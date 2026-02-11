@@ -64,6 +64,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/CdsRestClient.qm \
 	qlib/DiscordRestClient.qm \
 	qlib/DiscordWebSocketClient.qm \
+	qlib/FreshBooksRestClient.qm \
 	qlib/LinearRestClient.qm \
 	qlib/WaveRestClient.qm \
 	qlib/GoogleRestClient.qm \
@@ -122,6 +123,7 @@ DOX_SPLIT_MODULES = \
 	qlib/EdifactUtil \
     qlib/CdsRestDataProvider \
     qlib/DiscordDataProvider \
+    qlib/FreshBooksDataProvider \
     qlib/LinearDataProvider \
     qlib/WaveDataProvider \
     qlib/FileDataProvider \
@@ -169,6 +171,7 @@ DataProvider_modverdir = $(modverdir)/DataProvider
 EdifactUtil_modverdir = $(modverdir)/EdifactUtil
 DbDataProvider_modverdir = $(modverdir)/DbDataProvider
 DiscordDataProvider_modverdir = $(modverdir)/DiscordDataProvider
+FreshBooksDataProvider_modverdir = $(modverdir)/FreshBooksDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 WaveDataProvider_modverdir = $(modverdir)/WaveDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
@@ -225,6 +228,7 @@ dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm])
 dist_EdifactUtil_modver_DATA = $(wildcard qlib/EdifactUtil/*.q[cm])
 dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
+dist_FreshBooksDataProvider_modver_DATA = $(wildcard qlib/FreshBooksDataProvider/*.q[cm]) $(wildcard qlib/FreshBooksDataProvider/*.svg)
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_WaveDataProvider_modver_DATA = $(wildcard qlib/WaveDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
@@ -1199,6 +1203,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
 	qlib/DiscordDataProvider/discord-logo.svg \
+	qlib/FreshBooksDataProvider/freshbooks-logo.svg \
 	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \

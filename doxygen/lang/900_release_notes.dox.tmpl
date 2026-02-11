@@ -488,6 +488,13 @@ cargo install tree-sitter-cli@0.26.5
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - @ref freshbooksrestclientintro "FreshBooksRestClient" module
+      - new module providing a REST client for FreshBooks' accounting API
+      - supports OAuth2 authentication
+      - provides FreshBooksRestConnection for connection management with \c freshbooks:// URL scheme
+    - @ref freshbooksdataproviderintro "FreshBooksDataProvider" module
+      - new module providing a data provider API for FreshBooks accounting and invoicing services
+      - connection support with \c freshbooks:// URL scheme
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for Memcached caching servers
       - pure Qore implementation using TCP sockets with the memcached binary protocol

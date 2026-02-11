@@ -1,0 +1,1622 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FreshBooksDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/FreshBooksRestClient.qm
+%requires ../../../../qlib/FreshBooksDataProvider
+
+%exec-class FreshBooksDataProviderTest
+
+public class FreshBooksDataProviderTest inherits QUnit::Test {
+    private {
+        #! FreshBooks REST client for integration tests
+        *FreshBooksRestClient::FreshBooksRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "client_id": "i,client-id=s",
+            "client_secret": "s,client-secret=s",
+            "token": "t,token=s",
+            "account_id": "a,account-id=s",
+            "business_id": "b,business-id=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test client ID (created during test)
+        *int testClientId;
+
+        #! Test expense ID (created during test)
+        *int testExpenseId;
+
+        #! Test invoice ID (created during test)
+        *int testInvoiceId;
+
+        #! Test item ID (created during test)
+        *int testItemId;
+
+        #! Test service ID (created during test)
+        *int testServiceId;
+
+        #! Test estimate ID (created during test)
+        *int testEstimateId;
+
+        #! Test payment ID (created during test)
+        *int testPaymentId;
+
+        #! Account ID for tests
+        *string accountId;
+
+        #! Business ID for tests
+        *string businessId;
+    }
+
+    constructor() : Test("FreshBooksDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require FreshBooks credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the FreshBooks client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.FRESHBOOKS_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            client = get_connection(conn_name).get();
+            return;
+        }
+
+        *string token = m_options.token ?? ENV.FRESHBOOKS_TOKEN;
+        *string client_id = m_options.client_id ?? ENV.FRESHBOOKS_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.FRESHBOOKS_CLIENT_SECRET;
+        *string account_id = m_options.account_id ?? ENV.FRESHBOOKS_ACCOUNT_ID;
+        *string business_id = m_options.business_id ?? ENV.FRESHBOOKS_BUSINESS_ID;
+
+        if (!account_id || !business_id) {
+            if (m_options.verbose) {
+                printf("Missing FreshBooks credentials. Required:\n");
+                printf("  - FRESHBOOKS_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - FRESHBOOKS_TOKEN or -t option (access token)\n");
+                printf("  - FRESHBOOKS_ACCOUNT_ID or -a option\n");
+                printf("  - FRESHBOOKS_BUSINESS_ID or -b option\n");
+                printf("Or:\n");
+                printf("  - FRESHBOOKS_CLIENT_ID or -i option\n");
+                printf("  - FRESHBOOKS_CLIENT_SECRET or -s option\n");
+                printf("  - FRESHBOOKS_ACCOUNT_ID or -a option\n");
+                printf("  - FRESHBOOKS_BUSINESS_ID or -b option\n");
+            }
+            return;
+        }
+
+        # Token-only mode: access token without OAuth2 credentials
+        if (token && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Using token-only mode (no OAuth2 refresh)\n");
+            }
+            hash<auto> opts = {
+                "token": token,
+                "account_id": account_id,
+                "business_id": business_id,
+            };
+            client = new FreshBooksRestClient::FreshBooksRestClient(opts);
+            accountId = client.getAccountId();
+            businessId = client.getBusinessId();
+            return;
+        }
+
+        # Full OAuth2 mode
+        if (!client_id || !client_secret) {
+            if (m_options.verbose) {
+                printf("Missing OAuth2 credentials (client_id and client_secret required)\n");
+            }
+            return;
+        }
+
+        hash<auto> opts = {
+            "oauth2_client_id": client_id,
+            "oauth2_client_secret": client_secret,
+            "account_id": account_id,
+            "business_id": business_id,
+        };
+        if (token) {
+            opts.token = token;
+        }
+
+        client = new FreshBooksRestClient::FreshBooksRestClient(opts);
+
+        # Store account_id and business_id for integration tests
+        if (client) {
+            accountId = client.getAccountId();
+            businessId = client.getBusinessId();
+        }
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials via freshbooksrestclient_options
+        try {
+            FreshBooksDataProvider::FreshBooksDataProvider prov({
+                "freshbooksrestclient_options": {
+                    "token": "fake-token",
+                    "account_id": "fake-account",
+                    "business_id": "fake-business",
+                },
+            });
+            assertEq("freshbooks", prov.getName());
+            assertTrue(prov.getDesc().val());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping sanity tests");
+            }
+            rethrow;
+        }
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("freshbooks");
+        assertEq("freshbooks", factory.getInfo().name);
+        assertEq("FreshBooks data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("freshbooksrestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        try {
+            FreshBooksDataProvider::FreshBooksDataProvider prov({
+                "freshbooksrestclient_options": {
+                    "token": "fake-token",
+                    "account_id": "fake-account",
+                    "business_id": "fake-business",
+                },
+            });
+            hash<DataProviderInfo> info = prov.getInfo();
+
+            assertTrue(info.supports_children);
+            assertTrue(info.children_can_support_apis);
+            assertTrue(info.children_can_support_records);
+            assertTrue(info.children_can_support_observers);
+            assertEq("FreshBooksDataProvider", info.type);
+
+            # Check constructor options
+            assertTrue(info.constructor_options.hasKey("freshbooksrestclient"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping metadata tests");
+            }
+            rethrow;
+        }
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        FreshBooksDataProvider::FreshBooksDataProvider prov;
+        try {
+            prov = new FreshBooksDataProvider::FreshBooksDataProvider({
+                "freshbooksrestclient_options": {
+                    "token": "fake-token",
+                    "account_id": "fake-account",
+                    "business_id": "fake-business",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            rethrow;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify collection providers exist
+        assertTrue(children.contains("clients"));
+        assertTrue(children.contains("invoices"));
+        assertTrue(children.contains("expenses"));
+        assertTrue(children.contains("estimates"));
+        assertTrue(children.contains("items"));
+        assertTrue(children.contains("services"));
+
+        # Verify collection providers
+        assertTrue(children.contains("payments"));
+
+        # Verify action providers exist
+        assertTrue(children.contains("create-client"));
+        assertTrue(children.contains("update-client"));
+        assertTrue(children.contains("delete-client"));
+        assertTrue(children.contains("create-invoice"));
+        assertTrue(children.contains("update-invoice"));
+        assertTrue(children.contains("delete-invoice"));
+        assertTrue(children.contains("create-expense"));
+        assertTrue(children.contains("update-expense"));
+        assertTrue(children.contains("delete-expense"));
+        assertTrue(children.contains("create-item"));
+        assertTrue(children.contains("update-item"));
+        assertTrue(children.contains("delete-item"));
+        assertTrue(children.contains("create-service"));
+        assertTrue(children.contains("update-service"));
+        assertTrue(children.contains("delete-service"));
+        assertTrue(children.contains("create-estimate"));
+        assertTrue(children.contains("update-estimate"));
+        assertTrue(children.contains("create-payment"));
+        assertTrue(children.contains("update-payment"));
+        assertTrue(children.contains("delete-payment"));
+        assertTrue(children.contains("execute-api-call"));
+
+        # Verify events provider exists
+        assertTrue(children.contains("events"));
+
+        # Check clients child provider
+        AbstractDataProvider clients = prov.getChildProvider("clients");
+        assertEq("clients", clients.getName());
+        hash<DataProviderInfo> clientsInfo = clients.getInfo();
+        assertTrue(clientsInfo.supports_read);
+        assertTrue(clientsInfo.supports_native_search);
+
+        # Check invoices child provider
+        AbstractDataProvider invoices = prov.getChildProvider("invoices");
+        assertEq("invoices", invoices.getName());
+        hash<DataProviderInfo> invoicesInfo = invoices.getInfo();
+        assertTrue(invoicesInfo.supports_read);
+        assertTrue(invoicesInfo.supports_native_search);
+
+        # Check expenses child provider
+        AbstractDataProvider expenses = prov.getChildProvider("expenses");
+        assertEq("expenses", expenses.getName());
+        hash<DataProviderInfo> expensesInfo = expenses.getInfo();
+        assertTrue(expensesInfo.supports_read);
+        assertTrue(expensesInfo.supports_native_search);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+
+        # Check events child providers (triggers)
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("invoice-created"));
+        assertTrue(eventChildren.contains("payment-created"));
+        assertTrue(eventChildren.contains("client-created"));
+        assertTrue(eventChildren.contains("expense-created"));
+        assertTrue(eventChildren.contains("estimate-created"));
+
+        # Verify event providers have correct info
+        AbstractDataProvider invoiceCreatedEvent = events.getChildProvider("invoice-created");
+        assertEq("invoice-created", invoiceCreatedEvent.getName());
+        hash<DataProviderInfo> invoiceCreatedInfo = invoiceCreatedEvent.getInfo();
+        assertTrue(invoiceCreatedInfo.supports_observable);
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test client data type
+        FreshBooksDataProvider::FreshBooksClientDataType clientType();
+        hash<string, AbstractDataField> clientFields = clientType.getFields();
+        assertTrue(clientFields.hasKey("id"));
+        assertTrue(clientFields.hasKey("fname"));
+        assertTrue(clientFields.hasKey("lname"));
+        assertTrue(clientFields.hasKey("email"));
+        assertTrue(clientFields.hasKey("organization"));
+        assertTrue(clientFields.hasKey("phone"));
+        assertTrue(clientFields.hasKey("note"));
+        assertTrue(clientFields.hasKey("vis_state"));
+
+        # Test invoice data type
+        FreshBooksDataProvider::FreshBooksInvoiceDataType invoiceType();
+        hash<string, AbstractDataField> invoiceFields = invoiceType.getFields();
+        assertTrue(invoiceFields.hasKey("id"));
+        assertTrue(invoiceFields.hasKey("invoiceid"));
+        assertTrue(invoiceFields.hasKey("invoice_number"));
+        assertTrue(invoiceFields.hasKey("customerid"));
+        assertTrue(invoiceFields.hasKey("create_date"));
+        assertTrue(invoiceFields.hasKey("currency_code"));
+        assertTrue(invoiceFields.hasKey("status"));
+        assertTrue(invoiceFields.hasKey("amount"));
+        assertTrue(invoiceFields.hasKey("notes"));
+        assertTrue(invoiceFields.hasKey("terms"));
+        assertTrue(invoiceFields.hasKey("vis_state"));
+
+        # Test expense data type
+        FreshBooksDataProvider::FreshBooksExpenseDataType expenseType();
+        hash<string, AbstractDataField> expenseFields = expenseType.getFields();
+        assertTrue(expenseFields.hasKey("id"));
+        assertTrue(expenseFields.hasKey("expenseid"));
+        assertTrue(expenseFields.hasKey("categoryid"));
+        assertTrue(expenseFields.hasKey("amount"));
+        assertTrue(expenseFields.hasKey("vendor"));
+        assertTrue(expenseFields.hasKey("date"));
+        assertTrue(expenseFields.hasKey("notes"));
+        assertTrue(expenseFields.hasKey("status"));
+        assertTrue(expenseFields.hasKey("vis_state"));
+
+        # Test item data type
+        FreshBooksDataProvider::FreshBooksItemDataType itemType();
+        hash<string, AbstractDataField> itemFields = itemType.getFields();
+        assertTrue(itemFields.hasKey("id"));
+        assertTrue(itemFields.hasKey("itemid"));
+        assertTrue(itemFields.hasKey("name"));
+        assertTrue(itemFields.hasKey("description"));
+        assertTrue(itemFields.hasKey("sku"));
+        assertTrue(itemFields.hasKey("unit_cost"));
+        assertTrue(itemFields.hasKey("vis_state"));
+
+        # Test service data type
+        FreshBooksDataProvider::FreshBooksServiceDataType serviceType();
+        hash<string, AbstractDataField> serviceFields = serviceType.getFields();
+        assertTrue(serviceFields.hasKey("id"));
+        assertTrue(serviceFields.hasKey("name"));
+        assertTrue(serviceFields.hasKey("billable"));
+        assertTrue(serviceFields.hasKey("vis_state"));
+
+        # Test estimate data type
+        FreshBooksDataProvider::FreshBooksEstimateDataType estimateType();
+        hash<string, AbstractDataField> estimateFields = estimateType.getFields();
+        assertTrue(estimateFields.hasKey("id"));
+        assertTrue(estimateFields.hasKey("estimateid"));
+        assertTrue(estimateFields.hasKey("estimate_number"));
+        assertTrue(estimateFields.hasKey("customerid"));
+        assertTrue(estimateFields.hasKey("create_date"));
+        assertTrue(estimateFields.hasKey("currency_code"));
+        assertTrue(estimateFields.hasKey("status"));
+        assertTrue(estimateFields.hasKey("amount"));
+        assertTrue(estimateFields.hasKey("notes"));
+        assertTrue(estimateFields.hasKey("terms"));
+
+        # Test payment data type
+        FreshBooksDataProvider::FreshBooksPaymentDataType paymentType();
+        hash<string, AbstractDataField> paymentFields = paymentType.getFields();
+        assertTrue(paymentFields.hasKey("id"));
+        assertTrue(paymentFields.hasKey("paymentid"));
+        assertTrue(paymentFields.hasKey("invoiceid"));
+        assertTrue(paymentFields.hasKey("amount"));
+        assertTrue(paymentFields.hasKey("date"));
+        assertTrue(paymentFields.hasKey("type"));
+        assertTrue(paymentFields.hasKey("note"));
+        assertTrue(paymentFields.hasKey("vis_state"));
+
+        # Test create payment request type
+        FreshBooksDataProvider::FreshBooksPaymentCreateDataType createPaymentType();
+        hash<string, AbstractDataField> createPaymentFields = createPaymentType.getFields();
+        assertTrue(createPaymentFields.hasKey("invoiceid"));
+        assertTrue(createPaymentFields.hasKey("account_id"));
+        assertTrue(createPaymentFields.hasKey("amount"));
+        assertTrue(createPaymentFields.hasKey("date"));
+        assertTrue(createPaymentFields.hasKey("type"));
+        assertTrue(createPaymentFields.hasKey("note"));
+
+        # Test update payment request type
+        FreshBooksDataProvider::FreshBooksPaymentUpdateDataType updatePaymentType();
+        hash<string, AbstractDataField> updatePaymentFields = updatePaymentType.getFields();
+        assertTrue(updatePaymentFields.hasKey("id"));
+        assertTrue(updatePaymentFields.hasKey("amount"));
+        assertTrue(updatePaymentFields.hasKey("date"));
+        assertTrue(updatePaymentFields.hasKey("type"));
+        assertTrue(updatePaymentFields.hasKey("note"));
+
+        # Test create client request type
+        FreshBooksDataProvider::FreshBooksClientCreateDataType createClientType();
+        hash<string, AbstractDataField> createClientFields = createClientType.getFields();
+        assertTrue(createClientFields.hasKey("fname"));
+        assertTrue(createClientFields.hasKey("account_id"));
+        assertTrue(createClientFields.hasKey("lname"));
+        assertTrue(createClientFields.hasKey("email"));
+        assertTrue(createClientFields.hasKey("organization"));
+
+        # Test create invoice request type
+        FreshBooksDataProvider::FreshBooksInvoiceCreateDataType createInvoiceType();
+        hash<string, AbstractDataField> createInvoiceFields = createInvoiceType.getFields();
+        assertTrue(createInvoiceFields.hasKey("customerid"));
+        assertTrue(createInvoiceFields.hasKey("account_id"));
+        assertTrue(createInvoiceFields.hasKey("create_date"));
+        assertTrue(createInvoiceFields.hasKey("notes"));
+        assertTrue(createInvoiceFields.hasKey("terms"));
+        assertTrue(createInvoiceFields.hasKey("discount_value"));
+    }
+
+    #! Trigger example data tests - verify getExampleEventData() for all triggers
+    triggerExampleDataTests() {
+        checkJson();
+        FreshBooksDataProvider::FreshBooksDataProvider prov;
+        try {
+            prov = new FreshBooksDataProvider::FreshBooksDataProvider({
+                "freshbooksrestclient_options": {
+                    "token": "fake-token",
+                    "account_id": "fake-account",
+                    "business_id": "fake-business",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping trigger tests");
+            }
+            rethrow;
+        }
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+        list<string> triggerNames = (
+            "invoice-created",
+            "payment-created",
+            "client-created",
+            "expense-created",
+            "estimate-created",
+        );
+
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider triggerProvider = events.getChildProvider(triggerName);
+
+            # Verify event types are defined
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = triggerProvider.getEventTypes();
+            assertTrue(eventTypes.hasKey(triggerName),
+                sprintf("%s should define event type '%s'", triggerName, triggerName));
+
+            # Verify event type has a data type
+            assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
+                sprintf("%s event type should have a data type", triggerName));
+
+            # Get example event data (will fall back to fake data since we have fake credentials)
+            auto exampleData = triggerProvider.getExampleEventData(triggerName);
+            assertTrue(exampleData instanceof hash,
+                sprintf("%s getExampleEventData() should return a hash", triggerName));
+
+            # Verify example data has basic fields
+            hash<auto> data = exampleData;
+            assertTrue(data.hasKey("id"),
+                sprintf("%s example data should have 'id' field", triggerName));
+        }
+
+        # Verify resource-specific fields in example data
+        auto invoiceExample = events.getChildProvider("invoice-created")
+            .getExampleEventData("invoice-created");
+        assertTrue(invoiceExample.hasKey("invoiceid"), "Invoice example should have invoiceid");
+        assertTrue(invoiceExample.hasKey("invoice_number"), "Invoice example should have invoice_number");
+        assertTrue(invoiceExample.hasKey("customerid"), "Invoice example should have customerid");
+
+        auto paymentExample = events.getChildProvider("payment-created")
+            .getExampleEventData("payment-created");
+        assertTrue(paymentExample.hasKey("paymentid"), "Payment example should have paymentid");
+        assertTrue(paymentExample.hasKey("invoiceid"), "Payment example should have invoiceid");
+
+        auto clientExample = events.getChildProvider("client-created")
+            .getExampleEventData("client-created");
+        assertTrue(clientExample.hasKey("fname"), "Client example should have fname");
+        assertTrue(clientExample.hasKey("lname"), "Client example should have lname");
+        assertTrue(clientExample.hasKey("email"), "Client example should have email");
+
+        auto expenseExample = events.getChildProvider("expense-created")
+            .getExampleEventData("expense-created");
+        assertTrue(expenseExample.hasKey("expenseid"), "Expense example should have expenseid");
+        assertTrue(expenseExample.hasKey("vendor"), "Expense example should have vendor");
+
+        auto estimateExample = events.getChildProvider("estimate-created")
+            .getExampleEventData("estimate-created");
+        assertTrue(estimateExample.hasKey("estimateid"), "Estimate example should have estimateid");
+        assertTrue(estimateExample.hasKey("estimate_number"),
+            "Estimate example should have estimate_number");
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        FreshBooksDataProvider::FreshBooksDataProvider prov;
+        try {
+            prov = new FreshBooksDataProvider::FreshBooksDataProvider({
+                "freshbooksrestclient_options": {
+                    "token": "fake-token",
+                    "account_id": "fake-account",
+                    "business_id": "fake-business",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping negative tests");
+            }
+            rethrow;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event");
+        });
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("freshbooks");
+        assertEq("FreshBooks REST Connection", scheme.display_name);
+        assertTrue(scheme.short_desc.val());
+        assertTrue(scheme.desc.val());
+
+        # Verify required options
+        assertTrue(scheme.options.hasKey("account_id"));
+        assertTrue(scheme.options.hasKey("business_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_secret"));
+
+        # Verify connection can be created
+        FreshBooksRestClient::FreshBooksRestConnection conn("test", "test connection",
+            FreshBooksRestClient::FreshBooksRestClient::DefaultUrl, {}, {
+                "oauth2_client_id": "x",
+                "oauth2_client_secret": "x",
+                "account_id": "test-account",
+                "business_id": "test-business",
+            });
+        assertTrue(conn.hasDataProvider());
+        assertEq("FreshBooks", conn.getAppName());
+        assertEq("freshbooks", conn.getType());
+    }
+
+    #! Integration tests - require FreshBooks credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No FreshBooks credentials provided (use -t, -a, -b options or env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test client CRUD flow: create -> search -> update
+        testClientCrudFlow();
+
+        # Test expense CRUD flow: create -> get -> delete
+        testExpenseCrudFlow();
+
+        # Test item CRUD flow: create -> search -> update
+        testItemCrudFlow();
+
+        # Test service CRUD flow: create -> search -> update
+        testServiceCrudFlow();
+
+        # Test invoice CRUD flow (requires client): create -> search -> update
+        if (testClientId) {
+            testInvoiceCrudFlow();
+        }
+
+        # Test estimate flow (requires client): create -> search
+        if (testClientId) {
+            testEstimateCrudFlow();
+        }
+
+        # Test payment flow (requires invoice): create -> update -> delete
+        if (testInvoiceId) {
+            testPaymentCrudFlow();
+        }
+
+        # Test get-* (DPAT_FIND_SINGLE) for all entity types
+        testGetSingleRecords();
+
+        # Test execute-api-call
+        testExecuteApiCall();
+
+        # Cleanup test data
+        cleanup();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing API Connectivity ---\n");
+        }
+
+        # Test that we can connect to the API via the identity endpoint
+        hash<auto> response = client.get("/auth/api/v1/users/me");
+        assertTrue(response.body.response.id.val() || response.body.response.first_name.val());
+        if (m_options.verbose) {
+            printf("Connected to FreshBooks - User: %s %s\n",
+                response.body.response.first_name ?? "N/A",
+                response.body.response.last_name ?? "N/A");
+        }
+
+        if (m_options.verbose) {
+            printf("--- API Connectivity tests completed ---\n");
+        }
+    }
+
+    #! Test client CRUD flow: create -> search -> update -> verify
+    private testClientCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Client CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test client
+        AbstractDataProvider createClientProvider = prov.getChildProvider("create-client");
+        string testOrgName = sprintf("Test Org %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newClient = createClientProvider.doRequest({
+                "account_id": accountId,
+                "fname": "IntTest",
+                "lname": "Client",
+                "email": sprintf("inttest-%s@example.com", now_us().format("YYYYMMDDHHmmss")),
+                "organization": testOrgName,
+                "note": "Created by FreshBooks integration test",
+            });
+
+            assertTrue(newClient.id.val(), "Client should be created with an ID");
+            testClientId = newClient.id;
+            if (m_options.verbose) {
+                printf("Created test client: %s (ID: %d)\n", testOrgName, testClientId);
+            }
+
+            # Step 2: Search for the client via the clients collection provider
+            sleep(500ms);
+            AbstractDataProvider clientsProvider = prov.getChildProvider("clients");
+            list<hash<auto>> clients = map $1, clientsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testClientId});
+            assertTrue(clients.size() > 0, "Should find the created client by ID");
+
+            # Verify data persistence - the values we set must be returned
+            hash<auto> foundClient = clients[0];
+            assertEq(testClientId, foundClient.id);
+            assertEq("IntTest", foundClient.fname);
+            assertEq("Client", foundClient.lname);
+            assertEq(testOrgName, foundClient.organization);
+            if (m_options.verbose) {
+                printf("Verified client: %s %s (%s)\n",
+                    foundClient.fname, foundClient.lname, foundClient.organization);
+            }
+
+            # Step 3: Update the client
+            AbstractDataProvider updateClientProvider = prov.getChildProvider("update-client");
+            string updatedOrg = sprintf("Updated Org %s", now_us().format("YYYYMMDDHHmmss"));
+            updateClientProvider.doRequest({
+                "account_id": accountId,
+                "id": testClientId,
+                "organization": updatedOrg,
+                "note": "Updated by integration test",
+            });
+
+            if (m_options.verbose) {
+                printf("Updated client organization to: %s\n", updatedOrg);
+            }
+
+            # Step 4: Verify update persisted by re-fetching
+            sleep(500ms);
+            list<hash<auto>> verifyClients = map $1, clientsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testClientId});
+            assertTrue(verifyClients.size() > 0, "Should find the updated client");
+            assertEq(updatedOrg, verifyClients[0].organization,
+                "Organization update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: organization = %s\n",
+                    verifyClients[0].organization);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Client CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Client CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test expense CRUD flow: create -> get -> delete -> verify
+    private testExpenseCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Expense CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 0: Get a valid expense category ID
+        hash<auto> catResponse = client.get(
+            sprintf("/accounting/account/%s/expenses/categories", accountId));
+        int categoryId = catResponse.body.response.result.categories[0].id;
+        if (m_options.verbose) {
+            printf("Using expense category: %s (ID: %d)\n",
+                catResponse.body.response.result.categories[0].category, categoryId);
+        }
+
+        # Step 1: Create a test expense
+        AbstractDataProvider createExpenseProvider = prov.getChildProvider("create-expense");
+        string testNotes = sprintf("Test expense %s", now_us().format("YYYYMMDDHHmmss"));
+        string expenseDate = now().format("YYYY-MM-DD");
+
+        try {
+            hash<auto> newExpense = createExpenseProvider.doRequest({
+                "account_id": accountId,
+                "staffid": 1,
+                "categoryid": categoryId,
+                "amount": {"amount": "75.50", "code": "USD"},
+                "vendor": "Test Vendor Inc",
+                "date": expenseDate,
+                "notes": testNotes,
+            });
+
+            assertTrue(newExpense.id.val(), "Expense should be created with an ID");
+            testExpenseId = newExpense.id;
+            if (m_options.verbose) {
+                printf("Created test expense: %s (ID: %d)\n", testNotes, testExpenseId);
+            }
+
+            # Step 2: Get the expense via the expenses collection provider to verify persistence
+            sleep(500ms);
+            AbstractDataProvider expensesProvider = prov.getChildProvider("expenses");
+            list<hash<auto>> expenses = map $1, expensesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testExpenseId});
+            assertTrue(expenses.size() > 0, "Should find the created expense by ID");
+
+            # Verify data persistence
+            hash<auto> foundExpense = expenses[0];
+            assertEq(testExpenseId, foundExpense.id);
+            assertEq("Test Vendor Inc", foundExpense.vendor);
+            assertEq(testNotes, foundExpense.notes);
+            assertEq(expenseDate, foundExpense.date);
+            if (m_options.verbose) {
+                printf("Verified expense: vendor=%s, notes=%s, date=%s\n",
+                    foundExpense.vendor, foundExpense.notes, foundExpense.date);
+            }
+
+            # Step 3: Update the expense
+            AbstractDataProvider updateExpenseProvider = prov.getChildProvider("update-expense");
+            updateExpenseProvider.doRequest({
+                "account_id": accountId,
+                "id": testExpenseId,
+                "vendor": "Updated Vendor Inc",
+                "notes": "Updated by integration test",
+            });
+            if (m_options.verbose) {
+                printf("Updated expense: ID %d\n", testExpenseId);
+            }
+
+            # Step 4: Verify update persisted
+            sleep(500ms);
+            list<hash<auto>> verifyExpenses = map $1, expensesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testExpenseId});
+            assertTrue(verifyExpenses.size() > 0, "Should find the updated expense");
+            assertEq("Updated Vendor Inc", verifyExpenses[0].vendor,
+                "Expense vendor update should persist");
+            assertEq("Updated by integration test", verifyExpenses[0].notes,
+                "Expense notes update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: vendor=%s, notes=%s\n",
+                    verifyExpenses[0].vendor, verifyExpenses[0].notes);
+            }
+
+            # Step 5: Delete the expense (soft delete via vis_state = 1)
+            AbstractDataProvider deleteExpenseProvider = prov.getChildProvider("delete-expense");
+            hash<auto> deleteResult = deleteExpenseProvider.doRequest({
+                "account_id": accountId,
+                "id": testExpenseId,
+            });
+            if (m_options.verbose) {
+                printf("Deleted expense: ID %d (vis_state: %d)\n",
+                    testExpenseId, deleteResult.vis_state ?? -1);
+            }
+
+            # Step 6: Verify deletion - expense should now have vis_state = 1
+            sleep(500ms);
+            list<hash<auto>> deletedExpenses = map $1, expensesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testExpenseId});
+            if (deletedExpenses.size() > 0) {
+                assertEq(1, deletedExpenses[0].vis_state,
+                    "Deleted expense should have vis_state = 1");
+                if (m_options.verbose) {
+                    printf("Verified expense deletion: vis_state = %d\n",
+                        deletedExpenses[0].vis_state);
+                }
+            }
+            # Mark as cleaned up so we don't try to delete again
+            testExpenseId = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Expense CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Expense CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test item CRUD flow: create -> search -> update -> verify
+    private testItemCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Item CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test item
+        AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
+        string testItemName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newItem = createItemProvider.doRequest({
+                "account_id": accountId,
+                "name": testItemName,
+                "description": "Integration test item",
+                "unit_cost": {"amount": "150.00", "code": "USD"},
+            });
+
+            assertTrue(newItem.id.val(), "Item should be created with an ID");
+            testItemId = newItem.id;
+            if (m_options.verbose) {
+                printf("Created test item: %s (ID: %d)\n", testItemName, testItemId);
+            }
+
+            # Step 2: Search for the item via the items collection provider
+            sleep(500ms);
+            AbstractDataProvider itemsProvider = prov.getChildProvider("items");
+            list<hash<auto>> items = map $1, itemsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testItemId});
+            assertTrue(items.size() > 0, "Should find the created item by ID");
+
+            # Verify data persistence
+            hash<auto> foundItem = items[0];
+            assertEq(testItemId, foundItem.id);
+            assertEq(testItemName, foundItem.name);
+            assertEq("Integration test item", foundItem.description);
+            if (m_options.verbose) {
+                printf("Verified item: name=%s, description=%s\n",
+                    foundItem.name, foundItem.description);
+            }
+
+            # Step 3: Update the item
+            AbstractDataProvider updateItemProvider = prov.getChildProvider("update-item");
+            string updatedName = sprintf("Updated Item %s", now_us().format("YYYYMMDDHHmmss"));
+            updateItemProvider.doRequest({
+                "account_id": accountId,
+                "id": testItemId,
+                "name": updatedName,
+                "description": "Updated by integration test",
+            });
+
+            if (m_options.verbose) {
+                printf("Updated item name to: %s\n", updatedName);
+            }
+
+            # Step 4: Verify update persisted
+            sleep(500ms);
+            list<hash<auto>> verifyItems = map $1, itemsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testItemId});
+            assertTrue(verifyItems.size() > 0, "Should find the updated item");
+            assertEq(updatedName, verifyItems[0].name,
+                "Item name update should persist");
+            assertEq("Updated by integration test", verifyItems[0].description,
+                "Item description update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: name=%s, description=%s\n",
+                    verifyItems[0].name, verifyItems[0].description);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Item CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Item CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test service CRUD flow: create -> search -> update -> verify
+    private testServiceCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Service CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test service
+        AbstractDataProvider createServiceProvider = prov.getChildProvider("create-service");
+        string testServiceName = sprintf("Test Service %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newService = createServiceProvider.doRequest({
+                "business_id": businessId,
+                "name": testServiceName,
+                "billable": True,
+            });
+
+            assertTrue(newService.id.val(), "Service should be created with an ID");
+            testServiceId = newService.id;
+            if (m_options.verbose) {
+                printf("Created test service: %s (ID: %d)\n", testServiceName, testServiceId);
+            }
+
+            # Step 2: Search for the service via the services collection provider
+            sleep(500ms);
+            AbstractDataProvider servicesProvider = prov.getChildProvider("services");
+            list<hash<auto>> services = map $1, servicesProvider.searchRecords(
+                NOTHING, {"business_id": businessId});
+            bool found = False;
+            foreach hash<auto> svc in (services) {
+                if (svc.id == testServiceId) {
+                    found = True;
+                    assertEq(testServiceName, svc.name);
+                    if (m_options.verbose) {
+                        printf("Verified service: name=%s, billable=%s\n",
+                            svc.name, svc.billable);
+                    }
+                    break;
+                }
+            }
+            assertTrue(found, "Should find the created service in the list");
+
+            # Step 3: Update the service
+            AbstractDataProvider updateServiceProvider = prov.getChildProvider("update-service");
+            string updatedServiceName = sprintf("Updated Svc %s",
+                now_us().format("YYYYMMDDHHmmss"));
+            updateServiceProvider.doRequest({
+                "business_id": businessId,
+                "id": testServiceId,
+                "name": updatedServiceName,
+            });
+
+            if (m_options.verbose) {
+                printf("Updated service name to: %s\n", updatedServiceName);
+            }
+
+            # Step 4: Verify update persisted
+            sleep(500ms);
+            list<hash<auto>> verifyServices = map $1, servicesProvider.searchRecords(
+                NOTHING, {"business_id": businessId});
+            bool foundUpdated = False;
+            foreach hash<auto> svc in (verifyServices) {
+                if (svc.id == testServiceId) {
+                    foundUpdated = True;
+                    assertEq(updatedServiceName, svc.name,
+                        "Service name update should persist");
+                    if (m_options.verbose) {
+                        printf("Verified update persisted: name=%s\n", svc.name);
+                    }
+                    break;
+                }
+            }
+            assertTrue(foundUpdated, "Should find the updated service");
+
+            # Step 5: Delete the service
+            AbstractDataProvider deleteServiceProvider = prov.getChildProvider("delete-service");
+            deleteServiceProvider.doRequest({
+                "business_id": businessId,
+                "id": testServiceId,
+            });
+            if (m_options.verbose) {
+                printf("Deleted service: ID %d\n", testServiceId);
+            }
+
+            # Step 6: Verify deletion - service should have vis_state = 1
+            sleep(500ms);
+            list<hash<auto>> deletedServices = map $1, servicesProvider.searchRecords(
+                NOTHING, {"business_id": businessId, "id": testServiceId});
+            if (deletedServices.size() > 0) {
+                assertEq(1, deletedServices[0].vis_state,
+                    "Deleted service should have vis_state = 1");
+                if (m_options.verbose) {
+                    printf("Verified service deletion: vis_state = %d\n",
+                        deletedServices[0].vis_state);
+                }
+            }
+            # Mark as cleaned up
+            testServiceId = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Service CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Service CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test invoice CRUD flow: create -> search -> update -> verify data integrity
+    private testInvoiceCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Invoice CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test invoice
+        AbstractDataProvider createInvoiceProvider = prov.getChildProvider("create-invoice");
+        string invoiceDate = now().format("YYYY-MM-DD");
+        string testNotes = sprintf("Test invoice created at %s", now_us().toString());
+        string testTerms = "Net 30 - Integration test payment terms";
+
+        try {
+            hash<auto> newInvoice = createInvoiceProvider.doRequest({
+                "account_id": accountId,
+                "customerid": testClientId,
+                "create_date": invoiceDate,
+                "due_offset_days": 30,
+                "notes": testNotes,
+                "terms": testTerms,
+                "currency_code": "USD",
+            });
+
+            assertTrue(newInvoice.id.val(), "Invoice should be created with an ID");
+            testInvoiceId = newInvoice.id;
+            if (m_options.verbose) {
+                printf("Created test invoice: ID %d (number: %s)\n",
+                    testInvoiceId, newInvoice.invoice_number ?? "N/A");
+            }
+
+            # Step 2: Search for the invoice via the invoices collection provider
+            sleep(500ms);
+            AbstractDataProvider invoicesProvider = prov.getChildProvider("invoices");
+            list<hash<auto>> invoices = map $1, invoicesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testInvoiceId});
+            assertTrue(invoices.size() > 0, "Should find the created invoice by ID");
+
+            # Verify data persistence - critical check per CLAUDE.md
+            hash<auto> foundInvoice = invoices[0];
+            assertEq(testInvoiceId, foundInvoice.id);
+            assertEq(testClientId, foundInvoice.customerid);
+            assertEq(invoiceDate, foundInvoice.create_date);
+            assertEq(testNotes, foundInvoice.notes);
+            assertEq(testTerms, foundInvoice.terms);
+            assertTrue(foundInvoice.invoice_number.val(), "Invoice should have an invoice number");
+            if (m_options.verbose) {
+                printf("Verified invoice: customerid=%d, date=%s, notes=%s, terms=%s\n",
+                    foundInvoice.customerid, foundInvoice.create_date,
+                    foundInvoice.notes, foundInvoice.terms);
+            }
+
+            # Step 3: Update the invoice
+            AbstractDataProvider updateInvoiceProvider = prov.getChildProvider("update-invoice");
+            string updatedNotes = sprintf("Updated by integration test at %s",
+                now_us().toString());
+            string updatedTerms = "Net 45 - Updated payment terms";
+            updateInvoiceProvider.doRequest({
+                "account_id": accountId,
+                "id": testInvoiceId,
+                "notes": updatedNotes,
+                "terms": updatedTerms,
+                "due_offset_days": 45,
+            });
+            if (m_options.verbose) {
+                printf("Updated invoice: ID %d\n", testInvoiceId);
+            }
+
+            # Step 4: Verify update persisted - data integrity check
+            sleep(500ms);
+            list<hash<auto>> verifyInvoices = map $1, invoicesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testInvoiceId});
+            assertTrue(verifyInvoices.size() > 0, "Should find the updated invoice");
+            assertEq(updatedNotes, verifyInvoices[0].notes,
+                "Invoice notes update should persist");
+            assertEq(updatedTerms, verifyInvoices[0].terms,
+                "Invoice terms update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: notes=%s, terms=%s\n",
+                    verifyInvoices[0].notes, verifyInvoices[0].terms);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Invoice CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Invoice CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test estimate flow: create -> search -> verify
+    private testEstimateCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Estimate CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test estimate
+        AbstractDataProvider createEstimateProvider = prov.getChildProvider("create-estimate");
+        string estimateDate = now().format("YYYY-MM-DD");
+        string testNotes = sprintf("Test estimate %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newEstimate = createEstimateProvider.doRequest({
+                "account_id": accountId,
+                "customerid": testClientId,
+                "create_date": estimateDate,
+                "notes": testNotes,
+                "terms": "Valid for 30 days",
+                "currency_code": "USD",
+            });
+
+            assertTrue(newEstimate.id.val(), "Estimate should be created with an ID");
+            testEstimateId = newEstimate.id;
+            if (m_options.verbose) {
+                printf("Created test estimate: ID %d (number: %s)\n",
+                    testEstimateId, newEstimate.estimate_number ?? "N/A");
+            }
+
+            # Step 2: Search for the estimate via the estimates collection provider
+            sleep(500ms);
+            AbstractDataProvider estimatesProvider = prov.getChildProvider("estimates");
+            list<hash<auto>> estimates = map $1, estimatesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testEstimateId});
+            assertTrue(estimates.size() > 0, "Should find the created estimate by ID");
+
+            # Verify data persistence
+            hash<auto> foundEstimate = estimates[0];
+            assertEq(testEstimateId, foundEstimate.id);
+            assertEq(testClientId, foundEstimate.customerid);
+            assertEq(estimateDate, foundEstimate.create_date);
+            assertEq(testNotes, foundEstimate.notes);
+            assertEq("Valid for 30 days", foundEstimate.terms);
+            if (m_options.verbose) {
+                printf("Verified estimate: customerid=%d, date=%s, notes=%s\n",
+                    foundEstimate.customerid, foundEstimate.create_date, foundEstimate.notes);
+            }
+
+            # Step 3: Update the estimate
+            AbstractDataProvider updateEstimateProvider = prov.getChildProvider("update-estimate");
+            updateEstimateProvider.doRequest({
+                "account_id": accountId,
+                "id": testEstimateId,
+                "notes": "Updated by integration test",
+                "terms": "Valid for 60 days",
+            });
+            if (m_options.verbose) {
+                printf("Updated estimate: ID %d\n", testEstimateId);
+            }
+
+            # Step 4: Verify update persisted
+            sleep(500ms);
+            list<hash<auto>> verifyEstimates = map $1, estimatesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testEstimateId});
+            assertTrue(verifyEstimates.size() > 0, "Should find the updated estimate");
+            assertEq("Updated by integration test", verifyEstimates[0].notes,
+                "Estimate notes update should persist");
+            assertEq("Valid for 60 days", verifyEstimates[0].terms,
+                "Estimate terms update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: notes=%s, terms=%s\n",
+                    verifyEstimates[0].notes, verifyEstimates[0].terms);
+            }
+
+            # Step 5: Delete the estimate (soft delete via vis_state = 1)
+            AbstractDataProvider deleteEstimateProvider = prov.getChildProvider("delete-estimate");
+            hash<auto> deleteResult = deleteEstimateProvider.doRequest({
+                "account_id": accountId,
+                "id": testEstimateId,
+            });
+            if (m_options.verbose) {
+                printf("Deleted estimate: ID %d (vis_state: %d)\n",
+                    testEstimateId, deleteResult.vis_state ?? -1);
+            }
+
+            # Step 6: Verify deletion - estimate should have vis_state = 1
+            sleep(500ms);
+            list<hash<auto>> deletedEstimates = map $1, estimatesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testEstimateId});
+            if (deletedEstimates.size() > 0) {
+                assertEq(1, deletedEstimates[0].vis_state,
+                    "Deleted estimate should have vis_state = 1");
+                if (m_options.verbose) {
+                    printf("Verified estimate deletion: vis_state = %d\n",
+                        deletedEstimates[0].vis_state);
+                }
+            }
+            # Mark as cleaned up
+            testEstimateId = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Estimate CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Estimate CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test payment CRUD flow: create -> update -> verify -> delete -> verify
+    private testPaymentCrudFlow() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Payment CRUD Flow ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Step 1: Create a test payment against the test invoice
+        AbstractDataProvider createPaymentProvider = prov.getChildProvider("create-payment");
+        string paymentDate = now().format("YYYY-MM-DD");
+
+        try {
+            hash<auto> newPayment = createPaymentProvider.doRequest({
+                "account_id": accountId,
+                "invoiceid": testInvoiceId,
+                "amount": {"amount": "10.00", "code": "USD"},
+                "date": paymentDate,
+                "type": "Check",
+                "note": "Integration test payment",
+            });
+
+            assertTrue(newPayment.id.val(), "Payment should be created with an ID");
+            testPaymentId = newPayment.id;
+            if (m_options.verbose) {
+                printf("Created test payment: ID %d\n", testPaymentId);
+            }
+
+            # Step 2: Verify creation via payments collection provider
+            sleep(500ms);
+            AbstractDataProvider paymentsProvider = prov.getChildProvider("payments");
+            list<hash<auto>> payments = map $1, paymentsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testPaymentId});
+            assertTrue(payments.size() > 0, "Should find the created payment by ID");
+
+            hash<auto> foundPayment = payments[0];
+            assertEq(testPaymentId, foundPayment.id);
+            assertEq("Check", foundPayment.type);
+            assertEq("Integration test payment", foundPayment.note);
+            if (m_options.verbose) {
+                printf("Verified payment: type=%s, note=%s\n",
+                    foundPayment.type, foundPayment.note);
+            }
+
+            # Step 3: Update the payment
+            AbstractDataProvider updatePaymentProvider = prov.getChildProvider("update-payment");
+            updatePaymentProvider.doRequest({
+                "account_id": accountId,
+                "id": testPaymentId,
+                "note": "Updated by integration test",
+                "type": "Cash",
+            });
+            if (m_options.verbose) {
+                printf("Updated payment: ID %d\n", testPaymentId);
+            }
+
+            # Step 4: Verify update persisted
+            sleep(500ms);
+            list<hash<auto>> verifyPayments = map $1, paymentsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testPaymentId});
+            assertTrue(verifyPayments.size() > 0, "Should find the updated payment");
+            assertEq("Updated by integration test", verifyPayments[0].note,
+                "Payment note update should persist");
+            assertEq("Cash", verifyPayments[0].type,
+                "Payment type update should persist");
+            if (m_options.verbose) {
+                printf("Verified update persisted: note=%s, type=%s\n",
+                    verifyPayments[0].note, verifyPayments[0].type);
+            }
+
+            # Step 5: Delete the payment (soft delete via vis_state = 1)
+            AbstractDataProvider deletePaymentProvider = prov.getChildProvider("delete-payment");
+            hash<auto> deleteResult = deletePaymentProvider.doRequest({
+                "account_id": accountId,
+                "id": testPaymentId,
+            });
+            if (m_options.verbose) {
+                printf("Deleted payment: ID %d (vis_state: %d)\n",
+                    testPaymentId, deleteResult.vis_state ?? -1);
+            }
+
+            # Step 6: Verify deletion - payment should have vis_state = 1
+            sleep(500ms);
+            list<hash<auto>> deletedPayments = map $1, paymentsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testPaymentId});
+            if (deletedPayments.size() > 0) {
+                assertEq(1, deletedPayments[0].vis_state,
+                    "Deleted payment should have vis_state = 1");
+                if (m_options.verbose) {
+                    printf("Verified payment deletion: vis_state = %d\n",
+                        deletedPayments[0].vis_state);
+                }
+            }
+            # Mark as cleaned up
+            testPaymentId = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Payment CRUD flow failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Payment CRUD Flow tests completed ---\n");
+        }
+    }
+
+    #! Test get-* (DPAT_FIND_SINGLE) actions for all entity types
+    private testGetSingleRecords() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Get Single Record (DPAT_FIND_SINGLE) ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Test get-client (DPAT_FIND_SINGLE)
+        if (testClientId) {
+            AbstractDataProvider clientsProvider = prov.getChildProvider("clients");
+            list<hash<auto>> result = map $1, clientsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testClientId});
+            assertEq(1, result.size(), "get-client should return exactly one client");
+            assertEq(testClientId, result[0].id, "get-client should return the correct client");
+            assertTrue(result[0].fname.val() || result[0].lname.val() || result[0].organization.val(),
+                "get-client should return client data with name fields");
+            if (m_options.verbose) {
+                printf("get-client: OK (ID: %d, name: %s %s)\n",
+                    result[0].id, result[0].fname ?? "", result[0].lname ?? "");
+            }
+        }
+
+        # Test get-item (DPAT_FIND_SINGLE)
+        if (testItemId) {
+            AbstractDataProvider itemsProvider = prov.getChildProvider("items");
+            list<hash<auto>> result = map $1, itemsProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testItemId});
+            assertEq(1, result.size(), "get-item should return exactly one item");
+            assertEq(testItemId, result[0].id, "get-item should return the correct item");
+            assertTrue(result[0].name.val(), "get-item should return item with a name");
+            if (m_options.verbose) {
+                printf("get-item: OK (ID: %d, name: %s)\n", result[0].id, result[0].name);
+            }
+        }
+
+        # Note: get-service, get-expense, get-estimate, get-payment are tested within
+        # their respective CRUD flows (step 2: search by ID)
+
+        # Test get-invoice (DPAT_FIND_SINGLE)
+        if (testInvoiceId) {
+            AbstractDataProvider invoicesProvider = prov.getChildProvider("invoices");
+            list<hash<auto>> result = map $1, invoicesProvider.searchRecords(
+                NOTHING, {"account_id": accountId, "id": testInvoiceId});
+            assertEq(1, result.size(), "get-invoice should return exactly one invoice");
+            assertEq(testInvoiceId, result[0].id, "get-invoice should return the correct invoice");
+            assertEq(testClientId, result[0].customerid,
+                "get-invoice should return invoice with correct customer");
+            if (m_options.verbose) {
+                printf("get-invoice: OK (ID: %d, number: %s)\n",
+                    result[0].id, result[0].invoice_number ?? "N/A");
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Get Single Record tests completed ---\n");
+        }
+    }
+
+    #! Test execute-api-call provider
+    private testExecuteApiCall() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Execute API Call ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+        AbstractDataProvider apiCallProvider = prov.getChildProvider("execute-api-call");
+
+        # Test GET request via execute-api-call
+        hash<auto> result = apiCallProvider.doRequest({
+            "method": "GET",
+            "path": "/auth/api/v1/users/me",
+        });
+        assertTrue(result.id.val() || result.first_name.val(),
+            "execute-api-call GET should return user data");
+        if (m_options.verbose) {
+            printf("execute-api-call GET: OK (user: %s %s)\n",
+                result.first_name ?? "N/A", result.last_name ?? "N/A");
+        }
+
+        if (m_options.verbose) {
+            printf("--- Execute API Call tests completed ---\n");
+        }
+    }
+
+    #! Cleanup test data
+    private cleanup() {
+        if (m_options.verbose) {
+            printf("\n--- Cleanup ---\n");
+        }
+
+        FreshBooksDataProvider::FreshBooksDataProvider prov(client);
+
+        # Delete test payment if not already deleted
+        if (testPaymentId) {
+            try {
+                AbstractDataProvider deletePaymentProvider = prov.getChildProvider("delete-payment");
+                deletePaymentProvider.doRequest({"account_id": accountId, "id": testPaymentId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test payment: %d\n", testPaymentId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete payment: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test invoice (soft delete via vis_state)
+        if (testInvoiceId) {
+            try {
+                AbstractDataProvider deleteInvoiceProvider = prov.getChildProvider("delete-invoice");
+                deleteInvoiceProvider.doRequest({"account_id": accountId, "id": testInvoiceId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test invoice: %d\n", testInvoiceId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete invoice: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test estimate (soft delete via vis_state)
+        if (testEstimateId) {
+            try {
+                AbstractDataProvider executeApi = prov.getChildProvider("execute-api-call");
+                executeApi.doRequest({
+                    "method": "PUT",
+                    "path": sprintf("/accounting/account/%s/estimates/estimates/%d",
+                        client.getAccountId(), testEstimateId),
+                    "body": {"estimate": {"vis_state": 1}},
+                });
+                if (m_options.verbose) {
+                    printf("Soft-deleted test estimate: %d\n", testEstimateId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete estimate: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test expense if not already deleted
+        if (testExpenseId) {
+            try {
+                AbstractDataProvider deleteExpenseProvider = prov.getChildProvider("delete-expense");
+                deleteExpenseProvider.doRequest({"account_id": accountId, "id": testExpenseId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test expense: %d\n", testExpenseId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete expense: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test item (soft delete via vis_state)
+        if (testItemId) {
+            try {
+                AbstractDataProvider deleteItemProvider = prov.getChildProvider("delete-item");
+                deleteItemProvider.doRequest({"account_id": accountId, "id": testItemId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test item: %d\n", testItemId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete item: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test service (soft delete via vis_state)
+        if (testServiceId) {
+            try {
+                AbstractDataProvider deleteServiceProvider = prov.getChildProvider("delete-service");
+                deleteServiceProvider.doRequest({"business_id": businessId, "id": testServiceId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test service: %d\n", testServiceId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete service: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test client (soft delete via vis_state)
+        if (testClientId) {
+            try {
+                AbstractDataProvider deleteClientProvider = prov.getChildProvider("delete-client");
+                deleteClientProvider.doRequest({"account_id": accountId, "id": testClientId});
+                if (m_options.verbose) {
+                    printf("Soft-deleted test client: %d\n", testClientId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete client: %s\n", ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Cleanup completed ---\n");
+        }
+    }
+}

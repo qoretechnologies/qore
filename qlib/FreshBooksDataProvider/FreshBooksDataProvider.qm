@@ -1,0 +1,1957 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore FreshBooksDataProvider module definition
+
+/*  FreshBooksDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) FreshBooksRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module FreshBooksDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for FreshBooks accounting and invoicing";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new FreshBooksDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": FreshBooksDataProvider::AppName,
+            "display_name": "FreshBooks",
+            "short_desc": "FreshBooks cloud accounting software",
+            "desc": "FreshBooks is cloud-based accounting software designed for small businesses "
+                "and freelancers.\n\n"
+                "This integration supports clients, invoices, expenses, estimates, items, "
+                "and services.",
+            "scheme": "freshbooks",
+            "logo": FreshBooksLogo,
+            "logo_file_name": "freshbooks-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # ========== CLIENT ACTIONS ==========
+
+        # Create Client
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-client",
+            "action": "create-client",
+            "groups": "Clients",
+            "display_name": "Create Client",
+            "short_desc": "Create a new client",
+            "desc": "Create a new client in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "fname": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Client first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "First name of the client",
+                    "example_value": "John",
+                },
+                "lname": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Client last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Last name of the client",
+                    "example_value": "Doe",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Client email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "required": True,
+                    "desc": "Email address of the client (at least one of fname, lname, email, "
+                        "organization is required)",
+                    "example_value": "john@example.com",
+                },
+                "organization": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Organization or company name",
+                    "example_value": "Acme Corp",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Business phone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Notes about the client",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_street": <ActionOptionInfo>{
+                    "display_name": "Street",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_province": <ActionOptionInfo>{
+                    "display_name": "Province/State",
+                    "short_desc": "Province or state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_code": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal/zip code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "Country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Client
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-client",
+            "action": "update-client",
+            "groups": "Clients",
+            "display_name": "Update Client",
+            "short_desc": "Update an existing client",
+            "desc": "Update an existing client in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Client ID",
+                    "short_desc": "The client to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "clients",
+                },
+                "fname": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Client first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "lname": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Client last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Client email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "organization": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Business phone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Notes about the client",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_street": <ActionOptionInfo>{
+                    "display_name": "Street",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_province": <ActionOptionInfo>{
+                    "display_name": "Province/State",
+                    "short_desc": "Province or state",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_code": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal/zip code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "p_country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "Country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Search Clients
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/clients",
+            "action": "search-clients",
+            "groups": "Clients",
+            "display_name": "Search Clients",
+            "short_desc": "Search for clients",
+            "desc": "Search for clients in FreshBooks with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Client ID",
+                    "short_desc": "Filter by client ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search for clients by email address",
+                },
+                "organization": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Filter by organization name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search for clients by organization name (partial match)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return (max 100)",
+                },
+            },
+        });
+
+        # Get Client
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/clients",
+            "action": "get-client",
+            "groups": "Clients",
+            "display_name": "Get Client",
+            "short_desc": "Get a single client by ID",
+            "desc": "Retrieve a single client by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Client ID",
+                    "short_desc": "The client ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "clients",
+                },
+            },
+        });
+
+        # Delete Client
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-client",
+            "action": "delete-client",
+            "groups": "Clients",
+            "display_name": "Delete Client",
+            "short_desc": "Delete a client",
+            "desc": "Soft-delete a client in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Client ID",
+                    "short_desc": "The client to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "clients",
+                },
+            },
+        });
+
+        # ========== SERVICE ACTIONS ==========
+
+        # Create Service
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-service",
+            "action": "create-service",
+            "groups": "Services",
+            "display_name": "Create Service",
+            "short_desc": "Create a new service",
+            "desc": "Create a new service in FreshBooks for time tracking",
+            "action_code": DPAT_API,
+            "options": {
+                "business_id": <ActionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks business ID for time tracking API endpoints",
+                    "ref_data": "businesses",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Service name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the service",
+                    "example_value": "Development",
+                },
+                "billable": <ActionOptionInfo>{
+                    "display_name": "Billable",
+                    "short_desc": "Whether the service is billable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Whether this service is billable to clients",
+                },
+            },
+        });
+
+        # Update Service
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-service",
+            "action": "update-service",
+            "groups": "Services",
+            "display_name": "Update Service",
+            "short_desc": "Update an existing service",
+            "desc": "Update an existing service in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "business_id": <ActionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks business ID for time tracking API endpoints",
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Service ID",
+                    "short_desc": "The service to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "services",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Service name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billable": <ActionOptionInfo>{
+                    "display_name": "Billable",
+                    "short_desc": "Whether the service is billable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        # Search Services
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/services",
+            "action": "search-services",
+            "groups": "Services",
+            "display_name": "Search Services",
+            "short_desc": "Search for services",
+            "desc": "Search for services in FreshBooks",
+            "action_code": DPAT_FIND,
+            "options": {
+                "business_id": <ActionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks business ID for time tracking API endpoints",
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Service ID",
+                    "short_desc": "Filter by service ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Service
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/services",
+            "action": "get-service",
+            "groups": "Services",
+            "display_name": "Get Service",
+            "short_desc": "Get a single service by ID",
+            "desc": "Retrieve a single service by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "business_id": <ActionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks business ID for time tracking API endpoints",
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Service ID",
+                    "short_desc": "The service ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "services",
+                },
+            },
+        });
+
+        # Delete Service
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-service",
+            "action": "delete-service",
+            "groups": "Services",
+            "display_name": "Delete Service",
+            "short_desc": "Delete a service",
+            "desc": "Delete a service in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "business_id": <ActionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks business ID for time tracking API endpoints",
+                    "ref_data": "businesses",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Service ID",
+                    "short_desc": "The service to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "services",
+                },
+            },
+        });
+
+        # ========== ESTIMATE ACTIONS ==========
+
+        # Create Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-estimate",
+            "action": "create-estimate",
+            "groups": "Estimates",
+            "display_name": "Create Estimate",
+            "short_desc": "Create a new estimate",
+            "desc": "Create a new estimate/quote in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the estimate",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "clients",
+                },
+                "estimate_number": <ActionOptionInfo>{
+                    "display_name": "Estimate Number",
+                    "short_desc": "Unique estimate number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "create_date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Estimate date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "required": True,
+                    "desc": "Estimate date in YYYY-MM-DD format",
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Currency code (e.g. USD, CAD, EUR)",
+                    "example_value": "USD",
+                },
+                "lines": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Estimate line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "po_number": <ActionOptionInfo>{
+                    "display_name": "PO Number",
+                    "short_desc": "Purchase order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Search Estimates
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/estimates",
+            "action": "search-estimates",
+            "groups": "Estimates",
+            "display_name": "Search Estimates",
+            "short_desc": "Search for estimates",
+            "desc": "Search for estimates in FreshBooks",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "Filter by estimate ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "clients",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/estimates",
+            "action": "get-estimate",
+            "groups": "Estimates",
+            "display_name": "Get Estimate",
+            "short_desc": "Get a single estimate by ID",
+            "desc": "Retrieve a single estimate by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
+                },
+            },
+        });
+
+        # Update Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-estimate",
+            "action": "update-estimate",
+            "groups": "Estimates",
+            "display_name": "Update Estimate",
+            "short_desc": "Update an existing estimate",
+            "desc": "Update an existing estimate in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the estimate",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "clients",
+                },
+                "estimate_number": <ActionOptionInfo>{
+                    "display_name": "Estimate Number",
+                    "short_desc": "The estimate number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "create_date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Estimate date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Estimate date in YYYY-MM-DD format",
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "USD",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Estimate notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "po_number": <ActionOptionInfo>{
+                    "display_name": "PO Number",
+                    "short_desc": "Purchase order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Estimate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-estimate",
+            "action": "delete-estimate",
+            "groups": "Estimates",
+            "display_name": "Delete Estimate",
+            "short_desc": "Delete an estimate",
+            "desc": "Soft-delete an estimate in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Estimate ID",
+                    "short_desc": "The estimate to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "estimates",
+                },
+            },
+        });
+
+        # ========== EXPENSE ACTIONS ==========
+
+        # Create Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-expense",
+            "action": "create-expense",
+            "groups": "Expenses",
+            "display_name": "Create Expense",
+            "short_desc": "Create a new expense",
+            "desc": "Create a new expense in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "staffid": <ActionOptionInfo>{
+                    "display_name": "Staff Member",
+                    "short_desc": "Staff member for this expense",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "desc": "The ID of the staff member associated with this expense",
+                },
+                "categoryid": <ActionOptionInfo>{
+                    "display_name": "Category",
+                    "short_desc": "Expense category",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "required": True,
+                    "desc": "The expense category ID",
+                    "ref_data": "categories",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Expense amount",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "required": True,
+                    "desc": "Amount object with 'amount' (string) and 'code' (currency) fields",
+                },
+                "vendor": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Vendor name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Name of the vendor",
+                    "example_value": "Office Depot",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Expense date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "required": True,
+                    "desc": "Expense date in YYYY-MM-DD format",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Expense notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "taxName1": <ActionOptionInfo>{
+                    "display_name": "Tax Name",
+                    "short_desc": "Tax name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "taxPercent1": <ActionOptionInfo>{
+                    "display_name": "Tax Percent",
+                    "short_desc": "Tax percentage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-expense",
+            "action": "update-expense",
+            "groups": "Expenses",
+            "display_name": "Update Expense",
+            "short_desc": "Update an existing expense",
+            "desc": "Update an existing expense in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
+                },
+                "staffid": <ActionOptionInfo>{
+                    "display_name": "Staff Member",
+                    "short_desc": "Staff member for this expense",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The ID of the staff member associated with this expense",
+                },
+                "categoryid": <ActionOptionInfo>{
+                    "display_name": "Category",
+                    "short_desc": "Expense category",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "categories",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Expense amount",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Amount object with 'amount' (string) and 'code' (currency) fields",
+                },
+                "vendor": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Vendor name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Expense date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Expense date in YYYY-MM-DD format",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Expense notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "taxName1": <ActionOptionInfo>{
+                    "display_name": "Tax Name",
+                    "short_desc": "Tax name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "taxPercent1": <ActionOptionInfo>{
+                    "display_name": "Tax Percent",
+                    "short_desc": "Tax percentage",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-expense",
+            "action": "delete-expense",
+            "groups": "Expenses",
+            "display_name": "Delete Expense",
+            "short_desc": "Delete an expense",
+            "desc": "Soft-delete an expense in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
+                },
+            },
+        });
+
+        # Get Expense
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/expenses",
+            "action": "get-expense",
+            "groups": "Expenses",
+            "display_name": "Get Expense",
+            "short_desc": "Get a single expense by ID",
+            "desc": "Retrieve a single expense by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "The expense ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "expenses",
+                },
+            },
+        });
+
+        # Search Expenses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/expenses",
+            "action": "search-expenses",
+            "groups": "Expenses",
+            "display_name": "Search Expenses",
+            "short_desc": "Search for expenses",
+            "desc": "Search for expenses in FreshBooks with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Expense ID",
+                    "short_desc": "Filter by expense ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "categoryid": <ActionOptionInfo>{
+                    "display_name": "Category",
+                    "short_desc": "Filter by category",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "categories",
+                },
+                "vendor": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Filter by vendor name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== INVOICE ACTIONS ==========
+
+        # Create Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-invoice",
+            "action": "create-invoice",
+            "groups": "Invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Create a new invoice",
+            "desc": "Create a new invoice in FreshBooks for a customer",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "clients",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A unique invoice number (auto-generated if not provided)",
+                },
+                "create_date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Invoice date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice date in YYYY-MM-DD format",
+                },
+                "due_offset_days": <ActionOptionInfo>{
+                    "display_name": "Due in Days",
+                    "short_desc": "Days until due",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of days from creation until the invoice is due",
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "USD",
+                },
+                "lines": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "required": True,
+                    "desc": "List of line items with fields: description, quantity, unit_cost, "
+                        "taxName1, taxPercent1",
+                },
+                "discount_value": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount value",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Discount amount applied to the invoice",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "po_number": <ActionOptionInfo>{
+                    "display_name": "PO Number",
+                    "short_desc": "Purchase order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-invoice",
+            "action": "update-invoice",
+            "groups": "Invoices",
+            "display_name": "Update Invoice",
+            "short_desc": "Update an existing invoice",
+            "desc": "Update an existing invoice in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "clients",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Unique invoice number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "create_date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Invoice date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Invoice date in YYYY-MM-DD format",
+                },
+                "due_offset_days": <ActionOptionInfo>{
+                    "display_name": "Due in Days",
+                    "short_desc": "Days until due",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "lines": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items (replaces existing lines - include ALL desired lines)",
+                },
+                "discount_value": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount value",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "example_value": "USD",
+                },
+                "po_number": <ActionOptionInfo>{
+                    "display_name": "PO Number",
+                    "short_desc": "Purchase order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Search Invoices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/invoices",
+            "action": "search-invoices",
+            "groups": "Invoices",
+            "display_name": "Search Invoices",
+            "short_desc": "Search for invoices",
+            "desc": "Search for invoices in FreshBooks with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "Filter by invoice ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "customerid": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "clients",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/invoices",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get Invoice",
+            "short_desc": "Get a single invoice by ID",
+            "desc": "Retrieve a single invoice by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # Delete Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-invoice",
+            "action": "delete-invoice",
+            "groups": "Invoices",
+            "display_name": "Delete Invoice",
+            "short_desc": "Delete an invoice",
+            "desc": "Soft-delete an invoice in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # ========== ITEM ACTIONS ==========
+
+        # Create Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-item",
+            "action": "create-item",
+            "groups": "Items",
+            "display_name": "Create Item",
+            "short_desc": "Create a new item",
+            "desc": "Create a new product or service item in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Item name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The name of the item",
+                    "example_value": "Consulting",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Item description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit_cost": <ActionOptionInfo>{
+                    "display_name": "Unit Cost",
+                    "short_desc": "Cost per unit",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Unit cost object with 'amount' (string) and 'code' (currency) fields",
+                },
+                "qty": <ActionOptionInfo>{
+                    "display_name": "Quantity",
+                    "short_desc": "Default quantity",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "inventory": <ActionOptionInfo>{
+                    "display_name": "Inventory",
+                    "short_desc": "Inventory count",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tax1": <ActionOptionInfo>{
+                    "display_name": "Tax 1",
+                    "short_desc": "Default tax 1",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tax2": <ActionOptionInfo>{
+                    "display_name": "Tax 2",
+                    "short_desc": "Default tax 2",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-item",
+            "action": "update-item",
+            "groups": "Items",
+            "display_name": "Update Item",
+            "short_desc": "Update an existing item",
+            "desc": "Update an existing item in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "The item to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Item name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Item description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit_cost": <ActionOptionInfo>{
+                    "display_name": "Unit Cost",
+                    "short_desc": "Cost per unit",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Unit cost object with 'amount' (string) and 'code' (currency) fields",
+                },
+                "qty": <ActionOptionInfo>{
+                    "display_name": "Quantity",
+                    "short_desc": "Default quantity",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "inventory": <ActionOptionInfo>{
+                    "display_name": "Inventory",
+                    "short_desc": "Inventory count",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tax1": <ActionOptionInfo>{
+                    "display_name": "Tax 1",
+                    "short_desc": "Default tax 1",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tax2": <ActionOptionInfo>{
+                    "display_name": "Tax 2",
+                    "short_desc": "Default tax 2",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Search Items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/items",
+            "action": "search-items",
+            "groups": "Items",
+            "display_name": "Search Items",
+            "short_desc": "Search for items",
+            "desc": "Search for items in FreshBooks",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "Filter by item ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/items",
+            "action": "get-item",
+            "groups": "Items",
+            "display_name": "Get Item",
+            "short_desc": "Get a single item by ID",
+            "desc": "Retrieve a single item by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "The item ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+            },
+        });
+
+        # Delete Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-item",
+            "action": "delete-item",
+            "groups": "Items",
+            "display_name": "Delete Item",
+            "short_desc": "Delete an item",
+            "desc": "Soft-delete an item in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Item ID",
+                    "short_desc": "The item to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+            },
+        });
+
+        # ========== PAYMENT ACTIONS ==========
+
+        # Create Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/create-payment",
+            "action": "create-payment",
+            "groups": "Payments",
+            "display_name": "Create Payment",
+            "short_desc": "Record a new payment",
+            "desc": "Record a new payment against an invoice in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "invoiceid": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice for this payment",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Amount object with 'amount' (string) and 'code' (currency) fields",
+                    "required": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Payment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "required": True,
+                    "desc": "Payment date in YYYY-MM-DD format",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Payment type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "required": True,
+                    "desc": "Payment type (e.g. 'Credit Card', 'Check', 'Cash')",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Payment note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Update Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/update-payment",
+            "action": "update-payment",
+            "groups": "Payments",
+            "display_name": "Update Payment",
+            "short_desc": "Update an existing payment",
+            "desc": "Update an existing payment in FreshBooks",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Amount object with 'amount' (string) and 'code' (currency) fields",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Payment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment date in YYYY-MM-DD format",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Payment type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Payment type (e.g. 'Credit Card', 'Check', 'Cash')",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Payment note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/delete-payment",
+            "action": "delete-payment",
+            "groups": "Payments",
+            "display_name": "Delete Payment",
+            "short_desc": "Delete a payment",
+            "desc": "Soft-delete a payment in FreshBooks by setting vis_state to 1",
+            "action_code": DPAT_API,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+            },
+        });
+
+        # Search Payments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/payments",
+            "action": "search-payments",
+            "groups": "Payments",
+            "display_name": "Search Payments",
+            "short_desc": "Search for payments",
+            "desc": "Search for payments in FreshBooks with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "Filter by payment ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "invoiceid": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "Filter by invoice",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "invoices",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/payments",
+            "action": "get-payment",
+            "groups": "Payments",
+            "display_name": "Get Payment",
+            "short_desc": "Get a single payment by ID",
+            "desc": "Retrieve a single payment by ID from FreshBooks",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "id": <ActionOptionInfo>{
+                    "display_name": "Payment ID",
+                    "short_desc": "The payment ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "payments",
+                },
+            },
+        });
+
+        # ========== API CALL ACTION ==========
+
+        # Make an API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "Other",
+            "display_name": "Make an API Call",
+            "short_desc": "Execute a custom FreshBooks API call",
+            "desc": "Make a custom REST API call to any FreshBooks endpoint",
+            "action_code": DPAT_API,
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "HTTP method to use",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "HTTP method: GET, POST, PUT, or DELETE",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "GET",
+                            "desc": "HTTP GET request",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "POST",
+                            "desc": "HTTP POST request",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "PUT",
+                            "desc": "HTTP PUT request",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "DELETE",
+                            "desc": "HTTP DELETE request",
+                        },
+                    ),
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "Path",
+                    "short_desc": "API path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The API path (e.g. /accounting/account/ACCOUNT_ID/users/clients)",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Request body",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Optional JSON request body for POST/PUT requests",
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS ==========
+
+        # Invoice Created Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/events/invoice-created",
+            "action": EVENT_INVOICE_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Invoice",
+            "short_desc": "Trigger when a new invoice is created",
+            "desc": "Fires when a new invoice is created in FreshBooks. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INVOICE_CREATED,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Payment Created Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/events/payment-created",
+            "action": EVENT_PAYMENT_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Payment",
+            "short_desc": "Trigger when a new payment is received",
+            "desc": "Fires when a new payment is recorded in FreshBooks. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PAYMENT_CREATED,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Client Created Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/events/client-created",
+            "action": EVENT_CLIENT_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Client",
+            "short_desc": "Trigger when a new client is created",
+            "desc": "Fires when a new client is created in FreshBooks. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CLIENT_CREATED,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Expense Created Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/events/expense-created",
+            "action": EVENT_EXPENSE_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Expense",
+            "short_desc": "Trigger when a new expense is created",
+            "desc": "Fires when a new expense is recorded in FreshBooks. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_EXPENSE_CREATED,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Estimate Created Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshBooksDataProvider::AppName,
+            "path": "/events/estimate-created",
+            "action": EVENT_ESTIMATE_CREATED,
+            "groups": "Triggers",
+            "display_name": "New Estimate",
+            "short_desc": "Trigger when a new estimate is created",
+            "desc": "Fires when a new estimate is created in FreshBooks. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ESTIMATE_CREATED,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The FreshBooks account ID for accounting API endpoints",
+                    "ref_data": "accounts",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage FreshBooksDataProvider Module
+
+    @tableofcontents
+
+    @section freshbooksdataproviderintro FreshBooksDataProvider Introduction
+
+    The %FreshBooksDataProvider module provides a data provider API for FreshBooks cloud
+    accounting software.
+
+    To use this module, use \c "%requires FreshBooksDataProvider" in your code.
+
+    All the public symbols in the module are defined in the FreshBooksDataProvider namespace.
+
+    The main classes are:
+    - @ref FreshBooksDataProvider::FreshBooksDataProvider "FreshBooksDataProvider":
+      the root data provider for FreshBooks
+    - @ref FreshBooksDataProvider::FreshBooksDataProviderFactory "FreshBooksDataProviderFactory":
+      the data provider factory for FreshBooks
+
+    @section freshbooksdataproviderrelnotes Release Notes
+
+    @subsection freshbooksdataproviderv1_0 FreshBooksDataProvider v1.0
+    - the initial version of the %FreshBooksDataProvider module
+*/
+
+#! Contains all public definitions in the FreshBooksDataProvider module
+public namespace FreshBooksDataProvider {
+}

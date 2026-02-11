@@ -91,6 +91,7 @@ public class DataProvider {
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
