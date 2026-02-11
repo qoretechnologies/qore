@@ -5246,6 +5246,10 @@ void QoreClass::runtimeResolveAbstractMethods() {
     if (priv->scl) {
         priv->ahm.runtimeInit(*priv, priv->scl);
     }
+    // mark as resolved so that parseResolveAbstract() in parseCommit() is a no-op;
+    // this prevents concurrent modification of shared parent class data when
+    // multiple Programs share JNI parent class pointers via BCNode::sclass
+    priv->parse_resolve_abstract = true;
 }
 
 const QoreExternalNormalMember* QoreClass::findLocalMember(const char* name) const {
