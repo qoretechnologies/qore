@@ -538,13 +538,8 @@ public class HttpAsyncSocketIoController {
             }
         }
 
-        if (result.canceled) {
-            @debug(log(LoggerLevel::DEBUG, "accept canceled for owner %s", owner));
-            return;
-        }
-
-        # Replenish: submit a new accept operation (outside the lock to avoid deadlock,
-        # since submitAcceptOp() also acquires m)
+        # Replenish: submit a new accept operation BEFORE early returns to prevent accept starvation
+        # (outside the lock to avoid deadlock, since submitAcceptOp() also acquires m)
         bool do_replenish = False;
         {
             AutoLock al(m);
@@ -557,6 +552,11 @@ public class HttpAsyncSocketIoController {
         }
         if (do_replenish) {
             submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
+        }
+
+        if (result.canceled) {
+            @debug(log(LoggerLevel::DEBUG, "accept canceled for owner %s", owner));
+            return;
         }
 
         if (result.ex) {
