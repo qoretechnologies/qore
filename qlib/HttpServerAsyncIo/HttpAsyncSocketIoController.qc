@@ -506,8 +506,6 @@ public class HttpAsyncSocketIoController {
                 ssl_accept_all_certs = listeners{owner}.ssl_accept_all_certs;
             }
         }
-        log(LoggerLevel::INFO, "submitAcceptOp: owner=%s seq=%d cnt_before=%d cnt_after=%d",
-            owner, seq, cnt_before, cnt_after);
         on_error {
             AutoLock al(m);
             int cnt = accept_counts{owner} ?? 0;
@@ -558,11 +556,8 @@ public class HttpAsyncSocketIoController {
             }
             cnt_after = accept_counts{owner} ?? 0;
         }
-        log(LoggerLevel::INFO, "handleAcceptResult: owner=%s canceled=%y has_ex=%y cnt_before=%d cnt_after=%d",
-            owner, result.canceled, exists result.ex, cnt_before, cnt_after);
 
         if (result.canceled) {
-            log(LoggerLevel::INFO, "accept CANCELED for owner %s - returning without replenish", owner);
             return;
         }
 
@@ -581,14 +576,10 @@ public class HttpAsyncSocketIoController {
                 }
             }
         }
-        log(LoggerLevel::INFO, "accept replenish check: owner=%s has_listener=%y cnt=%d DefaultAcceptOps=%d do_replenish=%y",
-            owner, has_listener, cnt_check, DefaultAcceptOps, do_replenish);
 
         if (do_replenish) {
-            log(LoggerLevel::INFO, "SUBMITTING new accept op for owner=%s", owner);
             try {
                 submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
-                log(LoggerLevel::INFO, "SUCCESS: submitted new accept op for owner=%s", owner);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "FAILED to submit accept op for owner=%s: %s: %s",
                     owner, ex.err, ex.desc);

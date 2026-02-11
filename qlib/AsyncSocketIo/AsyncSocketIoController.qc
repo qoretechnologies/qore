@@ -1043,7 +1043,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         h = shift cmdq;
                     }
                 @debug(++cmd_count);
-                @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
                 list<auto> args = h.args ?? ();
                 switch (h.cmd) {
                     case IoCommand::Quit: {
