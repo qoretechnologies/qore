@@ -641,17 +641,12 @@ public class HttpAsyncSocketIoController {
         }
 
         if (output.ssl && !sock.isSecure()) {
-            hash<auto> cx;
-            try {
-                cx = {
-                    "peer": sock.getPeerInfo(),
-                    "socket": sock.getSocketInfo(),
-                };
-            } catch (hash<ExceptionInfo> ex) {
-                # Socket already closed by client - skip this connection
-                log(LoggerLevel::DEBUG, "Failed to get peer info during SSL setup: %s: %s", ex.err, ex.desc);
-                return;
-            }
+            # Don't call getPeerInfo() here - can block I/O thread if client closes socket
+            # Will populate peer info after SSL handshake completes and socket is stable
+            hash<auto> cx = {
+                "peer": {"address": "unknown", "port": 0},
+                "socket": {"address": "unknown", "port": 0},
+            };
 
             if (linfo.cert) {
                 sock.setCertificate(linfo.cert);
@@ -711,10 +706,19 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            hash<auto> cx = {
-                "peer": sock.getPeerInfo(),
-                "socket": sock.getSocketInfo(),
-            };
+            # Get peer info safely - no DNS lookup
+            hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+            if (sock.isOpen()) {
+                try {
+                    cx = {
+                        "peer": sock.getPeerInfo(False),    # No DNS blocking
+                        "socket": sock.getSocketInfo(),
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::DEBUG, "Could not get peer info for h2c connection %s: %s: %s",
+                        uh, ex.err, ex.desc);
+                }
+            }
 
             Http2PollOperation h2op(sock);
 
@@ -743,11 +747,20 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # HTTP/1.x path (SSL already complete)
-        hash<auto> cx = {
-            "peer": sock.getPeerInfo(),
-            "socket": sock.getSocketInfo(),
-        };
+        # HTTP/1.x path (no SSL)
+        # Get peer info safely - no DNS lookup
+        hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+        if (sock.isOpen()) {
+            try {
+                cx = {
+                    "peer": sock.getPeerInfo(False),    # No DNS blocking
+                    "socket": sock.getSocketInfo(),
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "Could not get peer info for HTTP/1.x connection %s: %s: %s",
+                    uh, ex.err, ex.desc);
+            }
+        }
 
         # Opt #5/#7: Merge round-robin + connection creation into single lock scope
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
@@ -836,8 +849,22 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # SSL handshake complete
+        # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
+
+        # Now safe to get peer info - socket established, DNS disabled
+        hash<auto> peer_info = {"address": "unknown", "port": 0};
+        hash<auto> socket_info = {"address": "unknown", "port": 0};
+        if (sock.isOpen()) {
+            try {
+                peer_info = sock.getPeerInfo(False);      # host_lookup=False - no DNS blocking
+                socket_info = sock.getSocketInfo();
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "Could not get peer info after SSL handshake for %s: %s: %s",
+                    uh, ex.err, ex.desc);
+                # Continue with fallback values - not critical
+            }
+        }
 
         *string negotiated = sock.getAlpnProtocol();
         bool is_http2 = (negotiated == "h2");
@@ -876,6 +903,9 @@ public class HttpAsyncSocketIoController {
                     conn_info.state = HttpConnectionState::Http2;
                     conn_info.stream_op = h2op;
                     conn_info.is_http2 = True;
+                    # Update cx with real peer info now that socket is stable
+                    conn_info.cx.peer = peer_info;
+                    conn_info.cx.socket = socket_info;
                     cinfo = connections{uh} = conn_info;
                 }
             } else {
@@ -890,6 +920,9 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                     conn_info.state = HttpConnectionState::ReadHeader;
                     conn_info.is_http2 = False;
+                    # Update cx with real peer info now that socket is stable
+                    conn_info.cx.peer = peer_info;
+                    conn_info.cx.socket = socket_info;
                     cinfo = connections{uh} = conn_info;
                 }
             }
