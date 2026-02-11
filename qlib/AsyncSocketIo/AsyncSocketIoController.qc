@@ -202,6 +202,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
     }
 
+    #! Returns the number of operations in the cache (useful for testing cleanup)
+    int getCacheSize() {
+        AutoLock al(m);
+        return cache.size();
+    }
+
     #! Set autostop flag
     setAutostop(bool autostop = True) {
         self.autostop = autostop;
@@ -587,6 +593,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         {
             AutoLock al(m);
             while (True) {
+                # Check if I/O thread has exited - if so, operations are implicitly canceled
+                if (!tid) {
+                    break;
+                }
                 bool found = False;
                 foreach string key in (keys cache) {
                     if (cache{key}.owner == owner) {
@@ -1033,7 +1043,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                         h = shift cmdq;
                     }
                 @debug(++cmd_count);
-                @debug(log(LoggerLevel::INFO, "I/O thread got command: %y", h));
                 list<auto> args = h.args ?? ();
                 switch (h.cmd) {
                     case IoCommand::Quit: {
@@ -1227,7 +1236,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         };
         # Always signal the I/O thread to ensure prompt wakeup
         # The cost of extra notifier signals is negligible compared to potential lost wakeups
-        @debug(log(LoggerLevel::INFO, "enqueueCmdLocked(): enqueued command %y args %y (signal)", cmd, args));
         return True;
     }
 
@@ -1248,10 +1256,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             AutoLock al(m);
             signal = sendCmdLocked(cmd, argv);
         }
-        @debug(log(LoggerLevel::INFO, "wrote command %y args %y to the command queue", cmd, argv));
         if (signal) {
             notifier.notify();
-            @debug(log(LoggerLevel::INFO, "notified I/O thread to wake up"));
         }
     }
 

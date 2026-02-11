@@ -88,7 +88,7 @@ class SlowHandler inherits AbstractHttpRequestHandler {
         if (m) {
             delay_ms = int(m[0]);
         }
-        sleep(delay_ms);
+        usleep(delay_ms * 1000);
         return makeResponse(200, sprintf("delayed %d ms", delay_ms), {"Content-Type": "text/plain"});
     }
 }
@@ -620,12 +620,104 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Test 4: Concurrent HTTP/2 requests with slow handler
     #! Verifies that a slow handler on one connection doesn't block other connections.
-    #! NOTE: skipped due to known HTTP/2 I/O thread wake issue with delayed responses;
-    #! the slow handler response is queued in nghttp2 but the I/O thread doesn't wake
-    #! to flush it (same issue as in HttpServerAsyncHttp2.qtest where the slow handler
-    #! test is also disabled)
     testConcurrentWithSlowHandler() {
-        testSkip("slow handler HTTP/2 response flushing has a known I/O wake issue");
+        int num_fast = 3;
+        int num_slow = 2;
+        int total = num_fast + num_slow;
+        int timeout_ms = 30000;
+
+        Counter cnt(total);
+        list<hash<auto>> results = ();
+        Mutex mx();
+
+        # Start slow requests first (200ms delay)
+        for (int i = 0; i < num_slow; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    RestClient rc = getRestClient(timeout_ms);
+                    on_exit delete rc;
+                    date start = now_us();
+                    hash<auto> resp = rc.get("/slow/200");
+                    date elapsed = now_us() - start;
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "slow",
+                        "status": resp.status_code,
+                        "elapsed_ms": elapsed.durationMilliseconds(),
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "slow",
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        # Wait a bit then start fast requests
+        sleep(50ms);
+
+        for (int i = 0; i < num_fast; i++) {
+            int idx = num_slow + i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    RestClient rc = getRestClient(timeout_ms);
+                    on_exit delete rc;
+                    date start = now_us();
+                    hash<auto> resp = rc.get("/simple");
+                    date elapsed = now_us() - start;
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "fast",
+                        "status": resp.status_code,
+                        "elapsed_ms": elapsed.durationMilliseconds(),
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "fast",
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        cnt.waitForZero(60s);
+
+        assertEq(total, results.size(), "all operations should complete");
+
+        int success_count = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                success_count++;
+                assertEq(200, r.status, sprintf("Request %d (%s) should return 200", r.idx, r.type));
+                if (r.type == "slow") {
+                    assertRegex("delayed", r.body, sprintf("Slow request %d body should mention delay", r.idx));
+                } else {
+                    assertEq("OK", r.body, sprintf("Fast request %d body", r.idx));
+                }
+            }
+        }
+
+        assertEq(total, success_count, "All concurrent requests (slow + fast) should succeed");
     }
 
     #! Test 5: Sequential streaming on same connection

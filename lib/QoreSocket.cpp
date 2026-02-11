@@ -5608,7 +5608,7 @@ QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
 #include "qore/intern/Http2Session.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), out(xsink) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // Check if socket is open and valid
@@ -5695,6 +5695,8 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         // Socket buffer full; poll and retry before completing the operation
                         return getSocketPollInfoHash(xsink, srv);
                     }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
                     h2_state = H2S_REQUEST_READY;
                     if (set_non_block) {
                         set_non_block = false;
@@ -5752,6 +5754,8 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         // Socket buffer full; poll and retry before completing the operation
                         return getSocketPollInfoHash(xsink, srv);
                     }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
                     h2_state = H2S_REQUEST_READY;
                     // Goal reached - clear non-block flag so subsequent operations can proceed
                     if (set_non_block) {
@@ -5792,8 +5796,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
             }
 
             case H2S_REQUEST_READY:
-                // If there are more completed streams, stay in REQUEST_READY
+                // If there are more completed streams, dequeue the next one
                 if (h2_session->hasCompletedStreams()) {
+                    cached_stream = h2_session->takeCompletedStream();
                     if (set_non_block) {
                         set_non_block = false;
                         sock->priv->clearNonBlock();
@@ -5802,6 +5807,7 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 }
                 // All completed streams consumed - transition back to reading
                 // so the same operation can be reused for multiplexing
+                cached_stream.reset();
                 h2_state = H2S_READING;
                 if (!set_non_block) {
                     if (sock->priv->setNonBlock(xsink)) {
@@ -5819,64 +5825,54 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 }
 
 QoreValue SocketHttp2ServerPollOperation::getOutput() const {
-    if (h2_state != H2S_REQUEST_READY || !h2_session) {
+    if (h2_state != H2S_REQUEST_READY) {
         return QoreValue();
     }
     if (peer_closed) {
         return QoreValue();
     }
-
-    // Get the completed stream
-    auto stream_info = h2_session->takeCompletedStream();
-    if (!stream_info) {
+    // cached_stream is dequeued in continuePoll() when transitioning to H2S_REQUEST_READY
+    if (!cached_stream) {
         return QoreValue();
     }
     // Skip streams reset at protocol level (e.g., CONNECT without ENABLE_CONNECT_PROTOCOL)
     // The RST_STREAM was already sent by nghttp2 via sendPendingData()
-    if (stream_info->reset) {
+    if (cached_stream->reset) {
         return QoreValue();
     }
 
-    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
+    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = cached_stream->stream_id;
 
-    // Build output hash
-    out = new QoreHashNode(autoTypeInfo);
-    out->setKeyValue("method", new QoreStringNode(stream_info->method), nullptr);
-    out->setKeyValue("path", new QoreStringNode(stream_info->path), nullptr);
-    out->setKeyValue("stream_id", stream_info->stream_id, nullptr);
+    // Build output hash from cached stream info (idempotent - safe to call multiple times)
+    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+    result->setKeyValue("method", new QoreStringNode(cached_stream->method), nullptr);
+    result->setKeyValue("path", new QoreStringNode(cached_stream->path), nullptr);
+    result->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
-    // Build headers hash
-    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
-    for (const auto& h : stream_info->headers) {
-        std::string lowered_name;
-        lowered_name.reserve(h.first.size());
-        for (unsigned char ch : h.first) {
-            lowered_name.push_back(std::tolower(ch));
-        }
-        headers->setKeyValue(lowered_name.c_str(), new QoreStringNode(h.second), nullptr);
-    }
-    out->setKeyValue("headers", headers, nullptr);
+    // Build headers hash (lowercase names, handle duplicate headers per RFC 7540)
+    QoreHashNode* headers = h2HeadersToQoreHash(cached_stream->headers, true);
+    result->setKeyValue("headers", headers, nullptr);
 
-    // Body as binary - must copy the data since stream_info->body will be destroyed
-    if (!stream_info->body.empty()) {
+    // Body as binary
+    if (!cached_stream->body.empty()) {
         BinaryNode* body = new BinaryNode();
-        body->append(stream_info->body.data(), stream_info->body.size());
-        out->setKeyValue("body", body, nullptr);
+        body->append(cached_stream->body.data(), cached_stream->body.size());
+        result->setKeyValue("body", body, nullptr);
     }
 
     // Add pseudo-headers if present
-    if (!stream_info->authority.empty()) {
-        out->setKeyValue("authority", new QoreStringNode(stream_info->authority), nullptr);
+    if (!cached_stream->authority.empty()) {
+        result->setKeyValue("authority", new QoreStringNode(cached_stream->authority), nullptr);
     }
-    if (!stream_info->scheme.empty()) {
-        out->setKeyValue("scheme", new QoreStringNode(stream_info->scheme), nullptr);
+    if (!cached_stream->scheme.empty()) {
+        result->setKeyValue("scheme", new QoreStringNode(cached_stream->scheme), nullptr);
     }
     // RFC 8441: Add :protocol pseudo-header for extended CONNECT
-    if (!stream_info->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol", new QoreStringNode(stream_info->connect_protocol), nullptr);
+    if (!cached_stream->connect_protocol.empty()) {
+        headers->setKeyValue(":protocol", new QoreStringNode(cached_stream->connect_protocol), nullptr);
     }
 
-    return out.release();
+    return result;
 }
 
 Http2SessionPtr SocketHttp2ServerPollOperation::takeSession() {
@@ -5909,15 +5905,24 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     }
     set_non_block = true;
 
-    // Build headers map
-    std::map<std::string, std::string> hdr_map;
+    // Build headers as vector of pairs to support duplicate header names (e.g., set-cookie)
+    std::vector<std::pair<std::string, std::string>> hdr_pairs;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                hdr_pairs.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+            } else if (val.getType() == NT_LIST) {
+                // Emit separate header entries for each list value
+                const QoreListNode* l = val.get<const QoreListNode>();
+                for (size_t i = 0; i < l->size(); ++i) {
+                    QoreValue lv = l->retrieveEntry(i);
+                    if (lv.getType() == NT_STRING) {
+                        hdr_pairs.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                    }
+                }
             }
         }
     }
@@ -5925,6 +5930,11 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     int rv;
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        // submitConnectResponse still uses map (CONNECT doesn't need duplicate headers)
+        std::map<std::string, std::string> hdr_map;
+        for (const auto& p : hdr_pairs) {
+            hdr_map[p.first] = p.second;
+        }
         if (getenv("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
                 stream_id, status_code);
@@ -5937,7 +5947,7 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         size_t body_len = body ? body->size() : 0;
         printd(5, "SocketHttp2SendResponsePollOperation() submitting response stream_id=%d status=%d body_len=%zu\n",
             stream_id, status_code, body_len);
-        rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
+        rv = session->submitResponse(stream_id, status_code, hdr_pairs, body_ptr, body_len, xsink);
     }
     if (rv != 0 || *xsink) {
         sock->priv->clearNonBlock();
@@ -6438,13 +6448,9 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     response->setKeyValue("stream_id", stream_id, xsink);
     response->setKeyValue("status_code", stream->status_code, xsink);
 
-    // Convert headers map to Qore hash
+    // Convert headers map to Qore hash (handle duplicate headers per RFC 7540)
     if (!stream->headers.empty()) {
-        ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), xsink);
-        for (const auto& h : stream->headers) {
-            headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
-        }
-        response->setKeyValue("headers", headers.release(), xsink);
+        response->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
     }
 
     // Convert body vector to Qore binary or string based on content-type
@@ -6452,9 +6458,9 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         // Check if content-type indicates text-based content
         bool is_text = false;
         auto ct_it = stream->headers.find("content-type");
-        if (ct_it != stream->headers.end()) {
+        if (ct_it != stream->headers.end() && !ct_it->second.empty()) {
             // Extract media type (before any parameters like charset)
-            std::string ct = ct_it->second;
+            std::string ct = ct_it->second.back();
             size_t semicolon = ct.find(';');
             if (semicolon != std::string::npos) {
                 ct = ct.substr(0, semicolon);

@@ -236,6 +236,14 @@ static std::string toLowerHeaderName(const std::string& name) {
 int32_t Http2Session::submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
+    // Delegate to vector<pair> overload
+    std::vector<std::pair<std::string, std::string>> pairs(headers.begin(), headers.end());
+    return submitRequest(method, path, pairs, body, body_len, xsink);
+}
+
+int32_t Http2Session::submitRequest(const char* method, const char* path,
+        const std::vector<std::pair<std::string, std::string>>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit request on server session");
@@ -244,47 +252,32 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 
     // Build pseudo-headers
     std::vector<nghttp2_nv> nva;
-    nva.reserve(headers.size() + 5);  // +5 for :method, :path, :scheme, :authority, :protocol
+    nva.reserve(headers.size() + 5);
 
-    // Add pseudo-headers first
+    // Extract pseudo-headers and special headers from the input
     std::string method_str(method);
     std::string path_str(path);
     std::string scheme_str;
     std::string authority;
-    std::string protocol;  // RFC 8441: :protocol pseudo-header for extended CONNECT
+    std::string protocol;
 
-    // Get scheme from headers if present, otherwise use stored scheme
-    auto scheme_it = headers.find(":scheme");
-    if (scheme_it != headers.end()) {
-        scheme_str = scheme_it->second;
-    } else {
-        scheme_str = scheme;  // Use stored scheme for h2c support
-    }
-
-    // Get authority from headers if present
-    // Check for :authority pseudo-header first (set by Qore layer)
-    auto it = headers.find(":authority");
-    if (it != headers.end()) {
-        authority = it->second;
-    } else {
-        // Fall back to host header for backwards compatibility
-        it = headers.find("host");
-        if (it != headers.end()) {
-            authority = it->second;
-        } else {
-            it = headers.find("Host");
-            if (it != headers.end()) {
-                authority = it->second;
-            }
+    for (const auto& h : headers) {
+        if (h.first == ":scheme") {
+            scheme_str = h.second;
+        } else if (h.first == ":authority") {
+            authority = h.second;
+        } else if (h.first == ":protocol") {
+            protocol = h.second;
+        } else if (!strcasecmp(h.first.c_str(), "host") && authority.empty()) {
+            authority = h.second;
         }
     }
 
-    // RFC 8441: Get :protocol for extended CONNECT (e.g., "websocket")
-    it = headers.find(":protocol");
-    if (it != headers.end()) {
-        protocol = it->second;
+    if (scheme_str.empty()) {
+        scheme_str = scheme;
     }
 
+    // Add :method pseudo-header
     nghttp2_nv nv_method = {
         reinterpret_cast<uint8_t*>(const_cast<char*>(":method")),
         reinterpret_cast<uint8_t*>(const_cast<char*>(method_str.c_str())),
@@ -292,7 +285,6 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     };
     nva.push_back(nv_method);
 
-    // RFC 8441: For extended CONNECT, :path and :scheme are still required (unlike regular CONNECT)
     nghttp2_nv nv_path = {
         reinterpret_cast<uint8_t*>(const_cast<char*>(":path")),
         reinterpret_cast<uint8_t*>(const_cast<char*>(path_str.c_str())),
@@ -316,7 +308,6 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         nva.push_back(nv_authority);
     }
 
-    // RFC 8441: Add :protocol pseudo-header for extended CONNECT (e.g., WebSocket over HTTP/2)
     if (!protocol.empty()) {
         nghttp2_nv nv_protocol = {
             reinterpret_cast<uint8_t*>(const_cast<char*>(":protocol")),
@@ -327,16 +318,14 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     }
 
     // Add regular headers (excluding pseudo-headers, host, and connection-specific headers)
-    // RFC 7540 Section 8.1.2.2: HTTP/2 MUST NOT use connection-specific header fields
+    // Store lowered names to keep them alive for the nghttp2 call
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
     for (const auto& h : headers) {
         std::string lname = toLowerHeaderName(h.first);
-        // Skip pseudo-headers and host (handled separately)
         if (lname[0] == ':' || lname == "host") {
             continue;
         }
-        // Skip connection-specific headers (forbidden in HTTP/2)
         if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
             lname == "transfer-encoding" || lname == "upgrade") {
             continue;
@@ -353,14 +342,8 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     nghttp2_data_provider* data_prd = nullptr;
     std::unique_ptr<DataProviderContext> provider_ctx;
 
-    // RFC 8441: For extended CONNECT (WebSocket over HTTP/2), we must NOT send END_STREAM
-    // because we need to send data after the handshake completes.
-    // Check if this is a CONNECT request with :protocol (extended CONNECT)
     bool is_extended_connect = (method_str == "CONNECT" && !protocol.empty());
 
-    // RFC 8441: Client SHOULD NOT send extended CONNECT if server hasn't advertised
-    // SETTINGS_ENABLE_CONNECT_PROTOCOL.  Only check if we've already received remote settings
-    // (remote_settings_received is set when we process the peer's SETTINGS frame).
     if (is_extended_connect && remote_settings_received
             && !remote_settings.enable_connect_protocol) {
         xsink->raiseException("HTTP2-CONNECT-ERROR",
@@ -372,7 +355,6 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     bool has_body = false;
     BodyData pending_data;
     if (body && body_len > 0) {
-        // Store body data for callback (copies the data) after stream_id is known
         pending_data = BodyData(body, body_len);
         has_body = true;
     }
@@ -388,7 +370,7 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     }
 
     if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: submitRequest sending %zu headers:\n", nva.size());
+        fprintf(stderr, "HTTP2 DEBUG: submitRequest (pairs) sending %zu headers:\n", nva.size());
         for (const auto& nv : nva) {
             fprintf(stderr, "  %.*s: %.*s\n", (int)nv.namelen, nv.name, (int)nv.valuelen, nv.value);
         }
@@ -411,7 +393,6 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         pending_data_providers.emplace(stream_id, std::move(provider_ctx));
     }
 
-    // Create stream info and mark as streaming for extended CONNECT
     Http2StreamInfo* stream = getOrCreateStream(stream_id);
     if (stream) {
         stream->is_connect = (method_str == "CONNECT");
@@ -420,7 +401,7 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         }
     }
     if (is_extended_connect && stream) {
-        stream->stream_type = Http2StreamType::WebSocket;  // Mark as bidirectional streaming
+        stream->stream_type = Http2StreamType::WebSocket;
     }
 
     return stream_id;
@@ -428,6 +409,14 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 
 int Http2Session::submitResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink) {
+    // Delegate to vector<pair> overload
+    std::vector<std::pair<std::string, std::string>> pairs(headers.begin(), headers.end());
+    return submitResponse(stream_id, status_code, pairs, body, body_len, xsink);
+}
+
+int Http2Session::submitResponse(int32_t stream_id, int status_code,
+        const std::vector<std::pair<std::string, std::string>>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
@@ -456,7 +445,6 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
         if (lname[0] == ':') {
             continue;
         }
-        // Skip connection-specific headers (forbidden in HTTP/2)
         if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
             lname == "transfer-encoding" || lname == "upgrade") {
             continue;
@@ -474,7 +462,6 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     std::unique_ptr<DataProviderContext> provider_ctx;
 
     if (body && body_len > 0) {
-        // Store body data for callback (copies the data)
         pending_body_data[stream_id] = BodyData(body, body_len);
 
         provider_ctx = std::make_unique<DataProviderContext>();
@@ -484,19 +471,16 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
         data_prd = &provider_ctx->provider;
     }
 
-    printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
+    printd(5, "submitResponse(pairs) stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
         stream_id, status_code, body_len, nva.size());
 
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), data_prd);
     if (rv != 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit response: %s",
             nghttp2_strerror(rv));
-        printd(5, "submitResponse() FAILED: %s\n", nghttp2_strerror(rv));
         return -1;
     }
 
-    printd(5, "submitResponse() SUCCESS: stream_id=%d want_write=%d want_read=%d\n",
-        stream_id, nghttp2_session_want_write(session), nghttp2_session_want_read(session));
     if (provider_ctx) {
         pending_data_providers.emplace(stream_id, std::move(provider_ctx));
     }
@@ -1573,7 +1557,7 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
             fflush(stderr);
         }
     } else {
-        stream->headers[header_name] = header_value;
+        stream->headers[header_name].push_back(header_value);
     }
 
     return 0;
@@ -1813,4 +1797,48 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     }
 
     return 0;
+}
+
+QoreHashNode* h2HeadersToQoreHash(
+        const std::map<std::string, std::vector<std::string>>& h2_headers,
+        bool lowercase) {
+    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
+    for (const auto& h : h2_headers) {
+        std::string name;
+        if (lowercase) {
+            name.reserve(h.first.size());
+            for (unsigned char ch : h.first) {
+                name.push_back(std::tolower(ch));
+            }
+        } else {
+            name = h.first;
+        }
+
+        const std::vector<std::string>& vals = h.second;
+        if (vals.empty()) {
+            continue;
+        }
+        if (vals.size() == 1) {
+            // Single value: store as plain string
+            headers->setKeyValue(name.c_str(), new QoreStringNode(vals[0]), nullptr);
+        } else if (name == "cookie") {
+            // RFC 7540 Section 8.1.2.5: concatenate cookie values with "; "
+            QoreStringNode* joined = new QoreStringNode;
+            for (size_t i = 0; i < vals.size(); ++i) {
+                if (i > 0) {
+                    joined->concat("; ");
+                }
+                joined->concat(vals[i].c_str());
+            }
+            headers->setKeyValue(name.c_str(), joined, nullptr);
+        } else {
+            // Multiple values: store as list (matches HTTP/1.1 duplicate header behavior)
+            QoreListNode* l = new QoreListNode(autoTypeInfo);
+            for (const auto& v : vals) {
+                l->push(new QoreStringNode(v), nullptr);
+            }
+            headers->setKeyValue(name.c_str(), l, nullptr);
+        }
+    }
+    return headers;
 }

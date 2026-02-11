@@ -474,16 +474,32 @@ public class HttpAsyncSocketIoController {
         };
     }
 
+    #! Returns the total number of operations in all I/O controller caches (useful for testing cleanup)
+    /** This method returns the sum of cache sizes across all I/O threads. A non-zero value
+        after connections are closed indicates a cache leak (poll operations not properly cancelled).
+    */
+    int getTotalCacheSize() {
+        int total = 0;
+        foreach AsyncSocketIoController c in (controllers) {
+            total += c.getCacheSize();
+        }
+        return total;
+    }
+
     #! Submits an accept operation to the controller
     private submitAcceptOp(Socket listener, HttpAsyncTarget target, bool ssl,
             auto cert, auto key, string http_version, string owner) {
         int seq;
         int ssl_verify_flags = SSL_VERIFY_NONE;
         bool ssl_accept_all_certs = True;
+        int cnt_before;
+        int cnt_after;
         {
             AutoLock al(m);
             seq = ++accept_seq;
-            accept_counts{owner} = (accept_counts{owner} ?? 0) + 1;
+            cnt_before = accept_counts{owner} ?? 0;
+            accept_counts{owner} = cnt_before + 1;
+            cnt_after = accept_counts{owner};
             # Get SSL params from listener info for consistent handshake behavior
             if (listeners{owner}) {
                 ssl_verify_flags = listeners{owner}.ssl_verify_flags;
@@ -530,33 +546,47 @@ public class HttpAsyncSocketIoController {
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
             string http_version, string owner) {
         # Decrement accept count
+        int cnt_before;
+        int cnt_after;
         {
             AutoLock al(m);
-            int cnt = accept_counts{owner} ?? 0;
-            if (cnt > 0) {
-                accept_counts{owner} = cnt - 1;
+            cnt_before = accept_counts{owner} ?? 0;
+            if (cnt_before > 0) {
+                accept_counts{owner} = cnt_before - 1;
             }
+            cnt_after = accept_counts{owner} ?? 0;
         }
 
         if (result.canceled) {
-            @debug(log(LoggerLevel::DEBUG, "accept canceled for owner %s", owner));
             return;
         }
 
         # Replenish: submit a new accept operation (outside the lock to avoid deadlock,
         # since submitAcceptOp() also acquires m)
         bool do_replenish = False;
+        bool has_listener;
+        int cnt_check;
         {
             AutoLock al(m);
-            if (listeners{owner}) {
-                int cnt = accept_counts{owner} ?? 0;
-                if (cnt < DefaultAcceptOps) {
+            has_listener = exists listeners{owner};
+            cnt_check = accept_counts{owner} ?? 0;
+            if (has_listener) {
+                if (cnt_check < DefaultAcceptOps) {
                     do_replenish = True;
                 }
             }
         }
+
         if (do_replenish) {
-            submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
+            try {
+                submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "FAILED to submit accept op for owner=%s: %s: %s",
+                    owner, ex.err, ex.desc);
+            }
+        } else {
+            log(LoggerLevel::WARN, "NOT REPLENISHING accept for owner=%s (has_listener=%y cnt=%d)",
+                owner, has_listener, cnt_check);
         }
 
         if (result.ex) {
@@ -611,9 +641,11 @@ public class HttpAsyncSocketIoController {
         }
 
         if (output.ssl && !sock.isSecure()) {
+            # Don't call getPeerInfo() here - can block I/O thread if client closes socket
+            # Will populate peer info after SSL handshake completes and socket is stable
             hash<auto> cx = {
-                "peer": sock.getPeerInfo(),
-                "socket": sock.getSocketInfo(),
+                "peer": {"address": "unknown", "port": 0},
+                "socket": {"address": "unknown", "port": 0},
             };
 
             if (linfo.cert) {
@@ -674,10 +706,19 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            hash<auto> cx = {
-                "peer": sock.getPeerInfo(),
-                "socket": sock.getSocketInfo(),
-            };
+            # Get peer info safely - no DNS lookup
+            hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+            if (sock.isOpen()) {
+                try {
+                    cx = {
+                        "peer": sock.getPeerInfo(False),    # No DNS blocking
+                        "socket": sock.getSocketInfo(),
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::DEBUG, "Could not get peer info for h2c connection %s: %s: %s",
+                        uh, ex.err, ex.desc);
+                }
+            }
 
             Http2PollOperation h2op(sock);
 
@@ -706,11 +747,20 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # HTTP/1.x path (SSL already complete)
-        hash<auto> cx = {
-            "peer": sock.getPeerInfo(),
-            "socket": sock.getSocketInfo(),
-        };
+        # HTTP/1.x path (no SSL)
+        # Get peer info safely - no DNS lookup
+        hash<auto> cx = {"peer": {"address": "unknown", "port": 0}, "socket": {"address": "unknown", "port": 0}};
+        if (sock.isOpen()) {
+            try {
+                cx = {
+                    "peer": sock.getPeerInfo(False),    # No DNS blocking
+                    "socket": sock.getSocketInfo(),
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "Could not get peer info for HTTP/1.x connection %s: %s: %s",
+                    uh, ex.err, ex.desc);
+            }
+        }
 
         # Opt #5/#7: Merge round-robin + connection creation into single lock scope
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
@@ -799,8 +849,22 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # SSL handshake complete
+        # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
+
+        # Now safe to get peer info - socket established, DNS disabled
+        hash<auto> peer_info = {"address": "unknown", "port": 0};
+        hash<auto> socket_info = {"address": "unknown", "port": 0};
+        if (sock.isOpen()) {
+            try {
+                peer_info = sock.getPeerInfo(False);      # host_lookup=False - no DNS blocking
+                socket_info = sock.getSocketInfo();
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "Could not get peer info after SSL handshake for %s: %s: %s",
+                    uh, ex.err, ex.desc);
+                # Continue with fallback values - not critical
+            }
+        }
 
         *string negotiated = sock.getAlpnProtocol();
         bool is_http2 = (negotiated == "h2");
@@ -839,6 +903,9 @@ public class HttpAsyncSocketIoController {
                     conn_info.state = HttpConnectionState::Http2;
                     conn_info.stream_op = h2op;
                     conn_info.is_http2 = True;
+                    # Update cx with real peer info now that socket is stable
+                    conn_info.cx.peer = peer_info;
+                    conn_info.cx.socket = socket_info;
                     cinfo = connections{uh} = conn_info;
                 }
             } else {
@@ -853,6 +920,9 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                     conn_info.state = HttpConnectionState::ReadHeader;
                     conn_info.is_http2 = False;
+                    # Update cx with real peer info now that socket is stable
+                    conn_info.cx.peer = peer_info;
+                    conn_info.cx.socket = socket_info;
                     cinfo = connections{uh} = conn_info;
                 }
             }
@@ -1413,21 +1483,35 @@ public class HttpAsyncSocketIoController {
 
     #! Handles connection closed
     private handleConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo) {
-        log(LoggerLevel::DEBUG, "Connection closed: %y", uh);
+        log(LoggerLevel::INFO, "Connection closed: %y", uh);
 
         {
             AutoLock al(m);
             remove connections{uh};
         }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
     }
 
     #! Handles SSE disconnect
     private handleSseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo) {
-        log(LoggerLevel::DEBUG, "SSE disconnect: %y", uh);
+        log(LoggerLevel::INFO, "SSE disconnect: %y", uh);
 
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
@@ -1440,11 +1524,18 @@ public class HttpAsyncSocketIoController {
     #! Handles WebSocket close
     private handleWebSocketClose(string uh, hash<HttpActiveConnectionInfo> cinfo,
             HttpWebSocketPollOperation op) {
-        log(LoggerLevel::DEBUG, "WebSocket close: %y (code: %d)", uh, op.getCloseCode());
+        log(LoggerLevel::INFO, "WebSocket close: %y (code: %d)", uh, op.getCloseCode());
 
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
@@ -1573,10 +1664,9 @@ public class HttpAsyncSocketIoController {
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
                         stream_id, ex.err, ex.desc);
-                    try {
-                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                    } catch () {}
-                    # Send 500 error response for this stream — do NOT close the connection
+                    # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
+                    # connection socket which breaks all other streams.  In HTTP/2 multiplexed
+                    # mode, a handler error affects only this stream; send a 500 response.
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
@@ -1669,10 +1759,9 @@ public class HttpAsyncSocketIoController {
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 WebSocket CONNECT stream=%d: "
                         "%s: %s", stream_id, ex.err, ex.desc);
-                    try {
-                        cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                    } catch () {}
-                    # Send 500 error response for this stream — do NOT close the connection
+                    # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
+                    # connection socket which breaks all other streams.  In HTTP/2 multiplexed
+                    # mode, a handler error affects only this stream; send a 500 response.
                     try {
                         cinfo.sock.submitHttp2Response(stream_id, 500,
                             {"content-type": "text/plain"},
@@ -1823,6 +1912,13 @@ public class HttpAsyncSocketIoController {
             AutoLock al(m);
             remove connections{uh};
         }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
     }
 
     #! Handles HTTP/2 async send completion (called on I/O thread)
@@ -1870,6 +1966,13 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
+
         try {
             cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
         } catch (hash<ExceptionInfo> ex) {
@@ -1886,6 +1989,13 @@ public class HttpAsyncSocketIoController {
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {

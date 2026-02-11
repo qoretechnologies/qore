@@ -540,8 +540,8 @@ public:
     DLLLOCAL int32_t getStreamId() const { return stream_id; }
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Clear output buffer to prevent memory accumulation on timeout
-        out = nullptr;
+        // Clear cached stream to prevent memory accumulation on timeout
+        cached_stream.reset();
         SocketPollSocketOperationBase::abort(xsink);
     }
 
@@ -550,7 +550,8 @@ private:
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
     bool peer_closed = false;
-    mutable ReferenceHolder<QoreHashNode> out;
+    //! Cached completed stream info, dequeued in continuePoll(), used by getOutput()
+    std::unique_ptr<Http2StreamInfo> cached_stream;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
 
