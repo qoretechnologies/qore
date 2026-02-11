@@ -210,6 +210,7 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
             }
         } catch (hash<ExceptionInfo> ex) {
             # Log error but continue polling
+            log(LoggerLevel::ERROR, "Error polling %s: %s: %s", getResourcePath(), ex.err, ex.desc);
         }
     }
 
