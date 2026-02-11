@@ -641,10 +641,17 @@ public class HttpAsyncSocketIoController {
         }
 
         if (output.ssl && !sock.isSecure()) {
-            hash<auto> cx = {
-                "peer": sock.getPeerInfo(),
-                "socket": sock.getSocketInfo(),
-            };
+            hash<auto> cx;
+            try {
+                cx = {
+                    "peer": sock.getPeerInfo(),
+                    "socket": sock.getSocketInfo(),
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                # Socket already closed by client - skip this connection
+                log(LoggerLevel::DEBUG, "Failed to get peer info during SSL setup: %s: %s", ex.err, ex.desc);
+                return;
+            }
 
             if (linfo.cert) {
                 sock.setCertificate(linfo.cert);
