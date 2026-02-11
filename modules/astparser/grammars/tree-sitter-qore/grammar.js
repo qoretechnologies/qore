@@ -948,11 +948,11 @@ module.exports = grammar({
           optional(seq(',', field('replacement', $._expression))))))),
     )),
 
-    // new expression: new Type(args) — supports complex types
+    // new expression: new Type(args) — parentheses are required in Qore
     new_expression: $ => prec.right(PREC.UNARY, seq(
       'new',
       field('type', $.type),
-      optional($.argument_list),
+      $.argument_list,
     )),
 
     // extract var, offset, length — returns extracted portion, modifies var
