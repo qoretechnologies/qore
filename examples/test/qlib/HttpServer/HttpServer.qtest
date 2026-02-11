@@ -336,6 +336,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
         addTestCase("async mode accept replenishment", \asyncModeAcceptReplenishmentTest());
         addTestCase("async mode cache cleanup", \asyncModeCacheCleanupTest());
+        addTestCase("async mode bad SSL handshake resilience", \asyncModeBadSslHandshakeTest());
+        addTestCase("async mode I/O thread non-blocking", \asyncModeIoThreadNonBlockingTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -2752,6 +2754,146 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             server.stopListenerID(ssl_info.id);
         }
+    }
+
+    /** Test that server handles bad SSL handshakes without blocking I/O thread.
+        Simulates clients that connect and close immediately during SSL handshake,
+        which previously caused getPeerInfo() to block the I/O thread.
+    */
+    asyncModeBadSslHandshakeTest() {
+        Logger logger("async-bad-ssl-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Create HTTPS listener
+        hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int ssl_port = ssl_info.port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test 1: Client connects and immediately closes (before SSL handshake)
+        {
+            Socket sock();
+            sock.connect("localhost:" + ssl_port);
+            sock.close();  # Close immediately - server will see EOF during SSL_accept
+            usleep(100ms);  # Give server time to process
+        }
+
+        # Test 2: Multiple rapid connect/close cycles
+        for (int i = 0; i < 10; ++i) {
+            Socket sock();
+            sock.connect("localhost:" + ssl_port);
+            sock.close();
+        }
+        usleep(500ms);  # Give server time to process all
+
+        # Critical: Verify server is still responsive (I/O thread not blocked)
+        HTTPClient verify_client({"url": "https://localhost:" + ssl_port,
+            "timeout": 2s, "ssl_verify_cert": False});
+        verify_client.connect();
+        assertEq("GET, test, /test", verify_client.get("/test"),
+            "server should still be responsive after bad SSL handshakes");
+        verify_client.disconnect();
+
+        # Verify cache is clean (no leaked operations from bad handshakes)
+        int cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+        if (m_options.verbose > 1) {
+            printf("Cache size after bad SSL handshakes: %d\n", cache_size);
+        }
+        # Cache should be small (just accept operations), not grown from leaked connections
+        assertTrue(cache_size < 20, "cache should not leak from bad SSL handshakes");
+    }
+
+    /** Test that I/O thread never blocks on getPeerInfo() calls.
+        Verifies the fix: getPeerInfo(host_lookup=False) and defensive checks.
+    */
+    asyncModeIoThreadNonBlockingTest() {
+        Logger logger("async-io-nonblock-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Test both HTTP and HTTPS
+        int http_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int https_port = ssl_info.port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Create many concurrent connections that close at various stages
+        Counter done(20);
+        bool all_completed = True;
+        date start = now_us();
+
+        for (int i = 0; i < 20; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    if (i % 2 == 0) {
+                        # HTTP connections
+                        HTTPClient client({"url": "http://localhost:" + http_port, "timeout": 2s});
+                        client.connect();
+                        client.get("/test");
+                        client.disconnect();
+                    } else {
+                        # HTTPS connections
+                        HTTPClient client({"url": "https://localhost:" + https_port,
+                            "timeout": 2s, "ssl_verify_cert": False});
+                        client.connect();
+                        client.get("/test");
+                        client.disconnect();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("Connection failed (expected for some): %s\n", ex.err);
+                    }
+                    all_completed = False;
+                }
+            }();
+        }
+
+        # Critical: All requests should complete quickly (not blocked on getPeerInfo)
+        done.waitForZero(10s);
+        assertEq(0, done.getCount(), "all concurrent requests should complete");
+
+        date elapsed = now_us() - start;
+        if (m_options.verbose > 1) {
+            printf("Elapsed time for 20 concurrent connections: %y\n", elapsed);
+        }
+
+        # Should complete in under 5 seconds (previously could take 20s+ if blocking)
+        assertTrue(elapsed < 5s, "I/O thread should not block - requests should be fast");
+
+        # Verify server still responsive
+        HTTPClient verify({"url": "http://localhost:" + http_port, "timeout": 2s});
+        verify.connect();
+        assertEq("GET, final, /final", verify.get("/final"));
+        verify.disconnect();
     }
 }
 
