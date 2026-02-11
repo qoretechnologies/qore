@@ -480,16 +480,22 @@ public class HttpAsyncSocketIoController {
         int seq;
         int ssl_verify_flags = SSL_VERIFY_NONE;
         bool ssl_accept_all_certs = True;
+        int cnt_before;
+        int cnt_after;
         {
             AutoLock al(m);
             seq = ++accept_seq;
-            accept_counts{owner} = (accept_counts{owner} ?? 0) + 1;
+            cnt_before = accept_counts{owner} ?? 0;
+            accept_counts{owner} = cnt_before + 1;
+            cnt_after = accept_counts{owner};
             # Get SSL params from listener info for consistent handshake behavior
             if (listeners{owner}) {
                 ssl_verify_flags = listeners{owner}.ssl_verify_flags;
                 ssl_accept_all_certs = listeners{owner}.ssl_accept_all_certs;
             }
         }
+        log(LoggerLevel::INFO, "submitAcceptOp: owner=%s seq=%d cnt_before=%d cnt_after=%d",
+            owner, seq, cnt_before, cnt_after);
         on_error {
             AutoLock al(m);
             int cnt = accept_counts{owner} ?? 0;
@@ -530,33 +536,54 @@ public class HttpAsyncSocketIoController {
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
             string http_version, string owner) {
         # Decrement accept count
+        int cnt_before;
+        int cnt_after;
         {
             AutoLock al(m);
-            int cnt = accept_counts{owner} ?? 0;
-            if (cnt > 0) {
-                accept_counts{owner} = cnt - 1;
+            cnt_before = accept_counts{owner} ?? 0;
+            if (cnt_before > 0) {
+                accept_counts{owner} = cnt_before - 1;
             }
+            cnt_after = accept_counts{owner} ?? 0;
+        }
+        log(LoggerLevel::INFO, "handleAcceptResult: owner=%s canceled=%y has_ex=%y cnt_before=%d cnt_after=%d",
+            owner, result.canceled, exists result.ex, cnt_before, cnt_after);
+
+        if (result.canceled) {
+            log(LoggerLevel::INFO, "accept CANCELED for owner %s - returning without replenish", owner);
+            return;
         }
 
-        # Replenish: submit a new accept operation BEFORE early returns to prevent accept starvation
-        # (outside the lock to avoid deadlock, since submitAcceptOp() also acquires m)
+        # Replenish: submit a new accept operation (outside the lock to avoid deadlock,
+        # since submitAcceptOp() also acquires m)
         bool do_replenish = False;
+        bool has_listener;
+        int cnt_check;
         {
             AutoLock al(m);
-            if (listeners{owner}) {
-                int cnt = accept_counts{owner} ?? 0;
-                if (cnt < DefaultAcceptOps) {
+            has_listener = exists listeners{owner};
+            cnt_check = accept_counts{owner} ?? 0;
+            if (has_listener) {
+                if (cnt_check < DefaultAcceptOps) {
                     do_replenish = True;
                 }
             }
         }
-        if (do_replenish) {
-            submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
-        }
+        log(LoggerLevel::INFO, "accept replenish check: owner=%s has_listener=%y cnt=%d DefaultAcceptOps=%d do_replenish=%y",
+            owner, has_listener, cnt_check, DefaultAcceptOps, do_replenish);
 
-        if (result.canceled) {
-            @debug(log(LoggerLevel::DEBUG, "accept canceled for owner %s", owner));
-            return;
+        if (do_replenish) {
+            log(LoggerLevel::INFO, "SUBMITTING new accept op for owner=%s", owner);
+            try {
+                submitAcceptOp(listener, target, ssl, cert, key, http_version, owner);
+                log(LoggerLevel::INFO, "SUCCESS: submitted new accept op for owner=%s", owner);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "FAILED to submit accept op for owner=%s: %s: %s",
+                    owner, ex.err, ex.desc);
+            }
+        } else {
+            log(LoggerLevel::WARN, "NOT REPLENISHING accept for owner=%s (has_listener=%y cnt=%d)",
+                owner, has_listener, cnt_check);
         }
 
         if (result.ex) {
@@ -1413,21 +1440,35 @@ public class HttpAsyncSocketIoController {
 
     #! Handles connection closed
     private handleConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo) {
-        log(LoggerLevel::DEBUG, "Connection closed: %y", uh);
+        log(LoggerLevel::INFO, "Connection closed: %y", uh);
 
         {
             AutoLock al(m);
             remove connections{uh};
         }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
     }
 
     #! Handles SSE disconnect
     private handleSseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo) {
-        log(LoggerLevel::DEBUG, "SSE disconnect: %y", uh);
+        log(LoggerLevel::INFO, "SSE disconnect: %y", uh);
 
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
@@ -1440,11 +1481,18 @@ public class HttpAsyncSocketIoController {
     #! Handles WebSocket close
     private handleWebSocketClose(string uh, hash<HttpActiveConnectionInfo> cinfo,
             HttpWebSocketPollOperation op) {
-        log(LoggerLevel::DEBUG, "WebSocket close: %y (code: %d)", uh, op.getCloseCode());
+        log(LoggerLevel::INFO, "WebSocket close: %y (code: %d)", uh, op.getCloseCode());
 
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
@@ -1821,6 +1869,13 @@ public class HttpAsyncSocketIoController {
             AutoLock al(m);
             remove connections{uh};
         }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
     }
 
     #! Handles HTTP/2 async send completion (called on I/O thread)
@@ -1868,6 +1923,13 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
+        }
+
         try {
             cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
         } catch (hash<ExceptionInfo> ex) {
@@ -1884,6 +1946,13 @@ public class HttpAsyncSocketIoController {
         {
             AutoLock al(m);
             remove connections{uh};
+        }
+
+        # Cancel the poll operation from the I/O controller cache to release socket reference
+        try {
+            controllers[cinfo.controller_idx].cancel(cinfo.sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
