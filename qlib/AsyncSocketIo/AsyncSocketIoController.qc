@@ -587,6 +587,10 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         {
             AutoLock al(m);
             while (True) {
+                # Check if I/O thread has exited - if so, operations are implicitly canceled
+                if (!tid) {
+                    break;
+                }
                 bool found = False;
                 foreach string key in (keys cache) {
                     if (cache{key}.owner == owner) {
