@@ -1220,9 +1220,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!value.isValid()) {
             return false;
         }
-        // Emit ScopeExit for all active scopes with is_error=true before throwing
-        // This ensures on_error handlers are executed
-        emitScopeExits(0, true);
+        // NOTE: do NOT emit ScopeExits before Throw. The exception must be on xsink
+        // before on_error handlers fire (for CatchExceptionHelper/rethrow support).
+        // For exception-target case: the LandingPad fires scope exits after the invoke.
+        // For no-exception-target case: the Throw handler fires scope exits after raising.
         // Emit CatchCleanup for all active catch scopes before throwing
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -1238,8 +1239,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!value.isValid()) {
                 return false;
             }
-            // Emit ScopeExit for all active scopes with is_error=true before throwing
-            emitScopeExits(0, true);
+            // NOTE: do NOT emit ScopeExits before Throw/Rethrow — same reason as Throw above.
             // Emit CatchCleanup for all active catch scopes before throwing
             for (int i = 0; i < catch_cleanup_depth; ++i) {
                 builder.createCatchCleanup(stmt->loc);
@@ -1247,8 +1247,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             builder.createThrow(value, handler, stmt->loc);
         } else {
-            // Emit ScopeExit for all active scopes with is_error=true before rethrowing
-            emitScopeExits(0, true);
+            // NOTE: do NOT emit ScopeExits before Rethrow — same reason as Throw above.
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
             // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
             // in the instruction so the rethrow handler can clean up all catch scopes

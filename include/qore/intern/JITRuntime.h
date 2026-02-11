@@ -247,6 +247,10 @@ uint64_t qore_rt_lvalue_unary(int opcode, uint64_t lvalue_bits, ExceptionSink* x
 //! LValue binary op (+=, -=, etc.): returns NaN-boxed result
 uint64_t qore_rt_lvalue_binary(int opcode, uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink);
 
+//! LValue ternary op (splice): returns NaN-boxed result
+uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uint64_t first_bits, uint64_t second_bits,
+    uint64_t third_bits, ExceptionSink* xsink);
+
 // --- Container construction helpers ---
 
 //! MakeList: takes array of NaN-boxed values, returns NaN-boxed list
@@ -464,6 +468,10 @@ uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, Exce
 
 //! LValue binary op via AOT context slot
 uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! LValue ternary op (splice) via AOT context slot
+uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t first, uint64_t second,
+    uint64_t third, ExceptionSink* xsink);
 
 //! Invoke a DotEval expression with a pre-evaluated base value.
 //! expr_bits is the NaN-boxed expression node (QoreDotEvalOperatorNode).

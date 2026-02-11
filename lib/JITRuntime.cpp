@@ -819,6 +819,17 @@ extern "C" uint64_t qore_rt_lvalue_binary(int opcode, uint64_t lvalue_bits, uint
     return toBits(result);
 }
 
+extern "C" uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uint64_t first_bits,
+        uint64_t second_bits, uint64_t third_bits, ExceptionSink* xsink) {
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue first = fromBits(first_bits);
+    QoreValue second = fromBits(second_bits);
+    QoreValue third = fromBits(third_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueTernary(static_cast<QoreIROpcode>(opcode), lvalue, first,
+        second, third, xsink);
+    return toBits(result);
+}
+
 // --- Container construction helpers ---
 
 extern "C" uint64_t qore_rt_make_list(uint64_t* vals, int count, ExceptionSink* xsink) {
@@ -2402,6 +2413,12 @@ extern "C" uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32
         ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     return qore_rt_lvalue_binary(op, ctx->exprs[idx], val, xsink);
+}
+
+extern "C" uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t first,
+        uint64_t second, uint64_t third, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_ternary(op, ctx->exprs[idx], first, second, third, xsink);
 }
 
 extern "C" uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,

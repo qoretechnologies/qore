@@ -1101,6 +1101,55 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Scope stack: tracks handler list indices at each ScopeEnter
     // Used to know which handlers to execute on ScopeExit
     std::vector<size_t> scope_stack;
+
+    // Helper to fire on_block_exit handlers for all scopes from current depth down to target_depth.
+    // Used by Throw/Rethrow handlers (no-exception-target case) to fire scope exits after
+    // the exception is raised on xsink, ensuring on_error handlers see the active exception.
+    auto fireScopeExits = [&](size_t target_depth = 0) {
+        while (scope_stack.size() > target_depth) {
+            size_t scope_start = scope_stack.back();
+            scope_stack.pop_back();
+            if (on_block_exit_handlers.size() > scope_start) {
+                bool error = xsink && xsink->isException();
+                ExceptionSink obe_xsink;
+                for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
+                    obe_type_e type = on_block_exit_handlers[i - 1].type;
+                    if (type == OBE_Unconditional || (error && type == OBE_Error)) {
+                        if (on_block_exit_handlers[i - 1].code) {
+                            std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                            std::unique_ptr<CatchExceptionHelper> ex_helper;
+                            if (type == OBE_Error && xsink) {
+                                QoreException* except = xsink->getException();
+                                if (except) {
+                                    ex_helper.reset(new CatchExceptionHelper(except));
+                                    argv_helper.reset(new SingleArgvContextHelper(
+                                        except->makeExceptionObject(), xsink));
+                                }
+                            }
+                            QoreValue rv;
+                            on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
+                            if (type == OBE_Error) {
+                                if (qore_es_private::get(obe_xsink)->rethrown) {
+                                    if (xsink) {
+                                        xsink->clear();
+                                    }
+                                }
+                            }
+                            if (obe_xsink) {
+                                if (xsink) {
+                                    xsink->assimilate(obe_xsink);
+                                }
+                            }
+                        }
+                    }
+                }
+                on_block_exit_handlers.resize(scope_start);
+                // Invalidate caches after AST execution
+                locals.clear();
+            }
+        }
+    };
+
     struct LocalInstantiationCleanup {
         std::unordered_set<const LocalVar*>& locals;
         ExceptionSink* xsink;
@@ -4224,6 +4273,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ip = 0;
                     break;
                 }
+                // No exception target: fire all scope exits after raising the exception.
+                // The exception is now on xsink, so on_error handlers can access it
+                // via CatchExceptionHelper for rethrow support.
+                fireScopeExits();
                 cleanupStoredValues(locals, nullptr);
                 cleanupStoredValues(globals, nullptr);
                 cleanupStoredValues(threadlocals, nullptr);
@@ -4265,6 +4318,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ip = 0;
                     break;
                 }
+                // No exception target: fire all scope exits after rethrowing.
+                // The rethrown exception is now on xsink, so on_error handlers
+                // can access it via CatchExceptionHelper.
+                fireScopeExits();
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupStoredValues(locals, nullptr);
                 cleanupStoredValues(globals, nullptr);
@@ -5587,7 +5644,7 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             break;
     }
     if (xsink) {
-        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue binary opcode");
+        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue binary opcode: %d", (int)op);
     }
     return QoreValue();
 }

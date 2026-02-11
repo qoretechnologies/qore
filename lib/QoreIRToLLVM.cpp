@@ -203,6 +203,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_lvalue_unary", unary_op_ft);
     // lvalue_binary: (i32, i64, i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_lvalue_binary", binary_op_ft);
+    // lvalue_ternary: (i32, i64, i64, i64, i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_lvalue_ternary",
+            llvm::FunctionType::get(i64_type, {i32_type, i64_type, i64_type, i64_type, i64_type, ptr_type}, false));
 
     // Container construction helpers
     // make_list: (ptr, i32, ptr) -> i64
@@ -326,6 +329,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // lvalue_binary_aot: (i32, ptr, i32, i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_lvalue_binary_aot",
             llvm::FunctionType::get(i64_type, {i32_type, ptr_type, i32_type, i64_type, ptr_type}, false));
+    // lvalue_ternary_aot: (i32, ptr, i32, i64, i64, i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_lvalue_ternary_aot",
+            llvm::FunctionType::get(i64_type,
+                {i32_type, ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
 
     // Call with pre-evaluated args: (i64, ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_call_with_args",
@@ -5706,9 +5713,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DivAssignLValue:
-        case QoreIROpcode::ModAssignLValue:
-        case QoreIROpcode::SpliceLValue: {
-            // Div/mod need zero-check (skip inline fast path), splice is always slow
+        case QoreIROpcode::ModAssignLValue: {
+            // Div/mod need zero-check (skip inline fast path)
             const auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst);
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
@@ -5735,6 +5741,57 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {i32_type, i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper,
                         {opcode_val, lv_const, val_boxed, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            {
+                const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
+                if (local_key) {
+                    reloadLocalFromRuntime(local_key, module, llvm_func);
+                }
+            }
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::SpliceLValue: {
+            // Splice is a ternary lvalue op: lvalue, offset, length, replacement
+            const auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst);
+            if (inst->operands.size() < 3) {
+                error = "SpliceLValue requires 3 operands (offset, length, replacement)";
+                return false;
+            }
+            auto* first_val = getVal(inst->operands[0].id, error);
+            if (!first_val) { return false; }
+            auto* second_val = getVal(inst->operands[1].id, error);
+            if (!second_val) { return false; }
+            auto* third_val = getVal(inst->operands[2].id, error);
+            if (!third_val) { return false; }
+            QoreValue lv = lvinst->lvalue;
+            uint64_t lv_bits;
+            std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
+            llvm::Value* first_boxed = boxValue(first_val, inst->operands[0].id);
+            llvm::Value* second_boxed = boxValue(second_val, inst->operands[1].id);
+            llvm::Value* third_boxed = boxValue(third_val, inst->operands[2].id);
+            emitPreDecrefAndClearTracker(inst->result.id, lvinst, module, llvm_func);
+            llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type,
+                    static_cast<int>(inst->opcode));
+            llvm::Value* result;
+            if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(lv_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_lvalue_ternary_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {opcode_val, aot_ctx_arg,
+                         llvm::ConstantInt::get(i32_type, slot), first_boxed, second_boxed, third_boxed, xsink_arg});
+            } else {
+                llvm::Value* lv_const = llvm::ConstantInt::get(i64_type, lv_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_lvalue_ternary",
+                        llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {opcode_val, lv_const, first_boxed, second_boxed, third_boxed, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

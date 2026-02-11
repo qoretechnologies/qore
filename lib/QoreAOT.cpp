@@ -250,6 +250,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 if (existing && !existing->empty()) {
                     printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
                         variant_key.c_str(), ir_func->name.c_str());
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
+                            variant_key.c_str(), ir_func->name.c_str());
+                    }
                     delete ir_func;
                     continue;
                 }
@@ -343,6 +347,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (existing && !existing->empty()) {
                         printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
                             variant_key.c_str(), ir_func->name.c_str());
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: skipping duplicate method variant '%s' (function '%s' already compiled)\n",
+                                variant_key.c_str(), ir_func->name.c_str());
+                        }
                         delete ir_func;
                         continue;
                     }
@@ -1021,8 +1029,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Report compilation stats
-    printf("AOT compilation: %d/%d functions pre-compiled (%d failed)\n",
-        compiled_count, total_funcs + 1, failed_count);
+    printf("AOT compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
+        compiled_count, total_funcs + 1, failed_count,
+        total_funcs + 1 - compiled_count - failed_count);
 
     // Use the program's actual parse options (includes directives like %modern)
     parse_options = pgm->getParseOptions64();
@@ -2058,8 +2067,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         return false;
     }
 
-    printf("AOT module compilation: %d/%d functions pre-compiled (%d failed)\n",
-        compiled_count, total_funcs, failed_count);
+    printf("AOT module compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
+        compiled_count, total_funcs, failed_count,
+        total_funcs - compiled_count - failed_count);
 
     // Step 4: Generate module ABI (instead of main + table)
     if (strip_source) {
@@ -2350,6 +2360,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (ns_module && strcmp(ns_module, mod_info.name.c_str()) != 0) {
                 printd(2, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
                     ni->first.c_str(), ns_module, mod_info.name.c_str());
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
+                        ni->first.c_str(), ns_module, mod_info.name.c_str());
+                }
                 continue;
             }
 
@@ -2362,8 +2376,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
-        printf("AOT split module compilation: %d/%d functions pre-compiled (%d failed)\n",
-            compiled_count, total_funcs, failed_count);
+        printf("AOT split module compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
+            compiled_count, total_funcs, failed_count, total_funcs - compiled_count - failed_count);
 
         // Step 10: Generate module ABI
         if (strip_source) {
