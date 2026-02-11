@@ -298,6 +298,8 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
         - new @ref HttpServer::HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
+      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
+        by disabling DNS hostname lookups and moving calls to after SSL handshake completion
     - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
