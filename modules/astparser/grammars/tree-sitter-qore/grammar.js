@@ -523,9 +523,17 @@ module.exports = grammar({
     empty_statement: $ => ';',
 
     expression_statement: $ => seq(
-      $._expression,
+      choice($.sequence_expression, $._expression),
       ';',
     ),
+
+    // Comma-separated expression list at statement level: remove x, remove y;
+    // Not part of _expression to avoid conflicts with commaSep1 in argument lists
+    sequence_expression: $ => prec.left(PREC.COMMA, seq(
+      $._expression,
+      ',',
+      choice($.sequence_expression, $._expression),
+    )),
 
     block: $ => seq(
       '{',
@@ -872,6 +880,7 @@ module.exports = grammar({
         $.index_expression,     // factories{name}(), DataSerializationSupport{ct}(body)
         $.call_expression,      // chained calls: f()(x)
         $.parenthesized_expression,  // (closure)()
+        $.closure_expression,   // sub() { ... }() — immediate closure invocation
         $.variable_name,        // $func()
         $.implicit_argument,    // $1() — calling implicit arg as closure
         $._type_keyword,        // string(), int(), etc.

@@ -2469,14 +2469,53 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "SYMBOL",
-          "name": "_expression"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "sequence_expression"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "_expression"
+            }
+          ]
         },
         {
           "type": "STRING",
           "value": ";"
         }
       ]
+    },
+    "sequence_expression": {
+      "type": "PREC_LEFT",
+      "value": 1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "_expression"
+          },
+          {
+            "type": "STRING",
+            "value": ","
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "sequence_expression"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_expression"
+              }
+            ]
+          }
+        ]
+      }
     },
     "block": {
       "type": "SEQ",
@@ -4707,6 +4746,10 @@
                 {
                   "type": "SYMBOL",
                   "name": "parenthesized_expression"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "closure_expression"
                 },
                 {
                   "type": "SYMBOL",

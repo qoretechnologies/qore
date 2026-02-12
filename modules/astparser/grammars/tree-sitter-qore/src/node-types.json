@@ -401,6 +401,10 @@
             "named": true
           },
           {
+            "type": "closure_expression",
+            "named": true
+          },
+          {
             "type": "code",
             "named": false
           },
@@ -1699,6 +1703,10 @@
         },
         {
           "type": "primary_expression",
+          "named": true
+        },
+        {
+          "type": "sequence_expression",
           "named": true
         },
         {
@@ -4560,6 +4568,45 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "sequence_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "assignment_expression",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "postfix_expression",
+          "named": true
+        },
+        {
+          "type": "primary_expression",
+          "named": true
+        },
+        {
+          "type": "sequence_expression",
+          "named": true
+        },
+        {
+          "type": "ternary_expression",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        }
+      ]
     }
   },
   {
