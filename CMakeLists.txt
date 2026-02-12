@@ -1496,7 +1496,7 @@ qore_user_module("qlib/ProviderIndexUtil" "")
 qore_user_module("qlib/QoreApiMetadata" "modules/astparser/astparser")
 qore_user_module("qlib/QoreCodeCompletion" "")
 qore_user_module("qlib/QoreCodeFormat" "modules/astparser/astparser")
-qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;Util;Mime")
+qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;QoreApiMetadata;Util;Mime")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")

@@ -34,6 +34,7 @@
 %requires astparser
 %requires QoreCodeCompletion
 %requires QoreCodeFormat
+%requires QoreApiMetadata
 
 module QLS {
     version = "1.0";
