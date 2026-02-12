@@ -39,7 +39,7 @@
 %endtry
 
 module QoreApiMetadata {
-    version = "1.0";
+    version = "1.1";
     desc = "structured API metadata extraction for Qore";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -87,6 +87,15 @@ module QoreApiMetadata {
     main entry points for metadata extraction, merging, search, and serialization.
 
     @section qoreapimetadata_relnotes Release Notes
+
+    @subsection qoreapimetadata_v1_1 v1.1
+    - added @ref QoreApiMetadata::DoxygenToMarkdown "DoxygenToMarkdown" converter class
+    - all doc comment text fields are now automatically converted from doxygen to Markdown
+    - supported conversions: \c \\ref, \c \\c, \c \\a, \c \\b, \c \\e, \c @par, \c @code / \c @endcode,
+      \c %ClassName, \c <tt>, \c <b>, \c <i>, HTML tables, HTML entities, \c @htmlonly / \c @endhtmlonly
+    - fixed bug in @ref QoreApiMetadata::DocCommentParser "DocCommentParser" where unrecognized tags
+      caused duplicate description text accumulation
+    - added \c @par as a recognized tag in DocCommentParser
 
     @subsection qoreapimetadata_v1_0 v1.0
     - initial release: structured API metadata extraction for %Qore

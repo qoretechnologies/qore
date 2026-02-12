@@ -121,6 +121,9 @@ public class DocCommentParser {
             if (exists tag_match) {
                 # flush previous tag
                 DocCommentParser::flushTag(\result, current_tag, current_arg, current_text);
+                current_tag = NOTHING;
+                current_arg = NOTHING;
+                current_text = "";
 
                 string tag_name = tag_match[0];
                 string tag_rest = tag_match[1];
@@ -197,26 +200,25 @@ public class DocCommentParser {
                         current_text = tag_rest;
                         break;
                     }
+                    case "par": {
+                        # @par Section: — treat as description text with @par prefix
+                        if (current_text.length()) {
+                            current_text += " ";
+                        }
+                        current_text += "@par";
+                        if (tag_rest.length()) {
+                            current_text += " " + tag_rest;
+                        }
+                        break;
+                    }
                     default: {
-                        # unknown tag — treat as continuation of description
-                        if (!exists current_tag) {
-                            current_tag = NOTHING;
-                            if (current_text.length()) {
-                                current_text += " ";
-                            }
-                            current_text += "@" + tag_name;
-                            if (tag_rest.length()) {
-                                current_text += " " + tag_rest;
-                            }
-                        } else {
-                            # continuation of current tag
-                            if (current_text.length()) {
-                                current_text += " ";
-                            }
-                            current_text += "@" + tag_name;
-                            if (tag_rest.length()) {
-                                current_text += " " + tag_rest;
-                            }
+                        # unknown tag — treat as description text
+                        if (current_text.length()) {
+                            current_text += " ";
+                        }
+                        current_text += "@" + tag_name;
+                        if (tag_rest.length()) {
+                            current_text += " " + tag_rest;
                         }
                         break;
                     }
@@ -249,6 +251,36 @@ public class DocCommentParser {
             if (!result.deprecated.length()) {
                 result.deprecated = True;
             }
+        }
+
+        # convert doxygen inline formatting to Markdown in all text fields
+        result.description = DoxygenToMarkdown::convert(result.description);
+        if (exists result.brief) {
+            result.brief = DoxygenToMarkdown::convert(result.brief);
+        }
+        if (exists result.return_description) {
+            result.return_description = DoxygenToMarkdown::convert(result.return_description);
+        }
+        foreach string key in (keys result.params) {
+            result.params{key} = DoxygenToMarkdown::convert(result.params{key});
+        }
+        for (int i = 0; i < result.throws.size(); ++i) {
+            if (exists result.throws[i].description) {
+                result.throws[i].description =
+                    DoxygenToMarkdown::convert(result.throws[i].description);
+            }
+        }
+        for (int i = 0; i < result.notes.size(); ++i) {
+            result.notes[i] = DoxygenToMarkdown::convert(result.notes[i]);
+        }
+        for (int i = 0; i < result.warnings.size(); ++i) {
+            result.warnings[i] = DoxygenToMarkdown::convert(result.warnings[i]);
+        }
+        if (exists result.deprecated && result.deprecated.typeCode() == NT_STRING) {
+            result.deprecated = DoxygenToMarkdown::convert(result.deprecated);
+        }
+        for (int i = 0; i < result.see_also.size(); ++i) {
+            result.see_also[i] = DoxygenToMarkdown::convert(result.see_also[i]);
         }
 
         return result;
