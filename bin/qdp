@@ -38,14 +38,13 @@
 %requires RestHandler
 # to create the data provider index
 %requires ProviderIndex
+%requires QoreHistory
 
 %try-module yaml
 %define NoYaml
 %endtry
 
-%try-module linenoise
-%define NoLinenoise
-%endtry
+%requires linenoise
 
 %try-module json
 %define NoJson
@@ -2300,11 +2299,7 @@ class QdpCmd {
 %else
         printf("YAML output: not available (yaml module not installed)\n");
 %endif
-%ifndef NoLinenoise
         printf("Line editing: supported (linenoise)\n");
-%else
-        printf("Line editing: basic (linenoise module not installed)\n");
-%endif
         exit(0);
     }
 
@@ -2443,9 +2438,7 @@ class MyObserver inherits Observer {
         string timestamp = QdpCmd::color.dim(now_us().format("YYYY-MM-DD HH:mm:SS.xx"));
         fmt = sprintf("%s %s ", direction_color, timestamp) + fmt;
         string msg = vsprintf(fmt, argv);
-%ifndef NoLinenoise
         msg =~ s/\n/\015\012/g;
-%endif
         stdout.print(msg + "\n");
         if (QdpCmd::ix) {
             stdout.print("\r");
@@ -2461,9 +2454,7 @@ class ConsoleAppender inherits LoggerAppenderWithLayout {
     processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_LOG:
-%ifndef NoLinenoise
                 params =~ s/\n/\r\n/g;
-%endif
                 print(params);
                 break;
         }
@@ -2478,10 +2469,12 @@ class InputHelper {
         # event map
         *hash<string, hash<DataProviderMessageInfo>> emap;
 
-%ifndef NoLinenoise
-        static string path;
+        #! Shared history manager
+        QoreHistory::History qhistory({"max_length": 100});
+
+        #! Path to history file (NOTHING if HOME is not set)
+        *string history_path;
         const HistoryFile = ".qdp-history";
-%endif
 
         const Prompt = "> ";
 
@@ -2501,61 +2494,59 @@ class InputHelper {
         mmap = provider.getMessageTypes();
         emap = provider.getEventTypes();
 
-%ifndef NoLinenoise
-        Linenoise::history_set_max_len(100);
-        Linenoise::set_callback(\completion());
-
-        path = ENV.HOME + DirSep + HistoryFile;
-
-        bool ok;
-        try {
-            # create history file if it doesn't exist
-            if (!is_file(path)) {
-                File f();
-                f.open2(path, O_CREAT | O_WRONLY);
-            }
-            ok = True;
-        } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("%y: WARNING: cannot create history file: %s: %s\n", path, ex.err, ex.desc);
+        if (exists ENV.HOME) {
+            history_path = ENV.HOME + DirSep + HistoryFile;
+        } else {
+            stderr.printf("WARNING: HOME not set, history will not be saved\n");
         }
 
-        if (ok) {
+        # Load history via QoreHistory (owns persistence and file format)
+        if (history_path) {
             try {
-                Linenoise::history_load(path);
+                qhistory.load(history_path);
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("%y: WARNING: cannot load history: %s: %s\n", path, ex.err, ex.desc);
+                stderr.printf("%y: WARNING: cannot load history: %s: %s\n", history_path,
+                    ex.err, ex.desc);
             }
         }
-%endif
+
+        Linenoise::set_callback(\completion());
+        # Delegate history navigation to QoreHistory (single source of truth)
+        Linenoise::set_history_provider(new QoreHistory::QoreHistoryProvider(qhistory));
     }
 
     destructor() {
-%ifndef NoLinenoise
-        Linenoise::history_save(path);
-%endif
+        if (history_path) {
+            try {
+                qhistory.save(history_path);
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("%y: WARNING: cannot save history: %s: %s\n", history_path,
+                    ex.err, ex.desc);
+            }
+        }
     }
 
     string get() {
         string line;
         while (True) {
-%ifndef NoLinenoise
             *string line0 = Linenoise::line(Prompt);
             if (!exists line0) {
                 line = "exit";
                 break;
             }
             line = line0;
-            Linenoise::history_add(line);
-%else
-            stdout.print(Prompt);
-            stdout.sync();
-            line = trim(stdin.readLine());
-%endif
 
-%ifndef NoLinenoise
-                # save history
-                Linenoise::history_save(InputHelper::path);
-%endif
+            # Add to QoreHistory (owns persistence, timestamps, dedup)
+            qhistory.add(line);
+            # Save eagerly after each command
+            if (history_path) {
+                try {
+                    qhistory.save(history_path);
+                } catch (hash<ExceptionInfo> ex) {
+                    stderr.printf("%y: WARNING: cannot save history: %s: %s\n", history_path,
+                        ex.err, ex.desc);
+                }
+            }
 
             if (line == 'help' || line == '?') {
                 interactiveHelp();
@@ -2581,12 +2572,14 @@ class InputHelper {
                 showEventInfo(provider, trim(line.substr(6)));
                 continue;
             }
-%ifndef NoLinenoise
             if (line == 'history') {
-                map printf("%s\n", $1), Linenoise::history();
+                int i = 1;
+                foreach hash<QoreHistory::HistoryEntry> item in (qhistory.getItems()) {
+                    printf("  %3d  %s  %s\n", i++,
+                        format_date("YYYY-MM-DD HH:mm:SS", item.timestamp), item.text);
+                }
                 continue;
             }
-%endif
 
             if (!line.val()) {
                 continue;
@@ -2615,17 +2608,13 @@ class InputHelper {
         printHelpLine("info events", "List all available events");
         printHelpLine("msg <id>", "Show message type details");
         printHelpLine("event <id>", "Show event type details");
-%ifndef NoLinenoise
         printHelpLine("history", "Show command history");
-%endif
         printHelpLine("quit, exit", "Exit interactive mode");
         printf("%s\n", QdpCmd::color.bold("KEYBOARD SHORTCUTS"));
         printHelpLine("Enter", "Send message / execute command");
         printHelpLine("Ctrl+C", "Exit interactive mode");
-%ifndef NoLinenoise
         printHelpLine("Up/Down", "Previous command in history");
         printHelpLine("Tab", "Autocomplete message ID");
-%endif
     }
 
     private printHelpLine(string key, string desc) {

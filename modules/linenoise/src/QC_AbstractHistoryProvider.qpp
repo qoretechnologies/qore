@@ -1,0 +1,145 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AbstractHistoryProvider.qpp
+
+    Qore Programming Language
+
+    Copyright 2012 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "QC_AbstractHistoryProvider.h"
+
+//! Abstract base class for external history providers
+/**
+    Subclass this class and implement prev(), next(), and reset() to provide
+    external history management for @ref Qore::Linenoise::line() editing.
+    When a history provider is set via @ref Qore::Linenoise::set_history_provider(),
+    Up/Down arrow navigation and Ctrl+R/S incremental search are delegated to the
+    provider instead of the internal history array.
+
+    The internal history functions (@ref Qore::Linenoise::history_add(),
+    @ref Qore::Linenoise::history(), etc.) continue to work independently of the
+    provider.
+
+    @par Required Methods
+    - @ref prev() — return the previous (older) history entry
+    - @ref next() — return the next (newer) history entry
+    - @ref reset() — reset the navigation position
+
+    @par Optional Methods
+    - @ref search() — search for a pattern; the default returns @ref nothing "NOTHING"
+      (disabling Ctrl+R/S search). Override to enable incremental search.
+
+    @par Example
+    @code{.py}
+%modern
+%requires linenoise
+
+class MyHistoryProvider inherits Linenoise::AbstractHistoryProvider {
+    private {
+        list<string> entries;
+        int pos;
+    }
+
+    constructor(list<string> e) {
+        entries = e;
+        pos = entries.size();
+    }
+
+    *string prev(string prefix) {
+        if (pos > 0) {
+            return entries[--pos];
+        }
+    }
+
+    *string next(string prefix) {
+        if (pos < entries.size() - 1) {
+            return entries[++pos];
+        }
+    }
+
+    nothing reset() {
+        pos = entries.size();
+    }
+}
+
+auto provider = new MyHistoryProvider(("line1", "line2", "line3"));
+Linenoise::set_history_provider(provider);
+    @endcode
+
+    @since linenoise 1.2.0
+*/
+qclass AbstractHistoryProvider [arg=HistoryProviderPriv* priv; ns=Qore::Linenoise];
+
+//! Creates the history provider object
+/**
+*/
+AbstractHistoryProvider::constructor() {
+    self->setPrivate(CID_ABSTRACTHISTORYPROVIDER, new HistoryProviderPriv(self));
+}
+
+//! Copying is not supported
+/**
+    @throw ABSTRACTHISTORYPROVIDER-COPY-ERROR copying AbstractHistoryProvider objects is not supported
+*/
+AbstractHistoryProvider::copy() {
+    xsink->raiseException("ABSTRACTHISTORYPROVIDER-COPY-ERROR",
+        "copying AbstractHistoryProvider objects is not supported");
+}
+
+//! Return the previous (older) history entry, or @ref nothing "NOTHING" if at the oldest entry
+/**
+    @param prefix the original text typed by the user before navigation started;
+    can be used to filter entries by prefix
+
+    @return the previous history entry as a string, or @ref nothing "NOTHING" if there
+    are no more entries
+*/
+abstract *string AbstractHistoryProvider::prev(string prefix);
+
+//! Return the next (newer) history entry, or @ref nothing "NOTHING" if back at the current line
+/**
+    @param prefix the original text typed by the user before navigation started
+
+    @return the next history entry as a string, or @ref nothing "NOTHING" if back
+    at the current (newest) position
+*/
+abstract *string AbstractHistoryProvider::next(string prefix);
+
+//! Reset the navigation position
+/**
+    Called at the start of each @ref Qore::Linenoise::line() call and whenever the
+    user types a character after navigating history. The implementation should reset
+    the internal position so that the next call to prev() returns the most recent entry.
+*/
+abstract nothing AbstractHistoryProvider::reset();
+
+//! Search for a pattern in the given direction
+/**
+    Override this method to enable Ctrl+R (reverse) and Ctrl+S (forward) incremental
+    search. The default implementation returns @ref nothing "NOTHING", which disables
+    search (Ctrl+R/S will beep).
+
+    @param pattern the search pattern string
+    @param direction search direction: @c -1 for reverse (older), @c 1 for forward (newer)
+
+    @return a matching history entry as a string, or @ref nothing "NOTHING" if no match
+*/
+*string AbstractHistoryProvider::search(string pattern, int direction) {
+    (void)pattern;
+    (void)direction;
+    return QoreValue();
+}

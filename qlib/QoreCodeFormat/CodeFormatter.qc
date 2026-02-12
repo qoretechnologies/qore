@@ -517,6 +517,7 @@ public class CodeFormatter {
     /** Parse directives start at column 0 with % and are not part of the AST.
         Lines inside block comments (e.g., @@code examples) are excluded.
         @param comments comment list from getComments() with 1-indexed loc
+        @param nodes node list from getNodesInfo() for detecting directives inside node ranges
         @return list of hashes with keys "line" (1-indexed), "text" (directive text)
     */
     private list<hash<auto>> extractParseDirectives(*list<hash<auto>> comments, *list<hash<auto>> nodes) {

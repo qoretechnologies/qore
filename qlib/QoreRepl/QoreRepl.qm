@@ -31,10 +31,8 @@
 %define NoWebSocketHandler
 %endtry
 
-# Optional linenoise support for line editing and history
-%try-module linenoise
-%define NoLinenoise
-%endtry
+# Linenoise support for line editing and history
+%requires linenoise
 
 # JSON support for WebSocket message protocol
 %requires json
@@ -47,6 +45,9 @@
 
 # QoreCodeFormat module for auto-indentation support
 %requires QoreCodeFormat
+
+# QoreHistory module for shared history management
+%requires(reexport) QoreHistory
 
 # QoreCodeCompletion module for shared code completion engine (re-exported for CompletionItem)
 %requires(reexport) QoreCodeCompletion

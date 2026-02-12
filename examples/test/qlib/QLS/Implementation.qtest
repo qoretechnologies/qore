@@ -1,0 +1,236 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Implementation.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class ImplementationTest
+
+class ImplementationTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS Implementation", "1.0") {
+        initServer();
+
+        addTestCase("class to subtypes", \testClassToSubtypes());
+        addTestCase("method to implementations", \testMethodToImplementations());
+        addTestCase("concrete method returns itself", \testConcreteMethodSelf());
+        addTestCase("function returns definition", \testFunctionDefinition());
+        addTestCase("cross-doc implementations", \testCrossDocImplementations());
+        addTestCase("no implementations", \testNoImplementations());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: class Shape {
+    # Line 2:     abstract float area();
+    # Line 3: }
+    # Line 4: class Circle inherits Shape {
+    # Line 5:     float radius;
+    # Line 6:     float area() { return 3.14 * radius * radius; }
+    # Line 7: }
+    # Line 8: class Square inherits Shape {
+    # Line 9:     float side;
+    # Line 10:     float area() { return side * side; }
+    # Line 11: }
+    private string getTestCode() {
+        return "%modern
+class Shape {
+    abstract float area();
+}
+class Circle inherits Shape {
+    float radius;
+    float area() { return 3.14 * radius * radius; }
+}
+class Square inherits Shape {
+    float side;
+    float area() { return side * side; }
+}
+";
+    }
+
+    private string setupDoc(*string text) {
+        string src = text ?? getTestCode();
+        *string cached = docCache{src};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/impl%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": src,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{src} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendImplementation(string uri, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/implementation", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testClassToSubtypes() {
+        string uri = setupDoc();
+
+        # "Shape" at line 1, col 6 → should find Circle and Square
+        *list<auto> result = sendImplementation(uri, 1, 6);
+        assertTrue(exists result && result.size() >= 2,
+            sprintf("Shape should have at least 2 implementations (got %d)",
+                result ? result.size() : 0));
+    }
+
+    testMethodToImplementations() {
+        string uri = setupDoc();
+
+        # "area" in abstract method at line 2, col 19 → concrete implementations
+        *list<auto> result = sendImplementation(uri, 2, 19);
+        assertTrue(exists result && result.size() >= 2,
+            sprintf("abstract area() should have at least 2 implementations (got %d)",
+                result ? result.size() : 0));
+    }
+
+    testConcreteMethodSelf() {
+        string uri = setupDoc();
+
+        # "area" in Circle at line 6, col 10 → should return itself or its definition
+        *list<auto> result = sendImplementation(uri, 6, 10);
+        assertTrue(exists result && result.size() > 0,
+            "concrete method should return at least its definition");
+    }
+
+    testFunctionDefinition() {
+        string code = "%modern
+sub myFunc(int x) { return x; }
+myFunc(5);
+";
+        string uri = setupDoc(code);
+
+        # "myFunc" at line 2, col 0 → should return function definition
+        *list<auto> result = sendImplementation(uri, 2, 0);
+        assertTrue(exists result && result.size() > 0,
+            "function call should return its definition");
+    }
+
+    testCrossDocImplementations() {
+        # Base class
+        string baseCode = "%modern
+class ImplBase {
+    abstract string getName();
+}
+";
+        setupDoc(baseCode);
+
+        # Implementation in another doc
+        string implCode = "%modern
+class ImplChild inherits ImplBase {
+    string getName() { return \"child\"; }
+}
+";
+        string implUri = setupDoc(implCode);
+
+        # Check that the implementation exists
+        # Get the child class implementations
+        *list<auto> result = sendImplementation(implUri, 2, 11);
+        assertTrue(exists result, "should find implementation result");
+    }
+
+    testNoImplementations() {
+        string code = "%modern
+int x = 5;
+";
+        string uri = setupDoc(code);
+
+        # Position on a simple variable
+        *list<auto> result = sendImplementation(uri, 1, 4);
+        # May return the definition itself or empty
+        assertTrue(exists result, "should return a result");
+    }
+
+    testMissingParams() {
+        hash<auto> req = makeRequest("textDocument/implementation");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testNonExistentDocument() {
+        setupDoc();
+
+        *list<auto> result = sendImplementation("file:///nonexistent.q", 0, 0);
+        assertEq(0, result.size(), "non-existent doc should return empty result");
+    }
+}

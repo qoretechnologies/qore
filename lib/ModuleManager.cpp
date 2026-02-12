@@ -1737,11 +1737,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // we do for user modules
     assert(!mpgm);
 
-    // load dependencies
+    // load dependencies BEFORE adding this module to the load map
+    // to prevent cross-thread circular dependency deadlocks (AB-BA deadlocks)
     if (!mod_info.dependencies.empty()) {
-        // run initialization unlocked
-        ModuleLoadMapHelper mlmh(name);
-
         for (std::string& dep : mod_info.dependencies) {
             //printd(5, "loading module dependency=%s\n", dep);
             loadModuleIntern(xsink, xsink, dep.c_str(), mpgm);
@@ -1750,6 +1748,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             }
         }
     }
+
+    // Add this module to the load map for its own initialization
+    // This must be AFTER dependency loading to prevent AB-BA deadlocks
+    ModuleLoadMapHelper mlmh(name);
 
     // see if a module with this name is already registered
     QoreAbstractModule* mi = findModuleUnlocked(name);

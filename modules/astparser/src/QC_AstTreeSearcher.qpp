@@ -834,3 +834,241 @@ AstTreeSearcher::constructor() {
 
     return lst.release();
 }
+
+//! Find node and all ancestor nodes at a position.
+/**
+    @param tree AST tree structure
+    @param line on what line lies the position (0-indexed)
+    @param col on what column lies the position (0-indexed)
+
+    @return list of range hashes from innermost node to root, or NOTHING if no node found
+
+    Each element is a hash with key "range" containing {start: {line, character}, end: {line, character}}.
+
+    @since %Qore 2.3
+ */
+*list<auto> AstTreeSearcher::findNodeAndParents(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::vector<TSNode> ancestors = CSTSearcher::findNodeAndParents(
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+
+    if (ancestors.empty()) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = ancestors.size(); i < count; i++) {
+        TSNode node = ancestors[i];
+        QoreHashNode* rangeHash = CSTSearcher::makeRange(node, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!rangeHash) {
+            continue;
+        }
+        ReferenceHolder<QoreHashNode> item(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        item->setKeyValue("range", rangeHash, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        lst->push(item.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    return lst.release();
+}
+
+//! Get superclass names for a class at position.
+/**
+    @param tree AST tree structure
+    @param line on what line lies the position (0-indexed)
+    @param col on what column lies the position (0-indexed)
+
+    @return list of superclass name strings, or NOTHING if not a class or no parents
+
+    @since %Qore 2.3
+ */
+*list<string> AstTreeSearcher::getSuperclassNames(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    std::unique_ptr<std::vector<std::string>> vec(
+        CSTSearcher::getSuperclassNames(result,
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        lst->push(new QoreStringNode(vec->at(i)), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    return lst.release();
+}
+
+//! Find all references to the identifier at position across multiple documents.
+/**
+    @param tree AST tree structure for the current document
+    @param uri document's URI
+    @param line 0-indexed line
+    @param col 0-indexed column
+    @param includeDecl whether to include the declaration itself
+    @param otherDocs hash mapping URI (string) to AstTree objects for other documents
+
+    @return list of location hashes {uri, range}, or NOTHING if none found
+
+    @since %Qore 2.3
+ */
+*list<auto> AstTreeSearcher::findReferencesCrossDoc(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, bool includeDecl, *hash<auto> otherDocs) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    // RAII guard for referenced AstTreeHolder pointers
+    struct HolderGuard {
+        std::vector<AstTreeHolder*> holders;
+        ExceptionSink* xsink;
+
+        HolderGuard(ExceptionSink* xs) : xsink(xs) {}
+        ~HolderGuard() {
+            for (auto* h : holders) {
+                h->deref(xsink);
+            }
+        }
+
+        HolderGuard(const HolderGuard&) = delete;
+        HolderGuard& operator=(const HolderGuard&) = delete;
+    };
+
+    HolderGuard guard(xsink);
+
+    // Build vector<DocumentRef> from the otherDocs hash
+    std::vector<DocumentRef> docRefs;
+
+    if (otherDocs && otherDocs->size()) {
+        ConstHashIterator hi(otherDocs);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() != NT_OBJECT) {
+                continue;
+            }
+            QoreObject* obj = val.get<QoreObject>();
+            AstTreeHolder* ath = reinterpret_cast<AstTreeHolder*>(
+                obj->getReferencedPrivateData(CID_ASTTREE, xsink));
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (!ath) {
+                continue;
+            }
+            guard.holders.push_back(ath);
+            AstParseResult* otherResult = ath->get();
+            if (otherResult) {
+                std::string docUri(hi.getKey());
+                docRefs.push_back({otherResult, docUri});
+            }
+        }
+    }
+
+    std::string currentUri(uri->c_str());
+    std::unique_ptr<std::vector<DefinitionResult>> vec(
+        CSTSearcher::findReferencesCrossDoc(result,
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col),
+            includeDecl, docRefs));
+
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const DefinitionResult& dr = vec->at(i);
+        std::string nodeUri = dr.uri.empty() ? currentUri : dr.uri;
+        QoreHashNode* location = CSTSearcher::makeLocation(dr.node, nodeUri, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (location) {
+            lst->push(location, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    }
+
+    return lst.release();
+}
+
+//! Collect semantic tokens from the parse tree.
+/**
+    @param tree AST tree structure
+    @param startLine start of range (0-indexed, inclusive), or -1 for 0
+    @param endLine end of range (0-indexed, inclusive), or -1 for UINT32_MAX
+
+    @return list of token hashes {line, startChar, length, tokenType, tokenModifiers},
+            sorted by position, or NOTHING if no tokens
+
+    @since %Qore 2.3
+ */
+*list<auto> AstTreeSearcher::getSemanticTokens(astparser::AstTree[AstTreeHolder] tree, int startLine = -1, int endLine = -1) {
+    ReferenceHolder<AstTreeHolder> holder(tree, xsink);
+
+    AstParseResult* result = tree->get();
+    if (!result) {
+        return QoreValue();
+    }
+
+    uint32_t sLine = startLine >= 0 ? static_cast<uint32_t>(startLine) : 0;
+    uint32_t eLine = endLine >= 0 ? static_cast<uint32_t>(endLine) : UINT32_MAX;
+
+    std::unique_ptr<std::vector<SemanticToken>> vec(
+        CSTSearcher::collectSemanticTokens(result, sLine, eLine));
+    if (!vec) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    for (size_t i = 0, count = vec->size(); i < count; i++) {
+        const SemanticToken& st = vec->at(i);
+        ReferenceHolder<QoreHashNode> tokenHash(new QoreHashNode, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        tokenHash->setKeyValue("line", static_cast<int64>(st.line), xsink);
+        tokenHash->setKeyValue("startChar", static_cast<int64>(st.startChar), xsink);
+        tokenHash->setKeyValue("length", static_cast<int64>(st.length), xsink);
+        tokenHash->setKeyValue("tokenType", static_cast<int64>(st.tokenType), xsink);
+        tokenHash->setKeyValue("tokenModifiers", static_cast<int64>(st.tokenModifiers), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        lst->push(tokenHash.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    return lst.release();
+}
