@@ -155,6 +155,7 @@ DOX_SPLIT_MODULES = \
     qlib/Http2ClientIo \
     qlib/MongoDbDataProvider \
     qlib/DpqlWebSocket \
+    qlib/QoreApiMetadata \
     qlib/QoreCodeCompletion \
     qlib/QoreCodeFormat \
     qlib/QoreHistory \
@@ -199,6 +200,7 @@ Pop3ClientDataProvider_modverdir = $(modverdir)/Pop3ClientDataProvider
 ProviderIndex_modverdir = $(modverdir)/ProviderIndex
 RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
+QoreApiMetadata_modverdir = $(modverdir)/QoreApiMetadata
 QoreCodeCompletion_modverdir = $(modverdir)/QoreCodeCompletion
 QoreCodeFormat_modverdir = $(modverdir)/QoreCodeFormat
 QoreHistory_modverdir = $(modverdir)/QoreHistory
@@ -274,6 +276,7 @@ dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[c
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
 dist_ZohoInvoiceDataProvider_modver_DATA = $(wildcard qlib/ZohoInvoiceDataProvider/*.q[cm]) $(wildcard qlib/ZohoInvoiceDataProvider/*.svg)
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
+dist_QoreApiMetadata_modver_DATA = $(wildcard qlib/QoreApiMetadata/*.q[cm])
 dist_QoreCodeCompletion_modver_DATA = $(wildcard qlib/QoreCodeCompletion/*.q[cm])
 dist_QoreCodeFormat_modver_DATA = $(wildcard qlib/QoreCodeFormat/*.q[cm])
 dist_QoreHistory_modver_DATA = $(wildcard qlib/QoreHistory/*.q[cm])

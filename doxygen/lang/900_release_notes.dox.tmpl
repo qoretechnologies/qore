@@ -628,10 +628,24 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new customers and new sales orders
       - action catalog integration with 27 actions and 2 triggers
       - connection support with \c unleashed:// URL scheme
+    - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
+      \c .meta.json metadata files during the build, providing machine-readable documentation for
+      all builtin classes, methods, functions, constants, hashdecls, and enums
     - new builtin classes for pre-compiled regular expressions with runtime strings:
       - @ref Qore::Regex "Regex" - pre-compiled regex pattern matching and group extraction
       - @ref Qore::RegexSubst "RegexSubst" - pre-compiled regex substitution with backreference support
       - @ref Qore::RegexExtract "RegexExtract" - pre-compiled regex extraction with global mode support
+    - @ref qoreapimetadataintro "QoreApiMetadata" module
+      - new module providing structured API metadata extraction for %Qore
+      - bridges three information sources: astparser (source-level with docs), reflection (runtime
+        types), and qpp \c .meta.json (builtin documentation)
+      - @ref QoreApiMetadata::DocCommentParser "DocCommentParser" for doxygen-style comment parsing
+      - @ref QoreApiMetadata::AstMetadataExtractor "AstMetadataExtractor" for source-level extraction
+      - @ref QoreApiMetadata::ReflectionMetadataExtractor "ReflectionMetadataExtractor" for runtime introspection
+      - @ref QoreApiMetadata::QppDocIndex "QppDocIndex" for loading qpp \c .meta.json builtin docs
+      - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" for merging all pipelines with priority
+      - @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade with search, serialization
+        (JSON/YAML), and the full merge pipeline
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)

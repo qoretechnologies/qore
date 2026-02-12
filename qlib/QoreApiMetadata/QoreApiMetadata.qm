@@ -1,0 +1,339 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreApiMetadata.qm Structured API metadata extraction for Qore
+
+/*  QoreApiMetadata.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%modern
+
+%requires reflection
+
+%requires astparser
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+module QoreApiMetadata {
+    version = "1.0";
+    desc = "structured API metadata extraction for Qore";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreApiMetadata Module
+
+    @section qoreapimetadataintro Introduction to the QoreApiMetadata Module
+
+    The %QoreApiMetadata module provides structured API metadata extraction for %Qore programs,
+    bridging three information sources into a unified format:
+
+    - <b>astparser</b> (tree-sitter CST): source-level parsing with documentation comments
+    - <b>reflection</b>: runtime introspection with accurate types but no documentation
+    - <b>qpp metadata</b>: builtin documentation from \c .meta.json files
+
+    @par Data Model
+
+    Each method or function variant is represented as a separate entry, giving full coverage
+    of %Qore's variant-based overloading. The data model uses hashdecls for type safety:
+
+    - @ref QoreApiMetadata::ParameterInfo "ParameterInfo" - function/method parameter metadata
+    - @ref QoreApiMetadata::ThrowInfo "ThrowInfo" - exception throw metadata
+    - @ref QoreApiMetadata::MemberInfo "MemberInfo" - class member metadata
+    - @ref QoreApiMetadata::ConstantInfo "ConstantInfo" - constant metadata
+    - @ref QoreApiMetadata::MethodInfo "MethodInfo" - method variant metadata
+    - @ref QoreApiMetadata::HashdeclInfo "HashdeclInfo" - typed hash declaration metadata
+    - @ref QoreApiMetadata::EnumValueInfo "EnumValueInfo" - enum value metadata
+    - @ref QoreApiMetadata::EnumInfo "EnumInfo" - enum type metadata
+    - @ref QoreApiMetadata::FunctionInfo "FunctionInfo" - function variant metadata
+    - @ref QoreApiMetadata::ClassInfo "ClassInfo" - class metadata
+    - @ref QoreApiMetadata::NamespaceInfo "NamespaceInfo" - namespace metadata (recursive)
+
+    @par Extraction Pipelines
+
+    - @ref QoreApiMetadata::AstMetadataExtractor "AstMetadataExtractor" - source parsing via astparser
+    - @ref QoreApiMetadata::ReflectionMetadataExtractor "ReflectionMetadataExtractor" - runtime reflection
+    - @ref QoreApiMetadata::QppDocIndex "QppDocIndex" - qpp \c .meta.json documentation loader
+    - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" - merges all pipelines with priority
+
+    @par Public API
+
+    The @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade class provides the
+    main entry points for metadata extraction, merging, search, and serialization.
+
+    @section qoreapimetadata_relnotes Release Notes
+
+    @subsection qoreapimetadata_v1_0 v1.0
+    - initial release: structured API metadata extraction for %Qore
+    - doc comment parser: doxygen-style comment parsing
+    - ast metadata extractor: source-level extraction via astparser
+    - reflection metadata extractor: runtime introspection
+    - qpp doc index: builtin documentation from \c .meta.json files
+    - symbol merger: unified metadata with documentation priority
+    - YAML/JSON serialization and search
+*/
+
+#! Main namespace for the QoreApiMetadata module
+public namespace QoreApiMetadata {
+    #! Schema version for serialized metadata
+    public const SCHEMA_VERSION = "1.0";
+
+    #! Function/method parameter metadata
+    public hashdecl ParameterInfo {
+        #! Parameter name
+        string name;
+        #! Type name (e.g., "string", "*int", "hash<auto>")
+        string type_name;
+        #! Default value expression as string, if any
+        *string default_value;
+        #! Parameter description from documentation
+        *string description;
+    }
+
+    #! Exception throw metadata
+    public hashdecl ThrowInfo {
+        #! Exception name/identifier
+        string name;
+        #! Description of when this exception is thrown
+        *string description;
+    }
+
+    #! Class member metadata
+    public hashdecl MemberInfo {
+        #! Member name
+        string name;
+        #! Type name
+        string type_name;
+        #! Member description from documentation
+        *string description;
+        #! Access level: "public", "private", "private:internal"
+        string access = "public";
+        #! Whether this is a static member
+        bool is_static = False;
+    }
+
+    #! Constant metadata
+    public hashdecl ConstantInfo {
+        #! Constant name (unqualified)
+        string name;
+        #! Fully qualified name (e.g., "Qore::Err::OK")
+        string full_name;
+        #! Type name, if known
+        *string type_name;
+        #! Value as string, if known
+        *string value;
+        #! Constant description from documentation
+        *string description;
+        #! Source file path, if known
+        *string source_file;
+        #! Module that provides this constant
+        *string module_name;
+    }
+
+    #! Method variant metadata
+    public hashdecl MethodInfo {
+        #! Method name (unqualified)
+        string name;
+        #! Fully qualified name (e.g., "Mutex::lock")
+        string full_name;
+        #! Human-readable signature (e.g., "nothing lock(timeout timeout_ms = 0)")
+        string signature;
+        #! Return type name, if known
+        *string return_type;
+        #! Method description from documentation
+        *string description;
+        #! Return value description from documentation
+        *string return_description;
+        #! Method parameters
+        list<hash<ParameterInfo>> params = ();
+        #! Exceptions this method can throw
+        *list<hash<ThrowInfo>> throws;
+        #! Access level: "public", "private", "private:internal"
+        string access = "public";
+        #! Whether this is a static method
+        bool is_static = False;
+        #! Whether this is an abstract method
+        bool is_abstract = False;
+        #! Whether this method is deprecated
+        bool is_deprecated = False;
+        #! Deprecation reason or replacement
+        *string deprecated_reason;
+        #! Version when this method was introduced
+        *string since;
+        #! See-also references
+        *list<string> see_also;
+        #! Source file path, if known
+        *string source_file;
+        #! Source line number, if known
+        *int source_line;
+        #! Module that provides this method
+        *string module_name;
+        #! Functional domain flags (e.g., "NOTHING", "NETWORK")
+        *string functional_domain;
+    }
+
+    #! Typed hash declaration (hashdecl) metadata
+    public hashdecl HashdeclInfo {
+        #! Hashdecl name (unqualified)
+        string name;
+        #! Fully qualified name
+        string full_name;
+        #! Namespace path
+        *string namespace_path;
+        #! Hashdecl description from documentation
+        *string description;
+        #! Member fields
+        list<hash<MemberInfo>> members = ();
+        #! Parent hashdecl name (for inheritance)
+        *string parent_name;
+        #! Source file path, if known
+        *string source_file;
+        #! Module that provides this hashdecl
+        *string module_name;
+    }
+
+    #! Enum value metadata
+    public hashdecl EnumValueInfo {
+        #! Enum value name
+        string name;
+        #! Numeric value, if known
+        *string value;
+        #! Value description from documentation
+        *string description;
+    }
+
+    #! Enum type metadata
+    public hashdecl EnumInfo {
+        #! Enum name (unqualified)
+        string name;
+        #! Fully qualified name
+        string full_name;
+        #! Namespace path
+        *string namespace_path;
+        #! Enum description from documentation
+        *string description;
+        #! Base type (e.g., "int", "string")
+        *string base_type;
+        #! Enum values
+        list<hash<EnumValueInfo>> values = ();
+        #! Source file path, if known
+        *string source_file;
+        #! Module that provides this enum
+        *string module_name;
+    }
+
+    #! Function variant metadata
+    public hashdecl FunctionInfo {
+        #! Function name (unqualified)
+        string name;
+        #! Fully qualified name (e.g., "Qore::printf")
+        string full_name;
+        #! Namespace path
+        *string namespace_path;
+        #! Human-readable signature (e.g., "string sprintf(string fmt, ...)")
+        string signature;
+        #! Return type name, if known
+        *string return_type;
+        #! Function description from documentation
+        *string description;
+        #! Return value description from documentation
+        *string return_description;
+        #! Function parameters
+        list<hash<ParameterInfo>> params = ();
+        #! Exceptions this function can throw
+        *list<hash<ThrowInfo>> throws;
+        #! Whether this function is deprecated
+        bool is_deprecated = False;
+        #! Version when this function was introduced
+        *string since;
+        #! See-also references
+        *list<string> see_also;
+        #! Source file path, if known
+        *string source_file;
+        #! Source line number, if known
+        *int source_line;
+        #! Module that provides this function
+        *string module_name;
+        #! Functional domain flags
+        *string functional_domain;
+    }
+
+    #! Class metadata
+    public hashdecl ClassInfo {
+        #! Class name (unqualified)
+        string name;
+        #! Fully qualified name (e.g., "Qore::Thread::Mutex")
+        string full_name;
+        #! Namespace path
+        *string namespace_path;
+        #! Class description from documentation
+        *string description;
+        #! Parent class names
+        *list<string> parents;
+        #! Static methods (one entry per variant)
+        list<hash<MethodInfo>> static_methods = ();
+        #! Instance methods (one entry per variant)
+        list<hash<MethodInfo>> instance_methods = ();
+        #! Class members
+        list<hash<MemberInfo>> members = ();
+        #! Class constants
+        list<hash<ConstantInfo>> constants = ();
+        #! Source file path, if known
+        *string source_file;
+        #! Module that provides this class
+        *string module_name;
+        #! Access level: "public", "private", "private:internal"
+        string access = "public";
+        #! Whether this class has abstract methods
+        bool is_abstract = False;
+        #! Whether this class is final
+        bool is_final = False;
+    }
+
+    #! Namespace metadata (recursive)
+    public hashdecl NamespaceInfo {
+        #! Namespace name (unqualified)
+        string name;
+        #! Fully qualified name (e.g., "Qore::Thread")
+        string full_name;
+        #! Namespace description from documentation
+        *string description;
+        #! Classes in this namespace
+        list<hash<ClassInfo>> classes = ();
+        #! Functions in this namespace (one entry per variant)
+        list<hash<FunctionInfo>> functions = ();
+        #! Constants in this namespace
+        list<hash<ConstantInfo>> constants = ();
+        #! Typed hash declarations in this namespace
+        list<hash<HashdeclInfo>> hashdecls = ();
+        #! Enums in this namespace
+        list<hash<EnumInfo>> enums = ();
+        #! Child namespaces (recursive)
+        list<hash<NamespaceInfo>> namespaces = ();
+    }
+}

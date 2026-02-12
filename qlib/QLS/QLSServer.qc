@@ -126,7 +126,7 @@ public const ServerCapabilities = {
      * The server provides completion support.
      */
     "completionProvider": {
-        "resolveProvider": False,
+        "resolveProvider": True,
         "triggerCharacters": (".", ":"),
     },
 
@@ -301,6 +301,21 @@ public class QLSServer {
 
         #! URIs of ignored documents
         hash<auto> ignoredUris;
+
+        #! Builtin metadata from qpp .meta.json + reflection (may be NOTHING if loading fails)
+        *hash<QoreApiMetadata::NamespaceInfo> builtinMetadata;
+
+        #! Fast lookup: unqualified name → list of metadata entries
+        hash<string, list<hash<auto>>> metaByName;
+
+        #! Fast lookup: fully qualified name → metadata entry
+        hash<string, hash<auto>> metaByQualifiedName;
+
+        #! Fast lookup: class name → ClassInfo
+        hash<string, hash<auto>> metaClassByName;
+
+        #! Single-char prefix index: lowercased first char → list of names
+        hash<string, list<string>> metaPrefixIndex;
     }
 
     private:internal {
@@ -401,6 +416,7 @@ public class QLSServer {
             "textDocument/documentSymbol": \meth_td_documentSymbol(),
             "textDocument/definition": \meth_td_definition(),
             "textDocument/completion": \meth_td_completion(),
+            "completionItem/resolve": \meth_completionItem_resolve(),
             "textDocument/onTypeFormatting": \meth_td_onTypeFormatting(),
             "textDocument/formatting": \meth_td_formatting(),
             "textDocument/documentHighlight": \meth_td_documentHighlight(),
@@ -599,6 +615,124 @@ public class QLSServer {
         map stdModuleDocs{$1} = new Document($1), moduleFiles;
     }
 
+    #! Find the metadata directory containing qpp .meta.json files
+    private static *string findMetadataDir() {
+        # check env override first (for development/testing)
+        *string env_dir = ENV.QORE_METADATA_DIR;
+        if (env_dir && is_dir(env_dir)) {
+            return env_dir;
+        }
+        # derive from module path: UserModuleDir is <datadir>/qore-modules/
+        hash<auto> info = get_qore_library_info();
+        string datadir = dirname(info.UserModuleDir);
+        string metadir = datadir + "/qore/metadata";
+        if (is_dir(metadir)) {
+            return metadir;
+        }
+        return NOTHING;
+    }
+
+    #! Load builtin metadata from qpp .meta.json files + reflection
+    private:internal loadBuiltinMetadata() {
+        *string metadir = findMetadataDir();
+
+        # step 1: extract runtime structure via reflection
+        hash<QoreApiMetadata::NamespaceInfo> runtimeMeta;
+        try {
+            runtimeMeta = QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime();
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: reflection metadata extraction failed - %s: %s", ex.err, ex.desc);
+            return;
+        }
+
+        # step 2: load qpp doc index (if available)
+        *hash<string, hash<auto>> docIndex;
+        if (metadir) {
+            try {
+                docIndex = QoreApiMetadata::QppDocIndex::buildFromDirectory(metadir);
+                log(0, "loaded %d qpp metadata entries from %s", docIndex.size(), metadir);
+            } catch (hash<ExceptionInfo> ex) {
+                log(0, "WARNING: qpp metadata loading failed - %s: %s", ex.err, ex.desc);
+            }
+        }
+
+        # step 3: merge
+        try {
+            builtinMetadata = QoreApiMetadata::SymbolMerger::merge(runtimeMeta, NOTHING, docIndex);
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: metadata merge failed - %s: %s", ex.err, ex.desc);
+            return;
+        }
+
+        # step 4: build fast lookup indexes
+        buildMetadataIndex(builtinMetadata);
+        log(0, "metadata index built: %d names, %d qualified, %d classes",
+            metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
+    }
+
+    #! Build fast lookup indexes from the metadata tree
+    private buildMetadataIndex(hash<auto> ns) {
+        # index classes
+        foreach hash<auto> c in (ns.classes) {
+            indexMetadataEntry(c.name, c.full_name, c + {"symbol_type": "class"});
+            metaClassByName{c.name} = c;
+            # also index by unqualified full_name parts
+            if (c.full_name != c.name) {
+                metaClassByName{c.full_name} = c;
+            }
+            # index methods
+            foreach hash<auto> m in (c.instance_methods) {
+                indexMetadataEntry(m.name, m.full_name, m + {"symbol_type": "method", "class_name": c.name});
+            }
+            foreach hash<auto> m in (c.static_methods) {
+                indexMetadataEntry(m.name, m.full_name,
+                    m + {"symbol_type": "static_method", "class_name": c.name});
+            }
+        }
+
+        # index functions
+        foreach hash<auto> f in (ns.functions) {
+            indexMetadataEntry(f.name, f.full_name, f + {"symbol_type": "function"});
+        }
+
+        # index constants
+        foreach hash<auto> c in (ns.constants) {
+            indexMetadataEntry(c.name, c.full_name, c + {"symbol_type": "constant"});
+        }
+
+        # index hashdecls
+        foreach hash<auto> h in (ns.hashdecls) {
+            indexMetadataEntry(h.name, h.full_name, h + {"symbol_type": "hashdecl"});
+        }
+
+        # index enums
+        foreach hash<auto> e in (ns.enums) {
+            indexMetadataEntry(e.name, e.full_name, e + {"symbol_type": "enum"});
+        }
+
+        # recurse into child namespaces
+        foreach hash<auto> child in (ns.namespaces) {
+            buildMetadataIndex(child);
+        }
+    }
+
+    #! Add an entry to the metadata indexes
+    private indexMetadataEntry(string name, string fullName, hash<auto> entry) {
+        if (!metaByName{name}) {
+            metaByName{name} = ();
+            # add to prefix index on first occurrence of this name
+            string key = name[0].lwr();
+            if (!metaPrefixIndex{key}) {
+                metaPrefixIndex{key} = ();
+            }
+            metaPrefixIndex{key} += name;
+        }
+        metaByName{name} += entry;
+        if (!metaByQualifiedName{fullName}) {
+            metaByQualifiedName{fullName} = entry;
+        }
+    }
+
 
     #=================
     # General methods
@@ -655,6 +789,13 @@ public class QLSServer {
             parseStdModules();
         } catch (hash<ExceptionInfo> ex) {
             return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %N", ex.err, ex.desc, ex));
+        }
+
+        try {
+            # load builtin metadata from qpp .meta.json + reflection
+            loadBuiltinMetadata();
+        } catch (hash<ExceptionInfo> ex) {
+            log(0, "WARNING: builtin metadata loading failed - %s: %s", ex.err, ex.desc);
         }
 
         # create response
@@ -1022,7 +1163,147 @@ public class QLSServer {
             }
         }
 
+        # metadata fallback for builtins not found in parsed documents
+        if (!result.contents.size() && builtinMetadata) {
+            *string hover_md = buildMetadataHover(query, symbolInfo);
+            if (hover_md) {
+                result.contents += hover_md;
+            }
+        }
+
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
+    }
+
+    #! Build hover Markdown from builtin metadata
+    /** @param name unqualified symbol name
+        @param symbolInfo symbol info from findSymbolInfo (has usage, name, range)
+        @return Markdown string or NOTHING if no metadata found
+    */
+    private *string buildMetadataHover(string name, hash<auto> symbolInfo) {
+        *list<hash<auto>> entries = metaByName{name};
+        if (!entries) {
+            return NOTHING;
+        }
+
+        # filter by symbol kind using usage info
+        *hash<string, bool> validKinds = SymbolUsageFastMap{string(symbolInfo.usage)};
+        list<hash<auto>> filtered = ();
+        foreach hash<auto> entry in (entries) {
+            if (validKinds) {
+                int kind = metaSymbolTypeToKind(entry.symbol_type);
+                if (kind && !validKinds.contains(kind)) {
+                    continue;
+                }
+            }
+            filtered += entry;
+        }
+        if (!filtered.size()) {
+            # if filtering removed everything, try all entries
+            filtered = entries;
+        }
+
+        list<string> parts = ();
+        foreach hash<auto> entry in (filtered) {
+            *string md = formatMetadataEntry(entry);
+            if (md) {
+                parts += md;
+            }
+        }
+
+        return parts.size() ? parts.join("\n\n---\n\n") : NOTHING;
+    }
+
+    #! Map metadata symbol_type to ASTSymbolKind
+    private static int metaSymbolTypeToKind(string symbol_type) {
+        switch (symbol_type) {
+            case "class": return ASTSymbolKind.Class;
+            case "function": return ASTSymbolKind.Function;
+            case "method": return ASTSymbolKind.Method;
+            case "static_method": return ASTSymbolKind.Method;
+            case "constant": return ASTSymbolKind.Constant;
+            case "hashdecl": return ASTSymbolKind.Interface;
+            case "enum": return ASTSymbolKind.Enum;
+        }
+        return 0;
+    }
+
+    #! Format a single metadata entry as Markdown for hover
+    private static *string formatMetadataEntry(hash<auto> entry) {
+        list<string> parts = ();
+
+        # signature as fenced code block
+        if (entry.signature) {
+            parts += sprintf("```qore\n%s\n```", entry.signature);
+        } else if (entry.symbol_type == "class") {
+            string header = "class " + entry.full_name;
+            if (entry.parents) {
+                header += " inherits " + entry.parents.join(", ");
+            }
+            parts += sprintf("```qore\n%s\n```", header);
+        } else if (entry.symbol_type == "constant") {
+            string header = "const " + entry.full_name;
+            if (entry.type_name) {
+                header = entry.type_name + " " + header;
+            }
+            parts += sprintf("```qore\n%s\n```", header);
+        } else if (entry.symbol_type == "hashdecl") {
+            parts += sprintf("```qore\nhashdecl %s\n```", entry.full_name);
+        } else if (entry.symbol_type == "enum") {
+            parts += sprintf("```qore\nenum %s\n```", entry.full_name);
+        }
+
+        # description
+        if (entry.description) {
+            parts += string(entry.description);
+        }
+
+        # parameters table
+        if (entry.params && entry.params.size()) {
+            list<string> paramLines = ("", "**Parameters:**", "");
+            foreach hash<auto> p in (entry.params) {
+                string line = sprintf("- `%s %s`", p.type_name ?? "auto", p.name);
+                if (p.default_value) {
+                    line += sprintf(" = `%s`", p.default_value);
+                }
+                if (p.description) {
+                    line += " — " + string(p.description);
+                }
+                paramLines += line;
+            }
+            parts += paramLines.join("\n");
+        }
+
+        # return description
+        if (entry.return_description) {
+            parts += sprintf("**Returns:** %s", entry.return_description);
+        }
+
+        # throws
+        if (entry.throws && entry.throws.size()) {
+            list<string> throwLines = ("**Throws:**",);
+            foreach hash<auto> t in (entry.throws) {
+                string line = sprintf("- `%s`", t.name);
+                if (t.description) {
+                    line += " — " + string(t.description);
+                }
+                throwLines += line;
+            }
+            parts += throwLines.join("\n");
+        }
+
+        # annotations
+        if (entry.since) {
+            parts += sprintf("**Since:** %s", entry.since);
+        }
+        if (entry.is_deprecated) {
+            string dep = "**Deprecated**";
+            if (entry.deprecated_reason) {
+                dep += ": " + string(entry.deprecated_reason);
+            }
+            parts += dep;
+        }
+
+        return parts.size() ? parts.join("\n\n") : NOTHING;
     }
 
     #! "textDocument/references" method handler
@@ -1163,7 +1444,8 @@ public class QLSServer {
         string input = lineText && col <= lineText.length() ? lineText.substr(0, col) : "";
 
         # Create provider + engine for this request
-        CSTCompletionProvider provider(doc, request.params.position);
+        CSTCompletionProvider provider(doc, request.params.position, metaByName, metaClassByName,
+            metaPrefixIndex);
         QoreCodeCompletion::CompletionEngine engine(provider);
 
         # Get completions
@@ -1184,6 +1466,10 @@ public class QLSServer {
                 "detail": item.detail,
                 "documentation": item.documentation,
                 "insertText": insertText,
+                "data": {
+                    "name": item.label,
+                    "symbolKind": item.kind,
+                },
             };
         }
 
@@ -1191,6 +1477,66 @@ public class QLSServer {
             "isIncomplete": False,
             "items": lspItems,
         });
+    }
+
+    #! "completionItem/resolve" method handler
+    /** Enriches a completion item with documentation from builtin metadata.
+        @param request LSP request with params: the CompletionItem to resolve
+        @return JSON-RPC response with enriched CompletionItem
+    */
+    private *string meth_completionItem_resolve(hash<auto> request) {
+        if (!request.hasKey("params")) {
+            return ErrorResponse::invalidRequest(request, "required attribute 'params' is missing");
+        }
+
+        hash<auto> item = request.params;
+
+        # if already has documentation, return as-is
+        if (item.documentation) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, item);
+        }
+
+        # try to enrich from metadata
+        if (builtinMetadata && item.data.name) {
+            string name = item.data.name;
+            *list<hash<auto>> entries = metaByName{name};
+            if (entries) {
+                # find best match by symbol kind
+                *hash<auto> best;
+                string targetKind = item.data.symbolKind ?? "";
+                foreach hash<auto> entry in (entries) {
+                    if (targetKind == "class" && entry.symbol_type == "class") {
+                        best = entry;
+                        break;
+                    } else if (targetKind == "function" && entry.symbol_type == "function") {
+                        best = entry;
+                        break;
+                    } else if (targetKind == "method"
+                            && (entry.symbol_type == "method"
+                                || entry.symbol_type == "static_method")) {
+                        best = entry;
+                        break;
+                    } else if (targetKind == "constant" && entry.symbol_type == "constant") {
+                        best = entry;
+                        break;
+                    } else if (!best) {
+                        best = entry;
+                    }
+                }
+
+                if (best) {
+                    *string doc = formatMetadataEntry(best);
+                    if (doc) {
+                        item.documentation = {
+                            "kind": "markdown",
+                            "value": doc,
+                        };
+                    }
+                }
+            }
+        }
+
+        return make_jsonrpc_response(jsonRpcVer, request.id, item);
     }
 
     #! "textDocument/onTypeFormatting" method handler
@@ -1574,6 +1920,53 @@ public class QLSServer {
             }
         }
 
+        # metadata fallback for builtins
+        *string methodDoc;
+        if (!params && builtinMetadata) {
+            *hash<auto> metaInfo;
+            if (isDotAccess && target) {
+                # resolve type from scope symbols
+                *string typeName;
+                *list<auto> scopeSymbols2 = doc.findScopeSymbolsDetailed({
+                    "line": line,
+                    "character": col,
+                });
+                if (scopeSymbols2) {
+                    foreach hash<auto> sym in (scopeSymbols2) {
+                        if (sym.name == target && sym.typeName) {
+                            typeName = sym.typeName;
+                            break;
+                        }
+                    }
+                }
+                if (!typeName) {
+                    typeName = target;
+                }
+                metaInfo = findMethodInMetadata(typeName, funcName);
+            } else if (isScopeAccess && target) {
+                metaInfo = findMethodInMetadata(target, funcName);
+            } else {
+                metaInfo = findFunctionInMetadata(funcName);
+            }
+
+            if (metaInfo) {
+                methodDoc = metaInfo.description;
+                returnType = metaInfo.return_type;
+                # build params from metadata
+                if (metaInfo.params && metaInfo.params.size()) {
+                    params = ();
+                    foreach hash<auto> mp in (metaInfo.params) {
+                        params += {
+                            "typeName": mp.type_name ?? "auto",
+                            "name": mp.name,
+                            "defaultVal": mp.default_value,
+                            "description": mp.description,
+                        };
+                    }
+                }
+            }
+        }
+
         if (!params) {
             return make_jsonrpc_response(jsonRpcVer, request.id, {
                 "signatures": (),
@@ -1591,7 +1984,17 @@ public class QLSServer {
                 plabel += " = " + p.defaultVal;
             }
             paramLabels += plabel;
-            paramInfos += {"label": plabel};
+            if (p.description) {
+                paramInfos += {
+                    "label": plabel,
+                    "documentation": {
+                        "kind": "markdown",
+                        "value": string(p.description),
+                    },
+                };
+            } else {
+                paramInfos += {"label": plabel};
+            }
         }
 
         string sigLabel = funcName + "(" + paramLabels.join(", ") + ")";
@@ -1603,12 +2006,52 @@ public class QLSServer {
             "label": sigLabel,
             "parameters": paramInfos,
         };
+        if (methodDoc) {
+            signature.documentation = {
+                "kind": "markdown",
+                "value": string(methodDoc),
+            };
+        }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, {
             "signatures": (signature,),
             "activeSignature": 0,
             "activeParameter": commaCount < paramInfos.size() ? commaCount : paramInfos.size() - 1,
         });
+    }
+
+    #! Find a method in builtin metadata by class name and method name
+    private *hash<auto> findMethodInMetadata(string className, string methodName) {
+        *hash<auto> ci = metaClassByName{className};
+        if (!ci) {
+            return NOTHING;
+        }
+        # search instance methods first, then static
+        foreach hash<auto> m in (ci.instance_methods) {
+            if (m.name == methodName) {
+                return m;
+            }
+        }
+        foreach hash<auto> m in (ci.static_methods) {
+            if (m.name == methodName) {
+                return m;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Find a function in builtin metadata by name
+    private *hash<auto> findFunctionInMetadata(string funcName) {
+        *list<hash<auto>> entries = metaByName{funcName};
+        if (!entries) {
+            return NOTHING;
+        }
+        foreach hash<auto> entry in (entries) {
+            if (entry.symbol_type == "function") {
+                return entry;
+            }
+        }
+        return NOTHING;
     }
 
     #! "textDocument/foldingRange" method handler
@@ -3119,11 +3562,22 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
     private {
         Document doc;
         hash<auto> position;
+        #! Metadata indexes for builtin symbol completion (may be empty)
+        hash<string, list<hash<auto>>> metaByName;
+        hash<string, hash<auto>> metaClassByName;
+        #! Single-char prefix index for fast lookup
+        hash<string, list<string>> metaPrefixIndex;
     }
 
-    constructor(Document doc, hash<auto> position) {
+    constructor(Document doc, hash<auto> position,
+            *hash<string, list<hash<auto>>> metaByName,
+            *hash<string, hash<auto>> metaClassByName,
+            *hash<string, list<string>> metaPrefixIndex) {
         self.doc = doc;
         self.position = position;
+        self.metaByName = metaByName ?? {};
+        self.metaClassByName = metaClassByName ?? {};
+        self.metaPrefixIndex = metaPrefixIndex ?? {};
     }
 
     int getParseOptions() {
@@ -3132,40 +3586,113 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
 
     list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
         *list<auto> symbols = doc.findScopeSymbolsDetailed(position);
-        if (!symbols) {
-            return ();
-        }
 
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
-        foreach hash<auto> sym in (symbols) {
-            string name = sym.name;
-            if (!seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                seen{name} = True;
-                string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
-                bool callable = kind == "function" || kind == "method";
-                result += <QoreCodeCompletion::CompletionItem>{
-                    "label": name,
-                    "kind": kind,
-                    "isCallable": callable,
-                };
+
+        if (symbols) {
+            foreach hash<auto> sym in (symbols) {
+                string name = sym.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
+                    bool callable = kind == "function" || kind == "method";
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": kind,
+                        "isCallable": callable,
+                    };
+                }
             }
         }
+
+        # add builtin symbols from metadata (classes, functions, constants)
+        # use the prefix index for fast single-character lookups
+        if (metaByName && prefix.length() >= 1) {
+            # get candidate names from the prefix index using the first character
+            string key = prefix[0].lwr();
+            *list<string> candidates = metaPrefixIndex{key};
+            foreach string name in (candidates) {
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    # use first entry's symbol_type for kind
+                    hash<auto> entry = metaByName{name}[0];
+                    string kind;
+                    bool callable;
+                    switch (entry.symbol_type) {
+                        case "class":
+                            kind = "class";
+                            callable = True;
+                            break;
+                        case "function":
+                            kind = "function";
+                            callable = True;
+                            break;
+                        case "constant":
+                            kind = "constant";
+                            callable = False;
+                            break;
+                        case "hashdecl":
+                            kind = "hashdecl";
+                            callable = False;
+                            break;
+                        case "enum":
+                            kind = "enum";
+                            callable = False;
+                            break;
+                        case "namespace":
+                            kind = "namespace";
+                            callable = False;
+                            break;
+                        default:
+                            continue;
+                    }
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": kind,
+                        "isCallable": callable,
+                    };
+                }
+            }
+        }
+
         return result;
     }
 
     list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
         *list<auto> symbols = doc.findScopeSymbolsDetailed(position);
-        if (!symbols) {
-            return ();
-        }
 
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
-        foreach hash<auto> sym in (symbols) {
-            if (sym.kind == ASTSymbolKind.Class) {
-                string name = sym.name;
+
+        if (symbols) {
+            foreach hash<auto> sym in (symbols) {
+                if (sym.kind == ASTSymbolKind.Class) {
+                    string name = sym.name;
+                    if (!seen{name}
+                            && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                        seen{name} = True;
+                        result += <QoreCodeCompletion::CompletionItem>{
+                            "label": name,
+                            "kind": "class",
+                            "isCallable": True,
+                        };
+                    }
+                }
+            }
+        }
+
+        # add builtin classes from metadata
+        if (metaClassByName && prefix.length()) {
+            HashIterator it(metaClassByName);
+            while (it.next()) {
+                string name = it.getKey();
+                # skip fully qualified names (only add unqualified)
+                if (name.find("::") >= 0) {
+                    continue;
+                }
                 if (!seen{name}
                         && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
                     seen{name} = True;
@@ -3177,6 +3704,7 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
                 }
             }
         }
+
         return result;
     }
 
@@ -3192,61 +3720,143 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
         }
 
         *list<auto> members = doc.findTypeMembers(typeName, True);
-        if (!members) {
-            return ();
-        }
 
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
-        foreach hash<auto> sym in (members) {
-            string name = sym.name;
-            if (name == "constructor" || name == "destructor" || name == "copy") {
-                continue;
-            }
-            # Skip static members for dot access
-            if (sym.isStatic) {
-                continue;
-            }
-            if (!seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                seen{name} = True;
-                string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
-                bool callable = kind == "function" || kind == "method";
-                result += <QoreCodeCompletion::CompletionItem>{
-                    "label": name,
-                    "kind": kind,
-                    "isCallable": callable,
-                };
+
+        if (members) {
+            foreach hash<auto> sym in (members) {
+                string name = sym.name;
+                if (name == "constructor" || name == "destructor" || name == "copy") {
+                    continue;
+                }
+                # Skip static members for dot access
+                if (sym.isStatic) {
+                    continue;
+                }
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
+                    bool callable = kind == "function" || kind == "method";
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": kind,
+                        "isCallable": callable,
+                    };
+                }
             }
         }
+
+        # metadata fallback for builtin class members
+        if (!result.size() && metaClassByName{typeName}) {
+            hash<auto> ci = metaClassByName{typeName};
+            foreach hash<auto> m in (ci.instance_methods) {
+                string name = m.name;
+                if (name == "constructor" || name == "destructor" || name == "copy") {
+                    continue;
+                }
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "method",
+                        "isCallable": True,
+                    };
+                }
+            }
+            # also add public members
+            foreach hash<auto> m in (ci.members) {
+                if (m.access != "public") {
+                    continue;
+                }
+                string name = m.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "member",
+                        "isCallable": False,
+                    };
+                }
+            }
+        }
+
         return result;
     }
 
     list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
         *list<auto> members = doc.findTypeMembers(target, True);
-        if (!members) {
-            return ();
-        }
 
         list<hash<QoreCodeCompletion::CompletionItem>> result = ();
         hash<string, bool> seen;
-        foreach hash<auto> sym in (members) {
-            string name = sym.name;
-            if (name == "constructor" || name == "destructor") {
-                continue;
-            }
-            if (!seen{name}
-                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
-                seen{name} = True;
-                string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
-                bool callable = kind == "function" || kind == "method";
-                result += <QoreCodeCompletion::CompletionItem>{
-                    "label": name,
-                    "kind": kind,
-                    "isCallable": callable,
-                };
+
+        if (members) {
+            foreach hash<auto> sym in (members) {
+                string name = sym.name;
+                if (name == "constructor" || name == "destructor") {
+                    continue;
+                }
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    string kind = CSTSymbolKindMap{string(sym.kind)} ?? "variable";
+                    bool callable = kind == "function" || kind == "method";
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": kind,
+                        "isCallable": callable,
+                    };
+                }
             }
         }
+
+        # metadata fallback for builtin class static members / namespace members
+        if (!result.size() && metaClassByName{target}) {
+            hash<auto> ci = metaClassByName{target};
+            foreach hash<auto> m in (ci.static_methods) {
+                string name = m.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "method",
+                        "isCallable": True,
+                    };
+                }
+            }
+            foreach hash<auto> m in (ci.instance_methods) {
+                string name = m.name;
+                if (name == "constructor" || name == "destructor") {
+                    continue;
+                }
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "method",
+                        "isCallable": True,
+                    };
+                }
+            }
+            foreach hash<auto> c in (ci.constants) {
+                string name = c.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "constant",
+                        "isCallable": False,
+                    };
+                }
+            }
+        }
+
         return result;
     }
 }
