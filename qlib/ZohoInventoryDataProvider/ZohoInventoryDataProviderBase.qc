@@ -355,6 +355,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
             "contacts": True,
             "customers": True,
             "vendors": True,
+            "contact_persons": True,
             "items": True,
             "item_groups": True,
             "salesorders": True,
@@ -363,6 +364,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
             "invoices": True,
             "shipmentorders": True,
             "inventory_adjustments": True,
+            "currencies": True,
         };
     }
 
@@ -381,6 +383,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
             case "contacts": return getReferenceContacts(NOTHING, org_id);
             case "customers": return getReferenceContacts("customer", org_id);
             case "vendors": return getReferenceContacts("vendor", org_id);
+            case "contact_persons": return getReferenceContactPersons(org_id);
             case "items": return getReferenceItems(org_id);
             case "item_groups": return getReferenceItemGroups(org_id);
             case "salesorders": return getReferenceSalesOrders(org_id);
@@ -389,6 +392,7 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
             case "invoices": return getReferenceInvoices(org_id);
             case "shipmentorders": return getReferenceShipmentOrders(org_id);
             case "inventory_adjustments": return getReferenceInventoryAdjustments(org_id);
+            case "currencies": return getReferenceCurrencies(org_id);
         }
     }
 
@@ -688,6 +692,88 @@ public class ZohoInventoryDataProviderBase inherits DataProvider::AbstractDataPr
         }
         return rv;
     }
+
+    #! Returns available contact persons for reference data
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceContactPersons(*string org_id) {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            # Get contacts first, then collect contact persons from each
+            hash<auto> response = doGet("/contacts", params);
+            if (response.contacts) {
+                foreach hash<auto> contact in (response.contacts) {
+                    try {
+                        hash<auto> cp_response = doGet(
+                            sprintf("/contacts/%s/contactpersons", contact.contact_id), params);
+                        if (cp_response.contact_persons) {
+                            foreach hash<auto> cp in (cp_response.contact_persons) {
+                                string cp_name = "";
+                                if (cp.first_name.val()) {
+                                    cp_name = cp.first_name;
+                                }
+                                if (cp.last_name.val()) {
+                                    cp_name += (cp_name.val() ? " " : "") + cp.last_name;
+                                }
+                                if (!cp_name.val()) {
+                                    cp_name = cp.email ?? sprintf("Contact Person %s",
+                                        cp.contact_person_id);
+                                }
+                                string contact_name = contact.contact_name ?? "Unknown Contact";
+                                rv += <AllowedValueInfo>{
+                                    "display_name": cp_name,
+                                    "short_desc": contact_name,
+                                    "desc": sprintf("%s (%s, ID: %s)", cp_name, contact_name,
+                                        cp.contact_person_id),
+                                    "value": cp.contact_person_id,
+                                };
+                            }
+                        }
+                    } catch () {
+                        # Skip contacts where we can't fetch contact persons
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available currencies for reference data
+    /** @param org_id optional organization ID from action options
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceCurrencies(*string org_id) {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> params;
+            if (org_id) {
+                params.organization_id = org_id;
+            }
+            hash<auto> response = doGet("/settings/currencies", params);
+            if (response.currencies) {
+                foreach hash<auto> currency in (response.currencies) {
+                    string display_name = currency.currency_name
+                        ?? sprintf("Currency %s", currency.currency_id);
+                    string code = currency.currency_code ?? "";
+                    rv += <AllowedValueInfo>{
+                        "display_name": code.val() ? sprintf("%s (%s)", display_name, code) : display_name,
+                        "short_desc": code,
+                        "desc": sprintf("%s - %s (ID: %s)", code, display_name, currency.currency_id),
+                        "value": currency.currency_id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
 }
 
 } # namespace ZohoInventoryDataProvider

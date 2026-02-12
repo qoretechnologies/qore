@@ -153,8 +153,14 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                 },
                 "currency_id": <ActionOptionInfo>{
-                    "display_name": "Currency ID",
+                    "display_name": "Currency",
                     "short_desc": "Currency for the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "currencies",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Website URL of the contact",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
                 "notes": <ActionOptionInfo>{
@@ -232,10 +238,21 @@ module ZohoInventoryDataProvider {
                     "short_desc": "Company name for the contact",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Type of contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "customer or vendor",
+                },
                 "payment_terms": <ActionOptionInfo>{
                     "display_name": "Payment Terms",
                     "short_desc": "Payment terms in days",
                     "type": AbstractDataProviderTypeMap."*int",
+                },
+                "website": <ActionOptionInfo>{
+                    "display_name": "Website",
+                    "short_desc": "Website URL of the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
                 "notes": <ActionOptionInfo>{
                     "display_name": "Notes",
@@ -424,6 +441,7 @@ module ZohoInventoryDataProvider {
                     "short_desc": "The contact person to retrieve",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "contact_persons",
                 },
             },
         });
@@ -452,6 +470,7 @@ module ZohoInventoryDataProvider {
                     "short_desc": "The contact person to update",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "contact_persons",
                 },
                 "first_name": <ActionOptionInfo>{
                     "display_name": "First Name",
@@ -505,6 +524,7 @@ module ZohoInventoryDataProvider {
                     "short_desc": "The contact person to delete",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "contact_persons",
                 },
             },
         });
@@ -533,6 +553,7 @@ module ZohoInventoryDataProvider {
                     "short_desc": "The contact person to mark as primary",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "contact_persons",
                 },
             },
         });
@@ -634,18 +655,18 @@ module ZohoInventoryDataProvider {
                     "type": AbstractDataProviderTypeMap."*float",
                 },
                 "account_id": <ActionOptionInfo>{
-                    "display_name": "Account ID",
-                    "short_desc": "Sales account ID",
+                    "display_name": "Sales Account",
+                    "short_desc": "Sales account",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
                 "purchase_account_id": <ActionOptionInfo>{
-                    "display_name": "Purchase Account ID",
-                    "short_desc": "Purchase account ID",
+                    "display_name": "Purchase Account",
+                    "short_desc": "Purchase account",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
                 "inventory_account_id": <ActionOptionInfo>{
-                    "display_name": "Inventory Account ID",
-                    "short_desc": "Inventory account ID",
+                    "display_name": "Inventory Account",
+                    "short_desc": "Inventory account",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },

@@ -862,6 +862,30 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             }
         }
 
+        # Test contact_persons reference data
+        *list<hash<AllowedValueInfo>> contactPersons = prov.getReferenceData("contact_persons");
+        if (contactPersons) {
+            if (m_options.verbose) {
+                printf("Reference data: %d contact persons available\n", contactPersons.size());
+            }
+            if (contactPersons.size() > 0) {
+                assertTrue(contactPersons[0].display_name.val());
+                assertTrue(contactPersons[0].value.val());
+            }
+        }
+
+        # Test currencies reference data
+        *list<hash<AllowedValueInfo>> currencies = prov.getReferenceData("currencies");
+        if (currencies) {
+            if (m_options.verbose) {
+                printf("Reference data: %d currencies available\n", currencies.size());
+            }
+            if (currencies.size() > 0) {
+                assertTrue(currencies[0].display_name.val());
+                assertTrue(currencies[0].value.val());
+            }
+        }
+
         if (m_options.verbose) {
             printf("--- Reference Data tests completed ---\n");
         }
@@ -895,6 +919,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
                 "contact_type": "customer",
                 "company_name": "Test Company Inc",
                 "payment_terms": 30,
+                "website": "https://test-company.example.com",
                 "notes": "Created by integration test",
             });
 
@@ -929,9 +954,40 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
                 });
                 assertEq(testContactId, fetchedContact.contact_id);
                 assertEq(testName, fetchedContact.contact_name);
+                assertEq("customer", fetchedContact.contact_type);
+                assertEq("https://test-company.example.com", fetchedContact.website);
                 if (m_options.verbose) {
-                    printf("  Fetched contact: %s (type: %s)\n",
-                        fetchedContact.contact_name, fetchedContact.contact_type ?? "N/A");
+                    printf("  Fetched contact: %s (type: %s, website: %s)\n",
+                        fetchedContact.contact_name, fetchedContact.contact_type ?? "N/A",
+                        fetchedContact.website ?? "N/A");
+                }
+
+                # Test update-contact with website and notes
+                AbstractDataProvider updateContactProvider = prov.getChildProvider("update-contact");
+                hash<auto> updatedContact = updateContactProvider.doRequest({
+                    "contact_id": testContactId,
+                    "company_name": "Updated Company Inc",
+                    "website": "https://updated-company.example.com",
+                    "notes": "Updated by integration test",
+                });
+                assertEq(testContactId, updatedContact.contact_id);
+                if (m_options.verbose) {
+                    printf("  Updated contact fields (company_name, website, notes)\n");
+                }
+
+                # Verify updates persisted
+                hash<auto> verifiedContact = getContactProvider.doRequest({
+                    "contact_id": testContactId,
+                });
+                assertEq("Updated Company Inc", verifiedContact.company_name);
+                assertEq("https://updated-company.example.com", verifiedContact.website);
+                assertEq("Updated by integration test", verifiedContact.notes);
+                # Verify contact_type unchanged (still customer for downstream tests)
+                assertEq("customer", verifiedContact.contact_type);
+                if (m_options.verbose) {
+                    printf("  Verified updated contact: company=%s, website=%s, notes=%s\n",
+                        verifiedContact.company_name, verifiedContact.website,
+                        verifiedContact.notes);
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
