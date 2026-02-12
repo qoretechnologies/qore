@@ -630,11 +630,29 @@ cargo install tree-sitter-cli@0.26.5
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
       - abstract provider interface for pluggable symbol resolution backends
       - %Qore keyword and built-in type completions
+    - @ref linenoiseintro "linenoise" module
+      - integrated into the %Qore build tree (previously a separate external module)
+      - provides readline-like line editing under a permissive (BSD) license
+      - supports arrow key navigation, reverse search (Ctrl+R), and tab completion
+      - includes @ref Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" abstract class
+        for external history management
+    - @ref qorehistoryintro "QoreHistory" module
+      - new module providing shared history management for %Qore tools
+      - timestamped entries with multiline support
+      - configurable deduplication (none, consecutive, full)
+      - prefix-filtered navigation, pattern search (prefix, substring, regex)
+      - history expansion (@c !!, @c !n, @c !-n, @c !prefix, @c !$)
+      - backward-compatible persistence (auto-detects legacy one-line-per-entry format)
+      - includes @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider" adapter class
+        bridging @ref QoreHistory::History "History" to
+        @ref Linenoise::AbstractHistoryProvider "Linenoise::AbstractHistoryProvider"
+      - used by @ref qorereplintro "QoreRepl" and \c qdp for history persistence
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
       - supports multi-line input detection, incremental parsing, and special commands (/help, /vars, /reset, etc.)
       - uses @ref qorecodecompletionintro "QoreCodeCompletion" module for context-aware code completion
+      - @ref linenoiseintro "linenoise" is now a mandatory dependency (no longer optional)
     - integrated REPL mode in the \c qore binary
       - automatically enters REPL mode when run interactively in a terminal with no script file
       - new \c --interactive command-line option to force REPL mode
@@ -696,10 +714,10 @@ cargo install tree-sitter-cli@0.26.5
       set these options will continue to work but the restrictions will not be applied.
 
     @subsection qore_2_3_0_known_limitations Known Limitations
-    - The integrated REPL in the \c qore binary provides basic readline functionality without advanced line
-      editing features. For enhanced editing (arrow key navigation, command history recall, etc.), consider:
-      - Using \c rlwrap: \c rlwrap \c qore (provides readline wrapper)
-      - Using the @ref qorereplintro "QoreRepl" module with a custom frontend that provides line editing
+    - The integrated REPL in the \c qore binary provides line editing via the built-in
+      @ref linenoiseintro "linenoise" module (arrow key navigation, command history recall, reverse
+      search with Ctrl+R, tab completion). For a full-featured ncurses TUI REPL, see the
+      <a href="https://github.com/qoretechnologies/module-ncurses">module-ncurses</a> \c qrepl application.
 
     @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
     - @ref httpserverintro "HttpServer" module

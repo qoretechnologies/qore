@@ -2222,6 +2222,7 @@ AC_DEFINE_UNQUOTED([QORE_BUILD_HOST],   "$QORE_BUILD_HOST", [Qore build host inf
 AC_CONFIG_FILES([Makefile lib/Makefile])
 AC_CONFIG_FILES([modules/astparser/Makefile modules/astparser/src/Makefile])
 AC_CONFIG_FILES([modules/reflection/Makefile modules/reflection/src/Makefile])
+AC_CONFIG_FILES([modules/linenoise/Makefile modules/linenoise/src/Makefile])
 AC_CONFIG_FILES([modules/logger_bin/Makefile modules/logger_bin/src/Makefile])
 AC_CONFIG_FILES([modules/mongodb/Makefile modules/mongodb/src/Makefile])
 AC_CONFIG_FILES([qore.pc])

@@ -1,0 +1,806 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreHistory.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreHistory
+
+%exec-class QoreHistoryTest
+
+class QoreHistoryTest inherits QUnit::Test {
+    private {
+        string tmpdir;
+    }
+
+    constructor() : QUnit::Test("QoreHistory", "1.0") {
+        tmpdir = ENV.TMPDIR ?? "/tmp";
+
+        addTestCase("add basic", \testAddBasic());
+        addTestCase("add dedup consecutive", \testAddDedupConsecutive());
+        addTestCase("add dedup full", \testAddDedupFull());
+        addTestCase("add dedup none", \testAddDedupNone());
+        addTestCase("add empty/whitespace skip", \testAddEmptySkip());
+        addTestCase("add max_length trim", \testAddMaxLengthTrim());
+        addTestCase("navigation prev/next", \testNavigation());
+        addTestCase("navigation bounds", \testNavigationBounds());
+        addTestCase("navigation prefix filter", \testNavigationPrefix());
+        addTestCase("navigation resetNavigation", \testResetNavigation());
+        addTestCase("search prefix", \testSearchPrefix());
+        addTestCase("search substring", \testSearchSubstring());
+        addTestCase("search regex", \testSearchRegex());
+        addTestCase("search no results", \testSearchNoResults());
+        addTestCase("save/load round-trip new format", \testSaveLoadNewFormat());
+        addTestCase("load legacy format", \testLoadLegacyFormat());
+        addTestCase("save/load multiline entries", \testSaveLoadMultiline());
+        addTestCase("load nonexistent file", \testLoadNonexistent());
+        addTestCase("load empty file", \testLoadEmptyFile());
+        addTestCase("save file permissions", \testSavePermissions());
+        addTestCase("remove by index", \testRemoveByIndex());
+        addTestCase("remove by text", \testRemoveByText());
+        addTestCase("remove all duplicates", \testRemoveAll());
+        addTestCase("remove out of range", \testRemoveOutOfRange());
+        addTestCase("expand !!", \testExpandBangBang());
+        addTestCase("expand !n", \testExpandBangN());
+        addTestCase("expand !-n", \testExpandBangMinusN());
+        addTestCase("expand !prefix", \testExpandBangPrefix());
+        addTestCase("expand !$", \testExpandBangDollar());
+        addTestCase("expand no match", \testExpandNoMatch());
+        addTestCase("expand empty history", \testExpandEmptyHistory());
+        addTestCase("timestamps", \testTimestamps());
+        addTestCase("multiline entries", \testMultilineEntries());
+        addTestCase("configuration setMaxLength", \testSetMaxLength());
+        addTestCase("configuration setDedupMode", \testSetDedupMode());
+        addTestCase("constructor options", \testConstructorOptions());
+        addTestCase("clear", \testClear());
+        addTestCase("getItems returns copy", \testGetItemsCopy());
+        addTestCase("setDedupMode validation", \testSetDedupModeValidation());
+        addTestCase("constructor dedup validation", \testConstructorDedupValidation());
+        addTestCase("load clears existing items", \testLoadClearsExisting());
+        addTestCase("timestamp precision in save/load", \testTimestampPrecision());
+        addTestCase("legacy format incrementing timestamps", \testLegacyTimestampOrdering());
+        addTestCase("atomic save on error", \testAtomicSave());
+        addTestCase("prev boundary then next", \testPrevBoundaryThenNext());
+        addTestCase("first and last", \testFirstAndLast());
+        addTestCase("searchNavigate backward", \testSearchNavigateBackward());
+        addTestCase("searchNavigate forward", \testSearchNavigateForward());
+        addTestCase("searchNavigate pattern change", \testSearchNavigatePatternChange());
+        addTestCase("searchNavigate empty history", \testSearchNavigateEmpty());
+        addTestCase("searchNavigate reset", \testSearchNavigateReset());
+
+        set_return_value(main());
+    }
+
+    private string getTmpFile() {
+        return tmpdir + "/qore-history-test-" + string(getpid()) + "-" + string(now_us()) + ".hist";
+    }
+
+    private nothing cleanupFile(string path) {
+        if (is_readable(path)) {
+            unlink(path);
+        }
+    }
+
+    # --- add() tests ---
+
+    testAddBasic() {
+        QoreHistory::History h();
+        h.add("hello");
+        h.add("world");
+        assertEq(2, h.size(), "two entries added");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("hello", items[0].text, "first entry text");
+        assertEq("world", items[1].text, "second entry text");
+    }
+
+    testAddDedupConsecutive() {
+        QoreHistory::History h();
+        h.add("hello");
+        h.add("hello");
+        h.add("world");
+        h.add("world");
+        h.add("hello");
+        assertEq(3, h.size(), "consecutive duplicates removed");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("hello", items[0].text);
+        assertEq("world", items[1].text);
+        assertEq("hello", items[2].text);
+    }
+
+    testAddDedupFull() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_FULL});
+        h.add("hello");
+        h.add("world");
+        h.add("hello");
+        assertEq(2, h.size(), "full dedup removes prior duplicate");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("world", items[0].text, "first entry is world");
+        assertEq("hello", items[1].text, "second entry is hello");
+    }
+
+    testAddDedupNone() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("hello");
+        h.add("hello");
+        h.add("hello");
+        assertEq(3, h.size(), "no dedup keeps all entries");
+    }
+
+    testAddEmptySkip() {
+        QoreHistory::History h();
+        h.add("");
+        h.add("  ");
+        h.add("\t");
+        assertEq(0, h.size(), "empty/whitespace entries skipped");
+    }
+
+    testAddMaxLengthTrim() {
+        QoreHistory::History h({"max_length": 3});
+        h.add("a");
+        h.add("b");
+        h.add("c");
+        h.add("d");
+        assertEq(3, h.size(), "trimmed to max_length");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("b", items[0].text, "oldest entry removed");
+        assertEq("d", items[2].text, "newest entry kept");
+    }
+
+    # --- prev()/next() tests ---
+
+    testNavigation() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("first");
+        h.add("second");
+        h.add("third");
+
+        # Navigate backward
+        assertEq("third", h.prev(), "prev returns last entry");
+        assertEq("second", h.prev(), "prev returns second");
+        assertEq("first", h.prev(), "prev returns first");
+
+        # Navigate forward
+        assertEq("second", h.next(), "next returns second");
+        assertEq("third", h.next(), "next returns third");
+        assertEq("", h.next(), "next returns empty when leaving history");
+    }
+
+    testNavigationBounds() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        # Empty history
+        assertEq(NOTHING, h.prev(), "prev on empty returns NOTHING");
+        assertEq(NOTHING, h.next(), "next when not navigating returns NOTHING");
+
+        h.add("only");
+        assertEq("only", h.prev(), "prev returns only entry");
+        # At beginning, prev returns NOTHING (no more history)
+        assertEq(NOTHING, h.prev(), "prev at beginning returns NOTHING");
+        # Navigation state is still at idx 0, so next goes to end (leaves history)
+        assertEq("", h.next(), "next leaves history");
+    }
+
+    testNavigationPrefix() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print 1");
+        h.add("int x = 2");
+        h.add("print 3");
+        h.add("string s");
+
+        # Prefix-filtered navigation
+        assertEq("print 3", h.prev("print"), "prefix prev returns last match");
+        assertEq("print 1", h.prev("print"), "prefix prev returns earlier match");
+        assertEq(NOTHING, h.prev("print"), "prefix prev returns NOTHING at start");
+
+        # Navigate forward with prefix
+        h.resetNavigation();
+        h.prev("print");  # "print 3"
+        h.prev("print");  # "print 1"
+        assertEq("print 3", h.next("print"), "prefix next returns next match");
+        assertEq("", h.next("print"), "prefix next returns empty when done");
+    }
+
+    testResetNavigation() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("first");
+        h.add("second");
+        h.prev();
+        h.resetNavigation();
+        assertEq(NOTHING, h.next(), "next after reset returns NOTHING");
+        assertEq("second", h.prev(), "prev after reset starts from end");
+    }
+
+    # --- search() tests ---
+
+    testSearchPrefix() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print 1");
+        h.add("int x = 2");
+        h.add("print 3");
+
+        list<hash<QoreHistory::HistoryEntry>> results = h.search("print");
+        assertEq(2, results.size(), "prefix search found 2 matches");
+        assertEq("print 3", results[0].text, "newest match first");
+        assertEq("print 1", results[1].text, "older match second");
+    }
+
+    testSearchSubstring() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("int x = 1");
+        h.add("string s = 'hello'");
+        h.add("float y = 1.5");
+
+        list<hash<QoreHistory::HistoryEntry>> results = h.search("=", QoreHistory::MATCH_SUBSTRING);
+        assertEq(3, results.size(), "substring search found all 3");
+    }
+
+    testSearchRegex() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("int x = 1");
+        h.add("string s = 'hello'");
+        h.add("int y = 2");
+
+        list<hash<QoreHistory::HistoryEntry>> results = h.search("^int ", QoreHistory::MATCH_REGEX);
+        assertEq(2, results.size(), "regex search found 2 matches");
+    }
+
+    testSearchNoResults() {
+        QoreHistory::History h();
+        h.add("hello");
+        list<hash<QoreHistory::HistoryEntry>> results = h.search("xyz");
+        assertEq(0, results.size(), "no results for non-matching prefix");
+    }
+
+    # --- Persistence tests ---
+
+    testSaveLoadNewFormat() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        QoreHistory::History h1({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h1.add("first");
+        h1.add("second");
+        h1.add("third");
+        h1.save(path);
+
+        QoreHistory::History h2({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h2.load(path);
+        assertEq(3, h2.size(), "loaded correct number of entries");
+        list<hash<QoreHistory::HistoryEntry>> items = h2.getItems();
+        assertEq("first", items[0].text, "first entry preserved");
+        assertEq("second", items[1].text, "second entry preserved");
+        assertEq("third", items[2].text, "third entry preserved");
+    }
+
+    testLoadLegacyFormat() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        # Write a legacy format file (one line per entry, no timestamps)
+        File f();
+        f.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        f.write("hello\nworld\nfoo\n");
+
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.load(path);
+        assertEq(3, h.size(), "loaded 3 legacy entries");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("hello", items[0].text, "legacy entry 1");
+        assertEq("world", items[1].text, "legacy entry 2");
+        assertEq("foo", items[2].text, "legacy entry 3");
+        # Timestamps should be assigned
+        assertTrue(items[0].timestamp > 0, "legacy entries have timestamps");
+    }
+
+    testSaveLoadMultiline() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        QoreHistory::History h1({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h1.add("{\n    int x = 1;\n    printf(\"%d\\n\", x);\n}");
+        h1.add("single line");
+        h1.add("line 1\nline 2");
+        h1.save(path);
+
+        QoreHistory::History h2({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h2.load(path);
+        assertEq(3, h2.size(), "loaded 3 multiline entries");
+        list<hash<QoreHistory::HistoryEntry>> items = h2.getItems();
+        assertEq("{\n    int x = 1;\n    printf(\"%d\\n\", x);\n}", items[0].text,
+            "multiline entry preserved");
+        assertEq("single line", items[1].text, "single line preserved");
+        assertEq("line 1\nline 2", items[2].text, "two-line entry preserved");
+    }
+
+    testLoadNonexistent() {
+        QoreHistory::History h();
+        h.load("/tmp/nonexistent-history-file-" + string(getpid()) + ".hist");
+        assertEq(0, h.size(), "loading nonexistent file is no-op");
+    }
+
+    testLoadEmptyFile() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        File f();
+        f.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+        QoreHistory::History h();
+        h.load(path);
+        assertEq(0, h.size(), "loading empty file is no-op");
+    }
+
+    testSavePermissions() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        QoreHistory::History h();
+        h.add("test");
+        h.save(path);
+
+        *hash<StatInfo> st = hstat(path);
+        assertTrue(exists st, "file exists after save");
+        # Check that file is 0600 (owner read/write only)
+        assertEq(0600, st.mode & 0777, "file has 0600 permissions");
+    }
+
+    # --- Entry management tests ---
+
+    testRemoveByIndex() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("a");
+        h.add("b");
+        h.add("c");
+        assertTrue(h.removeAt(1), "remove at valid index returns True");
+        assertEq(2, h.size(), "size decreased by 1");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("a", items[0].text, "first entry unchanged");
+        assertEq("c", items[1].text, "third entry shifted");
+    }
+
+    testRemoveByText() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("hello");
+        h.add("world");
+        h.add("hello");
+        assertTrue(h.removeText("hello"), "removeText returns True");
+        assertEq(2, h.size(), "only first match removed");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("world", items[0].text, "world still present");
+        assertEq("hello", items[1].text, "second hello still present");
+    }
+
+    testRemoveAll() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("hello");
+        h.add("world");
+        h.add("hello");
+        h.add("hello");
+        assertEq(3, h.removeAll("hello"), "removeAll returns count of removed");
+        assertEq(1, h.size(), "only non-matching entries remain");
+        assertEq("world", h.getItems()[0].text, "world still present");
+    }
+
+    testRemoveOutOfRange() {
+        QoreHistory::History h();
+        h.add("only");
+        assertFalse(h.removeAt(-1), "negative index returns False");
+        assertFalse(h.removeAt(1), "out of range index returns False");
+        assertFalse(h.removeAt(99), "far out of range index returns False");
+        assertFalse(h.removeText("nonexistent"), "removeText non-match returns False");
+        assertEq(0, h.removeAll("nonexistent"), "removeAll non-match returns 0");
+    }
+
+    # --- expand() tests ---
+
+    testExpandBangBang() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print('hello')");
+        h.add("int x = 1");
+        assertEq("int x = 1", h.expand("!!"), "!! returns last command");
+    }
+
+    testExpandBangN() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("first");
+        h.add("second");
+        h.add("third");
+        assertEq("first", h.expand("!1"), "!1 returns first entry");
+        assertEq("second", h.expand("!2"), "!2 returns second entry");
+        assertEq("third", h.expand("!3"), "!3 returns third entry");
+        assertEq(NOTHING, h.expand("!4"), "!4 out of range returns NOTHING");
+        assertEq(NOTHING, h.expand("!0"), "!0 returns NOTHING");
+    }
+
+    testExpandBangMinusN() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("first");
+        h.add("second");
+        h.add("third");
+        assertEq("third", h.expand("!-1"), "!-1 returns last entry");
+        assertEq("second", h.expand("!-2"), "!-2 returns second to last");
+        assertEq("first", h.expand("!-3"), "!-3 returns first entry");
+        assertEq(NOTHING, h.expand("!-4"), "!-4 out of range returns NOTHING");
+    }
+
+    testExpandBangPrefix() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print('hello')");
+        h.add("int x = 1");
+        h.add("printf('%d', x)");
+        assertEq("printf('%d', x)", h.expand("!print"), "!print returns last matching");
+        assertEq("int x = 1", h.expand("!int"), "!int returns matching entry");
+        assertEq(NOTHING, h.expand("!xyz"), "!xyz returns NOTHING");
+    }
+
+    testExpandBangDollar() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print hello world");
+        assertEq("world", h.expand("!$"), "!$ returns last word");
+    }
+
+    testExpandNoMatch() {
+        QoreHistory::History h();
+        h.add("hello");
+        assertEq(NOTHING, h.expand("x"), "non-! input returns NOTHING");
+        assertEq(NOTHING, h.expand("!"), "bare ! returns NOTHING");
+    }
+
+    testExpandEmptyHistory() {
+        QoreHistory::History h();
+        assertEq(NOTHING, h.expand("!!"), "!! on empty history returns NOTHING");
+        assertEq(NOTHING, h.expand("!1"), "!1 on empty history returns NOTHING");
+        assertEq(NOTHING, h.expand("!$"), "!$ on empty history returns NOTHING");
+    }
+
+    # --- Timestamp tests ---
+
+    testTimestamps() {
+        QoreHistory::History h();
+        date before = now_us();
+        h.add("test");
+        date after = now_us();
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertTrue(items[0].timestamp >= before, "timestamp not before add()");
+        assertTrue(items[0].timestamp <= after, "timestamp not after add()");
+    }
+
+    # --- Multiline tests ---
+
+    testMultilineEntries() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        string multi = "if (True) {\n    print('yes');\n}";
+        h.add(multi);
+        h.add("simple");
+        # prev returns last added first
+        *string last = h.prev();
+        assertEq("simple", last, "prev returns last entry");
+        *string prev = h.prev();
+        assertEq(multi, prev, "prev returns multiline entry");
+    }
+
+    # --- Configuration tests ---
+
+    testSetMaxLength() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("a");
+        h.add("b");
+        h.add("c");
+        h.add("d");
+        h.setMaxLength(2);
+        assertEq(2, h.size(), "setMaxLength trims existing entries");
+        assertEq(2, h.getMaxLength(), "getMaxLength returns new value");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq("c", items[0].text, "oldest entries removed");
+        assertEq("d", items[1].text, "newest entries kept");
+    }
+
+    testSetDedupMode() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        assertEq(QoreHistory::DEDUP_NONE, h.getDedupMode(), "initial mode");
+        h.add("hello");
+        h.add("hello");
+        assertEq(2, h.size(), "no dedup: both entries kept");
+
+        h.setDedupMode(QoreHistory::DEDUP_CONSECUTIVE);
+        assertEq(QoreHistory::DEDUP_CONSECUTIVE, h.getDedupMode(), "mode changed");
+        h.add("hello");
+        # With consecutive dedup, this should be skipped since last entry is "hello"
+        assertEq(2, h.size(), "consecutive dedup: duplicate skipped");
+    }
+
+    testConstructorOptions() {
+        QoreHistory::History h({"max_length": 100, "dedup_mode": QoreHistory::DEDUP_FULL});
+        assertEq(100, h.getMaxLength(), "constructor sets max_length");
+        assertEq(QoreHistory::DEDUP_FULL, h.getDedupMode(), "constructor sets dedup_mode");
+    }
+
+    testClear() {
+        QoreHistory::History h();
+        h.add("hello");
+        h.add("world");
+        h.prev();
+        h.clear();
+        assertEq(0, h.size(), "clear removes all entries");
+        assertEq(NOTHING, h.next(), "clear resets navigation");
+    }
+
+    testGetItemsCopy() {
+        QoreHistory::History h();
+        h.add("hello");
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq(1, items.size(), "getItems returns entries");
+        # Verify it's a snapshot - adding more shouldn't affect the copy
+        h.add("world");
+        assertEq(1, items.size(), "original list unchanged after add");
+        assertEq(2, h.size(), "history has new entry");
+    }
+
+    testSetDedupModeValidation() {
+        QoreHistory::History h();
+        # Valid modes should work
+        h.setDedupMode(QoreHistory::DEDUP_NONE);
+        assertEq(QoreHistory::DEDUP_NONE, h.getDedupMode());
+        h.setDedupMode(QoreHistory::DEDUP_CONSECUTIVE);
+        assertEq(QoreHistory::DEDUP_CONSECUTIVE, h.getDedupMode());
+        h.setDedupMode(QoreHistory::DEDUP_FULL);
+        assertEq(QoreHistory::DEDUP_FULL, h.getDedupMode());
+        # Invalid mode should throw
+        assertThrows("INVALID-DEDUP-MODE", sub () { h.setDedupMode(42); });
+        assertThrows("INVALID-DEDUP-MODE", sub () { h.setDedupMode(-1); });
+    }
+
+    testConstructorDedupValidation() {
+        # Valid mode in constructor should work
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_FULL});
+        assertEq(QoreHistory::DEDUP_FULL, h.getDedupMode());
+        # Invalid mode in constructor should throw
+        assertThrows("INVALID-DEDUP-MODE", sub () {
+            new QoreHistory::History({"dedup_mode": 99});
+        });
+    }
+
+    testLoadClearsExisting() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        # Create a file with 2 entries
+        QoreHistory::History h1({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h1.add("file1");
+        h1.add("file2");
+        h1.save(path);
+
+        # Load into a history that already has entries
+        QoreHistory::History h2({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h2.add("existing1");
+        h2.add("existing2");
+        h2.add("existing3");
+        assertEq(3, h2.size(), "has existing entries before load");
+
+        h2.load(path);
+        assertEq(2, h2.size(), "load replaced existing entries");
+        assertEq("file1", h2.getItems()[0].text, "first loaded entry");
+        assertEq("file2", h2.getItems()[1].text, "second loaded entry");
+    }
+
+    testTimestampPrecision() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        QoreHistory::History h1({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h1.add("entry1");
+        h1.add("entry2");
+        list<hash<QoreHistory::HistoryEntry>> orig = h1.getItems();
+        h1.save(path);
+
+        QoreHistory::History h2({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h2.load(path);
+        list<hash<QoreHistory::HistoryEntry>> loaded = h2.getItems();
+
+        # Timestamps should be preserved with microsecond precision
+        assertEq(orig[0].timestamp.getEpochMicroseconds(),
+            loaded[0].timestamp.getEpochMicroseconds(),
+            "entry1 timestamp microseconds preserved");
+        assertEq(orig[1].timestamp.getEpochMicroseconds(),
+            loaded[1].timestamp.getEpochMicroseconds(),
+            "entry2 timestamp microseconds preserved");
+    }
+
+    testLegacyTimestampOrdering() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        # Write a legacy format file
+        File f();
+        f.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        f.write("first\nsecond\nthird\n");
+
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.load(path);
+        list<hash<QoreHistory::HistoryEntry>> items = h.getItems();
+        assertEq(3, items.size());
+        # Each entry should have a distinct timestamp, each 1 second apart
+        assertTrue(items[1].timestamp > items[0].timestamp,
+            "second entry has later timestamp than first");
+        assertTrue(items[2].timestamp > items[1].timestamp,
+            "third entry has later timestamp than second");
+    }
+
+    testAtomicSave() {
+        string path = getTmpFile();
+        on_exit {
+            cleanupFile(path);
+        }
+        # Save initial data
+        QoreHistory::History h1({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h1.add("original");
+        h1.save(path);
+
+        # Verify original data is there
+        QoreHistory::History h2({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h2.load(path);
+        assertEq(1, h2.size());
+        assertEq("original", h2.getItems()[0].text);
+
+        # Save new data (should atomically replace)
+        QoreHistory::History h3({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h3.add("replaced");
+        h3.save(path);
+
+        QoreHistory::History h4({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h4.load(path);
+        assertEq(1, h4.size());
+        assertEq("replaced", h4.getItems()[0].text, "atomic save replaced file");
+
+        # Verify no temp file was left behind
+        assertFalse(is_file(path + ".tmp." + string(getpid())),
+            "no temp file left behind");
+    }
+
+    testPrevBoundaryThenNext() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("a");
+        h.add("b");
+        h.add("c");
+
+        # Navigate to beginning
+        assertEq("c", h.prev());
+        assertEq("b", h.prev());
+        assertEq("a", h.prev());
+        # At boundary, returns NOTHING but stays at idx 0
+        assertEq(NOTHING, h.prev());
+        # Next from idx 0 should go to b
+        assertEq("b", h.next());
+        assertEq("c", h.next());
+        assertEq("", h.next(), "leave history");
+    }
+
+    testFirstAndLast() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        # Empty history
+        assertEq(NOTHING, h.first(), "first on empty returns NOTHING");
+        assertEq(NOTHING, h.last(), "last on empty returns NOTHING");
+
+        h.add("a");
+        h.add("b");
+        h.add("c");
+
+        # Jump to oldest
+        assertEq("a", h.first(), "first returns oldest entry");
+        # Navigation continues from there
+        assertEq("b", h.next(), "next after first goes forward");
+
+        # Jump to newest
+        assertEq("c", h.last(), "last returns newest entry");
+        # Navigation continues from there
+        assertEq("b", h.prev(), "prev after last goes backward");
+
+        # first then prev returns NOTHING (already at beginning)
+        h.first();
+        assertEq(NOTHING, h.prev(), "prev after first returns NOTHING");
+
+        # last then next leaves history
+        h.last();
+        assertEq("", h.next(), "next after last leaves history");
+    }
+
+    testSearchNavigateBackward() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print 1");
+        h.add("int x = 2");
+        h.add("print 3");
+        h.add("string s");
+        h.add("print 4");
+
+        # Search backward for "print"
+        assertEq("print 4", h.searchNavigate("print", -1), "first backward match");
+        assertEq("print 3", h.searchNavigate("print", -1), "second backward match");
+        assertEq("print 1", h.searchNavigate("print", -1), "third backward match");
+        assertEq(NOTHING, h.searchNavigate("print", -1), "no more backward matches");
+    }
+
+    testSearchNavigateForward() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print 1");
+        h.add("int x = 2");
+        h.add("print 3");
+        h.add("string s");
+        h.add("print 4");
+
+        # Navigate backward to "print 1"
+        h.searchNavigate("print", -1);  # "print 4"
+        h.searchNavigate("print", -1);  # "print 3"
+        h.searchNavigate("print", -1);  # "print 1"
+
+        # Now search forward
+        assertEq("print 3", h.searchNavigate("print", 1), "forward from print 1");
+        assertEq("print 4", h.searchNavigate("print", 1), "forward to print 4");
+        assertEq(NOTHING, h.searchNavigate("print", 1), "no more forward matches");
+    }
+
+    testSearchNavigatePatternChange() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("alpha 1");
+        h.add("beta 2");
+        h.add("alpha 3");
+
+        # Search for "alpha"
+        assertEq("alpha 3", h.searchNavigate("alpha", -1), "first alpha match");
+        assertEq("alpha 1", h.searchNavigate("alpha", -1), "second alpha match");
+
+        # Change pattern — resets search position
+        assertEq("beta 2", h.searchNavigate("beta", -1), "new pattern finds beta");
+        assertEq(NOTHING, h.searchNavigate("beta", -1), "no more beta matches");
+    }
+
+    testSearchNavigateEmpty() {
+        QoreHistory::History h();
+        assertEq(NOTHING, h.searchNavigate("anything", -1), "empty history returns NOTHING");
+        assertEq(NOTHING, h.searchNavigate("anything", 1), "empty history forward returns NOTHING");
+    }
+
+    testSearchNavigateReset() {
+        QoreHistory::History h({"dedup_mode": QoreHistory::DEDUP_NONE});
+        h.add("print 1");
+        h.add("print 2");
+        h.add("print 3");
+
+        # Navigate partway
+        assertEq("print 3", h.searchNavigate("print", -1));
+        assertEq("print 2", h.searchNavigate("print", -1));
+
+        # Reset via resetNavigation
+        h.resetNavigation();
+
+        # Search starts from the end again
+        assertEq("print 3", h.searchNavigate("print", -1), "search restarts after reset");
+    }
+}
