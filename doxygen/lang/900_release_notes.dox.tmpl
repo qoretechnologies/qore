@@ -634,7 +634,7 @@ cargo install tree-sitter-cli@0.26.5
       - integrated into the %Qore build tree (previously a separate external module)
       - provides readline-like line editing under a permissive (BSD) license
       - supports arrow key navigation, reverse search (Ctrl+R), and tab completion
-      - includes @ref Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" abstract class
+      - includes @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" abstract class
         for external history management
     - @ref qorehistoryintro "QoreHistory" module
       - new module providing shared history management for %Qore tools
@@ -645,7 +645,7 @@ cargo install tree-sitter-cli@0.26.5
       - backward-compatible persistence (auto-detects legacy one-line-per-entry format)
       - includes @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider" adapter class
         bridging @ref QoreHistory::History "History" to
-        @ref Linenoise::AbstractHistoryProvider "Linenoise::AbstractHistoryProvider"
+        @ref Qore::Linenoise::AbstractHistoryProvider "Linenoise::AbstractHistoryProvider"
       - used by @ref qorereplintro "QoreRepl" and \c qdp for history persistence
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore

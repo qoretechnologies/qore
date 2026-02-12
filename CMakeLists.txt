@@ -1643,7 +1643,13 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
     endforeach()
     # Add binary module tag files required for lang cross-references.
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/astparser/astparser.tag=../../modules/astparser/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
+    if (MONGOC_FOUND)
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
+    endif()
     set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
     set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
@@ -1675,6 +1681,11 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     foreach(mod ${QORE_USER_MODULE_NAMES})
         add_dependencies(docs-lang-final docs-${mod})
     endforeach()
+    # Binary module doc dependencies
+    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise)
+    if (MONGOC_FOUND)
+        add_dependencies(docs-lang-final docs-mongodb)
+    endif()
 
     # docs depends on docs-lang-final (the final lang docs with module cross-refs)
     add_dependencies(docs docs-lang-final)
