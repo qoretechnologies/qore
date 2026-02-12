@@ -1,0 +1,257 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SelectionRange.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class SelectionRangeTest
+
+class SelectionRangeTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS SelectionRange", "1.0") {
+        initServer();
+
+        addTestCase("identifier expands to statement then block", \testIdentifierExpansion());
+        addTestCase("multiple positions in one request", \testMultiplePositions());
+        addTestCase("position on whitespace", \testWhitespace());
+        addTestCase("position on parse directive", \testParseDirective());
+        addTestCase("position on comment", \testComment());
+        addTestCase("nested selection chain", \testNestedChain());
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("missing params", \testMissingParams());
+        addTestCase("non-existent document", \testNonExistentDocument());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: class Calculator {
+    # Line 2:     int add(int n) { return n + 1; }
+    # Line 3: }
+    # Line 4: # a comment
+    # Line 5: int x = 5;
+    private string getTestCode() {
+        return "%modern
+class Calculator {
+    int add(int n) { return n + 1; }
+}
+# a comment
+int x = 5;
+";
+    }
+
+    private string setupDoc(*string text) {
+        string src = text ?? getTestCode();
+        *string cached = docCache{src};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/selrange%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": src,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{src} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendSelectionRange(string uri, list<hash<auto>> positions) {
+        hash<auto> req = makeRequest("textDocument/selectionRange", {
+            "textDocument": {"uri": uri},
+            "positions": positions,
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    #! Count the depth of a SelectionRange chain
+    private int countSelectionRangeDepth(*hash<auto> selRange) {
+        int depth = 0;
+        while (selRange) {
+            depth++;
+            selRange = selRange.parent;
+        }
+        return depth;
+    }
+
+    testIdentifierExpansion() {
+        string uri = setupDoc();
+
+        # "n" in "return n + 1" at line 2, col 28
+        *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 28},));
+        assertTrue(exists result && result.size() > 0,
+            "should return selection ranges for identifier");
+
+        # Should have a nested parent chain
+        hash<auto> sel = result[0];
+        assertTrue(exists sel.range, "should have range");
+        int depth = countSelectionRangeDepth(sel);
+        assertTrue(depth >= 3, sprintf("chain should have at least 3 levels (got %d)", depth));
+
+        # The outermost range should cover the source_file (entire document)
+        hash<auto> outermost = sel;
+        while (outermost.parent) {
+            outermost = outermost.parent;
+        }
+        assertEq(0, outermost.range.start.line,
+            "outermost range should start at line 0");
+    }
+
+    testMultiplePositions() {
+        string uri = setupDoc();
+
+        # Request two positions at once
+        *list<auto> result = sendSelectionRange(uri, (
+            {"line": 1, "character": 6},  # "Calculator"
+            {"line": 5, "character": 4},  # "x"
+        ));
+        assertTrue(exists result, "should return results");
+        assertEq(2, result.size(), "should return one result per position");
+
+        # Both should have ranges
+        assertTrue(exists result[0].range, "first result should have range");
+        assertTrue(exists result[1].range, "second result should have range");
+    }
+
+    testWhitespace() {
+        string uri = setupDoc();
+
+        # Position on leading whitespace at line 2, col 0
+        *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 0},));
+        assertTrue(exists result && result.size() > 0,
+            "should return range even on whitespace");
+    }
+
+    testParseDirective() {
+        string uri = setupDoc();
+
+        # Position on %modern at line 0, col 1
+        *list<auto> result = sendSelectionRange(uri, ({"line": 0, "character": 1},));
+        assertTrue(exists result && result.size() > 0,
+            "should return range on parse directive");
+    }
+
+    testComment() {
+        string uri = setupDoc();
+
+        # Position on "# a comment" at line 4, col 2
+        *list<auto> result = sendSelectionRange(uri, ({"line": 4, "character": 2},));
+        assertTrue(exists result && result.size() > 0,
+            "should return range on comment");
+    }
+
+    testNestedChain() {
+        string uri = setupDoc();
+
+        # "add" method name at line 2, col 8
+        *list<auto> result = sendSelectionRange(uri, ({"line": 2, "character": 8},));
+        assertTrue(exists result && result.size() > 0,
+            "should return selection for method name");
+
+        # Walk the chain and verify parent ranges always enclose child ranges
+        hash<auto> sel = result[0];
+        while (sel.parent) {
+            hash<auto> child = sel;
+            hash<auto> parent = sel.parent;
+            assertTrue(parent.range.start.line <= child.range.start.line,
+                "parent start line should be <= child start line");
+            assertTrue(parent.range.end.line >= child.range.end.line,
+                "parent end line should be >= child end line");
+            sel = parent;
+        }
+    }
+
+    testEmptyDocument() {
+        string uri = setupDoc("");
+
+        *list<auto> result = sendSelectionRange(uri, ({"line": 0, "character": 0},));
+        assertTrue(exists result, "should return result for empty document");
+        assertEq(1, result.size(), "should return one result");
+    }
+
+    testMissingParams() {
+        hash<auto> req = makeRequest("textDocument/selectionRange");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testNonExistentDocument() {
+        setupDoc();
+
+        *list<auto> result = sendSelectionRange(
+            "file:///nonexistent.q",
+            ({"line": 0, "character": 0},)
+        );
+        # Non-existent doc returns empty result
+        assertEq(0, result.size(), "non-existent doc should return empty result");
+    }
+}

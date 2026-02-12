@@ -94,6 +94,53 @@ struct CSTSymbolDetail {
     std::vector<CSTParamInfo> params;  //!< for callables
 };
 
+//! Semantic token classification for syntax highlighting.
+struct SemanticToken {
+    uint32_t line;
+    uint32_t startChar;
+    uint32_t length;
+    uint32_t tokenType;      //!< index into the legend (see SemanticTokenType)
+    uint32_t tokenModifiers;  //!< bitmask (see SemanticTokenModifier)
+};
+
+//! Token type indices for semantic tokens legend.
+enum SemanticTokenType : uint32_t {
+    STT_Namespace = 0,
+    STT_Type,
+    STT_Class,
+    STT_Enum,
+    STT_Interface,
+    STT_Struct,
+    STT_TypeParameter,
+    STT_Parameter,
+    STT_Variable,
+    STT_Property,
+    STT_EnumMember,
+    STT_Function,
+    STT_Method,
+    STT_Keyword,
+    STT_Comment,
+    STT_String,
+    STT_Number,
+    STT_Regexp,
+    STT_Operator,
+    STT_Decorator,
+};
+
+//! Token modifier bit flags for semantic tokens.
+enum SemanticTokenModifier : uint32_t {
+    STM_Declaration  = 1 << 0,
+    STM_Definition   = 1 << 1,
+    STM_Readonly     = 1 << 2,
+    STM_Static       = 1 << 3,
+    STM_Deprecated   = 1 << 4,
+    STM_Abstract     = 1 << 5,
+    STM_Async        = 1 << 6,
+    STM_Modification = 1 << 7,
+    STM_Documentation = 1 << 8,
+    STM_DefaultLibrary = 1 << 9,
+};
+
 //! Static utility class for searching tree-sitter CST nodes.
 class CSTSearcher {
 public:
@@ -178,6 +225,41 @@ public:
         const AstParseResult* result,
         const std::string& typeName,
         bool includeInherited = true);
+
+    //! Get superclass names for a class at position (0-indexed).
+    /** @param result parse result
+        @param line 0-indexed line
+        @param col 0-indexed column
+        @return vector of superclass name strings, or nullptr if not a class or no parents
+    */
+    static std::vector<std::string>* getSuperclassNames(
+        const AstParseResult* result, uint32_t line, uint32_t col);
+
+    //! Find all references to the identifier at position across multiple documents.
+    /** @param result parse result of the current document
+        @param line 0-indexed line
+        @param col 0-indexed column
+        @param includeDecl whether to include the declaration itself
+        @param otherDocs other documents to search
+        @return vector of DefinitionResult (node + URI), or nullptr if not found
+    */
+    static std::vector<DefinitionResult>* findReferencesCrossDoc(
+        const AstParseResult* result,
+        uint32_t line, uint32_t col,
+        bool includeDecl,
+        const std::vector<DocumentRef>& otherDocs);
+
+    //! Collect semantic tokens from the parse tree.
+    /** Walks the tree classifying nodes into semantic token types.
+        @param result parse result
+        @param startLine start of range (0-indexed, inclusive), default 0
+        @param endLine end of range (0-indexed, inclusive), default UINT32_MAX
+        @return vector of SemanticToken sorted by position, or nullptr if no tokens
+    */
+    static std::vector<SemanticToken>* collectSemanticTokens(
+        const AstParseResult* result,
+        uint32_t startLine = 0,
+        uint32_t endLine = UINT32_MAX);
 
     //! Build hover info description for a declaration at position.
     static std::string buildHoverInfo(
@@ -396,6 +478,19 @@ private:
     //! Collect enum members into a detail vector.
     static void collectEnumMembers(TSNode enumNode, const AstParseResult* result,
                                     std::vector<CSTSymbolDetail>* vec);
+
+    //! Recursively collect semantic tokens from a node.
+    static void collectSemanticTokensRecursive(
+        TSNode node,
+        const AstParseResult* result,
+        uint32_t startLine, uint32_t endLine,
+        std::vector<SemanticToken>* vec);
+
+    //! Classify a node type to a semantic token type and modifiers.
+    /** @return true if the node should generate a token */
+    static bool classifyNode(TSNode node, TSNode parent,
+                             const AstParseResult* result,
+                             uint32_t& tokenType, uint32_t& tokenModifiers);
 };
 
 #endif // _QLS_CSTSEARCHER_H

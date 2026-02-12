@@ -263,6 +263,22 @@ public class Document {
         return NOTHING;
     }
 
+    #! Find references across multiple documents.
+    /** @param Position LSP position (line, character)
+        @param includeDecl whether to include the declaration
+        @param otherDocs hash mapping URI → AstTree for other documents
+        @return list of {uri, range} locations, or NOTHING
+    */
+    *list<auto> findReferencesCrossDoc(hash<auto> Position, bool includeDecl,
+            *hash<auto> otherDocs) {
+        AstTreeSearcher searcher();
+        if (tree) {
+            return searcher.findReferencesCrossDoc(tree, uri, Position.line,
+                Position.character, includeDecl, otherDocs);
+        }
+        return NOTHING;
+    }
+
     #! Find all symbols.
     /**
         @param fixSymbols whether to fix symbol infos
@@ -368,6 +384,43 @@ public class Document {
             return searcher.findTypeMembers(tree, uri, typeName, includeInherited);
         }
         return NOTHING;
+    }
+
+    #! Find node and all ancestor nodes at the given position
+    /** @param Position LSP position (line, character)
+        @return list of range hashes from innermost node to root, or NOTHING
+    */
+    *list<auto> findNodeAndParents(hash<auto> Position) {
+        AstTreeSearcher searcher();
+        if (tree) {
+            return searcher.findNodeAndParents(tree, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
+    #! Get superclass names for a class at the given position
+    /** @param Position LSP position (line, character)
+        @return list of superclass name strings, or NOTHING
+    */
+    *list<string> getSuperclassNames(hash<auto> Position) {
+        AstTreeSearcher searcher();
+        if (tree) {
+            return searcher.getSuperclassNames(tree, Position.line, Position.character);
+        }
+        return NOTHING;
+    }
+
+    #! Collect semantic tokens from the parse tree
+    /** @param startLine start of range (0-indexed, inclusive), or -1 for beginning
+        @param endLine end of range (0-indexed, inclusive), or -1 for end
+        @return list of {line, startChar, length, tokenType, tokenModifiers} hashes, or NOTHING
+    */
+    *list<auto> semanticTokens(int startLine = -1, int endLine = -1) {
+        if (!tree) {
+            return NOTHING;
+        }
+        AstTreeSearcher searcher();
+        return searcher.getSemanticTokens(tree, startLine, endLine);
     }
 
     #! Get all comments from the AST tree

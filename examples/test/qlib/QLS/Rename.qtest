@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Rename.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class RenameTest
+
+class RenameTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS Rename", "1.0") {
+        initServer();
+
+        addTestCase("prepare rename on identifier", \testPrepareRename());
+        addTestCase("prepare rename on non-symbol", \testPrepareRenameNonSymbol());
+        addTestCase("rename local variable", \testRenameLocalVariable());
+        addTestCase("rename function", \testRenameFunction());
+        addTestCase("rename class", \testRenameClass());
+        addTestCase("cross-doc rename", \testCrossDocRename());
+        addTestCase("missing params rename", \testMissingParams());
+        addTestCase("missing newName", \testMissingNewName());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: sub helper(int x) { return x + 1; }
+    # Line 2: int val = helper(5);
+    # Line 3: helper(val);
+    private string getTestCode() {
+        return "%modern
+sub helper(int x) { return x + 1; }
+int val = helper(5);
+helper(val);
+";
+    }
+
+    private string setupDoc(*string text) {
+        string src = text ?? getTestCode();
+        *string cached = docCache{src};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/rename%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": src,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{src} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *hash<auto> sendPrepareRename(string uri, int line, int character) {
+        hash<auto> req = makeRequest("textDocument/prepareRename", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    private *hash<auto> sendRename(string uri, int line, int character, string newName) {
+        hash<auto> req = makeRequest("textDocument/rename", {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "newName": newName,
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testPrepareRename() {
+        string uri = setupDoc();
+
+        # "helper" at line 1, col 4
+        *hash<auto> result = sendPrepareRename(uri, 1, 4);
+        assertTrue(exists result, "should return prepare rename result");
+        if (result) {
+            assertTrue(exists result.range, "should have range");
+            assertEq("helper", result.placeholder, "placeholder should be 'helper'");
+        }
+    }
+
+    testPrepareRenameNonSymbol() {
+        string uri = setupDoc();
+
+        # Position on %modern at line 0, col 0 — parse directives are not renameable
+        *hash<auto> result = sendPrepareRename(uri, 0, 0);
+        # Should return null for non-renameable position
+        assertNothing(result, "prepareRename on non-symbol should return null");
+    }
+
+    testRenameLocalVariable() {
+        string code = "%modern
+sub test() {
+    int count = 0;
+    count += 1;
+    return count;
+}
+";
+        string uri = setupDoc(code);
+
+        # "count" at line 2, col 8
+        *hash<auto> result = sendRename(uri, 2, 8, "total");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            assertTrue(exists result.changes{uri}, "should have edits for current doc");
+            *list<auto> edits = result.changes{uri};
+            assertTrue(edits.size() >= 3,
+                sprintf("should have at least 3 references to rename (got %d)", edits.size()));
+            # All edits should have newText = "total"
+            foreach hash<auto> edit in (edits) {
+                assertEq("total", edit.newText, "newText should be 'total'");
+            }
+        }
+    }
+
+    testRenameFunction() {
+        string uri = setupDoc();
+
+        # "helper" at line 1, col 4
+        *hash<auto> result = sendRename(uri, 1, 4, "myHelper");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            *list<auto> edits = result.changes{uri};
+            assertTrue(exists edits && edits.size() >= 3,
+                sprintf("should find at least 3 references (decl + 2 calls), got %d",
+                    edits ? edits.size() : 0));
+        }
+    }
+
+    testRenameClass() {
+        string code = "%modern
+class Foo {
+    int val;
+}
+Foo f();
+";
+        string uri = setupDoc(code);
+
+        # "Foo" at line 1, col 6
+        *hash<auto> result = sendRename(uri, 1, 6, "Bar");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            *list<auto> edits = result.changes{uri};
+            assertTrue(exists edits && edits.size() >= 2,
+                sprintf("should find at least 2 references (decl + usage), got %d",
+                    edits ? edits.size() : 0));
+        }
+    }
+
+    testCrossDocRename() {
+        # Function definition in one doc
+        string funcCode = "%modern
+sub rnHelper(int x) { return x; }
+";
+        string funcUri = setupDoc(funcCode);
+
+        # Usage in another doc
+        string usageCode = "%modern
+rnHelper(5);
+";
+        string usageUri = setupDoc(usageCode);
+
+        # Rename "rnHelper" from the definition doc
+        *hash<auto> result = sendRename(funcUri, 1, 4, "rnNewHelper");
+        assertTrue(exists result, "should return workspace edit");
+        if (result && result.changes) {
+            assertTrue(exists result.changes{funcUri},
+                "should have edits for function doc");
+            assertTrue(exists result.changes{usageUri},
+                "should have edits for usage doc");
+        }
+    }
+
+    testMissingParams() {
+        hash<auto> req = makeRequest("textDocument/rename");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+
+    testMissingNewName() {
+        setupDoc();
+
+        hash<auto> req = makeRequest("textDocument/rename", {
+            "textDocument": {"uri": "file:///test/rename1.q"},
+            "position": {"line": 1, "character": 4},
+            # missing newName
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error for missing newName");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "should have error for missing newName");
+    }
+}

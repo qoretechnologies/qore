@@ -202,6 +202,44 @@ public class ParamValidator {
         }
         return NOTHING;
     }
+
+    #! Validates SelectionRangeParams (textDocument + positions array).
+    public static *string selectionRangeParams(hash<auto> request, hash<auto> params) {
+        *string err = ParamValidator::textDocumentIdentifier(request, params);
+        if (err) {
+            return err;
+        }
+        if (!ParamValidator::required(request, params, "positions", NT_LIST, \err)) {
+            return err;
+        }
+        foreach auto pos in (params.positions) {
+            if (pos.typeCode() != NT_HASH) {
+                return ErrorResponse::invalidRequest(
+                    request,
+                    sprintf("position entry has invalid type: %s (hash required)", pos.type())
+                );
+            }
+            if (!ParamValidator::required(request, pos, "line", NT_INT, \err)) {
+                return err;
+            }
+            if (!ParamValidator::required(request, pos, "character", NT_INT, \err)) {
+                return err;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Validates RenameParams (textDocumentPosition + newName string).
+    public static *string renameParams(hash<auto> request, hash<auto> params) {
+        *string err = ParamValidator::textDocumentPositionParams(request, params);
+        if (err) {
+            return err;
+        }
+        if (!ParamValidator::required(request, params, "newName", NT_STRING, \err)) {
+            return err;
+        }
+        return NOTHING;
+    }
 }
 
 } # namespace QLS
