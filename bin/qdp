@@ -1813,13 +1813,20 @@ class QdpCmd {
                 return parsed.expression;
             }
             # Legacy fallback is only for qdp auto-detection (no --dpql / --expressions).
-            if (!opts.dpql && !opts.exp) {
-                *hash<auto> legacy = QdpCmd::tryGetHashValue(arg);
-                if (legacy) {
-                    return legacy;
-                }
+            *hash<auto> legacy = QdpCmd::tryGetHashValue(arg);
+            if (legacy) {
+                return legacy;
             }
             QdpCmd::error(QdpCmd::formatDpqlErrors(parsed.errors, parsed.diagnostics, arg));
+        }
+
+        # Try legacy key=value syntax (parse_to_qore_value) before format-dependent parsing,
+        # since parseInputValue with -Y/--yaml won't understand key=value syntax.
+        {
+            *hash<auto> legacy = QdpCmd::tryGetHashValue(arg);
+            if (legacy) {
+                return legacy;
+            }
         }
 
         return QdpCmd::getHashIntern(arg, action, required);
@@ -1827,8 +1834,8 @@ class QdpCmd {
 
     static bool isDpqlCandidate(string text) {
         return (text =~ /@/)
-            || (text =~ /==|!=|=~|&&|\\|\\|/)
-            || (text =~ /\\bbetween\\b|\\bin\\b/);
+            || (text =~ /==|!=|=~|&&|\|\|/)
+            || (text =~ /\bbetween\b|\bin\b/);
     }
 
     static bool isEmptyDpqlExpression(string dpql) {
@@ -2002,7 +2009,9 @@ class QdpCmd {
             return;
         }
         try {
-            auto val = parseInputValue(text);
+            # Always use parse_to_qore_value for legacy key=value parsing,
+            # regardless of the -Y/--yaml or --json output format flags.
+            auto val = parse_to_qore_value(text);
             if (exists val && val.typeCode() == NT_HASH) {
                 return val;
             }
