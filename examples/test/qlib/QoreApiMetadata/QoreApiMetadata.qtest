@@ -45,6 +45,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment: @brief tag", \testBriefTag());
         addTestCase("doc comment: @code/@endcode blocks", \testCodeBlocks());
         addTestCase("doc comment: continuation lines", \testContinuationLines());
+        addTestCase("doc comment: paragraph breaks", \testParagraphBreaks());
         addTestCase("doc comment: multiple params", \testMultipleParams());
         addTestCase("doc comment: mixed tags", \testMixedTags());
         addTestCase("doc comment: empty and whitespace", \testEmptyComments());
@@ -286,7 +287,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
             "/** @brief Short description.\n\n    Longer description here. */");
         assertEq("Short description.", result.brief);
-        assertEq("Longer description here.", result.description);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Short description.\n\nLonger description here.", result.description);
 
         # brief without blank line — continuation belongs to brief
         hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
@@ -320,6 +322,42 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertEq("the name which continues here", result.params.name);
     }
 
+    testParagraphBreaks() {
+        # Blank lines between description paragraphs should produce \n\n
+        string comment = "/** Brief summary of the function.\n"
+            "\n"
+            "    Detailed description that provides more information\n"
+            "    about the function behavior.\n"
+            "\n"
+            "    Another paragraph with additional details.\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("Brief summary of the function.\n\n"
+            "Detailed description that provides more information about the function behavior.\n\n"
+            "Another paragraph with additional details.", result.description);
+
+        # Single paragraph without blank lines should have no breaks
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** Single paragraph\n    that continues here. */");
+        assertEq("Single paragraph that continues here.", r2.description);
+
+        # @brief + blank line + description paragraphs
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @brief Short summary.\n\n    First paragraph.\n\n    Second paragraph. */");
+        assertEq("Short summary.\n\nFirst paragraph.\n\nSecond paragraph.", r3.description);
+        assertEq("Short summary.", r3.brief);
+
+        # #! line comment followed by /** block comment should insert paragraph break
+        string comment4 = "#! creates a workflow order data instance in the database\n"
+            "/** Creates a workflow order data instance of the specified type.\n"
+            "\n"
+            "    @param name the workflow name\n"
+            "*/";
+        hash<auto> r4 = QoreApiMetadata::DocCommentParser::parse(comment4);
+        assertEq("creates a workflow order data instance in the database\n\n"
+            "Creates a workflow order data instance of the specified type.", r4.description);
+    }
+
     testMultipleParams() {
         string comment = "/** Do something.\n"
             "    @param first the first param\n"
@@ -347,7 +385,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
             "    @warning Expensive operation.\n"
             "*/";
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
-        assertEq("Main description.", result.description);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Brief text.\n\nMain description.", result.description);
         assertEq("Brief text.", result.brief);
         assertEq(2, result.params.size());
         assertEq("the x value", result.params.x);
