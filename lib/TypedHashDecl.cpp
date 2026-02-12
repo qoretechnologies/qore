@@ -165,7 +165,8 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         parse_init_done(old.parse_init_done) {
     // copy member list
     for (auto& i : old.members.member_list) {
-        members.addNoCheck(strdup(i.first), i.second ? new HashDeclMemberInfo(*i.second) : nullptr);
+        HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
+        members.addNoCheck(strdup(i.first), new_member);
     }
 }
 
@@ -484,10 +485,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             }
 
             // ensure the value is referenced before type acceptance, since the accept handler
-            // may discard the old value during type conversion (e.g. timeout: date -> int)
-            if (QoreTypeInfo::mayRequireFilter(i.second->getTypeInfo(), *val)) {
-                val.ensureReferencedValue();
-            }
+            // may discard the old value during type conversion; this includes complex type
+            // handling (e.g. list<string> from list, hash<string, int> from hash) where
+            // acceptInputComplexList/Hash creates a copy and discards the original, not just
+            // explicit filter maps
+            val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, xsink);
             if (*xsink) {
                 return -1;
