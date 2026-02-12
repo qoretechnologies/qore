@@ -1,0 +1,436 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FreshBooksRestClient.qm Qore user module for calling FreshBooks REST API services
+
+/*  FreshBooksRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module FreshBooksRestClient {
+    version = "1.0";
+    desc = "User module for calling FreshBooks REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("freshbooks", FreshBooksRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage FreshBooksRestClient Module
+
+    @tableofcontents
+
+    @section freshbooksrestclientintro FreshBooksRestClient Introduction
+
+    The %FreshBooksRestClient module provides an API for calling FreshBooks REST API services.
+
+    To use this module, use \c "%requires FreshBooksRestClient" in your code.
+
+    All the public symbols in the module are defined in the FreshBooksRestClient namespace.
+
+    The main classes are:
+    - @ref FreshBooksRestClient::FreshBooksRestClient "FreshBooksRestClient":
+      this class provides the REST client API for communication with the FreshBooks API;
+      it handles OAuth2 authentication
+    - @ref FreshBooksRestClient::FreshBooksRestConnection "FreshBooksRestConnection":
+      provides a connection object to FreshBooks services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires FreshBooksRestClient
+
+FreshBooksRestClient fb({
+    "oauth2_client_id": ENV.FRESHBOOKS_CLIENT_ID,
+    "oauth2_client_secret": ENV.FRESHBOOKS_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.FRESHBOOKS_REFRESH_TOKEN,
+    "account_id": ENV.FRESHBOOKS_ACCOUNT_ID,
+    "business_id": ENV.FRESHBOOKS_BUSINESS_ID,
+});
+hash<auto> result = fb.get("/auth/api/v1/users/me");
+printf("User: %s %s\n", result.body.response.first_name, result.body.response.last_name);
+    @endcode
+
+    @section freshbooksrestclientrelnotes Release Notes
+
+    @subsection freshbooksrestclientv1_0 FreshBooksRestClient v1.0
+    - the initial version of the %FreshBooksRestClient module
+*/
+
+#! the FreshBooksRestClient namespace contains all the objects in the FreshBooksRestClient module
+public namespace FreshBooksRestClient {
+
+#! This class provides the REST client API for communication with FreshBooks servers
+/** FreshBooks uses a REST API at https://api.freshbooks.com with OAuth2 authentication.
+
+    @par Endpoint Structure:
+    - Accounting: /accounting/account/<accountId>/...
+    - Time tracking: /timetracking/business/<businessId>/...
+    - Identity: /auth/api/v1/...
+    - Events: /events/account/<accountId>/...
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens
+    - Access tokens valid for 12 hours
+    - Refresh tokens never expire (one-time use)
+*/
+public class FreshBooksRestClient inherits RestClient::RestClient {
+    public {
+        #! Default FreshBooks API URL
+        const DefaultUrl = "https://api.freshbooks.com";
+
+        #! Default authorization request URL
+        const DefaultAuthUrl = "https://auth.freshbooks.com/oauth/authorize/";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default token request URL
+        const DefaultTokenUrl = "https://api.freshbooks.com/auth/oauth/token";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        const DefaultPingPath = "/auth/api/v1/users/me";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultUrl,
+        };
+
+        #! OAuth2 options (added when OAuth2 credentials are provided)
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+        };
+    }
+
+    private {
+        #! The FreshBooks account ID for accounting endpoints
+        string account_id;
+
+        #! The FreshBooks business ID for timetracking endpoints
+        string business_id;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+FreshBooksRestClient fb({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+    "account_id": "your-account-id",
+    "business_id": "your-business-id",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c account_id: the FreshBooks account ID (required for accounting endpoints)
+        - \c business_id: the FreshBooks business ID (required for time tracking endpoints)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(FreshBooksRestClient::getOptions(opts), do_not_connect) {
+        if (opts.account_id) {
+            account_id = opts.account_id;
+        }
+        if (opts.business_id) {
+            business_id = opts.business_id;
+        }
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Returns the account ID
+    string getAccountId() {
+        return account_id;
+    }
+
+    #! Sets the account ID
+    setAccountId(string aid) {
+        account_id = aid;
+    }
+
+    #! Returns the business ID
+    string getBusinessId() {
+        return business_id;
+    }
+
+    #! Sets the business ID
+    setBusinessId(string bid) {
+        business_id = bid;
+    }
+
+    #! returns options for @ref FreshBooksRestClient::FreshBooksRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
+
+        if (!token_only && opts.oauth2_client_id) {
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            # Remove token from opts so RestClient doesn't add another "Bearer" prefix
+            remove rv.token;
+        }
+
+        # Remove custom options that RestClient doesn't understand
+        remove rv.account_id;
+        remove rv.business_id;
+
+        return rv;
+    }
+}
+
+#! Class for FreshBooks REST connections; returns @ref FreshBooksRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c account_id: the FreshBooks account ID
+    - \c business_id: the FreshBooks business ID
+
+    @see @ref FreshBooksRestClient::FreshBooksRestClient::constructor() for more information on the above options
+*/
+public class FreshBooksRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default connection URL
+        const DefaultConnectionUrl = "freshbooks://api.freshbooks.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "FreshBooks REST Connection",
+            "short_desc": "A connection to the FreshBooks REST API",
+            "desc": "A connection to the FreshBooks REST API for accounting, invoicing, and time tracking",
+            "cls": Class::forName("FreshBooksRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "freshbooks": True,
+            },
+            "base_scheme_map": {
+                "https": "freshbooks",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultData,
+                },
+                "account_id": <ConnectionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "FreshBooks account ID",
+                    "type": "string",
+                    "desc": "The FreshBooks account ID, used for accounting API endpoints "
+                        "(clients, invoices, expenses, estimates, items). "
+                        "Find this by calling GET /auth/api/v1/users/me after authentication "
+                        "- it appears as 'account_id' in the business_memberships array, "
+                        "or in your FreshBooks URL (e.g. https://my.freshbooks.com/service/ACCOUNT_ID/...).",
+                },
+                "business_id": <ConnectionOptionInfo>{
+                    "display_name": "Business ID",
+                    "short_desc": "FreshBooks business ID",
+                    "type": "string",
+                    "desc": "The FreshBooks business ID, used for time tracking API endpoints "
+                        "(services, time entries, projects). "
+                        "Find this by calling GET /auth/api/v1/users/me after authentication "
+                        "- it appears as 'business.id' in the business_memberships array.",
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultPingPath,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultAuthUrl,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultTokenUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": FreshBooksRestClient::DefaultGrantType,
+                },
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the FreshBooksRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = FreshBooksRestClient::DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the FreshBooksRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "freshbooks"
+    string getType() {
+        return "freshbooks";
+    }
+
+    #! Returns connection options
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Always set OAuth2 URLs
+        rv.oauth2_auth_url = FreshBooksRestClient::DefaultAuthUrl;
+        rv.oauth2_token_url = FreshBooksRestClient::DefaultTokenUrl;
+        if (!rv.oauth2_grant_type) {
+            rv.oauth2_grant_type = FreshBooksRestClient::DefaultGrantType;
+        }
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "FreshBooks";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the FreshBooksDataProvider and creates the data provider
+        # object dynamically
+        load_module("FreshBooksDataProvider");
+        return create_object("FreshBooksDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options && url != DefaultConnectionUrl) {
+            doUpdateOptions(self, {
+                "url": DefaultConnectionUrl,
+            });
+        }
+    }
+
+    #! returns a @ref FreshBooksRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref FreshBooksRestClient object
+    */
+    private FreshBooksRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new FreshBooksRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}
