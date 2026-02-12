@@ -153,6 +153,27 @@ public:
         curr->var[curr->pos].cvv->deref(xsink);
     }
 
+    //! Returns the ClosureVarValue for the given id on the cvstack, or nullptr if not found.
+    /** Unlike find(), this method does not assert if the entry is not found.
+        Used when the cvstack search should be attempted first but may not have the entry
+        (e.g., when a closure outlives its enclosing function and the cvstack entries have been popped).
+    */
+    DLLLOCAL ClosureVarValue* try_find(const char* id) {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                ClosureVarValue* rv = w->var[p].cvv;
+                if (rv && rv->id == id) {
+                    return rv;
+                }
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
     DLLLOCAL ClosureVarValue* find(const char* id) {
         printd(5, "ThreadClosureVariableStack::find() this: %p id: %p\n", this, id);
         Block* w = curr;

@@ -49,6 +49,7 @@
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/QoreOperatorNode.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -1155,12 +1156,21 @@ void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
 
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
-    if (!inst->exception_target) {
-        return;
+    llvm::BasicBlock* exception_block = nullptr;
+    if (inst->exception_target) {
+        auto except_it = block_map.find(inst->exception_target);
+        if (except_it != block_map.end()) {
+            exception_block = except_it->second;
+        }
     }
-    auto except_it = block_map.find(inst->exception_target);
-    if (except_it == block_map.end()) {
-        return;
+    if (!exception_block) {
+        // Outside try block: use the function-level error return block.
+        // Create it lazily on first use — terminator is added later in
+        // finalizeErrorReturnBlock() after all invoke_result_allocas are known.
+        if (!error_return_block) {
+            error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
+        }
+        exception_block = error_return_block;
     }
     auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
@@ -1174,7 +1184,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
                 cont->getName().str().c_str());
         fflush(stderr);
     }
-    builder->CreateCondBr(has_exception, except_it->second, cont);
+    builder->CreateCondBr(has_exception, exception_block, cont);
     builder->SetInsertPoint(cont);
 }
 
@@ -1385,6 +1395,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_alloca_map.clear();
     pending_phis.clear();
     local_reload_trackers.clear();
+    error_return_block = nullptr;
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
@@ -1538,6 +1549,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
     pending_phis.clear();
+
+    // Finalize the error return block (if used): emit cleanup for all tracked
+    // allocas and pre-instantiated locals before returning NOTHING.
+    if (error_return_block) {
+        builder->SetInsertPoint(error_return_block);
+        emitPreinstantiatedCleanup(module);
+        emitInvokeCleanup(module);
+        emitLocalUninstantiation(module);
+        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    }
 
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {
@@ -3879,6 +3900,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -4009,6 +4031,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -4062,6 +4085,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -4181,6 +4205,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -4242,6 +4267,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
@@ -7319,11 +7345,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
             }
-            // Hoist alloca to entry block to avoid stack overflow in loops
+            // Hoist alloca to entry block, initialized to VAL_NOTHING for safe
+            // decref-before-overwrite on first iteration
             llvm::IRBuilder<> ab_iter(&llvm_func->getEntryBlock(),
                     llvm_func->getEntryBlock().begin());
             llvm::Value* out_val_ptr = ab_iter.CreateAlloca(i64_type, nullptr, "iter_out_val");
+            ab_iter.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), out_val_ptr);
+            // Decref previous iterator value before overwrite (first iteration
+            // decrefs NOTHING which is a no-op; subsequent iterations decref the
+            // pair hash / value from the previous iteration)
+            auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            llvm::Value* old_iter_val = builder->CreateLoad(i64_type, out_val_ptr, "old_iter_val");
+            builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
             // Call qore_rt_iterator_next(iter_ptr, out_val_ptr, xsink) -> i64 (1=done, 0=continue)
+            // Always writes to out_val_ptr (VAL_NOTHING on done/exception, value on continue)
             auto helper = module.getOrInsertFunction("qore_rt_iterator_next",
                     llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
             llvm::Value* done_flag = builder->CreateCall(helper, {iter_ptr, out_val_ptr, xsink_arg});
@@ -7333,6 +7369,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* out_val = builder->CreateLoad(i64_type, out_val_ptr, "iter_val");
             values[inst->result.id] = out_val;
             nanboxed_values.insert(inst->result.id);
+            // Track alloca for cleanup at function exit (decrefs last value or NOTHING)
+            invoke_result_allocas.push_back(static_cast<llvm::AllocaInst*>(out_val_ptr));
             // Branch based on done_flag
             auto done_it = block_map.find(iter_inst->done_target);
             auto cont_it = block_map.find(iter_inst->continue_target);
@@ -7397,7 +7435,13 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
             if (m && !m->getClass() && !m->getMethod() && m->getRawName()
                     && (!m->getArgs() || m->getArgs()->empty())
                     && QoreTypeInfo::isHashType(m->getSourceType())) {
-                key_str = m->getRawName();
+                // For optional types (*hash<auto>), pseudo-methods may not be resolved at
+                // parse time. Check if the name matches a hash pseudo-method to avoid
+                // incorrectly treating e.g. h.keys() as hash key access "keys".
+                QoreClass* pqc = nullptr;
+                if (!pseudo_classes_find_method(NT_HASH, m->getRawName(), pqc)) {
+                    key_str = m->getRawName();
+                }
             }
         }
     }

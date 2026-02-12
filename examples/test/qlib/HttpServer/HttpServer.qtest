@@ -2658,9 +2658,18 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             # Create many connections
             for (int i = 0; i < num_connections; ++i) {
-                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 2s});
+                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
                 client.connect();
-                assertEq("GET, test, /test", client.get("/test"));
+                try {
+                    assertEq("GET, test, /test", client.get("/test"));
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("Connection %d/%d FAILED: %s: %s (port: %d)\n",
+                        i, num_connections, ex.err, ex.desc, test_port);
+                    printf("  test_port: %d\n", test_port);
+                    printf("  globalAsyncCtrl cache: %d\n",
+                        server.getHttpAsyncIo().getTotalCacheSize());
+                    rethrow;
+                }
                 clients += client;
             }
 

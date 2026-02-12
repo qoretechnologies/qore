@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -2344,6 +2344,13 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     func->initGuardProfiles();
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
+    if (getenv("QORE_IR_TRACE")) {
+        const QoreProgramLocation* loc = signature.getParseLocation();
+        fprintf(stderr, "IR-PROMOTE: '%s' promoted to IR tier (exec_count=%lu) [%s:%d]\n",
+            name, (unsigned long)exec_count.load(std::memory_order_relaxed),
+            loc ? loc->getFile() : "?", loc ? loc->start_line : 0);
+        fflush(stderr);
+    }
     printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
         name, func->num_guards);
 }
@@ -2625,8 +2632,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // assert(statements);
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
-    printd(3, "evalTiered '%s': tier=%d exec_count=%lu cached_jit=%p cached_aot=%p cached_ir=%p\n",
-        name, (int)tier, exec_count.load(), (void*)cached_jit_fn, (void*)cached_aot_fn, (void*)cached_ir);
     // JIT/AOT tier: execute native function
     if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",

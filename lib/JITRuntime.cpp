@@ -400,10 +400,14 @@ extern "C" void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink) {
         return;
     }
     if (var->closureUse()) {
-        // Closure-captured locals live on the cvstack.  Clear the value under
-        // the write lock to trigger timely destruction at block scope exit.
+        // Closure-captured locals live on the cvstack.  Only clear the value
+        // if no closures still hold references to this ClosureVarValue.
+        // When references > 1, closures may still need to read the value
+        // (e.g., closures submitted to a thread pool that haven't executed
+        // yet).  When references == 1, only the cvstack entry remains, so
+        // it's safe to trigger timely destruction at block scope exit.
         ClosureVarValue* cvv = thread_find_closure_var(var->getName());
-        if (cvv) {
+        if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
             cvv->clearValue(xsink);
         }
     } else {
@@ -711,13 +715,10 @@ extern "C" uint64_t qore_rt_push_implicit_arg(uint64_t value_bits, ExceptionSink
     QoreValue old_context = old_argv ? const_cast<QoreListNode*>(old_argv)->refSelf() : QoreValue();
 
     // Create new single-element list with the value
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> new_argv(new QoreListNode(autoTypeInfo), xsink);
-    new_argv->push(value.refSelf(), xsink);
-    if (*xsink) {
-        // Exception occurred; clean up old_context and don't set new implicit args
-        old_context.discard(xsink);
-        return toBits(QoreValue());
-    }
+    qore_list_private::get(**new_argv)->pushIntern(value.refSelf());
+
     thread_set_implicit_args(new_argv.release());
 
     return toBits(old_context);
@@ -774,7 +775,8 @@ extern "C" void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, Exc
 
     QoreListNode* list = list_val.get<QoreListNode>();
     if (list) {
-        list->push(value.refSelf(), xsink);
+        // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
+        qore_list_private::get(*list)->pushIntern(value.refSelf());
     }
 }
 
@@ -799,6 +801,13 @@ extern "C" uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsi
 }
 
 extern "C" uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        // Defensive guard: if an exception was thrown by a prior instruction and not caught,
+        // discard the value and return NOTHING to avoid assertion in LValueHelper
+        QoreValue value = fromBits(value_bits);
+        value.discard(xsink);
+        return toBits(QoreValue());
+    }
     QoreValue lvalue = fromBits(lvalue_bits);
     QoreValue value = fromBits(value_bits);
     QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink);
@@ -833,13 +842,16 @@ extern "C" uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uin
 // --- Container construction helpers ---
 
 extern "C" uint64_t qore_rt_make_list(uint64_t* vals, int count, ExceptionSink* xsink) {
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+    qore_list_private* priv = qore_list_private::get(**list);
+    priv->reserve(count);
     for (int i = 0; i < count; i++) {
         QoreValue v = fromBits(vals[i]);
         if (v.hasNode()) {
             v.refSelf();
         }
-        list->push(v, xsink);
+        priv->pushIntern(v);
     }
     return toBits(QoreValue(list.release()));
 }
@@ -1063,17 +1075,23 @@ extern "C" uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args,
     }
 
     // Build QoreListNode from NaN-boxed args
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
-            val.refSelf();
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
         }
-        arg_list->push(val, xsink);
     }
 
     // Call directly — no AST node copy, no dynamic_cast chain
-    QoreValue result = callref->execValue(arg_list.release(), xsink);
+    // execValue borrows the arg list (const QoreListNode*), so we must NOT release ownership
+    QoreValue result = callref->execValue(*arg_list, xsink);
     return toBits(result);
 }
 
@@ -1755,13 +1773,18 @@ extern "C" uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, i
     }
 
     // Build QoreListNode from the NaN-boxed args array
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
-            val.refSelf();
+    {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
         }
-        arg_list->push(val, xsink);
     }
 
     // Determine call type and create a copy with the pre-built arg list
@@ -1828,13 +1851,20 @@ extern "C" uint64_t qore_rt_call_function_direct(const QoreFunction* func,
     assert(func);
 
     // Build QoreListNode from the NaN-boxed args array
+    // Use pushIntern() to bypass checkVal/stripVal which strips complex types
+    // (e.g., hash<string, bool> -> hash<auto>) from arguments in untyped lists,
+    // breaking function overload resolution
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
-            val.refSelf();
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
         }
-        arg_list->push(val, xsink);
     }
 
     // Get runtime config
@@ -1901,15 +1931,18 @@ extern "C" uint64_t qore_rt_call_fast(const QoreFunction* func,
     }
 
     // Build argv for excess arguments (varargs)
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> argv(xsink);
     if (nargs > (int)num_params) {
         argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
             if (val.hasNode()) {
                 val.refSelf();
             }
-            argv->push(val, xsink);
+            argv_priv->pushIntern(val);
         }
     }
 
@@ -1997,15 +2030,18 @@ extern "C" uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn)(Exceptio
     }
 
     // Build argv for excess arguments (varargs)
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> argv(xsink);
     if (nargs > (int)num_params) {
         argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
             if (val.hasNode()) {
                 val.refSelf();
             }
-            argv->push(val, xsink);
+            argv_priv->pushIntern(val);
         }
     }
 
@@ -2070,13 +2106,18 @@ extern "C" uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_
     }
 
     // Build QoreListNode from the NaN-boxed args array
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
-            val.refSelf();
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
         }
-        arg_list->push(val, xsink);
     }
 
     // Get runtime config
@@ -2152,15 +2193,18 @@ extern "C" uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     }
 
     // Build argv for excess arguments (varargs)
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> argv(xsink);
     if (nargs > (int)num_params) {
         argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
             if (val.hasNode()) {
                 val.refSelf();
             }
-            argv->push(val, xsink);
+            argv_priv->pushIntern(val);
         }
     }
 
@@ -2235,13 +2279,18 @@ extern "C" uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t* args, int
     }
 
     // Build QoreListNode from the NaN-boxed args array
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue val = fromBits(args[i]);
-        if (val.hasNode()) {
-            val.refSelf();
+    if (nargs > 0) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
         }
-        arg_list->push(val, xsink);
     }
 
     // Call execValue() directly — avoids the dynamic_cast chain and AST node copy
@@ -2553,6 +2602,7 @@ extern "C" void* qore_rt_iterator_create_aot(QoreAOTContext* ctx, int32_t slot,
 extern "C" int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink) {
     if (!iter_ptr) {
         // Empty iterator (was NOTHING) - already done
+        *out_value = 0;  // VAL_NOTHING - keep alloca consistent for decref-before-overwrite
         return 1;
     }
 
@@ -2563,12 +2613,14 @@ extern "C" int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out_value, Ex
     if (xsink && *xsink) {
         // Exception occurred - clean up iterator
         delete iter;
+        *out_value = 0;  // VAL_NOTHING - keep alloca consistent for decref-before-overwrite
         return 1;
     }
 
     if (done) {
         // Iterator exhausted - clean up
         delete iter;
+        *out_value = 0;  // VAL_NOTHING - keep alloca consistent for decref-before-overwrite
         return 1;
     }
 
@@ -2583,13 +2635,16 @@ static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, Excepti
     if (nargs <= 0) {
         return nullptr;
     }
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    qore_list_private* priv = qore_list_private::get(*arg_list);
+    priv->reserve(nargs);
     for (int i = 0; i < nargs; ++i) {
         QoreValue val = fromBits(args[i]);
         if (val.hasNode()) {
             val.refSelf();
         }
-        arg_list->push(val, xsink);
+        priv->pushIntern(val);
     }
     return arg_list;
 }
@@ -2656,15 +2711,18 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     // Build argv for excess arguments (varargs)
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> argv(xsink);
     if (nargs > (int)num_params) {
         argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
         for (int i = num_params; i < nargs; ++i) {
             QoreValue val = fromBits(args[i]);
             if (val.hasNode()) {
                 val.refSelf();
             }
-            argv->push(val, xsink);
+            argv_priv->pushIntern(val);
         }
     }
 

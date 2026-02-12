@@ -4112,6 +4112,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
 
+        # Check if handler switched to dedicated mode (WebSocket/SSE) - async_response
+        # will be NOTHING since handleRequest() deletes it after sending the 101 response
+        if (request_helper.isDedicated()) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+        }
+
         # Translate result to HttpRequestResultInfo for the controller
         return translateToRequestResult(async_response, request_helper, cx, s);
     }

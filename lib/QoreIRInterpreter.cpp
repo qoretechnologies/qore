@@ -685,12 +685,14 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
 static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>& values,
         const std::vector<QoreIRValue>& operands, size_t start_index, ExceptionSink* xsink) {
     QoreListNode* args = new QoreListNode(autoTypeInfo);
+    qore_list_private* priv = qore_list_private::get(*args);
+    priv->reserve(operands.size() - start_index);
     for (size_t i = start_index; i < operands.size(); ++i) {
         QoreValue val = getIRValue(values, operands[i]);
         QoreValue stored = val.hasNode() ? val.refSelf() : val;
-        if (args->push(stored, xsink)) {
-            return args;
-        }
+        // Use pushIntern() to bypass checkVal/stripVal which strips complex types
+        // (e.g., hash<string, bool> -> hash<auto>) from arguments
+        priv->pushIntern(stored);
     }
     return args;
 }
@@ -995,6 +997,36 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
+        // NewObject: construct object directly without VarRefNewObjectNode assignment
+        // VarRefNewObjectNode::evalImpl assigns to the local variable internally, but
+        // the IR lowering emits a separate StoreLocal for that. Going through evalExprNode
+        // would cause a double-assignment, leaking one reference.
+        case QoreIROpcode::NewObject: {
+            if (inv->expr.hasNode()) {
+                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
+                if (vrn) {
+                    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+                    if (qc) {
+                        RuntimeConfig& rc = rc_get_current_ref();
+                        return qore_class_private::execConstructor(*qc, rc,
+                            vrn->getVariant(), vrn->getArgs(), xsink);
+                    }
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
+        // VrnConstruct: construct hashdecl/complex types without local variable assignment
+        case QoreIROpcode::VrnConstruct: {
+            if (inv->expr.hasNode()) {
+                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
+                if (vrn) {
+                    return vrn->constructValue(xsink);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
@@ -1144,8 +1176,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 on_block_exit_handlers.resize(scope_start);
-                // Invalidate caches after AST execution
-                locals.clear();
+                // Invalidate caches after AST execution — must use cleanupStoredValues
+                // (not bare clear()) because storeValue() calls refSelf() on each cached
+                // entry; dropping them without discard() leaks references.
+                cleanupStoredValues(locals, nullptr);
             }
         }
     };
@@ -1557,17 +1591,26 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 // Build args list from operands[1..]
                 int nargs = static_cast<int>(inst->operands.size()) - 1;
-                ReferenceHolder<QoreListNode> arg_list(
-                    nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
-                for (int i = 0; i < nargs; ++i) {
-                    QoreValue val = getIRValue(values, inst->operands[i + 1]);
-                    if (val.hasNode()) {
-                        val.refSelf();
+                QoreListNode* arg_list =
+                    nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr;
+                if (arg_list) {
+                    for (int i = 0; i < nargs; ++i) {
+                        QoreValue val = getIRValue(values, inst->operands[i + 1]);
+                        if (val.hasNode()) {
+                            val.refSelf();
+                        }
+                        arg_list->push(val, xsink);
                     }
-                    arg_list->push(val, xsink);
                 }
 
-                QoreValue result = callref->execValue(arg_list.release(), xsink);
+                // execValue borrows args (const QoreListNode*) — it does NOT take
+                // ownership.  We must deref the arg list after the call to avoid
+                // leaking the refSelf'd entries.
+                QoreValue result = callref->execValue(arg_list, xsink);
+                // Deref the arg list now — entries were refSelf'd for the call
+                if (arg_list) {
+                    arg_list->deref(xsink);
+                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
@@ -1576,6 +1619,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
+                // Closure/callref execution can run arbitrary code that may modify
+                // globals, thread-locals, or other cached state
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
                 setValueSlot(values, inst->result.id, result, xsink);
                 if (result.hasNode()) {
                     cleanup.push_back(inst->result.id);
@@ -1844,12 +1893,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::LoadLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 ensureLocalInstantiated(local_inst->local, instantiated_locals, pre_instantiated);
-                QoreValue val;
+                QoreValue out;
                 // Closure-bound locals must always be read from the runtime stack
                 // because closures can modify the value between IR instructions
                 if (local_inst->local && local_inst->local->closureUse()) {
                     bool needs_deref = true;
-                    val = local_inst->local->eval(needs_deref, xsink);
+                    out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupStoredValues(locals, nullptr);
@@ -1858,13 +1907,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cleanupStoredValues(closures, nullptr);
                         return false;
                     }
+                    // eval() returns a referenced value; use it directly for the value slot
                 } else {
                     auto it = locals.find(local_inst->local);
                     if (it != locals.end()) {
-                        val = it->second;
+                        // Cache hit: val is shared with cache, needs refSelf for value slot
+                        QoreValue val = it->second;
+                        out = val.hasNode() ? val.refSelf() : val;
                     } else if (local_inst->local) {
                         bool needs_deref = true;
-                        val = local_inst->local->eval(needs_deref, xsink);
+                        QoreValue val = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupStoredValues(locals, nullptr);
@@ -1874,9 +1926,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             return false;
                         }
                         storeValue(locals, local_inst->local, val, nullptr);
+                        out = val.hasNode() ? val.refSelf() : val;
                     }
                 }
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
                 setValueSlot(values, local_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
@@ -1904,24 +1956,29 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::LoadClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
-                QoreValue val;
+                QoreValue out;
                 if (!inst->operands.empty() && closure) {
                     QoreValue idx_val = getIRValue(values, inst->operands[0]);
                     int64 idx = idx_val.getAsBigInt();
+                    QoreValue val;
                     if (idx >= 0 && static_cast<size_t>(idx) < closure->size()) {
                         val = (*closure)[static_cast<size_t>(idx)];
                     }
+                    // Closure arg: val is shared reference, needs refSelf for value slot
+                    out = val.hasNode() ? val.refSelf() : val;
                 } else {
                     auto it = closures.find(local_inst->local);
                     if (it != closures.end()) {
-                        val = it->second;
+                        // Cache hit: val is shared with cache, needs refSelf for value slot
+                        QoreValue val = it->second;
+                        out = val.hasNode() ? val.refSelf() : val;
                     } else if (local_inst->local) {
                         // Read from the runtime closure environment (set by
                         // ThreadSafeLocalVarRuntimeEnvironmentHelper in
                         // UserClosureFunction::evalClosure)
                         ClosureVarValue* cv = thread_get_runtime_closure_var(local_inst->local);
                         if (cv) {
-                            val = cv->eval(xsink);
+                            QoreValue val = cv->eval(xsink);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                                 cleanupStoredValues(locals, nullptr);
@@ -1931,10 +1988,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 return false;
                             }
                             storeValue(closures, local_inst->local, val, nullptr);
+                            out = val.hasNode() ? val.refSelf() : val;
                         }
                     }
                 }
-                QoreValue out = val.hasNode() ? val.refSelf() : val;
                 setValueSlot(values, local_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
@@ -2540,10 +2597,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // lvar->del() / cvv->clearValue() is the FINAL deref that
                         // triggers the destructor.  After this call, invalidate the
                         // globals cache since the destructor runs AST code.
+                        // For closure-captured locals: only clear the value if no
+                        // closures still hold references (references == 1 means only
+                        // the cvstack entry remains).  When references > 1, closures
+                        // may still need the value (e.g., submitted to a thread pool).
                         if (local_inst->local->closureUse()) {
                             ClosureVarValue* cvv = thread_find_closure_var(
                                 local_inst->local->getName());
-                            if (cvv) {
+                            if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
                                 cvv->clearValue(xsink);
                             }
                         } else {
@@ -3107,7 +3168,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // On-block-exit handlers execute through the AST path and can
                         // modify any local variable on the thread-local stack.  Clear the
                         // locals cache so subsequent LoadLocal re-reads from the runtime.
-                        locals.clear();
+                        // Must use cleanupStoredValues (not bare clear()) because
+                        // storeValue() calls refSelf() on each cached entry; dropping
+                        // them without discard() leaks references.
+                        cleanupStoredValues(locals, nullptr);
                     }
                 }
                 ++ip;

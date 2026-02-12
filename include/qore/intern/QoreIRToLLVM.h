@@ -239,6 +239,11 @@ private:
     // (+1 ref) so it can be decref'd before being replaced or at function exit.
     std::unordered_map<const void*, llvm::Value*> local_reload_trackers;
 
+    // Error return block: used for exception cleanup when outside a try block.
+    // When a Call/CallDirect/CallMethodDirect throws outside a try, execution
+    // jumps here to return NOTHING immediately.  Created lazily on first use.
+    llvm::BasicBlock* error_return_block = nullptr;
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 

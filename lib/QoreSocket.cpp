@@ -5483,6 +5483,7 @@ const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
 QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
     if (sock->priv->checkOpen(xsink)) {
+        printd(5, "SocketSendAndReadHeaderPollOperation::continuePoll() socket NOT open, phase=%d\n", (int)phase);
         phase = Phase::Error;
         return nullptr;
     }

@@ -50,9 +50,15 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreIRInterpreter.h"
 
-// Tiered compilation threshold defaults
-uint64_t QoreJIT::ir_threshold = 100;
-uint64_t QoreJIT::jit_threshold = 1000;
+// Tiered compilation threshold defaults (overridable via QORE_IR_THRESHOLD / QORE_JIT_THRESHOLD env vars)
+uint64_t QoreJIT::ir_threshold = []() -> uint64_t {
+    const char* env = getenv("QORE_IR_THRESHOLD");
+    return env ? strtoull(env, nullptr, 10) : 100;
+}();
+uint64_t QoreJIT::jit_threshold = []() -> uint64_t {
+    const char* env = getenv("QORE_JIT_THRESHOLD");
+    return env ? strtoull(env, nullptr, 10) : 1000;
+}();
 
 // JIT optimization level: default O2, overridable via QORE_JIT_OPT_LEVEL env var
 int QoreJIT::jit_opt_level = -1;  // -1 = not yet initialized

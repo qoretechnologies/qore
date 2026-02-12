@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -581,6 +581,7 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);

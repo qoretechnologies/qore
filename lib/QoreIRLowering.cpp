@@ -2124,6 +2124,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(node)) {
+        // NewObject evaluates constructor args through AST at runtime;
+        // track as AST-delegated so map body push/pop implicit args for $1/$#
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2140,6 +2143,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 new_obj->getArgs(), expr, nullptr)->result;
     }
     if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        // NewObject evaluates constructor args through AST at runtime;
+        // track as AST-delegated so map body push/pop implicit args for $1/$#
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -2412,6 +2418,9 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     // Handle VarRefNewObjectNode (e.g., "Foo f("hello")") — a variable declaration
     // with implicit constructor call. Split into construction + assignment.
     if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        // Constructor args are evaluated through AST at runtime;
+        // track as AST-delegated so map body push/pop implicit args for $1/$#
+        ++ast_delegate_count;
         // Check if this is a class constructor (VRN_OBJECT)
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
