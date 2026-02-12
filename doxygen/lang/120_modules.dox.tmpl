@@ -83,7 +83,7 @@ ModuleName/
         line debugger clients
     |user|<a href="../../modules/DebugLinenoiseCmdLine/html/index.html#debuglinenoisecmdlineintro">DebugLinenoiseCmdLine</a>|Provides an API \
         for command line debugger clients based on the \
-        <a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a> module
+        <a href="../../modules/linenoise/html/index.html#linenoiseintro">linenoise</a> module
     |user|<a href="../../modules/DebugProgramControl/html/index.html#debugprogramcontrolintro">DebugProgramControl</a>|Provides an API to \
         develop debug server
     |user|<a href="../../modules/DebugHandler/html/index.html#debughandlerintro">DebugHandler</a>|Provides a websocket for debug server
@@ -188,6 +188,9 @@ ModuleName/
     |user|<a href="../../modules/Logger/html/index.html#loggerintro">Logger</a>|Provides a flexible logging API (aka "log4q")
     |binary|<a href="../../modules/logger_bin/html/index.html#logger_binintro">logger_bin</a>|Provides a high-performance \
         implementation for the <a href="../../modules/Logger/html/index.html#loggerintro">Logger</a> module
+    |binary|<a href="../../modules/linenoise/html/index.html#linenoiseintro">linenoise</a>|Provides a readline-like API \
+        to %Qore under a permissive license; used by \
+        @ref qorereplintro "QoreRepl", @ref qorehistoryintro "QoreHistory", and \c qdp for interactive line editing
     |user|<a href="../../modules/MailMessage/html/index.html#mailmessageintro">MailMessage</a>|Provides supporting classes for the \
         <a href="../../modules/Pop3Client/html/index.html#pop3clientintro">Pop3Client</a> and \
         <a href="../../modules/SmtpClient/html/index.html#smtpclientintro">SmtpClient</a> modules; mail message serialization and \
@@ -276,8 +279,11 @@ ModuleName/
         a shared code completion engine with context detection, keyword filtering, and pluggable symbol backends
     |user|<a href="../../modules/QoreCodeFormat/html/index.html#qorecodeformatintro">QoreCodeFormat</a>|Provides \
         a canonical code formatter for %Qore source code (like gofmt for Go)
+    |user|<a href="../../modules/QoreHistory/html/index.html#qorehistoryintro">QoreHistory</a>|Provides \
+        shared history management with timestamps, deduplication, search, expansion, and persistence
     |user|<a href="../../modules/QLS/html/index.html#qlsintro">QLS</a>|Provides a Language Server Protocol \
-        (LSP) implementation for %Qore with code completion, hover, go-to-definition, and formatting
+        (LSP) implementation for %Qore with 25+ features including hover, go-to-definition, \
+        code completion, rename, semantic tokens, type/call hierarchy, and formatting
     |user|<a href="../../modules/QoreRepl/html/index.html#qorereplintro">QoreRepl</a>|Provides a reusable REPL \
         (Read-Eval-Print Loop) implementation for command-line and network-based Qore interpreters
     |user|<a href="../../modules/QUnit/html/index.html#qunitintro">QUnit</a>|Provides an API for defining and executing tests \
@@ -404,7 +410,7 @@ ModuleName/
         - <a href="https://qoretechnologies.com/manual/qorus/current/jni/MqttDataProvider/html/index.html">MqttDataProvider</a>: \
             a data provider API for MQTT messaging\n
     |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n- <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>: provides infrastructure for implementing JSON-RPC server-side services using the <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
-    |binary|<a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a>|Provides a readline-like API to %Qore under a permissive license
+
     |binary|<a href="https://github.com/qoretechnologies/module-msgpack">msgpack</a>|Provides APIs for efficient data serialization in %Qore using the <a href="https://msgpack.org/index.html">MessagePack</a> format
     |binary|<a href="https://github.com/qoretechnologies/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-odbc">odbc</a>|Provides an ODBC DBI driver to %Qore

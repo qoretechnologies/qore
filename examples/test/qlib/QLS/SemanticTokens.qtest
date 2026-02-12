@@ -1,0 +1,351 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SemanticTokens.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class SemanticTokensTest
+
+class SemanticTokensTest inherits QUnit::Test {
+    # Semantic token type indices (matches SemanticTokenTypes in QLSServer.qc):
+    # 0=namespace, 1=type, 2=class, 3=enum, 4=interface, 5=struct, 6=typeParameter,
+    # 7=parameter, 8=variable, 9=property, 10=enumMember, 11=function, 12=method,
+    # 13=keyword, 14=comment, 15=string, 16=number, 17=regexp, 18=operator, 19=decorator
+    # Modifier bitmask: 1=declaration, 2=definition, 4=readonly, 8=static
+
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+        hash<string, string> docCache;
+    }
+
+    constructor() : Test("QLS SemanticTokens", "1.0") {
+        initServer();
+
+        addTestCase("full tokens for simple code", \testFullTokens());
+        addTestCase("class tokens", \testClassTokens());
+        addTestCase("range tokens", \testRangeTokens());
+        addTestCase("delta encoding", \testDeltaEncoding());
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("missing params", \testMissingParams());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    private string setupDoc(*string text) {
+        string src = text ?? getTestCode();
+        *string cached = docCache{src};
+        if (exists cached) {
+            return cached;
+        }
+        string uri = sprintf("file:///test/semtokens%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": src,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        docCache{src} = uri;
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    # Test source:
+    # Line 0: %modern
+    # Line 1: sub add(int a, int b) { return a + b; }
+    private string getTestCode() {
+        return "%modern
+sub add(int a, int b) { return a + b; }
+";
+    }
+
+    private *list<int> sendFullTokens(string uri) {
+        hash<auto> req = makeRequest("textDocument/semanticTokens/full", {
+            "textDocument": {"uri": uri},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result.data;
+    }
+
+    private *list<int> sendRangeTokens(string uri, int startLine, int endLine) {
+        hash<auto> req = makeRequest("textDocument/semanticTokens/range", {
+            "textDocument": {"uri": uri},
+            "range": {
+                "start": {"line": startLine, "character": 0},
+                "end": {"line": endLine, "character": 999},
+            },
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result.data;
+    }
+
+    # Decode delta-encoded tokens back to absolute positions
+    private list<hash<auto>> decodeTokens(list<int> data) {
+        list<hash<auto>> tokens = ();
+        int prevLine = 0;
+        int prevChar = 0;
+
+        for (int i = 0; i + 4 < data.size(); i += 5) {
+            int deltaLine = data[i];
+            int deltaChar = data[i + 1];
+            int length = data[i + 2];
+            int tokenType = data[i + 3];
+            int tokenModifiers = data[i + 4];
+
+            int line = prevLine + deltaLine;
+            int startChar = deltaLine == 0 ? prevChar + deltaChar : deltaChar;
+
+            push tokens, {
+                "line": line,
+                "startChar": startChar,
+                "length": length,
+                "tokenType": tokenType,
+                "tokenModifiers": tokenModifiers,
+            };
+
+            prevLine = line;
+            prevChar = startChar;
+        }
+
+        return tokens;
+    }
+
+    testFullTokens() {
+        string uri = setupDoc();
+
+        *list<int> data = sendFullTokens(uri);
+        assertTrue(exists data && data.size() > 0, "should return token data");
+
+        # data should be a multiple of 5
+        assertEq(0, data.size() % 5, "data length should be multiple of 5");
+
+        # Decode and verify we got tokens for function "add"
+        list<hash<auto>> tokens = decodeTokens(data);
+        assertTrue(tokens.size() > 0, "should have decoded tokens");
+
+        # Line 1: sub add(int a, int b) { return a + b; }
+        # Should have tokens for: sub (keyword), add (function/decl), int (type), a (param), int (type), b (param),
+        # return (keyword), a (var), + (op), b (var)
+        # Verify we have a function declaration token on line 1
+        bool foundFuncDecl = False;
+        foreach hash<auto> t in (tokens) {
+            # tokenType 11 = function, modifier 1 = declaration
+            if (t.line == 1 && t.tokenType == 11 && (t.tokenModifiers & 1)) {
+                foundFuncDecl = True;
+                break;
+            }
+        }
+        assertTrue(foundFuncDecl, "should find function declaration token");
+
+        # Verify we have keyword tokens
+        bool foundKeyword = False;
+        foreach hash<auto> t in (tokens) {
+            if (t.tokenType == 13) {  # keyword
+                foundKeyword = True;
+                break;
+            }
+        }
+        assertTrue(foundKeyword, "should find keyword tokens");
+
+        # Verify we have parameter tokens
+        bool foundParam = False;
+        foreach hash<auto> t in (tokens) {
+            if (t.tokenType == 7) {  # parameter
+                foundParam = True;
+                break;
+            }
+        }
+        assertTrue(foundParam, "should find parameter tokens");
+
+        # Verify we have type tokens
+        bool foundType = False;
+        foreach hash<auto> t in (tokens) {
+            if (t.tokenType == 1) {  # type
+                foundType = True;
+                break;
+            }
+        }
+        assertTrue(foundType, "should find type tokens");
+    }
+
+    testClassTokens() {
+        string code = "%modern
+class Foo inherits Bar {
+    private { int x; }
+    int getX() { return x; }
+}
+";
+        string uri = setupDoc(code);
+
+        *list<int> data = sendFullTokens(uri);
+        assertTrue(exists data && data.size() > 0, "should return token data");
+
+        list<hash<auto>> tokens = decodeTokens(data);
+
+        # Should have class declaration token for "Foo"
+        bool foundClassDecl = False;
+        foreach hash<auto> t in (tokens) {
+            # tokenType 2 = class, modifier 1 = declaration
+            if (t.line == 1 && t.tokenType == 2 && (t.tokenModifiers & 1)) {
+                foundClassDecl = True;
+                break;
+            }
+        }
+        assertTrue(foundClassDecl, "should find class declaration token");
+
+        # Should have class reference for "Bar" (superclass)
+        bool foundSuperclass = False;
+        foreach hash<auto> t in (tokens) {
+            if (t.line == 1 && t.tokenType == 2 && !(t.tokenModifiers & 1)) {
+                foundSuperclass = True;
+                break;
+            }
+        }
+        assertTrue(foundSuperclass, "should find superclass reference token");
+
+        # Should have method declaration for "getX"
+        bool foundMethodDecl = False;
+        foreach hash<auto> t in (tokens) {
+            # tokenType 12 = method, modifier 1 = declaration
+            if (t.line == 3 && t.tokenType == 12 && (t.tokenModifiers & 1)) {
+                foundMethodDecl = True;
+                break;
+            }
+        }
+        assertTrue(foundMethodDecl, "should find method declaration token");
+
+        # Should have property token for "x"
+        bool foundProperty = False;
+        foreach hash<auto> t in (tokens) {
+            if (t.tokenType == 9) {  # property
+                foundProperty = True;
+                break;
+            }
+        }
+        assertTrue(foundProperty, "should find property token");
+    }
+
+    testRangeTokens() {
+        string code = "%modern
+sub foo() { return 1; }
+sub bar() { return 2; }
+";
+        string uri = setupDoc(code);
+
+        # Request only line 1
+        *list<int> data = sendRangeTokens(uri, 1, 1);
+        assertTrue(exists data && data.size() > 0, "should return range tokens");
+
+        list<hash<auto>> tokens = decodeTokens(data);
+
+        # All tokens should be on line 1
+        foreach hash<auto> t in (tokens) {
+            assertEq(1, t.line, "all tokens should be on line 1");
+        }
+
+        # Request only line 2
+        *list<int> data2 = sendRangeTokens(uri, 2, 2);
+        assertTrue(exists data2 && data2.size() > 0, "should return range tokens for line 2");
+
+        list<hash<auto>> tokens2 = decodeTokens(data2);
+
+        # All tokens should be on line 2
+        foreach hash<auto> t in (tokens2) {
+            assertEq(2, t.line, "all tokens should be on line 2");
+        }
+    }
+
+    testDeltaEncoding() {
+        string uri = setupDoc();
+
+        *list<int> data = sendFullTokens(uri);
+        assertTrue(exists data && data.size() >= 10,
+            "should have enough data for encoding check");
+
+        # First token should have absolute line (delta from 0)
+        # The deltas should be non-negative
+        for (int i = 0; i + 4 < data.size(); i += 5) {
+            assertTrue(data[i] >= 0, sprintf("delta line at %d should be >= 0", i));
+            assertTrue(data[i + 2] > 0, sprintf("length at %d should be > 0", i + 2));
+            assertTrue(data[i + 3] >= 0, sprintf("token type at %d should be >= 0", i + 3));
+            assertTrue(data[i + 4] >= 0, sprintf("token modifiers at %d should be >= 0", i + 4));
+        }
+    }
+
+    testEmptyDocument() {
+        string uri = setupDoc("");
+
+        *list<int> data = sendFullTokens(uri);
+        assertEq(0, data.size(), "empty doc should return empty data");
+    }
+
+    testMissingParams() {
+        hash<auto> req = makeRequest("textDocument/semanticTokens/full");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+}

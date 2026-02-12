@@ -31,6 +31,7 @@
 #include <cctype>
 #include <memory>
 #include <sstream>
+#include <unordered_set>
 
 // --------------------------------------------------------------------------
 // Node lookup helpers
@@ -2515,4 +2516,574 @@ std::string CSTSearcher::buildHoverInfo(
     }
 
     return std::string();
+}
+
+// --------------------------------------------------------------------------
+// findReferencesCrossDoc
+// --------------------------------------------------------------------------
+
+std::vector<DefinitionResult>* CSTSearcher::findReferencesCrossDoc(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col,
+    bool includeDecl,
+    const std::vector<DocumentRef>& otherDocs) {
+
+    if (!result) {
+        return nullptr;
+    }
+
+    // Find the identifier at position to get the name
+    TSNode node = findNodeAtPosition(result, line, col);
+    if (ts_node_is_null(node)) {
+        return nullptr;
+    }
+
+    const char* nodeType = ts_node_type(node);
+    if (strcmp(nodeType, "identifier") != 0 && strcmp(nodeType, "scoped_identifier") != 0) {
+        return nullptr;
+    }
+
+    uint32_t nameStart = ts_node_start_byte(node);
+    uint32_t nameEnd = ts_node_end_byte(node);
+    const std::string& src = result->getSource();
+    if (nameStart >= nameEnd || nameEnd > src.size()) {
+        return nullptr;
+    }
+
+    std::string name = src.substr(nameStart, nameEnd - nameStart);
+    if (name.empty()) {
+        return nullptr;
+    }
+
+    auto* vec = new std::vector<DefinitionResult>();
+
+    // Collect references in current document
+    TSNode root = result->getRootNode();
+    std::vector<TSNode> localRefs;
+    collectIdentifierRefs(root, result, name, &localRefs);
+
+    for (const auto& ref : localRefs) {
+        if (!includeDecl) {
+            TSNode parent = ts_node_parent(ref);
+            if (!ts_node_is_null(parent) && isNameOfDeclaration(ref, parent)) {
+                continue;
+            }
+        }
+        vec->push_back({ref, ""});
+    }
+
+    // Collect references in other documents
+    for (const auto& docRef : otherDocs) {
+        if (!docRef.result) {
+            continue;
+        }
+        TSNode otherRoot = docRef.result->getRootNode();
+        std::vector<TSNode> otherRefs;
+        collectIdentifierRefs(otherRoot, docRef.result, name, &otherRefs);
+
+        for (const auto& ref : otherRefs) {
+            if (!includeDecl) {
+                TSNode parent = ts_node_parent(ref);
+                if (!ts_node_is_null(parent) && isNameOfDeclaration(ref, parent)) {
+                    continue;
+                }
+            }
+            vec->push_back({ref, docRef.uri});
+        }
+    }
+
+    if (vec->empty()) {
+        delete vec;
+        return nullptr;
+    }
+    return vec;
+}
+
+// --------------------------------------------------------------------------
+// getSuperclassNames
+// --------------------------------------------------------------------------
+
+std::vector<std::string>* CSTSearcher::getSuperclassNames(
+    const AstParseResult* result,
+    uint32_t line, uint32_t col) {
+
+    if (!result) {
+        return nullptr;
+    }
+
+    // Find the node at position and walk up to find a class_declaration
+    std::vector<TSNode> ancestors = findNodeAndParents(result, line, col);
+    TSNode classNode = make_null_node();
+    for (const auto& node : ancestors) {
+        const char* type = ts_node_type(node);
+        if (strcmp(type, "class_declaration") == 0) {
+            classNode = node;
+            break;
+        }
+    }
+
+    if (ts_node_is_null(classNode)) {
+        return nullptr;
+    }
+
+    // Find the superclass_list child
+    TSNode superList = make_null_node();
+    uint32_t childCount = ts_node_named_child_count(classNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        if (strcmp(ts_node_type(child), "superclass_list") == 0) {
+            superList = child;
+            break;
+        }
+    }
+
+    if (ts_node_is_null(superList)) {
+        return nullptr;
+    }
+
+    // Collect superclass names
+    auto* vec = new std::vector<std::string>();
+    uint32_t superCount = ts_node_named_child_count(superList);
+    for (uint32_t i = 0; i < superCount; i++) {
+        TSNode superNode = ts_node_named_child(superList, i);
+        if (strcmp(ts_node_type(superNode), "superclass") != 0) {
+            continue;
+        }
+        // The superclass has optional access_modifier + identifier/scoped_identifier
+        // Find the identifier or scoped_identifier child
+        uint32_t scCount = ts_node_named_child_count(superNode);
+        for (uint32_t j = 0; j < scCount; j++) {
+            TSNode scChild = ts_node_named_child(superNode, j);
+            const char* scType = ts_node_type(scChild);
+            if (strcmp(scType, "identifier") == 0 || strcmp(scType, "scoped_identifier") == 0) {
+                uint32_t start = ts_node_start_byte(scChild);
+                uint32_t end = ts_node_end_byte(scChild);
+                const std::string& src = result->getSource();
+                if (start < end && end <= src.size()) {
+                    vec->push_back(src.substr(start, end - start));
+                }
+                break;
+            }
+        }
+    }
+
+    if (vec->empty()) {
+        delete vec;
+        return nullptr;
+    }
+    return vec;
+}
+
+// --------------------------------------------------------------------------
+// Semantic tokens
+// --------------------------------------------------------------------------
+
+//! Set of Qore keywords for semantic token classification.
+static const std::unordered_set<std::string>& getQoreKeywords() {
+    static const std::unordered_set<std::string> kw = {
+        "abstract", "background", "break", "case", "catch", "class", "const",
+        "constructor", "continue", "default", "delete", "deprecated", "destructor",
+        "do", "else", "enum", "exists", "final", "foldl", "foldr", "for",
+        "foreach", "hashdecl", "if", "in", "inherits", "instanceof", "keys",
+        "map", "module", "my", "namespace", "new", "on_error", "on_exit",
+        "on_success", "our", "pop", "private", "private:hierarchy",
+        "private:internal", "public", "push", "rethrow", "return", "returns",
+        "select", "shift", "splice", "static", "sub", "switch", "synchronized",
+        "thread_exit", "thread_local", "throw", "trim", "try", "typedef",
+        "unshift", "where", "while",
+    };
+    return kw;
+}
+
+//! Check if a node type string is a Qore keyword.
+static bool isKeyword(const char* type) {
+    return getQoreKeywords().count(type) > 0;
+}
+
+//! Emit semantic token(s) for a potentially multi-line node.
+static void emitToken(TSNode node, uint32_t tokenType, uint32_t tokenModifiers,
+                       uint32_t startLine, uint32_t endLine,
+                       const AstParseResult* result,
+                       std::vector<SemanticToken>* vec) {
+    TSPoint start = ts_node_start_point(node);
+    TSPoint end = ts_node_end_point(node);
+
+    if (start.row > endLine || end.row < startLine) {
+        return;
+    }
+
+    if (start.row == end.row) {
+        // Single-line token
+        uint32_t len = end.column - start.column;
+        if (len > 0) {
+            vec->push_back({start.row, start.column, len, tokenType, tokenModifiers});
+        }
+    } else {
+        // Multi-line token: emit one token per line
+        const std::string& src = result->getSource();
+        uint32_t byteStart = ts_node_start_byte(node);
+        uint32_t byteEnd = ts_node_end_byte(node);
+
+        if (byteEnd > src.size()) {
+            byteEnd = (uint32_t)src.size();
+        }
+
+        // Find line boundaries
+        uint32_t lineStart = start.row;
+        uint32_t col = start.column;
+        uint32_t pos = byteStart;
+
+        while (pos < byteEnd && lineStart <= endLine) {
+            // Find end of this line
+            uint32_t lineEnd = pos;
+            while (lineEnd < byteEnd && src[lineEnd] != '\n') {
+                ++lineEnd;
+            }
+
+            if (lineStart >= startLine) {
+                uint32_t len = lineEnd - pos;
+                if (len > 0) {
+                    vec->push_back({lineStart, col, len, tokenType, tokenModifiers});
+                }
+            }
+
+            // Move to next line
+            if (lineEnd < byteEnd && src[lineEnd] == '\n') {
+                ++lineEnd;
+            }
+            pos = lineEnd;
+            col = 0;
+            ++lineStart;
+        }
+    }
+}
+
+std::vector<SemanticToken>* CSTSearcher::collectSemanticTokens(
+        const AstParseResult* result,
+        uint32_t startLine, uint32_t endLine) {
+    if (!result) {
+        return nullptr;
+    }
+    TSTree* tree = result->getTree();
+    if (!tree) {
+        return nullptr;
+    }
+
+    auto* vec = new std::vector<SemanticToken>();
+    TSNode root = ts_tree_root_node(tree);
+    collectSemanticTokensRecursive(root, result, startLine, endLine, vec);
+
+    // Sort by position
+    std::sort(vec->begin(), vec->end(),
+        [](const SemanticToken& a, const SemanticToken& b) {
+            if (a.line != b.line) {
+                return a.line < b.line;
+            }
+            return a.startChar < b.startChar;
+        });
+
+    if (vec->empty()) {
+        delete vec;
+        return nullptr;
+    }
+    return vec;
+}
+
+void CSTSearcher::collectSemanticTokensRecursive(
+        TSNode node, const AstParseResult* result,
+        uint32_t startLine, uint32_t endLine,
+        std::vector<SemanticToken>* vec) {
+    // Quick range check
+    uint32_t nodeStartLine = ts_node_start_point(node).row;
+    uint32_t nodeEndLine = ts_node_end_point(node).row;
+    if (nodeEndLine < startLine || nodeStartLine > endLine) {
+        return;
+    }
+
+    uint32_t childCount = ts_node_child_count(node);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_child(node, i);
+        uint32_t tokenType = 0;
+        uint32_t tokenModifiers = 0;
+
+        if (classifyNode(child, node, result, tokenType, tokenModifiers)) {
+            emitToken(child, tokenType, tokenModifiers, startLine, endLine, result, vec);
+            // Don't recurse into classified leaf tokens
+        } else if (ts_node_child_count(child) > 0) {
+            // Recurse into structural nodes
+            collectSemanticTokensRecursive(child, result, startLine, endLine, vec);
+        }
+    }
+}
+
+bool CSTSearcher::classifyNode(TSNode node, TSNode parent,
+                                const AstParseResult* result,
+                                uint32_t& tokenType,
+                                uint32_t& tokenModifiers) {
+    const char* type = ts_node_type(node);
+    bool named = ts_node_is_named(node);
+
+    if (!named) {
+        // Anonymous node — check if it's a keyword
+        if (isKeyword(type)) {
+            tokenType = STT_Keyword;
+            tokenModifiers = 0;
+            return true;
+        }
+        // Operators
+        if (strcmp(type, "+") == 0 || strcmp(type, "-") == 0
+                || strcmp(type, "*") == 0 || strcmp(type, "/") == 0
+                || strcmp(type, "%") == 0 || strcmp(type, "=") == 0
+                || strcmp(type, "==") == 0 || strcmp(type, "!=") == 0
+                || strcmp(type, "<") == 0 || strcmp(type, ">") == 0
+                || strcmp(type, "<=") == 0 || strcmp(type, ">=") == 0
+                || strcmp(type, "&&") == 0 || strcmp(type, "||") == 0
+                || strcmp(type, "!") == 0 || strcmp(type, "&") == 0
+                || strcmp(type, "|") == 0 || strcmp(type, "^") == 0
+                || strcmp(type, "~") == 0 || strcmp(type, "<<") == 0
+                || strcmp(type, ">>") == 0 || strcmp(type, ">>>") == 0
+                || strcmp(type, "+=") == 0 || strcmp(type, "-=") == 0
+                || strcmp(type, "*=") == 0 || strcmp(type, "/=") == 0
+                || strcmp(type, "++") == 0 || strcmp(type, "--") == 0
+                || strcmp(type, "?") == 0 || strcmp(type, ":") == 0
+                || strcmp(type, "<=>") == 0 || strcmp(type, "??") == 0
+                || strcmp(type, "=~") == 0 || strcmp(type, "!~") == 0
+                || strcmp(type, "..") == 0 || strcmp(type, ".") == 0) {
+            tokenType = STT_Operator;
+            tokenModifiers = 0;
+            return true;
+        }
+        return false;
+    }
+
+    // Named nodes
+    // Comments (tree-sitter extras)
+    if (strcmp(type, "comment") == 0 || strcmp(type, "line_comment") == 0
+            || strcmp(type, "block_comment") == 0) {
+        tokenType = STT_Comment;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // String literals
+    if (strcmp(type, "string_literal") == 0
+            || strcmp(type, "double_quoted_string") == 0
+            || strcmp(type, "single_quoted_string") == 0
+            || strcmp(type, "backquote_string") == 0) {
+        tokenType = STT_String;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Number literals
+    if (strcmp(type, "integer_literal") == 0
+            || strcmp(type, "float_literal") == 0
+            || strcmp(type, "number_literal") == 0) {
+        tokenType = STT_Number;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Regex
+    if (strcmp(type, "regex_literal") == 0) {
+        tokenType = STT_Regexp;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Boolean/null constants
+    if (strcmp(type, "true") == 0 || strcmp(type, "false") == 0
+            || strcmp(type, "True") == 0 || strcmp(type, "False") == 0
+            || strcmp(type, "NOTHING") == 0 || strcmp(type, "NULL") == 0) {
+        tokenType = STT_Keyword;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Type annotations
+    if (strcmp(type, "simple_type") == 0 || strcmp(type, "scoped_type") == 0) {
+        tokenType = STT_Type;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Access modifier
+    if (strcmp(type, "access_modifier") == 0) {
+        tokenType = STT_Keyword;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Parse directives (%modern, %requires, etc.)
+    if (strcmp(type, "parse_directive") == 0) {
+        tokenType = STT_Decorator;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Relative date literals (P1D, PT5H, etc.)
+    if (strcmp(type, "relative_date") == 0) {
+        tokenType = STT_Number;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Implicit arguments ($1, etc.)
+    if (strcmp(type, "implicit_argument") == 0) {
+        tokenType = STT_Variable;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Variable name (e.g., $. prefixed)
+    if (strcmp(type, "variable_name") == 0) {
+        tokenType = STT_Variable;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Identifiers — classify based on parent context
+    if (strcmp(type, "identifier") == 0 || strcmp(type, "scoped_identifier") == 0) {
+        const char* parentType = ts_node_type(parent);
+
+        // Check if this identifier is the "name" field of its parent
+        TSNode nameChild = ts_node_child_by_field_name(parent, "name", 4);
+        bool isNameField = false;
+        if (!ts_node_is_null(nameChild)
+                && ts_node_start_byte(nameChild) == ts_node_start_byte(node)
+                && ts_node_end_byte(nameChild) == ts_node_end_byte(node)) {
+            isNameField = true;
+        }
+
+        if (isNameField) {
+            // Declaration name
+            if (strcmp(parentType, "class_declaration") == 0) {
+                tokenType = STT_Class;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "function_declaration") == 0) {
+                tokenType = STT_Function;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "method_declaration") == 0) {
+                tokenType = STT_Method;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "namespace_declaration") == 0) {
+                tokenType = STT_Namespace;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "enum_declaration") == 0) {
+                tokenType = STT_Enum;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "hashdecl_declaration") == 0) {
+                tokenType = STT_Struct;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "typedef_declaration") == 0) {
+                tokenType = STT_Type;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "constant_declaration") == 0) {
+                tokenType = STT_Variable;
+                tokenModifiers = STM_Declaration | STM_Readonly;
+                return true;
+            }
+            if (strcmp(parentType, "variable_declarator") == 0) {
+                tokenType = STT_Variable;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            if (strcmp(parentType, "enum_member") == 0) {
+                tokenType = STT_EnumMember;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+        }
+
+        // Parameter name
+        if (strcmp(parentType, "parameter") == 0) {
+            tokenType = STT_Parameter;
+            tokenModifiers = STM_Declaration;
+            return true;
+        }
+
+        // Member declaration name
+        if (strcmp(parentType, "member_declaration") == 0) {
+            // Check if this is the member name (not the type)
+            TSNode typeChild = ts_node_child_by_field_name(parent, "type", 4);
+            if (!ts_node_is_null(typeChild)
+                    && ts_node_start_byte(typeChild) != ts_node_start_byte(node)) {
+                tokenType = STT_Property;
+                tokenModifiers = STM_Declaration;
+                return true;
+            }
+            // If no type field, last identifier child is the name
+            uint32_t pc = ts_node_named_child_count(parent);
+            if (pc > 0) {
+                TSNode lastChild = ts_node_named_child(parent, pc - 1);
+                if (ts_node_start_byte(lastChild) == ts_node_start_byte(node)) {
+                    tokenType = STT_Property;
+                    tokenModifiers = STM_Declaration;
+                    return true;
+                }
+            }
+        }
+
+        // Call expression — function/method name
+        if (strcmp(parentType, "call_expression") == 0) {
+            tokenType = STT_Function;
+            tokenModifiers = 0;
+            return true;
+        }
+
+        // Member expression — method/property access
+        if (strcmp(parentType, "member_expression") == 0) {
+            // Last child is the member name
+            uint32_t pc = ts_node_named_child_count(parent);
+            if (pc > 0) {
+                TSNode lastNamed = ts_node_named_child(parent, pc - 1);
+                if (ts_node_start_byte(lastNamed) == ts_node_start_byte(node)) {
+                    tokenType = STT_Property;
+                    tokenModifiers = 0;
+                    return true;
+                }
+            }
+        }
+
+        // Superclass name
+        if (strcmp(parentType, "superclass") == 0) {
+            tokenType = STT_Class;
+            tokenModifiers = 0;
+            return true;
+        }
+
+        // Hash member name (in hashdecl body)
+        if (strcmp(parentType, "hash_member") == 0) {
+            tokenType = STT_Property;
+            tokenModifiers = STM_Declaration;
+            return true;
+        }
+
+        // Default: treat as variable reference
+        tokenType = STT_Variable;
+        tokenModifiers = 0;
+        return true;
+    }
+
+    // Constructor/destructor — don't emit for the structural node, let children emit
+    if (strcmp(type, "constructor_declaration") == 0
+            || strcmp(type, "destructor_declaration") == 0) {
+        return false;
+    }
+
+    return false;
 }

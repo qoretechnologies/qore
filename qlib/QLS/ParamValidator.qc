@@ -23,6 +23,7 @@
 
 public namespace QLS {
 
+#! Validates incoming LSP request parameters against required fields and types.
 public class ParamValidator {
     #! Check that required key is present in a hash and that its value is of correct type.
     /**
@@ -198,6 +199,44 @@ public class ParamValidator {
     public static *string workspaceSymbolParams(hash<auto> request, hash<auto> params) {
         string err;
         if (!ParamValidator::required(request, params, "query", NT_STRING, \err)) {
+            return err;
+        }
+        return NOTHING;
+    }
+
+    #! Validates SelectionRangeParams (textDocument + positions array).
+    public static *string selectionRangeParams(hash<auto> request, hash<auto> params) {
+        *string err = ParamValidator::textDocumentIdentifier(request, params);
+        if (err) {
+            return err;
+        }
+        if (!ParamValidator::required(request, params, "positions", NT_LIST, \err)) {
+            return err;
+        }
+        foreach auto pos in (params.positions) {
+            if (pos.typeCode() != NT_HASH) {
+                return ErrorResponse::invalidRequest(
+                    request,
+                    sprintf("position entry has invalid type: %s (hash required)", pos.type())
+                );
+            }
+            if (!ParamValidator::required(request, pos, "line", NT_INT, \err)) {
+                return err;
+            }
+            if (!ParamValidator::required(request, pos, "character", NT_INT, \err)) {
+                return err;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Validates RenameParams (textDocumentPosition + newName string).
+    public static *string renameParams(hash<auto> request, hash<auto> params) {
+        *string err = ParamValidator::textDocumentPositionParams(request, params);
+        if (err) {
+            return err;
+        }
+        if (!ParamValidator::required(request, params, "newName", NT_STRING, \err)) {
             return err;
         }
         return NOTHING;

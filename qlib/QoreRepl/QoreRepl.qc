@@ -79,8 +79,11 @@ public class QoreRepl {
         #! Options hash
         hash<auto> opts;
 
-        #! Command history
+        #! Command history (legacy - kept for backward compatibility)
         list<string> history = ();
+
+        #! Shared history manager
+        QoreHistory::History qhistory();
 
         #! Whether to show execution timing
         bool show_timing = False;
@@ -340,7 +343,16 @@ if (!exists result) {
         if (input =~ /^\//) {
             # Add command to history
             history += input;
+            qhistory.add(input);
             return processCommand(input);
+        }
+
+        # Check for history expansion (!! !n !-n !prefix !$)
+        if (input.size() >= 2 && input[0] == "!") {
+            *string expanded = qhistory.expand(input);
+            if (exists expanded) {
+                input = expanded;
+            }
         }
 
         # Accumulate input
@@ -364,6 +376,7 @@ if (!exists result) {
 
         # Add to history
         history += code;
+        qhistory.add(code);
 
         # Empty input
         if (trim(code) == "") {
@@ -684,13 +697,11 @@ if (!exists result) {
         help += "\nQore expressions and statements are evaluated directly.\n";
         help += sprintf("Multi-line input is supported - the prompt changes to '%s' when more input is needed.\n",
             color.value("    >"));
-%ifndef NoLinenoise
         help += sprintf("\n%s\n", color.key("Keyboard shortcuts (linenoise):"));
         help += helpLine("Up/Down", "Navigate history");
         help += helpLine("Ctrl+R", "Reverse search history");
         help += helpLine("Tab", "Complete commands, keywords, symbols, and members");
         help += helpLine("Ctrl+C", "Cancel current input / exit");
-%endif
         return help;
     }
 
@@ -1549,14 +1560,15 @@ if (!exists result) {
 
     #! Formats command history for display
     private string formatHistory() {
-        if (!history) {
+        list<hash<QoreHistory::HistoryEntry>> items = qhistory.getItems();
+        if (!items) {
             return "No command history";
         }
         string result = sprintf("%s\n", color.key("Command history:"));
         int i = 1;
-        foreach string cmd in (history) {
+        foreach hash<QoreHistory::HistoryEntry> item in (items) {
             # Truncate long commands and show first line only
-            string display = cmd;
+            string display = item.text;
             int nl = display.find("\n");
             if (nl >= 0) {
                 display = display.substr(0, nl) + "...";
@@ -1564,7 +1576,9 @@ if (!exists result) {
             if (display.length() > 60) {
                 display = display.substr(0, 57) + "...";
             }
-            result += sprintf("  %s  %s\n", color.number(sprintf("%3d", i++)), display);
+            string ts = format_date("YYYY-MM-DD HH:mm:SS", item.timestamp);
+            result += sprintf("  %s  %s  %s\n", color.number(sprintf("%3d", i++)),
+                color.info(ts), display);
         }
         return result;
     }
@@ -1617,14 +1631,15 @@ if (!exists result) {
                 "Type", color.value("/help"), "for commands,", color.value("/quit"), "to exit"));
         }
 
-%ifndef NoLinenoise
+        # Load persistent history
+        loadHistoryFile();
+
         # Initialize linenoise
-        Linenoise::history_set_max_len(MaxHistoryLen);
         Linenoise::set_callback(\completion());
         Linenoise::set_hints_callback(\hintsForInput());
         Linenoise::set_auto_dedent(QoreCodeFormat::SourceEmitter::INDENT_STR, "}");
-        loadHistoryFile();
-%endif
+        # Delegate history navigation to QoreHistory (single source of truth)
+        Linenoise::set_history_provider(new QoreHistory::QoreHistoryProvider(qhistory));
 
         # Main REPL loop
         while (True) {
@@ -1641,13 +1656,6 @@ if (!exists result) {
                 # Exit the REPL
                 break;
             }
-
-            # Add non-empty lines to linenoise history
-%ifndef NoLinenoise
-            if (line.length() > 0) {
-                Linenoise::history_add(line);
-            }
-%endif
 
             # Evaluate the input
             *hash<auto> result = eval(line);
@@ -1679,9 +1687,8 @@ if (!exists result) {
             }
         }
 
-%ifndef NoLinenoise
+        # Save persistent history
         saveHistoryFile();
-%endif
     }
 
     #! Reads a line of input from the user
@@ -1689,55 +1696,31 @@ if (!exists result) {
         @return The line read, or NOTHING on EOF/Ctrl+C
     */
     private *string readLine(string prompt) {
-%ifndef NoLinenoise
         if (pending_indent_level > 0) {
             Linenoise::preload_buffer(strmul(QoreCodeFormat::SourceEmitter::INDENT_STR,
                 pending_indent_level));
         }
         return Linenoise::line(prompt);
-%else
-        if (pending_indent_level > 0) {
-            string indent = strmul(QoreCodeFormat::SourceEmitter::INDENT_STR, pending_indent_level);
-            stdout.printf(prompt + indent);
-            stdout.sync();
-            *string line = stdin.readLine(False);
-            if (exists line) {
-                return indent + line;
-            }
-            return line;
-        }
-        stdout.printf(prompt);
-        stdout.sync();
-        return stdin.readLine(False);
-%endif
     }
 
     #! Prints output to stdout with CRLF handling for linenoise
     /** @param text The text to print
     */
     private printOutput(string text) {
-%ifndef NoLinenoise
         # Linenoise requires CRLF for proper line handling in raw mode
         # First normalize any existing \r\n to \n to avoid \r\r\n
         text = replace(text, "\r\n", "\n");
         stdout.print(replace(text, "\n", "\r\n"));
-%else
-        stdout.print(text);
-%endif
     }
 
     #! Prints error output to stderr with CRLF handling for linenoise
     /** @param text The text to print
     */
     private printError(string text) {
-%ifndef NoLinenoise
         # Linenoise requires CRLF for proper line handling in raw mode
         # First normalize any existing \r\n to \n to avoid \r\r\n
         text = replace(text, "\r\n", "\n");
         stderr.print(replace(text, "\n", "\r\n"));
-%else
-        stderr.print(text);
-%endif
     }
 
     #! Linenoise tab completion callback
@@ -2157,38 +2140,35 @@ if (!exists result) {
     }
 
     #! Loads history from the history file
+    /** QoreHistory owns persistence and file format. When linenoise is
+        available, a history provider is registered so linenoise delegates
+        Up/Down/Ctrl+R navigation directly to QoreHistory.
+    */
     private loadHistoryFile() {
-%ifndef NoLinenoise
         if (!history_file) {
             return;
         }
         try {
-            # Create the history file if it doesn't exist
-            if (!is_file(history_file)) {
-                File f();
-                f.open2(history_file, O_CREAT | O_WRONLY, 0600);
-            }
-            Linenoise::history_load(history_file);
+            # Load history via QoreHistory (owns persistence and file format)
+            qhistory.load(history_file);
         } catch (hash<ExceptionInfo> ex) {
             # Warn but don't fail - history is optional
             printError(sprintf("Warning: Could not load history file: %s\n", ex.desc));
         }
-%endif
     }
 
     #! Saves history to the history file
     private saveHistoryFile() {
-%ifndef NoLinenoise
         if (!history_file) {
             return;
         }
         try {
-            Linenoise::history_save(history_file);
+            # Save via QoreHistory (new timestamp-delimited format)
+            qhistory.save(history_file);
         } catch (hash<ExceptionInfo> ex) {
             # Warn but don't fail - history is optional
             printError(sprintf("Warning: Could not save history file: %s\n", ex.desc));
         }
-%endif
     }
 
     #! Returns hint text for the current input

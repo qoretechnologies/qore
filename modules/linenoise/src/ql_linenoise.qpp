@@ -1,0 +1,1004 @@
+/*
+    ql_linenoise.qpp
+
+    Qore Programming Language
+
+    Copyright 2012 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "linenoise-module.h"
+
+#include <errno.h>
+#include <memory>
+
+/** @defgroup linenoise_functions Linenoise Functions
+ */
+///@{
+namespace Qore::Linenoise;
+
+//! Main function to obtain line value
+/**
+    The function waits for user input confirmed by Enter.
+
+    @param prompt a custom string with prompt
+    @return User input string or @ref Qore::NOTHING if the user sends ^C (Ctrl+C) interrupt signal
+
+    <b>Features:</b>
+    - accept basic user input: regular characters, cursor keys, TAB, ENTER keys
+    - accept advanced edits: Ctrl+key, @ref key_shortcuts
+    - waits until the ENTER is pressed
+
+    <b>Example:</b>
+    @code{.py}
+while (True) {
+    *string line = line("my prompt> ");
+    printf("echo: %s\n", line);
+}
+    @endcode
+
+    @see @ref basic_usage
+ */
+string line(string prompt) {
+    AutoLocker al(lock);
+
+    char * ret = linenoise(prompt->c_str());
+    if (ret) {
+        QoreStringNode *s = new QoreStringNode(ret);
+        free(ret);
+        return s;
+    } else {
+        return nothing();
+    }
+}
+
+//! Add string to history
+/**
+    It adds new item to history. The history queue is shifted
+    if it hits the maximum history size.
+
+    @param line a string to be added
+ */
+int history_add(string line) {
+    AutoLocker al(lock);
+
+    return linenoiseHistoryAdd(line->c_str());
+}
+
+//! Set size of the history
+/**
+    @param len a new size
+ */
+int history_set_max_len(int len) {
+    AutoLocker al(lock);
+
+    return linenoiseHistorySetMaxLen(len);
+}
+
+//! get size of the history
+/**
+    @return int with size of history
+ */
+int history_get_max_len() {
+    AutoLocker al(lock);
+
+    return linenoiseHistoryGetMaxLen();
+}
+
+//! Save history to file
+/**
+    Save history queue to plain-text file.
+
+    @param filename a filename with relative or full path
+
+    @throw LINENOISE-HISTORY-SAVE-ERROR
+ */
+nothing history_save(string filename) [dom=FILESYSTEM] {
+    AutoLocker al(lock);
+
+    if (linenoiseHistorySave(filename->c_str())) {
+        xsink->raiseException("LINENOISE-HISTORY-SAVE-ERROR",
+                              "error: %d; description: %s", errno, strerror(errno));
+    }
+}
+
+//! Load history from file
+/**
+    Load history queue from plain-text file.
+
+    @param filename a filename with relative or full path
+
+    @throw LINENOISE-HISTORY-LOAD-ERROR
+ */
+nothing history_load(string filename) [dom=FILESYSTEM] {
+    AutoLocker al(lock);
+
+    if (linenoiseHistoryLoad(filename->c_str())) {
+        xsink->raiseException("LINENOISE-HISTORY-LOAD-ERROR",
+                              "error: %d; description: %s", errno, strerror(errno));
+    }
+}
+
+//! Clear the history
+nothing history_free() {
+    AutoLocker al(lock);
+
+    linenoiseHistoryFree();
+}
+
+//! Get complete history
+/**
+    Get complete history. History structure is limited by @ref Qore::Linenoise::history_set_max_len()
+
+    @return list a list with histroy items. 0 index is the oldest.
+
+    @see @ref history_handling
+ */
+list<auto> history() {
+    ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
+
+    AutoLocker al(lock);
+    int index = 0;
+    while (true) {
+        char* data = linenoiseHistoryLine(index++);
+        if (!data) {
+            break;
+        }
+        ON_BLOCK_EXIT(free, data);
+        ret->push(new QoreStringNode(data, QCS_UTF8), xsink);
+    }
+
+    return ret.release();
+}
+
+//! Get terminal width in characters.
+/**
+    @return int actual width of terminal window in characters (defaults to 80 if detection fails)
+ */
+int columns() {
+    return linenoiseColumns();
+}
+
+//! Get terminal height in rows.
+/**
+    @return int actual height of terminal window in rows (defaults to 24 if detection fails)
+ */
+int rows() {
+    return linenoiseRows();
+}
+
+//! Set auto-completion callback function
+/**
+    @param code a function/method reference or a closure to handle completion callback
+
+    @see @ref line_completion
+
+    @warning Qore language does not support complex types yet so you can register
+             any code with this function. But if the function/code will not accept
+             the string argument the \c RUNTIME-OVERLOAD-ERROR exception will be
+             thrown
+ */
+nothing set_callback(code callback) {
+    AutoLocker al(lock);
+
+    if (callbackNode) {
+        callbackNode->deref(xsink);
+    }
+    callbackNode = callback->refRefSelf();
+}
+
+//! Pre-fill the edit buffer for the next line() call
+/**
+    Sets text that will appear as editable content when @ref Qore::Linenoise::line() is next called.
+    The user can edit or delete this pre-filled text using normal editing keys (backspace, etc.).
+
+    This is useful for auto-indentation in REPL environments: before reading a continuation line,
+    call this function with the appropriate whitespace to pre-fill the indent.
+
+    @param text The text to pre-fill in the edit buffer
+
+    @note The preloaded text is consumed by the next @ref Qore::Linenoise::line() call and does not
+    persist beyond that single call.
+
+    <b>Example:</b>
+    @code{.py}
+# Pre-fill 8 spaces of indentation
+Linenoise::preload_buffer("        ");
+*string line = Linenoise::line("...> ");
+# The user sees "...>         " with cursor after the spaces
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing preload_buffer(string text) {
+    AutoLocker al(lock);
+
+    linenoisePreloadBuffer(text->c_str());
+}
+
+//! Configure auto-dedent behavior for closing characters
+/**
+    When the dedent character is typed and the edit buffer contains only
+    whitespace (i.e., only auto-indentation), one indent level is removed
+    before the character is inserted. This provides a seamless coding
+    experience for block-structured languages.
+
+    @param indent_str The indentation string (e.g., "    " for 4 spaces)
+    @param dedent_char The character that triggers dedent (e.g., "}")
+
+    @par Example
+    @code{.py}
+# Configure auto-dedent for Qore's brace-based blocks
+Linenoise::set_auto_dedent("    ", "}");
+# Now when user types "}" on an indented line, one level is removed automatically
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_auto_dedent(string indent_str, string dedent_char) {
+    AutoLocker al(lock);
+
+    char32_t dc = 0;
+    if (dedent_char->strlen() > 0) {
+        dc = static_cast<char32_t>(dedent_char->getUnicodePointFromUTF8(0));
+    }
+    linenoiseSetAutoDedent(indent_str->c_str(), dc);
+}
+
+//! Set hints callback function for inline argument display
+/**
+    @param callback a function/method reference or a closure to handle hints callback,
+    or @ref nothing "NOTHING" to clear.
+    The callback receives a string (the current input line) and should return one of:
+    - a string: displayed as a dim grey hint after the cursor
+    - a hash with keys: \c text (string), \c color (int ANSI color code), \c bold (bool)
+    - @ref nothing "NOTHING": no hint displayed
+
+    @par Example
+    @code{.py}
+Linenoise::set_hints_callback(sub (string input) {
+    if (input == "printf(") {
+        return " string fmt, ...";
+    }
+});
+# Clear the hints callback
+Linenoise::set_hints_callback();
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_hints_callback(*code callback) {
+    AutoLocker al(lock);
+
+    if (hintsCallbackNode) {
+        hintsCallbackNode->deref(xsink);
+    }
+    if (callback) {
+        hintsCallbackNode = callback->refRefSelf();
+    } else {
+        hintsCallbackNode = nullptr;
+    }
+}
+
+//! Enable or disable mask (password) mode
+/**
+    When mask mode is enabled, all characters in the edit buffer are displayed
+    as @c * asterisks instead of their actual values. This is useful for password
+    input or other sensitive data entry.
+
+    When mask mode is active:
+    - All characters are displayed as @c *
+    - Brace/bracket matching highlighting is disabled
+    - Hints callback display is suppressed
+    - The actual characters are still stored in the edit buffer and returned normally
+
+    @param enable \c True to enable mask mode, \c False to disable
+
+    @par Example
+    @code{.py}
+Linenoise::set_mask_mode(True);
+*string password = Linenoise::line("Password: ");
+Linenoise::set_mask_mode(False);
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_mask_mode(bool enable) {
+    AutoLocker al(lock);
+
+    if (enable) {
+        linenoiseMaskModeEnable();
+    } else {
+        linenoiseMaskModeDisable();
+    }
+}
+
+//! Enable or disable menu-complete mode
+/**
+    When menu-complete is enabled and multiple completions exist with no further
+    common prefix, pressing Tab cycles through the completions one at a time
+    instead of showing a list. Each subsequent Tab replaces the current word with
+    the next completion. Pressing any other key accepts the current completion and
+    processes that key normally.
+
+    @param enable \c True to enable menu-complete, \c False for standard completion behavior
+
+    @par Example
+    @code{.py}
+Linenoise::set_menu_complete(True);
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_menu_complete(bool enable) {
+    AutoLocker al(lock);
+
+    linenoiseSetMenuComplete(enable ? 1 : 0);
+}
+
+//! Enable or disable case-insensitive completion matching
+/**
+    When enabled, completion prefix matching ignores case differences. The
+    displayed completions retain their original casing.
+
+    @param enable \c True to enable case-insensitive matching, \c False for case-sensitive
+
+    @par Example
+    @code{.py}
+Linenoise::set_completion_case_insensitive(True);
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_completion_case_insensitive(bool enable) {
+    AutoLocker al(lock);
+
+    linenoiseSetCompletionCaseInsensitive(enable ? 1 : 0);
+}
+
+//! Enable or disable built-in filename completion
+/**
+    When enabled and no user completion callback is registered (via
+    @ref Qore::Linenoise::set_callback()), pressing Tab will complete filenames
+    from the current directory. Directories are completed with a trailing @c /
+    separator.
+
+    @param enable \c True to enable filename completion, \c False to disable
+
+    @par Example
+    @code{.py}
+Linenoise::set_filename_completion(True);
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_filename_completion(bool enable) [dom=FILESYSTEM] {
+    AutoLocker al(lock);
+
+    linenoiseSetFilenameCompletion(enable ? 1 : 0);
+}
+
+//! Read a line of input with a timeout
+/**
+    Like @ref Qore::Linenoise::line() but with a configurable timeout. If no input
+    is received within the specified time, a \c LINENOISE-TIMEOUT-ERROR exception
+    is thrown.
+
+    @param prompt a custom string with prompt
+    @param timeout_ms timeout in milliseconds; must be > 0
+
+    @return User input string or @ref nothing "NOTHING" if the user sends ^C (Ctrl+C)
+
+    @throw LINENOISE-TIMEOUT-ERROR thrown when the timeout expires before input is received
+
+    @par Example
+    @code{.py}
+try {
+    *string line = Linenoise::line_with_timeout("prompt> ", 30000);  # 30 second timeout
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "LINENOISE-TIMEOUT-ERROR") {
+        printf("Input timed out\n");
+    }
+}
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+*string line_with_timeout(string prompt, int timeout_ms) {
+    if (timeout_ms <= 0) {
+        xsink->raiseException("LINENOISE-TIMEOUT-ERROR",
+                              "timeout_ms must be > 0; got %d", (int)timeout_ms);
+        return QoreValue();
+    }
+
+    AutoLocker al(lock);
+
+    linenoiseSetReadTimeout(timeout_ms);
+    char* ret = linenoise(prompt->c_str());
+    int kt = linenoiseKeyType();
+    linenoiseSetReadTimeout(0);  // always reset timeout
+
+    static const int LINENOISE_KEY_TYPE_TIMEOUT = 3;
+    if (kt == LINENOISE_KEY_TYPE_TIMEOUT) {
+        if (ret) {
+            free(ret);
+        }
+        xsink->raiseException("LINENOISE-TIMEOUT-ERROR",
+                              "read timeout of %d ms expired", (int)timeout_ms);
+        return QoreValue();
+    }
+
+    if (ret) {
+        QoreStringNode* s = new QoreStringNode(ret);
+        free(ret);
+        return s;
+    } else {
+        return nothing();
+    }
+}
+
+//! Set syntax highlighting callback
+/**
+    The callback receives the current input line as a string and should return
+    a string containing ANSI escape codes for colorization. The returned string
+    must contain the same visible characters as the input, but may include ANSI
+    SGR sequences (e.g., @c "\\x1b[31m" for red) around tokens.
+
+    When a syntax callback is set:
+    - The callback is called on every screen refresh
+    - Brace/bracket highlighting overlays the syntax colors for the matched character
+    - Syntax highlighting is disabled in mask mode and during incremental search
+
+    Pass @ref nothing "NOTHING" to clear the callback.
+
+    @param callback a function/method reference or closure that receives a string and returns
+    a colorized string, or @ref nothing "NOTHING" to clear
+
+    @par Example
+    @code{.py}
+Linenoise::set_syntax_callback(sub (string input) {
+    # Simple keyword highlighting example
+    string output = regex_subst(input, "\\b(if|else|while|for)\\b", "\x1b[1;33m$1\x1b[0m", RE_Global);
+    return output;
+});
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_syntax_callback(*code callback) {
+    AutoLocker al(lock);
+
+    if (syntaxCallbackNode) {
+        syntaxCallbackNode->deref(xsink);
+    }
+    if (callback) {
+        syntaxCallbackNode = callback->refRefSelf();
+    } else {
+        syntaxCallbackNode = nullptr;
+    }
+}
+
+//! Set or clear the right-side prompt
+/**
+    Sets a prompt string that is displayed at the right edge of the terminal,
+    rendered in dim text. The right prompt is only displayed when the input
+    fits on a single line and there is sufficient space between the input
+    and the right edge.
+
+    Pass @ref nothing "NOTHING" or an empty string to clear the right prompt.
+
+    @param prompt the right prompt string, or @ref nothing "NOTHING" to clear
+
+    @par Example
+    @code{.py}
+Linenoise::set_right_prompt("[ins]");
+# Now the right side of the terminal shows "[ins]" in dim text
+Linenoise::set_right_prompt();  # clear the right prompt
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_right_prompt(*string prompt) {
+    AutoLocker al(lock);
+
+    if (prompt && prompt->strlen() > 0) {
+        linenoiseSetRightPrompt(prompt->c_str());
+    } else {
+        linenoiseSetRightPrompt(nullptr);
+    }
+}
+
+//! Bind a custom callback to a key combination
+/**
+    Registers a Qore callback to be invoked when the specified key combination
+    is pressed during @ref Qore::Linenoise::line() editing. User bindings take
+    priority over built-in key handlers.
+
+    The key specification is a case-insensitive string describing the key combo:
+    - Single character: @c "a", @c "x", @c "space"
+    - With modifiers: @c "ctrl-a", @c "meta-d", @c "ctrl-left", @c "meta-shift-d"
+    - Modifier aliases: @c alt is the same as @c meta
+    - Special keys: @c left, @c right, @c up, @c down, @c home, @c end,
+      @c delete, @c pageup, @c pagedown, @c insert, @c backspace, @c tab,
+      @c return
+
+    The callback receives a hash with keys:
+    - @c line (string): the current edit buffer contents
+    - @c pos (int): the cursor position in characters
+
+    The callback should return one of:
+    - a hash with @c line (string) and/or @c pos (int) keys to update the buffer
+    - @ref nothing "NOTHING" to leave the buffer unchanged
+
+    @param key_spec a key specification string
+    @param callback the callback code to invoke
+
+    @throw LINENOISE-KEY-SPEC-ERROR invalid key specification string
+
+    @par Example
+    @code{.py}
+# Bind ctrl-x to clear the line
+Linenoise::bind_key("ctrl-x", hash<auto> sub (hash<auto> info) {
+    return {"line": "", "pos": 0};
+});
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing bind_key(string key_spec, code callback) {
+    AutoLocker al(lock);
+
+    int keyCode = parseKeySpec(key_spec->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Store a reference to the Qore callback
+    ResolvedCallReferenceNode* cbRef = callback->refRefSelf();
+
+    // If there's an existing binding for this key, deref the old callback
+    auto it = keyBindingCallbacks.find(keyCode);
+    if (it != keyBindingCallbacks.end()) {
+        if (it->second) {
+            it->second->deref(xsink);
+        }
+        it->second = cbRef;
+    } else {
+        keyBindingCallbacks[keyCode] = cbRef;
+    }
+
+    // Register with linenoise, passing the callback pointer as userData
+    linenoiseBindKey(keyCode, static_cast<void*>(cbRef));
+}
+
+//! Remove a custom key binding
+/**
+    Removes a previously registered custom key binding, restoring the default
+    behavior for that key combination.
+
+    @param key_spec a key specification string (same format as @ref Qore::Linenoise::bind_key())
+
+    @throw LINENOISE-KEY-SPEC-ERROR invalid key specification string
+
+    @par Example
+    @code{.py}
+Linenoise::unbind_key("ctrl-x");
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing unbind_key(string key_spec) {
+    AutoLocker al(lock);
+
+    int keyCode = parseKeySpec(key_spec->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Remove from linenoise
+    linenoiseUnbindKey(keyCode);
+
+    // Deref and remove the stored callback
+    auto it = keyBindingCallbacks.find(keyCode);
+    if (it != keyBindingCallbacks.end()) {
+        if (it->second) {
+            it->second->deref(xsink);
+        }
+        keyBindingCallbacks.erase(it);
+    }
+}
+
+//! Set or clear a history provider for external history management
+/**
+    Registers an @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider"
+    subclass instance that controls Up/Down arrow history navigation and optionally
+    Ctrl+R/S incremental search. When a history provider is set, the internal history
+    array is not used for navigation; instead, the provider methods are invoked.
+
+    Pass @ref nothing "NOTHING" to clear the provider and revert to internal history
+    management.
+
+    @param provider an @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider"
+    subclass instance, or @ref nothing "NOTHING" to clear the provider
+
+    @par Example
+    @code{.py}
+class MyHistoryProvider inherits Linenoise::AbstractHistoryProvider {
+    private {
+        list<string> entries;
+        int pos;
+    }
+
+    constructor(list<string> e) {
+        entries = e;
+        pos = entries.size();
+    }
+
+    *string prev(string prefix) {
+        if (pos > 0) {
+            return entries[--pos];
+        }
+    }
+
+    *string next(string prefix) {
+        if (pos < entries.size() - 1) {
+            return entries[++pos];
+        }
+    }
+
+    nothing reset() {
+        pos = entries.size();
+    }
+}
+
+auto provider = new MyHistoryProvider(("line1", "line2", "line3"));
+Linenoise::set_history_provider(provider);
+# Clear the provider
+Linenoise::set_history_provider();
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+nothing set_history_provider(*AbstractHistoryProvider[HistoryProviderPriv] provider) {
+    // Check for error from private data extraction (e.g., object already deleted)
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Use ReferenceHolder to ensure exception-safe ownership of the new provider
+    // reference (from getReferencedPrivateData); release() transfers ownership
+    ReferenceHolder<HistoryProviderPriv> holder(provider, xsink);
+
+    AutoLocker al(lock);
+
+    // Clear C callbacks before derefing old provider to avoid dangling state
+    linenoiseSetHistoryProvider(NULL, NULL, NULL, NULL, NULL);
+
+    // Deref existing provider
+    if (historyProviderPriv) {
+        historyProviderPriv->deref(xsink);
+        historyProviderPriv = nullptr;
+    }
+    if (historyProviderObj) {
+        historyProviderObj->deref(xsink);
+        historyProviderObj = nullptr;
+    }
+
+    if (provider) {
+        // obj_provider is the const QoreObject* (generated by qpp macro)
+        historyProviderObj = const_cast<QoreObject*>(obj_provider);
+        historyProviderObj->ref();
+        historyProviderPriv = holder.release();
+
+        linenoiseSetHistoryProvider(
+            qore_history_provider_prev_cb,
+            qore_history_provider_next_cb,
+            qore_history_provider_reset_cb,
+            historyProviderPriv->hasSearchOverride()
+                ? qore_history_provider_search_cb : NULL,
+            NULL
+        );
+    }
+}
+
+//! Start an async line editing session
+/**
+    Creates a new non-blocking line editing session. The caller feeds
+    individual bytes via @ref Qore::Linenoise::edit_feed() and retrieves
+    the result via @ref Qore::Linenoise::edit_get_line(). This enables
+    event-loop integration (e.g., with ncurses or select/poll).
+
+    @param prompt a custom string with prompt
+
+    @return an integer session ID for use with other edit_* functions
+
+    @par Example
+    @code{.py}
+int sid = Linenoise::edit_start("prompt> ");
+Linenoise::edit_set_silent(sid, True);
+# ... feed bytes from event loop ...
+Linenoise::edit_stop(sid);
+    @endcode
+
+    @since linenoise 1.2.0
+ */
+int edit_start(string prompt) {
+    AutoLocker al(lock);
+
+    linenoiseState* state = linenoiseEditStart(prompt->c_str());
+    if (!state) {
+        xsink->raiseException("LINENOISE-EDIT-ERROR", "failed to create editing session");
+        return 0;
+    }
+    int64_t sid = nextSessionId++;
+    activeSessions[sid] = state;
+    return sid;
+}
+
+//! Feed a byte to an async editing session
+/**
+    Feeds a single byte to the editing session for processing. The byte
+    is handled as part of the UTF-8 and escape sequence state machine.
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+    @param byte_val the byte value to feed (0-255)
+
+    @return an integer result code:
+    - @c 0 (LN_FEED_MORE): need more input
+    - @c 1 (LN_FEED_DONE): line accepted (Enter pressed)
+    - @c -1 (LN_FEED_ABORT): aborted (Ctrl+C)
+    - @c -2 (LN_FEED_EXIT): exit (Ctrl+D on empty line)
+
+    @par Example
+    @code{.py}
+int rv = Linenoise::edit_feed(sid, byte_val);
+if (rv == 1) {
+    *string line = Linenoise::edit_get_line(sid);
+    printf("Got: %s\n", line);
+} else if (rv == -1) {
+    printf("Ctrl+C\n");
+} else if (rv == -2) {
+    printf("Ctrl+D\n");
+}
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+int edit_feed(int session, int byte_val) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return -1;
+    }
+    return linenoiseEditFeed(it->second, static_cast<char>(byte_val & 0xFF));
+}
+
+//! Get the completed line from an async editing session
+/**
+    After @ref Qore::Linenoise::edit_feed() returns @c 1 (LN_FEED_DONE),
+    call this function to retrieve the completed line.
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+
+    @return the completed line string, or @ref nothing "NOTHING" if the line
+    is not ready or the session was aborted
+
+    @par Example
+    @code{.py}
+if (Linenoise::edit_feed(sid, byte_val) == 1) {
+    *string line = Linenoise::edit_get_line(sid);
+    if (exists line) {
+        Linenoise::history_add(line);
+    }
+}
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+*string edit_get_line(int session) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return QoreValue();
+    }
+    char* line = linenoiseEditGetLine(it->second);
+    if (line) {
+        QoreStringNode* s = new QoreStringNode(line);
+        free(line);
+        return s;
+    }
+    return nothing();
+}
+
+//! Stop an async editing session and clean up resources
+/**
+    Stops the editing session, restores terminal state, and frees
+    all resources associated with the session. The session ID becomes
+    invalid after this call.
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+nothing edit_stop(int session) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return QoreValue();
+    }
+    linenoiseEditStop(it->second);
+    activeSessions.erase(it);
+}
+
+//! Get the file descriptor for the editing session's input
+/**
+    Returns the file descriptor that should be monitored for readability
+    in a select/poll loop. When data is available on this descriptor,
+    read one byte and pass it to @ref Qore::Linenoise::edit_feed().
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+
+    @return the input file descriptor (typically stdin)
+
+    @par Example
+    @code{.py}
+int sid = Linenoise::edit_start("prompt> ");
+int fd = Linenoise::edit_fd(sid);
+# Use fd with select() or poll() to wait for input
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+int edit_fd(int session) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return -1;
+    }
+    return linenoiseEditFd(it->second);
+}
+
+//! Get the current editing buffer contents and cursor position
+/**
+    Returns the current state of the editing buffer for external rendering.
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+
+    @return a hash with keys:
+    - \c text (string): the current buffer contents
+    - \c cursor (int): the cursor position in characters
+    - \c len (int): the buffer length in characters
+
+    @par Example
+    @code{.py}
+hash<auto> buf = Linenoise::edit_get_buffer(sid);
+# Render: buf.text with cursor at position buf.cursor
+printf("buffer: '%s' cursor=%d len=%d\n", buf.text, buf.cursor, buf.len);
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+hash<auto> edit_get_buffer(int session) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return QoreValue();
+    }
+    int cursor_pos = 0;
+    int buf_len = 0;
+    const char* text = linenoiseEditGetBuffer(it->second, &cursor_pos, &buf_len);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("text", new QoreStringNode(text ? text : "", QCS_UTF8), xsink);
+    h->setKeyValue("cursor", cursor_pos, xsink);
+    h->setKeyValue("len", buf_len, xsink);
+    return h.release();
+}
+
+//! Enable or disable silent mode for an async editing session
+/**
+    When silent mode is enabled, the editing session does not write any
+    output to the terminal. This is useful when the caller handles all
+    rendering externally (e.g., via ncurses).
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+    @param silent \c True to enable silent mode, \c False to disable
+
+    @par Example
+    @code{.py}
+int sid = Linenoise::edit_start("prompt> ");
+# Enable silent mode for external rendering (e.g., ncurses)
+Linenoise::edit_set_silent(sid, True);
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+nothing edit_set_silent(int session, bool silent) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return QoreValue();
+    }
+    linenoiseEditSetSilent(it->second, silent ? 1 : 0);
+}
+
+//! Get the key type from the last resolved async editing session result
+/**
+    Returns the type of key that caused the session to resolve. This is
+    analogous to @ref Qore::Linenoise::key_type() for the blocking API.
+
+    @param session the session ID returned by @ref Qore::Linenoise::edit_start()
+
+    @return an integer key type code:
+    - @c 0: normal (Enter)
+    - @c 1: Ctrl+C (abort)
+    - @c 2: Ctrl+D (exit)
+
+    @par Example
+    @code{.py}
+int rv = Linenoise::edit_feed(sid, byte_val);
+if (rv != 0) {
+    int kt = Linenoise::edit_key_type(sid);
+    if (kt == 1) {
+        printf("User pressed Ctrl+C\n");
+    }
+}
+    @endcode
+
+    @throw LINENOISE-SESSION-ERROR invalid session ID
+
+    @since linenoise 1.2.0
+ */
+int edit_key_type(int session) {
+    AutoLocker al(lock);
+
+    auto it = activeSessions.find(session);
+    if (it == activeSessions.end()) {
+        xsink->raiseException("LINENOISE-SESSION-ERROR",
+                              "invalid session ID: %d", session);
+        return 0;
+    }
+    return linenoiseEditKeyType(it->second);
+}
+///@}

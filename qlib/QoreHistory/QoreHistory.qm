@@ -1,0 +1,141 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreHistory.qm Shared history management module for Qore tools
+
+/*  QoreHistory.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires linenoise
+
+module QoreHistory {
+    version = "1.0";
+    desc = "Shared history management module for Qore tools";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qoretechnologies.com";
+    license = "MIT";
+}
+
+/** @mainpage QoreHistory Module
+
+    @section qorehistoryintro Introduction to the QoreHistory Module
+
+    The %QoreHistory module provides a shared history management class for Qore
+    tools such as @ref QoreRepl, @ref qdp, and ncurses-based REPL UIs.
+
+    Features:
+    - Timestamped history entries
+    - Multiline entry support
+    - Configurable deduplication (none, consecutive, full)
+    - Prefix-filtered navigation (prev/next)
+    - Pattern-based search (prefix, substring, regex)
+    - History expansion (!!, !n, !-n, !prefix, !$)
+    - Backward-compatible file loading (legacy one-line-per-entry format)
+    - New timestamp-delimited persistence format
+
+    @section qorehistoryusage Usage
+
+    @code{.py}
+%requires QoreHistory
+
+QoreHistory::History h({"max_length": 1000});
+h.load("~/.my-history");
+h.add("print('hello')");
+h.add("int x = 1");
+*string prev = h.prev();
+h.save("~/.my-history");
+    @endcode
+
+    @section qorehistorylinenoise Usage with Linenoise
+
+    When used alongside the Linenoise module for interactive line editing,
+    %QoreHistory is the single source of truth for history. Linenoise delegates
+    all history navigation (Up/Down, Ctrl+R/Ctrl+S) to %QoreHistory via the
+    built-in @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider" adapter
+    class that implements @ref Linenoise::AbstractHistoryProvider "AbstractHistoryProvider".
+
+    The integration pattern is:
+
+    -# %QoreHistory loads and saves history files — never use
+       @code Linenoise::history_load() @endcode or
+       @code Linenoise::history_save() @endcode
+    -# Register a @ref QoreHistory::QoreHistoryProvider "QoreHistoryProvider"
+       instance via @ref Linenoise::set_history_provider() "set_history_provider()"
+       — no @code Linenoise::history_add() @endcode calls needed
+    -# When the user enters a line, only call @ref History::add() "add()" —
+       Linenoise gets the entry via the provider on the next navigation
+    -# Use %QoreHistory for the @c /history command, history expansion
+       (@c !!, @c !n, etc.), timestamps, search, and all data-oriented features
+
+    @par Example: Linenoise Integration
+    @code{.py}
+%requires QoreHistory
+
+QoreHistory::History hist({"max_length": 500});
+hist.load(history_path);
+
+# Register QoreHistory as the history provider — single source of truth
+Linenoise::set_history_provider(new QoreHistory::QoreHistoryProvider(hist));
+
+# Main loop — only add to QoreHistory
+while (True) {
+    *string line = Linenoise::line("prompt> ");
+    if (!exists line) {
+        break;
+    }
+    hist.add(line);
+    # ... process line ...
+}
+
+hist.save(history_path);
+    @endcode
+
+    @section qorehistoryrelnotes Release Notes
+
+    @subsection qorehistory_1_0 QoreHistory 1.0
+    - Initial release with full history management, persistence, navigation,
+      search, expansion, and deduplication support
+*/
+
+#! Main namespace for the QoreHistory module
+public namespace QoreHistory {
+    #! Data structure for a single history entry
+    public hashdecl HistoryEntry {
+        #! The text content of the history entry
+        string text;
+        #! The timestamp when the entry was added
+        date timestamp;
+    }
+
+    #! No deduplication - all entries are kept
+    public const DEDUP_NONE = 0;
+    #! Skip entry if identical to the previous entry
+    public const DEDUP_CONSECUTIVE = 1;
+    #! Remove all prior duplicates when adding a new entry
+    public const DEDUP_FULL = 2;
+
+    #! Search for entries starting with the given pattern
+    public const MATCH_PREFIX = 0;
+    #! Search for entries containing the given pattern
+    public const MATCH_SUBSTRING = 1;
+    #! Search for entries matching the given regex pattern
+    public const MATCH_REGEX = 2;
+}

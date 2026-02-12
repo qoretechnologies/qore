@@ -8,7 +8,7 @@ qoredatadir = $(datarootdir)/qore
 
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = lib modules/astparser modules/reflection modules/logger_bin
+SUBDIRS = lib modules/astparser modules/reflection modules/logger_bin modules/linenoise
 if COND_MONGODB
 SUBDIRS += modules/mongodb
 endif
@@ -159,6 +159,7 @@ DOX_SPLIT_MODULES = \
     qlib/DpqlWebSocket \
     qlib/QoreCodeCompletion \
     qlib/QoreCodeFormat \
+    qlib/QoreHistory \
     qlib/QLS \
     qlib/QoreRepl
 
@@ -202,6 +203,7 @@ RedisDataProvider_modverdir = $(modverdir)/RedisDataProvider
 ProviderIndexUtil_modverdir = $(modverdir)/ProviderIndexUtil
 QoreCodeCompletion_modverdir = $(modverdir)/QoreCodeCompletion
 QoreCodeFormat_modverdir = $(modverdir)/QoreCodeFormat
+QoreHistory_modverdir = $(modverdir)/QoreHistory
 QLS_modverdir = $(modverdir)/QLS
 QoreRepl_modverdir = $(modverdir)/QoreRepl
 DpqlWebSocket_modverdir = $(modverdir)/DpqlWebSocket
@@ -278,6 +280,7 @@ dist_ZohoInvoiceDataProvider_modver_DATA = $(wildcard qlib/ZohoInvoiceDataProvid
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
 dist_QoreCodeCompletion_modver_DATA = $(wildcard qlib/QoreCodeCompletion/*.q[cm])
 dist_QoreCodeFormat_modver_DATA = $(wildcard qlib/QoreCodeFormat/*.q[cm])
+dist_QoreHistory_modver_DATA = $(wildcard qlib/QoreHistory/*.q[cm])
 dist_QLS_modver_DATA = $(wildcard qlib/QLS/*.q[cm])
 
 USER_MODULES = $(DOX_SRC_MODULES) \
