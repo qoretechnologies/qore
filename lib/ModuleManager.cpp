@@ -1883,10 +1883,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     try {
         assert(q_gettid());
-        // Run init unlocked to allow loading additional dependencies
-        // (e.g., for AOT modules that need to load dependencies during parsing)
-        ModuleLoadMapHelper mlmh(name);
-
+        // The ModuleLoadMapHelper at line 1811 already handles unlocking for
+        // init — no need for a second one here.
         assert(mod_info.init);
         printd(5, "QoreModuleManager::loadBinaryModuleFromDesc(%s) %s: calling module_init@%p\n", path,
             name, mod_info.init);
