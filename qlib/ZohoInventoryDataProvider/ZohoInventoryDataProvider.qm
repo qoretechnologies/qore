@@ -1,0 +1,2637 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ZohoInventoryDataProvider module definition
+
+/*  ZohoInventoryDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ZohoInventoryRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module ZohoInventoryDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Zoho Inventory";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ZohoInventoryDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ZohoInventoryDataProvider::AppName,
+            "display_name": "Zoho Inventory",
+            "short_desc": "Zoho Inventory management software",
+            "desc": "Zoho Inventory is an online inventory management software that helps "
+                "businesses manage orders, warehousing, and shipping.\n\n"
+                "This integration supports contacts, items, item groups, item adjustments, "
+                "packages, purchase orders, sales orders, and shipment orders.",
+            "scheme": "zohoinventory",
+            "logo": ZohoInventoryLogo,
+            "logo_file_name": "zohoinventory-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Search Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "Search Contacts",
+            "short_desc": "Search and list contacts",
+            "desc": "Search and retrieve a list of contacts from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Filter by contact name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Filter by phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by contact status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Filter by contact type (customer or vendor)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-contact",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Name of the contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Company name for the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "contact_type": <ActionOptionInfo>{
+                    "display_name": "Contact Type",
+                    "short_desc": "Type of contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "customer or vendor",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "currency_id": <ActionOptionInfo>{
+                    "display_name": "Currency ID",
+                    "short_desc": "Currency for the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Notes about the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-contact",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get contact details",
+            "desc": "Retrieve details of a specific contact from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The contact to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-contact",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The contact to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "contact_name": <ActionOptionInfo>{
+                    "display_name": "Contact Name",
+                    "short_desc": "Name of the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company_name": <ActionOptionInfo>{
+                    "display_name": "Company Name",
+                    "short_desc": "Company name for the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Notes about the contact",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-contact",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The contact to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Mark Contact Active/Inactive
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/mark-contact-active",
+            "action": "mark-contact-active",
+            "groups": "Contacts",
+            "display_name": "Mark Contact Active/Inactive",
+            "short_desc": "Mark a contact as active or inactive",
+            "desc": "Mark a contact as active or inactive in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The contact to mark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "active": <ActionOptionInfo>{
+                    "display_name": "Active",
+                    "short_desc": "Active status",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "required": True,
+                    "desc": "True to mark active, False to mark inactive",
+                },
+            },
+        });
+
+        # ========== CONTACT PERSON ACTIONS ==========
+
+        # List Contact Persons
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/contactpersons",
+            "action": "list-contact-persons",
+            "groups": "Contact Persons",
+            "display_name": "List Contact Persons",
+            "short_desc": "List contact persons for a contact",
+            "desc": "Retrieve a list of contact persons for a specific contact in Zoho Inventory",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The parent contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # Create Contact Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-contact-person",
+            "action": "create-contact-person",
+            "groups": "Contact Persons",
+            "display_name": "Create Contact Person",
+            "short_desc": "Create a new contact person",
+            "desc": "Create a new contact person for a contact in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The parent contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "contacts",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "First name of the contact person",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Last name of the contact person",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "designation": <ActionOptionInfo>{
+                    "display_name": "Designation",
+                    "short_desc": "Job title or designation",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Contact Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-contact-person",
+            "action": "get-contact-person",
+            "groups": "Contact Persons",
+            "display_name": "Get Contact Person",
+            "short_desc": "Get contact person details",
+            "desc": "Retrieve details of a specific contact person from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_person_id": <ActionOptionInfo>{
+                    "display_name": "Contact Person",
+                    "short_desc": "The contact person to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # Update Contact Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-contact-person",
+            "action": "update-contact-person",
+            "groups": "Contact Persons",
+            "display_name": "Update Contact Person",
+            "short_desc": "Update an existing contact person",
+            "desc": "Update an existing contact person in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_person_id": <ActionOptionInfo>{
+                    "display_name": "Contact Person",
+                    "short_desc": "The contact person to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "First name of the contact person",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Last name of the contact person",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "designation": <ActionOptionInfo>{
+                    "display_name": "Designation",
+                    "short_desc": "Job title or designation",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Contact Person
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-contact-person",
+            "action": "delete-contact-person",
+            "groups": "Contact Persons",
+            "display_name": "Delete Contact Person",
+            "short_desc": "Delete a contact person",
+            "desc": "Delete a contact person from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_person_id": <ActionOptionInfo>{
+                    "display_name": "Contact Person",
+                    "short_desc": "The contact person to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # Mark Contact Person Primary
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/mark-contact-person-primary",
+            "action": "mark-contact-person-primary",
+            "groups": "Contact Persons",
+            "display_name": "Mark Contact Person Primary",
+            "short_desc": "Mark a contact person as primary",
+            "desc": "Mark a contact person as the primary contact person in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "contact_person_id": <ActionOptionInfo>{
+                    "display_name": "Contact Person",
+                    "short_desc": "The contact person to mark as primary",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== ITEM ACTIONS ==========
+
+        # List Items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/items",
+            "action": "list-items",
+            "groups": "Items",
+            "display_name": "List Items",
+            "short_desc": "List and search items",
+            "desc": "Retrieve a list of items from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by item name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Filter by SKU",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "item_type": <ActionOptionInfo>{
+                    "display_name": "Item Type",
+                    "short_desc": "Filter by item type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-item",
+            "action": "create-item",
+            "groups": "Items",
+            "display_name": "Create Item",
+            "short_desc": "Create a new item",
+            "desc": "Create a new item in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Item name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "rate": <ActionOptionInfo>{
+                    "display_name": "Rate",
+                    "short_desc": "Selling price of the item",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Item description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit": <ActionOptionInfo>{
+                    "display_name": "Unit",
+                    "short_desc": "Unit of measurement",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "item_type": <ActionOptionInfo>{
+                    "display_name": "Item Type",
+                    "short_desc": "Type of item",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "inventory, sales, purchases, sales_and_purchases",
+                },
+                "purchase_rate": <ActionOptionInfo>{
+                    "display_name": "Purchase Rate",
+                    "short_desc": "Cost price of the item",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Sales account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "purchase_account_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Account ID",
+                    "short_desc": "Purchase account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "inventory_account_id": <ActionOptionInfo>{
+                    "display_name": "Inventory Account ID",
+                    "short_desc": "Inventory account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-item",
+            "action": "get-item",
+            "groups": "Items",
+            "display_name": "Get Item",
+            "short_desc": "Get item details",
+            "desc": "Retrieve details of a specific item from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item",
+                    "short_desc": "The item to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+            },
+        });
+
+        # Update Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-item",
+            "action": "update-item",
+            "groups": "Items",
+            "display_name": "Update Item",
+            "short_desc": "Update an existing item",
+            "desc": "Update an existing item in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item",
+                    "short_desc": "The item to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Item name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "rate": <ActionOptionInfo>{
+                    "display_name": "Rate",
+                    "short_desc": "Selling price of the item",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Item description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit": <ActionOptionInfo>{
+                    "display_name": "Unit",
+                    "short_desc": "Unit of measurement",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "purchase_rate": <ActionOptionInfo>{
+                    "display_name": "Purchase Rate",
+                    "short_desc": "Cost price of the item",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+            },
+        });
+
+        # Mark Item Active/Inactive
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/mark-item-active",
+            "action": "mark-item-active",
+            "groups": "Items",
+            "display_name": "Mark Item Active/Inactive",
+            "short_desc": "Mark an item as active or inactive",
+            "desc": "Mark an item as active or inactive in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item",
+                    "short_desc": "The item to mark",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+                "active": <ActionOptionInfo>{
+                    "display_name": "Active",
+                    "short_desc": "Active status",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "required": True,
+                },
+            },
+        });
+
+        # Delete Item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-item",
+            "action": "delete-item",
+            "groups": "Items",
+            "display_name": "Delete Item",
+            "short_desc": "Delete an item",
+            "desc": "Delete an item from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "item_id": <ActionOptionInfo>{
+                    "display_name": "Item",
+                    "short_desc": "The item to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "items",
+                },
+            },
+        });
+
+        # ========== ITEM GROUP ACTIONS ==========
+
+        # List Item Groups
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/itemgroups",
+            "action": "list-item-groups",
+            "groups": "Item Groups",
+            "display_name": "List Item Groups",
+            "short_desc": "List and search item groups",
+            "desc": "Retrieve a list of item groups from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "group_name": <ActionOptionInfo>{
+                    "display_name": "Group Name",
+                    "short_desc": "Filter by group name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Item Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-item-group",
+            "action": "create-item-group",
+            "groups": "Item Groups",
+            "display_name": "Create Item Group",
+            "short_desc": "Create a new item group",
+            "desc": "Create a new item group in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "group_name": <ActionOptionInfo>{
+                    "display_name": "Group Name",
+                    "short_desc": "Name of the item group",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "unit": <ActionOptionInfo>{
+                    "display_name": "Unit",
+                    "short_desc": "Unit of measurement",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Group description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "manufacturer": <ActionOptionInfo>{
+                    "display_name": "Manufacturer",
+                    "short_desc": "Manufacturer name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "brand": <ActionOptionInfo>{
+                    "display_name": "Brand",
+                    "short_desc": "Brand name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "items": <ActionOptionInfo>{
+                    "display_name": "Items",
+                    "short_desc": "Items in the group",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of items in the group with attributes",
+                },
+            },
+        });
+
+        # Get Item Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-item-group",
+            "action": "get-item-group",
+            "groups": "Item Groups",
+            "display_name": "Get Item Group",
+            "short_desc": "Get item group details",
+            "desc": "Retrieve details of a specific item group from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "group_id": <ActionOptionInfo>{
+                    "display_name": "Item Group",
+                    "short_desc": "The item group to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "item_groups",
+                },
+            },
+        });
+
+        # Update Item Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-item-group",
+            "action": "update-item-group",
+            "groups": "Item Groups",
+            "display_name": "Update Item Group",
+            "short_desc": "Update an existing item group",
+            "desc": "Update an existing item group in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "group_id": <ActionOptionInfo>{
+                    "display_name": "Item Group",
+                    "short_desc": "The item group to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "item_groups",
+                },
+                "group_name": <ActionOptionInfo>{
+                    "display_name": "Group Name",
+                    "short_desc": "Name of the item group",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit": <ActionOptionInfo>{
+                    "display_name": "Unit",
+                    "short_desc": "Unit of measurement",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Group description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "manufacturer": <ActionOptionInfo>{
+                    "display_name": "Manufacturer",
+                    "short_desc": "Manufacturer name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "brand": <ActionOptionInfo>{
+                    "display_name": "Brand",
+                    "short_desc": "Brand name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "items": <ActionOptionInfo>{
+                    "display_name": "Items",
+                    "short_desc": "Items in the group",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+            },
+        });
+
+        # Delete Item Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-item-group",
+            "action": "delete-item-group",
+            "groups": "Item Groups",
+            "display_name": "Delete Item Group",
+            "short_desc": "Delete an item group",
+            "desc": "Delete an item group from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "group_id": <ActionOptionInfo>{
+                    "display_name": "Item Group",
+                    "short_desc": "The item group to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "item_groups",
+                },
+            },
+        });
+
+        # ========== ITEM ADJUSTMENT ACTIONS ==========
+
+        # List Item Adjustments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/inventoryadjustments",
+            "action": "list-item-adjustments",
+            "groups": "Item Adjustments",
+            "display_name": "List Item Adjustments",
+            "short_desc": "List inventory adjustments",
+            "desc": "Retrieve a list of inventory adjustments from Zoho Inventory",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # Create Item Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-item-adjustment",
+            "action": "create-item-adjustment",
+            "groups": "Item Adjustments",
+            "display_name": "Create Item Adjustment",
+            "short_desc": "Create a new inventory adjustment",
+            "desc": "Create a new inventory adjustment in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Adjustment date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "reason": <ActionOptionInfo>{
+                    "display_name": "Reason",
+                    "short_desc": "Reason for the adjustment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "adjustment_type": <ActionOptionInfo>{
+                    "display_name": "Adjustment Type",
+                    "short_desc": "Type of adjustment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "quantity or value",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Adjustment line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of line items with item_id, quantity_adjusted, etc.",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Adjustment description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number for the adjustment",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Item Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-item-adjustment",
+            "action": "get-item-adjustment",
+            "groups": "Item Adjustments",
+            "display_name": "Get Item Adjustment",
+            "short_desc": "Get inventory adjustment details",
+            "desc": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "inventory_adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Inventory Adjustment",
+                    "short_desc": "The inventory adjustment to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "inventory_adjustments",
+                },
+            },
+        });
+
+        # Delete Item Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-item-adjustment",
+            "action": "delete-item-adjustment",
+            "groups": "Item Adjustments",
+            "display_name": "Delete Item Adjustment",
+            "short_desc": "Delete an inventory adjustment",
+            "desc": "Delete an inventory adjustment from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "inventory_adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Inventory Adjustment",
+                    "short_desc": "The inventory adjustment to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "inventory_adjustments",
+                },
+            },
+        });
+
+        # ========== PACKAGE ACTIONS ==========
+
+        # List Packages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/packages",
+            "action": "list-packages",
+            "groups": "Packages",
+            "display_name": "List Packages",
+            "short_desc": "List packages",
+            "desc": "Retrieve a list of packages from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "Filter by sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "salesorders",
+                },
+                "package_number": <ActionOptionInfo>{
+                    "display_name": "Package Number",
+                    "short_desc": "Filter by package number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-package",
+            "action": "create-package",
+            "groups": "Packages",
+            "display_name": "Create Package",
+            "short_desc": "Create a new package",
+            "desc": "Create a new package for a sales order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "The sales order for this package",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Package date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Package line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of items with so_line_item_id and quantity",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Package notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "package_number": <ActionOptionInfo>{
+                    "display_name": "Package Number",
+                    "short_desc": "Custom package number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-package",
+            "action": "get-package",
+            "groups": "Packages",
+            "display_name": "Get Package",
+            "short_desc": "Get package details",
+            "desc": "Retrieve details of a specific package from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "package_id": <ActionOptionInfo>{
+                    "display_name": "Package",
+                    "short_desc": "The package to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "packages",
+                },
+            },
+        });
+
+        # Update Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-package",
+            "action": "update-package",
+            "groups": "Packages",
+            "display_name": "Update Package",
+            "short_desc": "Update an existing package",
+            "desc": "Update an existing package in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "package_id": <ActionOptionInfo>{
+                    "display_name": "Package",
+                    "short_desc": "The package to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "packages",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Package date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Package line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Package notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-package",
+            "action": "delete-package",
+            "groups": "Packages",
+            "display_name": "Delete Package",
+            "short_desc": "Delete a package",
+            "desc": "Delete a package from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "package_id": <ActionOptionInfo>{
+                    "display_name": "Package",
+                    "short_desc": "The package to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "packages",
+                },
+            },
+        });
+
+        # ========== PURCHASE ORDER ACTIONS ==========
+
+        # List Purchase Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/purchaseorders",
+            "action": "list-purchase-orders",
+            "groups": "Purchase Orders",
+            "display_name": "List Purchase Orders",
+            "short_desc": "List and search purchase orders",
+            "desc": "Retrieve a list of purchase orders from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Filter by vendor",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by purchase order status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-purchase-order",
+            "action": "create-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Create Purchase Order",
+            "short_desc": "Create a new purchase order",
+            "desc": "Create a new purchase order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "The vendor for this purchase order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "vendors",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Purchase order line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                },
+                "purchaseorder_number": <ActionOptionInfo>{
+                    "display_name": "Purchase Order Number",
+                    "short_desc": "Custom purchase order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Purchase order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_date": <ActionOptionInfo>{
+                    "display_name": "Delivery Date",
+                    "short_desc": "Expected delivery date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Purchase order notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-purchase-order",
+            "action": "get-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Get Purchase Order",
+            "short_desc": "Get purchase order details",
+            "desc": "Retrieve details of a specific purchase order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "purchaseorder_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order",
+                    "short_desc": "The purchase order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "purchaseorders",
+                },
+            },
+        });
+
+        # Update Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-purchase-order",
+            "action": "update-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Update Purchase Order",
+            "short_desc": "Update an existing purchase order",
+            "desc": "Update an existing purchase order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "purchaseorder_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order",
+                    "short_desc": "The purchase order to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "purchaseorders",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "The vendor for this purchase order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Purchase order line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Purchase order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_date": <ActionOptionInfo>{
+                    "display_name": "Delivery Date",
+                    "short_desc": "Expected delivery date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Purchase order notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Purchase Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-purchase-order",
+            "action": "delete-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Delete Purchase Order",
+            "short_desc": "Delete a purchase order",
+            "desc": "Delete a purchase order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "purchaseorder_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order",
+                    "short_desc": "The purchase order to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "purchaseorders",
+                },
+            },
+        });
+
+        # ========== SALES ORDER ACTIONS ==========
+
+        # List Sales Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/salesorders",
+            "action": "list-sales-orders",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Orders",
+            "short_desc": "List and search sales orders",
+            "desc": "Retrieve a list of sales orders from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by sales order status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-sales-order",
+            "action": "create-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Create Sales Order",
+            "short_desc": "Create a new sales order",
+            "desc": "Create a new sales order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for this sales order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Sales order line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                },
+                "salesorder_number": <ActionOptionInfo>{
+                    "display_name": "Sales Order Number",
+                    "short_desc": "Custom sales order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Sales order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipment_date": <ActionOptionInfo>{
+                    "display_name": "Shipment Date",
+                    "short_desc": "Expected shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Sales order notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-sales-order",
+            "action": "get-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order",
+            "short_desc": "Get sales order details",
+            "desc": "Retrieve details of a specific sales order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "The sales order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # Update Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-sales-order",
+            "action": "update-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Update Sales Order",
+            "short_desc": "Update an existing sales order",
+            "desc": "Update an existing sales order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "The sales order to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for this sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Sales order line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Sales order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipment_date": <ActionOptionInfo>{
+                    "display_name": "Shipment Date",
+                    "short_desc": "Expected shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Sales order notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Sales Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-sales-order",
+            "action": "delete-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Delete Sales Order",
+            "short_desc": "Delete a sales order",
+            "desc": "Delete a sales order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "The sales order to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # ========== INVOICE ACTIONS ==========
+
+        # List Invoices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/invoices",
+            "action": "list-invoices",
+            "groups": "Invoices",
+            "display_name": "List Invoices",
+            "short_desc": "List and search invoices",
+            "desc": "Retrieve a list of invoices from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "Filter by invoice ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "invoices",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by invoice status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-invoice",
+            "action": "create-invoice",
+            "groups": "Invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Create a new invoice",
+            "desc": "Create a new invoice in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for this invoice",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of line items with item_id, rate, quantity, etc.",
+                },
+                "invoice_number": <ActionOptionInfo>{
+                    "display_name": "Invoice Number",
+                    "short_desc": "Custom invoice number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Invoice date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount or percentage",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Invoice notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "Associated sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "salesorders",
+                },
+            },
+        });
+
+        # Get Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-invoice",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get Invoice",
+            "short_desc": "Get invoice details",
+            "desc": "Retrieve details of a specific invoice from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # Update Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-invoice",
+            "action": "update-invoice",
+            "groups": "Invoices",
+            "display_name": "Update Invoice",
+            "short_desc": "Update an existing invoice",
+            "desc": "Update an existing invoice in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for this invoice",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Invoice line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Invoice date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "due_date": <ActionOptionInfo>{
+                    "display_name": "Due Date",
+                    "short_desc": "Payment due date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "payment_terms": <ActionOptionInfo>{
+                    "display_name": "Payment Terms",
+                    "short_desc": "Payment terms in days",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount or percentage",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Invoice notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-invoice",
+            "action": "delete-invoice",
+            "groups": "Invoices",
+            "display_name": "Delete Invoice",
+            "short_desc": "Delete an invoice",
+            "desc": "Delete an invoice from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice",
+                    "short_desc": "The invoice to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # ========== SHIPMENT ORDER ACTIONS ==========
+
+        # List Shipment Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/shipmentorders",
+            "action": "list-shipment-orders",
+            "groups": "Shipment Orders",
+            "display_name": "List Shipment Orders",
+            "short_desc": "List and search shipment orders",
+            "desc": "Retrieve a list of shipment orders from Zoho Inventory with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "Filter by sales order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "salesorders",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by shipment status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Create Shipment Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/create-shipment-order",
+            "action": "create-shipment-order",
+            "groups": "Shipment Orders",
+            "display_name": "Create Shipment Order",
+            "short_desc": "Create a new shipment order",
+            "desc": "Create a new shipment order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "shipment_number": <ActionOptionInfo>{
+                    "display_name": "Shipment Number",
+                    "short_desc": "Shipment order number",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Shipment date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "delivery_method": <ActionOptionInfo>{
+                    "display_name": "Delivery Method",
+                    "short_desc": "Method of delivery",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "salesorder_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order",
+                    "short_desc": "The sales order for this shipment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "salesorders",
+                },
+                "package_ids": <ActionOptionInfo>{
+                    "display_name": "Package IDs",
+                    "short_desc": "Packages to include in shipment",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "List of package IDs to include",
+                },
+                "tracking_number": <ActionOptionInfo>{
+                    "display_name": "Tracking Number",
+                    "short_desc": "Shipment tracking number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_charge": <ActionOptionInfo>{
+                    "display_name": "Shipping Charge",
+                    "short_desc": "Shipping charge amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Shipment notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Shipment Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/get-shipment-order",
+            "action": "get-shipment-order",
+            "groups": "Shipment Orders",
+            "display_name": "Get Shipment Order",
+            "short_desc": "Get shipment order details",
+            "desc": "Retrieve details of a specific shipment order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment Order",
+                    "short_desc": "The shipment order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "shipmentorders",
+                },
+            },
+        });
+
+        # Update Shipment Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/update-shipment-order",
+            "action": "update-shipment-order",
+            "groups": "Shipment Orders",
+            "display_name": "Update Shipment Order",
+            "short_desc": "Update an existing shipment order",
+            "desc": "Update an existing shipment order in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment Order",
+                    "short_desc": "The shipment order to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "shipmentorders",
+                },
+                "shipment_number": <ActionOptionInfo>{
+                    "display_name": "Shipment Number",
+                    "short_desc": "Shipment order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_method": <ActionOptionInfo>{
+                    "display_name": "Delivery Method",
+                    "short_desc": "Method of delivery",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tracking_number": <ActionOptionInfo>{
+                    "display_name": "Tracking Number",
+                    "short_desc": "Shipment tracking number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_charge": <ActionOptionInfo>{
+                    "display_name": "Shipping Charge",
+                    "short_desc": "Shipping charge amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Shipment notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete Shipment Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/delete-shipment-order",
+            "action": "delete-shipment-order",
+            "groups": "Shipment Orders",
+            "display_name": "Delete Shipment Order",
+            "short_desc": "Delete a shipment order",
+            "desc": "Delete a shipment order from Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment Order",
+                    "short_desc": "The shipment order to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "shipmentorders",
+                },
+            },
+        });
+
+        # Mark Shipment Delivered
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/mark-shipment-delivered",
+            "action": "mark-shipment-delivered",
+            "groups": "Shipment Orders",
+            "display_name": "Mark Shipment Delivered",
+            "short_desc": "Mark a shipment as delivered",
+            "desc": "Mark a shipment order as delivered in Zoho Inventory",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment Order",
+                    "short_desc": "The shipment order to mark as delivered",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "shipmentorders",
+                },
+            },
+        });
+
+        # ========== UTILITY ACTIONS ==========
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/api-call",
+            "action": "api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a custom API call",
+            "desc": "Make a custom API call to the Zoho Inventory API",
+            "action_code": DPAT_API,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "HTTP method to use",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "HTTP method: GET, POST, PUT, DELETE",
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "API endpoint path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "API path, e.g. /items",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Request body for POST/PUT requests",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Request body for POST/PUT requests",
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS (POLLING) ==========
+
+        # New Contact Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-contact",
+            "action": EVENT_NEW_CONTACT,
+            "groups": "Triggers",
+            "display_name": "New Contact",
+            "short_desc": "Trigger when a new contact is created",
+            "desc": "Fires when a new contact is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new contacts (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Invoice Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-invoice",
+            "action": EVENT_NEW_INVOICE,
+            "groups": "Triggers",
+            "display_name": "New Invoice",
+            "short_desc": "Trigger when a new invoice is created",
+            "desc": "Fires when a new invoice is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_INVOICE,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new invoices (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Item Adjustment Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-item-adjustment",
+            "action": EVENT_NEW_ITEM_ADJUSTMENT,
+            "groups": "Triggers",
+            "display_name": "New Item Adjustment",
+            "short_desc": "Trigger when a new item adjustment is created",
+            "desc": "Fires when a new item adjustment is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ITEM_ADJUSTMENT,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new item adjustments (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Item Group Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-item-group",
+            "action": EVENT_NEW_ITEM_GROUP,
+            "groups": "Triggers",
+            "display_name": "New Item Group",
+            "short_desc": "Trigger when a new item group is created",
+            "desc": "Fires when a new item group is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ITEM_GROUP,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new item groups (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Item Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-item",
+            "action": EVENT_NEW_ITEM,
+            "groups": "Triggers",
+            "display_name": "New Item",
+            "short_desc": "Trigger when a new item is created",
+            "desc": "Fires when a new item is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ITEM,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new items (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Package Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-package",
+            "action": EVENT_NEW_PACKAGE,
+            "groups": "Triggers",
+            "display_name": "New Package",
+            "short_desc": "Trigger when a new package is created",
+            "desc": "Fires when a new package is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PACKAGE,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new packages (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Purchase Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-purchase-order",
+            "action": EVENT_NEW_PURCHASE_ORDER,
+            "groups": "Triggers",
+            "display_name": "New Purchase Order",
+            "short_desc": "Trigger when a new purchase order is created",
+            "desc": "Fires when a new purchase order is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PURCHASE_ORDER,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new purchase orders (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # New Sales Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ZohoInventoryDataProvider::AppName,
+            "path": "/events/new-sales-order",
+            "action": EVENT_NEW_SALES_ORDER,
+            "groups": "Triggers",
+            "display_name": "New Sales Order",
+            "short_desc": "Trigger when a new sales order is created",
+            "desc": "Fires when a new sales order is created in Zoho Inventory. Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SALES_ORDER,
+            "options": {
+                "organization_id": <ActionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Zoho Inventory organization",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "organizations",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new sales orders (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage ZohoInventoryDataProvider Module
+
+    @tableofcontents
+
+    @section zohoinventorydataproviderintro ZohoInventoryDataProvider Introduction
+
+    The %ZohoInventoryDataProvider module provides a data provider API for Zoho Inventory
+    through the Zoho Inventory REST API.
+
+    To use this module, use \c "%requires ZohoInventoryDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ZohoInventoryDataProvider namespace.
+
+    The main classes are:
+    - @ref ZohoInventoryDataProvider::ZohoInventoryDataProvider "ZohoInventoryDataProvider":
+      the root data provider for Zoho Inventory with child providers for contacts, items, orders, etc.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ZohoInventoryDataProvider
+%requires ZohoInventoryRestClient
+
+# Create a REST client with credentials
+ZohoInventoryRestClient rest({
+    "oauth2_client_id": ENV.ZOHOINVENTORY_CLIENT_ID,
+    "oauth2_client_secret": ENV.ZOHOINVENTORY_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.ZOHOINVENTORY_REFRESH_TOKEN,
+    "organization_id": ENV.ZOHOINVENTORY_ORGANIZATION_ID,
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+
+# Create a data provider from the REST client
+ZohoInventoryDataProvider zoho(rest);
+
+# List items
+map printf("Item: %s - %s\n", $1.name, $1.rate),
+    zoho.getChildProvider("items").searchRecords();
+    @endcode
+
+    @section zohoinventorydataproviderrelnotes Release Notes
+
+    @subsection zohoinventorydataproviderv1_0 ZohoInventoryDataProvider v1.0
+    - the initial version of the %ZohoInventoryDataProvider module
+*/
+
+#! Contains all public definitions in the ZohoInventoryDataProvider module
+public namespace ZohoInventoryDataProvider {
+}

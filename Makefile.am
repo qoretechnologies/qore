@@ -110,6 +110,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/WebUtil.qm \
 	qlib/ZeyosRestClient.qm \
 	qlib/ZohoBooksRestClient.qm \
+	qlib/ZohoInventoryRestClient.qm \
 	qlib/ZohoInvoiceRestClient.qm \
 	qlib/BillwerkRestClient.qm \
     qlib/AwsRestClient.qm \
@@ -149,6 +150,7 @@ DOX_SPLIT_MODULES = \
     qlib/UnleashedDataProvider \
     qlib/SwaggerDataProvider \
     qlib/ZohoBooksDataProvider \
+    qlib/ZohoInventoryDataProvider \
     qlib/ZohoInvoiceDataProvider \
     qlib/AsyncApiDataProvider \
     qlib/HttpServerAsyncIo \
@@ -216,6 +218,7 @@ UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
 SwaggerDataProvider_modverdir = $(modverdir)/SwaggerDataProvider
 ZohoBooksDataProvider_modverdir = $(modverdir)/ZohoBooksDataProvider
+ZohoInventoryDataProvider_modverdir = $(modverdir)/ZohoInventoryDataProvider
 ZohoInvoiceDataProvider_modverdir = $(modverdir)/ZohoInvoiceDataProvider
 
 dist_AsyncSocketIo_modver_DATA = $(wildcard qlib/AsyncSocketIo/*.q[cm])
@@ -270,6 +273,7 @@ dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
 dist_SwaggerDataProvider_modver_DATA = $(wildcard qlib/SwaggerDataProvider/*.q[cm])
 dist_ZohoBooksDataProvider_modver_DATA = $(wildcard qlib/ZohoBooksDataProvider/*.q[cm]) $(wildcard qlib/ZohoBooksDataProvider/*.svg)
+dist_ZohoInventoryDataProvider_modver_DATA = $(wildcard qlib/ZohoInventoryDataProvider/*.q[cm]) $(wildcard qlib/ZohoInventoryDataProvider/*.svg)
 dist_ZohoInvoiceDataProvider_modver_DATA = $(wildcard qlib/ZohoInvoiceDataProvider/*.q[cm]) $(wildcard qlib/ZohoInvoiceDataProvider/*.svg)
 dist_AsyncApiDataProvider_modver_DATA = $(wildcard qlib/AsyncApiDataProvider/*.q[cm])
 dist_QoreCodeCompletion_modver_DATA = $(wildcard qlib/QoreCodeCompletion/*.q[cm])
@@ -1206,6 +1210,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/FreshBooksDataProvider/freshbooks-logo.svg \
 	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/WaveDataProvider/wave-logo.svg \
+	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/GeneratorDataProvider/generator-logo.svg \

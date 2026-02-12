@@ -159,6 +159,7 @@ public class DataProvider {
             "wave": "WaveDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
+            "zohoinventory": "ZohoInventoryDataProvider",
             "zohoinvoice": "ZohoInvoiceDataProvider",
         };
 
