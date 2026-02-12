@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Mapper.qm data mapping module
 
-/*  Mapper.qm Copyright 2014 - 2025 Qore Technologies, s.r.o.
+/*  Mapper.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %requires(reexport) DataProvider
 
 module Mapper {
-    version = "1.6.2";
+    version = "1.7";
     desc = "user module providing basic data mapping infrastructure";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -307,6 +307,9 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     runtime options duplicate existing functionality and are confusing and error-prone to use.
 
     @section mapperrelnotes Release Notes
+
+    @subsection mapperv1_7 Mapper v1.7
+    - added @ref Mapper::Mapper::getMapHash() "Mapper::getMapHash()" to return the original field mapping hash
 
     @subsection mapperv1_6_2 Mapper v1.6.2
     - fixed a bug handling default values for output fields with required (not-null) types
@@ -2942,6 +2945,15 @@ Mapper mapv(DataMap);
     */
     resetCount() {
         count = 0;
+    }
+
+    #! returns the original field mapping hash
+    /** @return a hash where each key is an output field name and the value is the mapping specification
+
+        @since %Mapper 1.7
+    */
+    hash<auto> getMapHash() {
+        return mapc;
     }
 
     #! performs type handling
