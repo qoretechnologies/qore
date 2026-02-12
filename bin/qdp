@@ -31,6 +31,7 @@
 %requires ConnectionProvider
 %requires DatasourceProvider
 %requires DbDataProvider
+%requires Mapper
 %requires Util
 %requires Logger
 # for webhooks
@@ -55,7 +56,7 @@
 class QdpCmd {
     public {
         #! Version string
-        const Version = "1.4.0";
+        const Version = "1.7.0";
 
         static HttpServer http;
 
@@ -94,6 +95,7 @@ class QdpCmd {
             "listapps": "a,list-apps",
             "listconnections": "c,list-connections",
             "listfactories": "f,list-factories",
+            "mapper": "M,mapper=s",
             "listtypes": "t,list-types",
             "modules": "m,module=s@",
             "nocolor": "C,no-color",
@@ -108,6 +110,7 @@ class QdpCmd {
             "exp": "x,expressions",
             "dpql": "q,dpql",
             "dpqlhelp": "Q,dpql-help",
+            "pipelinehelp": "P,pipeline-help",
             "yaml": "Y,yaml",
             "help": "h,help",
         };
@@ -155,6 +158,9 @@ class QdpCmd {
             "msg": \QdpCmd::message(),
             "pcreate": \QdpCmd::providerCreate(),
             "pdelete": \QdpCmd::providerDelete(),
+            "pipe": \QdpCmd::pipeline(),
+            "pipeline": \QdpCmd::pipeline(),
+            "pl": \QdpCmd::pipeline(),
             "provider-create": \QdpCmd::providerCreate(),
             "provider-delete": \QdpCmd::providerDelete(),
             "record": \QdpCmd::getRecord(),
@@ -183,6 +189,10 @@ class QdpCmd {
 
         #! Disambiguation for common commands with the same initial letters
         const DisambiguationMap = {
+            "pipe": "supports_read",
+            "pipeline": "supports_read",
+            "pl": "supports_read",
+
             "search": "supports_read",
             "send-message": "supports_messages",
             "smessage": "supports_messages",
@@ -220,6 +230,9 @@ class QdpCmd {
         }
         if (opts.dpqlhelp) {
             showDpqlHelp();
+        }
+        if (opts.pipelinehelp) {
+            showPipelineHelp();
         }
         if (opts.version) {
             showVersion();
@@ -264,7 +277,7 @@ class QdpCmd {
 
         DataProviderDataContextHelper dch;
         if (opts.options.val()) {
-            auto v = parse_to_qore_value(opts.options);
+            auto v = parseInputValue(opts.options);
             if (v.typeCode() != NT_HASH) {
                 error("options have type %y; expecting \"hash\"", v.fullType());
             }
@@ -451,6 +464,21 @@ class QdpCmd {
     }
 
     private Logger getLogger(string name = "console") {
+        LoggerLevel level;
+        if (opts.verbose > 1) {
+            level = LoggerLevel::getLevelDebug();
+        } else if (opts.verbose) {
+            level = LoggerLevel::getLevelInfo();
+        } else {
+            level = LoggerLevel::getLevelError();
+        }
+        Logger logger(name, level);
+        logger.addAppender(new ConsoleAppender());
+        return logger;
+    }
+
+    #! Static version of getLogger() for use in static command methods
+    static Logger getStaticLogger(string name = "pipeline") {
         LoggerLevel level;
         if (opts.verbose > 1) {
             level = LoggerLevel::getLevelDebug();
@@ -840,52 +868,96 @@ class QdpCmd {
 
         ix = True;
 
-        # print a message
-        stdout.printf("%s %s; enter %s to send a message, %s for help, %s to exit\n",
-            color.green("listening to events from"),
-            color.cyan(provider.getName()),
-            color.yellow("<message id>: <message body>"),
-            color.bold("'help'"),
-            color.dim("Ctrl+C"));
+        InputHelper input_helper(provider);
+
+        # print welcome message
+        if (input_helper.active_msgid) {
+            stdout.printf("%s %s; active message: %s\n",
+                color.green("listening to events from"),
+                color.cyan(provider.getName()),
+                color.type(input_helper.active_msgid));
+            stdout.printf("type data to send, %s for help, %s to exit\n",
+                color.bold("/help"),
+                color.dim("Ctrl+C"));
+        } else {
+            stdout.printf("%s %s\n",
+                color.green("listening to events from"),
+                color.cyan(provider.getName()));
+            stdout.printf("type %s to select a message type, %s for help\n",
+                color.bold("/use <msg-id>"),
+                color.bold("/help"));
+        }
+
         observable.registerObserver(observer);
 
         if (observable instanceof DataProvider::DelayedObservable) {
             cast<DataProvider::DelayedObservable>(observable).observersReady();
         }
 
-        InputHelper input_helper(provider);
         while (!shutdown_requested) {
             string input = input_helper.get();
             if (shutdown_requested) {
                 break;
             }
-            #printf("input: %y\n", input);
-            bool quit;
-            switch (input) {
-                case "exit":
-                case "quit":
-                    quit = True;
-                    break;
-            }
-            if (quit) {
+            if (input == "exit" || input == "quit") {
                 break;
             }
-            # check for msg ID
-            (*string msgid, *string msg) = (input =~ x/([^:]+):(.*)/);
-            if (!msgid) {
-                stdout.printf("%s %y; enter %s to send a message, %s for help\n",
-                    color.red("cannot parse input"),
-                    input,
-                    color.yellow("<message id>: <message body>"),
-                    color.bold("'help'"));
+
+            # Handle /send <id> <data>
+            if (input =~ /^\/send(\s|$)/) {
+                string rest = trim(input.substr(5));
+                (*string send_id, *string send_data) = (rest =~ x/(\S+)\s+(.*)/s);
+                if (!send_id) {
+                    stdout.printf("%s: usage: /send <msg-id> <data>\n", color.error("ERROR"));
+                    continue;
+                }
+                if (!input_helper.mmap.hasKey(send_id)) {
+                    stdout.printf("%s: unknown message type %y; available: %s\n",
+                        color.error("ERROR"), send_id,
+                        (foldl $1 + ", " + $2, keys input_helper.mmap));
+                    continue;
+                }
+                auto v;
+                try {
+                    v = parseInputValue(send_data);
+                } catch (hash<ExceptionInfo> ex) {
+                    stderr.printf("%s: %s; client-side error; the message was not sent\n",
+                        ex.err, ex.desc);
+                    continue;
+                }
+                printf("> %s %y -> %y\n", color.info("sending"), send_id, v);
+                try {
+                    provider.sendMessage(send_id, v);
+                } catch (hash<ExceptionInfo> ex) {
+                    stderr.printf("%s %s: %s\n", color.error("ERROR:"), ex.err, ex.desc);
+                }
                 continue;
+            }
+
+            # Unrecognized slash command (shouldn't reach here normally)
+            if (input[0] == "/") {
+                stdout.printf("unknown command %y; type /help for help\n", input);
+                continue;
+            }
+
+            # Default: send data with active message ID
+            *string msgid = input_helper.active_msgid;
+            if (!msgid) {
+                # Auto-select first available
+                msgid = input_helper.setFirstMsgId();
+                if (!msgid) {
+                    stdout.printf("no message types available\n");
+                    continue;
+                }
+                stdout.printf("auto-selected message type: %s\n", color.type(msgid));
             }
 
             auto v;
             try {
-                v = parse_to_qore_value(msg);
+                v = parseInputValue(input);
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("%s: %s; client-side error; the message was not sent\n", ex.err, ex.desc);
+                stderr.printf("%s: %s; client-side error; the message was not sent\n",
+                    ex.err, ex.desc);
                 continue;
             }
             printf("> %s %y -> %y\n", color.info("sending"), msgid, v);
@@ -1165,6 +1237,147 @@ class QdpCmd {
                 outputRecord(i.getValue());
                 ++count;
             }
+        }
+    }
+
+    static pipeline(AbstractDataProvider provider) {
+        # Get output provider spec (required)
+        *string output_spec = shift ARGV;
+        if (!output_spec) {
+            error("pipeline command requires an output provider argument\n"
+                "  Usage: qdp <input-provider> pipeline <output-provider> [search-criteria]");
+        }
+
+        # Get optional search criteria (reuses existing DPQL/hash/expression patterns)
+        *hash<auto> where_cond = QdpCmd::getSearchExpression("pipeline search", NOTHING, provider);
+        *hash<auto> search_options = QdpCmd::getHash("search options");
+
+        # Add limit/offset to search options if specified
+        if (opts.limit) {
+            search_options.limit = opts.limit;
+        }
+        if (opts.offset) {
+            search_options.offset = opts.offset;
+        }
+
+        # Resolve output provider
+        AbstractDataProvider output_provider;
+        try {
+            output_provider = resolveProvider(output_spec);
+        } catch (hash<ExceptionInfo> ex) {
+            error("cannot resolve output provider %y: %s: %s", output_spec, ex.err, ex.desc);
+        }
+
+        # Pre-flight validation
+        hash<DataProviderSummaryInfo> in_info = provider.getSummaryInfo();
+        hash<DataProviderSummaryInfo> out_info = output_provider.getSummaryInfo();
+        if (!in_info.supports_read) {
+            error("input provider %y does not support reading records", provider.getName());
+        }
+        if (!out_info.supports_create) {
+            error("output provider %y does not support creating records", output_provider.getName());
+        }
+
+        # Load optional mapper
+        *Mapper mapper = loadMapper();
+
+        # Dry-run: show pipeline plan without executing
+        if (opts.dryrun) {
+            printf("%s\n", color.bold("Pipeline Plan (dry-run):"));
+            printf("  %s %s\n", color.key("Input:"), provider.getName());
+            if (mapper) {
+                printf("  %s %s (%d field%s)\n", color.key("Mapper:"),
+                    is_readable(opts.mapper) ? "file: " + opts.mapper : "inline",
+                    mapper.getMapHash().size(),
+                    mapper.getMapHash().size() == 1 ? "" : "s");
+            } else {
+                printf("  %s no (pass-through)\n", color.key("Mapper:"));
+            }
+            printf("  %s %s\n", color.key("Output:"), output_provider.getName());
+            if (where_cond) {
+                printf("  %s %y\n", color.key("Filter:"), where_cond);
+            }
+            if (opts.limit) {
+                printf("  %s %d\n", color.key("Limit:"), opts.limit);
+            }
+            if (opts.offset) {
+                printf("  %s %d\n", color.key("Offset:"), opts.offset);
+            }
+            printf("  %s %s\n", color.key("Bulk:"), opts.bulk ? "yes" : "no");
+            printf("  %s %s\n", color.key("Input supports read:"), in_info.supports_read ? "yes" : "no");
+            printf("  %s %s\n", color.key("Output supports create:"), out_info.supports_create ? "yes" : "no");
+            if (opts.bulk) {
+                printf("  %s %s\n", color.key("Output supports bulk create:"),
+                    out_info.supports_bulk_create ? "yes" : "no");
+            }
+            return;
+        }
+
+        # Build pipeline with logging + metrics
+        Logger plogger = getStaticLogger("pipeline");
+        hash<PipelineOptionInfo> pl_opts = <PipelineOptionInfo>{
+            "name": sprintf("%s -> %s", provider.getName(), output_provider.getName()),
+            "info_log": sub (string fmt) { plogger.info(vsprintf(fmt, argv)); },
+            "error_log": sub (string fmt) { plogger.error(vsprintf(fmt, argv)); },
+            "debug_log": sub (string fmt) { plogger.debug(vsprintf(fmt, argv)); },
+        };
+
+        # Add progress metrics unless JSON/YAML output mode (clean machine-readable output)
+        if (!opts.json && !opts.yaml) {
+            pl_opts.metrics_collector = new ProgressMetricsCollector();
+        }
+
+        DataProviderPipeline pipeline(pl_opts);
+        if (mapper) {
+            pipeline.append(mapper);
+        }
+        pipeline.append(new DataProviderOutputProcessor(output_spec, out_info.supports_bulk_create));
+
+        # Handle signal interrupt for graceful shutdown
+        code orig_handler = \QdpCmd::signalHandler();
+        set_signal_handler(SIGINT, sub (int sig) {
+            orig_handler(sig);
+            pipeline.abort(True);
+        });
+
+        on_exit {
+            set_signal_handler(SIGINT, orig_handler);
+        }
+
+        # Get search iterator and submit to pipeline
+        try {
+            if (opts.bulk) {
+                AbstractDataProviderBulkRecordInterface bi =
+                    provider.searchRecordsBulk(NOTHING, where_cond, search_options);
+                pipeline.submit(bi);
+            } else {
+                AbstractDataProviderRecordIterator i = provider.searchRecords(where_cond, search_options);
+                pipeline.submit(i);
+            }
+            pipeline.waitDone();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PIPELINE-FAILED") {
+                stderr.printf("%s pipeline failed: %s\n", color.error("ERROR:"), ex.desc);
+                if (ex.arg) {
+                    foreach auto err in (ex.arg) {
+                        stderr.printf("  %s %s: %s\n", color.error("-"), err.err, err.desc);
+                    }
+                }
+                exit(1);
+            }
+            rethrow;
+        }
+
+        # Print final summary
+        hash<PipelineInfo> info = pipeline.getInfo();
+        if (opts.json || opts.yaml) {
+            output(info);
+        } else {
+            printf("%s %d records in %s (%.1f rec/s)\n",
+                color.info("pipeline complete:"),
+                info.record_count,
+                info.duration.format("HH:mm:SS.xx"),
+                info.recs_per_sec);
         }
     }
 
@@ -1789,7 +2002,7 @@ class QdpCmd {
             return;
         }
         try {
-            auto val = parse_to_qore_value(text);
+            auto val = parseInputValue(text);
             if (exists val && val.typeCode() == NT_HASH) {
                 return val;
             }
@@ -1801,7 +2014,7 @@ class QdpCmd {
 
     static *hash<auto> getHashIntern(auto arg, string action, *bool required) {
         if (exists arg) {
-            arg = parse_to_qore_value(arg);
+            arg = parseInputValue(arg);
             if (exists arg && arg.typeCode() != NT_HASH) {
                 QdpCmd::error("Invalid %s argument %y; expecting type \"hash\"; got type %y instead", action, arg,
                     arg.type());
@@ -1826,7 +2039,7 @@ class QdpCmd {
     static auto getAny(string action) {
         auto arg = shift ARGV;
         if (exists arg) {
-            arg = parse_to_qore_value(arg);
+            arg = parseInputValue(arg);
         }
         return arg;
     }
@@ -1873,7 +2086,7 @@ class QdpCmd {
         }
         *hash<auto> options;
         if (opts) {
-            options = parse_to_qore_value(opts);
+            options = parseInputValue(opts);
             if (exists options && options.typeCode() != NT_HASH) {
                 throw "ACTION-ERROR", sprintf("option string for @%s/%s does not parse to type \"hash\"; got "
                     "type %y instead", app_name, action_name, options.type());
@@ -1966,6 +2179,79 @@ class QdpCmd {
         }
 
         error("no connection or datasource connection %y exists in any known data provider", name);
+    }
+
+    #! Resolve a data provider from a CLI spec string (factory or connection)
+    static AbstractDataProvider resolveProvider(string spec) {
+        # Extract factory options in balanced braces (same regex as constructor line 292)
+        *string dp_opts = (spec =~ x/({(?:(?>[^{}]*)|(?0))*})/)[0];
+        string name = spec;
+        if (dp_opts) {
+            name = replace(name, dp_opts, "");
+        } else {
+            name =~ s/{}//;
+        }
+
+        list<string> path = name.split("/");
+        string root = shift path;
+
+        AbstractDataProvider provider;
+        string full_root = root + (dp_opts ?? "");
+
+        if (full_root =~ /\{/) {
+            # Factory resolution
+            provider = DataProvider::getFactoryObjectFromStringUseEnv(full_root);
+        } else {
+            # Connection resolution
+            Logger plogger = getStaticLogger("resolve");
+            *AbstractDataProvider dp = DataProvider::tryLoadProviderForConnectionFromEnv(
+                root, opts.subtype, plogger);
+            if (!dp) {
+                error("cannot resolve provider from %y; no matching connection or factory found", spec);
+            }
+            provider = dp;
+        }
+
+        # Navigate child path segments
+        map provider = provider.getChildProviderEx($1), path;
+        return provider;
+    }
+
+    #! Load a Mapper from the -M/--mapper option value (inline hash or file path)
+    /** @return a Mapper object, or NOTHING if -M was not specified
+    */
+    static *Mapper loadMapper() {
+        if (!opts.mapper) {
+            return;
+        }
+        string spec = opts.mapper;
+        hash<auto> mapv;
+
+        if (is_readable(spec)) {
+            string content = ReadOnlyFile::readTextFile(spec);
+            if (spec =~ /\.ya?ml$/i) {
+%ifndef NoYaml
+                mapv = parse_yaml(content);
+%else
+                error("YAML mapper file requested but yaml module is not available");
+%endif
+            } else if (spec =~ /\.json$/i) {
+%ifndef NoJson
+                mapv = parse_json(content);
+%else
+                error("JSON mapper file requested but json module is not available");
+%endif
+            } else {
+                mapv = parse_to_qore_value(content);
+            }
+        } else {
+            mapv = parseInputValue(spec);
+        }
+
+        if (mapv.typeCode() != NT_HASH) {
+            error("mapper spec must be a hash; got type %y", mapv.fullType());
+        }
+        return new Mapper(mapv);
     }
 
     static createIndex() {
@@ -2125,6 +2411,7 @@ class QdpCmd {
 
         printf("%s\n", color.bold("RECORD OPERATIONS"));
         printHelpLine(color.key("search <criteria>"), "Search for records", key_width);
+        printHelpLine(color.key("pipeline <output> [search]"), "Pipeline records to output provider", key_width);
         printHelpLine(color.key("create <record>"), "Create new record(s)", key_width);
         printHelpLine(color.key("update <set> <where>"), "Update matching records", key_width);
         printHelpLine(color.key("upsert <record>"), "Create or update record", key_width);
@@ -2167,9 +2454,9 @@ class QdpCmd {
         printHelpLine(color.key("provider-delete <name>"), "Delete child provider", key_width);
         printf("\n");
 
-        printf("%s\n", color.bold("OUTPUT OPTIONS"));
-        printHelpLine(color.key("-J, --json"), "Output in JSON format", key_width);
-        printHelpLine(color.key("-Y, --yaml"), "Output in YAML format", key_width);
+        printf("%s\n", color.bold("I/O FORMAT OPTIONS"));
+        printHelpLine(color.key("-J, --json"), "Use JSON for input and output", key_width);
+        printHelpLine(color.key("-Y, --yaml"), "Use YAML for input and output", key_width);
         printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
         printHelpLine(color.key("-v, --verbose"), "Increase verbosity (can repeat)", key_width);
         printf("\n");
@@ -2186,6 +2473,7 @@ class QdpCmd {
 
         printf("%s\n", color.bold("OTHER OPTIONS"));
         printHelpLine(color.key("-d, --dry-run"), "Preview changes without executing", key_width);
+        printHelpLine(color.key("-M, --mapper=X"), "Field mapper (inline hash or file path; see -P)", key_width);
         printHelpLine(color.key("-o, --options=X"), "Set data provider options (Qore hash format)", key_width);
         printHelpLine(color.key("-s, --subtype=X"), "Use subtype when creating from connection", key_width);
         printHelpLine(color.key("-H, --host=X"), "Hostname for webhooks", key_width);
@@ -2200,6 +2488,7 @@ class QdpCmd {
         printHelpLine(color.key("-t, --list-types"), "List known types", key_width);
         printHelpLine(color.key("-a, --list-apps"), "List applications", key_width);
         printHelpLine(color.key("-I, --create-index"), "Create provider indices", key_width);
+        printHelpLine(color.key("-P, --pipeline-help"), "Show pipeline help and examples", key_width);
         printHelpLine(color.key("-V, --version"), "Show version info", key_width);
         printHelpLine(color.key("-h, --help"), "Show this help", key_width);
         printf("\n");
@@ -2217,6 +2506,13 @@ class QdpCmd {
         printf("  %s @salesforce/search-records search '@query == \"SELECT Id FROM Account\"'\n", script);
         printf("  %s mydb/tables/users search '@name == \"John\"'\n", script);
         printf("  %s mydb/tables/users search -q '@name == \"John\"'\n", script);
+        printf("\n");
+        printf("  %s mydb/tables/users pipeline 'csvwrite{path=users.csv}'  %s\n",
+            script, color.dim("# Export to CSV"));
+        printf("  %s 'csvread{path=in.csv}' pipeline mydb/tables/users      %s\n",
+            script, color.dim("# Import from CSV"));
+        printf("  %s mydb/tables/users pipeline 'csvwrite{path=out.csv}' -d %s\n",
+            script, color.dim("# Dry-run pipeline"));
 
         exit(1);
     }
@@ -2281,6 +2577,141 @@ class QdpCmd {
         exit(0);
     }
 
+    static showPipelineHelp() {
+        string script = get_script_name();
+        printf("%s\n", color.bold("Pipeline Command"));
+        printf("  %s\n", color.info("Pipe records from an input data provider to an output data provider."));
+        printf("  %s\n", color.info("Uses DataProviderPipeline for threading, bulk support, and metrics."));
+
+        printf("\n%s\n", color.bold("SYNTAX"));
+        printf("  %s %s %s %s %s\n",
+            script, color.key("<input>"), color.type("pipeline"), color.key("<output>"),
+            color.dim("[search] [options]"));
+        printf("  %s\n", color.dim("Aliases: pipeline, pipe, pl"));
+
+        printf("\n%s\n", color.bold("ARGUMENTS"));
+        printf("  %s  %s\n", color.key("<input>"),
+            "Source provider (connection, factory, or path)");
+        printf("  %s  %s\n", color.key("<output>"),
+            "Destination provider (connection, factory, or path)");
+        printf("  %s  %s\n", color.key("[search]"),
+            "Optional filter (DPQL, hash, or expression); omit to stream all records");
+
+        printf("\n%s\n", color.bold("PROVIDER FORMATS"));
+        printf("  %s  %s\n", color.key("connection/tables/name"),
+            color.dim("Named connection with child path"));
+        printf("  %s  %s\n", color.key("factory{opt=val,...}"),
+            color.dim("Factory with inline options"));
+        printf("  %s  %s\n", color.key("csvread{path=file.csv}"),
+            color.dim("CSV file reader"));
+        printf("  %s  %s\n", color.key("csvwrite{path=file.csv}"),
+            color.dim("CSV file writer"));
+
+        printf("\n%s\n", color.bold("OPTIONS"));
+        printf("  %s  %s\n", color.key("-d, --dry-run"),
+            "Show pipeline plan without executing");
+        printf("  %s  %s\n", color.key("-l, --limit=N"),
+            "Limit number of records to transfer");
+        printf("  %s  %s\n", color.key("-O, --offset=N"),
+            "Skip first N records");
+        printf("  %s  %s\n", color.key("-b, --bulk"),
+            "Use bulk API for reading and writing");
+        printf("  %s  %s\n", color.key("-T, --timeout=N"),
+            "Timeout in seconds for the search");
+        printf("  %s  %s\n", color.key("-v, --verbose"),
+            "Show pipeline logging (repeat for debug)");
+        printf("  %s  %s\n", color.key("-J, --json"),
+            "Output final summary as JSON (suppresses progress)");
+        printf("  %s  %s\n", color.key("-Y, --yaml"),
+            "Output final summary as YAML (suppresses progress)");
+        printf("  %s  %s\n", color.key("-M, --mapper=X"),
+            "Field mapper (inline hash or file path)");
+        printf("  %s  %s\n", color.key("-q, --dpql"),
+            "Force DPQL parsing for search criteria");
+        printf("  %s  %s\n", color.key("-x, --expressions"),
+            "Use legacy search expressions");
+
+        printf("\n%s\n", color.bold("MAPPER"));
+        printf("  %s\n", color.info("Transform records between input and output using a field mapper."));
+        printf("  %s\n", color.info("The mapper uses the Mapper module (inherits AbstractDataProcessor)."));
+
+        printf("\n  %s\n", color.bold("Inline mapper (Qore hash syntax):"));
+        printf("  %s\n", color.dim("  -M '{output_field = True}'                    # pass-through (same name)"));
+        printf("  %s\n", color.dim("  -M '{out_name = \"in_name\"}'                   # rename field"));
+        printf("  %s\n", color.dim("  -M '{age = {name = \"in_age\", type = \"int\"}}' # rename + type coercion"));
+        printf("  %s\n", color.dim("  -M '{status = {constant = \"active\"}}'         # constant value"));
+        printf("  %s\n", color.dim("  -M '{name = {name = \"in_name\", default = \"N/A\"}}'  # default value"));
+        printf("  %s\n", color.dim("With -J, use JSON syntax: -M '{\"out\": \"in\"}'"));
+
+        printf("\n  %s\n", color.bold("File mapper:"));
+        printf("  %s\n", color.dim("  -M mapper.yaml    # YAML file (.yaml/.yml)"));
+        printf("  %s\n", color.dim("  -M mapper.json    # JSON file (.json)"));
+        printf("  %s\n", color.dim("  -M mapper.q       # Qore hash literal (any other extension)"));
+
+        printf("\n  %s\n", color.bold("Mapping value types:"));
+        printf("  %s  %s\n", color.key("True"),
+            "Pass-through: output field = input field with same name");
+        printf("  %s  %s\n", color.key("\"field_name\""),
+            "Rename: output field = input field with given name");
+        printf("  %s  %s\n", color.key("{name = ..., type = ...}"),
+            "Rename with type coercion (int, number, string, date, hash, any)");
+        printf("  %s  %s\n", color.key("{constant = value}"),
+            "Set a constant value for every record");
+        printf("  %s  %s\n", color.key("{name = ..., default = ...}"),
+            "Map field with a fallback default value");
+
+        printf("\n  %s\n", color.bold("YAML file example (mapper.yaml):"));
+        printf("  %s\n", color.dim("  full_name: \"name\""));
+        printf("  %s\n", color.dim("  user_age:"));
+        printf("  %s\n", color.dim("    name: \"age\""));
+        printf("  %s\n", color.dim("    type: \"int\""));
+        printf("  %s\n", color.dim("  status:"));
+        printf("  %s\n", color.dim("    constant: \"active\""));
+
+        printf("\n%s\n", color.bold("EXAMPLES"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s mydb/tables/users pipeline 'csvwrite{path=users.csv}'", script)),
+            color.dim("# Export table to CSV"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s 'csvread{path=data.csv}' pipeline mydb/tables/users", script)),
+            color.dim("# Import CSV to table"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s mydb/tables/users pl 'csvwrite{path=out.csv}' '@active == true'", script)),
+            color.dim("# Export filtered records"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s mydb/tables/users pipeline mydb2/tables/archive -l 1000", script)),
+            color.dim("# Copy 1000 records between DBs"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s mydb/tables/users pipeline 'csvwrite{path=out.csv}' -b", script)),
+            color.dim("# Bulk mode for large exports"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s mydb/tables/users pipeline 'csvwrite{path=out.csv}' -d", script)),
+            color.dim("# Dry-run: show plan only"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s -J mydb/tables/users pipeline 'csvwrite{path=out.csv}'", script)),
+            color.dim("# JSON summary output"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s 'csvread{path=in.csv}' pl 'csvwrite{path=out.csv}'"
+                " -M '{full_name = \"name\", age = {name = \"user_age\", type = \"int\"}}'", script)),
+            color.dim("# Inline mapper"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s 'csvread{path=in.csv}' pl 'csvwrite{path=out.csv}' -M mapper.yaml", script)),
+            color.dim("# File mapper"));
+        printf("  %s  %s\n",
+            color.key(sprintf("%s 'csvread{path=in.csv}' pl 'csvwrite{path=out.csv}'"
+                " -M '{name = True, status = {constant = \"active\"}}'", script)),
+            color.dim("# Pass-through + constant"));
+
+        printf("\n%s\n", color.bold("PROGRESS"));
+        printf("  %s\n", color.dim("Progress is shown on stderr every 2 seconds (suppressed with -J/-Y)."));
+        printf("  %s\n", color.dim("Press Ctrl+C for graceful shutdown — records already submitted will complete."));
+
+        printf("\n%s\n", color.bold("OUTPUT"));
+        printf("  %s\n", color.dim("Default: human-readable summary with record count and throughput."));
+        printf("  %s\n", color.dim("With -J/-Y: structured pipeline info (name, status, record_count, duration, recs_per_sec)."));
+        exit(0);
+    }
+
     static error(string fmt) {
         stderr.printf("%s: %s %s\n", get_script_name(), color.error("ERROR:"), vsprintf(fmt, argv));
         exit(1);
@@ -2290,14 +2721,14 @@ class QdpCmd {
         printf("%s version %s\n", get_script_name(), Version);
         printf("Qore %s\n", Qore::VersionString);
 %ifndef NoJson
-        printf("JSON output: supported\n");
+        printf("JSON I/O: supported\n");
 %else
-        printf("JSON output: not available (json module not installed)\n");
+        printf("JSON I/O: not available (json module not installed)\n");
 %endif
 %ifndef NoYaml
-        printf("YAML output: supported\n");
+        printf("YAML I/O: supported\n");
 %else
-        printf("YAML output: not available (yaml module not installed)\n");
+        printf("YAML I/O: not available (yaml module not installed)\n");
 %endif
         printf("Line editing: supported (linenoise)\n");
         exit(0);
@@ -2328,6 +2759,25 @@ class QdpCmd {
         }
     }
 
+    #! Parse input value according to the current format (JSON, YAML, or Qore)
+    static auto parseInputValue(string text) {
+        if (opts.json) {
+%ifndef NoJson
+            return parse_json(text);
+%else
+            error("JSON input requested but json module is not available");
+%endif
+        }
+        if (opts.yaml) {
+%ifndef NoYaml
+            return parse_yaml(text);
+%else
+            error("YAML input requested but yaml module is not available");
+%endif
+        }
+        return parse_to_qore_value(text);
+    }
+
     #! Output a single record/hash with optional color formatting
     static outputRecord(auto data) {
         if (opts.json || opts.yaml) {
@@ -2335,6 +2785,74 @@ class QdpCmd {
         } else {
             printf("%s\n", color.formatValue(data));
         }
+    }
+}
+
+#! Wraps an output data provider's createRecord()/createRecordsBulk() as an AbstractDataProcessor
+#! The output provider is created lazily on first submit to ensure it runs in the pipeline's worker thread
+#! (some providers like CsvWriteDataProvider create thread-locked streams on construction)
+class DataProviderOutputProcessor inherits DataProvider::AbstractDataProcessor {
+    private {
+        #! Spec string for lazy resolution in worker thread
+        string output_spec;
+        #! Provider resolved lazily on first submit
+        *AbstractDataProvider output_provider;
+        #! Whether the output provider supports bulk create
+        bool supports_bulk;
+    }
+
+    constructor(string output_spec, bool supports_bulk) {
+        self.output_spec = output_spec;
+        self.supports_bulk = supports_bulk;
+    }
+
+    private submitImpl(code enqueue, auto _data) {
+        # Lazy-resolve on first call (runs in pipeline worker thread)
+        if (!output_provider) {
+            output_provider = QdpCmd::resolveProvider(output_spec);
+        }
+        if (_data.typeCode() == NT_HASH) {
+            if (_data.firstValue().typeCode() == NT_LIST) {
+                output_provider.createRecordsBulk(_data);
+            } else {
+                output_provider.createRecord(_data);
+            }
+        }
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return supports_bulk;
+    }
+}
+
+#! Reports pipeline progress to stderr
+class ProgressMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    private {
+        date start;
+    }
+
+    constructor() {
+        start = now_us();
+    }
+
+    int getIntervalMs() {
+        return 2000;
+    }
+
+    int getRecordInterval() {
+        return 0;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        float elapsed = (now_us() - start).durationSecondsFloat();
+        stderr.printf("\r%s %d records (%.1f rec/s, %.0fs elapsed)   ",
+            QdpCmd::color.info("progress:"), snapshot.total_records_submitted,
+            snapshot.throughput_rps, elapsed);
+    }
+
+    shutdown() {
+        stderr.printf("\n");
     }
 }
 
@@ -2469,30 +2987,66 @@ class InputHelper {
         # event map
         *hash<string, hash<DataProviderMessageInfo>> emap;
 
+        #! Active message ID for default send
+        *string active_msgid;
+
+        #! Current input/output format for interactive mode ("qore", "json", "yaml")
+        string input_format = "qore";
+
+        #! Cached schema hint strings per message ID
+        hash<string, string> schema_hints;
+
         #! Shared history manager
-        QoreHistory::History qhistory({"max_length": 100});
+        QoreHistory::History qhistory({"max_length": 100, "dedup_mode": QoreHistory::DEDUP_FULL});
 
         #! Path to history file (NOTHING if HOME is not set)
         *string history_path;
         const HistoryFile = ".qdp-history";
 
-        const Prompt = "> ";
-
         const Commands = {
-            "event": True,
-            "exit": True,
-            "help": True,
-            "history": True,
-            "info": True,
-            "msg": True,
-            "quit": True,
+            "/event": True,
+            "/events": True,
+            "/exit": True,
+            "/format": True,
+            "/help": True,
+            "/history": True,
+            "/info": True,
+            "/msgs": True,
+            "/msg": True,
+            "/quit": True,
+            "/send": True,
+            "/use": True,
         };
+    }
+
+    string getPrompt() {
+        return active_msgid ? active_msgid + "> " : "> ";
+    }
+
+    #! Set active_msgid to the first available message ID; returns the ID or NOTHING
+    *string setFirstMsgId() {
+        if (mmap) {
+            active_msgid = mmap.firstKey();
+        }
+        return active_msgid;
     }
 
     constructor(AbstractDataProvider provider) {
         self.provider = provider;
         mmap = provider.getMessageTypes();
         emap = provider.getEventTypes();
+
+        # Initialize format from command-line flags
+        if (opts.json) {
+            input_format = "json";
+        } else if (opts.yaml) {
+            input_format = "yaml";
+        }
+
+        # Auto-select if only one message type
+        if (mmap.size() == 1) {
+            active_msgid = mmap.firstKey();
+        }
 
         if (exists ENV.HOME) {
             history_path = ENV.HOME + DirSep + HistoryFile;
@@ -2511,6 +3065,10 @@ class InputHelper {
         }
 
         Linenoise::set_callback(\completion());
+        Linenoise::set_hints_callback(\hintsForInput());
+        Linenoise::set_syntax_callback(\syntaxHighlight());
+        Linenoise::set_right_prompt(getRightPrompt());
+        Linenoise::set_completion_case_insensitive(True);
         # Delegate history navigation to QoreHistory (single source of truth)
         Linenoise::set_history_provider(new QoreHistory::QoreHistoryProvider(qhistory));
     }
@@ -2529,12 +3087,25 @@ class InputHelper {
     string get() {
         string line;
         while (True) {
-            *string line0 = Linenoise::line(Prompt);
+            *string line0 = Linenoise::line(getPrompt());
             if (!exists line0) {
                 line = "exit";
                 break;
             }
             line = line0;
+
+            if (!line.val()) {
+                continue;
+            }
+
+            # History expansion (!! !n !-n !prefix !$)
+            if (line[0] == "!" && line.length() >= 2) {
+                *string expanded = qhistory.expand(line);
+                if (exists expanded) {
+                    printf("! %s\n", expanded);
+                    line = expanded;
+                }
+            }
 
             # Add to QoreHistory (owns persistence, timestamps, dedup)
             qhistory.add(line);
@@ -2548,77 +3119,247 @@ class InputHelper {
                 }
             }
 
-            if (line == 'help' || line == '?') {
+            # Slash commands
+            if (line == "/help" || line == "/?") {
                 interactiveHelp();
                 continue;
             }
-            if (line == "info") {
+            if (line == "/info") {
                 interactiveInfo(provider);
                 continue;
             }
-            if (line == "info messages" || line == "info msgs") {
+            if (line == "/msgs") {
                 showAllMessages();
                 continue;
             }
-            if (line == "info events") {
+            if (line == "/events") {
                 showAllEvents();
                 continue;
             }
-            if (line =~ /^msg\s+/) {
-                showMessageInfo(provider, trim(line.substr(4)));
+            if (line =~ /^\/msg\s+/) {
+                showMessageInfo(provider, trim(line.substr(5)));
                 continue;
             }
-            if (line =~ /^event\s+/) {
-                showEventInfo(provider, trim(line.substr(6)));
+            if (line =~ /^\/event\s+/) {
+                showEventInfo(provider, trim(line.substr(7)));
                 continue;
             }
-            if (line == 'history') {
-                int i = 1;
-                foreach hash<QoreHistory::HistoryEntry> item in (qhistory.getItems()) {
-                    printf("  %3d  %s  %s\n", i++,
-                        format_date("YYYY-MM-DD HH:mm:SS", item.timestamp), item.text);
-                }
+            if (line == "/history" || line =~ /^\/history\s/) {
+                handleHistory(line.length() > 8 ? trim(line.substr(8)) : "");
+                continue;
+            }
+            if (line == "/use" || line =~ /^\/use\s/) {
+                handleUse(line.size() > 4 ? trim(line.substr(4)) : "");
+                continue;
+            }
+            if (line == "/format" || line =~ /^\/format\s/) {
+                handleFormat(line.length() > 7 ? trim(line.substr(7)) : "");
+                continue;
+            }
+            # /send is returned to interactive() for processing
+            if (line =~ /^\/send(\s|$)/) {
+                break;
+            }
+            if (line == "/exit" || line == "/quit") {
+                line = "exit";
+                break;
+            }
+            # Bare exit/quit for convenience
+            if (line == "exit" || line == "quit") {
+                break;
+            }
+            # Unrecognized slash command
+            if (line[0] == "/") {
+                printf("unknown command %y; type /help for help\n", line);
                 continue;
             }
 
-            if (!line.val()) {
-                continue;
-            }
-
+            # Default: return as data to send
             break;
         }
 
         return line;
     }
 
+    private handleUse(string args) {
+        string id = trim(args);
+        if (!id.val()) {
+            # Show current
+            if (active_msgid) {
+                printf("active message type: %s\n", QdpCmd::color.type(active_msgid));
+            } else {
+                printf("no active message type; use /use <id> to set one\n");
+            }
+            return;
+        }
+        if (!mmap.hasKey(id)) {
+            printf("unknown message type %y; available: %s\n", id,
+                (foldl $1 + ", " + $2, (map QdpCmd::color.type($1), keys mmap)));
+            return;
+        }
+        active_msgid = id;
+        printf("active message type set to: %s\n", QdpCmd::color.type(id));
+    }
+
+    #! Returns the right prompt string, including format indicator if not default
+    private string getRightPrompt() {
+        if (input_format == "json") {
+            return "[JSON] " + provider.getName();
+        }
+        if (input_format == "yaml") {
+            return "[YAML] " + provider.getName();
+        }
+        return provider.getName();
+    }
+
+    private handleFormat(string args) {
+        string mode = trim(args);
+        if (!mode.val()) {
+            printf("current format: %s\n", QdpCmd::color.type(input_format));
+            return;
+        }
+        switch (mode) {
+            case "qore":
+                input_format = "qore";
+                delete opts.json;
+                delete opts.yaml;
+                break;
+            case "json":
+%ifndef NoJson
+                input_format = "json";
+                opts.json = True;
+                delete opts.yaml;
+%else
+                printf("%s: JSON format not available (json module not installed)\n",
+                    QdpCmd::color.error("ERROR"));
+                return;
+%endif
+                break;
+            case "yaml":
+%ifndef NoYaml
+                input_format = "yaml";
+                delete opts.json;
+                opts.yaml = True;
+%else
+                printf("%s: YAML format not available (yaml module not installed)\n",
+                    QdpCmd::color.error("ERROR"));
+                return;
+%endif
+                break;
+            default:
+                printf("%s: unknown format %y; use: json, yaml, qore\n",
+                    QdpCmd::color.error("ERROR"), mode);
+                return;
+        }
+        Linenoise::set_right_prompt(getRightPrompt());
+        printf("format set to: %s\n", QdpCmd::color.type(input_format));
+    }
+
+    private handleHistory(string args) {
+        if (!args.val()) {
+            # Show all history
+            int i = 1;
+            foreach hash<QoreHistory::HistoryEntry> item in (qhistory.getItems()) {
+                printf("  %3d  %s  %s\n", i++,
+                    format_date("YYYY-MM-DD HH:mm:SS", item.timestamp), item.text);
+            }
+            return;
+        }
+
+        if (args =~ /^search\s+/) {
+            string pattern = trim(args.substr(7));
+            if (!pattern.val()) {
+                printf("usage: /history search <pattern>\n");
+                return;
+            }
+            list<hash<QoreHistory::HistoryEntry>> matches =
+                qhistory.search(pattern, QoreHistory::MATCH_SUBSTRING);
+            if (!matches) {
+                printf("no history entries matching %y\n", pattern);
+                return;
+            }
+            foreach hash<QoreHistory::HistoryEntry> item in (matches) {
+                printf("  %s  %s\n", format_date("YYYY-MM-DD HH:mm:SS", item.timestamp),
+                    item.text);
+            }
+            printf("  %d match%s\n", matches.size(), matches.size() == 1 ? "" : "es");
+            return;
+        }
+
+        if (args == "clear") {
+            int count = qhistory.size();
+            qhistory.clear();
+            printf("history cleared (%d entr%s removed)\n", count, count == 1 ? "y" : "ies");
+            return;
+        }
+
+        if (args =~ /^delete\s+/) {
+            string nstr = trim(args.substr(7));
+            if (nstr !~ /^\d+$/) {
+                printf("usage: /history delete <n> (1-based entry number)\n");
+                return;
+            }
+            int n = nstr.toInt();
+            if (n < 1) {
+                printf("entry number must be >= 1\n");
+                return;
+            }
+            if (qhistory.removeAt(n - 1)) {
+                printf("history entry %d deleted\n", n);
+            } else {
+                printf("invalid entry number %d (history has %d entries)\n", n, qhistory.size());
+            }
+            return;
+        }
+
+        printf("unknown /history subcommand %y; use: search <pat>, clear, delete <n>\n", args);
+    }
+
     private interactiveHelp() {
         printf("%s\n", QdpCmd::color.bold("SENDING MESSAGES"));
-        printHelpLine("<msg-id>: <data>", "Send a message to the provider");
-        printf("                    Example: data: action=ping,id=123\n");
+        printHelpLine("<data>", "Send data using the active message type");
+        printHelpLine("/send <id> <data>", "Send data with a specific message type");
+        printHelpLine("/use <id>", "Set the active message type");
+        printHelpLine("/use", "Show the current active message type");
+        printf("                    Example: action=ping,id=123\n");
         if (mmap) {
             printf("  %s: %s\n", QdpCmd::color.key("Available"),
                 (foldl $1 + ", " + $2, (map QdpCmd::color.type($1), keys mmap)));
-            printf("  (type '%s' or '%s <id>' for details)\n", QdpCmd::color.key("info msgs"),
-                QdpCmd::color.key("msg"));
         }
         printf("%s\n", QdpCmd::color.bold("SESSION COMMANDS"));
-        printHelpLine("help, ?", "Show this help");
-        printHelpLine("info", "Show connection info");
-        printHelpLine("info msgs", "List all available messages");
-        printHelpLine("info events", "List all available events");
-        printHelpLine("msg <id>", "Show message type details");
-        printHelpLine("event <id>", "Show event type details");
-        printHelpLine("history", "Show command history");
+        printHelpLine("/help, /?", "Show this help");
+        printHelpLine("/info", "Show connection info");
+        printHelpLine("/msgs", "List all available messages");
+        printHelpLine("/events", "List all available events");
+        printHelpLine("/msg <id>", "Show message type details");
+        printHelpLine("/event <id>", "Show event type details");
+        printHelpLine("/format [mode]", "Set input/output format (json, yaml, qore)");
+        printHelpLine("/quit, /exit", "Exit interactive mode");
         printHelpLine("quit, exit", "Exit interactive mode");
+        printf("%s\n", QdpCmd::color.bold("HISTORY"));
+        printHelpLine("/history", "Show command history");
+        printHelpLine("/history search <pat>", "Search history for pattern");
+        printHelpLine("/history clear", "Clear command history");
+        printHelpLine("/history delete <n>", "Delete history entry by number");
+        printHelpLine("!!", "Repeat last command");
+        printHelpLine("!<n>", "Repeat command by number");
+        printHelpLine("!-<n>", "Repeat command relative to end");
+        printHelpLine("!<prefix>", "Repeat last command starting with prefix");
+        printHelpLine("!$", "Last word of last command");
         printf("%s\n", QdpCmd::color.bold("KEYBOARD SHORTCUTS"));
         printHelpLine("Enter", "Send message / execute command");
         printHelpLine("Ctrl+C", "Exit interactive mode");
         printHelpLine("Up/Down", "Previous command in history");
-        printHelpLine("Tab", "Autocomplete message ID");
+        printHelpLine("Ctrl+R/Ctrl+S", "Search history backward/forward");
+        printHelpLine("Tab", "Autocomplete");
     }
 
     private printHelpLine(string key, string desc) {
-        printf("  %s%s%s\n", QdpCmd::color.key(key), strmul(" ", 18 - key.length()), desc);
+        int padding = 20 - key.length();
+        if (padding < 2) {
+            padding = 2;
+        }
+        printf("  %s%s%s\n", QdpCmd::color.key(key), strmul(" ", padding), desc);
     }
 
     private interactiveInfo(AbstractDataProvider provider) {
@@ -2645,14 +3386,14 @@ class InputHelper {
         *hash<string, hash<DataProviderMessageInfo>> messages = provider.getMessageTypes();
         if (messages) {
             printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Outgoing Messages"),
-                (foldl $1 + ", " + $2, keys messages), QdpCmd::color.key("msg"));
+                (foldl $1 + ", " + $2, keys messages), QdpCmd::color.key("/msg"));
         }
 
         # Events summary
         *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
         if (events) {
             printf("  %s: %s (type '%s <id>' for details)\n", QdpCmd::color.key("Incoming Events"),
-                (foldl $1 + ", " + $2, keys events), QdpCmd::color.key("event"));
+                (foldl $1 + ", " + $2, keys events), QdpCmd::color.key("/event"));
         }
     }
 
@@ -2681,7 +3422,7 @@ class InputHelper {
 
     private showMessageInfo(AbstractDataProvider provider, string msg_id) {
         if (!msg_id.val()) {
-            printf("%s: usage: msg <message-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+            printf("%s: usage: /msg <message-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
                 (foldl $1 + ", " + $2, keys mmap));
             return;
         }
@@ -2703,7 +3444,7 @@ class InputHelper {
     private showEventInfo(AbstractDataProvider provider, string event_id) {
         if (!event_id.val()) {
             *hash<string, hash<DataProviderMessageInfo>> events = provider.getEventTypes();
-            printf("%s: usage: event <event-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
+            printf("%s: usage: /event <event-id>; valid: %s\n", QdpCmd::color.error("ERROR"),
                 events ? (foldl $1 + ", " + $2, keys events) : "(none)");
             return;
         }
@@ -2729,7 +3470,7 @@ class InputHelper {
             return;
         }
         printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED MESSAGES"),
-            QdpCmd::color.key("msg"));
+            QdpCmd::color.key("/msg"));
         foreach hash<auto> msg in (mmap.pairIterator()) {
             string desc = msg.value.desc ?? "(no description)";
             printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(msg.key));
@@ -2743,7 +3484,7 @@ class InputHelper {
             return;
         }
         printf("%s (type '%s <id>' for type details)\n", QdpCmd::color.bold("SUPPORTED EVENTS"),
-            QdpCmd::color.key("event"));
+            QdpCmd::color.key("/event"));
         foreach hash<auto> evt in (emap.pairIterator()) {
             string desc = evt.value.desc ?? "(no description)";
             printf("  %s %s\n", QdpCmd::color.dim("→"), QdpCmd::color.key(evt.key));
@@ -2751,45 +3492,221 @@ class InputHelper {
         }
     }
 
-    softlist<string> completion(string str) {
-        list<string> rv = ();
-        # Info subcommands
-        list<string> info_subcmds = ("msgs", "messages", "events");
-        # For empty input (after "msg ", "event ", or "info ")
-        if (!str.val()) {
-            rv += keys mmap;
-            if (emap) {
-                rv += keys emap;
+    #! Hints callback — shows inline argument hints while typing
+    private *string hintsForInput(string input) {
+        try {
+            # Slash command argument hints
+            if (input[0] == "/") {
+                if (input == "/" || "/use".equalPartial(input)) {
+                    return " <msg-id>";
+                }
+                if ("/send".equalPartial(input)) {
+                    return " <msg-id> <data>";
+                }
+                if ("/msg".equalPartial(input)) {
+                    return " <msg-id>";
+                }
+                if ("/event".equalPartial(input)) {
+                    return " <event-id>";
+                }
+                if ("/format".equalPartial(input)) {
+                    return " <json|yaml|qore>";
+                }
+                if ("/history".equalPartial(input)) {
+                    return " [search <pat> | clear | delete <n>]";
+                }
+                return;
             }
-            rv += info_subcmds;
-            return rv;
-        }
-        # Complete command names
-        foreach string cmd in (keys Commands) {
-            if (cmd.equalPartial(str)) {
-                rv += cmd;
+
+            # Empty input hint
+            if (!input.val()) {
+                return " type data to send or /help";
             }
-        }
-        # Complete info subcommands (for after "info ")
-        foreach string subcmd in (info_subcmds) {
-            if (subcmd.equalPartial(str)) {
-                rv += subcmd;
-            }
-        }
-        # Complete message IDs (user adds ":" for sending)
-        foreach string msg in (keys mmap) {
-            if (msg.equalPartial(str)) {
-                rv += msg;
-            }
-        }
-        # Complete event IDs (for after "event ")
-        if (emap) {
-            foreach string evt in (keys emap) {
-                if (evt.equalPartial(str)) {
-                    rv += evt;
+
+            # Bare data input — show schema hint for active message type
+            if (active_msgid) {
+                if (!schema_hints.hasKey(active_msgid)) {
+                    *hash<DataProviderMessageInfo> info = mmap{active_msgid};
+                    if (info) {
+                        AbstractDataProviderType type = info.type;
+                        *hash<string, AbstractDataField> fields = type.getFields();
+                        if (fields) {
+                            list<string> parts = ();
+                            foreach hash<auto> f in (fields.pairIterator()) {
+                                parts += f.key + ": " + f.value.getType().getName();
+                            }
+                            schema_hints{active_msgid} = " {" + (foldl $1 + ", " + $2, parts) + "}";
+                        } else {
+                            schema_hints{active_msgid} = " (" + type.getName() + ")";
+                        }
+                    }
+                }
+                *string hint = schema_hints{active_msgid};
+                if (hint) {
+                    # Truncate if too long for terminal
+                    int cols = Linenoise::columns();
+                    int avail = cols - input.length() - 1;
+                    if (avail > 3 && hint.length() > avail) {
+                        hint = hint.substr(0, avail - 3) + "...";
+                    }
+                    return avail > 3 ? hint : NOTHING;
                 }
             }
+        } catch () {
+            # Never crash from hints
         }
+    }
+
+    #! Syntax highlighting callback — colorizes input
+    private string syntaxHighlight(string input) {
+        try {
+            # Slash commands: command name in cyan
+            if (input[0] == "/") {
+                # Find end of command name
+                int sp = index(input, " ");
+                if (sp > 0) {
+                    return "\033[36m" + input.substr(0, sp) + "\033[0m" + input.substr(sp);
+                }
+                return "\033[36m" + input + "\033[0m";
+            }
+
+            # JSON mode: JSON-specific highlighting
+            if (input_format == "json") {
+                string result = input;
+                # Keys ("key":) → cyan (key + colon together)
+                result = regex_subst(result, "(\"[^\"]*\")\\s*:", "\033[36m$1\033[0m:", RE_Global);
+                # Value strings (not already colored as keys) → yellow
+                # Match quoted strings not preceded by escape codes
+                result = regex_subst(result, "(?<!\033\\[0m)(\"[^\"]*\")", "\033[33m$1\033[0m",
+                    RE_Global);
+                # true/false/null → magenta
+                result = regex_subst(result, "\\b(true|false|null)\\b", "\033[35m$&\033[0m",
+                    RE_Global);
+                # Numbers → bright blue
+                result = regex_subst(result, "(?<!\\[)\\b\\d+(\\.\\d+)?\\b", "\033[94m$&\033[0m",
+                    RE_Global);
+                return result;
+            }
+
+            # YAML mode: skip highlighting (too many edge cases for simple regex)
+            if (input_format == "yaml") {
+                return input;
+            }
+
+            # Qore mode: colorize value literals
+            string result = input;
+
+            # Double-quoted strings → yellow
+            result = regex_subst(result, "\"[^\"]*\"", "\033[33m$&\033[0m", RE_Global);
+            # Single-quoted strings → yellow
+            result = regex_subst(result, "'[^']*'", "\033[33m$&\033[0m", RE_Global);
+            # Special values → magenta
+            result = regex_subst(result, "\\b(True|False|NOTHING)\\b", "\033[35m$&\033[0m",
+                RE_Global);
+            # Numbers → bright blue
+            result = regex_subst(result, "\\b\\d+(\\.\\d+)?\\b", "\033[94m$&\033[0m", RE_Global);
+
+            return result;
+        } catch () {
+            return input;
+        }
+    }
+
+    softlist<string> completion(string str) {
+        list<string> rv = ();
+
+        # For empty input, suggest slash commands
+        if (!str.val()) {
+            rv += keys Commands;
+            return rv;
+        }
+
+        # After "/use " or "/send ", complete with message IDs
+        if (str =~ /^\/use\s+/) {
+            string prefix = trim(str.substr(4));
+            foreach string msg in (keys mmap) {
+                if (!prefix.val() || msg.equalPartial(prefix)) {
+                    rv += "/use " + msg;
+                }
+            }
+            return rv;
+        }
+        if (str =~ /^\/send\s+/) {
+            string prefix = trim(str.substr(5));
+            # Only complete the message ID part (before any space in the rest)
+            if (prefix !~ /\s/) {
+                foreach string msg in (keys mmap) {
+                    if (!prefix.val() || msg.equalPartial(prefix)) {
+                        rv += "/send " + msg + " ";
+                    }
+                }
+            }
+            return rv;
+        }
+
+        # After "/msg ", complete with message IDs
+        if (str =~ /^\/msg\s+/) {
+            string prefix = trim(str.substr(4));
+            foreach string msg in (keys mmap) {
+                if (!prefix.val() || msg.equalPartial(prefix)) {
+                    rv += "/msg " + msg;
+                }
+            }
+            return rv;
+        }
+
+        # After "/event ", complete with event IDs
+        if (str =~ /^\/event\s+/) {
+            string prefix = trim(str.substr(6));
+            if (emap) {
+                foreach string evt in (keys emap) {
+                    if (!prefix.val() || evt.equalPartial(prefix)) {
+                        rv += "/event " + evt;
+                    }
+                }
+            }
+            return rv;
+        }
+
+        # After "/format ", complete with available formats
+        if (str =~ /^\/format\s+/) {
+            string prefix = trim(str.substr(7));
+            list<string> formats = ("qore",);
+%ifndef NoJson
+            formats += "json";
+%endif
+%ifndef NoYaml
+            formats += "yaml";
+%endif
+            foreach string fmt in (formats) {
+                if (!prefix.val() || fmt.equalPartial(prefix)) {
+                    rv += "/format " + fmt;
+                }
+            }
+            return rv;
+        }
+
+        # After "/history ", complete with subcommands
+        if (str =~ /^\/history\s+/) {
+            string prefix = trim(str.substr(8));
+            foreach string subcmd in ("search", "clear", "delete") {
+                if (!prefix.val() || subcmd.equalPartial(prefix)) {
+                    rv += "/history " + subcmd + " ";
+                }
+            }
+            return rv;
+        }
+
+        # Complete slash command names
+        if (str[0] == "/") {
+            foreach string cmd in (keys Commands) {
+                if (cmd.equalPartial(str)) {
+                    rv += cmd;
+                }
+            }
+            return rv;
+        }
+
         return rv;
     }
 }
