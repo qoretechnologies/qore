@@ -567,6 +567,17 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new invoices, bills, payments, customers, vendors, expenses, and more
       - action catalog integration with reference data support for organizations, customers, vendors, and items
       - connection support with \c zohobooks:// URL scheme
+    - @ref zohoinventoryrestclientintro "ZohoInventoryRestClient" module
+      - new module providing a REST client for Zoho Inventory's inventory management API
+      - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+      - provides ZohoInventoryRestConnection for connection management with \c zohoinventory:// URL scheme
+    - @ref zohoinventorydataproviderintro "ZohoInventoryDataProvider" module
+      - new module providing a data provider API for Zoho Inventory
+      - full CRUD support for contacts, items, item groups, packages, purchase orders, sales orders, and shipment orders
+      - create, read, and delete support for item adjustments
+      - polling-based event triggers for new contacts, invoices, items, item groups, item adjustments, packages, purchase orders, and sales orders
+      - action catalog integration with reference data support for organizations, contacts, items, and orders
+      - connection support with \c zohoinventory:// URL scheme
     - @ref zohoinvoicerestclientintro "ZohoInvoiceRestClient" module
       - new module providing a REST client for Zoho Invoice's invoicing API
       - supports OAuth2 authentication with regional endpoint support (.com, .eu, .in, .com.au, .ca, .sa, .jp)

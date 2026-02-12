@@ -1,0 +1,1545 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ZohoInventoryDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ZohoInventoryRestClient.qm
+%requires ../../../../qlib/ZohoInventoryDataProvider
+
+%exec-class ZohoInventoryDataProviderTest
+
+public class ZohoInventoryDataProviderTest inherits QUnit::Test {
+    private {
+        #! Zoho Inventory REST client for integration tests
+        *ZohoInventoryRestClient::ZohoInventoryRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "client_id": "i,client-id=s",
+            "client_secret": "s,client-secret=s",
+            "refresh_token": "r,refresh-token=s",
+            "token": "t,token=s",
+            "org_id": "o,org-id=s",
+            "subdomain": "S,subdomain=s",
+            "domain": "D,domain=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test contact ID (created during test)
+        *string testContactId;
+
+        #! Test item ID (created during test)
+        *string testItemId;
+
+        #! Test sales order ID (created during test)
+        *string testSalesOrderId;
+
+        #! Test invoice ID (created during test)
+        *string testInvoiceId;
+
+        #! Organization ID for tests (passed per-action, not from connection)
+        *string organizationId;
+    }
+
+    constructor() : Test("ZohoInventoryDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require Zoho Inventory credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Polling trigger tests (require credentials)
+        addTestCase("polling trigger tests", \pollingTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Zoho Inventory client for integration tests
+    private setupConnection() {
+        # Organization ID is always required for actions (passed per-action, not from connection)
+        organizationId = m_options.org_id ?? ENV.ZOHOINVENTORY_ORGANIZATION_ID;
+
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.ZOHOINVENTORY_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            if (!organizationId) {
+                if (m_options.verbose) {
+                    printf("Warning: No organization_id provided. Use -o option or "
+                        "ZOHOINVENTORY_ORGANIZATION_ID env var.\n");
+                }
+            }
+            client = get_connection(conn_name).get();
+            # Set organization_id on the client for request providers
+            if (organizationId) {
+                client.setOrganizationId(organizationId);
+            }
+            return;
+        }
+
+        *string client_id = m_options.client_id ?? ENV.ZOHOINVENTORY_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.ZOHOINVENTORY_CLIENT_SECRET;
+        *string refresh_token = m_options.refresh_token ?? ENV.ZOHOINVENTORY_REFRESH_TOKEN;
+        *string token = m_options.token ?? ENV.ZOHOINVENTORY_TOKEN;
+
+        # Allow token-only mode: just access token + org_id for quick testing
+        if (token && organizationId && (!client_id || !client_secret || !refresh_token)) {
+            if (m_options.verbose) {
+                printf("Using token-only mode (no OAuth2 refresh)\n");
+            }
+            hash<auto> opts = {
+                "subdomain": m_options.subdomain ?? ENV.ZOHOINVENTORY_SUBDOMAIN ?? "zoho",
+                "domain": m_options.domain ?? ENV.ZOHOINVENTORY_DOMAIN ?? ".com",
+                "token": token,
+            };
+            client = new ZohoInventoryRestClient::ZohoInventoryRestClient(opts);
+            if (organizationId) {
+                client.setOrganizationId(organizationId);
+            }
+            return;
+        }
+
+        if (!client_id || !client_secret || !refresh_token || !organizationId) {
+            if (m_options.verbose) {
+                printf("Missing Zoho Inventory credentials. Required:\n");
+                printf("  - ZOHOINVENTORY_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or (token-only mode):\n");
+                printf("  - ZOHOINVENTORY_TOKEN or -t option (access token)\n");
+                printf("  - ZOHOINVENTORY_ORGANIZATION_ID or -o option\n");
+                printf("Or (full OAuth2 mode):\n");
+                printf("  - ZOHOINVENTORY_CLIENT_ID or -i option\n");
+                printf("  - ZOHOINVENTORY_CLIENT_SECRET or -s option\n");
+                printf("  - ZOHOINVENTORY_REFRESH_TOKEN or -r option\n");
+                printf("  - ZOHOINVENTORY_ORGANIZATION_ID or -o option\n");
+                printf("  - ZOHOINVENTORY_TOKEN or -t option (optional access token)\n");
+            }
+            return;
+        }
+
+        hash<auto> opts = {
+            "oauth2_client_id": client_id,
+            "oauth2_client_secret": client_secret,
+            "oauth2_refresh_token": refresh_token,
+            # NOTE: organization_id is intentionally NOT set here to match real Qorus behavior
+            # where it's selected per-action, not from the connection
+            "subdomain": m_options.subdomain ?? ENV.ZOHOINVENTORY_SUBDOMAIN ?? "zoho",
+            "domain": m_options.domain ?? ENV.ZOHOINVENTORY_DOMAIN ?? ".com",
+        };
+        if (token) {
+            opts.token = token;
+        }
+
+        client = new ZohoInventoryRestClient::ZohoInventoryRestClient(opts);
+
+        # Set organization_id on the client for request providers (create, update, delete, get)
+        # Search providers pass it via search_options, the REST client won't duplicate it
+        if (organizationId) {
+            client.setOrganizationId(organizationId);
+        }
+    }
+
+    #! Get a test provider - uses real client if available, otherwise creates with do_not_connect
+    private ZohoInventoryDataProvider::ZohoInventoryDataProvider getTestProvider() {
+        if (client) {
+            return new ZohoInventoryDataProvider::ZohoInventoryDataProvider(client);
+        }
+        ZohoInventoryRestClient::ZohoInventoryRestClient rest({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+        }, True);
+        return new ZohoInventoryDataProvider::ZohoInventoryDataProvider(rest);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov = getTestProvider();
+        assertEq("zohoinventory", prov.getName());
+        assertTrue(prov.getDesc().val());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("zohoinventory");
+        assertEq("zohoinventory", factory.getInfo().name);
+        assertEq("Zoho Inventory data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("zohoinventoryrestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov = getTestProvider();
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+        assertEq("ZohoInventoryDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("zohoinventoryrestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov = getTestProvider();
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify collection providers exist
+        assertTrue(children.contains("contacts"));
+        assertTrue(children.contains("contactpersons"));
+        assertTrue(children.contains("items"));
+        assertTrue(children.contains("itemgroups"));
+        assertTrue(children.contains("inventoryadjustments"));
+        assertTrue(children.contains("packages"));
+        assertTrue(children.contains("purchaseorders"));
+        assertTrue(children.contains("salesorders"));
+        assertTrue(children.contains("invoices"));
+
+        # Verify CRUD providers exist
+        assertTrue(children.contains("create-invoice"));
+        assertTrue(children.contains("create-contact"));
+        assertTrue(children.contains("create-contact-person"));
+        assertTrue(children.contains("create-item"));
+        assertTrue(children.contains("create-item-group"));
+        assertTrue(children.contains("create-item-adjustment"));
+        assertTrue(children.contains("create-package"));
+        assertTrue(children.contains("create-purchase-order"));
+        assertTrue(children.contains("create-sales-order"));
+        assertTrue(children.contains("create-shipment-order"));
+
+        assertTrue(children.contains("get-invoice"));
+        assertTrue(children.contains("get-contact"));
+        assertTrue(children.contains("get-contact-person"));
+        assertTrue(children.contains("get-item"));
+        assertTrue(children.contains("get-item-group"));
+        assertTrue(children.contains("get-item-adjustment"));
+        assertTrue(children.contains("get-package"));
+        assertTrue(children.contains("get-purchase-order"));
+        assertTrue(children.contains("get-sales-order"));
+        assertTrue(children.contains("get-shipment-order"));
+
+        assertTrue(children.contains("update-invoice"));
+        assertTrue(children.contains("update-contact"));
+        assertTrue(children.contains("update-contact-person"));
+        assertTrue(children.contains("update-item"));
+        assertTrue(children.contains("update-item-group"));
+        assertTrue(children.contains("update-package"));
+        assertTrue(children.contains("update-purchase-order"));
+        assertTrue(children.contains("update-sales-order"));
+
+        assertTrue(children.contains("delete-invoice"));
+        assertTrue(children.contains("delete-contact"));
+        assertTrue(children.contains("delete-contact-person"));
+        assertTrue(children.contains("delete-item-group"));
+        assertTrue(children.contains("delete-item-adjustment"));
+        assertTrue(children.contains("delete-package"));
+        assertTrue(children.contains("delete-purchase-order"));
+        assertTrue(children.contains("delete-sales-order"));
+        assertTrue(children.contains("delete-shipment-order"));
+        assertTrue(children.contains("delete-item"));
+
+        # Verify shipment order providers
+        assertTrue(children.contains("shipmentorders"));
+        assertTrue(children.contains("update-shipment-order"));
+
+        # Verify special action providers exist
+        assertTrue(children.contains("mark-contact-active"));
+        assertTrue(children.contains("mark-contact-person-primary"));
+        assertTrue(children.contains("mark-item-active"));
+        assertTrue(children.contains("mark-shipment-delivered"));
+        assertTrue(children.contains("api-call"));
+
+        # Verify events provider exists
+        assertTrue(children.contains("events"));
+
+        # Check contacts child provider
+        AbstractDataProvider contacts = prov.getChildProvider("contacts");
+        assertEq("contacts", contacts.getName());
+        hash<DataProviderInfo> contactsInfo = contacts.getInfo();
+        assertTrue(contactsInfo.supports_read);
+        assertTrue(contactsInfo.supports_native_search);
+
+        # Check items child provider
+        AbstractDataProvider items = prov.getChildProvider("items");
+        assertEq("items", items.getName());
+        hash<DataProviderInfo> itemsInfo = items.getInfo();
+        assertTrue(itemsInfo.supports_read);
+        assertTrue(itemsInfo.supports_native_search);
+
+        # Check salesorders child provider
+        AbstractDataProvider salesorders = prov.getChildProvider("salesorders");
+        assertEq("salesorders", salesorders.getName());
+        hash<DataProviderInfo> salesordersInfo = salesorders.getInfo();
+        assertTrue(salesordersInfo.supports_read);
+        assertTrue(salesordersInfo.supports_native_search);
+
+        # Check purchaseorders child provider
+        AbstractDataProvider purchaseorders = prov.getChildProvider("purchaseorders");
+        assertEq("purchaseorders", purchaseorders.getName());
+        hash<DataProviderInfo> purchaseordersInfo = purchaseorders.getInfo();
+        assertTrue(purchaseordersInfo.supports_read);
+        assertTrue(purchaseordersInfo.supports_native_search);
+
+        # Check invoices child provider
+        AbstractDataProvider invoices = prov.getChildProvider("invoices");
+        assertEq("invoices", invoices.getName());
+        hash<DataProviderInfo> invoicesInfo = invoices.getInfo();
+        assertTrue(invoicesInfo.supports_read);
+        assertTrue(invoicesInfo.supports_native_search);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+
+        # Check events child providers (triggers)
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-contact"));
+        assertTrue(eventChildren.contains("new-invoice"));
+        assertTrue(eventChildren.contains("new-item-adjustment"));
+        assertTrue(eventChildren.contains("new-item-group"));
+        assertTrue(eventChildren.contains("new-item"));
+        assertTrue(eventChildren.contains("new-package"));
+        assertTrue(eventChildren.contains("new-purchase-order"));
+        assertTrue(eventChildren.contains("new-sales-order"));
+
+        # Verify event providers have correct info
+        AbstractDataProvider newContactEvent = events.getChildProvider("new-contact");
+        assertEq("new-contact", newContactEvent.getName());
+        hash<DataProviderInfo> newContactInfo = newContactEvent.getInfo();
+        assertTrue(newContactInfo.supports_observable);
+
+        AbstractDataProvider newInvoiceEvent = events.getChildProvider("new-invoice");
+        assertEq("new-invoice", newInvoiceEvent.getName());
+        hash<DataProviderInfo> newInvoiceInfo = newInvoiceEvent.getInfo();
+        assertTrue(newInvoiceInfo.supports_observable);
+
+        AbstractDataProvider newItemEvent = events.getChildProvider("new-item");
+        assertEq("new-item", newItemEvent.getName());
+        hash<DataProviderInfo> newItemInfo = newItemEvent.getInfo();
+        assertTrue(newItemInfo.supports_observable);
+
+        AbstractDataProvider newSalesOrderEvent = events.getChildProvider("new-sales-order");
+        assertEq("new-sales-order", newSalesOrderEvent.getName());
+        hash<DataProviderInfo> newSalesOrderInfo = newSalesOrderEvent.getInfo();
+        assertTrue(newSalesOrderInfo.supports_observable);
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov = getTestProvider();
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event");
+        });
+
+        # Test invalid subdomain
+        assertThrows("ZOHOINVENTORY-ERROR", sub() {
+            new ZohoInventoryRestClient::ZohoInventoryRestClient({
+                "oauth2_client_id": "x",
+                "oauth2_client_secret": "x",
+                "subdomain": "invalid",
+                "domain": ".com",
+            });
+        });
+
+        # Test invalid domain
+        assertThrows("ZOHOINVENTORY-ERROR", sub() {
+            new ZohoInventoryRestClient::ZohoInventoryRestClient({
+                "oauth2_client_id": "x",
+                "oauth2_client_secret": "x",
+                "subdomain": "zoho",
+                "domain": ".invalid",
+            });
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test with different subdomains
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientZoho({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".com",
+        }, True);
+        assertEq("https://www.zohoapis.com/inventory/v1", clientZoho.getURL());
+        assertEq("zoho", clientZoho.getSubdomain());
+        assertEq(".com", clientZoho.getDomain());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientZohoCloud({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zohocloud",
+            "domain": ".com",
+        }, True);
+        assertEq("https://www.zohoapis.com/inventory/v1", clientZohoCloud.getURL());
+        assertEq("zohocloud", clientZohoCloud.getSubdomain());
+
+        # Test with different domains
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientEU({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".eu",
+        }, True);
+        assertEq("https://www.zohoapis.eu/inventory/v1", clientEU.getURL());
+        assertEq(".eu", clientEU.getDomain());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientIN({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".in",
+        }, True);
+        assertEq("https://www.zohoapis.in/inventory/v1", clientIN.getURL());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientAU({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".com.au",
+        }, True);
+        assertEq("https://www.zohoapis.com.au/inventory/v1", clientAU.getURL());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientCA({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".ca",
+        }, True);
+        assertEq("https://www.zohoapis.ca/inventory/v1", clientCA.getURL());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientSA({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".sa",
+        }, True);
+        assertEq("https://www.zohoapis.sa/inventory/v1", clientSA.getURL());
+
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientJP({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "subdomain": "zoho",
+            "domain": ".jp",
+        }, True);
+        assertEq("https://www.zohoapis.jp/inventory/v1", clientJP.getURL());
+
+        # Test default subdomain and domain
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientDefault({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+        }, True);
+        assertEq("https://www.zohoapis.com/inventory/v1", clientDefault.getURL());
+        assertEq("zoho", clientDefault.getSubdomain());
+        assertEq(".com", clientDefault.getDomain());
+
+        # Test organization_id handling
+        ZohoInventoryRestClient::ZohoInventoryRestClient clientWithOrg({
+            "oauth2_client_id": "x",
+            "oauth2_client_secret": "x",
+            "organization_id": "12345",
+        }, True);
+        assertEq("12345", clientWithOrg.getOrganizationId());
+
+        # Test setOrganizationId
+        clientWithOrg.setOrganizationId("67890");
+        assertEq("67890", clientWithOrg.getOrganizationId());
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("zohoinventory");
+        assertEq("Zoho Inventory REST Connection", scheme.display_name);
+        assertTrue(scheme.short_desc.val());
+        assertTrue(scheme.desc.val());
+
+        # Verify required options (token OR oauth2 client credentials)
+        assertEq("token|oauth2_client_id,oauth2_client_secret", scheme.required_options);
+        assertTrue(scheme.options.hasKey("subdomain"));
+        assertTrue(scheme.options.hasKey("domain"));
+        assertTrue(scheme.options.hasKey("oauth2_client_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_secret"));
+        assertTrue(scheme.options.hasKey("oauth2_refresh_token"));
+        # Note: organization_id is NOT a connection option - it's an action-level option with ref_data
+
+        # Check subdomain option
+        assertEq("zoho", scheme.options.subdomain.default_value);
+        assertTrue(scheme.options.subdomain.preselected);
+        assertTrue(scheme.options.subdomain.allowed_values.size() == 2);
+
+        # Check domain option
+        assertEq(".com", scheme.options.domain.default_value);
+        assertTrue(scheme.options.domain.preselected);
+        assertTrue(scheme.options.domain.allowed_values.size() == 7);
+
+        # Verify connection can create data provider
+        ZohoInventoryRestClient::ZohoInventoryRestConnection conn("test", "test connection",
+            "zohoinventory://www.zohoapis.com", {}, {
+                "oauth2_client_id": "x",
+                "oauth2_client_secret": "x",
+                "subdomain": "zoho",
+                "domain": ".com",
+            });
+        assertTrue(conn.hasDataProvider());
+        assertEq("ZohoInventory", conn.getAppName());
+        assertEq("zohoinventory", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Zoho Inventory app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            ZohoInventoryDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify action count (10 DPAT_FIND + 44 DPAT_API + 8 DPAT_EVENT = 62)
+        assertEq(62, actions.size());
+
+        # Get action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Verify contact actions
+        assertTrue(actionNames.contains("list-contacts"));
+        assertTrue(actionNames.contains("create-contact"));
+        assertTrue(actionNames.contains("get-contact"));
+        assertTrue(actionNames.contains("update-contact"));
+        assertTrue(actionNames.contains("delete-contact"));
+        assertTrue(actionNames.contains("mark-contact-active"));
+
+        # Verify contact person actions
+        assertTrue(actionNames.contains("list-contact-persons"));
+        assertTrue(actionNames.contains("create-contact-person"));
+        assertTrue(actionNames.contains("get-contact-person"));
+        assertTrue(actionNames.contains("update-contact-person"));
+        assertTrue(actionNames.contains("delete-contact-person"));
+        assertTrue(actionNames.contains("mark-contact-person-primary"));
+
+        # Verify item actions
+        assertTrue(actionNames.contains("list-items"));
+        assertTrue(actionNames.contains("create-item"));
+        assertTrue(actionNames.contains("get-item"));
+        assertTrue(actionNames.contains("update-item"));
+        assertTrue(actionNames.contains("delete-item"));
+        assertTrue(actionNames.contains("mark-item-active"));
+
+        # Verify item group actions
+        assertTrue(actionNames.contains("list-item-groups"));
+        assertTrue(actionNames.contains("create-item-group"));
+        assertTrue(actionNames.contains("get-item-group"));
+        assertTrue(actionNames.contains("update-item-group"));
+        assertTrue(actionNames.contains("delete-item-group"));
+
+        # Verify item adjustment actions
+        assertTrue(actionNames.contains("list-item-adjustments"));
+        assertTrue(actionNames.contains("create-item-adjustment"));
+        assertTrue(actionNames.contains("get-item-adjustment"));
+        assertTrue(actionNames.contains("delete-item-adjustment"));
+
+        # Verify package actions
+        assertTrue(actionNames.contains("list-packages"));
+        assertTrue(actionNames.contains("create-package"));
+        assertTrue(actionNames.contains("get-package"));
+        assertTrue(actionNames.contains("update-package"));
+        assertTrue(actionNames.contains("delete-package"));
+
+        # Verify purchase order actions
+        assertTrue(actionNames.contains("list-purchase-orders"));
+        assertTrue(actionNames.contains("create-purchase-order"));
+        assertTrue(actionNames.contains("get-purchase-order"));
+        assertTrue(actionNames.contains("update-purchase-order"));
+        assertTrue(actionNames.contains("delete-purchase-order"));
+
+        # Verify sales order actions
+        assertTrue(actionNames.contains("list-sales-orders"));
+        assertTrue(actionNames.contains("create-sales-order"));
+        assertTrue(actionNames.contains("get-sales-order"));
+        assertTrue(actionNames.contains("update-sales-order"));
+        assertTrue(actionNames.contains("delete-sales-order"));
+
+        # Verify invoice actions
+        assertTrue(actionNames.contains("list-invoices"));
+        assertTrue(actionNames.contains("create-invoice"));
+        assertTrue(actionNames.contains("get-invoice"));
+        assertTrue(actionNames.contains("update-invoice"));
+        assertTrue(actionNames.contains("delete-invoice"));
+
+        # Verify shipment order actions
+        assertTrue(actionNames.contains("create-shipment-order"));
+        assertTrue(actionNames.contains("get-shipment-order"));
+        assertTrue(actionNames.contains("delete-shipment-order"));
+        assertTrue(actionNames.contains("update-shipment-order"));
+        assertTrue(actionNames.contains("list-shipment-orders"));
+        assertTrue(actionNames.contains("mark-shipment-delivered"));
+
+        # Verify api-call action
+        assertTrue(actionNames.contains("api-call"));
+
+        # Verify trigger actions
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_CONTACT));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_INVOICE));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_ITEM_ADJUSTMENT));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_ITEM_GROUP));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_ITEM));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_PACKAGE));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_PURCHASE_ORDER));
+        assertTrue(actionNames.contains(ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER));
+
+        # Verify create-contact action has ref_data for organizations
+        *hash<DataProviderActionInfo> createContactAction = DataProviderActionCatalog::getAppAction(
+            ZohoInventoryDataProvider::AppName, "create-contact");
+        assertTrue(exists createContactAction, "create-contact action should exist");
+        assertTrue(createContactAction.options.organization_id.ref_data == "organizations");
+
+        # Verify event actions have correct action_code
+        *hash<DataProviderActionInfo> newContactAction = DataProviderActionCatalog::getAppAction(
+            ZohoInventoryDataProvider::AppName, ZohoInventoryDataProvider::EVENT_NEW_CONTACT);
+        assertTrue(exists newContactAction, "new-contact action should exist");
+        assertEq(DPAT_EVENT, newContactAction.action_code);
+        assertEq(ZohoInventoryDataProvider::EVENT_NEW_CONTACT, newContactAction.action_val);
+
+        *hash<DataProviderActionInfo> newInvoiceAction = DataProviderActionCatalog::getAppAction(
+            ZohoInventoryDataProvider::AppName, ZohoInventoryDataProvider::EVENT_NEW_INVOICE);
+        assertTrue(exists newInvoiceAction, "new-invoice action should exist");
+        assertEq(DPAT_EVENT, newInvoiceAction.action_code);
+        assertEq(ZohoInventoryDataProvider::EVENT_NEW_INVOICE, newInvoiceAction.action_val);
+
+        *hash<DataProviderActionInfo> newSalesOrderAction = DataProviderActionCatalog::getAppAction(
+            ZohoInventoryDataProvider::AppName, ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER);
+        assertTrue(exists newSalesOrderAction, "new-sales-order action should exist");
+        assertEq(DPAT_EVENT, newSalesOrderAction.action_code);
+        assertEq(ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER, newSalesOrderAction.action_val);
+    }
+
+    #! Integration tests - require Zoho Inventory credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Zoho Inventory credentials provided (use -i, -s, -r, -o options or env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test reference data
+        testReferenceData();
+
+        # Test contacts provider
+        testContactsProvider();
+
+        # Test items provider
+        testItemsProvider();
+
+        # Test sales orders provider (requires contact and item)
+        if (testContactId && testItemId) {
+            testSalesOrdersProvider();
+        }
+
+        # Test invoices provider (requires contact and item)
+        if (testContactId && testItemId) {
+            testInvoicesProvider();
+        }
+
+        # Cleanup test data
+        cleanup();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing API Connectivity ---\n");
+        }
+
+        # Test that we can connect to the API
+        hash<auto> response = client.get("/organizations");
+        assertTrue(response.body.organizations.val());
+        if (m_options.verbose) {
+            printf("Connected to Zoho Inventory - Organization: %s\n",
+                response.body.organizations[0].name ?? "N/A");
+        }
+
+        if (m_options.verbose) {
+            printf("--- API Connectivity tests completed ---\n");
+        }
+    }
+
+    #! Test reference data
+    private testReferenceData() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Reference Data ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # Test organizations reference data
+        *list<hash<AllowedValueInfo>> organizations = prov.getReferenceData("organizations");
+        if (organizations) {
+            if (m_options.verbose) {
+                printf("Reference data: %d organizations available\n", organizations.size());
+            }
+            if (organizations.size() > 0) {
+                assertTrue(organizations[0].display_name.val());
+                assertTrue(organizations[0].value.val());
+            }
+        }
+
+        # Test contacts reference data
+        *list<hash<AllowedValueInfo>> contacts = prov.getReferenceData("contacts");
+        if (contacts) {
+            if (m_options.verbose) {
+                printf("Reference data: %d contacts available\n", contacts.size());
+            }
+        }
+
+        # Test customers reference data
+        *list<hash<AllowedValueInfo>> customers = prov.getReferenceData("customers");
+        if (customers) {
+            if (m_options.verbose) {
+                printf("Reference data: %d customers available\n", customers.size());
+            }
+        }
+
+        # Test vendors reference data
+        *list<hash<AllowedValueInfo>> vendors = prov.getReferenceData("vendors");
+        if (vendors) {
+            if (m_options.verbose) {
+                printf("Reference data: %d vendors available\n", vendors.size());
+            }
+        }
+
+        # Test items reference data
+        *list<hash<AllowedValueInfo>> items = prov.getReferenceData("items");
+        if (items) {
+            if (m_options.verbose) {
+                printf("Reference data: %d items available\n", items.size());
+            }
+        }
+
+        # Test item_groups reference data
+        *list<hash<AllowedValueInfo>> itemGroups = prov.getReferenceData("item_groups");
+        if (itemGroups) {
+            if (m_options.verbose) {
+                printf("Reference data: %d item groups available\n", itemGroups.size());
+            }
+        }
+
+        # Test salesorders reference data
+        *list<hash<AllowedValueInfo>> salesorders = prov.getReferenceData("salesorders");
+        if (salesorders) {
+            if (m_options.verbose) {
+                printf("Reference data: %d sales orders available\n", salesorders.size());
+            }
+        }
+
+        # Test purchaseorders reference data
+        *list<hash<AllowedValueInfo>> purchaseorders = prov.getReferenceData("purchaseorders");
+        if (purchaseorders) {
+            if (m_options.verbose) {
+                printf("Reference data: %d purchase orders available\n", purchaseorders.size());
+            }
+        }
+
+        # Test packages reference data
+        *list<hash<AllowedValueInfo>> packages = prov.getReferenceData("packages");
+        if (packages) {
+            if (m_options.verbose) {
+                printf("Reference data: %d packages available\n", packages.size());
+            }
+        }
+
+        # Test invoices reference data
+        *list<hash<AllowedValueInfo>> invoices = prov.getReferenceData("invoices");
+        if (invoices) {
+            if (m_options.verbose) {
+                printf("Reference data: %d invoices available\n", invoices.size());
+            }
+        }
+
+        # Test shipmentorders reference data
+        *list<hash<AllowedValueInfo>> shipmentorders = prov.getReferenceData("shipmentorders");
+        if (shipmentorders) {
+            if (m_options.verbose) {
+                printf("Reference data: %d shipment orders available\n", shipmentorders.size());
+            }
+        }
+
+        # Test inventory_adjustments reference data
+        *list<hash<AllowedValueInfo>> inventoryAdjustments = prov.getReferenceData("inventory_adjustments");
+        if (inventoryAdjustments) {
+            if (m_options.verbose) {
+                printf("Reference data: %d inventory adjustments available\n", inventoryAdjustments.size());
+            }
+        }
+
+        # Test contact_persons reference data
+        *list<hash<AllowedValueInfo>> contactPersons = prov.getReferenceData("contact_persons");
+        if (contactPersons) {
+            if (m_options.verbose) {
+                printf("Reference data: %d contact persons available\n", contactPersons.size());
+            }
+            if (contactPersons.size() > 0) {
+                assertTrue(contactPersons[0].display_name.val());
+                assertTrue(contactPersons[0].value.val());
+            }
+        }
+
+        # Test currencies reference data
+        *list<hash<AllowedValueInfo>> currencies = prov.getReferenceData("currencies");
+        if (currencies) {
+            if (m_options.verbose) {
+                printf("Reference data: %d currencies available\n", currencies.size());
+            }
+            if (currencies.size() > 0) {
+                assertTrue(currencies[0].display_name.val());
+                assertTrue(currencies[0].value.val());
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Reference Data tests completed ---\n");
+        }
+    }
+
+    #! Test contacts provider
+    private testContactsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Contacts Provider ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # List existing contacts
+        AbstractDataProvider contactsProvider = prov.getChildProvider("contacts");
+        list<hash<auto>> contacts = map $1, contactsProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
+
+        if (m_options.verbose) {
+            printf("Found %d contacts\n", contacts.size());
+        }
+
+        # Create a test contact
+        AbstractDataProvider createContactProvider = prov.getChildProvider("create-contact");
+        string testName = sprintf("Test Contact %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newContact = createContactProvider.doRequest({
+                "contact_name": testName,
+                "contact_type": "customer",
+                "company_name": "Test Company Inc",
+                "payment_terms": 30,
+                "website": "https://test-company.example.com",
+                "notes": "Created by integration test",
+            });
+
+            if (newContact.contact_id) {
+                testContactId = newContact.contact_id;
+                assertTrue(testContactId.val(), "Contact should be created with an ID");
+                if (m_options.verbose) {
+                    printf("Created test contact: %s (%s)\n", testName, testContactId);
+                }
+
+                # Verify the contact was created by listing
+                list<hash<auto>> updatedContacts = map $1, contactsProvider.searchRecords(
+                    NOTHING, {"organization_id": organizationId});
+                bool found = False;
+                foreach hash<auto> contact in (updatedContacts) {
+                    if (contact.contact_id == testContactId) {
+                        found = True;
+                        assertEq(testName, contact.contact_name);
+                        if (m_options.verbose) {
+                            printf("  Verified contact: %s (company: %s)\n",
+                                contact.contact_name, contact.company_name ?? "N/A");
+                        }
+                        break;
+                    }
+                }
+                assertTrue(found, "Created contact should be found in contact list");
+
+                # Verify the contact via get-contact
+                AbstractDataProvider getContactProvider = prov.getChildProvider("get-contact");
+                hash<auto> fetchedContact = getContactProvider.doRequest({
+                    "contact_id": testContactId,
+                });
+                assertEq(testContactId, fetchedContact.contact_id);
+                assertEq(testName, fetchedContact.contact_name);
+                assertEq("customer", fetchedContact.contact_type);
+                assertEq("https://test-company.example.com", fetchedContact.website);
+                if (m_options.verbose) {
+                    printf("  Fetched contact: %s (type: %s, website: %s)\n",
+                        fetchedContact.contact_name, fetchedContact.contact_type ?? "N/A",
+                        fetchedContact.website ?? "N/A");
+                }
+
+                # Test update-contact with website and notes
+                AbstractDataProvider updateContactProvider = prov.getChildProvider("update-contact");
+                hash<auto> updatedContact = updateContactProvider.doRequest({
+                    "contact_id": testContactId,
+                    "company_name": "Updated Company Inc",
+                    "website": "https://updated-company.example.com",
+                    "notes": "Updated by integration test",
+                });
+                assertEq(testContactId, updatedContact.contact_id);
+                if (m_options.verbose) {
+                    printf("  Updated contact fields (company_name, website, notes)\n");
+                }
+
+                # Verify updates persisted
+                hash<auto> verifiedContact = getContactProvider.doRequest({
+                    "contact_id": testContactId,
+                });
+                assertEq("Updated Company Inc", verifiedContact.company_name);
+                assertEq("https://updated-company.example.com", verifiedContact.website);
+                assertEq("Updated by integration test", verifiedContact.notes);
+                # Verify contact_type unchanged (still customer for downstream tests)
+                assertEq("customer", verifiedContact.contact_type);
+                if (m_options.verbose) {
+                    printf("  Verified updated contact: company=%s, website=%s, notes=%s\n",
+                        verifiedContact.company_name, verifiedContact.website,
+                        verifiedContact.notes);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Create contact failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Contacts Provider tests completed ---\n");
+        }
+    }
+
+    #! Test items provider
+    private testItemsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Items Provider ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # List existing items
+        AbstractDataProvider itemsProvider = prov.getChildProvider("items");
+        list<hash<auto>> items = map $1, itemsProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
+
+        if (m_options.verbose) {
+            printf("Found %d items\n", items.size());
+        }
+
+        # Create a test item
+        AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
+        string testName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmss"));
+
+        try {
+            hash<auto> newItem = createItemProvider.doRequest({
+                "name": testName,
+                "rate": 100.00,
+                "item_type": "inventory",
+                "sku": sprintf("TST-%s", now_us().format("YYYYMMDDHHmmss")),
+            });
+
+            if (newItem.item_id) {
+                testItemId = newItem.item_id;
+                assertTrue(testItemId.val(), "Item should be created with an ID");
+                if (m_options.verbose) {
+                    printf("Created test item: %s (%s)\n", testName, testItemId);
+                }
+
+                # Verify the item via get-item
+                AbstractDataProvider getItemProvider = prov.getChildProvider("get-item");
+                hash<auto> fetchedItem = getItemProvider.doRequest({
+                    "item_id": testItemId,
+                });
+                assertEq(testItemId, fetchedItem.item_id);
+                assertEq(testName, fetchedItem.name);
+                if (m_options.verbose) {
+                    printf("  Fetched item: %s (rate: %s)\n",
+                        fetchedItem.name, fetchedItem.rate ?? "N/A");
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Create item failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Items Provider tests completed ---\n");
+        }
+    }
+
+    #! Test sales orders provider
+    private testSalesOrdersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Sales Orders Provider ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # List existing sales orders
+        AbstractDataProvider salesOrdersProvider = prov.getChildProvider("salesorders");
+        list<hash<auto>> salesOrders = map $1, salesOrdersProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
+
+        if (m_options.verbose) {
+            printf("Found %d sales orders\n", salesOrders.size());
+        }
+
+        # Create a test sales order
+        AbstractDataProvider createSalesOrderProvider = prov.getChildProvider("create-sales-order");
+
+        string orderDate = now().format("YYYY-MM-DD");
+
+        try {
+            hash<auto> newSalesOrder = createSalesOrderProvider.doRequest({
+                "customer_id": testContactId,
+                "date": orderDate,
+                "line_items": ({
+                    "item_id": testItemId,
+                    "name": "Test Item",
+                    "quantity": 2,
+                    "rate": 100.00,
+                },),
+                "notes": "Created by integration test",
+            });
+
+            if (newSalesOrder.salesorder_id) {
+                testSalesOrderId = newSalesOrder.salesorder_id;
+                assertTrue(testSalesOrderId.val(), "Sales order should be created with an ID");
+                if (m_options.verbose) {
+                    printf("Created test sales order: %s (Total: %s)\n",
+                        newSalesOrder.salesorder_number ?? testSalesOrderId,
+                        newSalesOrder.total ?? "N/A");
+                }
+
+                # Small delay to allow API to fully process the created sales order
+                sleep(500ms);
+
+                # Test get sales order and verify created fields
+                AbstractDataProvider getSalesOrderProvider = prov.getChildProvider("get-sales-order");
+                hash<auto> fetchedOrder = getSalesOrderProvider.doRequest({
+                    "salesorder_id": testSalesOrderId,
+                });
+                assertEq(testSalesOrderId, fetchedOrder.salesorder_id);
+                assertEq(testContactId, fetchedOrder.customer_id);
+                assertEq(orderDate, fetchedOrder.date);
+                assertTrue(fetchedOrder.line_items.size() > 0, "Sales order should have line items");
+                if (m_options.verbose) {
+                    printf("Fetched sales order: %s (status: %s)\n",
+                        fetchedOrder.salesorder_number ?? testSalesOrderId,
+                        fetchedOrder.status ?? "N/A");
+                }
+
+                # Test update sales order
+                AbstractDataProvider updateSalesOrderProvider = prov.getChildProvider("update-sales-order");
+                string updatedNotes = sprintf("Updated by integration test at %s", now_us().toString());
+                hash<auto> updatedOrder = updateSalesOrderProvider.doRequest({
+                    "salesorder_id": testSalesOrderId,
+                    "customer_id": testContactId,
+                    "date": orderDate,
+                    "line_items": ({
+                        "item_id": testItemId,
+                        "name": "Test Item",
+                        "quantity": 3,
+                        "rate": 100.00,
+                    },),
+                    "notes": updatedNotes,
+                });
+                if (m_options.verbose) {
+                    printf("Updated sales order: %s\n",
+                        updatedOrder.salesorder_number ?? testSalesOrderId);
+                }
+
+                # Verify update persisted
+                hash<auto> verifyOrder = getSalesOrderProvider.doRequest({
+                    "salesorder_id": testSalesOrderId,
+                });
+                assertEq(updatedNotes, verifyOrder.notes);
+                assertTrue(verifyOrder.line_items.size() > 0, "Sales order should have line items after update");
+                if (m_options.verbose) {
+                    printf("Verified update: notes=%s, line_items=%d\n",
+                        verifyOrder.notes ?? "N/A", verifyOrder.line_items.size());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Sales order operation failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Sales Orders Provider tests completed ---\n");
+        }
+    }
+
+    #! Test invoices provider
+    private testInvoicesProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Invoices Provider ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # List existing invoices
+        AbstractDataProvider invoicesProvider = prov.getChildProvider("invoices");
+        list<hash<auto>> invoicesList = map $1, invoicesProvider.searchRecords(NOTHING, {
+            "organization_id": organizationId,
+        });
+
+        if (m_options.verbose) {
+            printf("Found %d invoices\n", invoicesList.size());
+        }
+
+        # Create a test invoice
+        AbstractDataProvider createInvoiceProvider = prov.getChildProvider("create-invoice");
+
+        string invoiceDate = now().format("YYYY-MM-DD");
+
+        try {
+            hash<auto> newInvoice = createInvoiceProvider.doRequest({
+                "customer_id": testContactId,
+                "date": invoiceDate,
+                "line_items": ({
+                    "item_id": testItemId,
+                    "name": "Test Item",
+                    "quantity": 1,
+                    "rate": 100.00,
+                },),
+                "notes": "Created by integration test",
+                "payment_terms": 30,
+            });
+
+            if (newInvoice.invoice_id) {
+                testInvoiceId = newInvoice.invoice_id;
+                assertTrue(testInvoiceId.val(), "Invoice should be created with an ID");
+                if (m_options.verbose) {
+                    printf("Created test invoice: %s (%s)\n",
+                        newInvoice.invoice_number ?? testInvoiceId, testInvoiceId);
+                }
+
+                # Small delay to allow API to fully process the created invoice
+                sleep(500ms);
+
+                # Test get invoice and verify created fields
+                AbstractDataProvider getInvoiceProvider = prov.getChildProvider("get-invoice");
+                hash<auto> fetchedInvoice = getInvoiceProvider.doRequest({
+                    "invoice_id": testInvoiceId,
+                });
+                assertEq(testInvoiceId, fetchedInvoice.invoice_id);
+                assertEq(testContactId, fetchedInvoice.customer_id);
+                assertEq(invoiceDate, fetchedInvoice.date);
+                assertTrue(fetchedInvoice.line_items.size() > 0, "Invoice should have line items");
+                if (m_options.verbose) {
+                    printf("Fetched invoice: %s (status: %s, total: %s)\n",
+                        fetchedInvoice.invoice_number ?? testInvoiceId,
+                        fetchedInvoice.status ?? "N/A",
+                        fetchedInvoice.total ?? "N/A");
+                }
+
+                # Test list invoices with invoice_id filter (DPAT_FIND_SINGLE pattern)
+                list<hash<auto>> singleResult = map $1, invoicesProvider.searchRecords(
+                    NOTHING, {
+                        "organization_id": organizationId,
+                        "invoice_id": testInvoiceId,
+                    });
+                assertEq(1, singleResult.size(), "Should find exactly one invoice by ID");
+                assertEq(testInvoiceId, singleResult[0].invoice_id);
+                if (m_options.verbose) {
+                    printf("Single invoice lookup: %s\n", singleResult[0].invoice_number ?? "N/A");
+                }
+
+                # Test update invoice
+                AbstractDataProvider updateInvoiceProvider = prov.getChildProvider("update-invoice");
+                string updatedNotes = sprintf("Updated by integration test at %s", now_us().toString());
+                hash<auto> updatedInvoice = updateInvoiceProvider.doRequest({
+                    "invoice_id": testInvoiceId,
+                    "customer_id": testContactId,
+                    "date": invoiceDate,
+                    "line_items": ({
+                        "item_id": testItemId,
+                        "name": "Test Item",
+                        "quantity": 2,
+                        "rate": 100.00,
+                    },),
+                    "notes": updatedNotes,
+                });
+                if (m_options.verbose) {
+                    printf("Updated invoice: %s\n",
+                        updatedInvoice.invoice_number ?? testInvoiceId);
+                }
+
+                # Verify update persisted
+                hash<auto> verifyInvoice = getInvoiceProvider.doRequest({
+                    "invoice_id": testInvoiceId,
+                });
+                assertEq(updatedNotes, verifyInvoice.notes);
+                assertTrue(verifyInvoice.line_items.size() > 0,
+                    "Invoice should have line items after update");
+                if (m_options.verbose) {
+                    printf("Verified update: notes=%s, line_items=%d\n",
+                        verifyInvoice.notes ?? "N/A", verifyInvoice.line_items.size());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Invoice operation failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Invoices Provider tests completed ---\n");
+        }
+    }
+
+    #! Cleanup test data
+    private cleanup() {
+        if (m_options.verbose) {
+            printf("\n--- Cleanup ---\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryDataProvider prov(client);
+
+        # Delete test invoice
+        if (testInvoiceId) {
+            try {
+                AbstractDataProvider deleteInvoiceProvider = prov.getChildProvider("delete-invoice");
+                deleteInvoiceProvider.doRequest({"invoice_id": testInvoiceId});
+                if (m_options.verbose) {
+                    printf("Deleted test invoice: %s\n", testInvoiceId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete invoice: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test sales order (before item, since sales orders reference items)
+        if (testSalesOrderId) {
+            try {
+                AbstractDataProvider deleteSalesOrderProvider = prov.getChildProvider("delete-sales-order");
+                deleteSalesOrderProvider.doRequest({"salesorder_id": testSalesOrderId});
+                if (m_options.verbose) {
+                    printf("Deleted test sales order: %s\n", testSalesOrderId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete sales order: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test item (after invoice and sales order, since they reference items)
+        if (testItemId) {
+            try {
+                AbstractDataProvider deleteItemProvider = prov.getChildProvider("delete-item");
+                deleteItemProvider.doRequest({"item_id": testItemId});
+                if (m_options.verbose) {
+                    printf("Deleted test item: %s\n", testItemId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete item: %s\n", ex.desc);
+                }
+            }
+        }
+
+        # Delete test contact
+        if (testContactId) {
+            try {
+                AbstractDataProvider deleteContactProvider = prov.getChildProvider("delete-contact");
+                deleteContactProvider.doRequest({"contact_id": testContactId});
+                if (m_options.verbose) {
+                    printf("Deleted test contact: %s\n", testContactId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete contact: %s\n", ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Cleanup completed ---\n");
+        }
+    }
+
+    #! Polling trigger tests - test polling-based triggers
+    pollingTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Zoho Inventory credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Polling Trigger Providers ---\n");
+        }
+
+        # ============================================
+        # Test New Contact Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ZohoInventoryNewContactWatchDataProvider...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewContactWatchDataProvider contactEventProv(client, {
+            "poll_interval": 60,
+        });
+        assertEq("new-contact", contactEventProv.getName());
+
+        # Verify provider metadata
+        hash<DataProviderInfo> contactEventInfo = contactEventProv.getInfo();
+        assertTrue(contactEventInfo.supports_observable);
+        assertEq("ZohoInventoryNewContactWatchDataProvider", contactEventInfo.type);
+
+        if (m_options.verbose) {
+            printf("  Provider name: %s\n", contactEventProv.getName());
+            printf("  Supports observable: %s\n", contactEventInfo.supports_observable);
+        }
+
+        # ============================================
+        # Test New Invoice Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ZohoInventoryNewInvoiceWatchDataProvider...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewInvoiceWatchDataProvider invoiceEventProv(client, {
+            "poll_interval": 60,
+        });
+        assertEq("new-invoice", invoiceEventProv.getName());
+        assertTrue(invoiceEventProv.getInfo().supports_observable);
+
+        # ============================================
+        # Test New Item Adjustment Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ZohoInventoryNewItemAdjustmentWatchDataProvider...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewItemAdjustmentWatchDataProvider itemAdjEventProv(client, {
+            "poll_interval": 60,
+        });
+        assertEq("new-item-adjustment", itemAdjEventProv.getName());
+        assertTrue(itemAdjEventProv.getInfo().supports_observable);
+
+        # ============================================
+        # Test New Item Group Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ZohoInventoryNewItemGroupWatchDataProvider...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewItemGroupWatchDataProvider itemGroupEventProv(client, {
+            "poll_interval": 60,
+        });
+        assertEq("new-item-group", itemGroupEventProv.getName());
+        assertTrue(itemGroupEventProv.getInfo().supports_observable);
+
+        # ============================================
+        # Test New Item Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ZohoInventoryNewItemWatchDataProvider...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewItemWatchDataProvider itemEventProv(client, {
+            "poll_interval": 60,
+        });
+        assertEq("new-item", itemEventProv.getName());
+        assertTrue(itemEventProv.getInfo().supports_observable);
+
+        # ============================================
+        # Test Remaining Event Providers
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting remaining event providers...\n");
+        }
+
+        ZohoInventoryDataProvider::ZohoInventoryNewPackageWatchDataProvider packageEventProv(client, {});
+        assertEq("new-package", packageEventProv.getName());
+        assertTrue(packageEventProv.getInfo().supports_observable);
+
+        ZohoInventoryDataProvider::ZohoInventoryNewPurchaseOrderWatchDataProvider purchaseOrderEventProv(client, {});
+        assertEq("new-purchase-order", purchaseOrderEventProv.getName());
+        assertTrue(purchaseOrderEventProv.getInfo().supports_observable);
+
+        ZohoInventoryDataProvider::ZohoInventoryNewSalesOrderWatchDataProvider salesOrderEventProv(client, {});
+        assertEq("new-sales-order", salesOrderEventProv.getName());
+        assertTrue(salesOrderEventProv.getInfo().supports_observable);
+
+        # ============================================
+        # Test Observer Registration
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting observer registration...\n");
+        }
+
+        TestObserver observer();
+        contactEventProv.registerObserver(observer);
+
+        # Note: We don't actually start polling in tests as it would make API calls
+        # The observer registration test verifies the mechanism works
+
+        if (m_options.verbose) {
+            printf("  Observer registered successfully\n");
+        }
+
+        # ============================================
+        # Test Example Event Data
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting example event data (getExampleEventData)...\n");
+        }
+
+        # Test that each event provider returns example data (either real or fake)
+        hash<string, hash<DataProviderMessageInfo>> contactEventTypes = contactEventProv.getEventTypes();
+        assertTrue(contactEventTypes.hasKey(ZohoInventoryDataProvider::EVENT_NEW_CONTACT));
+        auto contactExampleData = contactEventProv.getExampleEventData(
+            ZohoInventoryDataProvider::EVENT_NEW_CONTACT);
+        assertTrue(contactExampleData.contact_id.val(), "Contact example should have contact_id");
+        if (m_options.verbose) {
+            printf("  Contact example data: contact_id=%s\n", contactExampleData.contact_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> invoiceEventTypes = invoiceEventProv.getEventTypes();
+        assertTrue(invoiceEventTypes.hasKey(ZohoInventoryDataProvider::EVENT_NEW_INVOICE));
+        auto invoiceExampleData = invoiceEventProv.getExampleEventData(
+            ZohoInventoryDataProvider::EVENT_NEW_INVOICE);
+        assertTrue(invoiceExampleData.invoice_id.val(), "Invoice example should have invoice_id");
+        if (m_options.verbose) {
+            printf("  Invoice example data: invoice_id=%s\n", invoiceExampleData.invoice_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> itemEventTypes = itemEventProv.getEventTypes();
+        assertTrue(itemEventTypes.hasKey(ZohoInventoryDataProvider::EVENT_NEW_ITEM));
+        auto itemExampleData = itemEventProv.getExampleEventData(
+            ZohoInventoryDataProvider::EVENT_NEW_ITEM);
+        assertTrue(itemExampleData.item_id.val(), "Item example should have item_id");
+        if (m_options.verbose) {
+            printf("  Item example data: item_id=%s\n", itemExampleData.item_id);
+        }
+
+        hash<string, hash<DataProviderMessageInfo>> salesOrderEventTypes = salesOrderEventProv.getEventTypes();
+        assertTrue(salesOrderEventTypes.hasKey(ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER));
+        auto salesOrderExampleData = salesOrderEventProv.getExampleEventData(
+            ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER);
+        assertTrue(salesOrderExampleData.salesorder_id.val(),
+            "Sales order example should have salesorder_id");
+        if (m_options.verbose) {
+            printf("  Sales order example data: salesorder_id=%s\n", salesOrderExampleData.salesorder_id);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for polling events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}
