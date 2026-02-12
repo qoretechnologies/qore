@@ -431,6 +431,9 @@ public class QLSServer {
     # Main logic
     #=================
 
+    #! Runs the main JSON-RPC server loop, reading requests from stdin and writing responses to stdout.
+    /** @return the exit code (0 for normal shutdown, 1 for error)
+    */
     public int main() {
         while (running) {
             # read JSON-RPC request
@@ -469,6 +472,10 @@ public class QLSServer {
         return exitCode;
     }
 
+    #! Handles a single JSON-RPC request message and returns the response(s).
+    /** @param msg the raw JSON-RPC message string
+        @return a list of JSON-RPC response strings to send back (may be empty for notifications)
+    */
     softlist<auto> handleRequest(string msg) {
         # parse the request
         auto request = parse_json(msg);

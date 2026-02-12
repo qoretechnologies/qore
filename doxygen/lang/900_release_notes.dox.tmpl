@@ -692,12 +692,21 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
     - @ref qlsintro "QLS" module
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
-      - supports hover information, go-to-definition, find references, and document/workspace symbols
-      - added code completion support (@c textDocument/completion) using @ref qorecodecompletionintro "QoreCodeCompletion"
-      - supports identifier, @c new, dot-access, and scope (@c ::) completion contexts
-      - trigger characters: @c . and @c :
-      - installed as @c qls system command, usable from any editor
-    - \c QoreCodeFormat user module
+      - supports hover, go-to-definition, find references, and document/workspace symbols
+      - code completion using @ref qorecodecompletionintro "QoreCodeCompletion" (identifiers,
+        @c new, dot-access, scope @c ::)
+      - signature help, inlay hints (parameter names at call sites)
+      - semantic tokens (full and range) for syntax highlighting
+      - rename symbol with cross-document support
+      - go-to-type-definition and go-to-implementation
+      - type hierarchy (supertypes/subtypes) and call hierarchy (incoming/outgoing)
+      - code lens (reference counts), selection range, folding range
+      - document formatting via @ref qorecodeformatintro "QoreCodeFormat", on-type formatting
+        (auto-indent)
+      - code actions: sort imports, add @c %modern directive
+      - document highlight for all occurrences of symbol under cursor
+      - installed as @c qls system command, usable from any editor supporting LSP
+    - @ref qorecodeformatintro "QoreCodeFormat" module
       - new module providing automated Qore source code formatting using the tree-sitter-based CST from the
         \c astparser module
       - line-length-aware wrapping (120 character default) with intelligent binary expression chain and ternary

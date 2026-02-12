@@ -1675,6 +1675,25 @@ string doxygen_output = proc.process();
 
         #! Processes a method declaration
         private processMethod(hash<auto> method) {
+            # Determine access level from modifiers (default: public)
+            string access = "public";
+            if (method.modifiers) {
+                if (method.modifiers =~ /private:internal/) {
+                    access = "private";
+                } else if (method.modifiers =~ /private:hierarchy/) {
+                    access = "protected";
+                } else if (method.modifiers =~ /private/) {
+                    access = "protected";
+                }
+            }
+
+            # Emit access specifier if not public
+            if (access != "public") {
+                indent--;
+                writeLine(access + ":");
+                indent++;
+            }
+
             # Output doc comment if present
             *string doc = getDocForNode(method);
             if (exists doc) {
@@ -1713,6 +1732,13 @@ string doxygen_output = proc.process();
 
             writeLine(sig);
             writeLine("");
+
+            # Restore public access if we switched
+            if (access != "public") {
+                indent--;
+                writeLine("public:");
+                indent++;
+            }
         }
 
         #! Processes a function declaration

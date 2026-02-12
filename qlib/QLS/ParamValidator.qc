@@ -23,6 +23,7 @@
 
 public namespace QLS {
 
+#! Validates incoming LSP request parameters against required fields and types.
 public class ParamValidator {
     #! Check that required key is present in a hash and that its value is of correct type.
     /**

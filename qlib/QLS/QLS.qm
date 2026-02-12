@@ -47,31 +47,167 @@ module QLS {
 
     @section qlsintro QLS Module Introduction
 
-    The %QLS module provides a Language Server Protocol (LSP) implementation for
-    %Qore, offering code intelligence features for any editor:
-    - Hover information and go-to-definition
-    - Find references and document/workspace symbols
-    - Diagnostics (parse errors)
+    The %QLS module provides a full-featured
+    <a href="https://microsoft.github.io/language-server-protocol/">Language Server Protocol</a>
+    (LSP) implementation for %Qore, enabling code intelligence in any editor that supports
+    the LSP standard. It uses the @c astparser binary module's tree-sitter CST for static
+    analysis, delivering 25+ language features without requiring code execution.
+
+    The module provides the following classes:
+    - @ref QLS::QLSServer "QLSServer": main JSON-RPC server handling all LSP requests and
+      notifications; call @ref QLS::QLSServer::main() "main()" to run the server loop
+    - @ref QLS::Document "Document": document model wrapping the @c astparser CST; provides
+      symbol search, diagnostics, completion, formatting, folding, and cross-document resolution
+    - @ref QLS::Messenger "Messenger": JSON-RPC transport layer reading/writing LSP messages
+      on stdin/stdout with @c Content-Length headers
+    - @ref QLS::ErrorResponse "ErrorResponse": factory for LSP error responses
+      (@c InvalidRequest, @c MethodNotFound, @c InternalError, etc.)
+    - @ref QLS::Notification "Notification": factory for LSP notifications
+      (@c textDocument/publishDiagnostics, @c window/showMessage, etc.)
+    - @ref QLS::ParamValidator "ParamValidator": validates incoming request parameters against
+      required fields and types
+
+    @section qlsfeatures Supported LSP Features
+
+    The following table lists all LSP features supported by QLS, organized by category:
+
+    <b>Navigation</b>
+    |!Feature|!LSP Method|!Description
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor
+    |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
+    |Go to Type Definition|@c textDocument/typeDefinition|Jumps to the type definition of a symbol
+    |Go to Implementation|@c textDocument/implementation|Jumps to the implementation of an abstract method or interface
+    |Find References|@c textDocument/references|Finds all references to a symbol across open and workspace documents
+
+    <b>Code Intelligence</b>
+    |!Feature|!LSP Method|!Description
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"
+    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,
+    |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
+    |Semantic Tokens|@c textDocument/semanticTokens/full and @c .../range|Full semantic syntax highlighting with node-level classification
+    |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
+
+    <b>Refactoring</b>
+    |!Feature|!LSP Method|!Description
+    |Rename|@c textDocument/rename (with @c textDocument/prepareRename)|Renames a symbol across all documents in the workspace
+    |Code Actions|@c textDocument/codeAction|Quick fixes: sort imports, add @c %modern directive
+
+    <b>Code Structure</b>
+    |!Feature|!LSP Method|!Description
+    |Document Symbols|@c textDocument/documentSymbol|Hierarchical outline of all symbols in a document
+    |Workspace Symbols|@c workspace/symbol|Search for symbols across all workspace files
+    |Folding Ranges|@c textDocument/foldingRange|Code folding for declarations, blocks, and multi-line comments
+    |Selection Range|@c textDocument/selectionRange|Expanding selection based on syntactic structure
+
+    <b>Hierarchy</b>
+    |!Feature|!LSP Method|!Description
+    |Type Hierarchy|@c textDocument/prepareTypeHierarchy, @c typeHierarchy/supertypes, @c typeHierarchy/subtypes|Navigate class inheritance (supertypes and subtypes)
+    |Call Hierarchy|@c textDocument/prepareCallHierarchy, @c callHierarchy/incomingCalls, @c callHierarchy/outgoingCalls|Navigate call graphs (incoming and outgoing calls)
+
+    <b>Formatting and Display</b>
+    |!Feature|!LSP Method|!Description
+    |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
+    |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
+    |Code Lens|@c textDocument/codeLens|Shows reference counts above declarations
+    |Diagnostics|@c textDocument/publishDiagnostics|Reports parse errors as diagnostics
 
     @section qlsusage Usage
 
-    The module is invoked via the @c qls launcher script installed to the system PATH.
+    @subsection qls_editor Editor Integration
+
+    QLS is installed as the @c qls system command and communicates via JSON-RPC over
+    stdin/stdout, making it compatible with any editor that supports the LSP standard.
+
+    @subsection qls_vscode VS Code Configuration
+
+    Add the following to your VS Code @c settings.json to use QLS:
+
+    @code{.json}
+{
+    "qore.executablePath": "/usr/bin/qore",
+    "qore.useQLS": true
+}
+    @endcode
+
+    @subsection qls_programmatic Programmatic Usage
+
+    @code{.py}
+%requires QLS
+
+# Create and run the server (reads stdin, writes stdout)
+QLS::QLSServer server();
+server.main();
+    @endcode
+
+    For testing, you can call @ref QLS::QLSServer::handleRequest() "handleRequest()" directly
+    with JSON-RPC message strings to simulate editor requests.
+
+    @section qlsarchitecture Architecture
+
+    @verbatim
+    Editor  <-->  JSON-RPC (Messenger)  <-->  QLSServer  <-->  Document  <-->  astparser/CSTSearcher
+    @endverbatim
+
+    The @ref QLS::QLSServer "QLSServer" maintains three document stores:
+    - <b>Open documents</b> (@c documents): files currently open in the editor, updated on
+      every @c textDocument/didChange notification
+    - <b>Workspace documents</b> (@c workspaceDocs): all @c .qore, @c .qm, @c .qc, and
+      @c .qr files discovered in the workspace root, parsed on initialization
+    - <b>Standard module documents</b> (@c stdModuleDocs): %Qore standard library modules,
+      parsed from the module path on initialization
+
+    Cross-document features (find references, rename, call hierarchy) search across all three
+    stores to provide workspace-wide results.
 
     @section qlsrelnotes Release Notes
 
     @subsection qls_v1_0 v1.0
     - initial release as part of the %Qore repository
     - migrated from standalone qls repository
-    - added code completion support (@c textDocument/completion)
-    - @c CSTCompletionProvider uses CSTSearcher for static analysis completion
-    - supports identifier, @c new, dot-access, and scope (@c ::) completion contexts
-    - trigger characters: @c . and @c :
-    - added @c textDocument/onTypeFormatting support for auto-indentation on Enter
-      and auto-dedent on @c }
-    - added @c textDocument/formatting for whole-document formatting using QoreCodeFormat
-    - added @c textDocument/documentHighlight to highlight all occurrences of symbol under cursor
-    - added @c textDocument/signatureHelp for function/method parameter hints (triggers: @c ( and @c ,)
-    - added @c textDocument/foldingRange for code folding of declarations, blocks, and comments
+
+    <b>Navigation</b>
+    - @c textDocument/hover: type info, documentation, and source location
+    - @c textDocument/definition: go to symbol definition
+    - @c textDocument/typeDefinition: go to type definition
+    - @c textDocument/implementation: go to implementation of abstract methods
+    - @c textDocument/references: find all references with cross-document support
+
+    <b>Code Intelligence</b>
+    - @c textDocument/completion: context-aware code completion using
+      @ref qorecodecompletionintro "QoreCodeCompletion" (@c CSTCompletionProvider with
+      CSTSearcher); supports identifier, @c new, dot-access (@c .), and scope (@c ::) contexts
+    - @c textDocument/signatureHelp: function/method parameter hints (triggers: @c ( and @c ,)
+    - @c textDocument/inlayHint: parameter names at call sites
+    - @c textDocument/semanticTokens/full and @c .../range: semantic syntax highlighting
+    - @c textDocument/documentHighlight: highlight all occurrences of symbol under cursor
+
+    <b>Refactoring</b>
+    - @c textDocument/rename with @c textDocument/prepareRename: cross-document symbol rename
+    - @c textDocument/codeAction: sort imports, add @c %modern directive
+
+    <b>Code Structure</b>
+    - @c textDocument/documentSymbol: hierarchical document outline
+    - @c workspace/symbol: workspace-wide symbol search
+    - @c textDocument/foldingRange: code folding for declarations, blocks, and comments
+    - @c textDocument/selectionRange: syntax-aware expanding selection
+
+    <b>Hierarchy</b>
+    - @c textDocument/prepareTypeHierarchy, @c typeHierarchy/supertypes,
+      @c typeHierarchy/subtypes: class inheritance navigation
+    - @c textDocument/prepareCallHierarchy, @c callHierarchy/incomingCalls,
+      @c callHierarchy/outgoingCalls: call graph navigation
+
+    <b>Formatting and Display</b>
+    - @c textDocument/formatting: whole-document formatting via
+      @ref qorecodeformatintro "QoreCodeFormat"
+    - @c textDocument/onTypeFormatting: auto-indent on Enter, auto-dedent on @c }
+    - @c textDocument/codeLens: reference counts above declarations
+    - @c textDocument/publishDiagnostics: parse error diagnostics
+
+    <b>Infrastructure</b>
+    - installed as @c qls system command, usable from any editor supporting LSP
+    - JSON-RPC transport over stdin/stdout with @c Content-Length headers
+    - workspace scanning and standard module indexing on initialization
 */
 
 #! Main namespace for the QLS module
