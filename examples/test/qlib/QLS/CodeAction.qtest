@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  CodeAction.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+%requires ../../../../qlib/QLS
+
+%exec-class CodeActionTest
+
+class CodeActionTest inherits QUnit::Test {
+    private {
+        QLS::QLSServer server;
+        int reqId = 0;
+        int docCount = 0;
+    }
+
+    constructor() : Test("QLS CodeAction", "1.0") {
+        initServer();
+
+        addTestCase("sort imports unsorted", \testSortImportsUnsorted());
+        addTestCase("sort imports already sorted", \testSortImportsSorted());
+        addTestCase("sort imports single", \testSortImportsSingle());
+        addTestCase("add modern missing", \testAddModernMissing());
+        addTestCase("add modern present", \testAddModernPresent());
+        addTestCase("empty document", \testEmptyDocument());
+        addTestCase("missing params", \testMissingParams());
+
+        set_return_value(main());
+    }
+
+    private initServer() {
+        server = new QLS::QLSServer();
+
+        hash<auto> initReq = makeRequest("initialize", {
+            "processId": getpid(),
+            "capabilities": {},
+            "rootUri": NOTHING,
+        });
+        server.handleRequest(make_json(initReq));
+
+        hash<auto> initializedReq = makeRequest("initialized");
+        delete initializedReq.id;
+        server.handleRequest(make_json(initializedReq));
+    }
+
+    private string setupDoc(string text) {
+        string uri = sprintf("file:///test/codeaction%d.q", ++docCount);
+        hash<auto> openReq = makeRequest("textDocument/didOpen", {
+            "textDocument": {
+                "uri": uri,
+                "languageId": "qore",
+                "version": 1,
+                "text": text,
+            },
+        });
+        delete openReq.id;
+        server.handleRequest(make_json(openReq));
+        return uri;
+    }
+
+    private hash<auto> makeRequest(string method, *hash<auto> params) {
+        return {
+            "jsonrpc": "2.0",
+            "id": ++reqId,
+            "method": method,
+            "params": params,
+        };
+    }
+
+    private *list<auto> sendCodeAction(string uri, int startLine, int endLine) {
+        hash<auto> req = makeRequest("textDocument/codeAction", {
+            "textDocument": {"uri": uri},
+            "range": {
+                "start": {"line": startLine, "character": 0},
+                "end": {"line": endLine, "character": 999},
+            },
+            "context": {
+                "diagnostics": (),
+            },
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return NOTHING;
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result;
+    }
+
+    testSortImportsUnsorted() {
+        string code = "%modern
+%requires json
+%requires astparser
+%requires xml
+";
+        string uri = setupDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 4);
+        assertTrue(exists actions, "should return actions");
+
+        # Find sort imports action
+        bool foundSort = False;
+        hash<auto> sortAction;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+                sortAction = action;
+                break;
+            }
+        }
+        assertTrue(foundSort, "should have sort imports action");
+
+        # Verify the edit reorders imports alphabetically
+        if (foundSort) {
+            assertEq("Sort imports", sortAction.title, "action title");
+            assertTrue(exists sortAction.edit.changes{uri},
+                "edit should have changes for the document");
+            list<auto> edits = sortAction.edit.changes{uri};
+            assertEq(3, edits.size(), "should have 3 edits (one per requires line)");
+            # After sorting: astparser, json, xml
+            assertEq("%requires astparser", edits[0].newText, "first should be astparser");
+            assertEq("%requires json", edits[1].newText, "second should be json");
+            assertEq("%requires xml", edits[2].newText, "third should be xml");
+        }
+    }
+
+    testSortImportsSorted() {
+        string code = "%modern
+%requires astparser
+%requires json
+%requires xml
+";
+        string uri = setupDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 4);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have sort imports (already sorted)
+        bool foundSort = False;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+            }
+        }
+        assertFalse(foundSort, "should not offer sort when already sorted");
+    }
+
+    testSortImportsSingle() {
+        string code = "%modern
+%requires json
+";
+        string uri = setupDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have sort imports (only one import)
+        bool foundSort = False;
+        foreach hash<auto> action in (actions) {
+            if (action.kind == "source.sortImports") {
+                foundSort = True;
+            }
+        }
+        assertFalse(foundSort, "should not offer sort with single import");
+    }
+
+    testAddModernMissing() {
+        string code = "%requires json
+sub foo() { return 1; }
+";
+        string uri = setupDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Find add modern action
+        bool foundModern = False;
+        hash<auto> modernAction;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+                modernAction = action;
+                break;
+            }
+        }
+        assertTrue(foundModern, "should have add modern action");
+
+        # Verify the edit adds %modern at beginning
+        if (foundModern) {
+            list<auto> edits = modernAction.edit.changes{uri};
+            assertEq(1, edits.size(), "should have 1 edit");
+            assertEq("%modern\n", edits[0].newText, "should add %modern\\n");
+            assertEq(0, edits[0].range.start.line, "edit at line 0");
+            assertEq(0, edits[0].range.start.character, "edit at col 0");
+        }
+    }
+
+    testAddModernPresent() {
+        string code = "%modern
+sub foo() { return 1; }
+";
+        string uri = setupDoc(code);
+
+        *list<auto> actions = sendCodeAction(uri, 0, 2);
+        assertTrue(exists actions, "should return actions");
+
+        # Should NOT have add modern action
+        bool foundModern = False;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+            }
+        }
+        assertFalse(foundModern, "should not offer add modern when present");
+    }
+
+    testEmptyDocument() {
+        string uri = setupDoc("");
+
+        *list<auto> actions = sendCodeAction(uri, 0, 0);
+        assertTrue(exists actions, "should return actions");
+
+        # Empty doc should offer "add modern"
+        bool foundModern = False;
+        foreach hash<auto> action in (actions) {
+            if (action.title == "Add %modern directive") {
+                foundModern = True;
+            }
+        }
+        assertTrue(foundModern, "empty doc should offer add modern");
+    }
+
+    testMissingParams() {
+        hash<auto> req = makeRequest("textDocument/codeAction");
+        delete req.params;
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        assertTrue(exists responses && responses.size() > 0,
+            "should return error response for missing params");
+        hash<auto> resp = parse_json(responses[0]);
+        assertTrue(exists resp.error, "response should have error field");
+    }
+}

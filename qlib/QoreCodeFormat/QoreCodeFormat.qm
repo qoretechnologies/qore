@@ -40,31 +40,144 @@ module QoreCodeFormat {
 
     @section qorecodeformatintro QoreCodeFormat Module Introduction
 
-    The %QoreCodeFormat module provides a canonical code formatter for the Qore programming
-    language, similar to \c gofmt for Go.
+    The %QoreCodeFormat module provides a canonical code formatter for the %Qore programming
+    language, similar to @c gofmt for Go. Given any syntactically valid %Qore source code,
+    it produces deterministic, consistently formatted output. The formatter uses the
+    @c astparser binary module's tree-sitter CST to parse source code and then re-emits it
+    in a canonical format.
 
-    It uses the AST parser (\c astparser binary module) to parse Qore source code and then
-    re-emits it in a canonical format with consistent indentation, brace placement, and spacing.
+    The module provides the following classes:
+    - @ref QoreCodeFormat::CodeFormatter "CodeFormatter": main formatter class; call
+      @ref QoreCodeFormat::CodeFormatter::format() "format()" with source code to get
+      formatted output
+    - @ref QoreCodeFormat::SourceEmitter "SourceEmitter": indentation-aware output buffer
+      used internally by the formatter; handles indent tracking, line emission, and
+      multi-line block output
+    - @ref QoreCodeFormat::CSTTranslator "CSTTranslator": translates tree-sitter CST nodes
+      into the legacy AST format used by tools such as @c Qdx (the %Qore documentation
+      extractor)
+    - @ref QoreCodeFormat::CommentAttacher "CommentAttacher": attaches comments from the
+      tree-sitter extras list to their nearest AST nodes for correct placement during
+      emission
 
-    @section qorecodeformatfeatures Features
+    The module also defines AST node type constants (@c ANT_*, @c ADK_*, @c AEK_*, @c ASK_*)
+    and operator/parse-option string maps used by both the formatter and dependent tools.
 
-    - 4-space indentation (no tabs)
-    - Opening braces on same line
-    - Mandatory braces for if/while/for/foreach/do-while
-    - Space around binary operators
-    - Parse directives at column 0
-    - One blank line between top-level declarations
-    - Comment preservation
-    - Source literal preservation (strings, regex, numbers)
+    @section qorecodeformatfeatures Formatting Rules
+
+    @subsection qorecodeformat_indent Indentation
+    - 4 spaces per indent level (no tabs)
+    - Consistent indentation for all nested blocks
+
+    @subsection qorecodeformat_braces Brace Style
+    - Opening braces on the same line as the declaration or control statement
+    - Mandatory braces for @c if, @c while, @c for, @c foreach, and @c do-while (single
+      statements are wrapped in braces)
+
+    @subsection qorecodeformat_spacing Spacing
+    - Spaces around binary operators (@c +, @c -, @c ==, etc.)
+    - Space after keywords (@c if, @c while, @c for, etc.)
+    - No trailing whitespace on any line
+
+    @subsection qorecodeformat_structure Structure
+    - Parse directives (@c %requires, @c %modern, etc.) at column 0
+    - One blank line between top-level declarations (classes, functions, namespaces)
+    - Single trailing newline at end of file
+
+    @subsection qorecodeformat_preservation Preservation
+    - Comments are preserved in their original positions (line comments and block comments)
+    - String literals, regex literals, and number literals are preserved verbatim
+    - Parse directives are preserved in their original order
+
+    @subsection qorecodeformat_wrapping Line Wrapping
+    - Maximum line length of 120 characters (@c MAX_LINE_LENGTH)
+    - Binary expression chains are wrapped with operator-leading continuation at +8 indent:
+      @code{.py}
+# Before:
+int result = very_long_variable_name + another_long_variable_name + yet_another_variable + final_variable;
+
+# After:
+int result = very_long_variable_name + another_long_variable_name
+        + yet_another_variable + final_variable;
+      @endcode
+    - Ternary expressions wrap @c ? and @c : on continuation lines
+    - Hash and list literals wrap individual items when the collection exceeds the line limit
+
+    @subsection qorecodeformat_idempotency Idempotency
+    - Formatting already-formatted code produces identical output
+    - The formatter is safe to apply repeatedly without introducing changes
 
     @section qorecodeformatusage Usage
+
+    @subsection qorecodeformat_basic Basic Formatting
 
     @code{.py}
 %requires QoreCodeFormat
 
+string source = File::readTextFile("my_module.qm");
 QoreCodeFormat::CodeFormatter fmt();
-string formatted = fmt.format(source_code);
+string formatted = fmt.format(source);
     @endcode
+
+    @subsection qorecodeformat_before_after Before and After
+
+    Input:
+    @code{.py}
+  class Foo inherits Bar {
+private {string name; int count;}
+  constructor(string n,int c) {
+   name=n;count=c;
+  if(c>0)
+     printf("positive\n");
+  }
+}
+    @endcode
+
+    Output:
+    @code{.py}
+class Foo inherits Bar {
+    private {
+        string name;
+        int count;
+    }
+
+    constructor(string n, int c) {
+        name = n;
+        count = c;
+        if (c > 0) {
+            printf("positive\n");
+        }
+    }
+}
+    @endcode
+
+    @subsection qorecodeformat_cst CSTTranslator for AST Consumers
+
+    The @ref QoreCodeFormat::CSTTranslator "CSTTranslator" class translates tree-sitter CST
+    nodes into the legacy AST hash format expected by tools like @c Qdx:
+
+    @code{.py}
+%requires QoreCodeFormat
+
+hash<auto> cst_node = ...; # tree-sitter CST node from astparser
+hash<auto> ast_node = QoreCodeFormat::CSTTranslator::translate(cst_node);
+# ast_node now has "nodetype", "kind", "loc", etc. fields
+    @endcode
+
+    @section qorecodeformatrelnotes Release Notes
+
+    @subsection qorecodeformat_v1_0 v1.0
+    - initial release providing canonical %Qore code formatting using tree-sitter CST
+    - 4-space indentation, same-line opening braces, mandatory braces for control flow
+    - space around binary operators, after keywords, no trailing whitespace
+    - parse directives at column 0, blank lines between top-level declarations
+    - comment, string literal, regex literal, and number literal preservation
+    - line-length-aware wrapping (120 character limit) with intelligent binary expression
+      chain and ternary operator wrapping
+    - idempotent formatting (formatting already-formatted code produces identical output)
+    - @ref QoreCodeFormat::CSTTranslator "CSTTranslator" for legacy AST consumers
+    - AST node type constants (@c ANT_*, @c ADK_*, @c AEK_*, @c ASK_*) and operator/parse-option
+      string maps
 */
 
 #! Main QoreCodeFormat namespace

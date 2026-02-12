@@ -1,0 +1,93 @@
+/** @mainpage %Qore %Linenoise Module
+
+    @tableofcontents
+
+    @section linenoiseintro linenoise Module Introduction
+
+    The linenoise module provides readline-like functionality to Qore, allowing
+    qore programs to manage comfortable user input in the command line.
+
+    This module is released under a choice of two licenses:
+
+    - LGPL 2.1
+    - MIT (see COPYING.MIT in the source distribution for more information)
+
+    The module is tagged as such in the module's header (meaning it can be
+    loaded unconditionally regardless of how the Qore library was initialized).
+
+    The underlying functionality is provided by Linenoise-NG library: https://github.com/arangodb/linenoise-ng
+    of the original version https://github.com/antirez/linenoise
+
+    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    @section basic_usage Basic Usage
+
+    The core of functionality is the Qore::Linenoise::line() function. It waits for user input
+    providing basic and advanced edit functionality.
+
+    @code{.py}
+%new-style
+%require-types
+%strict-args
+
+%requires linenoise
+
+while (True) {
+    *string line = Linenoise::line("prompt> ");
+    if (!exists line) {
+        printf("^C signal caught. Exiting.\n");
+        break;
+    }
+
+    # process the line value...
+}
+    @endcode
+
+    @section history_handling History Handling
+
+    Linenoise module keeps history in its internal structure. To add a history item
+    use @ref Qore::Linenoise::history_add()
+
+    Full history content can be obtained with @ref Qore::Linenoise::history
+
+    To handle history size use @ref Qore::Linenoise::history_set_max_len and
+    @ref Qore::Linenoise::history_get_max_len
+
+    History is not persistent across processes (the memory is cleared when the process terminates).
+    To store and load history content use @ref Qore::Linenoise::history_save()
+    and @ref Qore::Linenoise::history_load()
+
+    @section line_completion Line Completion
+
+    Users start line completion by pressing the TAB key when in @ref Qore::Linenoise::line().
+
+    An callback has to be used to provide line completion values.
+    The callback is registered with @ref Qore::Linenoise::set_callback().
+
+    @note The callback code must accept a \c string as an input argument and return a \c list.
+
+    If the input argument isn't a string, a \c RUNTIME-OVERLOAD-ERROR exception will be thrown.
+
+    If the return value isn't a list, the return will be ignored.
+
+    Non string members of returned list will be converted to string (string representation
+    of the list member will be used).
+
+    <b>Example</b>
+    @code{.py}
+# h<TAB> is expanded to string: history
+list sub my_callback(string value) {
+    list ret = ();
+    if (value == 'h')
+        push ret, 'history';
+
+    return ret;
+}
+
+Linenoise::set_callback(\my_callback());
+    @endcode
+
+    @section linenoisereleasenotes linenoise Module Release Notes
+
+    This module is always delivered with %Qore and therefore mirrors the %Qore version.
+*/
