@@ -34,6 +34,15 @@ hashdecl Issue3518 {
     int i;
 }
 
+# Hashdecl with complex type default value - tests that acceptInputComplexList
+# does not steal a reference from the shared default expression node
+public hashdecl ComplexDefaults {
+    string name;
+    list<string> items = ();
+    list<int> numbers = ();
+    hash<string, string> metadata = {};
+}
+
 hashdecl Issue3654 {
     bool b = False;
 }
@@ -89,6 +98,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("Test HashDecl", \testHashDecl());
         addTestCase("namespaced typed hash literal", \namespacedTypedHashLiteral());
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
+        addTestCase("complex type defaults", \testComplexTypeDefaults());
         set_return_value(main());
     }
 
@@ -940,6 +950,77 @@ class HashDeclTest inherits QUnit::Test {
             hash result = p.callFunction("test_type_compat");
             assertEq("compat", result.name);
             assertEq(888, result.id);
+        }
+    }
+
+    testComplexTypeDefaults() {
+        # Test that hashdecl with complex type defaults (list<T>, hash<K,V>) works
+        # correctly when instantiated in a child Program.  This exercises the
+        # mergeUserPublic() copy path where the default value node is shared
+        # between two hashdecl copies.  Before the fix, acceptInputComplexList()
+        # would steal a reference from the shared default, causing use-after-free.
+
+        # Test 1: Direct instantiation
+        {
+            hash<ComplexDefaults> cd({"name": "test"});
+            assertEq("test", cd.name);
+            assertEq(0, cd.items.size());
+            assertEq("list<string>", cd.items.fullType());
+            assertEq(0, cd.numbers.size());
+            assertEq("list<int>", cd.numbers.fullType());
+            assertEq(0, cd.metadata.size());
+        }
+
+        # Test 2: Instantiation in a child Program (triggers mergeUserPublic copy)
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd({'name': 'child'});
+                    return (cd.name, cd.items.size(), cd.numbers.size(), cd.metadata.size());
+                }
+            ", "complex-defaults-test");
+
+            list result = p.callFunction("test");
+            assertEq("child", result[0]);
+            assertEq(0, result[1]);
+            assertEq(0, result[2]);
+            assertEq(0, result[3]);
+        }
+
+        # Test 3: Multiple instantiations in child Program
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd1({'name': 'first'});
+                    hash<ComplexDefaults> cd2({'name': 'second'});
+                    return (cd1.name, cd1.items.size(), cd2.name, cd2.items.size());
+                }
+            ", "complex-defaults-multi");
+
+            list result = p.callFunction("test");
+            assertEq("first", result[0]);
+            assertEq(0, result[1]);
+            assertEq("second", result[2]);
+            assertEq(0, result[3]);
+        }
+
+        # Test 4: Imported hashdecl with complex defaults
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+            p.importHashDecl("ComplexDefaults");
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd({'name': 'imported'});
+                    return (cd.name, cd.items.size(), cd.numbers.size());
+                }
+            ", "complex-defaults-import");
+
+            list result = p.callFunction("test");
+            assertEq("imported", result[0]);
+            assertEq(0, result[1]);
+            assertEq(0, result[2]);
         }
     }
 }

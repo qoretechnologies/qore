@@ -582,10 +582,13 @@ set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
 target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 # libqore generators
-qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC ${LIBQORE_QPP_SRC})
-qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC ${PSEUDO_QPP_SRC})
+qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
+qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
 
 add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
+
+# install qpp metadata files
+install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
 add_custom_target(BISON_GENERATED_FILES DEPENDS ${BISON_qoreparser_OUTPUTS})
 add_custom_target(FLEX_GENERATED_FILES DEPENDS ${FLEX_qorescanner_OUTPUTS})
 
@@ -1490,9 +1493,10 @@ qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
 qore_user_module("qlib/ProviderIndexUtil" "")
+qore_user_module("qlib/QoreApiMetadata" "modules/astparser/astparser")
 qore_user_module("qlib/QoreCodeCompletion" "")
 qore_user_module("qlib/QoreCodeFormat" "modules/astparser/astparser")
-qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;Util;Mime")
+qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;QoreApiMetadata;Util;Mime")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")

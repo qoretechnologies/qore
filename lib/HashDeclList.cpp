@@ -45,8 +45,9 @@ void HashDeclList::remove(hm_qth_t::iterator i) {
 }
 
 void HashDeclList::deleteAll() {
-    for (hm_qth_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i)
+    for (hm_qth_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i) {
         typed_hash_decl_private::get(*i->second)->deref();
+    }
 
     hm.clear();
 }
@@ -86,7 +87,6 @@ const TypedHashDecl* HashDeclList::find(const char* name) const {
 }
 
 HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* ns) {
-    //printd(5, "HashDeclList::HashDeclList() this: %p ns: '%s' size: %d\n", this, ns->name.c_str(), (int)old.hm.size());
     for (auto& i : old.hm) {
         //printd(5, "HashDeclList::HashDeclList() this: %p hd: %p '%s' po & PO_NO_INHERIT_USER_HASHDECLS: %s sys: %s pub: %s\n", this, i.second, i.second->getName(), po & PO_NO_INHERIT_USER_HASHDECLS ? "true": "false", i.second->isSystem() ? "true": "false", typed_hash_decl_private::get(*i.second)->isPublic() ? "true": "false");
         if (!i.second->isSystem()) {

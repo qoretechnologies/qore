@@ -47,6 +47,7 @@
 #include <cstring>
 #include <libgen.h>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <sys/stat.h>
@@ -66,6 +67,7 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -D, --define=arg       define a preprocessor macro (can be used multiple times)\n"
     " -h, --help             this help text\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
+    " -m, --metadata=arg     JSON metadata output file name\n"
     " -o, --output=arg       cpp output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
@@ -76,6 +78,7 @@ static const option pgm_opts[] = {
     {"dox-output", required_argument, nullptr, 'd'},
     {"help", no_argument, nullptr, 'h'},
     {"javadoc", required_argument, nullptr, 'j'},
+    {"metadata", required_argument, nullptr, 'm'},
     {"output", required_argument, nullptr, 'o'},
     {"table", required_argument, nullptr, 't'},
     {"unit", required_argument, nullptr, 'u'},
@@ -95,6 +98,7 @@ static struct qpp_opts {
     std::string output_fn;
     std::string dox_fn;
     std::string javadoc_fn;
+    std::string metadata_fn;
     std::string unit_test_fn;
     std::string table_fn;
     int verbose;
@@ -227,6 +231,30 @@ static bool idchar(const char c) {
 
 static bool idnschar(const char c) {
     return isalnum(c) || c == '_' || c == ':';
+}
+
+static std::string json_escape_string(const std::string& s) {
+    std::string result;
+    result.reserve(s.size() + 16);
+    for (char c : s) {
+        switch (c) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    result += buf;
+                } else {
+                    result += c;
+                }
+                break;
+        }
+    }
+    return result;
 }
 
 static int my_vsprintf(std::string& buf, const char* fmt, va_list args) {
@@ -2423,6 +2451,26 @@ public:
         fprintf(fp, "    const %s = %s;\n", name.c_str(), qv.c_str());
         return 0;
     }
+
+    void serializeMetadataConstantJson(FILE* fp, const std::string& ns_path, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns_path.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns_path).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+        if (!value.empty()) {
+            std::string qv;
+            if (!get_dox_value(value, qv)) {
+                fprintf(fp, ",\"value\":\"%s\"", json_escape_string(qv).c_str());
+            }
+        }
+        fputc('}', fp);
+    }
 };
 
 class TextGroupElement {
@@ -2804,6 +2852,86 @@ protected:
             fputs("private:internal ", fp);
     }
 
+    void serializeMetadataParamsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < params.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            const Param& p = params[i];
+            std::string ptype = p.type;
+            if (!ptype.empty() && ptype[0] == '!') {
+                ptype = ptype.substr(1);
+            }
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\"",
+                json_escape_string(p.name).c_str(),
+                json_escape_string(ptype).c_str());
+            if (!p.val.empty()) {
+                std::string qv;
+                if (!get_dox_value(p.val, qv)) {
+                    fprintf(fp, ",\"default_value\":\"%s\"", json_escape_string(qv).c_str());
+                }
+            }
+            fputc('}', fp);
+        }
+        fputc(']', fp);
+    }
+
+    void serializeMetadataFlagsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < flags.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            fprintf(fp, "\"%s\"", json_escape_string(flags[i]).c_str());
+        }
+        fputc(']', fp);
+    }
+
+    void serializeMetadataDomainsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < dom.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            fprintf(fp, "\"%s\"", json_escape_string(dom[i]).c_str());
+        }
+        fputc(']', fp);
+    }
+
+    std::string buildMetadataSignature(const char* prefix = nullptr) const {
+        std::string sig = (return_type.empty() ? "nothing" : return_type) + " ";
+        if (prefix) {
+            sig += prefix;
+            sig += "::";
+        }
+        sig += name;
+        sig += "(";
+        for (unsigned i = 0; i < params.size(); ++i) {
+            if (i) {
+                sig += ", ";
+            }
+            std::string ptype = params[i].type;
+            if (!ptype.empty() && ptype[0] == '!') {
+                ptype = ptype.substr(1);
+            }
+            sig += ptype;
+            if (params[i].type != "...") {
+                sig += " ";
+                sig += params[i].name;
+                if (!params[i].val.empty()) {
+                    std::string qv;
+                    if (!get_dox_value(params[i].val, qv)) {
+                        sig += " = ";
+                        sig += qv;
+                    }
+                }
+            }
+        }
+        sig += ")";
+        return sig;
+    }
+
     const char* getReturnType() const {
         return "QoreValue";
     }
@@ -3057,6 +3185,30 @@ public:
         fputs(");\n\n", fp);
 
         return 0;
+    }
+
+    void serializeMetadataFunctionJson(FILE* fp, const std::string& ns_path, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns_path.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns_path).c_str());
+        }
+        std::string sig = buildMetadataSignature();
+        fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
+        fprintf(fp, ",\"return_type\":\"%s\"",
+            json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        fputs(",\"params\":", fp);
+        serializeMetadataParamsJson(fp);
+        fputs(",\"flags\":", fp);
+        serializeMetadataFlagsJson(fp);
+        fputs(",\"domains\":", fp);
+        serializeMetadataDomainsJson(fp);
+        fputc('}', fp);
     }
 };
 
@@ -3542,6 +3694,18 @@ public:
     bool hasConstants() const {
         return !cmap.empty();
     }
+
+    void serializeMetadataFunctionsJson(FILE* fp, bool& first) const {
+        for (auto& i : fmap) {
+            i.second->serializeMetadataFunctionJson(fp, ns, first);
+        }
+    }
+
+    void serializeMetadataConstantsJson(FILE* fp, bool& first) const {
+        for (auto& i : cmap) {
+            i.second->serializeMetadataConstantJson(fp, ns, first);
+        }
+    }
 };
 
 typedef std::vector<Group*> grouplist_t;
@@ -3674,6 +3838,18 @@ public:
             if (grouplist[i]->serializeConstantDox(fp, needs_prefix))
                 return -1;
         return 0;
+    }
+
+    void serializeMetadataFunctionsJson(FILE* fp, bool& first) const {
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            grouplist[i]->serializeMetadataFunctionsJson(fp, first);
+        }
+    }
+
+    void serializeMetadataConstantsJson(FILE* fp, bool& first) const {
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            grouplist[i]->serializeMetadataConstantsJson(fp, first);
+        }
     }
 
     void clear() {
@@ -3968,6 +4144,39 @@ public:
         return valid;
     }
 
+    void serializeMetadataJson(FILE* fp, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        if (!parent_name.empty()) {
+            fprintf(fp, ",\"parent_name\":\"%s\"", json_escape_string(parent_name).c_str());
+        }
+        fputs(",\"members\":[", fp);
+        bool first_member = true;
+        for (auto& i : hdmap) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"description\":\"%s\"",
+                json_escape_string(i.first).c_str(),
+                json_escape_string(i.second.type).c_str(),
+                json_escape_string(i.second.comment).c_str());
+            if (!i.second.value.empty()) {
+                fprintf(fp, ",\"default_value\":\"%s\"", json_escape_string(i.second.value).c_str());
+            }
+            fputc('}', fp);
+        }
+        fputs("]}", fp);
+    }
+
 protected:
     std::string comment;
     std::string name;
@@ -4246,6 +4455,37 @@ public:
 
     operator bool() const {
         return valid;
+    }
+
+    void serializeMetadataJson(FILE* fp, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        fprintf(fp, ",\"base_type\":\"%s\"", json_escape_string(baseType).c_str());
+        fputs(",\"values\":[", fp);
+        bool first_val = true;
+        for (auto& m : members) {
+            if (!first_val) {
+                fputc(',', fp);
+            }
+            first_val = false;
+            fprintf(fp, "{\"name\":\"%s\"", json_escape_string(m.first).c_str());
+            if (!m.second.computed_value.empty()) {
+                fprintf(fp, ",\"value\":\"%s\"", json_escape_string(m.second.computed_value).c_str());
+            }
+            if (!m.second.comment.empty()) {
+                fprintf(fp, ",\"description\":\"%s\"", json_escape_string(m.second.comment).c_str());
+            }
+            fputc('}', fp);
+        }
+        fputs("]}", fp);
     }
 
 protected:
@@ -4588,6 +4828,37 @@ public:
 
     void serializeUnitTestStatic(FILE* fp, const char* cname) const {
         serializeQorePrototypeComment(fp, cname, 8, "#");
+    }
+
+    void serializeMetadataMethodJson(FILE* fp, const std::string& class_name, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        std::string sig = buildMetadataSignature(class_name.c_str());
+        fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
+        fprintf(fp, ",\"return_type\":\"%s\"",
+            json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        fputs(",\"params\":", fp);
+        serializeMetadataParamsJson(fp);
+
+        const char* access_str = "public";
+        if (attr & QCA_PRIVATE) {
+            access_str = "private";
+        } else if (attr & QCA_PRIVATE_INTERNAL) {
+            access_str = "private:internal";
+        }
+        fprintf(fp, ",\"access\":\"%s\"", access_str);
+        fprintf(fp, ",\"is_static\":%s", (attr & QCA_STATIC) ? "true" : "false");
+        fprintf(fp, ",\"is_abstract\":%s", (attr & QCA_ABSTRACT) ? "true" : "false");
+        fputs(",\"flags\":", fp);
+        serializeMetadataFlagsJson(fp);
+        fputs(",\"domains\":", fp);
+        serializeMetadataDomainsJson(fp);
+        fputc('}', fp);
     }
 
     void serializeNormalJavadocMethod(FILE* fp, const char* cname) const {
@@ -5371,6 +5642,98 @@ public:
         outputNamespaceEnd(fp);
         return 0;
     }
+
+    void serializeMetadataJson(FILE* fp, bool& first) {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+
+        // parents
+        if (!vparents.empty()) {
+            fputs(",\"parents\":[", fp);
+            for (unsigned i = 0; i < vparents.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(vparents[i]).c_str());
+            }
+            fputc(']', fp);
+        }
+
+        fprintf(fp, ",\"is_final\":%s", is_final ? "true" : "false");
+
+        // class-level domains
+        if (!dom.empty()) {
+            fputs(",\"domains\":[", fp);
+            for (unsigned i = 0; i < dom.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(dom[i]).c_str());
+            }
+            fputc(']', fp);
+        }
+
+        // instance methods
+        fputs(",\"instance_methods\":[", fp);
+        bool first_method = true;
+        for (auto& i : normal_mmap) {
+            i.second->serializeMetadataMethodJson(fp, name, first_method);
+        }
+        fputs("]", fp);
+
+        // static methods
+        fputs(",\"static_methods\":[", fp);
+        first_method = true;
+        for (auto& i : static_mmap) {
+            i.second->serializeMetadataMethodJson(fp, name, first_method);
+        }
+        fputs("]", fp);
+
+        // members
+        fputs(",\"members\":[", fp);
+        bool first_member = true;
+        for (auto& m : public_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"public\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        for (auto& m : private_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"private\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        for (auto& m : internal_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"private:internal\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        fputs("]", fp);
+
+        fputc('}', fp);
+    }
 };
 
 typedef std::map<std::string, ClassElement*> cemap_t;
@@ -5899,6 +6262,70 @@ public:
         return 0;
     }
 
+    int serializeMetadata() {
+        if (opts.metadata_fn.empty()) {
+            return 0;
+        }
+        std::unique_ptr<FILE, int(*)(FILE*)> fp(
+            fopen(opts.metadata_fn.c_str(), "w"), fclose);
+        if (!fp) {
+            error("%s: %s\n", opts.metadata_fn.c_str(), strerror(errno));
+            return -1;
+        }
+        log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
+
+        fprintf(fp.get(), "{\"schema_version\":\"1.0\",\"source_file\":\"%s\"",
+            json_escape_string(fileName).c_str());
+
+        // classes
+        fputs(",\"classes\":[", fp.get());
+        bool first = true;
+        for (auto* elem : source) {
+            auto* ce = dynamic_cast<ClassElement*>(elem);
+            if (ce) {
+                ce->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // hashdecls
+        fputs(",\"hashdecls\":[", fp.get());
+        first = true;
+        for (auto* elem : source) {
+            auto* hd = dynamic_cast<HashDecl*>(elem);
+            if (hd) {
+                hd->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // enums
+        fputs(",\"enums\":[", fp.get());
+        first = true;
+        for (auto* elem : source) {
+            auto* en = dynamic_cast<Enum*>(elem);
+            if (en) {
+                en->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // functions
+        fputs(",\"functions\":[", fp.get());
+        first = true;
+        groups.serializeMetadataFunctionsJson(fp.get(), first);
+        fputs("]", fp.get());
+
+        // constants
+        fputs(",\"constants\":[", fp.get());
+        first = true;
+        groups.serializeMetadataConstantsJson(fp.get(), first);
+        fputs("]", fp.get());
+
+        fputs("}\n", fp.get());
+        return 0;
+    }
+
     operator bool() const {
         return valid;
     }
@@ -6152,7 +6579,7 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -6171,6 +6598,10 @@ void process_command_line(int& argc, char**& argv) {
 
             case 'j':
                 opts.javadoc_fn = optarg;
+                break;
+
+            case 'm':
+                opts.metadata_fn = optarg;
                 break;
 
             case 'o':
@@ -6237,6 +6668,10 @@ int main(int argc, char* argv[]) {
 
         // create javadoc output file
         code.serializeJavadoc();
+
+        // create metadata output file
+        if (code.serializeMetadata())
+            return -1;
     }
 
     if (!opts.table_fn.empty())
