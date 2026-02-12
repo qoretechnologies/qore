@@ -201,6 +201,8 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "squareres": "SquareRestClient",
+
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",
 
