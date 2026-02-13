@@ -6947,14 +6947,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === Exists: use pre-evaluated operand to avoid double-evaluation ===
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool: {
+            // Use the pre-evaluated operand[0] — do NOT re-evaluate the AST expr
+            // which would double-evaluate the inner expression (e.g., function call)
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // exists returns true if value is NOT NOTHING
+            llvm::Value* is_not_nothing = builder->CreateICmpNE(val_boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            llvm::Value* result = boxBool(is_not_nothing);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            // No trackResultForCleanup — boolean value, no heap allocation
+            // No emitExceptionCheck — exists cannot throw
+            return true;
+        }
+
         // === Pure expression ops (no variable modification) ===
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
         case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
-        case QoreIROpcode::ExistsAny:
-        case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {
             // Pure expression ops — delegate to qore_rt_invoke_expr via the AST node

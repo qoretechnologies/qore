@@ -2579,8 +2579,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ExistsAny:
-                case QoreIROpcode::ExistsBool:
                 case QoreIROpcode::ElementsAny:
                 case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:
@@ -2856,8 +2854,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ExistsAny:
-                case QoreIROpcode::ExistsBool:
                 case QoreIROpcode::ElementsAny:
                 case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:
@@ -3207,8 +3203,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ExistsAny:
-                case QoreIROpcode::ExistsBool:
                 case QoreIROpcode::ElementsAny:
                 case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:

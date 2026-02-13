@@ -717,7 +717,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::UnaryPlusAny:
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::UnaryMinusFloat:
-        case QoreIROpcode::UnaryMinusAny: {
+        case QoreIROpcode::UnaryMinusAny:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
         }
@@ -3292,7 +3294,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::UnaryPlusAny:
             case QoreIROpcode::UnaryMinusInt:
             case QoreIROpcode::UnaryMinusFloat:
-            case QoreIROpcode::UnaryMinusAny: {
+            case QoreIROpcode::UnaryMinusAny:
+            case QoreIROpcode::ExistsAny:
+            case QoreIROpcode::ExistsBool: {
                 if (inst->operands.size() < 1) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
@@ -4275,8 +4279,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ListAssignAny:
             case QoreIROpcode::PopAny:
             case QoreIROpcode::PushAny:
-            case QoreIROpcode::ExistsAny:
-            case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::CastAny:
@@ -4537,6 +4539,9 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             QoreUnaryMinusOperatorNode node(nullptr, value);
             return evalAndRef(&node, xsink);
         }
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+            return QoreValue(!value.isNothing());
         default:
             break;
     }

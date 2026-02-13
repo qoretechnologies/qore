@@ -440,6 +440,8 @@ inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::UnaryMinusAny:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
             return true;
         default:
             return false;
