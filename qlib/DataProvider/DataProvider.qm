@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -205,6 +205,140 @@ module DataProvider {
                 QoreRecordLimitProcessor::ConstructorOptions, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register running-stats action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/running-stats",
+            "action": "running-stats",
+            "display_name": "Running Statistics",
+            "short_desc": "Compute running statistics over windows of numeric records",
+            "desc": "Compute running statistics (count, sum, average, min, max, standard deviation, "
+                "variance) over a sliding window of records for each configured numeric field; "
+                "emits one analytics event per field when each window is full",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreRunningStatsProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRunningStatsProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register moving-average action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/moving-average",
+            "action": "moving-average",
+            "display_name": "Moving Average",
+            "short_desc": "Compute simple and exponential moving averages per record",
+            "desc": "Compute simple moving average (SMA) and exponential moving average (EMA) "
+                "for each configured numeric field; emits one analytics event per input record "
+                "with the current SMA and EMA values",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreMovingAverageProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMovingAverageProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreMovingAverageProcessor::ConstructorOptions{"ema_alpha",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register trend-analysis action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/trend-analysis",
+            "action": "trend-analysis",
+            "display_name": "Trend Analysis",
+            "short_desc": "Detect trends using linear regression over windows of records",
+            "desc": "Compute linear regression trend analysis (slope, intercept, r-squared, "
+                "direction) over a window of records for each configured numeric field; "
+                "emits one analytics event per field when each window is full with the "
+                "trend direction (rising, falling, or flat)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreTrendAnalysisProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreTrendAnalysisProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreTrendAnalysisProcessor::ConstructorOptions{"direction_threshold",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register anomaly-detection action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/anomaly-detection",
+            "action": "anomaly-detection",
+            "display_name": "Anomaly Detection",
+            "short_desc": "Detect anomalous values using z-score analysis per record",
+            "desc": "Detect anomalous values in each configured numeric field using z-score "
+                "analysis against a sliding window; emits one analytics event per input record "
+                "indicating whether the value exceeds the configured threshold",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreAnomalyDetectionProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreAnomalyDetectionProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreAnomalyDetectionProcessor::ConstructorOptions{"threshold",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register group-by action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/group-by",
+            "action": "group-by",
+            "display_name": "Group By and Aggregate",
+            "short_desc": "Group records by field values and compute aggregates per group",
+            "desc": "Group records by one or more field values and compute aggregate functions "
+                "(count, sum, avg, min, max, first, last) per group; emits one output record "
+                "per group on flush with the group field values and computed aggregates",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProvider::QoreGroupByProcessor",
+            "groups": ("Aggregation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGroupByProcessor::ConstructorOptions{"aggregates",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGroupByProcessor::ConstructorOptions{"group_by",}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ),
@@ -636,6 +770,31 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_4 DataProvider v3.4
+    - added streaming analytics pipeline processors for real-time data analysis:
+      - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
+        (count, sum, avg, min, max, stddev, variance) over windows of records
+      - @ref DataProvider::QoreMovingAverageProcessor "moving-average": compute simple and exponential
+        moving averages per record
+      - @ref DataProvider::QoreTrendAnalysisProcessor "trend-analysis": compute linear regression trend
+        analysis (slope, intercept, r-squared, direction) over windows
+      - @ref DataProvider::QoreAnomalyDetectionProcessor "anomaly-detection": z-score based anomaly
+        detection per record
+    - added the @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" abstract base
+      class for building streaming analytics processors with window and record emission modes
+    - added the @ref DPC_ANALYTICS processor capability constant for analytics processors
+    - added analytics event hashdecls: @ref DataProvider::AnalyticsEventInfo "AnalyticsEventInfo",
+      @ref DataProvider::StatisticsEventInfo "StatisticsEventInfo",
+      @ref DataProvider::MovingAverageEventInfo "MovingAverageEventInfo",
+      @ref DataProvider::TrendEventInfo "TrendEventInfo",
+      @ref DataProvider::AnomalyEventInfo "AnomalyEventInfo"
+    - added @ref DataProvider::QoreGroupByProcessor "group-by": group records by field values and
+      compute aggregate functions (count, sum, avg, min, max, first, last) per group
+    - added 4 new analytics actions to the Qore app in the "Analytics" group
+    - added 1 new aggregation action to the Qore app in the "Aggregation" group
+    - updated @ref DataProvider::QoreProcessorsDataProvider "qore-processors" factory with 5 new
+      processor children (4 analytics + 1 aggregation)
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added the built-in "Qore" app with pipeline processor actions for filtering, transforming, and

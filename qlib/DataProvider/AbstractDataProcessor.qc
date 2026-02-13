@@ -46,6 +46,10 @@ public const DPC_EXPAND = (1 << 2);
 public const DPC_AGGREGATE = (1 << 3);
 #! Processor is a data sink: consumes records, writes to external target; may or may not pass through
 public const DPC_SINK = (1 << 4);
+#! Processor computes streaming analytics: accumulates data in windows and emits analytics events
+/** @since %DataProvider 3.4
+*/
+public const DPC_ANALYTICS = (1 << 5);
 #/@}
 
 #! Map of DPC_* processor capability codes to descriptive names
@@ -57,6 +61,7 @@ public const ProcessorCapabilityNameMap = {
     DPC_EXPAND: "EXPAND",
     DPC_AGGREGATE: "AGGREGATE",
     DPC_SINK: "SINK",
+    DPC_ANALYTICS: "ANALYTICS",
 };
 
 #! Defines an abstract class for accepting data and outputting optionally transformed or filtered data
