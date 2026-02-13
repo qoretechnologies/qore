@@ -68,14 +68,14 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 "required": False,
                 "default_value": False,
             },
-            "global": <DataProviderOptionInfo>{
-                "display_name": "Replace All",
-                "short_desc": "Replace all occurrences or only the first",
-                "desc": "If True, all occurrences of the search pattern are replaced; "
-                    "if False, only the first occurrence is replaced",
-                "type": AbstractDataProviderTypeMap."bool",
+            "regex_options": <DataProviderOptionInfo>{
+                "display_name": "Regex Options",
+                "short_desc": "Regular expression options for matching",
+                "desc": "A list of regular expression option names to apply when performing "
+                    "regex matching (e.g. RE_Global, RE_Caseless)",
+                "type": AbstractDataProviderTypeMap."*list",
                 "required": False,
-                "default_value": True,
+                "element_allowed_values": RegularExpressionArgInfo[2].allowed_values,
             },
         };
     }
@@ -93,8 +93,8 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         #! Regex flag
         bool is_regex;
 
-        #! Global replacement flag
-        bool global_replace;
+        #! Regex options bitfield
+        int regex_opts = 0;
 
         #! Flag indicating if the processor has been configured
         bool configured = False;
@@ -112,7 +112,9 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             search = copts.search;
             replace_str = copts.replace;
             is_regex = copts.is_regex ?? False;
-            global_replace = copts.global ?? True;
+            if (*list<auto> ropts = copts.regex_options) {
+                regex_opts = foldl $1 | $2, (map RegexOpts{$1}, ropts);
+            }
             configured = True;
         }
     }
@@ -125,7 +127,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return "Performs search and replace on a string field in each record; supports both literal "
-            "string matching and regular expression patterns with global or first-only replacement";
+            "string matching and regular expression patterns with configurable regex options";
     }
 
     #! Returns data provider static info
@@ -145,9 +147,9 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         }
         string val = record{field};
         if (is_regex) {
-            val = regex_subst(val, search, replace_str, global_replace ? RE_Global : 0);
+            val = regex_subst(val, search, replace_str, regex_opts);
         } else {
-            if (global_replace) {
+            if (regex_opts & RE_Global) {
                 val = replace(val, search, replace_str);
             } else {
                 # replace first occurrence only

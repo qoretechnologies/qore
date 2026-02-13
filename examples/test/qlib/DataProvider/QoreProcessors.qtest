@@ -67,23 +67,19 @@ class TestSinkProcessor inherits DataProvider::AbstractDataProcessor {
 
 class QoreProcessorsTest inherits QUnit::Test {
     constructor() : Test("QoreProcessorsTest", "1.0") {
-        addTestCase("filter - simple mode matching", \filterSimpleMatch());
-        addTestCase("filter - simple mode non-matching", \filterSimpleNoMatch());
-        addTestCase("filter - DPQL expression mode", \filterDpqlExpression());
-        addTestCase("filter - invalid DPQL expression", \filterInvalidDpql());
+        addTestCase("filter - where_cond matching", \filterWhereCondMatch());
+        addTestCase("filter - where_cond non-matching", \filterWhereCondNoMatch());
+        addTestCase("filter - where_cond complex expression", \filterWhereCondComplex());
         addTestCase("filter - no options error", \filterNoOptions());
-        addTestCase("filter - operators", \filterOperators());
-        addTestCase("filter - in operator", \filterInOperator());
-        addTestCase("filter - between operator", \filterBetweenOperator());
-        addTestCase("filter - regex operator", \filterRegexOperator());
 
         addTestCase("select-fields - keep fields", \selectFieldsKeep());
         addTestCase("select-fields - rename fields", \selectFieldsRename());
         addTestCase("select-fields - combined keep and rename", \selectFieldsCombined());
         addTestCase("select-fields - empty fields error", \selectFieldsEmpty());
 
-        addTestCase("set-fields - add new field", \setFieldsAddNew());
-        addTestCase("set-fields - overwrite existing field", \setFieldsOverwrite());
+        addTestCase("set-fields - add new fields", \setFieldsAddNew());
+        addTestCase("set-fields - overwrite existing fields", \setFieldsOverwrite());
+        addTestCase("set-fields - multiple fields", \setFieldsMultiple());
 
         addTestCase("remove-fields - remove single field", \removeFieldsSingle());
         addTestCase("remove-fields - remove multiple fields", \removeFieldsMultiple());
@@ -91,6 +87,8 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("search-replace - literal replacement", \searchReplaceLiteral());
         addTestCase("search-replace - regex replacement", \searchReplaceRegex());
         addTestCase("search-replace - global vs first-only", \searchReplaceGlobalVsFirst());
+        addTestCase("search-replace - regex with multiple options", \searchReplaceMultipleOptions());
+        addTestCase("search-replace - invalid regex option", \searchReplaceInvalidOption());
         addTestCase("search-replace - field not present", \searchReplaceFieldMissing());
 
         addTestCase("record-limit - pass N records", \recordLimitPass());
@@ -108,7 +106,6 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("data provider navigation - child info", \navigationChildInfo());
 
         addTestCase("filter - where_cond expression builder", \filterWhereCond());
-        addTestCase("filter - where_cond mutual exclusivity", \filterWhereCondExclusive());
 
         addTestCase("pipeline processor type API - input/output types", \pipelineProcessorTypeApi());
         addTestCase("pipeline processor type API - with options", \pipelineProcessorTypeApiWithOptions());
@@ -117,37 +114,54 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("dynamic options - filter action", \dynamicOptionsFilterAction());
         addTestCase("dynamic options - pipeline processor dispatch", \dynamicOptionsPipelineProcessorDispatch());
 
+        addTestCase("RegularExpressionArgInfo - RE_Global present", \regexArgInfoReGlobal());
+
         set_return_value(main());
     }
 
     # --- Filter Tests ---
 
-    filterSimpleMatch() {
-        QoreFilterRecordsProcessor proc({"field": "status", "operator": "==", "value": "active"});
+    filterWhereCondMatch() {
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
         hash<auto> record = {"name": "Alice", "status": "active", "amount": 100};
-        auto result = proc.processRecord(record);
-        assertEq(record, result);
+        assertEq(record, proc.processRecord(record));
     }
 
-    filterSimpleNoMatch() {
-        QoreFilterRecordsProcessor proc({"field": "status", "operator": "==", "value": "active"});
+    filterWhereCondNoMatch() {
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
         hash<auto> record = {"name": "Bob", "status": "inactive", "amount": 50};
-        auto result = proc.processRecord(record);
-        assertNothing(result);
+        assertNothing(proc.processRecord(record));
     }
 
-    filterDpqlExpression() {
-        QoreFilterRecordsProcessor proc({"expression": '@status == "active"'});
-        hash<auto> active = {"name": "Alice", "status": "active"};
-        hash<auto> inactive = {"name": "Bob", "status": "inactive"};
-        assertEq(active, proc.processRecord(active));
-        assertNothing(proc.processRecord(inactive));
-    }
+    filterWhereCondComplex() {
+        # AND with two conditions
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
 
-    filterInvalidDpql() {
-        assertThrows("DPQL-PARSE-ERROR", sub () {
-            new QoreFilterRecordsProcessor({"expression": '@status =='});
-        });
+        assertEq({"status": "active", "amount": 200},
+            proc.processRecord({"status": "active", "amount": 200}));
+        assertNothing(proc.processRecord({"status": "active", "amount": 50}));
+        assertNothing(proc.processRecord({"status": "inactive", "amount": 200}));
     }
 
     filterNoOptions() {
@@ -156,137 +170,6 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertThrows("PROCESSOR-ERROR", sub () {
             proc.processRecord({"a": 1});
         });
-    }
-
-    filterOperators() {
-        # test != operator
-        {
-            QoreFilterRecordsProcessor proc({"field": "x", "operator": "!=", "value": 5});
-            assertEq({"x": 3}, proc.processRecord({"x": 3}));
-            assertNothing(proc.processRecord({"x": 5}));
-        }
-        # test > operator
-        {
-            QoreFilterRecordsProcessor proc({"field": "x", "operator": ">", "value": 10});
-            assertEq({"x": 20}, proc.processRecord({"x": 20}));
-            assertNothing(proc.processRecord({"x": 5}));
-        }
-        # test < operator
-        {
-            QoreFilterRecordsProcessor proc({"field": "x", "operator": "<", "value": 10});
-            assertEq({"x": 5}, proc.processRecord({"x": 5}));
-            assertNothing(proc.processRecord({"x": 20}));
-        }
-        # test >= operator
-        {
-            QoreFilterRecordsProcessor proc({"field": "x", "operator": ">=", "value": 10});
-            assertEq({"x": 10}, proc.processRecord({"x": 10}));
-            assertNothing(proc.processRecord({"x": 5}));
-        }
-        # test <= operator
-        {
-            QoreFilterRecordsProcessor proc({"field": "x", "operator": "<=", "value": 10});
-            assertEq({"x": 10}, proc.processRecord({"x": 10}));
-            assertNothing(proc.processRecord({"x": 20}));
-        }
-    }
-
-    filterInOperator() {
-        # matching: value is in the list
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "status",
-                "operator": "in",
-                "value": ("active", "pending"),
-            });
-            assertEq({"status": "active"}, proc.processRecord({"status": "active"}));
-            assertEq({"status": "pending"}, proc.processRecord({"status": "pending"}));
-            assertNothing(proc.processRecord({"status": "inactive"}));
-        }
-        # numeric values
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "code",
-                "operator": "in",
-                "value": (200, 201, 204),
-            });
-            assertEq({"code": 200}, proc.processRecord({"code": 200}));
-            assertEq({"code": 204}, proc.processRecord({"code": 204}));
-            assertNothing(proc.processRecord({"code": 404}));
-        }
-    }
-
-    filterBetweenOperator() {
-        # between uses exclusive bounds (> lower AND < upper)
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "amount",
-                "operator": "between",
-                "value": (10, 20),
-            });
-            assertEq({"amount": 15}, proc.processRecord({"amount": 15}));
-            # exclusive: boundary values should NOT match
-            assertNothing(proc.processRecord({"amount": 10}));
-            assertNothing(proc.processRecord({"amount": 20}));
-            # outside range
-            assertNothing(proc.processRecord({"amount": 5}));
-            assertNothing(proc.processRecord({"amount": 25}));
-        }
-        # string between
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "name",
-                "operator": "between",
-                "value": ("B", "D"),
-            });
-            assertEq({"name": "Charlie"}, proc.processRecord({"name": "Charlie"}));
-            assertNothing(proc.processRecord({"name": "Alice"}));
-            assertNothing(proc.processRecord({"name": "Eve"}));
-        }
-        # invalid: non-list value
-        {
-            assertThrows("CONSTRUCTOR-ERROR", sub () {
-                new QoreFilterRecordsProcessor({
-                    "field": "x",
-                    "operator": "between",
-                    "value": 10,
-                });
-            });
-        }
-        # invalid: list with wrong number of elements
-        {
-            assertThrows("CONSTRUCTOR-ERROR", sub () {
-                new QoreFilterRecordsProcessor({
-                    "field": "x",
-                    "operator": "between",
-                    "value": (1, 2, 3),
-                });
-            });
-        }
-    }
-
-    filterRegexOperator() {
-        # simple regex match
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "email",
-                "operator": "regex",
-                "value": "^[a-z]+@",
-            });
-            assertEq({"email": "alice@example.com"}, proc.processRecord({"email": "alice@example.com"}));
-            assertNothing(proc.processRecord({"email": "ALICE@example.com"}));
-        }
-        # regex with digits
-        {
-            QoreFilterRecordsProcessor proc({
-                "field": "code",
-                "operator": "regex",
-                "value": "^[A-Z]{2}-\\d{3}$",
-            });
-            assertEq({"code": "AB-123"}, proc.processRecord({"code": "AB-123"}));
-            assertNothing(proc.processRecord({"code": "AB-12"}));
-            assertNothing(proc.processRecord({"code": "ab-123"}));
-        }
     }
 
     # --- Select Fields Tests ---
@@ -321,16 +204,23 @@ class QoreProcessorsTest inherits QUnit::Test {
     # --- Set Fields Tests ---
 
     setFieldsAddNew() {
-        QoreSetFieldsProcessor proc({"field_name": "source", "field_value": "pipeline"});
+        QoreSetFieldsProcessor proc({"fields": {"source": "pipeline"}});
         hash<auto> record = {"name": "Alice", "age": 30};
         hash<auto> expected = {"name": "Alice", "age": 30, "source": "pipeline"};
         assertEq(expected, proc.processRecord(record));
     }
 
     setFieldsOverwrite() {
-        QoreSetFieldsProcessor proc({"field_name": "age", "field_value": 25});
+        QoreSetFieldsProcessor proc({"fields": {"age": 25}});
         hash<auto> record = {"name": "Alice", "age": 30};
         hash<auto> expected = {"name": "Alice", "age": 25};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    setFieldsMultiple() {
+        QoreSetFieldsProcessor proc({"fields": {"source": "pipeline", "processed": True, "version": 2}});
+        hash<auto> record = {"name": "Alice"};
+        hash<auto> expected = {"name": "Alice", "source": "pipeline", "processed": True, "version": 2};
         assertEq(expected, proc.processRecord(record));
     }
 
@@ -357,6 +247,7 @@ class QoreProcessorsTest inherits QUnit::Test {
             "field": "name",
             "search": "Alice",
             "replace": "Bob",
+            "regex_options": ("RE_Global",),
         });
         hash<auto> record = {"name": "Alice Smith", "age": 30};
         hash<auto> expected = {"name": "Bob Smith", "age": 30};
@@ -376,27 +267,51 @@ class QoreProcessorsTest inherits QUnit::Test {
     }
 
     searchReplaceGlobalVsFirst() {
-        # global replacement (default)
+        # global replacement using regex_options
         {
             QoreSearchReplaceProcessor proc({
                 "field": "text",
                 "search": "foo",
                 "replace": "bar",
+                "regex_options": ("RE_Global",),
             });
             hash<auto> record = {"text": "foo and foo"};
             assertEq({"text": "bar and bar"}, proc.processRecord(record));
         }
-        # first-only replacement
+        # first-only replacement (no regex_options / no RE_Global)
         {
             QoreSearchReplaceProcessor proc({
                 "field": "text",
                 "search": "foo",
                 "replace": "bar",
-                "global": False,
             });
             hash<auto> record = {"text": "foo and foo"};
             assertEq({"text": "bar and foo"}, proc.processRecord(record));
         }
+    }
+
+    searchReplaceMultipleOptions() {
+        # regex with RE_Global + RE_Caseless
+        QoreSearchReplaceProcessor proc({
+            "field": "text",
+            "search": "hello",
+            "replace": "hi",
+            "is_regex": True,
+            "regex_options": ("RE_Global", "RE_Caseless"),
+        });
+        hash<auto> record = {"text": "Hello HELLO hello"};
+        assertEq({"text": "hi hi hi"}, proc.processRecord(record));
+    }
+
+    searchReplaceInvalidOption() {
+        assertThrows("OPTION-VALUE-ERROR", sub () {
+            new QoreSearchReplaceProcessor({
+                "field": "text",
+                "search": "x",
+                "replace": "y",
+                "regex_options": ("RE_Invalid",),
+            });
+        });
     }
 
     searchReplaceFieldMissing() {
@@ -445,9 +360,13 @@ class QoreProcessorsTest inherits QUnit::Test {
 
     pipelineFilterSelectSet() {
         # chain filter -> select -> set using DataProviderPipeline
-        QoreFilterRecordsProcessor filter({"field": "status", "operator": "==", "value": "active"});
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor filter({"where_cond": expr});
         QoreSelectFieldsProcessor sel({"fields": "name,amount"});
-        QoreSetFieldsProcessor setter({"field_name": "processed", "field_value": True});
+        QoreSetFieldsProcessor setter({"fields": {"processed": True}});
         TestSinkProcessor sink();
 
         DataProviderPipeline pipeline();
@@ -474,14 +393,19 @@ class QoreProcessorsTest inherits QUnit::Test {
 
     pipelineAllProcessors() {
         # chain all 6 processors using processRecord() for deterministic testing
-        QoreFilterRecordsProcessor filter({"field": "active", "operator": "==", "value": True});
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "active"}, True),
+        };
+        QoreFilterRecordsProcessor filter({"where_cond": expr});
         QoreSelectFieldsProcessor sel({"fields": "name,desc"});
-        QoreSetFieldsProcessor setter({"field_name": "source", "field_value": "test"});
+        QoreSetFieldsProcessor setter({"fields": {"source": "test"}});
         QoreRemoveFieldsProcessor remover({"fields": "desc"});
         QoreSearchReplaceProcessor replacer({
             "field": "name",
             "search": "User",
             "replace": "Person",
+            "regex_options": ("RE_Global",),
         });
         QoreRecordLimitProcessor limiter({"limit": 2});
 
@@ -628,26 +552,6 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertNothing(proc2.processRecord({"status": "inactive", "amount": 200}));
     }
 
-    filterWhereCondExclusive() {
-        # verify where_cond exclusive_with metadata is set correctly in the constructor options
-        hash<DataProviderOptionInfo> wc_opt = QoreFilterRecordsProcessor::ConstructorOptions.where_cond;
-        assertEq(True, wc_opt.exclusive_with.contains("expression"));
-        assertEq(True, wc_opt.exclusive_with.contains("field"));
-        assertEq(True, wc_opt.exclusive_with.contains("operator"));
-        assertEq(True, wc_opt.exclusive_with.contains("value"));
-
-        # verify expression exclusive_with includes where_cond
-        hash<DataProviderOptionInfo> expr_opt = QoreFilterRecordsProcessor::ConstructorOptions.expression;
-        assertEq(True, expr_opt.exclusive_with.contains("where_cond"));
-
-        # verify field/operator/value exclusive_with include where_cond
-        assertEq(True, QoreFilterRecordsProcessor::ConstructorOptions.field.exclusive_with.contains("where_cond"));
-        assertEq(True,
-            QoreFilterRecordsProcessor::ConstructorOptions.operator.exclusive_with.contains("where_cond"));
-        assertEq(True,
-            QoreFilterRecordsProcessor::ConstructorOptions.value.exclusive_with.contains("where_cond"));
-    }
-
     # --- Pipeline Processor Type API Tests ---
 
     pipelineProcessorTypeApi() {
@@ -735,5 +639,22 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(True, exists dispatched_opts);
         assertEq(True, dispatched_opts.hasKey("where_cond"));
         assertEq(True, dispatched_opts.where_cond.supports_expressions);
+    }
+
+    # --- RegularExpressionArgInfo Tests ---
+
+    regexArgInfoReGlobal() {
+        # verify RE_Global is present in the allowed values
+        list<auto> allowed = RegularExpressionArgInfo[2].allowed_values;
+        bool found = False;
+        foreach hash<auto> av in (allowed) {
+            if (av.value == "RE_Global") {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "RE_Global should be in RegularExpressionArgInfo allowed_values");
+        # verify total count is 6 (5 original + RE_Global)
+        assertEq(6, allowed.size());
     }
 }

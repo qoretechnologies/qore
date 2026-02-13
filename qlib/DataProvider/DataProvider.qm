@@ -76,9 +76,9 @@ module DataProvider {
             "path": "/filter",
             "action": "filter-records",
             "display_name": "Filter Records",
-            "short_desc": "Filter records by expression or field comparison",
-            "desc": "Filter pipeline records using a DPQL expression or a simple field/operator/value "
-                "comparison; matching records pass through, non-matching records are dropped",
+            "short_desc": "Filter records by where_cond expression",
+            "desc": "Filter pipeline records using a where_cond expression; "
+                "matching records pass through, non-matching records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
             "cls": "DataProvider::QoreFilterRecordsProcessor",
@@ -124,8 +124,8 @@ module DataProvider {
             "path": "/set-fields",
             "action": "set-fields",
             "display_name": "Set Fields",
-            "short_desc": "Set a field to a constant value in each record",
-            "desc": "Add or overwrite a field with a constant value in each record passing through "
+            "short_desc": "Set fields to constant values in each record",
+            "desc": "Add or overwrite fields with constant values in each record passing through "
                 "the pipeline",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
@@ -182,7 +182,7 @@ module DataProvider {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreSearchReplaceProcessor::ConstructorOptions - ("field", "search", "replace"), {
+                QoreSearchReplaceProcessor::ConstructorOptions{"is_regex", "regex_options"}, {
                     "loc": "constructor",
                 }
             ),

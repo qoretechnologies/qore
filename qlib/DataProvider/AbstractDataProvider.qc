@@ -1171,6 +1171,12 @@ public const RegularExpressionArgInfo = (
                     "newline in the subject string",
                 "value": "RE_MultiLine",
             },
+            <AllowedValueInfo>{
+                "display_name": "Global?",
+                "short_desc": "Match all occurrences, not just the first",
+                "desc": "Match all occurrences, not just the first",
+                "value": "RE_Global",
+            },
         ),
     },
 );

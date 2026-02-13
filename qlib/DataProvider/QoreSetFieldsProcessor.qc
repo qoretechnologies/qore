@@ -24,7 +24,7 @@
 
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
-#! Pipeline processor that sets a field to a constant value in each record
+#! Pipeline processor that sets fields to constant values in each record
 public class QoreSetFieldsProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
@@ -37,29 +37,20 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
 
         #! Constructor options
         const ConstructorOptions = {
-            "field_name": <DataProviderOptionInfo>{
-                "display_name": "Field Name",
-                "short_desc": "Name of the field to set",
-                "desc": "The name of the field to add or overwrite in each record",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
-            },
-            "field_value": <DataProviderOptionInfo>{
-                "display_name": "Field Value",
-                "short_desc": "Value to assign to the field",
-                "desc": "The constant value to assign to the named field in each record",
-                "type": AbstractDataProviderTypeMap."auto",
+            "fields": <DataProviderOptionInfo>{
+                "display_name": "Fields",
+                "short_desc": "A hash of field names and values to set",
+                "desc": "A hash of field names and values to set on each record; existing fields "
+                    "are overwritten, new fields are added",
+                "type": AbstractDataProviderTypeMap."*hash",
                 "required": True,
             },
         };
     }
 
     private {
-        #! The field name to set
-        string field_name;
-
-        #! The value to set
-        auto field_value;
+        #! The fields hash to apply
+        hash<auto> fields;
 
         #! Flag indicating if the processor has been configured
         bool configured = False;
@@ -72,9 +63,8 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        if (copts.field_name.val()) {
-            field_name = copts.field_name;
-            field_value = copts.field_value;
+        if (copts.fields) {
+            fields = copts.fields;
             configured = True;
         }
     }
@@ -86,7 +76,7 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Sets a field to a constant value in each record; if the field already exists it is "
+        return "Sets fields to constant values in each record; if a field already exists it is "
             "overwritten, otherwise it is added";
     }
 
@@ -98,10 +88,9 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
     #! Processes a single record and returns the result
     private *auto processRecordImpl(auto record) {
         if (!configured) {
-            throw "PROCESSOR-ERROR", "QoreSetFieldsProcessor: not configured; provide 'field_name' and "
-                "'field_value' options";
+            throw "PROCESSOR-ERROR", "QoreSetFieldsProcessor: not configured; provide 'fields' option";
         }
-        return record + {field_name: field_value};
+        return record + fields;
     }
 
     #! Indicates that this processor does not support the bulk API
