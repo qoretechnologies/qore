@@ -117,7 +117,7 @@ public hashdecl DataProviderAppInfo {
     */
     bool supports_delete = False;
 
-    #! If the apps supports pipeline processor actions
+    #! If the app supports pipeline processor actions
     /** This attribute is filled automatically when actions are registered
 
         @since %DataProvider 3.3

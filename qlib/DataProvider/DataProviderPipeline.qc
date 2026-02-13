@@ -554,7 +554,7 @@ class PipelineQueue {
                                     new_recs += new_elem_recs;
                                 }
                                 parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
-                                    elem.className(), new_elem_recs);
+                                    elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
                                 if (mc) {

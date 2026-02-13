@@ -160,6 +160,11 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return record + {field: val};
     }
 
+    #! Indicates that this processor does not support the bulk API
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_TRANSFORM;

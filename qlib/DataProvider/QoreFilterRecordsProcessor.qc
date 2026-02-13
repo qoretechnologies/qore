@@ -225,6 +225,11 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         return AbstractDataProvider::evalGenericExpression(record, where_expr) ? record : NOTHING;
     }
 
+    #! Indicates that this processor does not support the bulk API
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_FILTER;
