@@ -496,8 +496,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     private:internal bool flushIoIntern(ServerSentEventConnection conn, Socket sock, bool update_tld) {
         bool rv;
-        while (!conn.stop_flag && exists (*string d = conn.pollDataImmediate())) {
-            #printf("TID %d: ServerSentEventHandler::flushIo() sending msg %d bytes\n", gettid(), d.size());
+        while (!conn.stop_flag) {
+            *string d = conn.pollDataImmediate();
+            if (!exists d) {
+                break;
+            }
             sock.send2(d, DefaultSocketSendTimeout);
             if (d && !rv) {
                 rv = True;
