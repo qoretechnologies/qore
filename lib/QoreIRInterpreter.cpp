@@ -2050,8 +2050,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 cleanupStoredValues(closures, nullptr);
                                 return false;
                             }
+                            // cv->eval() returns a referenced value (+1); store a separate
+                            // reference in the cache and use eval's reference for the value
+                            // slot.  No additional refSelf for out — eval's +1 transfers to it.
                             storeValue(closures, local_inst->local, val, nullptr);
-                            out = val.hasNode() ? val.refSelf() : val;
+                            out = val;
                         }
                     }
                 }
