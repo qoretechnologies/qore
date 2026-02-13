@@ -733,7 +733,7 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
     }
 }
 
-extern "C" int qore_aot_run(
+extern "C" DLLEXPORT int qore_aot_run(
     int argc, char** argv,
     const char* source, int source_len,
     const char* label,
@@ -886,7 +886,7 @@ extern "C" int qore_aot_run(
 
 // ---- Source-Stripped AOT Runtime (V2) ----
 
-extern "C" int qore_aot_run_v2(
+extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
     const char* label,
@@ -1388,7 +1388,7 @@ static std::string stripRequiresDirectives(const char* source, int source_len) {
     return result;
 }
 
-extern "C" QoreStringNode* qore_aot_module_init(
+extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     const char* source, int source_len,
     const char* label,
     int64_t parse_options,
@@ -1509,7 +1509,7 @@ extern "C" QoreStringNode* qore_aot_module_init(
     return nullptr;  // success
 }
 
-extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
+extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
     if (!aot_module_pgm) {
         printd(5, "AOT module ns_init: no program!\n");
         return;
@@ -1563,7 +1563,7 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
     printd(5, "AOT module ns_init '%s': merge complete\n", aot_module_name.c_str());
 }
 
-extern "C" void qore_aot_module_delete() {
+extern "C" DLLEXPORT void qore_aot_module_delete() {
     if (aot_module_pgm) {
         aot_module_pgm->waitForTerminationAndDeref(nullptr);
         aot_module_pgm = nullptr;
@@ -1573,7 +1573,7 @@ extern "C" void qore_aot_module_delete() {
     aot_module_num_funcs = 0;
 }
 
-extern "C" QoreStringNode* qore_aot_module_init_v2(
+extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     const uint8_t* metadata, int metadata_len,
     const char* label,
     int64_t parse_options,
