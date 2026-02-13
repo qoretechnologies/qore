@@ -133,6 +133,11 @@ class SsePerfTest inherits QUnit::Test {
     }
 
     constructor() : Test("SsePerfTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("single connection throughput", \singleConnectionThroughputTest());
         addTestCase("broadcast scalability", \broadcastScalabilityTest());
         addTestCase("large event payloads", \largeEventPayloadsTest());
