@@ -482,6 +482,40 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_3 DataProvider v3.3
+    - added a return-based API to @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor"
+      (@ref DataProvider::AbstractDataProcessor::processRecord() "processRecord()",
+      @ref DataProvider::AbstractDataProcessor::processRecords() "processRecords()",
+      @ref DataProvider::AbstractDataProcessor::processRecordsBulk() "processRecordsBulk()",
+      @ref DataProvider::AbstractDataProcessor::flushRecords() "flushRecords()")
+    - made @ref DataProvider::AbstractDataProcessor::submitImpl() "submitImpl()" and
+      @ref DataProvider::AbstractDataProcessor::supportsBulkApiImpl() "supportsBulkApiImpl()" non-abstract
+      with bidirectional defaults bridging to the new return-based API
+    - added processor capability constants (@ref DPC_TRANSFORM, @ref DPC_FILTER, @ref DPC_EXPAND,
+      @ref DPC_AGGREGATE, @ref DPC_SINK) and
+      @ref DataProvider::AbstractDataProcessor::getProcessorCapabilities() "getProcessorCapabilities()"
+    - added utility methods @ref DataProvider::AbstractDataProcessor::hashListToRecords() "hashListToRecords()"
+      and @ref DataProvider::AbstractDataProcessor::recordsToHashList() "recordsToHashList()"
+    - added @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
+      @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()" methods
+    - @ref DataProvider::AbstractDataProvider "AbstractDataProvider" now inherits
+      @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" so data providers can serve as
+      pipeline processors
+    - added @ref DataProvider::AbstractDataProvider::supportsPipelineProcessor() "supportsPipelineProcessor()"
+      query method
+    - added \c supports_pipeline_processor, \c processor_capabilities, and
+      \c children_can_support_pipeline_processors fields to
+      @ref DataProvider::DataProviderSummaryInfo "DataProviderSummaryInfo" and
+      @ref DataProvider::DataProviderInfo "DataProviderInfo"
+    - added \c pipeline_processor_options to @ref DataProvider::DataProviderInfo "DataProviderInfo"
+    - added @ref DPAT_PIPELINE_PROCESSOR action type code for pipeline processor actions
+    - added \c supports_pipeline_processors to
+      @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"
+    - added \c processor_capabilities to
+      @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo"
+    - updated @ref DataProvider::DataProviderPipeline "DataProviderPipeline" to use the return-based API
+      internally via
+      @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
+      @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
     - added methods to return data provider types in the context of option dataprovider_message_support
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2

@@ -245,6 +245,21 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     /** @since DataProvider 3.0
     */
     bool children_identical = False;
+
+    #! Does the data provider support being used as a pipeline processor?
+    /** @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processor = False;
+
+    #! Processor capability bitfield (DPC_* constants)
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
+
+    #! Can any child data providers support being used as pipeline processors?
+    /** @since %DataProvider 3.3
+    */
+    bool children_can_support_pipeline_processors = False;
 }
 
 #! Data provider message and event info
@@ -1049,6 +1064,26 @@ public hashdecl DataProviderInfo {
 
     #! Any optional provider-specific information
     *hash<auto> info;
+
+    #! Does the data provider support being used as a pipeline processor?
+    /** @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processor = False;
+
+    #! Processor capability bitfield (DPC_* constants)
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
+
+    #! Pipeline processor options, if applicable
+    /** @since %DataProvider 3.3
+    */
+    *hash<string, hash<DataProviderOptionInfo>> pipeline_processor_options;
+
+    #! Can any child data providers support being used as pipeline processors?
+    /** @since %DataProvider 3.3
+    */
+    bool children_can_support_pipeline_processors = False;
 }
 
 #! Data provider connection info
@@ -1156,7 +1191,7 @@ list<string> sub dp_get_all_typed_hash_member_names(TypedHash th) {
 }
 
 #! The AbstractDataProvider class
-public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
+public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable, AbstractDataProcessor {
     public {
         #! Generic expression implementations for data providers without native search functionality
         const GenericExpressionImplementations = {
@@ -6312,6 +6347,42 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     */
     bool debugCollectionEnabled() {
         return debug_collector.val();
+    }
+
+    #! Returns @ref True if the data provider supports being used as a pipeline processor
+    /** @return @ref True if the data provider supports pipeline processor capabilities
+
+        @since %DataProvider 3.3
+    */
+    bool supportsPipelineProcessor() {
+        return getStaticInfoImpl().supports_pipeline_processor;
+    }
+
+    #! Overrides the processor API to throw by default
+    /** Data providers do not support the pipeline processor API by default; subclasses must override this method
+        to provide pipeline processor capabilities.
+
+        @throws UNIMPLEMENTED thrown if the data provider does not implement pipeline processor capabilities
+
+        @since %DataProvider 3.3
+    */
+    private *auto processRecordImpl(auto record) {
+        throw "UNIMPLEMENTED", sprintf("%s does not implement pipeline processor capabilities",
+            self.className());
+    }
+
+    #! Returns @ref True for the bulk API
+    /** @since %DataProvider 3.3
+    */
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+
+    #! Returns 0 (no processor capabilities) by default
+    /** @since %DataProvider 3.3
+    */
+    private int getProcessorCapabilitiesImpl() {
+        return 0;
     }
 }
 }
