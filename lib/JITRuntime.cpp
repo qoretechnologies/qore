@@ -873,19 +873,36 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, Excep
     ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
     qore_list_private* priv = qore_list_private::get(**list);
     priv->reserve(count);
+    // Track common value type for proper list typing (e.g., list<string> vs list<auto>)
+    const QoreTypeInfo* vtype = nullptr;
+    bool vcommon = false;
     for (int i = 0; i < count; i++) {
         QoreValue v = fromBits(vals[i]);
         if (v.hasNode()) {
             v.refSelf();
         }
+        const QoreTypeInfo* vt = v.getTypeInfo();
+        if (!vtype) {
+            vtype = vt;
+            vcommon = true;
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+            vcommon = false;
+        }
         priv->pushIntern(v);
     }
+    if (!vtype || vtype == anyTypeInfo || !vcommon) {
+        vtype = autoTypeInfo;
+    }
+    priv->complexTypeInfo = qore_get_complex_list_type(vtype);
     return toBits(QoreValue(list.release()));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     // count is the number of key-value pairs; kv_pairs has 2*count elements
+    // Track common value type for proper hash typing (e.g., hash<string, string> vs hash<string, auto>)
+    const QoreTypeInfo* vtype = nullptr;
+    bool vcommon = false;
     for (int i = 0; i < count; i++) {
         QoreValue key = fromBits(kv_pairs[i * 2]);
         QoreValue val = fromBits(kv_pairs[i * 2 + 1]);
@@ -893,11 +910,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, E
         if (val.hasNode()) {
             val.refSelf();
         }
+        const QoreTypeInfo* vt = val.getTypeInfo();
+        if (!i) {
+            vtype = vt;
+            vcommon = true;
+        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
+            vcommon = false;
+        }
         hash->setKeyValue(key_str->c_str(), val, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
     }
+    if (!vtype || vtype == anyTypeInfo) {
+        vtype = autoTypeInfo;
+    }
+    qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     return toBits(QoreValue(hash.release()));
 }
 
