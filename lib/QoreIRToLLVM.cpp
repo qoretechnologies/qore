@@ -3054,17 +3054,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 // Take a reference to the return value before cleanup.
+                // emitInvokeCleanup will deref the invoke alloca (if any),
+                // balancing this incref. Net refcount change = 0 (correct).
                 auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
                         llvm::FunctionType::get(void_type, {i64_type}, false));
                 builder->CreateCall(incref_fn, {boxed_ret});
-
-                // If returning an Invoke/ConstString result directly, clear its
-                // cleanup alloca so emitInvokeCleanup won't double-decref.
-                auto alloca_it = invoke_alloca_map.find(ret->value.id);
-                if (alloca_it != invoke_alloca_map.end()) {
-                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                            alloca_it->second);
-                }
             }
             // Execute on_block_exit handlers before cleanup
             emitOnBlockExitExec(module);
