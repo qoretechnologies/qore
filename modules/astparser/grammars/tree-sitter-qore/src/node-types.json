@@ -3454,6 +3454,10 @@
           "named": true
         },
         {
+          "type": "constant_declaration",
+          "named": true
+        },
+        {
           "type": "member_declaration",
           "named": true
         },
@@ -6358,10 +6362,6 @@
     "named": false
   },
   {
-    "type": "%exec-class",
-    "named": false
-  },
-  {
     "type": "%include",
     "named": false
   },
@@ -6739,11 +6739,11 @@
   },
   {
     "type": "binary",
-    "named": false
+    "named": true
   },
   {
     "type": "binary",
-    "named": true
+    "named": false
   },
   {
     "type": "bool",
@@ -6783,13 +6783,11 @@
   },
   {
     "type": "comment",
-    "named": true,
-    "extra": true
+    "named": true
   },
   {
     "type": "conditional_directive",
-    "named": true,
-    "extra": true
+    "named": true
   },
   {
     "type": "const",
@@ -6817,11 +6815,11 @@
   },
   {
     "type": "date",
-    "named": false
+    "named": true
   },
   {
     "type": "date",
-    "named": true
+    "named": false
   },
   {
     "type": "default",
@@ -6941,8 +6939,7 @@
   },
   {
     "type": "line_comment",
-    "named": true,
-    "extra": true
+    "named": true
   },
   {
     "type": "list",
@@ -6978,11 +6975,11 @@
   },
   {
     "type": "nothing",
-    "named": false
+    "named": true
   },
   {
     "type": "nothing",
-    "named": true
+    "named": false
   },
   {
     "type": "null",

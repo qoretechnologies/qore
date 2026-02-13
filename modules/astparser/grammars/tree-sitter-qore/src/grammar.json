@@ -380,10 +380,6 @@
             },
             {
               "type": "STRING",
-              "value": "%exec-class"
-            },
-            {
-              "type": "STRING",
               "value": "%modern"
             },
             {
@@ -577,6 +573,32 @@
               {
                 "type": "STRING",
                 "value": "%pop-parse-options"
+              },
+              {
+                "type": "PATTERN",
+                "value": "[^\\n]*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "%module-cmd"
+              },
+              {
+                "type": "PATTERN",
+                "value": "[^\\n]*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "%exec-class"
               },
               {
                 "type": "PATTERN",
@@ -981,6 +1003,10 @@
               {
                 "type": "SYMBOL",
                 "name": "member_declaration"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "constant_declaration"
               },
               {
                 "type": "SYMBOL",
@@ -7500,6 +7526,5 @@
   "precedences": [],
   "externals": [],
   "inline": [],
-  "supertypes": [],
-  "reserved": {}
+  "supertypes": []
 }
