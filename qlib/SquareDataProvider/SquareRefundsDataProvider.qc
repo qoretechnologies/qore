@@ -44,17 +44,23 @@ public class SquareRefundsDataProvider inherits SquareDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "refund_id": <DataProviderOptionInfo>{
+                "display_name": "Refund ID",
+                "short_desc": "Get a specific refund by ID",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter by refund ID for single record lookup",
+            },
             "begin_time": <DataProviderOptionInfo>{
                 "display_name": "Begin Time",
                 "short_desc": "Filter by start time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return refunds created at or after this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return refunds created at or after this timestamp",
             },
             "end_time": <DataProviderOptionInfo>{
                 "display_name": "End Time",
                 "short_desc": "Filter by end time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return refunds created before this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return refunds created before this timestamp",
             },
             "sort_order": <DataProviderOptionInfo>{
                 "display_name": "Sort Order",
@@ -111,13 +117,20 @@ public class SquareRefundsDataProvider inherits SquareDataProviderBase {
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # If refund_id provided, get single record
+        if (search_options.refund_id) {
+            hash<auto> result = doGet("refunds/" + search_options.refund_id);
+            return new DefaultRecordIterator(new ListHashIterator((result.refund,)),
+                where_cond, search_options);
+        }
+
         # Build query params
         hash<auto> params;
         if (search_options.begin_time) {
-            params.begin_time = search_options.begin_time;
+            params.begin_time = formatDateTimeSquare(search_options.begin_time);
         }
         if (search_options.end_time) {
-            params.end_time = search_options.end_time;
+            params.end_time = formatDateTimeSquare(search_options.end_time);
         }
         if (search_options.sort_order) {
             params.sort_order = search_options.sort_order;

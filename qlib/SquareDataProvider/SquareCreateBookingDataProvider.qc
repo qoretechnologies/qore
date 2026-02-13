@@ -37,10 +37,10 @@ public class SquareCreateBookingRequestDataType inherits HashDataType {
                 "required": True,
             },
             "start_at": {
-                "type": StringType,
+                "type": DateType,
                 "display_name": "Start At",
                 "short_desc": "Start time (required)",
-                "desc": "The start time of the booking (RFC 3339 format)",
+                "desc": "The start time of the booking",
                 "required": True,
             },
             "customer_id": {
@@ -136,7 +136,7 @@ public class SquareCreateBookingDataProvider inherits SquareDataProviderBase {
 
         hash<auto> booking = {
             "location_id": req.location_id,
-            "start_at": req.start_at,
+            "start_at": formatDateTimeSquare(req.start_at),
             "appointment_segments": (segment,),
         };
         if (req.customer_id) {

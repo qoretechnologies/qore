@@ -32,6 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) SquareRestClient
+%requires uuid
 %try-module json
 %define NoJson
 %endtry
@@ -200,6 +201,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "desc": "The ID of the customer group",
+                    "ref_data": "customer_groups",
                 },
             },
         });
@@ -229,6 +231,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "desc": "The ID of the customer group",
+                    "ref_data": "customer_groups",
                 },
             },
         });
@@ -292,24 +295,30 @@ module SquareDataProvider {
             },
         });
 
-        # Find Customer by ID
+        # Delete a Customer
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
-            "path": "/customers",
-            "action": "find-customer-by-id",
+            "path": "/customers/delete",
+            "action": "delete-customer",
             "groups": "Customers",
-            "display_name": "Find Customer by ID",
-            "short_desc": "Find a customer by their ID",
-            "desc": "Look up a specific customer by ID in Square",
-            "action_code": DPAT_FIND_SINGLE,
+            "display_name": "Delete a Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer from Square",
+            "action_code": DPAT_API,
             "options": {
                 "customer_id": <ActionOptionInfo>{
                     "display_name": "Customer ID",
-                    "short_desc": "The customer ID to find",
+                    "short_desc": "The customer to delete",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
                     "ref_data": "customers",
+                },
+                "version": <ActionOptionInfo>{
+                    "display_name": "Version",
+                    "short_desc": "Customer version",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The current version of the customer profile (for optimistic concurrency)",
                 },
             },
         });
@@ -452,23 +461,23 @@ module SquareDataProvider {
                 "created_at_start": <ActionOptionInfo>{
                     "display_name": "Created After",
                     "short_desc": "Created after date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return orders created at or after this timestamp (RFC 3339)",
                 },
                 "created_at_end": <ActionOptionInfo>{
                     "display_name": "Created Before",
                     "short_desc": "Created before date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "updated_at_start": <ActionOptionInfo>{
                     "display_name": "Updated After",
                     "short_desc": "Updated after date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "updated_at_end": <ActionOptionInfo>{
                     "display_name": "Updated Before",
                     "short_desc": "Updated before date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -478,14 +487,14 @@ module SquareDataProvider {
             },
         });
 
-        # Find Order by ID
+        # Get an Order
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
             "path": "/orders",
-            "action": "find-order-by-id",
+            "action": "get-order",
             "groups": "Orders",
-            "display_name": "Find Order by ID",
-            "short_desc": "Find an order by its ID",
+            "display_name": "Get an Order",
+            "short_desc": "Get a single order by ID",
             "desc": "Retrieve a single order by ID from Square",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
@@ -495,11 +504,112 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "orders",
+                },
+            },
+        });
+
+        # Cancel an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/orders/cancel",
+            "action": "cancel-order",
+            "groups": "Orders",
+            "display_name": "Cancel an Order",
+            "short_desc": "Cancel an order",
+            "desc": "Cancel an open order in Square",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order to cancel",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "version": <ActionOptionInfo>{
+                    "display_name": "Version",
+                    "short_desc": "Order version",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The current version of the order (for optimistic concurrency)",
                 },
             },
         });
 
         # ========== PAYMENT ACTIONS ==========
+
+        # Create a Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/payments/create",
+            "action": "create-payment",
+            "groups": "Payments",
+            "display_name": "Create a Payment",
+            "short_desc": "Create a new payment",
+            "desc": "Create a new payment in Square",
+            "action_code": DPAT_API,
+            "options": {
+                "source_id": <ActionOptionInfo>{
+                    "display_name": "Source ID",
+                    "short_desc": "Payment source",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The source of funds (payment token, card ID, or 'EXTERNAL')",
+                    "example_value": "EXTERNAL",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount in cents",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "desc": "The amount in the smallest currency unit (cents for USD)",
+                    "example_value": 1000,
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Currency code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The currency code (default: USD)",
+                    "default_value": "USD",
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "The location",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "locations",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "orders",
+                },
+                "reference_id": <ActionOptionInfo>{
+                    "display_name": "Reference ID",
+                    "short_desc": "External reference",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "note": <ActionOptionInfo>{
+                    "display_name": "Note",
+                    "short_desc": "Payment note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "autocomplete": <ActionOptionInfo>{
+                    "display_name": "Autocomplete",
+                    "short_desc": "Complete immediately",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "If true (default), payment completes immediately. If false, "
+                        "must be completed later with complete-payment.",
+                },
+            },
+        });
 
         # Complete Payment
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -518,6 +628,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
                 "version_token": <ActionOptionInfo>{
                     "display_name": "Version Token",
@@ -544,6 +655,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
                 "amount": <ActionOptionInfo>{
                     "display_name": "Amount",
@@ -587,13 +699,13 @@ module SquareDataProvider {
                 "begin_time": <ActionOptionInfo>{
                     "display_name": "Begin Time",
                     "short_desc": "Start of time range",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return payments created at or after this timestamp (RFC 3339)",
                 },
                 "end_time": <ActionOptionInfo>{
                     "display_name": "End Time",
                     "short_desc": "End of time range",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "sort_order": <ActionOptionInfo>{
                     "display_name": "Sort Order",
@@ -632,6 +744,7 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "payments",
                 },
             },
         });
@@ -661,6 +774,7 @@ module SquareDataProvider {
                     "short_desc": "The order",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "orders",
                     "desc": "The ID of the order associated with this invoice",
                 },
                 "customer_id": <ActionOptionInfo>{
@@ -679,7 +793,7 @@ module SquareDataProvider {
                 "due_date": <ActionOptionInfo>{
                     "display_name": "Due Date",
                     "short_desc": "Invoice due date",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Due date in YYYY-MM-DD format",
                 },
                 "delivery_method": <ActionOptionInfo>{
@@ -728,6 +842,28 @@ module SquareDataProvider {
             },
         });
 
+        # Get an Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/invoices",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get an Invoice",
+            "short_desc": "Get a single invoice by ID",
+            "desc": "Retrieve a single invoice by ID from Square",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
         # Send Invoice
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
@@ -745,6 +881,36 @@ module SquareDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "version": <ActionOptionInfo>{
+                    "display_name": "Version",
+                    "short_desc": "Invoice version",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "desc": "The current version of the invoice (for optimistic concurrency)",
+                },
+            },
+        });
+
+        # Cancel Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/invoices/cancel",
+            "action": "cancel-invoice",
+            "groups": "Invoices",
+            "display_name": "Cancel Invoice",
+            "short_desc": "Cancel an invoice",
+            "desc": "Cancel a published invoice in Square",
+            "action_code": DPAT_API,
+            "options": {
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to cancel",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
                 },
                 "version": <ActionOptionInfo>{
                     "display_name": "Version",
@@ -779,7 +945,7 @@ module SquareDataProvider {
                 "start_at": <ActionOptionInfo>{
                     "display_name": "Start At",
                     "short_desc": "Start time",
-                    "type": AbstractDataProviderTypeMap."string",
+                    "type": AbstractDataProviderTypeMap."date",
                     "required": True,
                     "desc": "Start time of the booking (RFC 3339 format)",
                 },
@@ -788,6 +954,7 @@ module SquareDataProvider {
                     "short_desc": "Team member",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "team_members",
                 },
                 "service_variation_id": <ActionOptionInfo>{
                     "display_name": "Service Variation ID",
@@ -835,19 +1002,20 @@ module SquareDataProvider {
                 "start_at_min": <ActionOptionInfo>{
                     "display_name": "Start At Min",
                     "short_desc": "Earliest start time",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return bookings starting at or after this timestamp (RFC 3339)",
                 },
                 "start_at_max": <ActionOptionInfo>{
                     "display_name": "Start At Max",
                     "short_desc": "Latest start time",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return bookings starting before this timestamp (RFC 3339)",
                 },
                 "team_member_id": <ActionOptionInfo>{
                     "display_name": "Team Member ID",
                     "short_desc": "Filter by team member",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "team_members",
                 },
                 "customer_id": <ActionOptionInfo>{
                     "display_name": "Customer ID",
@@ -859,6 +1027,56 @@ module SquareDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Booking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/bookings",
+            "action": "get-booking",
+            "groups": "Bookings",
+            "display_name": "Get a Booking",
+            "short_desc": "Get a single booking by ID",
+            "desc": "Retrieve a single booking (appointment) by ID from Square",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "booking_id": <ActionOptionInfo>{
+                    "display_name": "Booking ID",
+                    "short_desc": "The booking ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "bookings",
+                },
+            },
+        });
+
+        # Cancel Booking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/bookings/cancel",
+            "action": "cancel-booking",
+            "groups": "Bookings",
+            "display_name": "Cancel Booking",
+            "short_desc": "Cancel a booking",
+            "desc": "Cancel a booking (appointment) in Square",
+            "action_code": DPAT_API,
+            "options": {
+                "booking_id": <ActionOptionInfo>{
+                    "display_name": "Booking ID",
+                    "short_desc": "The booking to cancel",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "bookings",
+                },
+                "booking_version": <ActionOptionInfo>{
+                    "display_name": "Booking Version",
+                    "short_desc": "Booking version",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "The current version of the booking (for optimistic concurrency)",
                 },
             },
         });
@@ -921,6 +1139,33 @@ module SquareDataProvider {
             },
         });
 
+        # Get Inventory Count
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/inventory/get-counts",
+            "action": "get-inventory-count",
+            "groups": "Inventory",
+            "display_name": "Get Inventory Count",
+            "short_desc": "Get inventory counts for an item",
+            "desc": "Get inventory counts for a catalog item variation in Square",
+            "action_code": DPAT_API,
+            "options": {
+                "catalog_object_id": <ActionOptionInfo>{
+                    "display_name": "Catalog Object ID",
+                    "short_desc": "Item variation ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The ID of the catalog item variation to get counts for",
+                },
+                "location_ids": <ActionOptionInfo>{
+                    "display_name": "Location IDs",
+                    "short_desc": "Filter by locations",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "Optional list of location IDs to filter counts by",
+                },
+            },
+        });
+
         # ========== CATALOG / SERVICE ACTIONS ==========
 
         # Search Catalog
@@ -944,7 +1189,7 @@ module SquareDataProvider {
                 "begin_time": <ActionOptionInfo>{
                     "display_name": "Begin Time",
                     "short_desc": "Updated after",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return objects updated at or after this timestamp (RFC 3339)",
                 },
                 "limit": <ActionOptionInfo>{
@@ -996,13 +1241,13 @@ module SquareDataProvider {
                 "begin_time": <ActionOptionInfo>{
                     "display_name": "Begin Time",
                     "short_desc": "Start of time range",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                     "desc": "Return refunds created at or after this timestamp (RFC 3339)",
                 },
                 "end_time": <ActionOptionInfo>{
                     "display_name": "End Time",
                     "short_desc": "End of time range",
-                    "type": AbstractDataProviderTypeMap."*string",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "sort_order": <ActionOptionInfo>{
                     "display_name": "Sort Order",
@@ -1032,6 +1277,28 @@ module SquareDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Refund
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquareDataProvider::AppName,
+            "path": "/refunds",
+            "action": "get-refund",
+            "groups": "Refunds",
+            "display_name": "Get a Refund",
+            "short_desc": "Get a single refund by ID",
+            "desc": "Retrieve a single refund by ID from Square",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "refund_id": <ActionOptionInfo>{
+                    "display_name": "Refund ID",
+                    "short_desc": "The refund ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "refunds",
                 },
             },
         });

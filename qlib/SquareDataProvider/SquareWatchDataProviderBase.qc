@@ -209,11 +209,6 @@ public class SquareWatchDataProviderBase inherits SquareDataProviderBase,
         }
     }
 
-    #! Formats a date for Square API parameters (RFC 3339)
-    static string formatDateTimeSquare(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
-    }
-
     #! Returns a hash of all supported event types
     private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
         return {

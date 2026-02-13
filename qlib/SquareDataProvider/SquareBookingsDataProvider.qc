@@ -46,6 +46,12 @@ public class SquareBookingsDataProvider inherits SquareDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "booking_id": <DataProviderOptionInfo>{
+                "display_name": "Booking ID",
+                "short_desc": "Get a specific booking by ID",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter by booking ID for single record lookup",
+            },
             "location_id": <DataProviderOptionInfo>{
                 "display_name": "Location ID",
                 "short_desc": "Filter by location",
@@ -55,14 +61,14 @@ public class SquareBookingsDataProvider inherits SquareDataProviderBase {
             "start_at_min": <DataProviderOptionInfo>{
                 "display_name": "Start At Min",
                 "short_desc": "Earliest start time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return bookings starting at or after this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return bookings starting at or after this timestamp",
             },
             "start_at_max": <DataProviderOptionInfo>{
                 "display_name": "Start At Max",
                 "short_desc": "Latest start time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return bookings starting before this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return bookings starting before this timestamp",
             },
             "team_member_id": <DataProviderOptionInfo>{
                 "display_name": "Team Member ID",
@@ -87,6 +93,7 @@ public class SquareBookingsDataProvider inherits SquareDataProviderBase {
         #! Child provider map
         const ChildMap = {
             "create": Class::forName("SquareCreateBookingDataProvider"),
+            "cancel": Class::forName("SquareCancelBookingDataProvider"),
         };
     }
 
@@ -125,16 +132,23 @@ public class SquareBookingsDataProvider inherits SquareDataProviderBase {
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # If booking_id provided, get single record
+        if (search_options.booking_id) {
+            hash<auto> result = doGet("bookings/" + search_options.booking_id);
+            return new DefaultRecordIterator(new ListHashIterator((result.booking,)),
+                where_cond, search_options);
+        }
+
         # Build query params
         hash<auto> params;
         if (search_options.location_id) {
             params.location_id = search_options.location_id;
         }
         if (search_options.start_at_min) {
-            params.start_at_min = search_options.start_at_min;
+            params.start_at_min = formatDateTimeSquare(search_options.start_at_min);
         }
         if (search_options.start_at_max) {
-            params.start_at_max = search_options.start_at_max;
+            params.start_at_max = formatDateTimeSquare(search_options.start_at_max);
         }
         if (search_options.team_member_id) {
             params.team_member_id = search_options.team_member_id;

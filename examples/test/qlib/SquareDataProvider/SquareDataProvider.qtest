@@ -53,8 +53,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
             "client_id": "i,client-id=s",
             "client_secret": "s,client-secret=s",
             "token": "t,token=s",
-            "location_id": "l,location-id=s",
+            "location_id": "L,location-id=s",
             "conn": "c,connection=s",
+            "sandbox": "S,sandbox",
+            "url": "u,url=s",
         };
 
         #! Test customer ID (created during test)
@@ -124,14 +126,26 @@ public class SquareDataProviderTest inherits QUnit::Test {
             return;
         }
 
+        # Determine URL
+        *string url = m_options.url ?? ENV.SQUARE_URL;
+        if (!url && (m_options.sandbox || ENV.SQUARE_SANDBOX)) {
+            url = "https://connect.squareupsandbox.com/v2";
+        }
+
         # Token-only mode
         if (token && (!client_id || !client_secret)) {
             if (m_options.verbose) {
                 printf("Using token-only mode (no OAuth2 refresh)\n");
+                if (url) {
+                    printf("Using URL: %s\n", url);
+                }
             }
             hash<auto> opts = {
                 "token": token,
             };
+            if (url) {
+                opts.url = url;
+            }
             client = new SquareRestClient::SquareRestClient(opts);
             return;
         }
@@ -143,6 +157,9 @@ public class SquareDataProviderTest inherits QUnit::Test {
         };
         if (token) {
             opts.token = token;
+        }
+        if (url) {
+            opts.url = url;
         }
         client = new SquareRestClient::SquareRestClient(opts);
     }
@@ -257,6 +274,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         list<string> customerChildren = customers.getChildProviderNames();
         assertTrue(customerChildren.contains("create"));
         assertTrue(customerChildren.contains("update"));
+        assertTrue(customerChildren.contains("delete"));
         assertTrue(customerChildren.contains("add-to-group"));
         assertTrue(customerChildren.contains("remove-from-group"));
 
@@ -272,11 +290,13 @@ public class SquareDataProviderTest inherits QUnit::Test {
         assertTrue(orderChildren.contains("create"));
         assertTrue(orderChildren.contains("create-paid"));
         assertTrue(orderChildren.contains("batch-get"));
+        assertTrue(orderChildren.contains("cancel"));
 
         # Check payments child provider
         AbstractDataProvider payments = prov.getChildProvider("payments");
         assertEq("payments", payments.getName());
         list<string> paymentChildren = payments.getChildProviderNames();
+        assertTrue(paymentChildren.contains("create"));
         assertTrue(paymentChildren.contains("complete"));
         assertTrue(paymentChildren.contains("refund"));
 
@@ -286,12 +306,14 @@ public class SquareDataProviderTest inherits QUnit::Test {
         list<string> invoiceChildren = invoices.getChildProviderNames();
         assertTrue(invoiceChildren.contains("create"));
         assertTrue(invoiceChildren.contains("send"));
+        assertTrue(invoiceChildren.contains("cancel"));
 
         # Check bookings child provider
         AbstractDataProvider bookings = prov.getChildProvider("bookings");
         assertEq("bookings", bookings.getName());
         list<string> bookingChildren = bookings.getChildProviderNames();
         assertTrue(bookingChildren.contains("create"));
+        assertTrue(bookingChildren.contains("cancel"));
 
         # Check inventory child provider
         AbstractDataProvider inventory = prov.getChildProvider("inventory");
@@ -486,7 +508,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         checkJson();
         # Verify the scheme is registered
         hash<auto> scheme = ConnectionSchemeCache::getScheme("squareres");
-        assertEq("squareres", scheme.scheme);
+        assertTrue(scheme.schemes.squareres);
         assertTrue(scheme.auto_url);
 
         # Verify scheme has required options
@@ -540,7 +562,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         AbstractDataProvider customers = prov.getChildProvider("customers");
 
         # Search with limit
-        AbstractDataProviderRecordIterator iter = customers.searchRecords({"limit": 5});
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {"limit": 5});
         int count = 0;
         while (iter.next()) {
             hash<auto> record = iter.getValue();
@@ -577,7 +599,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
 
         # Verify data persistence - retrieve the customer and verify fields
         AbstractDataProvider customers = prov.getChildProvider("customers");
-        AbstractDataProviderRecordIterator iter = customers.searchRecords({
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
             "customer_id": testCustomerId,
         });
         assertTrue(iter.next(), "Should find created customer by ID");
@@ -597,7 +619,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         SquareDataProvider::SquareDataProvider prov(client);
         AbstractDataProvider customers = prov.getChildProvider("customers");
 
-        AbstractDataProviderRecordIterator iter = customers.searchRecords({
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
             "customer_id": testCustomerId,
         });
         assertTrue(iter.next(), "Should find customer by ID");
@@ -628,7 +650,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
 
         # Verify the update persisted
         AbstractDataProvider customers = prov.getChildProvider("customers");
-        AbstractDataProviderRecordIterator iter = customers.searchRecords({
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
             "customer_id": testCustomerId,
         });
         assertTrue(iter.next(), "Should find updated customer");
@@ -641,7 +663,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         SquareDataProvider::SquareDataProvider prov(client);
         AbstractDataProvider payments = prov.getChildProvider("payments");
 
-        AbstractDataProviderRecordIterator iter = payments.searchRecords({"limit": 5});
+        AbstractDataProviderRecordIterator iter = payments.searchRecords(NOTHING, {"limit": 5});
         int count = 0;
         while (iter.next()) {
             hash<auto> record = iter.getValue();
@@ -683,7 +705,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         SquareDataProvider::SquareDataProvider prov(client);
         AbstractDataProvider refunds = prov.getChildProvider("refunds");
 
-        AbstractDataProviderRecordIterator iter = refunds.searchRecords({"limit": 5});
+        AbstractDataProviderRecordIterator iter = refunds.searchRecords(NOTHING, {"limit": 5});
         int count = 0;
         while (iter.next()) {
             hash<auto> record = iter.getValue();
@@ -707,13 +729,13 @@ public class SquareDataProviderTest inherits QUnit::Test {
             printf("Cleaning up test customer: %s\n", testCustomerId);
         }
 
-        # Delete the test customer via API call
+        # Delete the test customer using the delete action
         try {
             SquareDataProvider::SquareDataProvider prov(client);
-            AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
-            apiCall.doRequest({
-                "method": "DELETE",
-                "path": sprintf("customers/%s", testCustomerId),
+            AbstractDataProvider deleteAction = prov.getChildProvider("customers")
+                .getChildProvider("delete");
+            deleteAction.doRequest({
+                "customer_id": testCustomerId,
             });
             if (m_options.verbose) {
                 printf("Test customer deleted successfully\n");

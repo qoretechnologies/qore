@@ -55,14 +55,14 @@ public class SquarePaymentsDataProvider inherits SquareDataProviderBase {
             "begin_time": <DataProviderOptionInfo>{
                 "display_name": "Begin Time",
                 "short_desc": "Filter by start time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return payments created at or after this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return payments created at or after this timestamp",
             },
             "end_time": <DataProviderOptionInfo>{
                 "display_name": "End Time",
                 "short_desc": "Filter by end time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return payments created before this timestamp (RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return payments created before this timestamp",
             },
             "sort_order": <DataProviderOptionInfo>{
                 "display_name": "Sort Order",
@@ -86,6 +86,7 @@ public class SquarePaymentsDataProvider inherits SquareDataProviderBase {
 
         #! Child provider map
         const ChildMap = {
+            "create": Class::forName("SquareCreatePaymentDataProvider"),
             "complete": Class::forName("SquareCompletePaymentDataProvider"),
             "refund": Class::forName("SquareRefundPaymentDataProvider"),
         };
@@ -136,10 +137,10 @@ public class SquarePaymentsDataProvider inherits SquareDataProviderBase {
         # Build query params
         hash<auto> params;
         if (search_options.begin_time) {
-            params.begin_time = search_options.begin_time;
+            params.begin_time = formatDateTimeSquare(search_options.begin_time);
         }
         if (search_options.end_time) {
-            params.end_time = search_options.end_time;
+            params.end_time = formatDateTimeSquare(search_options.end_time);
         }
         if (search_options.sort_order) {
             params.sort_order = search_options.sort_order;

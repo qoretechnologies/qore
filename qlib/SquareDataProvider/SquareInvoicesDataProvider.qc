@@ -46,6 +46,12 @@ public class SquareInvoicesDataProvider inherits SquareDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "invoice_id": <DataProviderOptionInfo>{
+                "display_name": "Invoice ID",
+                "short_desc": "Get a specific invoice by ID",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter by invoice ID for single record lookup",
+            },
             "location_id": <DataProviderOptionInfo>{
                 "display_name": "Location ID",
                 "short_desc": "Filter by location (required)",
@@ -65,6 +71,7 @@ public class SquareInvoicesDataProvider inherits SquareDataProviderBase {
         const ChildMap = {
             "create": Class::forName("SquareCreateInvoiceDataProvider"),
             "send": Class::forName("SquareSendInvoiceDataProvider"),
+            "cancel": Class::forName("SquareCancelInvoiceDataProvider"),
         };
     }
 
@@ -103,6 +110,13 @@ public class SquareInvoicesDataProvider inherits SquareDataProviderBase {
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # If invoice_id provided, get single record
+        if (search_options.invoice_id) {
+            hash<auto> result = doGet("invoices/" + search_options.invoice_id);
+            return new DefaultRecordIterator(new ListHashIterator((result.invoice,)),
+                where_cond, search_options);
+        }
+
         # Get location_id (required by Square API)
         string location_id;
         if (search_options.location_id) {

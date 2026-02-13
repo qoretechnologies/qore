@@ -44,6 +44,7 @@ public class SquareInventoryDataProvider inherits SquareDataProviderBase {
         #! Child provider map
         const ChildMap = {
             "change": Class::forName("SquareChangeInventoryDataProvider"),
+            "get-counts": Class::forName("SquareGetInventoryCountDataProvider"),
         };
     }
 

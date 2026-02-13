@@ -58,10 +58,10 @@ public class SquareCreateInvoiceRequestDataType inherits HashDataType {
                 "default_value": "BALANCE",
             },
             "due_date": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Due Date",
                 "short_desc": "Invoice due date",
-                "desc": "The due date for the invoice payment (YYYY-MM-DD format)",
+                "desc": "The due date for the invoice payment",
             },
             "delivery_method": {
                 "type": StringOrNothingType,
@@ -156,7 +156,7 @@ public class SquareCreateInvoiceDataProvider inherits SquareDataProviderBase {
             "request_type": req.payment_request_type ?? "BALANCE",
         };
         if (req.due_date) {
-            payment_request.due_date = req.due_date;
+            payment_request.due_date = formatDateSquare(req.due_date);
         }
         invoice.payment_requests = (payment_request,);
 

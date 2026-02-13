@@ -76,6 +76,7 @@ public class SquareCustomersDataProvider inherits SquareDataProviderBase {
         const ChildMap = {
             "create": Class::forName("SquareCreateCustomerDataProvider"),
             "update": Class::forName("SquareUpdateCustomerDataProvider"),
+            "delete": Class::forName("SquareDeleteCustomerDataProvider"),
             "add-to-group": Class::forName("SquareAddCustomerToGroupDataProvider"),
             "remove-from-group": Class::forName("SquareRemoveCustomerFromGroupDataProvider"),
         };

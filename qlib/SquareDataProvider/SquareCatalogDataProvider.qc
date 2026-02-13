@@ -54,9 +54,8 @@ public class SquareCatalogDataProvider inherits SquareDataProviderBase {
             "begin_time": <DataProviderOptionInfo>{
                 "display_name": "Begin Time",
                 "short_desc": "Filter by update time",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Return catalog objects updated at or after this timestamp "
-                    "(RFC 3339 format)",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Return catalog objects updated at or after this timestamp",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -96,7 +95,7 @@ public class SquareCatalogDataProvider inherits SquareDataProviderBase {
             body.object_types = search_options.object_types;
         }
         if (search_options.begin_time) {
-            body.begin_time = search_options.begin_time;
+            body.begin_time = formatDateTimeSquare(search_options.begin_time);
         }
         if (search_options.limit) {
             body.limit = search_options.limit;

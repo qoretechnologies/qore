@@ -364,16 +364,30 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
     #! Returns information on supported reference data
     *hash<string, bool> getSupportedReferenceData() {
         return {
-            "locations": True,
+            "bookings": True,
             "customers": True,
+            "customer_groups": True,
+            "invoices": True,
+            "locations": True,
+            "orders": True,
+            "payments": True,
+            "refunds": True,
+            "team_members": True,
         };
     }
 
     #! Returns reference data of the given kind if available
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
-            case "locations": return getReferenceLocations();
+            case "bookings": return getReferenceBookings();
             case "customers": return getReferenceCustomers();
+            case "customer_groups": return getReferenceCustomerGroups();
+            case "invoices": return getReferenceInvoices();
+            case "locations": return getReferenceLocations();
+            case "orders": return getReferenceOrders();
+            case "payments": return getReferencePayments();
+            case "refunds": return getReferenceRefunds();
+            case "team_members": return getReferenceTeamMembers();
         }
     }
 
@@ -428,6 +442,191 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
             # Silently ignore errors when fetching reference data
         }
         return rv;
+    }
+    #! Returns available customer groups for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceCustomerGroups() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("customers/groups");
+            if (response.groups) {
+                foreach hash<auto> group in (response.groups) {
+                    rv += <AllowedValueInfo>{
+                        "display_name": group.name ?? sprintf("Group %s", group.id),
+                        "short_desc": "",
+                        "desc": sprintf("%s (ID: %s)", group.name ?? "Group", group.id),
+                        "value": group.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available payments for reference data
+    private *list<hash<AllowedValueInfo>> getReferencePayments() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("payments");
+            if (response.payments) {
+                foreach hash<auto> payment in (response.payments) {
+                    string display_name = sprintf("%s %s",
+                        payment.amount_money.currency ?? "USD",
+                        payment.amount_money.amount ?? "0");
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": payment.status ?? "",
+                        "desc": sprintf("%s - %s (ID: %s)", display_name,
+                            payment.status ?? "", payment.id),
+                        "value": payment.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available refunds for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceRefunds() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("refunds");
+            if (response.refunds) {
+                foreach hash<auto> refund in (response.refunds) {
+                    string display_name = sprintf("%s %s",
+                        refund.amount_money.currency ?? "USD",
+                        refund.amount_money.amount ?? "0");
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": refund.status ?? "",
+                        "desc": sprintf("%s - %s (ID: %s)", display_name,
+                            refund.status ?? "", refund.id),
+                        "value": refund.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available invoices for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceInvoices() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            string location_id = getFirstLocationId();
+            hash<auto> response = doGet("invoices", {"location_id": location_id});
+            if (response.invoices) {
+                foreach hash<auto> invoice in (response.invoices) {
+                    string display_name = invoice.invoice_number
+                        ?? sprintf("Invoice %s", invoice.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": invoice.status ?? "",
+                        "desc": sprintf("%s - %s (ID: %s)", display_name,
+                            invoice.status ?? "", invoice.id),
+                        "value": invoice.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available orders for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceOrders() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<string> location_ids = getLocationIds();
+            if (!location_ids) {
+                return rv;
+            }
+            hash<auto> body = {
+                "location_ids": location_ids,
+                "limit": DefaultPageSize,
+            };
+            hash<auto> response = doPost("orders/search", body);
+            if (response.orders) {
+                foreach hash<auto> order in (response.orders) {
+                    string display_name = sprintf("Order %s", order.id);
+                    if (order.total_money) {
+                        display_name = sprintf("%s %s - %s",
+                            order.total_money.currency ?? "USD",
+                            order.total_money.amount ?? "0",
+                            order.state ?? "");
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": order.state ?? "",
+                        "desc": sprintf("%s (ID: %s)", display_name, order.id),
+                        "value": order.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available bookings for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceBookings() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("bookings", {"limit": DefaultPageSize});
+            if (response.bookings) {
+                foreach hash<auto> booking in (response.bookings) {
+                    string display_name = sprintf("Booking %s", booking.id);
+                    if (booking.start_at) {
+                        display_name = sprintf("%s - %s", booking.start_at, booking.status ?? "");
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": booking.status ?? "",
+                        "desc": sprintf("%s (ID: %s)", display_name, booking.id),
+                        "value": booking.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available team members for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceTeamMembers() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doPost("team-members/search", {});
+            if (response.team_members) {
+                foreach hash<auto> member in (response.team_members) {
+                    string display_name = trim(sprintf("%s %s",
+                        member.given_name ?? "", member.family_name ?? ""));
+                    if (!display_name.val()) {
+                        display_name = sprintf("Member %s", member.id);
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": member.status ?? "",
+                        "desc": sprintf("%s (ID: %s)", display_name, member.id),
+                        "value": member.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Formats a date for Square API parameters (RFC 3339)
+    static string formatDateTimeSquare(date dt) {
+        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+    }
+
+    #! Formats a date for Square API date-only parameters (YYYY-MM-DD)
+    static string formatDateSquare(date dt) {
+        return dt.format("YYYY-MM-DD");
     }
 }
 

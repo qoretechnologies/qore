@@ -68,25 +68,25 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
             "created_at_start": <DataProviderOptionInfo>{
                 "display_name": "Created After",
                 "short_desc": "Filter by creation start date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
                 "desc": "Return orders created at or after this timestamp (RFC 3339 format)",
             },
             "created_at_end": <DataProviderOptionInfo>{
                 "display_name": "Created Before",
                 "short_desc": "Filter by creation end date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
                 "desc": "Return orders created before this timestamp (RFC 3339 format)",
             },
             "updated_at_start": <DataProviderOptionInfo>{
                 "display_name": "Updated After",
                 "short_desc": "Filter by update start date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
                 "desc": "Return orders updated at or after this timestamp (RFC 3339 format)",
             },
             "updated_at_end": <DataProviderOptionInfo>{
                 "display_name": "Updated Before",
                 "short_desc": "Filter by update end date",
-                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
                 "desc": "Return orders updated before this timestamp (RFC 3339 format)",
             },
             "limit": <DataProviderOptionInfo>{
@@ -102,6 +102,7 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
             "create": Class::forName("SquareCreateOrderDataProvider"),
             "create-paid": Class::forName("SquareCreatePaidOrderDataProvider"),
             "batch-get": Class::forName("SquareGetOrdersDataProvider"),
+            "cancel": Class::forName("SquareCancelOrderDataProvider"),
         };
     }
 
@@ -168,10 +169,13 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
         if (search_options.created_at_start || search_options.created_at_end) {
             hash<auto> date_time_filter;
             if (search_options.created_at_start) {
-                date_time_filter.created_at = {"start_at": search_options.created_at_start};
+                date_time_filter.created_at = {
+                    "start_at": formatDateTimeSquare(search_options.created_at_start),
+                };
             }
             if (search_options.created_at_end) {
-                date_time_filter.created_at.end_at = search_options.created_at_end;
+                date_time_filter.created_at.end_at =
+                    formatDateTimeSquare(search_options.created_at_end);
             }
             query_filter.date_time_filter = date_time_filter;
         }
@@ -179,10 +183,13 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
         if (search_options.updated_at_start || search_options.updated_at_end) {
             hash<auto> date_time_filter = query_filter.date_time_filter ?? {};
             if (search_options.updated_at_start) {
-                date_time_filter.updated_at = {"start_at": search_options.updated_at_start};
+                date_time_filter.updated_at = {
+                    "start_at": formatDateTimeSquare(search_options.updated_at_start),
+                };
             }
             if (search_options.updated_at_end) {
-                date_time_filter.updated_at.end_at = search_options.updated_at_end;
+                date_time_filter.updated_at.end_at =
+                    formatDateTimeSquare(search_options.updated_at_end);
             }
             query_filter.date_time_filter = date_time_filter;
         }

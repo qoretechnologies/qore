@@ -138,10 +138,17 @@ public class SquareRestClient inherits RestClient::RestClient {
         };
 
         #! Default OAuth2 scopes
-        const DefaultScopes = "CUSTOMERS_READ CUSTOMERS_WRITE ORDERS_READ ORDERS_WRITE "
-            "PAYMENTS_READ PAYMENTS_WRITE INVOICES_READ INVOICES_WRITE INVENTORY_READ "
-            "INVENTORY_WRITE ITEMS_READ ITEMS_WRITE APPOINTMENTS_READ APPOINTMENTS_WRITE "
-            "APPOINTMENTS_ALL_READ APPOINTMENTS_ALL_WRITE MERCHANT_PROFILE_READ";
+        const DefaultScopes = (
+            "CUSTOMERS_READ", "CUSTOMERS_WRITE",
+            "ORDERS_READ", "ORDERS_WRITE",
+            "PAYMENTS_READ", "PAYMENTS_WRITE",
+            "INVOICES_READ", "INVOICES_WRITE",
+            "INVENTORY_READ", "INVENTORY_WRITE",
+            "ITEMS_READ", "ITEMS_WRITE",
+            "APPOINTMENTS_READ", "APPOINTMENTS_WRITE",
+            "APPOINTMENTS_ALL_READ", "APPOINTMENTS_ALL_WRITE",
+            "MERCHANT_PROFILE_READ",
+        );
 
         #! Default OAuth2 auth args to request offline access (refresh tokens)
         const DefaultAuthArgs = {
@@ -275,7 +282,7 @@ public class SquareRestConnection inherits RestClient::RestConnection {
                     "default_value": SquareRestClient::DefaultTokenUrl,
                 },
             },
-            "required_options": "token|oauth2_client_id,oauth2_client_secret",
+            "required_options": "oauth2_client_id,oauth2_client_secret",
         };
     }
 
@@ -370,10 +377,17 @@ public class SquareRestConnection inherits RestClient::RestConnection {
     #! Sets the update options code for the connection
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
-        if (update_options && url != DefaultConnectionUrl) {
-            doUpdateOptions(self, {
-                "url": DefaultConnectionUrl,
-            });
+        if (update_options) {
+            hash<auto> update;
+            if (url != DefaultConnectionUrl) {
+                update.url = DefaultConnectionUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
         }
     }
 
