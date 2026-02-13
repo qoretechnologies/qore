@@ -45,6 +45,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment: @brief tag", \testBriefTag());
         addTestCase("doc comment: @code/@endcode blocks", \testCodeBlocks());
         addTestCase("doc comment: continuation lines", \testContinuationLines());
+        addTestCase("doc comment: paragraph breaks", \testParagraphBreaks());
         addTestCase("doc comment: multiple params", \testMultipleParams());
         addTestCase("doc comment: mixed tags", \testMixedTags());
         addTestCase("doc comment: empty and whitespace", \testEmptyComments());
@@ -85,6 +86,27 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("facade: YAML roundtrip", \testFacadeYamlRoundtrip());
         addTestCase("facade: schema version check", \testFacadeSchemaVersion());
         addTestCase("facade: fromRuntimeWithDocs", \testFacadeFromRuntimeWithDocs());
+        addTestCase("doxygen: @ref conversion", \testDoxygenRef());
+        addTestCase("doxygen: @ref with display text", \testDoxygenRefDisplay());
+        addTestCase("doxygen: @par section header", \testDoxygenPar());
+        addTestCase("doxygen: \\c word to code", \testDoxygenBackslashC());
+        addTestCase("doxygen: \\a \\e word to italic", \testDoxygenBackslashA());
+        addTestCase("doxygen: \\b word to bold", \testDoxygenBackslashB());
+        addTestCase("doxygen: %ClassName stripping", \testDoxygenPercentClass());
+        addTestCase("doxygen: <tt>, <b>, <i> tags", \testDoxygenHtmlInline());
+        addTestCase("doxygen: @code/@endcode blocks", \testDoxygenCodeBlocks());
+        addTestCase("doxygen: @htmlonly/@endhtmlonly stripping", \testDoxygenHtmlOnly());
+        addTestCase("doxygen: HTML table conversion", \testDoxygenHtmlTable());
+        addTestCase("doxygen: HTML entities", \testDoxygenHtmlEntities());
+        addTestCase("doxygen: structural tag stripping", \testDoxygenStructuralTags());
+        addTestCase("doxygen: empty and NOTHING handling", \testDoxygenEmptyNothing());
+        addTestCase("doxygen: composite real-world description", \testDoxygenComposite());
+        addTestCase("doxygen: idempotency", \testDoxygenIdempotency());
+        addTestCase("doxygen: literal newline markers", \testDoxygenLiteralNewlines());
+        addTestCase("doxygen: DocCommentParser bug fix", \testDocCommentParserBugFix());
+        addTestCase("doxygen: DocCommentParser @par handling", \testDocCommentParserPar());
+        addTestCase("doxygen: integration pipeline", \testDoxygenIntegrationPipeline());
+        addTestCase("doxygen: all text fields converted", \testDoxygenAllFieldsConverted());
         set_return_value(main());
     }
 
@@ -265,7 +287,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
             "/** @brief Short description.\n\n    Longer description here. */");
         assertEq("Short description.", result.brief);
-        assertEq("Longer description here.", result.description);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Short description.\n\nLonger description here.", result.description);
 
         # brief without blank line — continuation belongs to brief
         hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
@@ -299,6 +322,42 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertEq("the name which continues here", result.params.name);
     }
 
+    testParagraphBreaks() {
+        # Blank lines between description paragraphs should produce \n\n
+        string comment = "/** Brief summary of the function.\n"
+            "\n"
+            "    Detailed description that provides more information\n"
+            "    about the function behavior.\n"
+            "\n"
+            "    Another paragraph with additional details.\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("Brief summary of the function.\n\n"
+            "Detailed description that provides more information about the function behavior.\n\n"
+            "Another paragraph with additional details.", result.description);
+
+        # Single paragraph without blank lines should have no breaks
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** Single paragraph\n    that continues here. */");
+        assertEq("Single paragraph that continues here.", r2.description);
+
+        # @brief + blank line + description paragraphs
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @brief Short summary.\n\n    First paragraph.\n\n    Second paragraph. */");
+        assertEq("Short summary.\n\nFirst paragraph.\n\nSecond paragraph.", r3.description);
+        assertEq("Short summary.", r3.brief);
+
+        # #! line comment followed by /** block comment should insert paragraph break
+        string comment4 = "#! creates a workflow order data instance in the database\n"
+            "/** Creates a workflow order data instance of the specified type.\n"
+            "\n"
+            "    @param name the workflow name\n"
+            "*/";
+        hash<auto> r4 = QoreApiMetadata::DocCommentParser::parse(comment4);
+        assertEq("creates a workflow order data instance in the database\n\n"
+            "Creates a workflow order data instance of the specified type.", r4.description);
+    }
+
     testMultipleParams() {
         string comment = "/** Do something.\n"
             "    @param first the first param\n"
@@ -326,7 +385,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
             "    @warning Expensive operation.\n"
             "*/";
         hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
-        assertEq("Main description.", result.description);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Brief text.\n\nMain description.", result.description);
         assertEq("Brief text.", result.brief);
         assertEq(2, result.params.size());
         assertEq("the x value", result.params.x);
@@ -1460,5 +1520,310 @@ class QoreApiMetadataTest inherits QUnit::Test {
             }
         }
         assertTrue(found_mutex);
+    }
+
+    testDoxygenRef() {
+        # simple @ref
+        assertEq("`Foo::bar`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@ref Foo::bar"));
+        # @ref with surrounding text
+        assertEq("See `Mutex::lock` for details",
+            QoreApiMetadata::DoxygenToMarkdown::convert("See @ref Mutex::lock for details"));
+        # multiple @ref
+        assertEq("`Foo` and `Bar`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@ref Foo and @ref Bar"));
+    }
+
+    testDoxygenRefDisplay() {
+        # @ref with display text in quotes
+        assertEq("See the bar method for details",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "See @ref Foo::bar \"the bar method\" for details"));
+        # multiple @ref with display text
+        assertEq("use foo or bar",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "use @ref Foo \"foo\" or @ref Bar \"bar\""));
+    }
+
+    testDoxygenPar() {
+        # @par with colon
+        assertEq("**Section:**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Section:"));
+        # @par with colon and trailing text
+        assertEq("**Restrictions:** text after",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Restrictions: text after"));
+        # @par without colon
+        assertEq("**Overview**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Overview"));
+    }
+
+    testDoxygenBackslashC() {
+        assertEq("`word`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\c word"));
+        assertEq("the `timeout` value",
+            QoreApiMetadata::DoxygenToMarkdown::convert("the \\c timeout value"));
+        # multiple \c
+        assertEq("`int` or `string`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\c int or \\c string"));
+    }
+
+    testDoxygenBackslashA() {
+        assertEq("*word*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\a word"));
+        assertEq("use *emphasis* here",
+            QoreApiMetadata::DoxygenToMarkdown::convert("use \\a emphasis here"));
+        # \e also works
+        assertEq("*italic*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\e italic"));
+    }
+
+    testDoxygenBackslashB() {
+        assertEq("**word**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\b word"));
+        assertEq("very **important** note",
+            QoreApiMetadata::DoxygenToMarkdown::convert("very \\b important note"));
+    }
+
+    testDoxygenPercentClass() {
+        assertEq("ClassName",
+            QoreApiMetadata::DoxygenToMarkdown::convert("%ClassName"));
+        assertEq("use Qore and Mutex",
+            QoreApiMetadata::DoxygenToMarkdown::convert("use %Qore and %Mutex"));
+        # % before lowercase should NOT be stripped
+        assertEq("%lowercase",
+            QoreApiMetadata::DoxygenToMarkdown::convert("%lowercase"));
+    }
+
+    testDoxygenHtmlInline() {
+        # <tt>
+        assertEq("`code here`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<tt>code here</tt>"));
+        # <b>
+        assertEq("**bold text**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<b>bold text</b>"));
+        # <i>
+        assertEq("*italic text*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<i>italic text</i>"));
+        # nested
+        assertEq("**bold** and *italic*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<b>bold</b> and <i>italic</i>"));
+    }
+
+    testDoxygenCodeBlocks() {
+        # basic @code/@endcode
+        string input = "@code\nint x = 1;\n@endcode";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("```qore", result);
+        assertRegex("int x = 1;", result);
+        assertRegex("```", result);
+
+        # @code{.py}
+        input = "@code{.py}\nfor i in range(10):\n    print(i)\n@endcode";
+        result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("```qore", result);
+        assertRegex("for i in range", result);
+    }
+
+    testDoxygenHtmlOnly() {
+        assertEq("Before  After",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "Before @htmlonly<div>HTML content</div>@endhtmlonly After"));
+        # multiline
+        string input = "Text\n@htmlonly\n<div>stuff</div>\n@endhtmlonly\nMore";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("Text", result);
+        assertRegex("More", result);
+        assertFalse(result.find("htmlonly") >= 0);
+    }
+
+    testDoxygenHtmlTable() {
+        string input = "<table><tr><th>Name</th><th>Type</th></tr>"
+            "<tr><td>foo</td><td>int</td></tr></table>";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("Name", result);
+        assertRegex("Type", result);
+        assertRegex("foo", result);
+        assertRegex("int", result);
+        assertRegex("\\|", result);
+        assertRegex("---", result);
+    }
+
+    testDoxygenHtmlEntities() {
+        assertEq("< > & \" text",
+            QoreApiMetadata::DoxygenToMarkdown::convert("&lt; &gt; &amp; &quot; text"));
+        assertEq("it's",
+            QoreApiMetadata::DoxygenToMarkdown::convert("it&#39;s"));
+        assertEq("a b",
+            QoreApiMetadata::DoxygenToMarkdown::convert("a&nbsp;b"));
+    }
+
+    testDoxygenStructuralTags() {
+        # @anchor, @section, etc. should be stripped
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(
+            "@anchor my_anchor\nSome text\n@section my_sec Title");
+        assertRegex("Some text", result);
+        assertFalse(result.find("@anchor") >= 0);
+        assertFalse(result.find("@section") >= 0);
+    }
+
+    testDoxygenEmptyNothing() {
+        assertEq("", QoreApiMetadata::DoxygenToMarkdown::convert(""));
+        assertEq("", QoreApiMetadata::DoxygenToMarkdown::convert(NOTHING));
+        assertEq("plain text", QoreApiMetadata::DoxygenToMarkdown::convert("plain text"));
+    }
+
+    testDoxygenComposite() {
+        # real-world-like description with multiple constructs
+        string input = "This class inherits @ref Qore::Thread::AbstractSmartLock "
+            "\"AbstractSmartLock\", so it can be used by "
+            "@ref Qore::Thread::Condition \"Condition\" objects.\n"
+            "@par Restrictions:\n"
+            "@ref Qore::PO_NO_THREAD_CLASSES\n"
+            "Use the \\c lock method with a \\c timeout parameter.\n"
+            "See <b>important</b> notes in <tt>README</tt>.";
+
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+
+        # @ref with display text should be plain text
+        assertRegex("AbstractSmartLock", result);
+        assertFalse(result.find("@ref") >= 0);
+        # @par should be bold
+        assertRegex("\\*\\*Restrictions:\\*\\*", result);
+        # \c should be backticked
+        assertRegex("`lock`", result);
+        assertRegex("`timeout`", result);
+        # HTML tags should be converted
+        assertRegex("\\*\\*important\\*\\*", result);
+        assertRegex("`README`", result);
+        # no doxygen constructs remain
+        assertFalse(result.find("\\c ") >= 0);
+        assertFalse(result.find("<b>") >= 0);
+        assertFalse(result.find("<tt>") >= 0);
+    }
+
+    testDoxygenIdempotency() {
+        # converting already-converted text should produce the same output
+        string input = "Use `code` and **bold** and *italic* text";
+        string first = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        string second = QoreApiMetadata::DoxygenToMarkdown::convert(first);
+        assertEq(first, second);
+
+        # also test with actual doxygen input
+        string doxy = "\\c word and @ref target and <b>bold</b>";
+        string pass1 = QoreApiMetadata::DoxygenToMarkdown::convert(doxy);
+        string pass2 = QoreApiMetadata::DoxygenToMarkdown::convert(pass1);
+        assertEq(pass1, pass2);
+    }
+
+    testDoxygenLiteralNewlines() {
+        # Test literal \n\n markers (from qpp meta files)
+        # In JSON, \\n becomes literal backslash+n in Qore
+        # We simulate by building the string directly
+        string input = "first" + "\\" + "n" + "\\" + "n" + "second";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertEq("first\n\nsecond", result);
+
+        # single \n
+        input = "first" + "\\" + "n" + "second";
+        result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertEq("first\nsecond", result);
+    }
+
+    testDocCommentParserBugFix() {
+        # Before fix: multiple @ref tags would cause description to accumulate
+        # duplicates because current_text wasn't reset after flushTag()
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(
+            "/** First description.\n"
+            "    @ref Foo\n"
+            "    @ref Bar\n"
+            "*/");
+        # description should contain each piece once, not duplicated
+        # count occurrences of "First description"
+        int count = 0;
+        int pos = 0;
+        while (True) {
+            int idx = r.description.find("First description", pos);
+            if (idx < 0) {
+                break;
+            }
+            ++count;
+            pos = idx + 1;
+        }
+        assertEq(1, count, "description should not be duplicated");
+        # both refs should be present in converted form
+        assertRegex("`Foo`", r.description);
+        assertRegex("`Bar`", r.description);
+    }
+
+    testDocCommentParserPar() {
+        # @par should be treated as description text (not unknown tag)
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(
+            "/** Main description.\n"
+            "    @par Section:\n"
+            "    Section content here.\n"
+            "*/");
+        assertRegex("Main description", r.description);
+        # @par should be converted to bold section header
+        assertRegex("\\*\\*Section:\\*\\*", r.description);
+        assertRegex("Section content here", r.description);
+    }
+
+    testDoxygenIntegrationPipeline() {
+        # Full pipeline: DocCommentParser + converter produces clean Markdown
+        string comment = "/** Locks the %Mutex object; blocks if the lock is already held\n"
+            "    To release the %Mutex, use @ref Mutex::unlock()\n"
+            "    @par Example:\n"
+            "    @code{.py}\n"
+            "    mutex.lock();\n"
+            "    @endcode\n"
+            "    @param timeout_ms a \\c timeout value\n"
+            "    @return returns -1 for error, 0 for success\n"
+            "    @throws LOCK-ERROR lock called twice\n"
+            "    @note Thread-safe with <b>deadlock detection</b>.\n"
+            "*/";
+
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+
+        # description should have clean markdown, no doxygen
+        assertFalse(result.description.find("@ref") >= 0);
+        assertFalse(result.description.find("\\c ") >= 0);
+        assertRegex("`Mutex::unlock\\(\\)`", result.description);
+        assertRegex("Mutex", result.description);
+
+        # param should be converted
+        assertRegex("`timeout`", result.params.timeout_ms);
+
+        # note should have markdown bold
+        assertRegex("\\*\\*deadlock detection\\*\\*", result.notes[0]);
+
+        # return description should be clean
+        assertEq("returns -1 for error, 0 for success", result.return_description);
+    }
+
+    testDoxygenAllFieldsConverted() {
+        # Verify that ALL text fields go through conversion
+        string comment = "/** Main \\c desc text\n"
+            "    @brief Brief \\c text here\n"
+            "    @param x the \\c param value\n"
+            "    @return the \\c result value\n"
+            "    @throws ERR \\c error desc\n"
+            "    @note A \\c note here\n"
+            "    @warning A \\c warning here\n"
+            "    @deprecated Use \\c newFunc instead\n"
+            "    @see \\c OtherClass\n"
+            "*/";
+
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(comment);
+
+        # all fields should have backtick-converted \c
+        assertRegex("`desc`", r.description);
+        assertRegex("`text`", r.brief);
+        assertRegex("`param`", r.params.x);
+        assertRegex("`result`", r.return_description);
+        assertRegex("`error`", r.throws[0].description);
+        assertRegex("`note`", r.notes[0]);
+        assertRegex("`warning`", r.warnings[0]);
+        assertRegex("`newFunc`", r.deprecated);
+        assertRegex("`OtherClass`", r.see_also[0]);
     }
 }

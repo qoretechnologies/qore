@@ -94,6 +94,14 @@ public class DocCommentParser {
                     current_tag = NOTHING;
                     current_arg = NOTHING;
                     current_text = "";
+                } else if (current_text.length()) {
+                    # Flush pending description text before paragraph break
+                    DocCommentParser::flushTag(\result, NOTHING, NOTHING, current_text);
+                    current_text = "";
+                }
+                # Mark paragraph break in description
+                if (result.description.length() && !result.description.endsWith("\n\n")) {
+                    result.description += "\n\n";
                 }
                 continue;
             }
@@ -121,6 +129,9 @@ public class DocCommentParser {
             if (exists tag_match) {
                 # flush previous tag
                 DocCommentParser::flushTag(\result, current_tag, current_arg, current_text);
+                current_tag = NOTHING;
+                current_arg = NOTHING;
+                current_text = "";
 
                 string tag_name = tag_match[0];
                 string tag_rest = tag_match[1];
@@ -197,26 +208,25 @@ public class DocCommentParser {
                         current_text = tag_rest;
                         break;
                     }
+                    case "par": {
+                        # @par Section: — treat as description text with @par prefix
+                        if (current_text.length()) {
+                            current_text += " ";
+                        }
+                        current_text += "@par";
+                        if (tag_rest.length()) {
+                            current_text += " " + tag_rest;
+                        }
+                        break;
+                    }
                     default: {
-                        # unknown tag — treat as continuation of description
-                        if (!exists current_tag) {
-                            current_tag = NOTHING;
-                            if (current_text.length()) {
-                                current_text += " ";
-                            }
-                            current_text += "@" + tag_name;
-                            if (tag_rest.length()) {
-                                current_text += " " + tag_rest;
-                            }
-                        } else {
-                            # continuation of current tag
-                            if (current_text.length()) {
-                                current_text += " ";
-                            }
-                            current_text += "@" + tag_name;
-                            if (tag_rest.length()) {
-                                current_text += " " + tag_rest;
-                            }
+                        # unknown tag — treat as description text
+                        if (current_text.length()) {
+                            current_text += " ";
+                        }
+                        current_text += "@" + tag_name;
+                        if (tag_rest.length()) {
+                            current_text += " " + tag_rest;
                         }
                         break;
                     }
@@ -232,6 +242,16 @@ public class DocCommentParser {
 
         # flush final tag
         DocCommentParser::flushTag(\result, current_tag, current_arg, current_text);
+
+        # Combine brief + description when @brief is present
+        if (exists result.brief && trim(result.brief).length()) {
+            string brief_text = trim(result.brief);
+            if (result.description.length()) {
+                result.description = brief_text + "\n\n" + trim(result.description);
+            } else {
+                result.description = brief_text;
+            }
+        }
 
         # trim all string fields
         result.description = trim(result.description);
@@ -251,6 +271,36 @@ public class DocCommentParser {
             }
         }
 
+        # convert doxygen inline formatting to Markdown in all text fields
+        result.description = DoxygenToMarkdown::convert(result.description);
+        if (exists result.brief) {
+            result.brief = DoxygenToMarkdown::convert(result.brief);
+        }
+        if (exists result.return_description) {
+            result.return_description = DoxygenToMarkdown::convert(result.return_description);
+        }
+        foreach string key in (keys result.params) {
+            result.params{key} = DoxygenToMarkdown::convert(result.params{key});
+        }
+        for (int i = 0; i < result.throws.size(); ++i) {
+            if (exists result.throws[i].description) {
+                result.throws[i].description =
+                    DoxygenToMarkdown::convert(result.throws[i].description);
+            }
+        }
+        for (int i = 0; i < result.notes.size(); ++i) {
+            result.notes[i] = DoxygenToMarkdown::convert(result.notes[i]);
+        }
+        for (int i = 0; i < result.warnings.size(); ++i) {
+            result.warnings[i] = DoxygenToMarkdown::convert(result.warnings[i]);
+        }
+        if (exists result.deprecated && result.deprecated.typeCode() == NT_STRING) {
+            result.deprecated = DoxygenToMarkdown::convert(result.deprecated);
+        }
+        for (int i = 0; i < result.see_also.size(); ++i) {
+            result.see_also[i] = DoxygenToMarkdown::convert(result.see_also[i]);
+        }
+
         return result;
     }
 
@@ -268,14 +318,21 @@ public class DocCommentParser {
         list<string> raw_lines = text.split("\n");
         list<string> result = ();
         bool in_block = False;
+        # track whether the previous line was a line-style comment (#! or //!)
+        bool prev_was_line_comment = False;
 
         foreach string line in (raw_lines) {
             string cleaned = trim(line);
 
             # handle inline /** block start (e.g., after #! lines)
             if (!in_block && cleaned =~ /^\/\*\*/) {
+                # Insert paragraph break at transition from line comment to block comment
+                if (prev_was_line_comment && result.size()) {
+                    result += "";
+                }
                 cleaned = regex_subst(cleaned, "^\\/\\*\\*\\s?", "");
                 in_block = True;
+                prev_was_line_comment = False;
                 # check if block also ends on same line
                 if (cleaned =~ /\*\/\s*$/) {
                     cleaned = regex_subst(cleaned, "\\s*\\*\\/\\s*$", "");
@@ -285,6 +342,9 @@ public class DocCommentParser {
                 # end of block comment
                 cleaned = regex_subst(cleaned, "\\s*\\*\\/\\s*$", "");
                 in_block = False;
+                prev_was_line_comment = False;
+            } else {
+                prev_was_line_comment = False;
             }
 
             # strip leading * (common in block comments)
@@ -294,8 +354,10 @@ public class DocCommentParser {
             # strip //! or #! prefix
             if (cleaned =~ /^\/\/!/) {
                 cleaned = regex_subst(cleaned, "^\\/\\/!\\s?", "");
+                prev_was_line_comment = True;
             } else if (cleaned =~ /^#!/) {
                 cleaned = regex_subst(cleaned, "^#!\\s?", "");
+                prev_was_line_comment = True;
             }
             result += cleaned;
         }
@@ -312,7 +374,10 @@ public class DocCommentParser {
             # description text
             if (trimmed.length()) {
                 if (result.description.length()) {
-                    result.description += " ";
+                    # Preserve paragraph breaks; otherwise join with space
+                    if (!result.description.endsWith("\n\n")) {
+                        result.description += " ";
+                    }
                 }
                 result.description += trimmed;
             }
