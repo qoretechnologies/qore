@@ -1,0 +1,739 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class QoreProcessorsTest
+
+#! A simple data provider that does NOT support pipeline processor
+class NonProcessorDataProvider inherits DataProvider::AbstractDataProvider {
+    string getName() {
+        return "non-processor";
+    }
+
+    *string getDesc() {
+        return "A test data provider that does not support the pipeline processor API";
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "NonProcessorDataProvider",
+        };
+    }
+}
+
+#! Simple sink processor for collecting pipeline output
+class TestSinkProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        list<auto> results;
+    }
+
+    private submitImpl(code enqueue, auto _data) {
+        push results, _data;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+class QoreProcessorsTest inherits QUnit::Test {
+    constructor() : Test("QoreProcessorsTest", "1.0") {
+        addTestCase("filter - simple mode matching", \filterSimpleMatch());
+        addTestCase("filter - simple mode non-matching", \filterSimpleNoMatch());
+        addTestCase("filter - DPQL expression mode", \filterDpqlExpression());
+        addTestCase("filter - invalid DPQL expression", \filterInvalidDpql());
+        addTestCase("filter - no options error", \filterNoOptions());
+        addTestCase("filter - operators", \filterOperators());
+        addTestCase("filter - in operator", \filterInOperator());
+        addTestCase("filter - between operator", \filterBetweenOperator());
+        addTestCase("filter - regex operator", \filterRegexOperator());
+
+        addTestCase("select-fields - keep fields", \selectFieldsKeep());
+        addTestCase("select-fields - rename fields", \selectFieldsRename());
+        addTestCase("select-fields - combined keep and rename", \selectFieldsCombined());
+        addTestCase("select-fields - empty fields error", \selectFieldsEmpty());
+
+        addTestCase("set-fields - add new field", \setFieldsAddNew());
+        addTestCase("set-fields - overwrite existing field", \setFieldsOverwrite());
+
+        addTestCase("remove-fields - remove single field", \removeFieldsSingle());
+        addTestCase("remove-fields - remove multiple fields", \removeFieldsMultiple());
+
+        addTestCase("search-replace - literal replacement", \searchReplaceLiteral());
+        addTestCase("search-replace - regex replacement", \searchReplaceRegex());
+        addTestCase("search-replace - global vs first-only", \searchReplaceGlobalVsFirst());
+        addTestCase("search-replace - field not present", \searchReplaceFieldMissing());
+
+        addTestCase("record-limit - pass N records", \recordLimitPass());
+        addTestCase("record-limit - drop after limit", \recordLimitDrop());
+        addTestCase("record-limit - zero limit", \recordLimitZero());
+
+        addTestCase("pipeline - filter + select + set chain", \pipelineFilterSelectSet());
+        addTestCase("pipeline - all processors mixed", \pipelineAllProcessors());
+
+        addTestCase("app registration", \appRegistration());
+        addTestCase("action registration", \actionRegistration());
+
+        addTestCase("data provider navigation - factory exists", \navigationFactory());
+        addTestCase("data provider navigation - children", \navigationChildren());
+        addTestCase("data provider navigation - child info", \navigationChildInfo());
+
+        addTestCase("filter - where_cond expression builder", \filterWhereCond());
+        addTestCase("filter - where_cond mutual exclusivity", \filterWhereCondExclusive());
+
+        addTestCase("pipeline processor type API - input/output types", \pipelineProcessorTypeApi());
+        addTestCase("pipeline processor type API - with options", \pipelineProcessorTypeApiWithOptions());
+        addTestCase("pipeline processor type API - guard throws", \pipelineProcessorTypeApiGuard());
+
+        addTestCase("dynamic options - filter action", \dynamicOptionsFilterAction());
+        addTestCase("dynamic options - pipeline processor dispatch", \dynamicOptionsPipelineProcessorDispatch());
+
+        set_return_value(main());
+    }
+
+    # --- Filter Tests ---
+
+    filterSimpleMatch() {
+        QoreFilterRecordsProcessor proc({"field": "status", "operator": "==", "value": "active"});
+        hash<auto> record = {"name": "Alice", "status": "active", "amount": 100};
+        auto result = proc.processRecord(record);
+        assertEq(record, result);
+    }
+
+    filterSimpleNoMatch() {
+        QoreFilterRecordsProcessor proc({"field": "status", "operator": "==", "value": "active"});
+        hash<auto> record = {"name": "Bob", "status": "inactive", "amount": 50};
+        auto result = proc.processRecord(record);
+        assertNothing(result);
+    }
+
+    filterDpqlExpression() {
+        QoreFilterRecordsProcessor proc({"expression": '@status == "active"'});
+        hash<auto> active = {"name": "Alice", "status": "active"};
+        hash<auto> inactive = {"name": "Bob", "status": "inactive"};
+        assertEq(active, proc.processRecord(active));
+        assertNothing(proc.processRecord(inactive));
+    }
+
+    filterInvalidDpql() {
+        assertThrows("DPQL-PARSE-ERROR", sub () {
+            new QoreFilterRecordsProcessor({"expression": '@status =='});
+        });
+    }
+
+    filterNoOptions() {
+        # a filter with no options is valid for navigation, but processRecord should throw
+        QoreFilterRecordsProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub () {
+            proc.processRecord({"a": 1});
+        });
+    }
+
+    filterOperators() {
+        # test != operator
+        {
+            QoreFilterRecordsProcessor proc({"field": "x", "operator": "!=", "value": 5});
+            assertEq({"x": 3}, proc.processRecord({"x": 3}));
+            assertNothing(proc.processRecord({"x": 5}));
+        }
+        # test > operator
+        {
+            QoreFilterRecordsProcessor proc({"field": "x", "operator": ">", "value": 10});
+            assertEq({"x": 20}, proc.processRecord({"x": 20}));
+            assertNothing(proc.processRecord({"x": 5}));
+        }
+        # test < operator
+        {
+            QoreFilterRecordsProcessor proc({"field": "x", "operator": "<", "value": 10});
+            assertEq({"x": 5}, proc.processRecord({"x": 5}));
+            assertNothing(proc.processRecord({"x": 20}));
+        }
+        # test >= operator
+        {
+            QoreFilterRecordsProcessor proc({"field": "x", "operator": ">=", "value": 10});
+            assertEq({"x": 10}, proc.processRecord({"x": 10}));
+            assertNothing(proc.processRecord({"x": 5}));
+        }
+        # test <= operator
+        {
+            QoreFilterRecordsProcessor proc({"field": "x", "operator": "<=", "value": 10});
+            assertEq({"x": 10}, proc.processRecord({"x": 10}));
+            assertNothing(proc.processRecord({"x": 20}));
+        }
+    }
+
+    filterInOperator() {
+        # matching: value is in the list
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "status",
+                "operator": "in",
+                "value": ("active", "pending"),
+            });
+            assertEq({"status": "active"}, proc.processRecord({"status": "active"}));
+            assertEq({"status": "pending"}, proc.processRecord({"status": "pending"}));
+            assertNothing(proc.processRecord({"status": "inactive"}));
+        }
+        # numeric values
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "code",
+                "operator": "in",
+                "value": (200, 201, 204),
+            });
+            assertEq({"code": 200}, proc.processRecord({"code": 200}));
+            assertEq({"code": 204}, proc.processRecord({"code": 204}));
+            assertNothing(proc.processRecord({"code": 404}));
+        }
+    }
+
+    filterBetweenOperator() {
+        # between uses exclusive bounds (> lower AND < upper)
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "amount",
+                "operator": "between",
+                "value": (10, 20),
+            });
+            assertEq({"amount": 15}, proc.processRecord({"amount": 15}));
+            # exclusive: boundary values should NOT match
+            assertNothing(proc.processRecord({"amount": 10}));
+            assertNothing(proc.processRecord({"amount": 20}));
+            # outside range
+            assertNothing(proc.processRecord({"amount": 5}));
+            assertNothing(proc.processRecord({"amount": 25}));
+        }
+        # string between
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "name",
+                "operator": "between",
+                "value": ("B", "D"),
+            });
+            assertEq({"name": "Charlie"}, proc.processRecord({"name": "Charlie"}));
+            assertNothing(proc.processRecord({"name": "Alice"}));
+            assertNothing(proc.processRecord({"name": "Eve"}));
+        }
+        # invalid: non-list value
+        {
+            assertThrows("CONSTRUCTOR-ERROR", sub () {
+                new QoreFilterRecordsProcessor({
+                    "field": "x",
+                    "operator": "between",
+                    "value": 10,
+                });
+            });
+        }
+        # invalid: list with wrong number of elements
+        {
+            assertThrows("CONSTRUCTOR-ERROR", sub () {
+                new QoreFilterRecordsProcessor({
+                    "field": "x",
+                    "operator": "between",
+                    "value": (1, 2, 3),
+                });
+            });
+        }
+    }
+
+    filterRegexOperator() {
+        # simple regex match
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "email",
+                "operator": "regex",
+                "value": "^[a-z]+@",
+            });
+            assertEq({"email": "alice@example.com"}, proc.processRecord({"email": "alice@example.com"}));
+            assertNothing(proc.processRecord({"email": "ALICE@example.com"}));
+        }
+        # regex with digits
+        {
+            QoreFilterRecordsProcessor proc({
+                "field": "code",
+                "operator": "regex",
+                "value": "^[A-Z]{2}-\\d{3}$",
+            });
+            assertEq({"code": "AB-123"}, proc.processRecord({"code": "AB-123"}));
+            assertNothing(proc.processRecord({"code": "AB-12"}));
+            assertNothing(proc.processRecord({"code": "ab-123"}));
+        }
+    }
+
+    # --- Select Fields Tests ---
+
+    selectFieldsKeep() {
+        QoreSelectFieldsProcessor proc({"fields": "name,email"});
+        hash<auto> record = {"name": "Alice", "email": "a@b.com", "age": 30, "role": "admin"};
+        hash<auto> expected = {"name": "Alice", "email": "a@b.com"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    selectFieldsRename() {
+        QoreSelectFieldsProcessor proc({"fields": "customer_name=name,customer_email=email"});
+        hash<auto> record = {"name": "Alice", "email": "a@b.com", "age": 30};
+        hash<auto> expected = {"customer_name": "Alice", "customer_email": "a@b.com"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    selectFieldsCombined() {
+        QoreSelectFieldsProcessor proc({"fields": "name,customer_email=email"});
+        hash<auto> record = {"name": "Alice", "email": "a@b.com", "age": 30};
+        hash<auto> expected = {"name": "Alice", "customer_email": "a@b.com"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    selectFieldsEmpty() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreSelectFieldsProcessor({"fields": ",,,"});
+        });
+    }
+
+    # --- Set Fields Tests ---
+
+    setFieldsAddNew() {
+        QoreSetFieldsProcessor proc({"field_name": "source", "field_value": "pipeline"});
+        hash<auto> record = {"name": "Alice", "age": 30};
+        hash<auto> expected = {"name": "Alice", "age": 30, "source": "pipeline"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    setFieldsOverwrite() {
+        QoreSetFieldsProcessor proc({"field_name": "age", "field_value": 25});
+        hash<auto> record = {"name": "Alice", "age": 30};
+        hash<auto> expected = {"name": "Alice", "age": 25};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    # --- Remove Fields Tests ---
+
+    removeFieldsSingle() {
+        QoreRemoveFieldsProcessor proc({"fields": "age"});
+        hash<auto> record = {"name": "Alice", "age": 30, "email": "a@b.com"};
+        hash<auto> expected = {"name": "Alice", "email": "a@b.com"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    removeFieldsMultiple() {
+        QoreRemoveFieldsProcessor proc({"fields": "age,email"});
+        hash<auto> record = {"name": "Alice", "age": 30, "email": "a@b.com"};
+        hash<auto> expected = {"name": "Alice"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    # --- Search Replace Tests ---
+
+    searchReplaceLiteral() {
+        QoreSearchReplaceProcessor proc({
+            "field": "name",
+            "search": "Alice",
+            "replace": "Bob",
+        });
+        hash<auto> record = {"name": "Alice Smith", "age": 30};
+        hash<auto> expected = {"name": "Bob Smith", "age": 30};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    searchReplaceRegex() {
+        QoreSearchReplaceProcessor proc({
+            "field": "email",
+            "search": "@old\\.com$",
+            "replace": "@new.com",
+            "is_regex": True,
+        });
+        hash<auto> record = {"name": "Alice", "email": "alice@old.com"};
+        hash<auto> expected = {"name": "Alice", "email": "alice@new.com"};
+        assertEq(expected, proc.processRecord(record));
+    }
+
+    searchReplaceGlobalVsFirst() {
+        # global replacement (default)
+        {
+            QoreSearchReplaceProcessor proc({
+                "field": "text",
+                "search": "foo",
+                "replace": "bar",
+            });
+            hash<auto> record = {"text": "foo and foo"};
+            assertEq({"text": "bar and bar"}, proc.processRecord(record));
+        }
+        # first-only replacement
+        {
+            QoreSearchReplaceProcessor proc({
+                "field": "text",
+                "search": "foo",
+                "replace": "bar",
+                "global": False,
+            });
+            hash<auto> record = {"text": "foo and foo"};
+            assertEq({"text": "bar and foo"}, proc.processRecord(record));
+        }
+    }
+
+    searchReplaceFieldMissing() {
+        QoreSearchReplaceProcessor proc({
+            "field": "missing_field",
+            "search": "x",
+            "replace": "y",
+        });
+        hash<auto> record = {"name": "Alice"};
+        # record should pass through unchanged
+        assertEq(record, proc.processRecord(record));
+    }
+
+    # --- Record Limit Tests ---
+
+    recordLimitPass() {
+        QoreRecordLimitProcessor proc({"limit": 3});
+        list<auto> results;
+        for (int i = 0; i < 3; ++i) {
+            auto result = proc.processRecord({"i": i});
+            if (exists result) {
+                push results, result;
+            }
+        }
+        assertEq(3, results.size());
+        assertEq(0, results[0].i);
+        assertEq(1, results[1].i);
+        assertEq(2, results[2].i);
+    }
+
+    recordLimitDrop() {
+        QoreRecordLimitProcessor proc({"limit": 2});
+        assertEq({"i": 0}, proc.processRecord({"i": 0}));
+        assertEq({"i": 1}, proc.processRecord({"i": 1}));
+        assertNothing(proc.processRecord({"i": 2}));
+        assertNothing(proc.processRecord({"i": 3}));
+    }
+
+    recordLimitZero() {
+        QoreRecordLimitProcessor proc({"limit": 0});
+        assertNothing(proc.processRecord({"i": 0}));
+        assertNothing(proc.processRecord({"i": 1}));
+    }
+
+    # --- Pipeline Integration Tests ---
+
+    pipelineFilterSelectSet() {
+        # chain filter -> select -> set using DataProviderPipeline
+        QoreFilterRecordsProcessor filter({"field": "status", "operator": "==", "value": "active"});
+        QoreSelectFieldsProcessor sel({"fields": "name,amount"});
+        QoreSetFieldsProcessor setter({"field_name": "processed", "field_value": True});
+        TestSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(filter);
+        pipeline.append(sel);
+        pipeline.append(setter);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"name": "Alice", "status": "active", "amount": 100, "extra": "x"},
+            {"name": "Bob", "status": "inactive", "amount": 200, "extra": "y"},
+            {"name": "Carol", "status": "active", "amount": 300, "extra": "z"},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        assertEq(2, sink.results.size());
+        assertEq({"name": "Alice", "amount": 100, "processed": True}, sink.results[0]);
+        assertEq({"name": "Carol", "amount": 300, "processed": True}, sink.results[1]);
+    }
+
+    pipelineAllProcessors() {
+        # chain all 6 processors using processRecord() for deterministic testing
+        QoreFilterRecordsProcessor filter({"field": "active", "operator": "==", "value": True});
+        QoreSelectFieldsProcessor sel({"fields": "name,desc"});
+        QoreSetFieldsProcessor setter({"field_name": "source", "field_value": "test"});
+        QoreRemoveFieldsProcessor remover({"fields": "desc"});
+        QoreSearchReplaceProcessor replacer({
+            "field": "name",
+            "search": "User",
+            "replace": "Person",
+        });
+        QoreRecordLimitProcessor limiter({"limit": 2});
+
+        list<AbstractDataProcessor> processors = (filter, sel, setter, remover, replacer, limiter);
+
+        list<hash<auto>> input = (
+            {"name": "User1", "active": True, "desc": "first"},
+            {"name": "User2", "active": False, "desc": "second"},
+            {"name": "User3", "active": True, "desc": "third"},
+            {"name": "User4", "active": True, "desc": "fourth"},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (input) {
+            auto current = rec;
+            foreach AbstractDataProcessor proc in (processors) {
+                if (!exists current) {
+                    break;
+                }
+                current = proc.processRecord(current);
+            }
+            if (exists current) {
+                push results, current;
+            }
+        }
+
+        assertEq(2, results.size());
+        assertEq({"name": "Person1", "source": "test"}, results[0]);
+        assertEq({"name": "Person3", "source": "test"}, results[1]);
+    }
+
+    # --- App and Action Catalog Tests ---
+
+    appRegistration() {
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Qore");
+        assertEq(True, exists app);
+        assertEq("Qore", app.name);
+        assertEq("Qore", app.display_name);
+        assertEq(True, app.logo.val());
+        assertEq("qore-q-logo.svg", app.logo_file_name);
+        assertEq(MimeTypeSvg, app.logo_mime_type);
+    }
+
+    actionRegistration() {
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+        assertEq(True, exists actions);
+
+        # check all 6 actions are registered
+        list<string> expected_actions = (
+            "filter-records",
+            "select-fields",
+            "set-fields",
+            "remove-fields",
+            "search-replace",
+            "record-limit",
+        );
+        foreach string action_name in (expected_actions) {
+            assertEq(True, actions.hasKey(action_name),
+                sprintf("action %y should exist", action_name));
+            assertEq(DPAT_PIPELINE_PROCESSOR, actions{action_name}.action_code);
+            assertEq(True, actions{action_name}.processor_capabilities > 0,
+                sprintf("action %y should have processor_capabilities", action_name));
+        }
+
+        # verify filter actions have DPC_FILTER capability
+        assertEq(DPC_FILTER, actions."filter-records".processor_capabilities);
+        assertEq(DPC_FILTER, actions."record-limit".processor_capabilities);
+
+        # verify transform actions have DPC_TRANSFORM capability
+        foreach string action_name in (("select-fields", "set-fields", "remove-fields", "search-replace")) {
+            assertEq(DPC_TRANSFORM, actions{action_name}.processor_capabilities,
+                sprintf("action %y should have DPC_TRANSFORM capability", action_name));
+        }
+    }
+
+    # --- Data Provider Navigation Tests ---
+
+    navigationFactory() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("qore-processors");
+        assertEq(True, exists factory);
+        assertEq("qore-processors", factory.getInfo().name);
+    }
+
+    navigationChildren() {
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        *list<string> children = root.getChildProviderNames();
+        assertEq(True, exists children);
+        assertEq(6, children.size());
+        # check all expected children
+        list<string> expected = ("filter", "select-fields", "set-fields", "remove-fields",
+            "search-replace", "record-limit");
+        foreach string name in (expected) {
+            assertEq(True, children.contains(name),
+                sprintf("child %y should be listed", name));
+        }
+    }
+
+    navigationChildInfo() {
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        # all children should support pipeline processor
+        *list<string> children = root.getChildProviderNames();
+        foreach string name in (children) {
+            AbstractDataProvider child = root.getChildProvider(name);
+            assertEq(True, child.supportsPipelineProcessor(),
+                sprintf("child %y should support pipeline processor", name));
+            assertEq(True, child.getProcessorCapabilities() > 0,
+                sprintf("child %y should have processor capabilities", name));
+        }
+    }
+
+    # --- Expression Builder Tests ---
+
+    filterWhereCond() {
+        # construct filter with a DataProviderExpression hash via where_cond
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+        };
+        QoreFilterRecordsProcessor proc({"where_cond": expr});
+
+        hash<auto> active = {"name": "Alice", "status": "active"};
+        hash<auto> inactive = {"name": "Bob", "status": "inactive"};
+        assertEq(active, proc.processRecord(active));
+        assertNothing(proc.processRecord(inactive));
+
+        # test with a more complex expression (AND with two conditions)
+        hash<DataProviderExpression> complex_expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">",
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 100),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor proc2({"where_cond": complex_expr});
+
+        assertEq({"status": "active", "amount": 200}, proc2.processRecord({"status": "active", "amount": 200}));
+        assertNothing(proc2.processRecord({"status": "active", "amount": 50}));
+        assertNothing(proc2.processRecord({"status": "inactive", "amount": 200}));
+    }
+
+    filterWhereCondExclusive() {
+        # verify where_cond exclusive_with metadata is set correctly in the constructor options
+        hash<DataProviderOptionInfo> wc_opt = QoreFilterRecordsProcessor::ConstructorOptions.where_cond;
+        assertEq(True, wc_opt.exclusive_with.contains("expression"));
+        assertEq(True, wc_opt.exclusive_with.contains("field"));
+        assertEq(True, wc_opt.exclusive_with.contains("operator"));
+        assertEq(True, wc_opt.exclusive_with.contains("value"));
+
+        # verify expression exclusive_with includes where_cond
+        hash<DataProviderOptionInfo> expr_opt = QoreFilterRecordsProcessor::ConstructorOptions.expression;
+        assertEq(True, expr_opt.exclusive_with.contains("where_cond"));
+
+        # verify field/operator/value exclusive_with include where_cond
+        assertEq(True, QoreFilterRecordsProcessor::ConstructorOptions.field.exclusive_with.contains("where_cond"));
+        assertEq(True,
+            QoreFilterRecordsProcessor::ConstructorOptions.operator.exclusive_with.contains("where_cond"));
+        assertEq(True,
+            QoreFilterRecordsProcessor::ConstructorOptions.value.exclusive_with.contains("where_cond"));
+    }
+
+    # --- Pipeline Processor Type API Tests ---
+
+    pipelineProcessorTypeApi() {
+        # pipeline processor providers should support the type API
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        AbstractDataProvider filter_prov = root.getChildProvider("filter");
+
+        # filter processor returns NOTHING for input/output types (accepts any record type)
+        # but the call should succeed (not throw)
+        auto input_type = filter_prov.getPipelineProcessorInputType();
+        auto output_type = filter_prov.getPipelineProcessorOutputType();
+        # default implementations return NOTHING (any type)
+        assertNothing(input_type);
+        assertNothing(output_type);
+    }
+
+    pipelineProcessorTypeApiWithOptions() {
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        AbstractDataProvider filter_prov = root.getChildProvider("filter");
+
+        # with options variants should also succeed
+        auto input_type = filter_prov.getPipelineProcessorInputTypeWithOptions({"test": "data"});
+        auto output_type = filter_prov.getPipelineProcessorOutputTypeWithOptions({"test": "data"});
+        assertNothing(input_type);
+        assertNothing(output_type);
+    }
+
+    pipelineProcessorTypeApiGuard() {
+        # calling type API on a non-processor data provider should throw
+        NonProcessorDataProvider prov();
+        assertThrows("INVALID-OPERATION", sub () {
+            prov.getPipelineProcessorInputType();
+        });
+        assertThrows("INVALID-OPERATION", sub () {
+            prov.getPipelineProcessorOutputType();
+        });
+        assertThrows("INVALID-OPERATION", sub () {
+            prov.getPipelineProcessorInputTypeWithOptions();
+        });
+        assertThrows("INVALID-OPERATION", sub () {
+            prov.getPipelineProcessorOutputTypeWithOptions();
+        });
+    }
+
+    # --- Dynamic Options Tests ---
+
+    dynamicOptionsFilterAction() {
+        # the filter-records action should have data_dependent_options set
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+        hash<DataProviderActionInfo> filter_action = actions."filter-records";
+        assertEq(True, filter_action.data_dependent_options);
+
+        # the action should have data_provider_info with expressions
+        assertEq(True, exists filter_action.data_provider_info);
+        assertEq("QoreFilterRecordsProcessor", filter_action.data_provider_info.type);
+        assertEq(True, filter_action.data_provider_info.supports_pipeline_processor);
+        assertEq(True, exists filter_action.data_provider_info.expressions);
+        assertEq(DataProviderGenericExpressions, filter_action.data_provider_info.expressions);
+    }
+
+    dynamicOptionsPipelineProcessorDispatch() {
+        # test that tryGetActionOptionsForPipelineProcessorWithOptions works on the filter processor
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        AbstractDataProvider filter_prov = root.getChildProvider("filter");
+
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+        hash<DataProviderActionInfo> filter_action = actions."filter-records";
+
+        # call the dynamic options method
+        *hash<string, hash<ActionOptionInfo>> dynamic_opts =
+            filter_prov.tryGetActionOptionsForPipelineProcessorWithOptions(filter_action);
+        assertEq(True, exists dynamic_opts);
+
+        # the where_cond option should be present with correct attributes
+        assertEq(True, dynamic_opts.hasKey("where_cond"));
+        assertEq(True, dynamic_opts.where_cond.supports_expressions);
+        assertEq(False, dynamic_opts.where_cond.supports_custom_values);
+        assertEq(False, dynamic_opts.where_cond.server_expression_handling);
+        assertEq(True, dynamic_opts.where_cond.preselected);
+        assertEq("constructor", dynamic_opts.where_cond.loc);
+
+        # also test the dispatch through tryGetActionOptionsWithOptions
+        *hash<string, hash<ActionOptionInfo>> dispatched_opts =
+            filter_prov.tryGetActionOptionsWithOptions(filter_action);
+        assertEq(True, exists dispatched_opts);
+        assertEq(True, dispatched_opts.hasKey("where_cond"));
+        assertEq(True, dispatched_opts.where_cond.supports_expressions);
+    }
+}

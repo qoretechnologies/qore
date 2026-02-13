@@ -373,6 +373,107 @@ class StringTestType inherits Type {
     }
 }
 
+#! Test processor using the new return-based API
+class ReturnBasedProcessor inherits AbstractDataProcessor {
+    private *auto processRecordImpl(auto record) {
+        return record + {"processed": True};
+    }
+
+    private int getProcessorCapabilitiesImpl() {
+        return DPC_TRANSFORM;
+    }
+}
+
+#! Test filter processor using the new return-based API
+class ReturnBasedFilterProcessor inherits AbstractDataProcessor {
+    private *auto processRecordImpl(auto record) {
+        if (record.skip) {
+            return;
+        }
+        return record;
+    }
+
+    private int getProcessorCapabilitiesImpl() {
+        return DPC_FILTER;
+    }
+}
+
+#! Test expand processor using the new return-based API
+class ReturnBasedExpandProcessor inherits AbstractDataProcessor {
+    private *auto processRecordImpl(auto record) {
+        return (record + {"copy": 1}, record + {"copy": 2});
+    }
+
+    private int getProcessorCapabilitiesImpl() {
+        return DPC_EXPAND;
+    }
+}
+
+#! Test aggregator using the new return-based API
+class ReturnBasedAggregateProcessor inherits AbstractDataProcessor {
+    private {
+        list<auto> buffer;
+    }
+
+    private *auto processRecordImpl(auto record) {
+        push buffer, record;
+        # aggregate - don't output until flushed
+        return;
+    }
+
+    private *list<auto> flushRecordsImpl() {
+        if (!buffer) {
+            return;
+        }
+        *list<auto> result = buffer;
+        remove buffer;
+        return result;
+    }
+
+    private int getProcessorCapabilitiesImpl() {
+        return DPC_AGGREGATE;
+    }
+}
+
+#! Test processor that overrides neither submitImpl nor processRecordImpl
+class BrokenProcessor inherits AbstractDataProcessor {
+}
+
+#! Test data provider that supports pipeline processing
+class TestPipelineDataProvider inherits AbstractDataProvider {
+    private {
+        string pfx;
+    }
+
+    constructor(string pfx) {
+        self.pfx = pfx;
+    }
+
+    string getName() {
+        return "TestPipelineDataProvider";
+    }
+
+    private *auto processRecordImpl(auto record) {
+        return map {pfx + "-" + $1.key: $1.value}, record.pairIterator();
+    }
+
+    private int getProcessorCapabilitiesImpl() {
+        return DPC_TRANSFORM;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "test-pipeline",
+            "supports_pipeline_processor": True,
+            "processor_capabilities": DPC_TRANSFORM,
+        };
+    }
+}
+
 public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
@@ -385,6 +486,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("compat test", \compatTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
+        addTestCase("return-based processor API test", \returnBasedApiTest());
         addTestCase("type cache test", \typeCacheTest());
         addTestCase("test", \dataProviderTest());
 
@@ -708,7 +810,7 @@ public class DataProviderTest inherits QUnit::Test {
             "desc": "",
         });
 
-        assertEq(my_app, DataProviderActionCatalog::getAllApps()[0]);
+        assertEq(my_app, DataProviderActionCatalog::getApp(app));
 
         string act = get_random_string();
 
@@ -840,10 +942,12 @@ public class DataProviderTest inherits QUnit::Test {
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
-        assertEq(action, DataProviderActionCatalog::getAllActions()[0]);
-        assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_action_context);
-        assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].action_context);
-        assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_child_eligibility_check);
+        list<hash<DataProviderActionInfo>> all_actions = DataProviderActionCatalog::getActions(app);
+        assertEq(1, all_actions.size());
+        assertEq(action, all_actions[0]);
+        assertTrue(all_actions[0].requires_action_context);
+        assertEq("pipeline", all_actions[0].action_context);
+        assertTrue(all_actions[0].requires_child_eligibility_check);
 
         list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::searchAppRegex(app);
         assertEq(1, apps.size());
@@ -2373,6 +2477,354 @@ public class DataProviderTest inherits QUnit::Test {
                 "only the forced final report should exist when both thresholds are 0");
             assertEq(20, collector.collected_metrics[0].total_records_submitted);
             assertTrue(collector.shutdown_called);
+        }
+    }
+
+    #! Tests for the return-based processor API, data-provider-as-processor, and action catalog additions
+    /** @since DataProvider 3.3
+    */
+    returnBasedApiTest() {
+        # Test return-based processor - processRecord
+        {
+            ReturnBasedProcessor proc();
+            *auto result = proc.processRecord({"a": 1, "b": 2});
+            assertEq({"a": 1, "b": 2, "processed": True}, result);
+        }
+
+        # Test return-based filter processor
+        {
+            ReturnBasedFilterProcessor proc();
+            *auto result = proc.processRecord({"x": 1});
+            assertEq({"x": 1}, result);
+            # test filtering
+            result = proc.processRecord({"x": 1, "skip": True});
+            assertNothing(result);
+        }
+
+        # Test processRecords (list)
+        {
+            ReturnBasedProcessor proc();
+            *list<auto> results = proc.processRecords(({"a": 1}, {"a": 2}));
+            assertEq(2, results.lsize());
+            assertEq({"a": 1, "processed": True}, results[0]);
+            assertEq({"a": 2, "processed": True}, results[1]);
+        }
+
+        # Test processRecords with filter
+        {
+            ReturnBasedFilterProcessor proc();
+            *list<auto> results = proc.processRecords(({"x": 1}, {"x": 2, "skip": True}, {"x": 3}));
+            assertEq(2, results.lsize());
+            assertEq({"x": 1}, results[0]);
+            assertEq({"x": 3}, results[1]);
+        }
+
+        # Test processRecordsBulk (hash-of-lists)
+        {
+            ReturnBasedProcessor proc();
+            *hash<auto> result = proc.processRecordsBulk({"a": (1, 2), "b": ("x", "y")});
+            # processRecordsBulk default passes hash-of-lists through processRecordImpl as a single unit
+            # the ReturnBasedProcessor adds "processed": True to the hash
+            assertEq(True, result.hasKey("processed"));
+        }
+
+        # Test flushRecords on aggregator
+        {
+            ReturnBasedAggregateProcessor proc();
+            # process some records - should not produce output
+            *auto result = proc.processRecord({"val": 1});
+            assertNothing(result);
+            result = proc.processRecord({"val": 2});
+            assertNothing(result);
+            # flush should return aggregated records
+            *list<auto> flush_results = proc.flushRecords();
+            assertEq(2, flush_results.lsize());
+            assertEq({"val": 1}, flush_results[0]);
+            assertEq({"val": 2}, flush_results[1]);
+            # second flush should return nothing
+            flush_results = proc.flushRecords();
+            assertNothing(flush_results);
+        }
+
+        # Test processRecord on old closure-based processor (backwards compat bridge)
+        {
+            TestRecordProcessor proc("X");
+            *auto result = proc.processRecord({"a": 1, "b": 2});
+            assertEq({"X-a": 1, "X-b": 2}, result);
+        }
+
+        # Test submitAndCollect on old closure-based processor
+        {
+            TestRecordProcessor proc("Y");
+            *list<auto> results = proc.submitAndCollect({"a": 1});
+            assertEq(1, results.lsize());
+            assertEq({"Y-a": 1}, results[0]);
+        }
+
+        # Test submitAndCollect on DuplicateRecordProcessor
+        {
+            DuplicateRecordProcessor proc("X", "Y");
+            *list<auto> results = proc.submitAndCollect({"a": 1, "b": 2});
+            assertEq(2, results.lsize());
+            assertEq({"X-a": 1, "X-b": 2}, results[0]);
+            assertEq({"Y-a": 1, "Y-b": 2}, results[1]);
+        }
+
+        # Test flushAndCollect on flush processor
+        {
+            TestFlushRecordProcessor proc("Z", NOTHING, NOTHING, {"flushed": True});
+            *list<auto> flush_results = proc.flushAndCollect();
+            assertEq(1, flush_results.lsize());
+            assertEq({"flushed": True}, flush_results[0]);
+        }
+
+        # Test processor capabilities
+        {
+            ReturnBasedProcessor proc();
+            assertEq(DPC_TRANSFORM, proc.getProcessorCapabilities());
+
+            ReturnBasedFilterProcessor fproc();
+            assertEq(DPC_FILTER, fproc.getProcessorCapabilities());
+
+            ReturnBasedExpandProcessor eproc();
+            assertEq(DPC_EXPAND, eproc.getProcessorCapabilities());
+
+            ReturnBasedAggregateProcessor aproc();
+            assertEq(DPC_AGGREGATE, aproc.getProcessorCapabilities());
+        }
+
+        # Test capability constants
+        {
+            assertEq(1, DPC_TRANSFORM);
+            assertEq(2, DPC_FILTER);
+            assertEq(4, DPC_EXPAND);
+            assertEq(8, DPC_AGGREGATE);
+            assertEq(16, DPC_SINK);
+            # test bitfield combination
+            int caps = DPC_TRANSFORM | DPC_FILTER;
+            assertEq(3, caps);
+        }
+
+        # Test ProcessorCapabilityNameMap
+        {
+            assertEq("TRANSFORM", ProcessorCapabilityNameMap{DPC_TRANSFORM});
+            assertEq("FILTER", ProcessorCapabilityNameMap{DPC_FILTER});
+            assertEq("EXPAND", ProcessorCapabilityNameMap{DPC_EXPAND});
+            assertEq("AGGREGATE", ProcessorCapabilityNameMap{DPC_AGGREGATE});
+            assertEq("SINK", ProcessorCapabilityNameMap{DPC_SINK});
+        }
+
+        # Test hashListToRecords utility
+        {
+            hash<auto> hl = {"a": (1, 2, 3), "b": ("x", "y", "z")};
+            list<auto> records = AbstractDataProcessor::hashListToRecords(hl);
+            assertEq(3, records.lsize());
+            assertEq({"a": 1, "b": "x"}, records[0]);
+            assertEq({"a": 2, "b": "y"}, records[1]);
+            assertEq({"a": 3, "b": "z"}, records[2]);
+        }
+
+        # Test recordsToHashList utility
+        {
+            list<auto> records = ({"a": 1, "b": "x"}, {"a": 2, "b": "y"});
+            hash<auto> hl = AbstractDataProcessor::recordsToHashList(records);
+            assertEq({"a": (1, 2), "b": ("x", "y")}, hl);
+        }
+
+        # Test hashListToRecords and recordsToHashList round-trip
+        {
+            hash<auto> orig = {"name": ("Alice", "Bob"), "age": (30, 25)};
+            list<auto> records = AbstractDataProcessor::hashListToRecords(orig);
+            hash<auto> roundtrip = AbstractDataProcessor::recordsToHashList(records);
+            assertEq(orig, roundtrip);
+        }
+
+        # Test return-based processor in pipeline
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "test-return-based-pipeline",
+            });
+            ReturnBasedProcessor proc1();
+            RecordProcessorSink sink();
+            pipe.append(proc1);
+            pipe.append(sink);
+            pipe.submit({"a": 1});
+            pipe.waitDone();
+            assertEq(1, sink.recs.lsize());
+            assertEq({"a": 1, "processed": True}, sink.recs[0]);
+        }
+
+        # Test mixing old and new processors in pipeline
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "test-mixed-pipeline",
+            });
+            TestRecordProcessor old_proc("X");
+            ReturnBasedProcessor new_proc();
+            RecordProcessorSink sink();
+            pipe.append(old_proc);
+            pipe.append(new_proc);
+            pipe.append(sink);
+            pipe.submit({"a": 1});
+            pipe.waitDone();
+            assertEq(1, sink.recs.lsize());
+            assertEq({"X-a": 1, "processed": True}, sink.recs[0]);
+        }
+
+        # Test data provider as pipeline processor
+        {
+            TestPipelineDataProvider dp("P");
+            assertTrue(dp.supportsPipelineProcessor());
+            assertEq(DPC_TRANSFORM, dp.getProcessorCapabilities());
+
+            # test in pipeline
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "test-dp-as-processor-pipeline",
+            });
+            pipe.append(dp);
+            RecordProcessorSink sink();
+            pipe.append(sink);
+            pipe.submit({"a": 1, "b": 2});
+            pipe.waitDone();
+            assertEq(1, sink.recs.lsize());
+            assertEq({"P-a": 1, "P-b": 2}, sink.recs[0]);
+        }
+
+        # Test that plain AbstractDataProvider throws on processRecord
+        {
+            TestPipelineDataProvider dp("Q");
+            # TestPipelineDataProvider overrides processRecordImpl, so it should work
+            *auto result = dp.processRecord({"x": 1});
+            assertEq({"Q-x": 1}, result);
+        }
+
+        # Negative test: recursion guard - processor with neither method overridden
+        {
+            BrokenProcessor proc();
+            assertThrows("PROCESSOR-ERROR", \proc.processRecord(), ({"a": 1},));
+        }
+
+        # Negative test: recursion guard via submit (old API)
+        {
+            BrokenProcessor proc();
+            code enqueue = sub (auto data) {};
+            assertThrows("PROCESSOR-ERROR", \proc.submit(), (enqueue, {"a": 1}));
+        }
+
+        # Test DPAT_PIPELINE_PROCESSOR constant
+        {
+            assertEq(10, DPAT_PIPELINE_PROCESSOR);
+            assertEq("supports_pipeline_processors", ActionCodeFlagMap{DPAT_PIPELINE_PROCESSOR});
+            assertEq("supports_pipeline_processor", ActionAttrMap{DPAT_PIPELINE_PROCESSOR});
+            assertEq("PIPELINE_PROCESSOR", ActionNameMap{DPAT_PIPELINE_PROCESSOR});
+        }
+
+        # Test registering a pipeline processor action
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test",
+                "short_desc": "test",
+                "desc": "test action catalog pipeline processor",
+                "logo": "data",
+                "logo_mime_type": MimeTypeSvg,
+                "logo_file_name": "test.svg",
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # negative test: pipeline processor action without capabilities
+            assertThrows("ACTION-ERROR", \DataProviderActionCatalog::registerAction(),
+                (<DataProviderActionInfo>{
+                    "app": app,
+                    "action": "bad-action",
+                    "path": "/test",
+                    "display_name": "Bad Processor",
+                    "short_desc": "test",
+                    "desc": "test",
+                    "action_code": DPAT_PIPELINE_PROCESSOR,
+                },));
+
+            # positive test: pipeline processor action with capabilities
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": app,
+                "action": "good-processor",
+                "path": "/test-proc",
+                "display_name": "Good Processor",
+                "short_desc": "test processor",
+                "desc": "test pipeline processor action",
+                "action_code": DPAT_PIPELINE_PROCESSOR,
+                "processor_capabilities": DPC_TRANSFORM,
+            });
+
+            # verify action was registered
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(app, "good-processor");
+            assertTrue(action.val());
+            assertEq(DPAT_PIPELINE_PROCESSOR, action.action_code);
+            assertEq(DPC_TRANSFORM, action.processor_capabilities);
+
+            # verify supports_pipeline_processors flag on app
+            *hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getApp(app);
+            assertTrue(app_info.supports_pipeline_processors);
+
+            # verify default input/output data types
+            assertTrue(action.input_data_types{DPAD_NORMAL});
+            assertTrue(action.input_data_types{DPAD_RECORD_SET});
+            assertEq(DPAD_NORMAL, action.output_data_type);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
+        # Test DataProviderInfo and DataProviderSummaryInfo pipeline fields
+        {
+            TestPipelineDataProvider dp("T");
+            hash<DataProviderSummaryInfo> summary = dp.getSummaryInfo();
+            assertTrue(summary.supports_pipeline_processor);
+            assertEq(DPC_TRANSFORM, summary.processor_capabilities);
+        }
+
+        # Test supportsBulkApi default returns True
+        {
+            ReturnBasedProcessor proc();
+            assertTrue(proc.supportsBulkApi());
+        }
+
+        # Test expand processor in pipeline
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "test-expand-pipeline",
+            });
+            ReturnBasedExpandProcessor proc();
+            RecordProcessorSink sink();
+            pipe.append(proc);
+            pipe.append(sink);
+            pipe.submit({"val": 1});
+            pipe.waitDone();
+            assertEq(2, sink.recs.lsize());
+            assertEq({"val": 1, "copy": 1}, sink.recs[0]);
+            assertEq({"val": 1, "copy": 2}, sink.recs[1]);
+        }
+
+        # Test aggregator in pipeline
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "test-aggregate-pipeline",
+            });
+            ReturnBasedAggregateProcessor proc();
+            RecordProcessorSink sink();
+            pipe.append(proc);
+            pipe.append(sink);
+            pipe.submit({"val": 1});
+            pipe.submit({"val": 2});
+            pipe.submit({"val": 3});
+            pipe.waitDone();
+            # flushed records should flow through to sink
+            assertEq(3, sink.recs.lsize());
+            assertEq({"val": 1}, sink.recs[0]);
+            assertEq({"val": 2}, sink.recs[1]);
+            assertEq({"val": 3}, sink.recs[2]);
         }
     }
 
