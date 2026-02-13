@@ -60,19 +60,19 @@ public const ProcessorCapabilityNameMap = {
 };
 
 #! Defines an abstract class for accepting data and outputting optionally transformed or filtered data
-public class AbstractDataProcessor {
+public class AbstractDataProcessor inherits Qore::Serializable {
     private {
         #! Thread-local data to set before running the processor
-        *hash<auto> thread_local_data;
+        transient *hash<auto> thread_local_data;
 
         #! Thread-local data keys from \a thread_local_data
-        *list<string> thread_local_data_keys;
+        transient *list<string> thread_local_data_keys;
 
         #! Recursion guard for bidirectional default dispatch between submitImpl and processRecordImpl
-        bool in_dispatch = False;
+        transient bool in_dispatch = False;
 
         #! Recursion guard for bidirectional default dispatch between flushImpl and flushRecordsImpl
-        bool in_flush_dispatch = False;
+        transient bool in_flush_dispatch = False;
     }
 
     #! Sets thread-local data to set before running the processor
