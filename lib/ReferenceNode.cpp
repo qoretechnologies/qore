@@ -266,7 +266,10 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     }
 
     // check lvalue, and convert "normal" local vars to thread-safe local vars
+    // also: if the variable has a narrowed type, use the declared type for the reference
+    // because references allow write-back and narrowed types are too restrictive
     QoreValue n = lvexp;
+    bool direct_var_ref = true;
     while (true) {
         qore_type_t ntype = n.getType();
         // references to objects members and static class vars are already thread-safe
@@ -274,10 +277,18 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
             break;
         }
         if (ntype == NT_VARREF) {
-            n.get<VarRefNode>()->setThreadSafe();
+            VarRefNode* vr = n.get<VarRefNode>();
+            vr->setThreadSafe();
+            // if the type was narrowed and this is a direct variable reference (not a complex
+            // lvalue like \hash.key), use the declared type for the reference type because
+            // references allow write-back and narrowed types are too restrictive
+            if (direct_var_ref && (parse_context.pflag & PF_NARROWED_TYPE)) {
+                argTypeInfo = vr->parseGetTypeInfoForReference();
+            }
             break;
         }
         assert(ntype == NT_OPERATOR);
+        direct_var_ref = false;
         {
             QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode());
             if (op) {
@@ -291,9 +302,14 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     }
 
     if (argTypeInfo) {
+        // if argTypeInfo is already a reference type (including *reference<T>), extract the
+        // inner type to avoid creating nested reference types like reference<*reference<T>>
+        // (e.g., \info where info is *reference<hash<auto>>)
+        const QoreTypeInfo* ref_target = QoreTypeInfo::getReferenceTarget(argTypeInfo);
         // use the actual type info for the reference type, including autoTypeInfo
         // reference<auto> is different from bare reference
-        parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(argTypeInfo);
+        parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(
+            ref_target ? ref_target : argTypeInfo);
     } else {
         parse_context.typeInfo = nullptr;
     }
