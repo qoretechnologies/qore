@@ -775,6 +775,23 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new customers and new sales orders
       - action catalog integration with 27 actions and 2 triggers
       - connection support with \c unleashed:// URL scheme
+    - @ref squarerestclientintro "SquareRestClient" module
+      - new module providing a REST client for Square's payments and commerce API
+      - supports OAuth2 authentication with bearer tokens
+      - provides SquareRestConnection for connection management with \c squareres:// URL scheme
+    - @ref squaredataproviderintro "SquareDataProvider" module
+      - new module providing a data provider API for Square payments and commerce
+      - customer management (create, update, list, find by ID, add/remove from groups)
+      - order management (create, create paid, search, batch retrieve)
+      - payment management (list, get, complete, refund)
+      - invoice management (create, send/publish)
+      - booking/appointment management (create, list)
+      - catalog and service search
+      - inventory management (adjustments and physical counts)
+      - refund listing with filtering
+      - polling-based event triggers for customers, orders, payments, appointments, catalog items, invoices, and events
+      - action catalog integration with 23 actions and 7 triggers
+      - connection support with \c squareres:// URL scheme
     - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
       \c .meta.json metadata files during the build, providing machine-readable documentation for
       all builtin classes, methods, functions, constants, hashdecls, and enums
