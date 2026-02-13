@@ -33,7 +33,11 @@ class ReadTest inherits QUnit::Test {
         ReadOnlyFile fr(file);
         fr.setPos();
         string s;
-        while (exists (*string line1 = fr.readLine())) {
+        while (True) {
+            *string line1 = fr.readLine();
+            if (!exists line1) {
+                break;
+            }
             s += line1;
         }
 

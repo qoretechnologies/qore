@@ -1399,7 +1399,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
     private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
         bool rv;
-        while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
+        while (!wsc.stop_flag) {
+            *binary d = wsc.pollDataImmediate();
+            if (!exists d) {
+                break;
+            }
             sendFrame(wsc, sock, d);
             if (d && !rv) {
                 rv = True;
