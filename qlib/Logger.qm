@@ -421,6 +421,18 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
         #printf("<E:%y, tid: %d> ", id, gettid());
     }
 
+    #! Submits a worker task to the thread pool
+    /** This method ensures that each closure captures its own copy of the parameters,
+        avoiding the shared closure variable issue when called in a loop.
+
+        @param worker_id unique identifier for the worker
+        @param appender the appender to process events for
+        @param events the list of events to process
+    */
+    private:internal submitWorker(string worker_id, LoggerAppender appender, list<auto> events) {
+        threadPool.submit(sub() { worker(worker_id, appender, events); });
+    }
+
     #! Creates the object
     /** @param tp worker @ref Qore::Thread::ThreadPool "ThreadPool" where loggging events are submitted
         @param max_threads max.number of worker threads, default value is \c -1, i.e. unlimited
@@ -513,10 +525,6 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
 
         # now try push pending
         foreach string id in (keys pendingEvents) {
-            # remove meanwhile finished if any
-            while (finishedEvents.size() > 0) {
-                remove processingEvents{finishedEvents.get(-1)};
-            }
             # is available a free worker thread ?
             if (maxThreads >= 0 && processingEvents.size() >= maxThreads) {
                 return;
@@ -527,10 +535,11 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
             }
             hash<auto> e = remove pendingEvents{id};
             processingEvents{id} = e;
-            # When passing "id" then no copy is passed to submit pool queue and worker may get the wrong value
-            # so we must pass value in new variable which won't change meanwhile when the value is to be used.
-            # It is a feature of the "submit" implementation related to parameter passing
-            threadPool.submit(sub() { worker(e.id, e.appender, e.events); });
+            # Use submitWorker() to ensure each worker closure gets its own copy of the
+            # parameters; closures created in a loop capture shared variable references,
+            # so direct threadPool.submit() with a closure here would cause all workers
+            # to see the same (last) value of the loop variable
+            submitWorker(e.id, e.appender, e.events);
         }
     }
 
