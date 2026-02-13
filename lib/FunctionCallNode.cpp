@@ -632,7 +632,8 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
 int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     assert(fe);
-    return parseArgs(parse_context, fe->getFunction(), fe->getNamespace());
+    QoreFunction* func = fe->getFunction();
+    return parseArgs(parse_context, func, fe->getNamespace());
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {

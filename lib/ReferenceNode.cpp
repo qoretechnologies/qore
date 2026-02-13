@@ -196,9 +196,11 @@ ReferenceNode* ParseReferenceNode::evalToRef(ExceptionSink* xsink) const {
     QoreValue nv = doPartialEval(lvexp, self, lvalue_id, qc, xsink);
     //printd(5, "ParseReferenceNode::evalToRef() this: %p nv: %p lvexp: %p lvalue_id: %p\n", this, nv, lvexp,
     //  lvalue_id);
-    return nv
-        ? new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc)
-        : nullptr;
+    if (nv) {
+        const QoreTypeInfo* refti = QoreTypeInfo::getUniqueReturnComplexReference(typeInfo);
+        return new ReferenceNode(nv, refti, self, lvalue_id, qc);
+    }
+    return nullptr;
 }
 
 ReferenceNode* ParseReferenceNode::evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const {
@@ -263,7 +265,6 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
         return -1;
     }
 
-    //printd(5, "ParseReferenceNode::parseInitImpl() lv: '%s'\n", QoreTypeInfo::getName(argTypeInfo));
     // check lvalue, and convert "normal" local vars to thread-safe local vars
     QoreValue n = lvexp;
     while (true) {
@@ -289,7 +290,9 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
         n = op->getLeft();
     }
 
-    if (QoreTypeInfo::hasType(argTypeInfo)) {
+    if (argTypeInfo) {
+        // use the actual type info for the reference type, including autoTypeInfo
+        // reference<auto> is different from bare reference
         parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(argTypeInfo);
     } else {
         parse_context.typeInfo = nullptr;

@@ -184,7 +184,8 @@ static void add_args(QoreStringNode &desc, const QoreListNode* args) {
     for (unsigned i = 0; i < args->size(); ++i) {
         const QoreValue n = args->retrieveEntry(i);
         QoreString scratch;
-        desc.concat(n.getFullTypeName(true, scratch));
+        const char* tname = n.getFullTypeName(true, scratch);
+        desc.concat(tname);
         if (i != (args->size() - 1))
             desc.concat(", ");
     }
@@ -310,7 +311,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             return;
         }
     } else {
-    if (findVariant(func, variant, cctx)) {
+        if (findVariant(func, variant, cctx)) {
             return;
         }
         // get default argument list of variant
@@ -1222,9 +1223,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                     rc = QTI_IGNORE;
                 } else {
                     rc = QoreTypeInfo::runtimeAcceptsValue(t, n);
-                    //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) i: %d param: %s arg: %s rc: %d\n",
-                    //    this, getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t), n.getFullTypeName(),
-                    //    rc);
                     if (rc == QTI_NOT_EQUAL) {
                         ok = false;
                         break;
