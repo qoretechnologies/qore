@@ -117,6 +117,13 @@ public hashdecl DataProviderAppInfo {
     */
     bool supports_delete = False;
 
+    #! If the app supports pipeline processor actions
+    /** This attribute is filled automatically when actions are registered
+
+        @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processors = False;
+
     #! Was the application added dynamically?
     bool dynamic = False;
 
@@ -127,38 +134,33 @@ public hashdecl DataProviderAppInfo {
     *hash<auto> info;
 }
 
-/** @defgroup dp_action_type DataProvider Action Type Codes
+#! Data Provider Action Type Codes
+/** Each action implements only one type, so these codes do not make up a bitfield
 
-    Each action implements only one type, so these codes do not make up a bitfield
+    @since %DataProvider 3.3 converted from individual constants to an enum
 */
-#/@{
-#! Data Provider Action Type: wait for an event
-public const DPAT_EVENT = 1;
-
-#! Data Provider Action Type: make an API call
-public const DPAT_API = 2;
-
-#! Data Provider Action Type: send a message
-public const DPAT_SEND_MESSAGE = 3;
-
-#! Data Provider Action Type: find all matching records
-public const DPAT_FIND = 4;
-
-#! Data Provider Action Type: find a single record
-public const DPAT_FIND_SINGLE = 5;
-
-#! Data Provider Action Type: create a record
-public const DPAT_CREATE = 6;
-
-#! Data Provider Action Type: upsert a record
-public const DPAT_UPSERT = 7;
-
-#! Data Provider Action Type: update a record
-public const DPAT_UPDATE = 8;
-
-#! Data Provider Action Type: delete a record
-public const DPAT_DELETE = 9;
-#/@}
+public enum DataProviderActionType {
+    #! Wait for an event
+    DPAT_EVENT = 1,
+    #! Make an API call
+    DPAT_API = 2,
+    #! Send a message
+    DPAT_SEND_MESSAGE = 3,
+    #! Find all matching records
+    DPAT_FIND = 4,
+    #! Find a single record
+    DPAT_FIND_SINGLE = 5,
+    #! Create a record
+    DPAT_CREATE = 6,
+    #! Upsert a record
+    DPAT_UPSERT = 7,
+    #! Update a record
+    DPAT_UPDATE = 8,
+    #! Delete a record
+    DPAT_DELETE = 9,
+    #! Pipeline processor
+    DPAT_PIPELINE_PROCESSOR = 10
+}
 
 #! Maps DPAT_* action type codes to app action flags
 public const ActionCodeFlagMap = {
@@ -171,6 +173,7 @@ public const ActionCodeFlagMap = {
     DPAT_UPSERT: "supports_upsert",
     DPAT_UPDATE: "supports_update",
     DPAT_DELETE: "supports_delete",
+    DPAT_PIPELINE_PROCESSOR: "supports_pipeline_processors",
 };
 
 #! List of app action flags
@@ -187,6 +190,7 @@ public const ActionAttrMap = {
     DPAT_UPSERT: "supports_upsert",
     DPAT_UPDATE: "supports_update",
     DPAT_DELETE: "supports_delete",
+    DPAT_PIPELINE_PROCESSOR: "supports_pipeline_processor",
 };
 
 #! Maps DPAT_* action type codes to a user-friendly name
@@ -200,6 +204,7 @@ public const ActionNameMap = {
     DPAT_UPSERT: "UPSERT",
     DPAT_UPDATE: "UPDATE",
     DPAT_DELETE: "DELETE",
+    DPAT_PIPELINE_PROCESSOR: "PIPELINE_PROCESSOR",
 };
 
 #! Set of actions that support search expressions
@@ -364,7 +369,7 @@ public hashdecl DataProviderActionInfo {
     string desc;
 
     #! Action type code
-    /** @see DPAT_* action type codes for valid values
+    /** @see DataProviderActionType for valid values
     */
     int action_code;
 
@@ -449,6 +454,11 @@ public hashdecl DataProviderActionInfo {
 
     #! Free-form metadata for the action
     *hash<auto> metadata;
+
+    #! Processor capability bitfield (DPC_* constants) for pipeline processor actions
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
 }
 
 #! DataProvider action and application catalog class
@@ -674,8 +684,12 @@ public class DataProviderActionCatalog {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
                 missing, action);
         }
-        if (action.action_code < 1 || action.action_code > DPAT_DELETE) {
+        if (!ActionCodeFlagMap.hasKey(action.action_code)) {
             throw "ACTION-ERROR", sprintf("invalid action code %y in action: %y", action.action_code, action);
+        }
+        if (action.action_code == DPAT_PIPELINE_PROCESSOR && !action.processor_capabilities) {
+            throw "ACTION-ERROR", sprintf("pipeline processor action %y/%y must have processor_capabilities set",
+                action.app, action.action);
         }
         if (DataProviderActionCatalog::checkName(action.action)) {
             throw "APP-ERROR", sprintf("Action name %y is illegal; only A-Za-z0-9_- are accepted", action.action);
@@ -725,6 +739,13 @@ public class DataProviderActionCatalog {
                     };
                     break;
 
+                case DPAT_PIPELINE_PROCESSOR:
+                    action.input_data_types = {
+                        DPAD_NORMAL: True,
+                        DPAD_RECORD_SET: True,
+                    };
+                    break;
+
                 default:
                     action.input_data_types = {
                         DPAD_NORMAL: True,
@@ -741,6 +762,10 @@ public class DataProviderActionCatalog {
 
                 case DPAT_CREATE:
                     action.output_data_type = DPAD_RECORD_SET;
+                    break;
+
+                case DPAT_PIPELINE_PROCESSOR:
+                    action.output_data_type = DPAD_NORMAL;
                     break;
 
                 default:

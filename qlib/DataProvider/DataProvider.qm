@@ -53,6 +53,162 @@ module DataProvider {
 
         # to workaround #4048 (circular initialization error)
         AbstractDataProviderType::anyDataType = new QoreDataType(AutoType);
+
+        # register the Qore processors data provider factory
+        DataProvider::registerFactory(new QoreProcessorsDataProviderFactory());
+
+        # register the Qore processors app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": QoreApp::AppName,
+            "display_name": "Qore",
+            "short_desc": "Built-in data pipeline processors",
+            "desc": "Built-in Qore data pipeline processors for filtering, transforming, "
+                "and manipulating records in data pipelines",
+            "logo": QoreApp::QoreLogo,
+            "logo_file_name": "qore-q-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::DataTransformation,),
+        });
+
+        # register filter-records action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/filter",
+            "action": "filter-records",
+            "display_name": "Filter Records",
+            "short_desc": "Filter records by expression or field comparison",
+            "desc": "Filter pipeline records using a DPQL expression or a simple field/operator/value "
+                "comparison; matching records pass through, non-matching records are dropped",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_FILTER,
+            "cls": "DataProvider::QoreFilterRecordsProcessor",
+            "groups": ("Filtering",),
+            "data_dependent_options": True,
+            "data_provider_info": <DataProviderInfo>{
+                "type": "QoreFilterRecordsProcessor",
+                "supports_pipeline_processor": True,
+                "expressions": DataProviderGenericExpressions,
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreFilterRecordsProcessor::ConstructorOptions, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register select-fields action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/select-fields",
+            "action": "select-fields",
+            "display_name": "Select Fields",
+            "short_desc": "Select and optionally rename fields from records",
+            "desc": "Select specific fields from each record and optionally rename them; "
+                "only the specified fields appear in the output",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProvider::QoreSelectFieldsProcessor",
+            "groups": ("Transformation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSelectFieldsProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register set-fields action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/set-fields",
+            "action": "set-fields",
+            "display_name": "Set Fields",
+            "short_desc": "Set a field to a constant value in each record",
+            "desc": "Add or overwrite a field with a constant value in each record passing through "
+                "the pipeline",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProvider::QoreSetFieldsProcessor",
+            "groups": ("Transformation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSetFieldsProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register remove-fields action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/remove-fields",
+            "action": "remove-fields",
+            "display_name": "Remove Fields",
+            "short_desc": "Remove specified fields from records",
+            "desc": "Remove one or more fields from each record passing through the pipeline; "
+                "fields not in the removal list are passed through unchanged",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProvider::QoreRemoveFieldsProcessor",
+            "groups": ("Transformation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRemoveFieldsProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register search-replace action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/search-replace",
+            "action": "search-replace",
+            "display_name": "Search and Replace",
+            "short_desc": "Search and replace text in a record field",
+            "desc": "Perform search and replace on a string field in each record; supports both "
+                "literal string matching and regular expression patterns",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProvider::QoreSearchReplaceProcessor",
+            "groups": ("Transformation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSearchReplaceProcessor::ConstructorOptions{"field", "search", "replace"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSearchReplaceProcessor::ConstructorOptions - ("field", "search", "replace"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register record-limit action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/record-limit",
+            "action": "record-limit",
+            "display_name": "Record Limit",
+            "short_desc": "Limit the number of records passing through",
+            "desc": "Limit the number of records passing through the pipeline; the first N records "
+                "pass through and all subsequent records are dropped",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_FILTER,
+            "cls": "DataProvider::QoreRecordLimitProcessor",
+            "groups": ("Filtering",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRecordLimitProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -482,6 +638,62 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_3 DataProvider v3.3
+    - added the built-in "Qore" app with pipeline processor actions for filtering, transforming, and
+      manipulating records in data pipelines:
+      - @ref DataProvider::QoreFilterRecordsProcessor "filter-records": filter records by DPQL expression
+        or field comparison
+      - @ref DataProvider::QoreSelectFieldsProcessor "select-fields": select and rename fields
+      - @ref DataProvider::QoreSetFieldsProcessor "set-fields": set a field to a constant value
+      - @ref DataProvider::QoreRemoveFieldsProcessor "remove-fields": remove fields from records
+      - @ref DataProvider::QoreSearchReplaceProcessor "search-replace": search and replace text in fields
+      - @ref DataProvider::QoreRecordLimitProcessor "record-limit": limit the number of records
+    - added the @ref DataProvider::QoreProcessorsDataProviderFactory "qore-processors" factory for
+      navigating built-in pipeline processors
+    - added a return-based API to @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor"
+      (@ref DataProvider::AbstractDataProcessor::processRecord() "processRecord()",
+      @ref DataProvider::AbstractDataProcessor::processRecords() "processRecords()",
+      @ref DataProvider::AbstractDataProcessor::processRecordsBulk() "processRecordsBulk()",
+      @ref DataProvider::AbstractDataProcessor::flushRecords() "flushRecords()")
+    - made @ref DataProvider::AbstractDataProcessor::submitImpl() "submitImpl()" and
+      @ref DataProvider::AbstractDataProcessor::supportsBulkApiImpl() "supportsBulkApiImpl()" non-abstract
+      with bidirectional defaults bridging to the new return-based API
+    - added processor capability constants (@ref DPC_TRANSFORM, @ref DPC_FILTER, @ref DPC_EXPAND,
+      @ref DPC_AGGREGATE, @ref DPC_SINK) and
+      @ref DataProvider::AbstractDataProcessor::getProcessorCapabilities() "getProcessorCapabilities()"
+    - added utility methods @ref DataProvider::AbstractDataProcessor::hashListToRecords() "hashListToRecords()"
+      and @ref DataProvider::AbstractDataProcessor::recordsToHashList() "recordsToHashList()"
+    - added @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
+      @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()" methods
+    - @ref DataProvider::AbstractDataProvider "AbstractDataProvider" now inherits
+      @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" so data providers can serve as
+      pipeline processors
+    - added @ref DataProvider::AbstractDataProvider::supportsPipelineProcessor() "supportsPipelineProcessor()"
+      query method
+    - added pipeline processor type API methods:
+      @ref DataProvider::AbstractDataProvider::getPipelineProcessorInputType() "getPipelineProcessorInputType()",
+      @ref DataProvider::AbstractDataProvider::getPipelineProcessorInputTypeWithOptions() "getPipelineProcessorInputTypeWithOptions()",
+      @ref DataProvider::AbstractDataProvider::getPipelineProcessorOutputType() "getPipelineProcessorOutputType()",
+      @ref DataProvider::AbstractDataProvider::getPipelineProcessorOutputTypeWithOptions() "getPipelineProcessorOutputTypeWithOptions()"
+    - added
+      @ref DataProvider::AbstractDataProvider::tryGetActionOptionsForPipelineProcessorWithOptions() "tryGetActionOptionsForPipelineProcessorWithOptions()"
+      method and \c DPAT_PIPELINE_PROCESSOR case in the dynamic options dispatch
+    - added expression builder support to the
+      @ref DataProvider::QoreFilterRecordsProcessor "filter-records" processor via the \c where_cond
+      constructor option and dynamic action option with \c supports_expressions
+    - added \c supports_pipeline_processor, \c processor_capabilities, and
+      \c children_can_support_pipeline_processors fields to
+      @ref DataProvider::DataProviderSummaryInfo "DataProviderSummaryInfo" and
+      @ref DataProvider::DataProviderInfo "DataProviderInfo"
+    - added \c pipeline_processor_options to @ref DataProvider::DataProviderInfo "DataProviderInfo"
+    - added @ref DPAT_PIPELINE_PROCESSOR action type code for pipeline processor actions
+    - added \c supports_pipeline_processors to
+      @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"
+    - added \c processor_capabilities to
+      @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo"
+    - updated @ref DataProvider::DataProviderPipeline "DataProviderPipeline" to use the return-based API
+      internally via
+      @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
+      @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
     - added methods to return data provider types in the context of option dataprovider_message_support
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2

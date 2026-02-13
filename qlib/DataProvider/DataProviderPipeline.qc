@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DataProviderPipeline class definition
 
-/** DataProviderPipeline.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderPipeline.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -432,16 +432,9 @@ class PipelineQueue {
                     # iterate each data element in the current data set and submit it to processors
                     foreach auto data_elem in (data_recs) {
                         if (elem instanceof AbstractDataProcessor) {
-                            # new data for the next processor
-                            *softlist<auto> new_elem_recs;
-                            # enqueue data for the next processor in the queue
-                            code enqueue = sub (auto new_qdata) {
-                                push new_elem_recs, new_qdata;
-                            };
-
                             # Measure processing time
                             date start_time = now_us();
-                            elem.submit(enqueue, data_elem);
+                            *list<auto> new_elem_recs = elem.submitAndCollect(data_elem);
                             int processing_us = (now_us() - start_time).durationMicroseconds();
 
                             # if we have output data, save it for the next processor
@@ -449,20 +442,23 @@ class PipelineQueue {
                                 # here we need to use += to concatenate lists
                                 new_recs += new_elem_recs;
                             }
-                            parent.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
+                            parent.logDebug("queue %d data processor %y output: %y", id, elem.className(),
+                                new_elem_recs);
 
                             # Record metrics if collector is enabled
                             if (mc) {
                                 string element_id = sprintf("%d:%d", id, elem_index);
                                 # Count input records - for bulk hash data, count the list size
                                 int records_in = 1;
-                                if (data_elem.typeCode() == NT_HASH && data_elem.firstValue().typeCode() == NT_LIST) {
+                                if (data_elem.typeCode() == NT_HASH
+                                        && data_elem.firstValue().typeCode() == NT_LIST) {
                                     records_in = data_elem.firstValue().lsize();
                                 }
                                 # Count output records
                                 int records_out = 0;
                                 foreach auto out_rec in (new_elem_recs) {
-                                    if (out_rec.typeCode() == NT_HASH && out_rec.firstValue().typeCode() == NT_LIST) {
+                                    if (out_rec.typeCode() == NT_HASH
+                                            && out_rec.firstValue().typeCode() == NT_LIST) {
                                         records_out += out_rec.firstValue().lsize();
                                     } else {
                                         ++records_out;
@@ -508,17 +504,12 @@ class PipelineQueue {
             int elem_index = 0;
             foreach auto elem in (elems) {
                 if (elem instanceof AbstractDataProcessor) {
-                    *softlist<auto> new_elem_recs;
-                    code enqueue = sub (auto new_qdata) {
-                        push new_elem_recs, new_qdata;
-                    };
-
                     # Measure flush processing time
                     date start_time = now_us();
-                    elem.flush(enqueue);
+                    *list<auto> flush_results = elem.flushAndCollect();
                     int processing_us = (now_us() - start_time).durationMicroseconds();
 
-                    if (!new_elem_recs) {
+                    if (!flush_results) {
                         ++elem_index;
                         continue;
                     }
@@ -530,7 +521,7 @@ class PipelineQueue {
                     if (mc) {
                         string element_id = sprintf("%d:%d", id, elem_index);
                         int records_out = 0;
-                        foreach auto out_rec in (new_elem_recs) {
+                        foreach auto out_rec in (flush_results) {
                             if (out_rec.typeCode() == NT_HASH && out_rec.firstValue().typeCode() == NT_LIST) {
                                 records_out += out_rec.firstValue().lsize();
                             } else {
@@ -541,8 +532,9 @@ class PipelineQueue {
                         mc.recordElementProcessing(element_id, processing_us, 0, records_out);
                     }
 
-                    softlist<auto> data_recs = new_elem_recs;
-                    parent.logDebug("queue %d data processor %y flush output: %y", id, elem.className(), new_elem_recs);
+                    softlist<auto> data_recs = flush_results;
+                    parent.logDebug("queue %d data processor %y flush output: %y", id, elem.className(),
+                        flush_results);
                     int elem_size = elems.size();
                     # iterate subsequent processor elements in the queue
                     for (int i = $# + 1; i < elem_size; ++i) {
@@ -551,29 +543,31 @@ class PipelineQueue {
                         foreach auto data_elem in (data_recs) {
                             if (elems[i] instanceof AbstractDataProcessor) {
                                 AbstractDataProcessor elem2 = cast<AbstractDataProcessor>(elems[i]);
-                                remove new_elem_recs;
 
                                 # Measure processing time
                                 start_time = now_us();
-                                elem2.submit(enqueue, data_elem);
+                                *list<auto> new_elem_recs = elem2.submitAndCollect(data_elem);
                                 processing_us = (now_us() - start_time).durationMicroseconds();
 
                                 if (new_elem_recs) {
                                     # here we need to use += to concatenate lists
                                     new_recs += new_elem_recs;
                                 }
-                                parent.logDebug("queue %d data processor %y processing flushed output: %y", id, elem.className(), new_elem_recs);
+                                parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
+                                    elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
                                 if (mc) {
                                     string element_id = sprintf("%d:%d", id, i);
                                     int records_in = 1;
-                                    if (data_elem.typeCode() == NT_HASH && data_elem.firstValue().typeCode() == NT_LIST) {
+                                    if (data_elem.typeCode() == NT_HASH
+                                            && data_elem.firstValue().typeCode() == NT_LIST) {
                                         records_in = data_elem.firstValue().lsize();
                                     }
                                     int records_out = 0;
                                     foreach auto out_rec in (new_elem_recs) {
-                                        if (out_rec.typeCode() == NT_HASH && out_rec.firstValue().typeCode() == NT_LIST) {
+                                        if (out_rec.typeCode() == NT_HASH
+                                                && out_rec.firstValue().typeCode() == NT_LIST) {
                                             records_out += out_rec.firstValue().lsize();
                                         } else {
                                             ++records_out;
