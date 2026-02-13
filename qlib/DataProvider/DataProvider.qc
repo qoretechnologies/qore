@@ -126,6 +126,7 @@ public class DataProvider {
             "servicenowrest": "ServiceNowRestDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
+            "square": "SquareDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",
