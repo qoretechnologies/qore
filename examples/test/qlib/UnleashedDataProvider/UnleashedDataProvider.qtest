@@ -378,7 +378,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         UnleashedRestClient::UnleashedRestClient client1({
             "api_id": "x",
             "apikey": "x",
-        });
+        }, True);
         assertTrue(client1.getURL() =~ /api\.unleashedsoftware\.com/);
         assertFalse(client1.getURL() =~ /\/v2$/);
     }
