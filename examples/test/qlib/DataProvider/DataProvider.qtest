@@ -810,7 +810,7 @@ public class DataProviderTest inherits QUnit::Test {
             "desc": "",
         });
 
-        assertEq(my_app, DataProviderActionCatalog::getAllApps()[0]);
+        assertEq(my_app, DataProviderActionCatalog::getApp(app));
 
         string act = get_random_string();
 
@@ -942,10 +942,12 @@ public class DataProviderTest inherits QUnit::Test {
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getActionsEx(), get_random_string());
 
-        assertEq(action, DataProviderActionCatalog::getAllActions()[0]);
-        assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_action_context);
-        assertEq("pipeline", DataProviderActionCatalog::getAllActions()[0].action_context);
-        assertTrue(DataProviderActionCatalog::getAllActions()[0].requires_child_eligibility_check);
+        list<hash<DataProviderActionInfo>> all_actions = DataProviderActionCatalog::getActions(app);
+        assertEq(1, all_actions.size());
+        assertEq(action, all_actions[0]);
+        assertTrue(all_actions[0].requires_action_context);
+        assertEq("pipeline", all_actions[0].action_context);
+        assertTrue(all_actions[0].requires_child_eligibility_check);
 
         list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::searchAppRegex(app);
         assertEq(1, apps.size());

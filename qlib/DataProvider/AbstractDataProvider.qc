@@ -3018,6 +3018,64 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getErrorResponseTypeImpl(error_code);
     }
 
+    #! Returns the input type for the pipeline processor, if any
+    /** @return the input type for the pipeline processor; NOTHING means any type is accepted
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorInputType() {
+        checkPipelineProcessor();
+        return getPipelineProcessorInputTypeImpl();
+    }
+
+    #! Returns the input type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the input type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is accepted
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about input data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorInputTypeWithOptions(*hash<auto> options) {
+        checkPipelineProcessor();
+        return getPipelineProcessorInputTypeWithOptionsImpl(options);
+    }
+
+    #! Returns the output type for the pipeline processor, if any
+    /** @return the output type for the pipeline processor; NOTHING means any type is produced
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorOutputType() {
+        checkPipelineProcessor();
+        return getPipelineProcessorOutputTypeImpl();
+    }
+
+    #! Returns the output type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the output type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is produced
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about output data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorOutputTypeWithOptions(*hash<auto> options) {
+        checkPipelineProcessor();
+        return getPipelineProcessorOutputTypeWithOptionsImpl(options);
+    }
+
     #! Returns the description of an observable event, if any
     /** @param event_id the event ID of the event
 
@@ -3277,6 +3335,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } catch (hash<ExceptionInfo> ex) {
             LoggerWrapper::error("Failed to get action options for delete with options (%y): %s", options,
                 get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a pipeline processor action
+    /** @param action action info for the pipeline processor action
+        @param options sample option data that can be used to determine the final type
+
+        @return action options for a pipeline processor action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForPipelineProcessorWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkPipelineProcessor();
+            return tryGetActionOptionsForPipelineProcessorWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for pipeline processor with options (%y): %s",
+                options, get_exception_string(ex));
         }
     }
 
@@ -3752,6 +3833,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         if (!supportsRequest()) {
             throw "INVALID-OPERATION", sprintf("data provider %y (type %y) does not support the request API",
                 getName(), self.className());
+        }
+    }
+
+    #! Ensures that the data provider supports the pipeline processor API
+    /**
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    checkPipelineProcessor() {
+        if (!supportsPipelineProcessor()) {
+            throw "INVALID-OPERATION", sprintf("data provider %y (type %y) does not support the pipeline "
+                "processor API", getName(), self.className());
         }
     }
 
@@ -4415,6 +4509,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } + getSearchOptionsAsActionOptions();
     }
 
+    #! Returns action options corresponding to the given option data for a pipeline processor action
+    /** @param action action info for the pipeline processor action
+        @param options sample option data that can be used to determine the final type
+
+        @return action options for a pipeline processor action according to the available option data
+
+        The default implementation returns the static options unchanged; subclasses can override this to add
+        dynamic options (e.g. a \c where_cond option for filters).
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForPipelineProcessorWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        return action.options;
+    }
+
     #! Returns action options corresponding to the given option data
     /** @param action action info to determine options
         @param options sample option data that can be used to determine the final type
@@ -4445,6 +4557,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
             case DPAT_DELETE:
                 return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+            case DPAT_PIPELINE_PROCESSOR:
+                return tryGetActionOptionsForPipelineProcessorWithOptionsImpl(action, options);
         }
         return action.options;
     }
@@ -6356,6 +6470,58 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     */
     bool supportsPipelineProcessor() {
         return getStaticInfoImpl().supports_pipeline_processor;
+    }
+
+    #! Returns the input type for the pipeline processor, if any
+    /** @return the input type for the pipeline processor; NOTHING means any type is accepted
+
+        @note only called if the provider supports the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorInputTypeImpl() {
+    }
+
+    #! Returns the input type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the input type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is accepted
+
+        @note
+        - Only called if the provider supports the pipeline processor API
+        - This API is meant to provide information about input data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorInputTypeWithOptionsImpl(*hash<auto> options) {
+        return getPipelineProcessorInputTypeImpl();
+    }
+
+    #! Returns the output type for the pipeline processor, if any
+    /** @return the output type for the pipeline processor; NOTHING means any type is produced
+
+        @note only called if the provider supports the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
+    }
+
+    #! Returns the output type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the output type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is produced
+
+        @note
+        - Only called if the provider supports the pipeline processor API
+        - This API is meant to provide information about output data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithOptionsImpl(*hash<auto> options) {
+        return getPipelineProcessorOutputTypeImpl();
     }
 
     #! Overrides the processor API to throw by default
