@@ -448,7 +448,7 @@ public class Http2ClientConnection {
 
             # Wait for socket to be ready
             int poll_timeout = min(int(remaining), 1000);
-            Socket::poll((poll_info,), poll_timeout);
+            Socket::poll(cast<list<hash<SocketPollInfo>>>((poll_info,)), poll_timeout);
             handlePollResult();
         }
 
@@ -503,7 +503,7 @@ public class Http2ClientConnection {
             return True;
         }
 
-        Socket::poll((poll_info,), int(poll_timeout_ms));
+        Socket::poll(cast<list<hash<SocketPollInfo>>>((poll_info,)), poll_timeout_ms);
         handlePollResult();
         return True;
     }
