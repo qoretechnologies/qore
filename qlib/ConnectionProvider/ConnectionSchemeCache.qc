@@ -225,6 +225,7 @@ public class ConnectionSchemeCache {
             "wave": "WaveRestClient",
 
             "zohobooks": "ZohoBooksRestClient",
+            "zohoinventory": "ZohoInventoryRestClient",
             "zohoinvoice": "ZohoInvoiceRestClient",
         };
 

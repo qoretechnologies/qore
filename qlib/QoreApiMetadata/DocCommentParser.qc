@@ -94,6 +94,14 @@ public class DocCommentParser {
                     current_tag = NOTHING;
                     current_arg = NOTHING;
                     current_text = "";
+                } else if (current_text.length()) {
+                    # Flush pending description text before paragraph break
+                    DocCommentParser::flushTag(\result, NOTHING, NOTHING, current_text);
+                    current_text = "";
+                }
+                # Mark paragraph break in description
+                if (result.description.length() && !result.description.endsWith("\n\n")) {
+                    result.description += "\n\n";
                 }
                 continue;
             }
@@ -235,6 +243,16 @@ public class DocCommentParser {
         # flush final tag
         DocCommentParser::flushTag(\result, current_tag, current_arg, current_text);
 
+        # Combine brief + description when @brief is present
+        if (exists result.brief && trim(result.brief).length()) {
+            string brief_text = trim(result.brief);
+            if (result.description.length()) {
+                result.description = brief_text + "\n\n" + trim(result.description);
+            } else {
+                result.description = brief_text;
+            }
+        }
+
         # trim all string fields
         result.description = trim(result.description);
         if (exists result.brief) {
@@ -300,14 +318,21 @@ public class DocCommentParser {
         list<string> raw_lines = text.split("\n");
         list<string> result = ();
         bool in_block = False;
+        # track whether the previous line was a line-style comment (#! or //!)
+        bool prev_was_line_comment = False;
 
         foreach string line in (raw_lines) {
             string cleaned = trim(line);
 
             # handle inline /** block start (e.g., after #! lines)
             if (!in_block && cleaned =~ /^\/\*\*/) {
+                # Insert paragraph break at transition from line comment to block comment
+                if (prev_was_line_comment && result.size()) {
+                    result += "";
+                }
                 cleaned = regex_subst(cleaned, "^\\/\\*\\*\\s?", "");
                 in_block = True;
+                prev_was_line_comment = False;
                 # check if block also ends on same line
                 if (cleaned =~ /\*\/\s*$/) {
                     cleaned = regex_subst(cleaned, "\\s*\\*\\/\\s*$", "");
@@ -317,6 +342,9 @@ public class DocCommentParser {
                 # end of block comment
                 cleaned = regex_subst(cleaned, "\\s*\\*\\/\\s*$", "");
                 in_block = False;
+                prev_was_line_comment = False;
+            } else {
+                prev_was_line_comment = False;
             }
 
             # strip leading * (common in block comments)
@@ -326,8 +354,10 @@ public class DocCommentParser {
             # strip //! or #! prefix
             if (cleaned =~ /^\/\/!/) {
                 cleaned = regex_subst(cleaned, "^\\/\\/!\\s?", "");
+                prev_was_line_comment = True;
             } else if (cleaned =~ /^#!/) {
                 cleaned = regex_subst(cleaned, "^#!\\s?", "");
+                prev_was_line_comment = True;
             }
             result += cleaned;
         }
@@ -344,7 +374,10 @@ public class DocCommentParser {
             # description text
             if (trimmed.length()) {
                 if (result.description.length()) {
-                    result.description += " ";
+                    # Preserve paragraph breaks; otherwise join with space
+                    if (!result.description.endsWith("\n\n")) {
+                        result.description += " ";
+                    }
                 }
                 result.description += trimmed;
             }
