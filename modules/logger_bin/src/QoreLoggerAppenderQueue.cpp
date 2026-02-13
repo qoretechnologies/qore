@@ -105,12 +105,6 @@ void QoreLoggerAppenderQueue::process(int64 ms, ExceptionSink* xsink) {
             break;
         }
 
-        // Reduce current bytes for memory tracking
-        QoreValue size_val = rec->getKeyValue("_size");
-        if (size_val.getType() == NT_INT) {
-            reduceBytes(size_val.getAsBigInt());
-        }
-
         QoreValue appender = rec->getKeyValue("appender", xsink);
         assert(!*xsink);
         assert(appender.getType() == NT_OBJECT);
@@ -160,5 +154,15 @@ QoreHashNode* QoreLoggerAppenderQueue::getEvent(int64 ms, ExceptionSink* xsink) 
         }
         return nullptr;
     }
-    return h.releaseAs<QoreHashNode>();
+    QoreHashNode* rv = h.releaseAs<QoreHashNode>();
+    // Reduce byte counter for memory-based backpressure tracking
+    // This must be done here (not just in process()) because subclasses like
+    // LoggerAppenderQueueThreadPool override process() and call getEvent() directly
+    if (rv) {
+        QoreValue size_val = rv->getKeyValue("_size");
+        if (size_val.getType() == NT_INT) {
+            reduceBytes(size_val.getAsBigInt());
+        }
+    }
+    return rv;
 }

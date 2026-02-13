@@ -181,6 +181,9 @@ class Test inherits QUnit::Test {
         #printf("m_processing.waitForZero() DONE, tid:%d, count: %d\n", gettid(), m_processing.getCount());
         assertAppenderLogs(appenders, programCount, iterCnt);
         printf("assertAppenderLogs() DONE\n");
+        # delete m_laq before tp goes out of scope to prevent calling
+        # ThreadPool::stopWait() on an already-deleted ThreadPool object
+        delete m_laq;
     }
 
 }
