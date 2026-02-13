@@ -330,6 +330,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::UnshiftLValue:
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
+        case QoreIROpcode::ListPush:
         case QoreIROpcode::SpliceLValue:
         case QoreIROpcode::Call:
         case QoreIROpcode::CallDirect:
@@ -374,6 +375,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
             return 0;
+        case QoreIROpcode::ListPush:      // 2 operands: list and value to push
         case QoreIROpcode::ListAppend:    // 2 operands: list and value to append
         case QoreIROpcode::ListGetInt:    // 2 operands: list and index
         case QoreIROpcode::ListGetFloat:  // 2 operands: list and index

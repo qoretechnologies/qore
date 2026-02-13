@@ -780,6 +780,33 @@ extern "C" void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, Exc
     }
 }
 
+extern "C" uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue list_val = fromBits(list_bits);
+    QoreValue push_val = fromBits(val_bits);
+
+    if (list_val.getType() == NT_LIST) {
+        QoreListNode* l = list_val.get<QoreListNode>();
+        l->push(push_val.refSelf(), xsink);
+        // Return same list with a new reference for the caller to own
+        l->ref();
+        return list_bits;
+    }
+
+    if (list_val.isNothing()) {
+        // Auto-vivify empty list (already has refcount 1 from new)
+        QoreListNode* l = new QoreListNode(autoTypeInfo);
+        l->push(push_val.refSelf(), xsink);
+        QoreValue result(l);
+        return toBits(result);
+    }
+
+    // Not a list - raise error
+    xsink->raiseException("PUSH-ERROR",
+        "the lvalue argument to push is type \"%s\"; expecting \"list\"",
+        list_val.getTypeName());
+    return toBits(QoreValue());
+}
+
 extern "C" uint64_t qore_rt_switch_regex_match(uint64_t regex_case_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
     const CaseNodeRegex* regex_case = reinterpret_cast<const CaseNodeRegex*>(regex_case_ptr);
     QoreValue switch_val = fromBits(switch_val_bits);

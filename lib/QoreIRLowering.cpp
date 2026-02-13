@@ -474,6 +474,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
 
+        // Move merge_block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the then/else body lowering.
+        builder.getFunction()->moveBlockToEnd(merge_block);
         builder.setBlock(merge_block);
         return true;
     }
@@ -1212,6 +1215,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(merge_block);
         }
 
+        // Move merge_block to the end of the block list so it is processed
+        // AFTER all invoke.cont blocks created during the try body lowering.
+        // LLVM lowering processes blocks in list order — emitInvokeCleanup in
+        // ReturnNothing must see all trackResultForCleanup allocas from the body.
+        builder.getFunction()->moveBlockToEnd(merge_block);
         builder.setBlock(merge_block);
         return true;
     }
@@ -4791,6 +4799,50 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         return QoreIRValue();
     }
     QoreValue left_expr = op->getLeft();
+
+    // Native ListPush path: when lvalue is a simple local variable, emit
+    // LoadLocal + ListPush + StoreLocal to avoid AST delegation (which causes
+    // reload trackers → extra refcount → copy-on-write → O(n²) in loops)
+    if (left_expr.hasNode()) {
+        auto* var = dynamic_cast<const VarRefNode*>(left_expr.getInternalNode());
+        if (var && var->getType() == VT_LOCAL && var->ref.id) {
+            // Lower the value to push first
+            QoreIRValue push_val = lowerExpression(op->getRight(), error);
+            if (!push_val.isValid()) {
+                return QoreIRValue();
+            }
+
+            // Load current list from local
+            QoreIRValue list_val = builder.createLoadLocal(var->ref.id, op->loc)->result;
+
+            if (!exception_stack.empty()) {
+                // Invoke path: ListPush can throw (type errors, etc.)
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvoke(expr, {list_val, push_val}, normal_block, handler, op->loc);
+                inst->invoke_opcode = QoreIROpcode::ListPush;
+                builder.setBlock(normal_block);
+
+                // Store result back to local
+                auto* store_inst = builder.createStoreLocal(var->ref.id, inst->result, op->loc);
+                store_inst->exception_target = exception_stack.back();
+                return inst->result;
+            }
+
+            // Normal path
+            QoreIRValue result = builder.createListPush(list_val, push_val, op->loc)->result;
+
+            // Store result back to local (may be new list if auto-vivified from NOTHING)
+            builder.createStoreLocal(var->ref.id, result, op->loc);
+            return result;
+        }
+    }
+
+    // Fallback: delegate to AST for non-local lvalues (global, closure, complex lvalues)
     if (!guardLValueBase(left_expr, error, true)) {
         return QoreIRValue();
     }

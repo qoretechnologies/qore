@@ -75,6 +75,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc = nullptr);
 
+    QoreIRInstruction* createListPush(QoreIRValue list, QoreIRValue val,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createTernaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second, QoreIRValue third,

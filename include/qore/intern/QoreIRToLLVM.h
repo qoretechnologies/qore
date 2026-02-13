@@ -378,6 +378,10 @@ private:
     // enabling copy-on-write to skip the copy (in-place modification).
     void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
 
+    // Clear all reload trackers for all locals.  Called before AST-delegated
+    // lvalue operations (PushAny, etc.) to prevent refcount inflation.
+    void clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func);
+
     // Pre-decref old result and clear reload tracker before lvalue compound
     // operations.  Ensures the cleanup alloca exists (creating in the entry
     // block if necessary), decrefs the previous value stored in it, and clears

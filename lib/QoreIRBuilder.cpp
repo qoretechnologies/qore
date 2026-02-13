@@ -247,6 +247,11 @@ QoreIRInstruction* QoreIRBuilder::createGetObjectClass(QoreIRValue obj, const Qo
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createListPush(QoreIRValue list, QoreIRValue val,
+        const QoreProgramLocation* loc) {
+    return createBinaryOp(QoreIROpcode::ListPush, list, val, loc);
+}
+
 QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(op);

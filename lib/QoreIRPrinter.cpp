@@ -53,6 +53,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CreateEmptyList: return "create.empty.list";
         case QoreIROpcode::CreateSizedList: return "create.sized.list";
         case QoreIROpcode::ListAppend: return "list.append";
+        case QoreIROpcode::ListPush: return "list.push";
         case QoreIROpcode::ListSize: return "list.size";
         case QoreIROpcode::ListGetInt: return "list.get.int";
         case QoreIROpcode::ListGetFloat: return "list.get.float";

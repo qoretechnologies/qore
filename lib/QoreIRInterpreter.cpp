@@ -1027,6 +1027,30 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
+        // ListPush invoke: native list push with pre-evaluated operands
+        case QoreIROpcode::ListPush: {
+            QoreValue list_val = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
+            QoreValue push_val = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            if (list_val.getType() == NT_LIST) {
+                QoreListNode* l = list_val.get<QoreListNode>();
+                l->push(push_val.refSelf(), xsink);
+                // refSelf: result shares same list pointer as operand; both are in
+                // cleanup, so both need their own reference
+                return list_val.refSelf();
+            }
+            if (list_val.isNothing()) {
+                QoreListNode* l = new QoreListNode(autoTypeInfo);
+                l->push(push_val.refSelf(), xsink);
+                return QoreValue(l);
+            }
+            if (xsink) {
+                xsink->raiseException("PUSH-ERROR",
+                    "the lvalue argument to push is type \"%s\"; expecting \"list\"",
+                    list_val.getTypeName());
+            }
+            return QoreValue();
+        }
+
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
@@ -1426,6 +1450,43 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreListNode* list = list_val.get<QoreListNode>();
                 if (list) {
                     list->push(value.hasNode() ? value.refSelf() : value, xsink);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListPush: {
+                QoreValue list_val = getIRValue(values, inst->operands[0]);
+                QoreValue push_val = getIRValue(values, inst->operands[1]);
+                QoreValue result;
+                if (list_val.getType() == NT_LIST) {
+                    QoreListNode* l = list_val.get<QoreListNode>();
+                    l->push(push_val.refSelf(), xsink);
+                    // refSelf: result shares same list pointer as operand; both are in
+                    // cleanup, so both need their own reference
+                    result = list_val.refSelf();
+                } else if (list_val.isNothing()) {
+                    QoreListNode* l = new QoreListNode(autoTypeInfo);
+                    l->push(push_val.refSelf(), xsink);
+                    result = QoreValue(l);
+                } else {
+                    if (xsink) {
+                        xsink->raiseException("PUSH-ERROR",
+                            "the lvalue argument to push is type \"%s\"; expecting \"list\"",
+                            list_val.getTypeName());
+                    }
+                }
+                if (xsink && *xsink) {
+                    result.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
                 }
                 ++ip;
                 break;

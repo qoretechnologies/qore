@@ -426,6 +426,8 @@ enum class QoreIROpcode : uint16_t {
     DecrefNoThrow,
 
     SwitchRegexMatch,   // Test switch regex case: (switch_val, regex_case_ptr) -> bool
+
+    ListPush,           // Native list push: (list, value) -> list (in-place push, auto-vivify NOTHING)
 };
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -1441,6 +1443,19 @@ public:
         QoreIRBasicBlock* ptr = block.get();
         blocks.push_back(std::move(block));
         return ptr;
+    }
+
+    //! Move an existing block to the end of the block list.
+    //! This ensures it is processed after all subsequently-created blocks
+    //! during LLVM lowering (which processes blocks in list order).
+    void moveBlockToEnd(QoreIRBasicBlock* block) {
+        auto it = std::find_if(blocks.begin(), blocks.end(),
+                [block](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == block; });
+        if (it != blocks.end()) {
+            auto ptr = std::move(*it);
+            blocks.erase(it);
+            blocks.push_back(std::move(ptr));
+        }
     }
 
     QoreIRValue createValue() {

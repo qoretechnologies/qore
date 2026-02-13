@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+%exec-class BenchmarkRunner
 
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
@@ -8,8 +9,8 @@
 # Benchmark script to compare all execution modes: AST, IR, tiered, JIT, AOT
 #
 # Usage:
-#   LD_LIBRARY_PATH=build-debug qore examples/test/ir/benchmark_exec_modes.q
-#   QORE_BIN=build-debug/qore LD_LIBRARY_PATH=build-debug qore examples/test/ir/benchmark_exec_modes.q
+#   LD_LIBRARY_PATH=build-release qore examples/test/ir/benchmark_exec_modes.qr
+#   QORE_BIN=build-release/qore LD_LIBRARY_PATH=build-release qore examples/test/ir/benchmark_exec_modes.qr
 #
 # Environment variables:
 #   QORE_BIN         Path to the qore binary to benchmark (default: argv[0] or "qore")
@@ -18,173 +19,8 @@
 #   BENCH_ITERS      Base iteration count (default: 1000000)
 
 const DEFAULT_ITERATIONS = 1000000;
-int ITERATIONS = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
 
-# ==========================================================================
-# Test 1: Simple integer loop (baseline — tests typed int ops)
-# ==========================================================================
-string loop_code = sprintf("%%modern
-int sum = 0;
-for (int i = 0; i < %d; ++i) {
-    sum += i;
-}
-printf(\"%%d\\n\", sum);
-", ITERATIONS);
-
-# ==========================================================================
-# Test 2: Recursive fibonacci (tests deep call stack with CallDirect)
-# ==========================================================================
-string fib_code = "%modern
-int fib(int n) {
-    if (n <= 1) {
-        return n;
-    }
-    return fib(n - 1) + fib(n - 2);
-}
-printf(\"%d\\n\", fib(30));
-";
-
-# ==========================================================================
-# Test 3: self.method() calls on final class (CallMethodDirect)
-# ==========================================================================
-string self_method_code = sprintf("%%modern
-
-final class SelfAccum {
-    public {
-        int total = 0;
-    }
-
-    int add(int x) {
-        total += x;
-        return total;
-    }
-
-    int compute() {
-        int result = 0;
-        for (int i = 0; i < %d; ++i) {
-            result = self.add(1);
-        }
-        return result;
-    }
-}
-
-SelfAccum a();
-printf(\"%%d\\n\", a.compute());
-", ITERATIONS / 10);
-
-# ==========================================================================
-# Test 4: obj.method() calls — DotEvalMethodDirect (our new opcode)
-# ==========================================================================
-string dot_eval_code = sprintf("%%modern
-
-class MyProcessor {
-    private {
-        int count = 0;
-    }
-
-    int process(int x) {
-        count += x;
-        return count;
-    }
-
-    int getCount() {
-        return count;
-    }
-}
-
-MyProcessor p();
-int result = 0;
-for (int i = 0; i < %d; ++i) {
-    result = p.process(1);
-}
-printf(\"%%d\\n\", result);
-", ITERATIONS / 10);
-
-# ==========================================================================
-# Test 5: obj.method() in try/catch — InvokeDotEvalMethodDirect
-# ==========================================================================
-string dot_eval_try_code = sprintf("%%modern
-
-class MyCounter {
-    private {
-        int val = 0;
-    }
-
-    int increment(int x) {
-        val += x;
-        return val;
-    }
-}
-
-MyCounter c();
-int result = 0;
-for (int i = 0; i < %d; ++i) {
-    try {
-        result = c.increment(1);
-    } catch (hash<auto> ex) {
-        # won't happen
-    }
-}
-printf(\"%%d\\n\", result);
-", ITERATIONS / 10);
-
-# ==========================================================================
-# Test 6: Static method calls — CallStaticDirect (our new opcode)
-# ==========================================================================
-string static_call_code = sprintf("%%modern
-
-class MathHelper {
-    static int square(int x) {
-        return x * x;
-    }
-
-    static int add(int a, int b) {
-        return a + b;
-    }
-}
-
-int sum = 0;
-for (int i = 0; i < %d; ++i) {
-    sum = MathHelper::add(sum, MathHelper::square(i %% 100));
-}
-printf(\"%%d\\n\", sum);
-", ITERATIONS / 10);
-
-# ==========================================================================
-# Test 7: Functional operators — foldl
-# ==========================================================================
-string foldl_code = sprintf("%%modern
-list<int> nums = range(%d);
-int sum = (foldl $1 + $2, nums, 0);
-printf(\"%%d\\n\", sum);
-", ITERATIONS / 100);
-
-# ==========================================================================
-# Test 8: Functional operators — map
-# ==========================================================================
-string map_code = sprintf("%%modern
-list<int> nums = range(%d);
-list<int> doubled = (map $1 * 2, nums);
-printf(\"%%d\\n\", doubled.size());
-", ITERATIONS / 100);
-
-# ==========================================================================
-
-hash<string, string> tests = {
-    "loop": loop_code,
-    "fibonacci": fib_code,
-    "self_method": self_method_code,
-    "dot_eval": dot_eval_code,
-    "dot_eval_try": dot_eval_try_code,
-    "static_call": static_call_code,
-    "foldl": foldl_code,
-    "map": map_code,
-};
-
-string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
-string ld_path = ENV.LD_LIBRARY_PATH ?? "";
-
-hash<auto> sub run_benchmark(string name, string code, string mode) {
+hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path) {
     # Write code to temp file
     string tmp = sprintf("/tmp/bench_%s.q", name);
     {
@@ -220,7 +56,250 @@ hash<auto> sub run_benchmark(string name, string code, string mode) {
     };
 }
 
-sub main() {
+class BenchmarkRunner {
+    constructor() {
+        main();
+    }
+
+    private main() {
+        int iterations = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
+
+    # ==========================================================================
+    # Test 1: Simple integer loop (baseline - tests typed int ops)
+    # ==========================================================================
+    string loop_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += i;
+}
+printf(\"%%d\\n\", sum);
+", iterations);
+
+    # ==========================================================================
+    # Test 2: Recursive fibonacci (tests deep call stack with CallDirect)
+    # ==========================================================================
+    string fib_code = "%new-style
+%strict-args
+%require-types
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(30));
+";
+
+    # ==========================================================================
+    # Test 3: self.method() calls on final class (CallMethodDirect)
+    # ==========================================================================
+    string self_method_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+final class SelfAccum {
+    public {
+        int total = 0;
+    }
+
+    int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result = self.add(1);
+        }
+        return result;
+    }
+}
+
+SelfAccum a();
+printf(\"%%d\\n\", a.compute());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 4: obj.method() calls - DotEvalMethodDirect
+    # ==========================================================================
+    string dot_eval_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+class MyProcessor {
+    private {
+        int count = 0;
+    }
+
+    int process(int x) {
+        count += x;
+        return count;
+    }
+
+    int getCount() {
+        return count;
+    }
+}
+
+MyProcessor p();
+int result = 0;
+for (int i = 0; i < %d; ++i) {
+    result = p.process(1);
+}
+printf(\"%%d\\n\", result);
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 5: obj.method() in try/catch - InvokeDotEvalMethodDirect
+    # ==========================================================================
+    string dot_eval_try_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+class MyCounter {
+    private {
+        int val = 0;
+    }
+
+    int increment(int x) {
+        val += x;
+        return val;
+    }
+}
+
+MyCounter c();
+int result = 0;
+for (int i = 0; i < %d; ++i) {
+    try {
+        result = c.increment(1);
+    } catch (hash<auto> ex) {
+        # won't happen
+    }
+}
+printf(\"%%d\\n\", result);
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 6: Static method calls - CallStaticDirect
+    # ==========================================================================
+    string static_call_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+class MathHelper {
+    static int square(int x) {
+        return x * x;
+    }
+
+    static int add(int a, int b) {
+        return a + b;
+    }
+}
+
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum = MathHelper::add(sum, MathHelper::square(i %% 100));
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 7: Functional operators - foldl
+    # ==========================================================================
+    string foldl_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+list<int> nums = range(%d);
+int sum = (foldl $1 + $2, nums, 0);
+printf(\"%%d\\n\", sum);
+", iterations / 100);
+
+    # ==========================================================================
+    # Test 8: Functional operators - map (int list)
+    # ==========================================================================
+    string map_int_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+list<int> nums = range(%d);
+list<int> doubled = (map $1 * 2, nums);
+printf(\"%%d\\n\", doubled.size());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 9: map expression over list<hash<auto>> (hash key access pattern)
+    # ==========================================================================
+    string map_hash_expr_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"name\": \"item\" + string(i), \"value\": i, \"score\": i * 1.5};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(%d);
+list<auto> vals = (map $1.value + 1, data);
+printf(\"%%d\\n\", vals.size());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 10: map hash body over list<hash<auto>> (hash remapping pattern)
+    # ==========================================================================
+    string map_hash_body_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+hash<auto> sub remap(hash<auto> h) { return {\"n\": h.name, \"v\": h.value}; }
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"name\": \"item\" + string(i), \"value\": i, \"score\": i * 1.5};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(%d);
+list<hash<auto>> result = (map remap($1), data);
+printf(\"%%d\\n\", result.size());
+", iterations / 10);
+
+    # ==========================================================================
+    # Test 11: select with hash predicate
+    # ==========================================================================
+    string select_hash_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"name\": \"item\" + string(i), \"value\": i, \"active\": i %% 2 == 0};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(%d);
+list<hash<auto>> result = (select data, $1.value > 0);
+printf(\"%%d\\n\", result.size());
+", iterations / 10);
+
+    hash<string, string> tests = {
+        "loop": loop_code,
+        "fibonacci": fib_code,
+        "self_method": self_method_code,
+        "dot_eval": dot_eval_code,
+        "dot_eval_try": dot_eval_try_code,
+        "static_call": static_call_code,
+        "foldl": foldl_code,
+        "map_int": map_int_code,
+        "map_hash_expr": map_hash_expr_code,
+        "map_hash_body": map_hash_body_code,
+        "select_hash": select_hash_code,
+    };
+
+    string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+    string ld_path = ENV.LD_LIBRARY_PATH ?? "";
+
     # Parse modes from environment or use default
     list<string> modes;
     if (ENV.BENCH_MODES) {
@@ -230,7 +309,7 @@ sub main() {
     }
 
     printf("Performance Benchmark: %s\n", modes.join(" vs "));
-    printf("Iterations base: %d\n", ITERATIONS);
+    printf("Iterations base: %d\n", iterations);
     printf("Binary: %s\n", qore_bin);
     printf("========================================================================\n\n");
 
@@ -247,7 +326,7 @@ sub main() {
         bool have_expected = False;
 
         foreach string mode in (modes) {
-            hash<auto> r = run_benchmark(test_name, code, mode);
+            hash<auto> r = run_benchmark(test_name, code, mode, qore_bin, ld_path);
             test_results{mode} = r.elapsed_ms;
             if (!have_expected) {
                 expected_output = r.output;
@@ -317,5 +396,4 @@ sub main() {
         }
     }
 }
-
-main();
+}

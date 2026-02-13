@@ -996,6 +996,12 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
     builder->CreateCall(decref_fn, {old_val, xsink_arg});
 }
 
+void QoreIRToLLVM::clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func) {
+    for (auto& [key, alloca] : local_allocas) {
+        clearLocalReloadTracker(key, module, llvm_func);
+    }
+}
+
 llvm::AllocaInst* QoreIRToLLVM::emitPreDecrefAndClearTracker(uint32_t result_id,
         const QoreIRLValueInstruction* lvinst,
         llvm::Module& module, llvm::Function* llvm_func) {
@@ -3663,6 +3669,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // VrnConstruct doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::ListPush) {
+                // ListPush invoke: native list push with pre-evaluated operands
+                auto* list = getVal(inv->operands[0].id, error);
+                if (!list) { return false; }
+                auto* val = getVal(inv->operands[1].id, error);
+                if (!val) { return false; }
+                llvm::Value* list_boxed = boxValue(list, inv->operands[0].id);
+                llvm::Value* val_boxed = boxValue(val, inv->operands[1].id);
+                auto push_fn = module.getOrInsertFunction("qore_rt_list_push",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(push_fn, {list_boxed, val_boxed, xsink_arg});
+                // ListPush doesn't modify locals — no reload needed
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
@@ -4916,6 +4935,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_list_append",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
             builder->CreateCall(helper, {list_boxed, value_boxed, xsink_arg});
+            return true;
+        }
+        case QoreIROpcode::ListPush: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* val = getVal(inst->operands[1].id, error);
+            if (!val) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
+            auto push_fn = module.getOrInsertFunction("qore_rt_list_push",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(push_fn, {list_boxed, val_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::CreateSizedList: {
@@ -6888,6 +6923,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             QoreValue expr_val = expr_inst->expr;
             uint64_t expr_bits;
             std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            // Clear reload trackers before AST delegation to prevent refcount
+            // inflation → copy-on-write → O(n²) for container ops in loops
+            clearAllLocalReloadTrackers(module, llvm_func);
             llvm::Value* result;
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
