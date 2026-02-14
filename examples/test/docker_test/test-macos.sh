@@ -56,17 +56,18 @@ if [ -z "$LLVM_PREFIX" ]; then
     fi
 fi
 
-CMAKE_EXTRA_ARGS=""
+CMAKE_PREFIX_PATH="/opt/local"
 if [ -n "$LLVM_PREFIX" ]; then
     echo "Found LLVM at: $LLVM_PREFIX"
-    CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${LLVM_PREFIX}"
+    CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};${LLVM_PREFIX}"
 fi
 
 # Configure with CMake
+# CMAKE_PREFIX_PATH includes /opt/local for MacPorts dependencies and LLVM prefix if found
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
     -DSINGLE_COMPILATION_UNIT=1 \
-    ${CMAKE_EXTRA_ARGS}
+    -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"
 
 # Build
 make -j${MAKE_JOBS}

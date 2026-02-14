@@ -26,7 +26,7 @@
 public namespace DataProvider {
 
 /** @defgroup analytics_mode_constants Analytics Processor Mode Constants
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 #/@{
 #! Window-level analytics: accumulate records, emit one event per field per window
@@ -36,7 +36,7 @@ public const ANALYTICS_MODE_RECORD = 1;
 #/@}
 
 #! Base analytics event hashdecl with common fields
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl AnalyticsEventInfo {
     #! The type of analytics event (e.g. "statistics", "moving-average", "trend", "anomaly")
@@ -50,7 +50,7 @@ public hashdecl AnalyticsEventInfo {
 }
 
 #! Statistics event hashdecl for running statistics analytics
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl StatisticsEventInfo inherits AnalyticsEventInfo {
     #! Number of values in this window
@@ -70,7 +70,7 @@ public hashdecl StatisticsEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Moving average event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl MovingAverageEventInfo inherits AnalyticsEventInfo {
     #! Simple moving average over the window
@@ -82,7 +82,7 @@ public hashdecl MovingAverageEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Trend analysis event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl TrendEventInfo inherits AnalyticsEventInfo {
     #! Slope of the linear regression line
@@ -96,7 +96,7 @@ public hashdecl TrendEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Anomaly detection event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl AnomalyEventInfo inherits AnalyticsEventInfo {
     #! Z-score of the current value
@@ -113,13 +113,143 @@ public hashdecl AnomalyEventInfo inherits AnalyticsEventInfo {
     float stddev;
 }
 
+#! Percentile/quantile event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl PercentileEventInfo inherits AnalyticsEventInfo {
+    #! Percentile values keyed by name (e.g. "p25", "p50", "p75", etc.)
+    hash<auto> percentiles;
+    #! Interquartile range (P75 - P25)
+    float iqr;
+    #! Minimum value in the window
+    float min_val;
+    #! Maximum value in the window
+    float max_val;
+    #! Skewness of the distribution (0 = symmetric, positive = right-skewed)
+    float skewness;
+    #! Excess kurtosis of the distribution (0 = normal/mesokurtic; Fisher's definition)
+    float kurtosis;
+    #! Number of values in the window
+    int count;
+}
+
+#! Correlation event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl CorrelationEventInfo {
+    #! Event type identifier
+    string event_type = "correlation";
+    #! Window size used
+    int window_size;
+    #! Number of windows processed
+    int window_count;
+    #! Pairwise correlations keyed by "fieldA_fieldB"
+    hash<auto> correlations;
+    #! Full correlation matrix keyed by field name
+    hash<auto> matrix;
+    #! Number of values in the window
+    int count;
+}
+
+#! Cross-correlation event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl CrossCorrelationEventInfo {
+    #! Event type identifier
+    string event_type = "cross-correlation";
+    #! First field name
+    string field_x;
+    #! Second field name
+    string field_y;
+    #! Window size used
+    int window_size;
+    #! Number of windows processed
+    int window_count;
+    #! Maximum lag computed
+    int max_lag;
+    #! Correlation at each lag keyed by lag string (e.g. "-3", "0", "2")
+    hash<auto> lag_correlations;
+    #! Lag with the strongest absolute correlation
+    int best_lag;
+    #! Correlation value at the best lag
+    float best_correlation;
+    #! Number of values in the window
+    int count;
+}
+
+#! Histogram event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl HistogramEventInfo inherits AnalyticsEventInfo {
+    #! Bin edge values (N+1 edges for N bins)
+    list<float> bin_edges;
+    #! Count of values in each bin
+    list<int> bin_counts;
+    #! Normalized frequencies (sum to 1.0)
+    list<float> bin_frequencies;
+    #! Width of each bin (for uniform binning)
+    float bin_width;
+    #! Number of values in the window
+    int count;
+}
+
+#! Rate of change event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl RateOfChangeEventInfo inherits AnalyticsEventInfo {
+    #! The actual record value
+    float record_value;
+    #! First derivative (rate of change)
+    float rate_of_change;
+    #! Second derivative (acceleration)
+    float acceleration;
+    #! Percentage change relative to previous value
+    float percent_change;
+}
+
+#! EWMA control chart event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl EWMAControlChartEventInfo inherits AnalyticsEventInfo {
+    #! The actual record value
+    float record_value;
+    #! Current EWMA statistic
+    float ewma;
+    #! Upper control limit
+    float ucl;
+    #! Lower control limit
+    float lcl;
+    #! Center/target line
+    float center;
+    #! Whether the EWMA is outside control limits
+    bool out_of_control;
+    #! Signal classification: "normal", "upper_violation", or "lower_violation"
+    string signal;
+}
+
+#! Seasonality detection event hashdecl
+/** @since %DataProvider 3.3
+*/
+public hashdecl SeasonalityDetectionEventInfo inherits AnalyticsEventInfo {
+    #! Whether significant periodicity was detected
+    bool has_seasonality;
+    #! Strongest detected period (0 if none)
+    int dominant_period;
+    #! Autocorrelation at the dominant period
+    float dominant_correlation;
+    #! All significant periods with their correlations
+    list<hash<auto>> periods;
+    #! Full autocorrelation function values
+    list<float> autocorrelation;
+}
+
 #! Abstract base class for streaming analytics pipeline processors
 /** Analytics processors accumulate data in windows and emit analytics events.
     They inherit from @ref AbstractDataProvider and support two emission modes:
     - Window-level: accumulate N records, emit one event per field per window
     - Record-level: emit one event per record per field, maintaining a sliding window
 
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     public {

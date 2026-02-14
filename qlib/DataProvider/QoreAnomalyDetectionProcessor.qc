@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that performs z-score based anomaly detection per record
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreAnomalyDetectionProcessor inherits AbstractAnalyticsProcessor {
     public {
