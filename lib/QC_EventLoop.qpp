@@ -454,8 +454,17 @@ if (events) {
         }
 
         ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
         entry->setKeyValue("events", ev, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
         entry->setKeyValue("socket", obj->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
         rv->push(entry.release(), xsink);
     }
 
