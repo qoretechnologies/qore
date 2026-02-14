@@ -1,0 +1,270 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_GMM.qpp
+
+    Qore ml module - Gaussian Mixture Model class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_GMM.h"
+
+// Extern declaration for hashdecl (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclGMMResult;
+
+//! The GMM class implements the Gaussian Mixture Model clustering algorithm
+/** GMM models data as a mixture of Gaussian distributions and uses the Expectation-Maximization
+    (EM) algorithm to fit the parameters. Unlike K-Means, GMM provides soft (probabilistic)
+    cluster assignments and can model clusters with different shapes and orientations.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create a GMM with 3 components
+GMM gmm({"n_components": 3, "seed": 42});
+
+# Train on data
+list<hash<auto>> training_data = (
+    {"x": 1.0, "y": 1.0},
+    {"x": 1.1, "y": 0.9},
+    {"x": 10.0, "y": 10.0},
+    {"x": 10.1, "y": 9.9},
+    # ... more data
+);
+gmm.fit(training_data);
+
+# Predict cluster membership
+hash<GMMResult> result = gmm.predict({"x": 1.05, "y": 0.95});
+printf("Cluster: %d, Probability: %f\n", result.cluster, result.max_probability);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass GMM [arg=QoreGMM* gmm; ns=ML; flags=final];
+
+//! Creates a GMM with the given options
+/** @param options a hash with the following keys:
+    - \c n_components (int): number of Gaussian components (required)
+    - \c max_iterations (int): maximum EM iterations (default: 100)
+    - \c tolerance (float): convergence tolerance for log-likelihood (default: 1e-4)
+    - \c seed (int): random seed for reproducibility; 0 = random (default: 0)
+    - \c covariance_type (string): "full" or "diagonal" (default: "full")
+
+    @par Example:
+    @code{.py}
+GMM gmm({"n_components": 3, "covariance_type": "diagonal", "seed": 42});
+    @endcode
+
+    @throw ML-GMM-ERROR invalid option values or missing required options
+*/
+GMM::constructor(hash<auto> options) {
+    QoreValue v;
+    v = options->getKeyValue("n_components");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "'n_components' option is required");
+        return;
+    }
+    int64 n_components = v.getAsBigInt();
+
+    int64 max_iterations = 100;
+    double tolerance = 1e-4;
+    int64 seed = 0;
+    std::string covariance_type = "full";
+
+    v = options->getKeyValue("max_iterations");
+    if (!v.isNullOrNothing()) {
+        max_iterations = v.getAsBigInt();
+    }
+    v = options->getKeyValue("tolerance");
+    if (!v.isNullOrNothing()) {
+        tolerance = v.getAsFloat();
+    }
+    v = options->getKeyValue("seed");
+    if (!v.isNullOrNothing()) {
+        seed = v.getAsBigInt();
+    }
+    v = options->getKeyValue("covariance_type");
+    if (!v.isNullOrNothing()) {
+        const QoreStringNode* ct = v.get<const QoreStringNode>();
+        covariance_type = ct->c_str();
+    }
+
+    if (n_components < 1) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "n_components must be >= 1; got " QLLD, n_components);
+        return;
+    }
+    if (max_iterations < 1) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "max_iterations must be >= 1; got " QLLD, max_iterations);
+        return;
+    }
+    if (covariance_type != "full" && covariance_type != "diagonal") {
+        xsink->raiseException("ML-GMM-ERROR",
+            "covariance_type must be 'full' or 'diagonal'; got '%s'", covariance_type.c_str());
+        return;
+    }
+
+    self->setPrivate(CID_GMM,
+        new QoreGMM(static_cast<int>(n_components), static_cast<int>(max_iterations),
+            tolerance, seed, covariance_type));
+}
+
+//! Creates a copy of the GMM
+/** @throw COPY-ERROR GMM objects cannot be copied
+*/
+GMM::copy() {
+    xsink->raiseException("COPY-ERROR", "GMM objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records
+/** Uses the EM algorithm to fit Gaussian mixture parameters to the data.
+
+    @param data a list of hashes where each hash represents a record; only numeric fields
+    (int, float) are used as features
+
+    @par Example:
+    @code{.py}
+gmm.fit(data_records);
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-GMM-ERROR if fitting fails
+*/
+nothing GMM::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    gmm->setFieldNames(field_names);
+    gmm->fit(matrix, xsink);
+}
+
+//! Trains the model on a numeric matrix
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @par Example:
+    @code{.py}
+gmm.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+*/
+nothing GMM::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    gmm->fit(mat, xsink);
+}
+
+//! Predicts cluster membership for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref GMMResult hash with:
+    - \c cluster: most likely cluster assignment (0-based)
+    - \c max_probability: probability of the most likely cluster
+    - \c probabilities: list of probabilities for each cluster
+    - \c log_likelihood: log-likelihood of the data point
+
+    @par Example:
+    @code{.py}
+hash<GMMResult> result = gmm.predict({"x": 1.0, "y": 2.0});
+    @endcode
+
+    @throw ML-GMM-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<GMMResult> GMM::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = gmm->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-GMM-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return gmm->predict(point, xsink);
+}
+
+//! Predicts cluster membership for multiple rows in matrix form
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @return a list of @ref GMMResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<GMMResult>> results = gmm.predictMatrix(test_data);
+    @endcode
+
+    @throw ML-GMM-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<GMMResult>> GMM::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return gmm->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!gmm.isFitted()) {
+    gmm.fit(data);
+}
+    @endcode
+*/
+bool GMM::isFitted() [flags=CONSTANT] {
+    return gmm->isFitted();
+}
+
+//! Returns the number of components
+/** @return the number of Gaussian components
+*/
+int GMM::getNumComponents() [flags=CONSTANT] {
+    return gmm->getNumComponents();
+}
+
+//! Returns the component means
+/** @return a list of lists, where each inner list is the mean vector for a component
+
+    @throw ML-GMM-ERROR if the model has not been fitted
+*/
+list<list<float>> GMM::getMeans() {
+    return gmm->getMeans(xsink);
+}
+
+//! Returns the log-likelihood of the training data
+/** @return the final log-likelihood after EM convergence
+
+    @throw ML-GMM-ERROR if the model has not been fitted
+*/
+float GMM::getLogLikelihood() {
+    return gmm->getLogLikelihood(xsink);
+}

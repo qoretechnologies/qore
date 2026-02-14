@@ -47,6 +47,13 @@ public class QoreProcessorsDataProvider inherits AbstractDataProvider {
             "trend-analysis": "QoreTrendAnalysisProcessor",
             "anomaly-detection": "QoreAnomalyDetectionProcessor",
             "group-by": "QoreGroupByProcessor",
+            "percentile": "QorePercentileProcessor",
+            "correlation": "QoreCorrelationProcessor",
+            "cross-correlation": "QoreCrossCorrelationProcessor",
+            "histogram": "QoreHistogramProcessor",
+            "rate-of-change": "QoreRateOfChangeProcessor",
+            "ewma-control-chart": "QoreEWMAControlChartProcessor",
+            "seasonality-detection": "QoreSeasonalityDetectionProcessor",
         };
     }
 
@@ -101,6 +108,20 @@ public class QoreProcessorsDataProvider inherits AbstractDataProvider {
                 return new QoreAnomalyDetectionProcessor();
             case "group-by":
                 return new QoreGroupByProcessor();
+            case "percentile":
+                return new QorePercentileProcessor();
+            case "correlation":
+                return new QoreCorrelationProcessor();
+            case "cross-correlation":
+                return new QoreCrossCorrelationProcessor();
+            case "histogram":
+                return new QoreHistogramProcessor();
+            case "rate-of-change":
+                return new QoreRateOfChangeProcessor();
+            case "ewma-control-chart":
+                return new QoreEWMAControlChartProcessor();
+            case "seasonality-detection":
+                return new QoreSeasonalityDetectionProcessor();
         }
     }
 }

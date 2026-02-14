@@ -493,11 +493,13 @@ class QoreProcessorsTest inherits QUnit::Test {
         AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
         *list<string> children = root.getChildProviderNames();
         assertEq(True, exists children);
-        assertEq(11, children.size());
+        assertEq(18, children.size());
         # check all expected children
         list<string> expected = ("filter", "select-fields", "set-fields", "remove-fields",
             "search-replace", "record-limit", "running-stats", "moving-average",
-            "trend-analysis", "anomaly-detection", "group-by");
+            "trend-analysis", "anomaly-detection", "group-by",
+            "correlation", "cross-correlation", "ewma-control-chart",
+            "histogram", "percentile", "rate-of-change", "seasonality-detection");
         foreach string name in (expected) {
             assertEq(True, children.contains(name),
                 sprintf("child %y should be listed", name));

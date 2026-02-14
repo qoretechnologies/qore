@@ -118,8 +118,8 @@ docs
 doxygen/lang/*.dox
 doxygen/qlib/*.qm
 Doxyfile
-!modules/astparser/docs/
-!modules/astparser/docs/mainpage.dox.tmpl
+!modules/*/docs/
+!modules/*/docs/mainpage.dox.tmpl
 Doxyfile.???*
 *.tag
 

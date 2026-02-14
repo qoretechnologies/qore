@@ -1468,6 +1468,13 @@ if (MONGOC_FOUND)
 else()
     message(STATUS "libmongoc not found - mongodb module will not be built")
 endif()
+# ml module (requires Eigen3)
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if (Eigen3_FOUND)
+    add_subdirectory(modules/ml)
+else()
+    message(STATUS "Eigen not found - ml module will not be built")
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1509,6 +1516,9 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;qore-q-logo.svg")
+if (Eigen3_FOUND)
+    qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+endif()
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
@@ -1657,6 +1667,9 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
+    if (Eigen3_FOUND)
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
+    endif()
     if (MONGOC_FOUND)
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
     endif()
@@ -1693,6 +1706,9 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     endforeach()
     # Binary module doc dependencies
     add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise)
+    if (Eigen3_FOUND)
+        add_dependencies(docs-lang-final docs-ml)
+    endif()
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()

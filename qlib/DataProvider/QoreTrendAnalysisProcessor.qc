@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that computes linear regression trend analysis per window
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreTrendAnalysisProcessor inherits AbstractAnalyticsProcessor {
     public {
