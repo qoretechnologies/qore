@@ -301,7 +301,6 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     for (int i = 0; i < rc; ++i) {
         uintptr_t ident = kevents[i].ident;
-        void* udata = kevents[i].udata;
 
         int ev = 0;
         if (kevents[i].flags & EV_ERROR) {
@@ -328,6 +327,17 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
 
         int fd = static_cast<int>(ident);
+
+        // Look up udata from our fd_map instead of using the kevent's udata directly;
+        // the kevent udata can become stale if the fd was removed between kevent()
+        // returning and processing the results
+        auto fd_it = fd_map.find(fd);
+        if (fd_it == fd_map.end()) {
+            // fd was removed after kevent() returned; skip stale event
+            continue;
+        }
+        void* udata = fd_it->second.udata;
+
         auto it = fd_to_idx.find(fd);
         if (it != fd_to_idx.end()) {
             // Combine with existing entry
