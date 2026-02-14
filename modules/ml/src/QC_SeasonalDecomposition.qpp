@@ -1,0 +1,106 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SeasonalDecomposition.qpp
+
+    Qore ml module - SeasonalDecomposition class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_SeasonalDecomposition.h"
+
+//! The SeasonalDecomposition class implements classical seasonal decomposition
+/** Decomposes a time series into trend, seasonal, and residual components using
+    moving average extraction, supporting both additive and multiplicative modes.
+
+    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+
+    @since ml 1.0
+*/
+qclass SeasonalDecomposition [arg=QoreSeasonalDecomposition* sd; ns=ML; flags=final];
+
+//! Creates a SeasonalDecomposition instance with the given options
+/** @param options a hash with the following keys:
+    - \c period (int, required): seasonal period
+    - \c type (string, default "additive"): "additive" or "multiplicative"
+
+    @throw ML-SEASONAL-DECOMPOSITION-ERROR invalid option values
+*/
+SeasonalDecomposition::constructor(hash<auto> options) {
+    int64 period = 0;
+    const char* type = "additive";
+
+    QoreValue v = options->getKeyValue("period");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-SEASONAL-DECOMPOSITION-ERROR",
+            "required option 'period' not provided");
+        return;
+    }
+    period = v.getAsBigInt();
+
+    v = options->getKeyValue("type");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        type = v.get<const QoreStringNode>()->c_str();
+    }
+
+    if (period < 2) {
+        xsink->raiseException("ML-SEASONAL-DECOMPOSITION-ERROR",
+            "period must be >= 2; got " QLLD, period);
+        return;
+    }
+
+    self->setPrivate(CID_SEASONALDECOMPOSITION,
+        new QoreSeasonalDecomposition(static_cast<int>(period), type));
+}
+
+//! Creates a copy of the SeasonalDecomposition instance
+/** @throw COPY-ERROR SeasonalDecomposition objects cannot be copied
+*/
+SeasonalDecomposition::copy() {
+    xsink->raiseException("COPY-ERROR", "SeasonalDecomposition objects cannot be copied");
+}
+
+//! Decomposes a time series into trend, seasonal, and residual components
+/** @param series a list of float values (>= 2 * period values required)
+    @return a list of @ref SeasonalDecompositionResult hashes
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+list<auto> SeasonalDecomposition::decompose(list<auto> series) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "SeasonalDecomposition::decompose() is not yet implemented; will be available in a future release");
+    return QoreValue();
+}
+
+//! Returns the configured seasonal period
+/** @return the period value
+*/
+int SeasonalDecomposition::getPeriod() [flags=CONSTANT] {
+    return sd->getPeriod();
+}
+
+//! Returns the configured decomposition type
+/** @return "additive" or "multiplicative"
+*/
+string SeasonalDecomposition::getType() [flags=CONSTANT] {
+    return new QoreStringNode(sd->getType().c_str());
+}

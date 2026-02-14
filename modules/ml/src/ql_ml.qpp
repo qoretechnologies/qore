@@ -1,0 +1,175 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_ml.qpp
+
+    Qore ml module - hashdecl definitions and namespace-level functions
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+
+#include <Eigen/Dense>
+
+// Extern declarations for hashdecl globals (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclIsolationForestResult;
+extern const TypedHashDecl* hashdeclDBSCANResult;
+extern const TypedHashDecl* hashdeclKMeansResult;
+extern const TypedHashDecl* hashdeclHoltWintersResult;
+extern const TypedHashDecl* hashdeclPCAResult;
+extern const TypedHashDecl* hashdeclSeasonalDecompositionResult;
+extern const TypedHashDecl* hashdeclMLCapabilities;
+
+//! Result of Isolation Forest anomaly scoring
+/** @since ml 1.0
+*/
+hashdecl IsolationForestResult {
+    //! anomaly score (0.0 = normal, 1.0 = anomalous)
+    float anomaly_score;
+    //! whether the score exceeds the configured threshold
+    bool is_anomaly;
+    //! average path length in the forest
+    float average_path_length;
+    //! expected path length for the dataset size
+    float expected_path_length;
+}
+
+//! Result of DBSCAN clustering
+/** @since ml 1.0
+*/
+hashdecl DBSCANResult {
+    //! cluster label (-1 = noise/outlier)
+    int cluster;
+    //! whether the point is a core point
+    bool is_core;
+    //! number of neighbors within epsilon
+    int neighbor_count;
+}
+
+//! Result of K-Means clustering
+/** @since ml 1.0
+*/
+hashdecl KMeansResult {
+    //! assigned cluster index (0-based)
+    int cluster;
+    //! distance to assigned centroid
+    float distance;
+    //! distances to all centroids
+    list<float> centroid_distances;
+}
+
+//! Holt-Winters forecast result
+/** @since ml 1.0
+*/
+hashdecl HoltWintersResult {
+    //! forecasted value
+    float forecast;
+    //! current level component
+    float level;
+    //! current trend component
+    float trend;
+    //! current seasonal component
+    float seasonal;
+}
+
+//! PCA transformation result
+/** @since ml 1.0
+*/
+hashdecl PCAResult {
+    //! transformed values (principal components)
+    list<float> components;
+    //! explained variance ratio per component
+    list<float> explained_variance_ratio;
+    //! total explained variance
+    float total_explained_variance;
+}
+
+//! Seasonal decomposition result
+/** @since ml 1.0
+*/
+hashdecl SeasonalDecompositionResult {
+    //! trend component
+    float trend;
+    //! seasonal component
+    float seasonal;
+    //! residual component
+    float residual;
+    //! detected period length
+    int period;
+}
+
+//! ML module capability information
+/** @since ml 1.0
+*/
+hashdecl MLCapabilities {
+    //! whether ONNX Runtime support is compiled in
+    bool has_onnx;
+    //! list of available native algorithm names
+    list<string> native_algorithms;
+    //! Eigen version string
+    string eigen_version;
+}
+
+/** @defgroup ml_functions ML Functions
+    ML utility functions
+*/
+///@{
+
+//! Returns ML module capabilities
+/** @return an @ref MLCapabilities hash with module capability information
+
+    @par Example:
+    @code{.py}
+hash<MLCapabilities> caps = ml_get_capabilities();
+printf("Eigen version: %s\n", caps.eigen_version);
+printf("ONNX support: %y\n", caps.has_onnx);
+    @endcode
+
+    @since ml 1.0
+*/
+hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclMLCapabilities, xsink), xsink);
+
+#ifdef HAVE_ONNXRUNTIME
+    rv->setKeyValue("has_onnx", true, xsink);
+#else
+    rv->setKeyValue("has_onnx", false, xsink);
+#endif
+
+    // Build native algorithms list
+    ReferenceHolder<QoreListNode> algos(new QoreListNode(stringTypeInfo), xsink);
+    algos->push(new QoreStringNode("IsolationForest"), xsink);
+    algos->push(new QoreStringNode("DBSCAN"), xsink);
+    algos->push(new QoreStringNode("KMeans"), xsink);
+    algos->push(new QoreStringNode("HoltWinters"), xsink);
+    algos->push(new QoreStringNode("PCA"), xsink);
+    algos->push(new QoreStringNode("SeasonalDecomposition"), xsink);
+    rv->setKeyValue("native_algorithms", algos.release(), xsink);
+
+    // Eigen version string
+    QoreStringNode* eigen_ver = new QoreStringNode;
+    eigen_ver->sprintf("%d.%d.%d", EIGEN_WORLD_VERSION, EIGEN_MAJOR_VERSION, EIGEN_MINOR_VERSION);
+    rv->setKeyValue("eigen_version", eigen_ver, xsink);
+
+    return rv.release();
+}
+
+///@}

@@ -1,0 +1,124 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_PCA.qpp
+
+    Qore ml module - PCA class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_PCA.h"
+
+//! The PCA class implements Principal Component Analysis for dimensionality reduction
+/** PCA computes principal components via eigendecomposition of the covariance matrix,
+    allowing projection of data onto the most important directions of variance.
+
+    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+
+    @since ml 1.0
+*/
+qclass PCA [arg=QorePCA* pca; ns=ML; flags=final];
+
+//! Creates a PCA instance with the given options
+/** @param options a hash with the following optional keys:
+    - \c n_components (int, default 0 = all): number of components to keep
+    - \c variance_threshold (float, default 0.0): keep components explaining >= this ratio (0-1)
+    - \c center (bool, default True): subtract mean before PCA
+    - \c scale (bool, default False): scale to unit variance before PCA
+
+    @throw ML-PCA-ERROR invalid option values
+*/
+PCA::constructor(*hash<auto> options) {
+    int64 n_components = 0;
+    double variance_threshold = 0.0;
+    bool center = true;
+    bool scale = false;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("n_components");
+        if (!v.isNullOrNothing()) {
+            n_components = v.getAsBigInt();
+        }
+        v = options->getKeyValue("variance_threshold");
+        if (!v.isNullOrNothing()) {
+            variance_threshold = v.getAsFloat();
+        }
+        v = options->getKeyValue("center");
+        if (!v.isNullOrNothing()) {
+            center = v.getAsBool();
+        }
+        v = options->getKeyValue("scale");
+        if (!v.isNullOrNothing()) {
+            scale = v.getAsBool();
+        }
+    }
+
+    self->setPrivate(CID_PCA,
+        new QorePCA(static_cast<int>(n_components), variance_threshold, center, scale));
+}
+
+//! Creates a copy of the PCA instance
+/** @throw COPY-ERROR PCA objects cannot be copied
+*/
+PCA::copy() {
+    xsink->raiseException("COPY-ERROR", "PCA objects cannot be copied");
+}
+
+//! Fits the model on a list of hash records
+/** @param data a list of hashes with numeric fields
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+nothing PCA::fit(list<auto> data) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "PCA::fit() is not yet implemented; will be available in a future release");
+}
+
+//! Fits the model on a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+nothing PCA::fitMatrix(list<auto> matrix) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "PCA::fitMatrix() is not yet implemented; will be available in a future release");
+}
+
+//! Transforms a single record using the fitted model
+/** @param record a hash with numeric fields
+    @return a @ref PCAResult hash
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+hash<auto> PCA::transform(hash<auto> record) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "PCA::transform() is not yet implemented; will be available in a future release");
+    return QoreValue();
+}
+
+//! Returns True if the model has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool PCA::isFitted() [flags=CONSTANT] {
+    return pca->isFitted();
+}

@@ -1,0 +1,117 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ml-module.cpp
+
+    Qore ml module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+
+#include "QC_IsolationForest.h"
+#include "QC_DBSCAN.h"
+#include "QC_KMeans.h"
+#include "QC_HoltWinters.h"
+#include "QC_PCA.h"
+#include "QC_SeasonalDecomposition.h"
+
+static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
+static void ml_module_delete();
+
+extern "C" DLLEXPORT void ml_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = "ml";
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "Machine learning module providing thread-safe ML algorithms "
+                    "and model inference for Qore";
+    mod_info.author = "Qore Technologies, s.r.o.";
+    mod_info.url = "https://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = ml_module_init;
+    mod_info.ns_init = ml_module_ns_init;
+    mod_info.del = ml_module_delete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+}
+
+QoreNamespace MLNS("ML");
+
+// Forward declarations for hashdecl init functions (generated from ql_ml.qpp)
+DLLLOCAL TypedHashDecl* init_hashdecl_IsolationForestResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_DBSCANResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KMeansResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_HoltWintersResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_PCAResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SeasonalDecompositionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
+
+// Global hashdecl pointers (referenced by generated QPP code)
+const TypedHashDecl* hashdeclIsolationForestResult;
+const TypedHashDecl* hashdeclDBSCANResult;
+const TypedHashDecl* hashdeclKMeansResult;
+const TypedHashDecl* hashdeclHoltWintersResult;
+const TypedHashDecl* hashdeclPCAResult;
+const TypedHashDecl* hashdeclSeasonalDecompositionResult;
+const TypedHashDecl* hashdeclMLCapabilities;
+
+// Forward declarations for function init (generated from ql_ml.qpp)
+DLLLOCAL void init_ml_functions(QoreNamespace& ns);
+
+static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    // Pre-initialize all classes first (creates class objects without methods)
+    preinitIsolationForestClass();
+    preinitDBSCANClass();
+    preinitKMeansClass();
+    preinitHoltWintersClass();
+    preinitPCAClass();
+    preinitSeasonalDecompositionClass();
+
+    // Initialize hashdecls (store in globals for generated QPP code)
+    hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
+    hashdeclDBSCANResult = init_hashdecl_DBSCANResult(MLNS);
+    hashdeclKMeansResult = init_hashdecl_KMeansResult(MLNS);
+    hashdeclHoltWintersResult = init_hashdecl_HoltWintersResult(MLNS);
+    hashdeclPCAResult = init_hashdecl_PCAResult(MLNS);
+    hashdeclSeasonalDecompositionResult = init_hashdecl_SeasonalDecompositionResult(MLNS);
+    hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
+
+    // Add classes to namespace (adds methods that may reference other classes)
+    MLNS.addSystemClass(initIsolationForestClass(MLNS));
+    MLNS.addSystemClass(initDBSCANClass(MLNS));
+    MLNS.addSystemClass(initKMeansClass(MLNS));
+    MLNS.addSystemClass(initHoltWintersClass(MLNS));
+    MLNS.addSystemClass(initPCAClass(MLNS));
+    MLNS.addSystemClass(initSeasonalDecompositionClass(MLNS));
+
+    // Add namespace-level functions
+    init_ml_functions(MLNS);
+}
+
+static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+    qns->addNamespace(MLNS.copy());
+}
+
+static void ml_module_delete() {
+    ExceptionSink xsink;
+    MLNS.clear(&xsink);
+}

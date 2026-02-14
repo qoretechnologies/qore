@@ -12,6 +12,9 @@ SUBDIRS = lib modules/astparser modules/reflection modules/logger_bin modules/li
 if COND_MONGODB
 SUBDIRS += modules/mongodb
 endif
+if COND_EIGEN3
+SUBDIRS += modules/ml
+endif
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
 

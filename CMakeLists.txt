@@ -1468,6 +1468,13 @@ if (MONGOC_FOUND)
 else()
     message(STATUS "libmongoc not found - mongodb module will not be built")
 endif()
+# ml module (requires Eigen3)
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if (Eigen3_FOUND)
+    add_subdirectory(modules/ml)
+else()
+    message(STATUS "Eigen not found - ml module will not be built")
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.

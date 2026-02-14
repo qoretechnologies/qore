@@ -1,0 +1,145 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_KMeans.qpp
+
+    Qore ml module - KMeans class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_KMeans.h"
+
+//! The KMeans class implements K-Means clustering with optional mini-batch online updates
+/** K-Means partitions data into k clusters by iteratively assigning points to the nearest
+    centroid and updating centroids to be the mean of assigned points.
+
+    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+
+    @since ml 1.0
+*/
+qclass KMeans [arg=QoreKMeans* kmeans; ns=ML; flags=final];
+
+//! Creates a KMeans instance with the given options
+/** @param options a hash with the following keys:
+    - \c k (int, required): number of clusters
+    - \c max_iterations (int, default 100): maximum Lloyd iterations
+    - \c tolerance (float, default 1e-4): convergence tolerance
+    - \c seed (int, default 0 = random): random seed for reproducibility
+    - \c init (string, default "kmeans++"): initialization method ("kmeans++", "random")
+
+    @throw ML-KMEANS-ERROR invalid option values
+*/
+KMeans::constructor(hash<auto> options) {
+    int64 k = 0;
+    int64 max_iterations = 100;
+    double tolerance = 1e-4;
+    int64 seed = 0;
+    const char* init_method = "kmeans++";
+
+    QoreValue v = options->getKeyValue("k");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "required option 'k' not provided");
+        return;
+    }
+    k = v.getAsBigInt();
+
+    v = options->getKeyValue("max_iterations");
+    if (!v.isNullOrNothing()) {
+        max_iterations = v.getAsBigInt();
+    }
+    v = options->getKeyValue("tolerance");
+    if (!v.isNullOrNothing()) {
+        tolerance = v.getAsFloat();
+    }
+    v = options->getKeyValue("seed");
+    if (!v.isNullOrNothing()) {
+        seed = v.getAsBigInt();
+    }
+    v = options->getKeyValue("init");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        init_method = v.get<const QoreStringNode>()->c_str();
+    }
+
+    if (k < 1) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "k must be >= 1; got " QLLD, k);
+        return;
+    }
+
+    self->setPrivate(CID_KMEANS,
+        new QoreKMeans(static_cast<int>(k), static_cast<int>(max_iterations),
+            tolerance, seed, init_method));
+}
+
+//! Creates a copy of the KMeans instance
+/** @throw COPY-ERROR KMeans objects cannot be copied
+*/
+KMeans::copy() {
+    xsink->raiseException("COPY-ERROR", "KMeans objects cannot be copied");
+}
+
+//! Fits the model on a list of hash records
+/** @param data a list of hashes with numeric fields
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+nothing KMeans::fit(list<auto> data) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "KMeans::fit() is not yet implemented; will be available in a future release");
+}
+
+//! Fits the model on a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+nothing KMeans::fitMatrix(list<auto> matrix) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "KMeans::fitMatrix() is not yet implemented; will be available in a future release");
+}
+
+//! Predicts cluster assignment for a single record
+/** @param record a hash with numeric fields
+    @return a @ref KMeansResult hash
+
+    @throw NOT-IMPLEMENTED this method is not yet implemented
+*/
+hash<auto> KMeans::predict(hash<auto> record) {
+    xsink->raiseException("NOT-IMPLEMENTED",
+        "KMeans::predict() is not yet implemented; will be available in a future release");
+    return QoreValue();
+}
+
+//! Returns the number of clusters
+/** @return the k value
+*/
+int KMeans::getK() [flags=CONSTANT] {
+    return kmeans->getK();
+}
+
+//! Returns True if the model has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool KMeans::isFitted() [flags=CONSTANT] {
+    return kmeans->isFitted();
+}
