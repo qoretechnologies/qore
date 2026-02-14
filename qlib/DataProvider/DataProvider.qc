@@ -655,7 +655,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John" && @age > 18');
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DataProviderExpression> parseDpqlExpression(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -679,7 +679,7 @@ if (!result.success) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -703,7 +703,7 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
 # Result: @name == "John"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static string serializeDpqlExpression(hash<DataProviderExpression> exp,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -724,7 +724,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlTokenInfo>> getDpqlTokens(string text) {
         DpqlTokenizer tokenizer(text);
@@ -749,7 +749,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 # Returns completions for fields starting with "na"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
             hash<string, AbstractDataField> fields,
@@ -778,7 +778,7 @@ if (errors) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,

@@ -224,6 +224,7 @@ module DbDataProvider {
             "logo_file_name": "oracle-logo.svg",
             "native_driver": "oracle",
             "default_port": 1521,
+            "jdbc_jar": "ojdbc11.jar",
         });
         registerDbVendorApp(<DbVendorInfo>{
             "display_name": "SQL-Server",
@@ -232,6 +233,7 @@ module DbDataProvider {
             "logo_file_name": "freetds-logo.svg",
             "native_driver": "freetds",
             "default_port": 1433,
+            "jdbc_jar": "mssql-jdbc.jar",
         });
         registerDbVendorApp(<DbVendorInfo>{
             "display_name": "SQLite",
@@ -241,6 +243,56 @@ module DbDataProvider {
             "native_driver": "sqlite3",
             "supports_jdbc": False,
             "supports_odbc": False,
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "CockroachDB",
+            "short_desc": "CockroachDB distributed SQL database",
+            "logo": DbDriverLogos.cockroachdb.logo,
+            "logo_file_name": "cockroachdb-logo.svg",
+            "native_driver": "pgsql",
+            "default_port": 26257,
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "Amazon-Redshift",
+            "short_desc": "Amazon Redshift data warehouse",
+            "logo": DbDriverLogos.redshift.logo,
+            "logo_file_name": "redshift-logo.svg",
+            "native_driver": "pgsql",
+            "default_port": 5439,
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "MariaDB",
+            "short_desc": "MariaDB database server",
+            "logo": DbDriverLogos.mariadb.logo,
+            "logo_file_name": "mariadb-logo.svg",
+            "native_driver": "mysql",
+            "default_port": 3306,
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "Snowflake",
+            "short_desc": "Snowflake cloud data warehouse",
+            "logo": DbDriverLogos.snowflake.logo,
+            "logo_file_name": "snowflake-logo.svg",
+            "default_port": 443,
+            "supports_odbc": False,
+            "jdbc_jar": "snowflake-jdbc.jar",
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "ClickHouse",
+            "short_desc": "ClickHouse analytics database",
+            "logo": DbDriverLogos.clickhouse.logo,
+            "logo_file_name": "clickhouse-logo.svg",
+            "default_port": 8123,
+            "supports_odbc": False,
+            "jdbc_jar": "clickhouse-jdbc.jar",
+        });
+        registerDbVendorApp(<DbVendorInfo>{
+            "display_name": "H2",
+            "short_desc": "H2 embedded Java SQL database",
+            "logo": DbDriverLogos.h2.logo,
+            "logo_file_name": "h2-logo.svg",
+            "supports_odbc": False,
+            "jdbc_jar": "h2.jar",
         });
     };
 }
@@ -275,6 +327,9 @@ module DbDataProvider {
     - added @ref DbDataProvider::registerDbVendorApp() "registerDbVendorApp()" for registering per-vendor database
       applications with individual connection form fields (driver, host, port, db, user, pass, etc.)
     - registered per-vendor database applications for PostgreSQL, MySQL, Oracle, SQL Server, and SQLite
+    - added per-vendor database applications for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
+    - added @c jdbc_jar field to @ref DbDataProvider::DbVendorInfo "DbVendorInfo" for JDBC auto-classpath support
+    - added SVG logos for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
 
     @subsection dbdataprovider_v2_3 DbDataProvider v2.3
     - added the @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database connectivity
@@ -349,6 +404,36 @@ public const DbDriverLogos = {
         "logo_file_name": "odbc-logo.svg",
         "logo_mime_type": MimeTypeSvg,
     },
+    "cockroachdb": {
+        "logo": File::readTextFile(get_script_dir() + "/cockroachdb-logo.svg"),
+        "logo_file_name": "cockroachdb-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "redshift": {
+        "logo": File::readTextFile(get_script_dir() + "/redshift-logo.svg"),
+        "logo_file_name": "redshift-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "mariadb": {
+        "logo": File::readTextFile(get_script_dir() + "/mariadb-logo.svg"),
+        "logo_file_name": "mariadb-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "snowflake": {
+        "logo": File::readTextFile(get_script_dir() + "/snowflake-logo.svg"),
+        "logo_file_name": "snowflake-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "clickhouse": {
+        "logo": File::readTextFile(get_script_dir() + "/clickhouse-logo.svg"),
+        "logo_file_name": "clickhouse-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "h2": {
+        "logo": File::readTextFile(get_script_dir() + "/h2-logo.svg"),
+        "logo_file_name": "h2-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
 };
 
 #! Default logo info for unknown database drivers
@@ -396,6 +481,9 @@ public hashdecl DbVendorInfo {
 
     #! Whether ODBC can be used (default True)
     bool supports_odbc = True;
+
+    #! JDBC JAR filename for auto-classpath (e.g. "ojdbc11.jar"), NOTHING if not applicable
+    *string jdbc_jar;
 
     #! Extra vendor-specific connection options (merged after standard fields)
     *hash<string, hash<ConnectionOptionInfo>> extra_options;
@@ -451,19 +539,23 @@ public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
     bool single_driver = driver_values.size() == 1;
     hash<string, hash<ConnectionOptionInfo>> conn_opts;
 
-    conn_opts.driver = <ConnectionOptionInfo>{
-        "display_name": "Driver",
-        "short_desc": "Database driver",
-        "desc": "The database driver to use for the connection",
-        "type": "string",
-        "required": True,
-        "allowed_values": driver_values,
-        "default_value": single_driver ? driver_values[0].value : NOTHING,
-        "readonly": single_driver,
-        "has_dependents": !single_driver,
-        "on_change": !single_driver ? ("refetch",) : NOTHING,
-        "preselected": True,
-    };
+    # only show the driver option when there are multiple choices; when there is only one driver,
+    # it is omitted from the form and the backend applies the default automatically
+    if (!single_driver) {
+        conn_opts.driver = <ConnectionOptionInfo>{
+            "display_name": "Driver",
+            "short_desc": "Database driver",
+            "desc": "The database driver to use for the connection",
+            "type": "string",
+            "required": True,
+            "allowed_values": driver_values,
+            # default priority: native > jdbc > odbc (matches driver_values order)
+            "default_value": driver_values[0].value,
+            "has_dependents": True,
+            "on_change": ("refetch",),
+            "preselected": True,
+        };
+    }
 
     conn_opts.host = <ConnectionOptionInfo>{
         "display_name": "Host",
@@ -555,6 +647,10 @@ public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
         "groups": (DataProvider::AppGroup::Databases,),
         "connection_options": conn_opts,
         "auto_url": True,
+        # store default driver and JDBC JAR for backend URL construction
+        "info": {
+            "default_driver": driver_values[0].value,
+        } + (vendor.jdbc_jar ? {"jdbc_jar": vendor.jdbc_jar} : {}),
     });
 
 }

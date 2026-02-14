@@ -138,7 +138,7 @@ public hashdecl DataProviderAppInfo {
         creation forms. This allows multiple apps to share the same connection scheme (e.g. @c "db")
         while presenting different form fields.
 
-        @since %DataProvider 3.5
+        @since %DataProvider 3.3
     */
     *hash<string, hash<ConnectionProvider::ConnectionOptionInfo>> connection_options;
 
@@ -146,7 +146,7 @@ public hashdecl DataProviderAppInfo {
     /** When @ref True, the connection URL is generated automatically from options and the URL
         field is not shown in the connection creation form, regardless of the scheme's auto_url setting.
 
-        @since %DataProvider 3.5
+        @since %DataProvider 3.3
     */
     *bool auto_url;
 }

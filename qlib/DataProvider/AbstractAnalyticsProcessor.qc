@@ -26,7 +26,7 @@
 public namespace DataProvider {
 
 /** @defgroup analytics_mode_constants Analytics Processor Mode Constants
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 #/@{
 #! Window-level analytics: accumulate records, emit one event per field per window
@@ -36,7 +36,7 @@ public const ANALYTICS_MODE_RECORD = 1;
 #/@}
 
 #! Base analytics event hashdecl with common fields
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl AnalyticsEventInfo {
     #! The type of analytics event (e.g. "statistics", "moving-average", "trend", "anomaly")
@@ -50,7 +50,7 @@ public hashdecl AnalyticsEventInfo {
 }
 
 #! Statistics event hashdecl for running statistics analytics
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl StatisticsEventInfo inherits AnalyticsEventInfo {
     #! Number of values in this window
@@ -70,7 +70,7 @@ public hashdecl StatisticsEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Moving average event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl MovingAverageEventInfo inherits AnalyticsEventInfo {
     #! Simple moving average over the window
@@ -82,7 +82,7 @@ public hashdecl MovingAverageEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Trend analysis event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl TrendEventInfo inherits AnalyticsEventInfo {
     #! Slope of the linear regression line
@@ -96,7 +96,7 @@ public hashdecl TrendEventInfo inherits AnalyticsEventInfo {
 }
 
 #! Anomaly detection event hashdecl
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl AnomalyEventInfo inherits AnalyticsEventInfo {
     #! Z-score of the current value
@@ -119,7 +119,7 @@ public hashdecl AnomalyEventInfo inherits AnalyticsEventInfo {
     - Window-level: accumulate N records, emit one event per field per window
     - Record-level: emit one event per record per field, maintaining a sliding window
 
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     public {

@@ -110,12 +110,12 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
         - a string with @c "=": option must equal a specific value (e.g. @c "driver=jdbc")
         - a list of strings: a group where at least one must have a value
 
-        @since %DataProvider 3.5
+        @since %DataProvider 3.3
     */
     *softlist<softstring> depends_on;
 
     #! How to react to changes (e.g. @c "refetch" to reload options from the server)
-    /** @since %DataProvider 3.5
+    /** @since %DataProvider 3.3
     */
     *softlist<softstring> on_change;
 }
@@ -716,7 +716,7 @@ public hashdecl DataProviderExpressionInfo {
     Either start or end (or both) must be present.
     Both bounds are inclusive (Qore-style).
 
-    @since DataProvider 3.4
+    @since DataProvider 3.3
 */
 public hashdecl DataProviderRangeSpec {
     #! Start index of the range (NOTHING for open start, e.g., \c [..5])
@@ -1799,7 +1799,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     private:internal {
         #! Optional debug info collector
-        /** @since DataProvider 3.5
+        /** @since DataProvider 3.3
         */
         *AbstractDebugInfoCollector debug_collector;
     }
@@ -2223,7 +2223,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw INVALID-OPERATION the data provider does not support reading
         @throw NO-DATA the \c required_result search option was set and no record was found
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     *hash<auto> searchFirstRecord(string dpql_where, *hash<auto> search_options) {
         return searchFirstRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
@@ -2286,7 +2286,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw MULTIPLE-RECORDS-ERROR multiple records found
         @throw NO-DATA the \c required_result search option was set and no record was found
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     *hash<auto> searchSingleRecord(string dpql_where, *hash<auto> search_options) {
         return searchSingleRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
@@ -2379,7 +2379,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw INVALID-BLOCK-SIZE the block size must be a positive number
         @throw INVALID-OPERATION the data provider does not support reading
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     AbstractDataProviderBulkRecordInterface searchRecordsBulk(int block_size = 1000,
             string dpql_where, *hash<auto> search_options) {
@@ -2448,7 +2448,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support reading
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     AbstractDataProviderRecordIterator searchRecords(string dpql_where, *hash<auto> search_options) {
         return searchRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
@@ -2599,7 +2599,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw INVALID-OPERATION the data provider does not support record updating
         @throw UPDATE-RECORDS-ERROR error updating records
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     int updateRecords(hash<auto> set, string dpql_where, *hash<auto> search_options) {
         return updateRecords(set, DataProvider::parseDpqlExpression(dpql_where), search_options);
@@ -2684,7 +2684,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @throw INVALID-OPERATION the data provider does not support record deletion
         @throw DELETE-RECORDS-ERROR error deleting records
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     int deleteRecords(string dpql_where, *hash<auto> search_options) {
         return deleteRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
@@ -4777,7 +4777,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @return for a single key, the value; for multiple keys, a hash subset
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static auto applyKeyAccessorImpl(auto value, list<string> key_list) {
         # Handle list values by mapping key accessor over each element
@@ -6450,7 +6450,7 @@ auto response = provider.doRequest(request);
 list<hash<DataProviderDebugInfo>> info = collector.getAll();
         @endcode
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     setDebugCollector(*AbstractDebugInfoCollector collector) {
         debug_collector = collector;
@@ -6459,7 +6459,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     #! Returns the current debug info collector, if any
     /** @return the current debug collector, or @ref nothing if none is set
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     *AbstractDebugInfoCollector getDebugCollector() {
         return debug_collector;
@@ -6471,7 +6471,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
         Subclasses should call this method to report debug information when performing operations.
         If no collector is registered, this method does nothing.
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     private collectDebugInfo(hash<DataProviderDebugInfo> info) {
         if (debug_collector) {
@@ -6482,7 +6482,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     #! Returns @ref True if debug collection is enabled
     /** @return @ref True if a debug collector is registered
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     bool debugCollectionEnabled() {
         return debug_collector.val();

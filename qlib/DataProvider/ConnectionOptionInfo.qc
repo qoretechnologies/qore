@@ -29,7 +29,7 @@ public namespace ConnectionProvider {
 /** @note This hashdecl is defined in the @c DataProvider module (not in the @c ConnectionProvider module) so that
     both modules can reference it without circular dependencies.
 
-    @since %DataProvider 3.5 (moved from ConnectionProvider to DataProvider)
+    @since %DataProvider 3.3 (moved from ConnectionProvider to DataProvider)
 */
 public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
     #! Option value type

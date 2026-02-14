@@ -36,6 +36,8 @@ public class DatasourceConnectionTest inherits QUnit::Test {
         addTestCase("minimal URL", \testMinimalUrl());
         addTestCase("vendor app registration", \testVendorApps());
         addTestCase("vendor app connection options", \testVendorAppConnectionOptions());
+        addTestCase("new vendor apps", \testNewVendorApps());
+        addTestCase("jdbc jar info", \testJdbcJarInfo());
 
         set_return_value(main());
     }
@@ -301,7 +303,8 @@ public class DatasourceConnectionTest inherits QUnit::Test {
 
     testVendorApps() {
         # verify all vendor apps are registered
-        list<string> vendor_names = ("PostgreSQL", "MySQL", "Oracle", "SQL-Server", "SQLite");
+        list<string> vendor_names = ("PostgreSQL", "MySQL", "Oracle", "SQL-Server", "SQLite",
+            "CockroachDB", "Amazon-Redshift", "MariaDB", "Snowflake", "ClickHouse", "H2");
         for (int i = 0; i < vendor_names.size(); ++i) {
             string name = vendor_names[i];
             *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(name);
@@ -343,6 +346,12 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             *hash<auto> pgsql_av = (select av, $1.value == "pgsql")[0];
             assertTrue(exists pgsql_av, "pgsql driver in allowed_values");
 
+            # default_value is always the first (native) driver
+            assertEq("pgsql", opts.driver.default_value);
+
+            # default_driver in app info for backend URL construction
+            assertEq("pgsql", app.info.default_driver);
+
             # multiple drivers -> has_dependents and on_change
             if (av.size() > 1) {
                 assertTrue(opts.driver.has_dependents);
@@ -363,20 +372,17 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             assertEq(("driver=jdbc",), opts.classpath.depends_on);
         }
 
-        # verify SQLite has no JDBC/ODBC options and no classpath
+        # verify SQLite has no driver option (single driver), no JDBC/ODBC options, no classpath
         {
             *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQLite");
             @assert(app);
             hash<auto> opts = app.connection_options;
 
-            # driver allowed_values should only have sqlite3
-            list<auto> av = opts.driver.allowed_values;
-            assertEq(1, av.size());
-            assertEq("sqlite3", av[0].value);
+            # single driver -> driver option omitted from form
+            assertFalse(exists opts.driver, "single-driver: driver option omitted");
 
-            # single driver -> readonly, no has_dependents
-            assertTrue(opts.driver.readonly);
-            assertEq("sqlite3", opts.driver.default_value);
+            # default_driver stored in app info for backend URL construction
+            assertEq("sqlite3", app.info.default_driver);
 
             # no classpath for SQLite (no JDBC/ODBC support)
             assertFalse(exists opts.classpath);
@@ -401,6 +407,128 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Oracle");
             @assert(app);
             assertEq(1521, app.connection_options.port.default_value);
+        }
+    }
+
+    testNewVendorApps() {
+        # CockroachDB: native pgsql driver, port 26257
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("CockroachDB");
+            @assert(app);
+            assertEq("pgsql", app.info.default_driver);
+            assertEq(26257, app.connection_options.port.default_value);
+            assertTrue(exists app.connection_options.driver, "CockroachDB has driver option");
+            # should support native pgsql, jdbc, odbc
+            list<auto> av = app.connection_options.driver.allowed_values;
+            assertTrue(av.size() >= 3, "CockroachDB has 3+ driver options");
+            assertEq("pgsql", av[0].value, "CockroachDB default is pgsql");
+        }
+
+        # Amazon-Redshift: native pgsql driver, port 5439
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Amazon-Redshift");
+            @assert(app);
+            assertEq("pgsql", app.info.default_driver);
+            assertEq(5439, app.connection_options.port.default_value);
+        }
+
+        # MariaDB: native mysql driver, port 3306
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MariaDB");
+            @assert(app);
+            assertEq("mysql", app.info.default_driver);
+            assertEq(3306, app.connection_options.port.default_value);
+        }
+
+        # Snowflake: no native driver, JDBC only (no ODBC), port 443
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Snowflake");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertEq(443, app.connection_options.port.default_value);
+            # single driver (jdbc) -> driver option omitted
+            assertFalse(exists app.connection_options.driver, "Snowflake: single driver, no driver option");
+            # classpath is present because JDBC is supported
+            assertTrue(exists app.connection_options.classpath, "Snowflake: classpath available for JDBC");
+        }
+
+        # ClickHouse: no native driver, JDBC only, port 8123
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("ClickHouse");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertEq(8123, app.connection_options.port.default_value);
+            assertFalse(exists app.connection_options.driver, "ClickHouse: single driver, no driver option");
+        }
+
+        # H2: no native driver, JDBC only, no default port
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("H2");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertFalse(exists app.connection_options.port.default_value, "H2: no default port");
+            assertFalse(exists app.connection_options.driver, "H2: single driver, no driver option");
+        }
+    }
+
+    testJdbcJarInfo() {
+        # vendors with jdbc_jar set
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Oracle");
+            @assert(app);
+            assertEq("ojdbc11.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQL-Server");
+            @assert(app);
+            assertEq("mssql-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Snowflake");
+            @assert(app);
+            assertEq("snowflake-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("ClickHouse");
+            @assert(app);
+            assertEq("clickhouse-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("H2");
+            @assert(app);
+            assertEq("h2.jar", app.info.jdbc_jar);
+        }
+
+        # vendors without jdbc_jar (use native driver by default)
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("PostgreSQL");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "PostgreSQL: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MySQL");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "MySQL: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQLite");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "SQLite: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("CockroachDB");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "CockroachDB: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Amazon-Redshift");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "Amazon-Redshift: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MariaDB");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "MariaDB: no jdbc_jar");
         }
     }
 

@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.5.0";
+    version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -771,41 +771,6 @@ if (errors) {
 
     @section dataprovider_relnotes Release Notes
 
-    @subsection dataprovider_v3_5 DataProvider v3.5
-    - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
-      @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously
-      defined only in child hashdecls and are now shared across all option types
-    - @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo": added @c connection_options and @c auto_url
-      fields to support per-app connection option overrides for connection creation forms
-    - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
-      resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
-      compatibility
-
-    @subsection dataprovider_v3_4 DataProvider v3.4
-    - added streaming analytics pipeline processors for real-time data analysis:
-      - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
-        (count, sum, avg, min, max, stddev, variance) over windows of records
-      - @ref DataProvider::QoreMovingAverageProcessor "moving-average": compute simple and exponential
-        moving averages per record
-      - @ref DataProvider::QoreTrendAnalysisProcessor "trend-analysis": compute linear regression trend
-        analysis (slope, intercept, r-squared, direction) over windows
-      - @ref DataProvider::QoreAnomalyDetectionProcessor "anomaly-detection": z-score based anomaly
-        detection per record
-    - added the @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" abstract base
-      class for building streaming analytics processors with window and record emission modes
-    - added the @ref DPC_ANALYTICS processor capability constant for analytics processors
-    - added analytics event hashdecls: @ref DataProvider::AnalyticsEventInfo "AnalyticsEventInfo",
-      @ref DataProvider::StatisticsEventInfo "StatisticsEventInfo",
-      @ref DataProvider::MovingAverageEventInfo "MovingAverageEventInfo",
-      @ref DataProvider::TrendEventInfo "TrendEventInfo",
-      @ref DataProvider::AnomalyEventInfo "AnomalyEventInfo"
-    - added @ref DataProvider::QoreGroupByProcessor "group-by": group records by field values and
-      compute aggregate functions (count, sum, avg, min, max, first, last) per group
-    - added 4 new analytics actions to the Qore app in the "Analytics" group
-    - added 1 new aggregation action to the Qore app in the "Aggregation" group
-    - updated @ref DataProvider::QoreProcessorsDataProvider "qore-processors" factory with 5 new
-      processor children (4 analytics + 1 aggregation)
-
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added the built-in "Qore" app with pipeline processor actions for filtering, transforming, and
       manipulating records in data pipelines:
@@ -864,6 +829,37 @@ if (errors) {
       @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
       @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
     - added methods to return data provider types in the context of option dataprovider_message_support
+    - added streaming analytics pipeline processors for real-time data analysis:
+      - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
+        (count, sum, avg, min, max, stddev, variance) over windows of records
+      - @ref DataProvider::QoreMovingAverageProcessor "moving-average": compute simple and exponential
+        moving averages per record
+      - @ref DataProvider::QoreTrendAnalysisProcessor "trend-analysis": compute linear regression trend
+        analysis (slope, intercept, r-squared, direction) over windows
+      - @ref DataProvider::QoreAnomalyDetectionProcessor "anomaly-detection": z-score based anomaly
+        detection per record
+    - added the @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" abstract base
+      class for building streaming analytics processors with window and record emission modes
+    - added the @ref DPC_ANALYTICS processor capability constant for analytics processors
+    - added analytics event hashdecls: @ref DataProvider::AnalyticsEventInfo "AnalyticsEventInfo",
+      @ref DataProvider::StatisticsEventInfo "StatisticsEventInfo",
+      @ref DataProvider::MovingAverageEventInfo "MovingAverageEventInfo",
+      @ref DataProvider::TrendEventInfo "TrendEventInfo",
+      @ref DataProvider::AnomalyEventInfo "AnomalyEventInfo"
+    - added @ref DataProvider::QoreGroupByProcessor "group-by": group records by field values and
+      compute aggregate functions (count, sum, avg, min, max, first, last) per group
+    - added 4 new analytics actions to the Qore app in the "Analytics" group
+    - added 1 new aggregation action to the Qore app in the "Aggregation" group
+    - updated @ref DataProvider::QoreProcessorsDataProvider "qore-processors" factory with 5 new
+      processor children (4 analytics + 1 aggregation)
+    - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
+      @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously
+      defined only in child hashdecls and are now shared across all option types
+    - @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo": added @c connection_options and @c auto_url
+      fields to support per-app connection option overrides for connection creation forms
+    - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
+      resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
+      compatibility
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields
