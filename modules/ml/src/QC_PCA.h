@@ -30,13 +30,15 @@
 
 #include "ml_common.h"
 
+#include <mutex>
+
 DLLEXPORT extern qore_classid_t CID_PCA;
 DLLLOCAL extern QoreClass* QC_PCA;
 
 DLLLOCAL void preinitPCAClass();
 DLLLOCAL QoreClass* initPCAClass(QoreNamespace& ns);
 
-//! PCA implementation class (stub)
+//! PCA implementation class
 class QorePCA : public AbstractPrivateData {
 public:
     DLLLOCAL QorePCA(int n_components, double variance_threshold, bool center, bool scale)
@@ -44,15 +46,56 @@ public:
           center(center), scale(scale) {
     }
 
-    DLLLOCAL int getNumComponents() const { return n_components; }
+    DLLLOCAL int getNumComponents() const { return actual_n_components; }
     DLLLOCAL bool isFitted() const { return fitted; }
 
+    //! Fit the model on data
+    DLLLOCAL void fitInternal(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Transform a single point
+    DLLLOCAL QoreHashNode* transformInternal(const RowVectorXd& point, ExceptionSink* xsink);
+
+    //! Transform multiple points
+    DLLLOCAL QoreListNode* transformMatrix(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Fit and transform atomically (single lock acquisition)
+    DLLLOCAL QoreListNode* fitTransformInternal(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Get principal component vectors
+    DLLLOCAL QoreListNode* getComponents(ExceptionSink* xsink);
+
+    //! Get explained variance ratios
+    DLLLOCAL QoreListNode* getExplainedVarianceRatio(ExceptionSink* xsink);
+
+    //! Get mean vector
+    DLLLOCAL QoreListNode* getMean(ExceptionSink* xsink);
+
+    //! Store field names
+    DLLLOCAL void setFieldNames(const std::vector<std::string>& names) { field_names = names; }
+    DLLLOCAL const std::vector<std::string>& getFieldNames() const { return field_names; }
+
 private:
-    int n_components;
+    //! Fit implementation (assumes lock is held)
+    DLLLOCAL void doFit(const MatrixXd& data, ExceptionSink* xsink);
+
+    //! Transform matrix implementation (assumes lock is held)
+    DLLLOCAL QoreListNode* doTransformMatrix(const MatrixXd& data, ExceptionSink* xsink);
+    int n_components;       // requested (0 = all)
+    int actual_n_components = 0; // after fitting
     double variance_threshold;
     bool center;
     bool scale;
+
+    // Fitted state
+    MatrixXd components;            // actual_n_components x n_features
+    VectorXd mean_vec;
+    VectorXd stddev_vec;
+    VectorXd explained_variance_ratio_vec;
+    int n_features = 0;
     bool fitted = false;
+    std::vector<std::string> field_names;
+
+    mutable std::mutex mtx;
 };
 
 #endif // _QORE_MODULE_ML_QC_PCA_H

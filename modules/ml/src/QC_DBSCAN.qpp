@@ -28,11 +28,17 @@
 #include "qore/Qore.h"
 #include "QC_DBSCAN.h"
 
+extern const TypedHashDecl* hashdeclDBSCANResult;
+
 //! The DBSCAN class implements density-based spatial clustering
 /** DBSCAN finds clusters of arbitrary shape by identifying dense regions in the data.
     Points that don't belong to any cluster are classified as noise.
 
-    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+    @par Example:
+    @code{.py}
+DBSCAN db({"epsilon": 0.5, "min_points": 5, "metric": "euclidean"});
+list<hash<DBSCANResult>> results = db.cluster(data_records);
+    @endcode
 
     @since ml 1.0
 */
@@ -80,6 +86,13 @@ DBSCAN::constructor(hash<auto> options) {
         return;
     }
 
+    if (strcmp(metric, "euclidean") != 0 && strcmp(metric, "manhattan") != 0
+        && strcmp(metric, "cosine") != 0) {
+        xsink->raiseException("ML-DBSCAN-ERROR",
+            "metric must be 'euclidean', 'manhattan', or 'cosine'; got '%s'", metric);
+        return;
+    }
+
     self->setPrivate(CID_DBSCAN,
         new QoreDBSCAN(epsilon, static_cast<int>(min_points), metric));
 }
@@ -95,24 +108,40 @@ DBSCAN::copy() {
 /** @param data a list of hashes with numeric fields
     @return a list of @ref DBSCANResult hashes
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+list<hash<DBSCANResult>> results = db.cluster(data_records);
+for (int i = 0; i < results.size(); ++i) {
+    printf("point %d: cluster=%d is_core=%y neighbors=%d\n",
+        i, results[i].cluster, results[i].is_core, results[i].neighbor_count);
+}
+    @endcode
+
+    @throw ML-DBSCAN-ERROR no data provided
+    @throw ML-DATA-ERROR data format errors
 */
-list<auto> DBSCAN::cluster(list<auto> data) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "DBSCAN::cluster() is not yet implemented; will be available in a future release");
-    return QoreValue();
+list<hash<DBSCANResult>> DBSCAN::cluster(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dbscan->cluster(matrix, xsink);
 }
 
 //! Clusters a numeric matrix
 /** @param matrix a list of lists of numeric values
     @return a list of @ref DBSCANResult hashes
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @throw ML-DBSCAN-ERROR no data provided
+    @throw ML-DATA-ERROR data format errors
 */
-list<auto> DBSCAN::clusterMatrix(list<auto> matrix) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "DBSCAN::clusterMatrix() is not yet implemented; will be available in a future release");
-    return QoreValue();
+list<hash<DBSCANResult>> DBSCAN::clusterMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dbscan->cluster(mat, xsink);
 }
 
 //! Returns the configured epsilon value

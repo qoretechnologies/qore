@@ -106,12 +106,12 @@ hashdecl PCAResult {
 /** @since ml 1.0
 */
 hashdecl SeasonalDecompositionResult {
-    //! trend component
-    float trend;
+    //! trend component (NOTHING at edges where the moving average cannot be computed)
+    *float trend;
     //! seasonal component
     float seasonal;
-    //! residual component
-    float residual;
+    //! residual component (NOTHING at edges where the moving average cannot be computed)
+    *float residual;
     //! detected period length
     int period;
 }

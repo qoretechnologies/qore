@@ -28,11 +28,17 @@
 #include "qore/Qore.h"
 #include "QC_SeasonalDecomposition.h"
 
+extern const TypedHashDecl* hashdeclSeasonalDecompositionResult;
+
 //! The SeasonalDecomposition class implements classical seasonal decomposition
 /** Decomposes a time series into trend, seasonal, and residual components using
     moving average extraction, supporting both additive and multiplicative modes.
 
-    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+    @par Example:
+    @code{.py}
+SeasonalDecomposition sd({"period": 12, "type": "additive"});
+list<hash<SeasonalDecompositionResult>> results = sd.decompose(monthly_values);
+    @endcode
 
     @since ml 1.0
 */
@@ -68,6 +74,12 @@ SeasonalDecomposition::constructor(hash<auto> options) {
         return;
     }
 
+    if (strcmp(type, "additive") != 0 && strcmp(type, "multiplicative") != 0) {
+        xsink->raiseException("ML-SEASONAL-DECOMPOSITION-ERROR",
+            "type must be 'additive' or 'multiplicative'; got '%s'", type);
+        return;
+    }
+
     self->setPrivate(CID_SEASONALDECOMPOSITION,
         new QoreSeasonalDecomposition(static_cast<int>(period), type));
 }
@@ -81,14 +93,28 @@ SeasonalDecomposition::copy() {
 
 //! Decomposes a time series into trend, seasonal, and residual components
 /** @param series a list of float values (>= 2 * period values required)
-    @return a list of @ref SeasonalDecompositionResult hashes
+    @return a list of @ref SeasonalDecompositionResult hashes; trend and residual are
+    NOTHING at the edges where the moving average cannot be computed
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+list<hash<SeasonalDecompositionResult>> results = sd.decompose(monthly_values);
+for (int i = 0; i < results.size(); ++i) {
+    if (exists results[i].trend) {
+        printf("i=%d trend=%.2f seasonal=%.2f residual=%.2f\n",
+            i, results[i].trend, results[i].seasonal, results[i].residual);
+    }
+}
+    @endcode
+
+    @throw ML-SEASONAL-DECOMPOSITION-ERROR not enough data (< 2 * period values)
 */
-list<auto> SeasonalDecomposition::decompose(list<auto> series) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "SeasonalDecomposition::decompose() is not yet implemented; will be available in a future release");
-    return QoreValue();
+list<hash<SeasonalDecompositionResult>> SeasonalDecomposition::decompose(list<auto> series) {
+    VectorXd vec = qoreListToVector(series, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return sd->decompose(vec, xsink);
 }
 
 //! Returns the configured seasonal period

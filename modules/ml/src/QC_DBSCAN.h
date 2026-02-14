@@ -30,13 +30,15 @@
 
 #include "ml_common.h"
 
+#include <queue>
+
 DLLEXPORT extern qore_classid_t CID_DBSCAN;
 DLLLOCAL extern QoreClass* QC_DBSCAN;
 
 DLLLOCAL void preinitDBSCANClass();
 DLLLOCAL QoreClass* initDBSCANClass(QoreNamespace& ns);
 
-//! DBSCAN clustering implementation class (stub)
+//! DBSCAN clustering implementation class
 class QoreDBSCAN : public AbstractPrivateData {
 public:
     DLLLOCAL QoreDBSCAN(double epsilon, int min_points, const char* metric)
@@ -47,10 +49,19 @@ public:
     DLLLOCAL int getMinPoints() const { return min_points; }
     DLLLOCAL const std::string& getMetric() const { return metric; }
 
+    //! Cluster the data and return a list of DBSCANResult hashes
+    DLLLOCAL QoreListNode* cluster(const MatrixXd& data, ExceptionSink* xsink);
+
 private:
     double epsilon;
     int min_points;
     std::string metric;
+
+    //! Compute pairwise distance matrix
+    DLLLOCAL MatrixXd computeDistanceMatrix(const MatrixXd& data) const;
+
+    //! Find neighbors of a point within epsilon
+    DLLLOCAL std::vector<int> findNeighbors(const MatrixXd& dist_matrix, int point_idx) const;
 };
 
 #endif // _QORE_MODULE_ML_QC_DBSCAN_H

@@ -28,11 +28,18 @@
 #include "qore/Qore.h"
 #include "QC_HoltWinters.h"
 
+extern const TypedHashDecl* hashdeclHoltWintersResult;
+
 //! The HoltWinters class implements triple exponential smoothing for forecasting
 /** Holt-Winters decomposes time series data into level, trend, and seasonal components,
-    supporting both additive and multiplicative seasonality.
+    supporting both additive and multiplicative seasonality with optional damped trend.
 
-    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+    @par Example:
+    @code{.py}
+HoltWinters hw({"period": 12, "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+hw.fit(historical_monthly_values);
+list<float> next_year = hw.forecast(12);
+    @endcode
 
     @since ml 1.0
 */
@@ -46,6 +53,8 @@ qclass HoltWinters [arg=QoreHoltWinters* hw; ns=ML; flags=final];
     - \c gamma (float, default 0.3): seasonal smoothing factor (0 < gamma < 1)
     - \c seasonal_type (string, default "additive"): "additive" or "multiplicative"
     - \c damped (bool, default False): use damped trend
+    - \c phi (float, default 0.9): damping factor when \c damped is True (0 < phi < 1);
+      ignored when \c damped is False
 
     @throw ML-HOLTWINTERS-ERROR invalid option values
 */
@@ -56,6 +65,7 @@ HoltWinters::constructor(hash<auto> options) {
     double gamma = 0.3;
     const char* seasonal_type = "additive";
     bool damped = false;
+    double phi = 0.9;
 
     QoreValue v = options->getKeyValue("period");
     if (v.isNullOrNothing()) {
@@ -85,6 +95,10 @@ HoltWinters::constructor(hash<auto> options) {
     if (!v.isNullOrNothing()) {
         damped = v.getAsBool();
     }
+    v = options->getKeyValue("phi");
+    if (!v.isNullOrNothing()) {
+        phi = v.getAsFloat();
+    }
 
     if (period < 2) {
         xsink->raiseException("ML-HOLTWINTERS-ERROR",
@@ -92,9 +106,25 @@ HoltWinters::constructor(hash<auto> options) {
         return;
     }
 
+    if (strcmp(seasonal_type, "additive") != 0 && strcmp(seasonal_type, "multiplicative") != 0) {
+        xsink->raiseException("ML-HOLTWINTERS-ERROR",
+            "seasonal_type must be 'additive' or 'multiplicative'; got '%s'", seasonal_type);
+        return;
+    }
+
+    if (damped) {
+        if (phi <= 0.0 || phi >= 1.0) {
+            xsink->raiseException("ML-HOLTWINTERS-ERROR",
+                "phi must be in (0, 1) when damped is True; got %f", phi);
+            return;
+        }
+    } else {
+        phi = 1.0;  // no damping: phi=1 reduces to standard Holt-Winters
+    }
+
     self->setPrivate(CID_HOLTWINTERS,
         new QoreHoltWinters(static_cast<int>(period), alpha, beta, gamma,
-            seasonal_type, damped));
+            seasonal_type, damped, phi));
 }
 
 //! Creates a copy of the HoltWinters instance
@@ -107,35 +137,51 @@ HoltWinters::copy() {
 //! Initializes the model from historical data
 /** @param series a list of float values (>= 2 * period values required)
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+hw.fit(monthly_sales_data);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR not enough data (< 2 * period values)
 */
 nothing HoltWinters::fit(list<auto> series) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "HoltWinters::fit() is not yet implemented; will be available in a future release");
+    VectorXd vec = qoreListToVector(series, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    hw->fit(vec, xsink);
 }
 
 //! Processes one new observation and returns the current state
 /** @param value the new observation value
-    @return a @ref HoltWintersResult hash
+    @return a @ref HoltWintersResult hash with the one-step-ahead forecast and current
+    level, trend, and seasonal components
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+hash<HoltWintersResult> result = hw.update(new_value);
+printf("Next forecast: %.2f\n", result.forecast);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
 */
-hash<auto> HoltWinters::update(float value) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "HoltWinters::update() is not yet implemented; will be available in a future release");
-    return QoreValue();
+hash<HoltWintersResult> HoltWinters::update(float value) {
+    return hw->update(value, xsink);
 }
 
 //! Forecasts N steps ahead
-/** @param steps number of steps to forecast
+/** @param steps number of steps to forecast (>= 1)
     @return a list of forecasted float values
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+list<float> next_12 = hw.forecast(12);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted or steps < 1
 */
-list<auto> HoltWinters::forecast(int steps) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "HoltWinters::forecast() is not yet implemented; will be available in a future release");
-    return QoreValue();
+list<float> HoltWinters::forecast(int steps) {
+    return hw->forecast(steps, xsink);
 }
 
 //! Returns the configured seasonal period
@@ -150,4 +196,31 @@ int HoltWinters::getPeriod() [flags=CONSTANT] {
 */
 bool HoltWinters::isFitted() [flags=CONSTANT] {
     return hw->isFitted();
+}
+
+//! Returns the current level component
+/** @return the current level value
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+float HoltWinters::getLevel() {
+    return hw->getLevel(xsink);
+}
+
+//! Returns the current trend component
+/** @return the current trend value
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+float HoltWinters::getTrend() {
+    return hw->getTrend(xsink);
+}
+
+//! Returns the current seasonal factors
+/** @return a list of seasonal factors (one per period position)
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+list<float> HoltWinters::getSeasonal() {
+    return hw->getSeasonal(xsink);
 }

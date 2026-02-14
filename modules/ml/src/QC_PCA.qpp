@@ -28,11 +28,18 @@
 #include "qore/Qore.h"
 #include "QC_PCA.h"
 
+extern const TypedHashDecl* hashdeclPCAResult;
+
 //! The PCA class implements Principal Component Analysis for dimensionality reduction
 /** PCA computes principal components via eigendecomposition of the covariance matrix,
     allowing projection of data onto the most important directions of variance.
 
-    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+    @par Example:
+    @code{.py}
+PCA pca({"n_components": 2});
+pca.fitMatrix(training_data);
+hash<PCAResult> result = pca.transform({"x": 1.0, "y": 2.0, "z": 3.0});
+    @endcode
 
     @since ml 1.0
 */
@@ -87,33 +94,109 @@ PCA::copy() {
 //! Fits the model on a list of hash records
 /** @param data a list of hashes with numeric fields
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+pca.fit(data_records);
+    @endcode
+
+    @throw ML-PCA-ERROR fitting failed
+    @throw ML-DATA-ERROR data format errors
 */
 nothing PCA::fit(list<auto> data) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "PCA::fit() is not yet implemented; will be available in a future release");
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    pca->setFieldNames(field_names);
+    pca->fitInternal(matrix, xsink);
 }
 
 //! Fits the model on a numeric matrix
 /** @param matrix a list of lists of numeric values
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @throw ML-PCA-ERROR fitting failed
+    @throw ML-DATA-ERROR data format errors
 */
 nothing PCA::fitMatrix(list<auto> matrix) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "PCA::fitMatrix() is not yet implemented; will be available in a future release");
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    pca->fitInternal(mat, xsink);
 }
 
 //! Transforms a single record using the fitted model
 /** @param record a hash with numeric fields
     @return a @ref PCAResult hash
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+hash<PCAResult> result = pca.transform(record);
+printf("Components: %y\n", result.components);
+    @endcode
+
+    @throw ML-PCA-ERROR model not fitted or dimension mismatch
 */
-hash<auto> PCA::transform(hash<auto> record) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "PCA::transform() is not yet implemented; will be available in a future release");
-    return QoreValue();
+hash<PCAResult> PCA::transform(hash<auto> record) {
+    const std::vector<std::string>& field_names = pca->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-PCA-ERROR",
+            "model was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pca->transformInternal(point, xsink);
+}
+
+//! Transforms multiple rows in matrix form
+/** @param matrix a list of lists of numeric values
+    @return a list of @ref PCAResult hashes
+
+    @throw ML-PCA-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<PCAResult>> PCA::transformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pca->transformMatrix(mat, xsink);
+}
+
+//! Fits the model and transforms data in one step
+/** @param data a list of hashes with numeric fields
+    @return a list of @ref PCAResult hashes
+
+    @throw ML-PCA-ERROR fitting or transformation failed
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<PCAResult>> PCA::fitTransform(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    pca->setFieldNames(field_names);
+    return pca->fitTransformInternal(matrix, xsink);
+}
+
+//! Fits the model and transforms a numeric matrix in one step
+/** @param matrix a list of lists of numeric values
+    @return a list of @ref PCAResult hashes
+
+    @throw ML-PCA-ERROR fitting or transformation failed
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<PCAResult>> PCA::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pca->fitTransformInternal(mat, xsink);
 }
 
 //! Returns True if the model has been fitted
@@ -121,4 +204,45 @@ hash<auto> PCA::transform(hash<auto> record) {
 */
 bool PCA::isFitted() [flags=CONSTANT] {
     return pca->isFitted();
+}
+
+//! Returns the number of components kept after fitting
+/** @return the number of principal components
+
+    @throw ML-PCA-ERROR model not fitted
+*/
+int PCA::getNumComponents() {
+    if (!pca->isFitted()) {
+        xsink->raiseException("ML-PCA-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return QoreValue();
+    }
+    return pca->getNumComponents();
+}
+
+//! Returns the principal component vectors
+/** @return a list of lists of float values (n_components x n_features)
+
+    @throw ML-PCA-ERROR model not fitted
+*/
+list<auto> PCA::getComponents() {
+    return pca->getComponents(xsink);
+}
+
+//! Returns the explained variance ratio per component
+/** @return a list of float values
+
+    @throw ML-PCA-ERROR model not fitted
+*/
+list<auto> PCA::getExplainedVarianceRatio() {
+    return pca->getExplainedVarianceRatio(xsink);
+}
+
+//! Returns the mean vector used for centering
+/** @return a list of float values
+
+    @throw ML-PCA-ERROR model not fitted
+*/
+list<auto> PCA::getMean() {
+    return pca->getMean(xsink);
 }

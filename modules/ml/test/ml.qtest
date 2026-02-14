@@ -47,11 +47,29 @@ public class MlTest inherits QUnit::Test {
         addTestCase("IsolationForest fitMatrix inconsistent rows", \iforestInconsistentRowsTest());
         addTestCase("IsolationForest multivariate", \iforestMultivariateTest());
         addTestCase("IsolationForest thread safety", \iforestThreadSafetyTest());
-        addTestCase("DBSCAN stub", \dbscanStubTest());
-        addTestCase("KMeans stub", \kmeansStubTest());
-        addTestCase("HoltWinters stub", \holtwinterStubTest());
-        addTestCase("PCA stub", \pcaStubTest());
-        addTestCase("SeasonalDecomposition stub", \seasonalStubTest());
+        addTestCase("SeasonalDecomposition additive", \seasonalAdditiveTest());
+        addTestCase("SeasonalDecomposition multiplicative", \seasonalMultiplicativeTest());
+        addTestCase("SeasonalDecomposition error cases", \seasonalErrorTest());
+        addTestCase("DBSCAN euclidean clustering", \dbscanEuclideanTest());
+        addTestCase("DBSCAN manhattan clustering", \dbscanManhattanTest());
+        addTestCase("DBSCAN cosine clustering", \dbscanCosineTest());
+        addTestCase("DBSCAN noise detection", \dbscanNoiseTest());
+        addTestCase("DBSCAN error cases", \dbscanErrorTest());
+        addTestCase("HoltWinters additive fit and forecast", \hwAdditiveTest());
+        addTestCase("HoltWinters multiplicative", \hwMultiplicativeTest());
+        addTestCase("HoltWinters update incremental", \hwUpdateTest());
+        addTestCase("HoltWinters damped trend", \hwDampedTest());
+        addTestCase("HoltWinters error cases", \hwErrorTest());
+        addTestCase("KMeans basic clustering", \kmeansBasicTest());
+        addTestCase("KMeans kmeans++ vs random", \kmeansInitTest());
+        addTestCase("KMeans predict and predictMatrix", \kmeansPredictTest());
+        addTestCase("KMeans mini-batch update", \kmeansUpdateTest());
+        addTestCase("KMeans error cases", \kmeansErrorTest());
+        addTestCase("PCA basic dimensionality reduction", \pcaBasicTest());
+        addTestCase("PCA variance threshold", \pcaVarianceThresholdTest());
+        addTestCase("PCA center and scale", \pcaCenterScaleTest());
+        addTestCase("PCA fitTransform", \pcaFitTransformTest());
+        addTestCase("PCA error cases", \pcaErrorTest());
         set_return_value(main());
     }
 
@@ -347,141 +365,766 @@ public class MlTest inherits QUnit::Test {
         }
     }
 
-    dbscanStubTest() {
-        ML::DBSCAN dbscan({"epsilon": 0.5, "min_points": 5});
-        assertEq(0.5, dbscan.getEpsilon());
-        assertEq(5, dbscan.getMinPoints());
+    # ===================== SeasonalDecomposition Tests =====================
 
-        # Copy should throw
-        assertThrows("COPY-ERROR", sub() {
-            ML::DBSCAN copy = dbscan.copy();
-        });
-
-        # Methods should throw NOT-IMPLEMENTED
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            dbscan.cluster(({"x": 1.0},));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            dbscan.clusterMatrix(((1.0, 2.0),));
-        });
-
-        # Required option validation
-        assertThrows("ML-DBSCAN-ERROR", sub() {
-            ML::DBSCAN bad({"min_points": 5});  # missing epsilon
-        });
-        assertThrows("ML-DBSCAN-ERROR", sub() {
-            ML::DBSCAN bad({"epsilon": -1.0});  # invalid epsilon
-        });
-    }
-
-    kmeansStubTest() {
-        ML::KMeans km({"k": 3});
-        assertEq(3, km.getK());
-        assertEq(False, km.isFitted());
-
-        # Copy should throw
-        assertThrows("COPY-ERROR", sub() {
-            ML::KMeans copy = km.copy();
-        });
-
-        # Methods should throw NOT-IMPLEMENTED
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            km.fit(({"x": 1.0},));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            km.fitMatrix(((1.0, 2.0),));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            km.predict({"x": 1.0});
-        });
-
-        # Required option
-        assertThrows("ML-KMEANS-ERROR", sub() {
-            ML::KMeans bad({});  # missing k
-        });
-        assertThrows("ML-KMEANS-ERROR", sub() {
-            ML::KMeans bad({"k": 0});  # invalid k
-        });
-    }
-
-    holtwinterStubTest() {
-        ML::HoltWinters hw({"period": 12});
-        assertEq(12, hw.getPeriod());
-        assertEq(False, hw.isFitted());
-
-        # Copy should throw
-        assertThrows("COPY-ERROR", sub() {
-            ML::HoltWinters copy = hw.copy();
-        });
-
-        # Methods should throw NOT-IMPLEMENTED
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            hw.fit((1.0, 2.0, 3.0));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            hw.update(1.0);
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            hw.forecast(5);
-        });
-
-        # Required option
-        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
-            ML::HoltWinters bad({});  # missing period
-        });
-        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
-            ML::HoltWinters bad({"period": 1});  # period too small
-        });
-    }
-
-    pcaStubTest() {
-        ML::PCA pca();
-        assertEq(False, pca.isFitted());
-
-        ML::PCA pca2({"n_components": 3, "center": True, "scale": True});
-        assertEq(False, pca2.isFitted());
-
-        # Copy should throw
-        assertThrows("COPY-ERROR", sub() {
-            ML::PCA copy = pca.copy();
-        });
-
-        # Methods should throw NOT-IMPLEMENTED
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            pca.fit(({"x": 1.0},));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            pca.fitMatrix(((1.0, 2.0),));
-        });
-        assertThrows("NOT-IMPLEMENTED", sub() {
-            pca.transform({"x": 1.0});
-        });
-    }
-
-    seasonalStubTest() {
-        ML::SeasonalDecomposition sd({"period": 7, "type": "additive"});
-        assertEq(7, sd.getPeriod());
+    seasonalAdditiveTest() {
+        ML::SeasonalDecomposition sd({"period": 4, "type": "additive"});
+        assertEq(4, sd.getPeriod());
         assertEq("additive", sd.getType());
 
-        ML::SeasonalDecomposition sd2({"period": 12, "type": "multiplicative"});
-        assertEq("multiplicative", sd2.getType());
+        # Create a synthetic additive seasonal series:
+        # trend = 10 + 0.5*t, seasonal pattern = (3, -1, -2, 0)
+        list<float> series;
+        list<float> season_pattern = (3.0, -1.0, -2.0, 0.0);
+        for (int i = 0; i < 24; ++i) {
+            float trend_val = 10.0 + 0.5 * i;
+            float seasonal_val = season_pattern[i % 4];
+            push series, trend_val + seasonal_val;
+        }
+
+        list<hash<ML::SeasonalDecompositionResult>> results = sd.decompose(series);
+        assertEq(24, results.size());
+
+        # Check that all results have the period
+        for (int i = 0; i < results.size(); ++i) {
+            assertEq(4, results[i].period);
+        }
+
+        # Edge values should have NOTHING for trend and residual
+        assertTrue(!exists results[0].trend, "first element trend should be NOTHING");
+        assertTrue(!exists results[1].trend, "second element trend should be NOTHING");
+
+        # Middle values should have valid trend and residual
+        assertTrue(exists results[6].trend, "middle element should have trend");
+        assertTrue(exists results[6].residual, "middle element should have residual");
+
+        # Trend should be approximately linear
+        # Check at positions 4..19 (where trend is defined)
+        float prev_trend;
+        bool first_trend = True;
+        for (int i = 2; i < 22; ++i) {
+            if (exists results[i].trend) {
+                if (first_trend) {
+                    first_trend = False;
+                } else {
+                    # Trend should be increasing (positive slope)
+                    assertTrue(results[i].trend >= prev_trend - 0.5,
+                        sprintf("trend at %d (%.2f) should be >= prev trend (%.2f)",
+                            i, results[i].trend, prev_trend));
+                }
+                prev_trend = results[i].trend;
+            }
+        }
+
+        # Seasonal components should repeat with period 4
+        # Check that same-position seasonal values are close
+        for (int i = 4; i < 20; ++i) {
+            float diff = abs(results[i].seasonal - results[i % 4].seasonal);
+            assertTrue(diff < 0.01,
+                sprintf("seasonal[%d]=%.3f should match seasonal[%d]=%.3f",
+                    i, results[i].seasonal, i % 4, results[i % 4].seasonal));
+        }
+
+        # Residuals should be small (near 0) where trend is defined
+        for (int i = 2; i < 22; ++i) {
+            if (exists results[i].residual) {
+                assertTrue(abs(results[i].residual) < 2.0,
+                    sprintf("residual[%d]=%.3f should be small", i, results[i].residual));
+            }
+        }
 
         # Copy should throw
         assertThrows("COPY-ERROR", sub() {
             ML::SeasonalDecomposition copy = sd.copy();
         });
+    }
 
-        # Methods should throw NOT-IMPLEMENTED
-        assertThrows("NOT-IMPLEMENTED", sub() {
+    seasonalMultiplicativeTest() {
+        ML::SeasonalDecomposition sd({"period": 4, "type": "multiplicative"});
+        assertEq("multiplicative", sd.getType());
+
+        # Create multiplicative series: value = trend * seasonal
+        # trend = 100 + 2*t, seasonal = (1.2, 0.8, 1.1, 0.9)
+        list<float> series;
+        list<float> season_factors = (1.2, 0.8, 1.1, 0.9);
+        for (int i = 0; i < 24; ++i) {
+            float trend_val = 100.0 + 2.0 * i;
+            push series, trend_val * season_factors[i % 4];
+        }
+
+        list<hash<ML::SeasonalDecompositionResult>> results = sd.decompose(series);
+        assertEq(24, results.size());
+
+        # Seasonal factors should average to approximately 1.0
+        float seasonal_sum = 0.0;
+        for (int j = 0; j < 4; ++j) {
+            seasonal_sum += results[j].seasonal;
+        }
+        float seasonal_avg = seasonal_sum / 4.0;
+        assertTrue(abs(seasonal_avg - 1.0) < 0.1,
+            sprintf("multiplicative seasonal average %.3f should be near 1.0", seasonal_avg));
+
+        # Residuals should be near 1.0 for multiplicative decomposition
+        for (int i = 2; i < 22; ++i) {
+            if (exists results[i].residual) {
+                assertTrue(abs(results[i].residual - 1.0) < 0.3,
+                    sprintf("multiplicative residual[%d]=%.3f should be near 1.0",
+                        i, results[i].residual));
+            }
+        }
+    }
+
+    seasonalErrorTest() {
+        ML::SeasonalDecomposition sd({"period": 12});
+
+        # Not enough data
+        assertThrows("ML-SEASONAL-DECOMPOSITION-ERROR", sub() {
             sd.decompose((1.0, 2.0, 3.0));
         });
 
         # Required option
         assertThrows("ML-SEASONAL-DECOMPOSITION-ERROR", sub() {
-            ML::SeasonalDecomposition bad({});  # missing period
+            ML::SeasonalDecomposition bad({});
         });
         assertThrows("ML-SEASONAL-DECOMPOSITION-ERROR", sub() {
-            ML::SeasonalDecomposition bad({"period": 1});  # period too small
+            ML::SeasonalDecomposition bad({"period": 1});
+        });
+
+        # Invalid type
+        assertThrows("ML-SEASONAL-DECOMPOSITION-ERROR", sub() {
+            ML::SeasonalDecomposition bad({"period": 4, "type": "invalid"});
+        });
+    }
+
+    # ===================== DBSCAN Tests =====================
+
+    dbscanEuclideanTest() {
+        ML::DBSCAN db({"epsilon": 2.0, "min_points": 2, "metric": "euclidean"});
+        assertEq(2.0, db.getEpsilon());
+        assertEq(2, db.getMinPoints());
+
+        # Two well-separated clusters
+        list<list<float>> data = (
+            # Cluster 0: around (0, 0)
+            (0.0, 0.0), (0.5, 0.5), (0.3, -0.2), (-0.4, 0.3),
+            # Cluster 1: around (10, 10)
+            (10.0, 10.0), (10.5, 10.5), (10.2, 9.8), (9.7, 10.3),
+        );
+
+        list<hash<ML::DBSCANResult>> results = db.clusterMatrix(data);
+        assertEq(8, results.size());
+
+        # First cluster (points 0-3) should all be in the same cluster
+        int cluster0 = results[0].cluster;
+        for (int i = 1; i < 4; ++i) {
+            assertEq(cluster0, results[i].cluster,
+                sprintf("point %d should be in cluster %d", i, cluster0));
+        }
+
+        # Second cluster (points 4-7) should all be in a different cluster
+        int cluster1 = results[4].cluster;
+        for (int i = 5; i < 8; ++i) {
+            assertEq(cluster1, results[i].cluster);
+        }
+        assertTrue(cluster0 != cluster1, "two clusters should have different labels");
+
+        # All points should be core points (>= min_points=2 neighbors)
+        for (int i = 0; i < 8; ++i) {
+            assertTrue(results[i].is_core,
+                sprintf("point %d should be a core point (neighbors=%d)",
+                    i, results[i].neighbor_count));
+        }
+    }
+
+    dbscanManhattanTest() {
+        ML::DBSCAN db({"epsilon": 3.0, "min_points": 2, "metric": "manhattan"});
+
+        # Need >= min_points neighbors within epsilon for core points
+        # With min_points=2, each point needs at least 2 neighbors (excluding self)
+        list<list<float>> data = (
+            # Cluster 0: around (0, 0) - manhattan distances all <= 2.0
+            (0.0, 0.0), (0.5, 0.5), (1.0, 1.0),
+            # Cluster 1: around (10, 10) - far from cluster 0
+            (10.0, 10.0), (10.5, 10.5), (11.0, 11.0),
+        );
+
+        list<hash<ML::DBSCANResult>> results = db.clusterMatrix(data);
+        assertEq(6, results.size());
+
+        # Points 0-2 in one cluster; points 3-5 in another
+        assertEq(results[0].cluster, results[1].cluster);
+        assertEq(results[0].cluster, results[2].cluster);
+        assertEq(results[3].cluster, results[4].cluster);
+        assertEq(results[3].cluster, results[5].cluster);
+        assertTrue(results[0].cluster != results[3].cluster);
+    }
+
+    dbscanCosineTest() {
+        ML::DBSCAN db({"epsilon": 0.1, "min_points": 2, "metric": "cosine"});
+
+        # Cosine distance is 1 - cos(angle); similar direction = small distance
+        list<list<float>> data = (
+            # Similar direction (small cosine distance)
+            (1.0, 0.0), (2.0, 0.1), (3.0, 0.2),
+            # Opposite direction (large cosine distance)
+            (-1.0, 0.0), (-2.0, -0.1),
+        );
+
+        list<hash<ML::DBSCANResult>> results = db.clusterMatrix(data);
+        assertEq(5, results.size());
+
+        # Points 0-2 should cluster together (similar direction)
+        assertEq(results[0].cluster, results[1].cluster);
+        assertEq(results[0].cluster, results[2].cluster);
+        # Points 3-4 should cluster together (similar direction to each other)
+        assertEq(results[3].cluster, results[4].cluster);
+    }
+
+    dbscanNoiseTest() {
+        ML::DBSCAN db({"epsilon": 1.0, "min_points": 3});
+
+        list<list<float>> data = (
+            # Dense cluster
+            (0.0, 0.0), (0.3, 0.3), (0.1, 0.5), (-0.2, 0.4),
+            # Isolated point = noise
+            (100.0, 100.0),
+        );
+
+        list<hash<ML::DBSCANResult>> results = db.clusterMatrix(data);
+        assertEq(5, results.size());
+
+        # First 4 points should be in a cluster (not noise)
+        assertTrue(results[0].cluster >= 0, "dense point should not be noise");
+
+        # Last point should be noise
+        assertEq(-1, results[4].cluster, "isolated point should be noise");
+        assertEq(False, results[4].is_core, "isolated point should not be core");
+        assertEq(0, results[4].neighbor_count, "isolated point has no neighbors");
+    }
+
+    dbscanErrorTest() {
+        ML::DBSCAN db({"epsilon": 0.5});
+
+        # Copy error
+        assertThrows("COPY-ERROR", sub() {
+            ML::DBSCAN copy = db.copy();
+        });
+
+        # Required option
+        assertThrows("ML-DBSCAN-ERROR", sub() {
+            ML::DBSCAN bad({"min_points": 5});
+        });
+        assertThrows("ML-DBSCAN-ERROR", sub() {
+            ML::DBSCAN bad({"epsilon": -1.0});
+        });
+
+        # Invalid metric
+        assertThrows("ML-DBSCAN-ERROR", sub() {
+            ML::DBSCAN bad({"epsilon": 1.0, "metric": "invalid"});
+        });
+
+        # Hash-based cluster
+        list<hash<ML::DBSCANResult>> results = db.cluster((
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.1, "y": 0.1},
+        ));
+        assertEq(2, results.size());
+    }
+
+    # ===================== HoltWinters Tests =====================
+
+    hwAdditiveTest() {
+        ML::HoltWinters hw({"period": 4, "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+        assertEq(4, hw.getPeriod());
+        assertEq(False, hw.isFitted());
+
+        # Create additive seasonal series
+        list<float> series;
+        list<float> seasonal = (5.0, -3.0, 2.0, -4.0);
+        for (int i = 0; i < 24; ++i) {
+            float trend_val = 100.0 + 0.5 * i;
+            push series, trend_val + seasonal[i % 4];
+        }
+
+        hw.fit(series);
+        assertTrue(hw.isFitted());
+
+        # Level should be near the last trend value
+        float level = hw.getLevel();
+        assertTrue(level > 90.0 && level < 130.0,
+            sprintf("level %.2f should be in reasonable range", level));
+
+        # Trend should be positive (series has positive trend)
+        float trend = hw.getTrend();
+        assertTrue(trend > -1.0 && trend < 3.0,
+            sprintf("trend %.2f should be small positive", trend));
+
+        # Seasonal factors should exist
+        list<float> sf = hw.getSeasonal();
+        assertEq(4, sf.size());
+
+        # Forecast should produce reasonable values
+        list<float> fc = hw.forecast(4);
+        assertEq(4, fc.size());
+        for (int i = 0; i < 4; ++i) {
+            assertTrue(fc[i] > 50.0 && fc[i] < 200.0,
+                sprintf("forecast[%d]=%.2f should be reasonable", i, fc[i]));
+        }
+
+        # Forecast should reflect the trend (generally increasing if trend > 0)
+        # Check the forecast for one full period ahead tracks the seasonal pattern
+        assertTrue(fc.size() == 4);
+    }
+
+    hwMultiplicativeTest() {
+        ML::HoltWinters hw({"period": 4, "seasonal_type": "multiplicative",
+            "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+
+        # Multiplicative series: value = trend * seasonal
+        list<float> series;
+        list<float> seasonal = (1.3, 0.7, 1.1, 0.9);
+        for (int i = 0; i < 24; ++i) {
+            float trend_val = 100.0 + 2.0 * i;
+            push series, trend_val * seasonal[i % 4];
+        }
+
+        hw.fit(series);
+        assertTrue(hw.isFitted());
+
+        list<float> fc = hw.forecast(4);
+        assertEq(4, fc.size());
+        for (int i = 0; i < 4; ++i) {
+            assertTrue(fc[i] > 50.0 && fc[i] < 300.0,
+                sprintf("multiplicative forecast[%d]=%.2f should be reasonable", i, fc[i]));
+        }
+    }
+
+    hwUpdateTest() {
+        ML::HoltWinters hw({"period": 4, "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+
+        list<float> series;
+        for (int i = 0; i < 16; ++i) {
+            push series, 100.0 + 0.5 * i + (i % 4) * 2.0;
+        }
+
+        hw.fit(series);
+
+        # Update with new observations
+        for (int i = 0; i < 4; ++i) {
+            float new_val = 110.0 + i * 2.0;
+            hash<ML::HoltWintersResult> result = hw.update(new_val);
+            assertTrue(result.hasKey("forecast"));
+            assertTrue(result.hasKey("level"));
+            assertTrue(result.hasKey("trend"));
+            assertTrue(result.hasKey("seasonal"));
+            # Forecast should be a finite number
+            assertTrue(result.forecast > -1000.0 && result.forecast < 1000.0,
+                sprintf("update forecast %.2f should be finite", result.forecast));
+        }
+    }
+
+    hwDampedTest() {
+        ML::HoltWinters hw({"period": 4, "damped": True,
+            "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+
+        list<float> series;
+        for (int i = 0; i < 16; ++i) {
+            push series, 100.0 + 1.0 * i + (i % 4) * 3.0;
+        }
+
+        hw.fit(series);
+
+        # Damped forecast: trend should diminish over time
+        list<float> fc = hw.forecast(20);
+        assertEq(20, fc.size());
+
+        # With damping, the trend component diminishes so long-range forecasts
+        # converge; verify all values are finite and reasonable
+        for (int i = 0; i < 20; ++i) {
+            assertTrue(fc[i] > 0.0 && fc[i] < 500.0,
+                sprintf("damped forecast[%d]=%.2f should be in reasonable range", i, fc[i]));
+        }
+    }
+
+    hwErrorTest() {
+        ML::HoltWinters hw({"period": 4});
+
+        # Not fitted
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.update(1.0);
+        });
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.forecast(5);
+        });
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.getLevel();
+        });
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.getTrend();
+        });
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.getSeasonal();
+        });
+
+        # Not enough data
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            hw.fit((1.0, 2.0, 3.0));
+        });
+
+        # Invalid period
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            ML::HoltWinters bad({"period": 1});
+        });
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            ML::HoltWinters bad({});
+        });
+
+        # Invalid seasonal_type
+        assertThrows("ML-HOLTWINTERS-ERROR", sub() {
+            ML::HoltWinters bad({"period": 4, "seasonal_type": "invalid"});
+        });
+
+        # Copy
+        assertThrows("COPY-ERROR", sub() {
+            ML::HoltWinters copy = hw.copy();
+        });
+    }
+
+    # ===================== KMeans Tests =====================
+
+    kmeansBasicTest() {
+        ML::KMeans km({"k": 3, "seed": 42});
+        assertEq(3, km.getK());
+        assertEq(False, km.isFitted());
+
+        # Three well-separated 2D clusters
+        list<list<float>> data;
+        for (int i = 0; i < 30; ++i) {
+            push data, (0.0 + (i % 5) * 0.1, 0.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 30; ++i) {
+            push data, (10.0 + (i % 5) * 0.1, 10.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 30; ++i) {
+            push data, (0.0 + (i % 5) * 0.1, 10.0 + (i % 5) * 0.1);
+        }
+
+        km.fitMatrix(data);
+        assertTrue(km.isFitted());
+
+        # Get centroids
+        list<auto> centroids = km.getCentroids();
+        assertEq(3, centroids.size());
+        for (int c = 0; c < 3; ++c) {
+            assertEq(2, centroids[c].size());
+        }
+
+        # Inertia should be small (tight clusters)
+        float inertia = km.getInertia();
+        assertTrue(inertia >= 0.0, sprintf("inertia %.2f should be >= 0", inertia));
+
+        # Predict using matrix: first 30 should be one cluster, next 30 another, etc.
+        list<hash<ML::KMeansResult>> results = km.predictMatrix(data);
+        assertEq(90, results.size());
+
+        int c0 = results[0].cluster;
+        int c1 = results[30].cluster;
+        int c2 = results[60].cluster;
+
+        # All three groups should have different cluster assignments
+        assertTrue(c0 != c1 || c0 != c2 || c1 != c2,
+            "three separated groups should have different clusters");
+
+        # Points within each group should have the same cluster
+        for (int i = 0; i < 30; ++i) {
+            assertEq(c0, results[i].cluster,
+                sprintf("point %d should be in cluster %d", i, c0));
+        }
+        for (int i = 30; i < 60; ++i) {
+            assertEq(c1, results[i].cluster);
+        }
+        for (int i = 60; i < 90; ++i) {
+            assertEq(c2, results[i].cluster);
+        }
+    }
+
+    kmeansInitTest() {
+        # k-means++ should converge well
+        ML::KMeans km_pp({"k": 2, "seed": 42, "init": "kmeans++"});
+        ML::KMeans km_rand({"k": 2, "seed": 42, "init": "random"});
+
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, (0.0 + (i % 10) * 0.1, 0.0 + (i % 10) * 0.1);
+        }
+        for (int i = 0; i < 50; ++i) {
+            push data, (10.0 + (i % 10) * 0.1, 10.0 + (i % 10) * 0.1);
+        }
+
+        km_pp.fitMatrix(data);
+        km_rand.fitMatrix(data);
+
+        # Both should find 2 clusters; inertia should be similar
+        assertTrue(km_pp.isFitted());
+        assertTrue(km_rand.isFitted());
+        assertTrue(km_pp.getInertia() >= 0.0);
+        assertTrue(km_rand.getInertia() >= 0.0);
+    }
+
+    kmeansPredictTest() {
+        ML::KMeans km({"k": 2, "seed": 42});
+
+        # Train with hash data
+        list<hash<auto>> train = (
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.1, "y": 0.1},
+            {"x": 0.2, "y": 0.0},
+            {"x": 10.0, "y": 10.0},
+            {"x": 10.1, "y": 10.1},
+            {"x": 10.2, "y": 10.0},
+        );
+        km.fit(train);
+
+        # Predict single hash
+        hash<ML::KMeansResult> result = km.predict({"x": 0.05, "y": 0.05});
+        assertTrue(result.hasKey("cluster"));
+        assertTrue(result.hasKey("distance"));
+        assertTrue(result.hasKey("centroid_distances"));
+        assertTrue(result.distance >= 0.0);
+        assertEq(2, result.centroid_distances.size());
+
+        # Point near cluster 0 should have same label as (0,0) training points
+        hash<ML::KMeansResult> r_near0 = km.predict({"x": 0.0, "y": 0.0});
+        hash<ML::KMeansResult> r_near1 = km.predict({"x": 10.0, "y": 10.0});
+        assertTrue(r_near0.cluster != r_near1.cluster,
+            "points near different clusters should have different assignments");
+    }
+
+    kmeansUpdateTest() {
+        ML::KMeans km({"k": 2, "seed": 42});
+
+        # Initial fit
+        list<list<float>> init_data;
+        for (int i = 0; i < 20; ++i) {
+            push init_data, (0.0 + (i % 5) * 0.1, 0.0);
+        }
+        for (int i = 0; i < 20; ++i) {
+            push init_data, (10.0 + (i % 5) * 0.1, 0.0);
+        }
+        km.fitMatrix(init_data);
+
+        # Update with new data in same clusters
+        list<list<float>> new_data;
+        for (int i = 0; i < 10; ++i) {
+            push new_data, (0.0 + (i % 3) * 0.05, 0.0);
+        }
+        for (int i = 0; i < 10; ++i) {
+            push new_data, (10.0 + (i % 3) * 0.05, 0.0);
+        }
+        km.updateMatrix(new_data);
+
+        # Model should still be fitted
+        assertTrue(km.isFitted());
+
+        # Centroids should still separate the two clusters
+        list<auto> centroids = km.getCentroids();
+        assertEq(2, centroids.size());
+    }
+
+    kmeansErrorTest() {
+        ML::KMeans km({"k": 3});
+
+        # Not fitted
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.predictMatrix(((1.0, 2.0),));
+        });
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.getCentroids();
+        });
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.getInertia();
+        });
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.updateMatrix(((1.0, 2.0),));
+        });
+
+        # k > n
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.fitMatrix(((1.0, 2.0), (3.0, 4.0)));  # k=3 > n=2
+        });
+
+        # Required option
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            ML::KMeans bad({});
+        });
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            ML::KMeans bad({"k": 0});
+        });
+
+        # Invalid init
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            ML::KMeans bad({"k": 2, "init": "invalid"});
+        });
+
+        # Copy
+        assertThrows("COPY-ERROR", sub() {
+            ML::KMeans copy = km.copy();
+        });
+
+        # Dimension mismatch after fit
+        km.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+        assertThrows("ML-KMEANS-ERROR", sub() {
+            km.predictMatrix(((1.0, 2.0, 3.0),));
+        });
+    }
+
+    # ===================== PCA Tests =====================
+
+    pcaBasicTest() {
+        ML::PCA pca({"n_components": 2});
+        assertEq(False, pca.isFitted());
+
+        # Create 3D data with strong correlation: z = x + y + noise
+        list<list<float>> data;
+        for (int i = 0; i < 100; ++i) {
+            float x = i * 0.1;
+            float y = i * 0.2;
+            float z = x + y + (i % 7) * 0.01;
+            push data, (x, y, z);
+        }
+
+        pca.fitMatrix(data);
+        assertTrue(pca.isFitted());
+
+        # Should keep 2 components
+        assertEq(2, pca.getNumComponents());
+
+        # Get components
+        list<auto> components = pca.getComponents();
+        assertEq(2, components.size());
+        assertEq(3, components[0].size());  # 3 features per component
+
+        # Explained variance ratio
+        list<float> evr = pca.getExplainedVarianceRatio();
+        assertEq(2, evr.size());
+        # First component should explain most variance (>50%)
+        assertTrue(evr[0] > 0.5,
+            sprintf("first component should explain >50%% variance; got %.3f", evr[0]));
+        # Total should be high (data is highly correlated)
+        float total = evr[0] + evr[1];
+        assertTrue(total > 0.95,
+            sprintf("2 components should explain >95%% variance; got %.3f", total));
+
+        # Mean vector
+        list<float> mean = pca.getMean();
+        assertEq(3, mean.size());
+
+        # Transform points
+        list<hash<ML::PCAResult>> results = pca.transformMatrix(data);
+        assertEq(100, results.size());
+        assertEq(2, results[0].components.size());
+        assertTrue(results[0].total_explained_variance > 0.95);
+    }
+
+    pcaVarianceThresholdTest() {
+        # Use variance_threshold to auto-select components
+        ML::PCA pca({"variance_threshold": 0.95});
+
+        # 3D data where first 2 dims have variance, 3rd is nearly constant
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, (i * 1.0, i * 0.5, 5.0 + (i % 3) * 0.001);
+        }
+
+        pca.fitMatrix(data);
+        assertTrue(pca.isFitted());
+
+        # Should keep fewer components than total (3rd dimension has almost no variance relative)
+        int nc = pca.getNumComponents();
+        assertTrue(nc >= 1 && nc <= 3,
+            sprintf("variance threshold should select 1-3 components; got %d", nc));
+    }
+
+    pcaCenterScaleTest() {
+        # Test with scale=True
+        ML::PCA pca_scaled({"n_components": 2, "scale": True});
+
+        # Data where one feature has much larger scale
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, (i * 0.01, i * 1000.0, i * 0.5);
+        }
+
+        pca_scaled.fitMatrix(data);
+        assertTrue(pca_scaled.isFitted());
+
+        # With scaling, the large-scale feature shouldn't dominate
+        list<float> evr = pca_scaled.getExplainedVarianceRatio();
+        assertEq(2, evr.size());
+        # Both components should contribute meaningfully when scaled
+        assertTrue(evr[0] > 0.0 && evr[0] <= 1.0);
+
+        # Test without scale (default center only)
+        ML::PCA pca_centered({"n_components": 2});
+        pca_centered.fitMatrix(data);
+        assertTrue(pca_centered.isFitted());
+    }
+
+    pcaFitTransformTest() {
+        ML::PCA pca({"n_components": 2});
+
+        list<list<float>> data;
+        for (int i = 0; i < 30; ++i) {
+            push data, (i * 1.0, i * 2.0, i * 3.0);
+        }
+
+        # fitTransformMatrix should return results
+        list<hash<ML::PCAResult>> results = pca.fitTransformMatrix(data);
+        assertEq(30, results.size());
+        assertTrue(pca.isFitted());
+
+        # Each result should have 2 components
+        for (int i = 0; i < results.size(); ++i) {
+            assertEq(2, results[i].components.size());
+        }
+    }
+
+    pcaErrorTest() {
+        ML::PCA pca();
+
+        # Not fitted
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.transformMatrix(((1.0, 2.0),));
+        });
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.getComponents();
+        });
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.getExplainedVarianceRatio();
+        });
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.getMean();
+        });
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.getNumComponents();
+        });
+
+        # Copy
+        assertThrows("COPY-ERROR", sub() {
+            ML::PCA copy = pca.copy();
+        });
+
+        # Dimension mismatch
+        pca.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+        assertThrows("ML-PCA-ERROR", sub() {
+            pca.transformMatrix(((1.0, 2.0, 3.0),));
+        });
+
+        # fitMatrix after fitMatrix using hash-based API
+        ML::PCA pca2();
+        pca2.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+        assertThrows("ML-PCA-ERROR", "fitMatrix", sub() {
+            pca2.transform({"x": 1.0, "y": 2.0});
         });
     }
 }

@@ -30,23 +30,39 @@
 
 #include "ml_common.h"
 
+#include <mutex>
+
 DLLEXPORT extern qore_classid_t CID_HOLTWINTERS;
 DLLLOCAL extern QoreClass* QC_HOLTWINTERS;
 
 DLLLOCAL void preinitHoltWintersClass();
 DLLLOCAL QoreClass* initHoltWintersClass(QoreNamespace& ns);
 
-//! Holt-Winters triple exponential smoothing implementation class (stub)
+//! Holt-Winters triple exponential smoothing implementation class
 class QoreHoltWinters : public AbstractPrivateData {
 public:
     DLLLOCAL QoreHoltWinters(int period, double alpha, double beta, double gamma,
-        const char* seasonal_type, bool damped)
+        const char* seasonal_type, bool damped, double phi)
         : period(period), alpha(alpha), beta(beta), gamma(gamma),
-          seasonal_type(seasonal_type), damped(damped) {
+          seasonal_type(seasonal_type), damped(damped), phi(phi) {
     }
 
     DLLLOCAL int getPeriod() const { return period; }
     DLLLOCAL bool isFitted() const { return fitted; }
+
+    //! Initialize model from historical data
+    DLLLOCAL void fit(const VectorXd& series, ExceptionSink* xsink);
+
+    //! Process one new observation
+    DLLLOCAL QoreHashNode* update(double value, ExceptionSink* xsink);
+
+    //! Forecast N steps ahead
+    DLLLOCAL QoreListNode* forecast(int steps, ExceptionSink* xsink);
+
+    //! Getters for model state (thread-safe; check fitted under lock)
+    DLLLOCAL QoreValue getLevel(ExceptionSink* xsink);
+    DLLLOCAL QoreValue getTrend(ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* getSeasonal(ExceptionSink* xsink);
 
 private:
     int period;
@@ -55,7 +71,16 @@ private:
     double gamma;
     std::string seasonal_type;
     bool damped;
+    double phi;  // damping factor
+
+    // Model state
+    double level = 0.0;
+    double trend = 0.0;
+    std::vector<double> seasonal;
+    int t = 0;  // step counter
     bool fitted = false;
+
+    mutable std::mutex mtx;
 };
 
 #endif // _QORE_MODULE_ML_QC_HOLTWINTERS_H

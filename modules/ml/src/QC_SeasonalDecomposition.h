@@ -36,7 +36,7 @@ DLLLOCAL extern QoreClass* QC_SEASONALDECOMPOSITION;
 DLLLOCAL void preinitSeasonalDecompositionClass();
 DLLLOCAL QoreClass* initSeasonalDecompositionClass(QoreNamespace& ns);
 
-//! Seasonal decomposition implementation class (stub)
+//! Seasonal decomposition implementation class
 class QoreSeasonalDecomposition : public AbstractPrivateData {
 public:
     DLLLOCAL QoreSeasonalDecomposition(int period, const char* type)
@@ -45,6 +45,9 @@ public:
 
     DLLLOCAL int getPeriod() const { return period; }
     DLLLOCAL const std::string& getType() const { return type; }
+
+    //! Decompose a time series into trend, seasonal, and residual components
+    DLLLOCAL QoreListNode* decompose(const VectorXd& series, ExceptionSink* xsink);
 
 private:
     int period;

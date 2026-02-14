@@ -28,11 +28,19 @@
 #include "qore/Qore.h"
 #include "QC_KMeans.h"
 
+extern const TypedHashDecl* hashdeclKMeansResult;
+
 //! The KMeans class implements K-Means clustering with optional mini-batch online updates
 /** K-Means partitions data into k clusters by iteratively assigning points to the nearest
-    centroid and updating centroids to be the mean of assigned points.
+    centroid and updating centroids to be the mean of assigned points. Supports k-means++
+    initialization for better convergence.
 
-    @note This class is a stub; methods will throw NOT-IMPLEMENTED until Phase 1b.
+    @par Example:
+    @code{.py}
+KMeans km({"k": 3, "seed": 42});
+km.fitMatrix(training_data);
+hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
+    @endcode
 
     @since ml 1.0
 */
@@ -86,6 +94,12 @@ KMeans::constructor(hash<auto> options) {
         return;
     }
 
+    if (strcmp(init_method, "kmeans++") != 0 && strcmp(init_method, "random") != 0) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "init must be 'kmeans++' or 'random'; got '%s'", init_method);
+        return;
+    }
+
     self->setPrivate(CID_KMEANS,
         new QoreKMeans(static_cast<int>(k), static_cast<int>(max_iterations),
             tolerance, seed, init_method));
@@ -101,33 +115,106 @@ KMeans::copy() {
 //! Fits the model on a list of hash records
 /** @param data a list of hashes with numeric fields
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+km.fit(data_records);
+    @endcode
+
+    @throw ML-KMEANS-ERROR no data or k > n_samples
+    @throw ML-DATA-ERROR data format errors
 */
 nothing KMeans::fit(list<auto> data) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "KMeans::fit() is not yet implemented; will be available in a future release");
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->setFieldNames(field_names);
+    kmeans->fit(matrix, xsink);
 }
 
 //! Fits the model on a numeric matrix
 /** @param matrix a list of lists of numeric values
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @throw ML-KMEANS-ERROR no data or k > n_samples
+    @throw ML-DATA-ERROR data format errors
 */
 nothing KMeans::fitMatrix(list<auto> matrix) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "KMeans::fitMatrix() is not yet implemented; will be available in a future release");
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->fit(mat, xsink);
+}
+
+//! Performs a mini-batch online update with new data
+/** @param data a list of hashes with numeric fields
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::update(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->update(matrix, xsink);
+}
+
+//! Performs a mini-batch online update with a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::updateMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->update(mat, xsink);
 }
 
 //! Predicts cluster assignment for a single record
 /** @param record a hash with numeric fields
     @return a @ref KMeansResult hash
 
-    @throw NOT-IMPLEMENTED this method is not yet implemented
+    @par Example:
+    @code{.py}
+hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
+printf("Cluster: %d, Distance: %.2f\n", result.cluster, result.distance);
+    @endcode
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
 */
-hash<auto> KMeans::predict(hash<auto> record) {
-    xsink->raiseException("NOT-IMPLEMENTED",
-        "KMeans::predict() is not yet implemented; will be available in a future release");
-    return QoreValue();
+hash<KMeansResult> KMeans::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = kmeans->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return kmeans->predict(point, xsink);
+}
+
+//! Predicts cluster assignments for multiple rows in matrix form
+/** @param matrix a list of lists of numeric values
+    @return a list of @ref KMeansResult hashes
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<KMeansResult>> KMeans::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return kmeans->predictMatrix(mat, xsink);
 }
 
 //! Returns the number of clusters
@@ -142,4 +229,27 @@ int KMeans::getK() [flags=CONSTANT] {
 */
 bool KMeans::isFitted() [flags=CONSTANT] {
     return kmeans->isFitted();
+}
+
+//! Returns the current centroids
+/** @return a list of lists of float values (k x n_features)
+
+    @throw ML-KMEANS-ERROR model not fitted
+*/
+list<auto> KMeans::getCentroids() {
+    return kmeans->getCentroids(xsink);
+}
+
+//! Returns the inertia (sum of squared distances to nearest centroid)
+/** @return the inertia value
+
+    @throw ML-KMEANS-ERROR model not fitted
+*/
+float KMeans::getInertia() {
+    if (!kmeans->isFitted()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return QoreValue();
+    }
+    return kmeans->getInertia();
 }
