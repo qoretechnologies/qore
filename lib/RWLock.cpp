@@ -7,7 +7,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -139,6 +139,12 @@ int RWLock::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeout_m
     // check for errors
     if (tid == mtid) {
         xsink->raiseException("LOCK-ERROR", "TID %d tried to grab the write lock twice", tid);
+        return -1;
+    }
+    // check if this thread holds a read lock - upgrading from read to write lock would deadlock
+    if (tmap.find(mtid) != tmap.end()) {
+        xsink->raiseException("LOCK-ERROR", "TID %d tried to acquire the write lock while holding the read lock; "
+            "read-to-write lock upgrades are not supported and would result in a deadlock", mtid);
         return -1;
     }
     while (tid >= 0 || (tid == Lock_Unlocked && num_readers)) {
