@@ -27,9 +27,11 @@ echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
 # Configure with CMake
+# CMAKE_PREFIX_PATH=/opt/local enables MacPorts-installed dependencies (Eigen3, ONNX Runtime, etc.)
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
-    -DSINGLE_COMPILATION_UNIT=1
+    -DSINGLE_COMPILATION_UNIT=1 \
+    -DCMAKE_PREFIX_PATH=/opt/local
 
 # Build
 make -j${MAKE_JOBS}
