@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -455,6 +455,16 @@ DLLEXPORT extern DBIDriverList DBI;
 
 //! parses a datasource string and returns a hash of the component parts
 DLLEXPORT QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink);
+
+//! builds a datasource connection string from a hash of component parts
+/** @param h the hash with datasource configuration keys: type (required), user, pass, db, charset, host, port, options
+    @param xsink Qore-language exceptions are stored here
+
+    @return the datasource connection string
+
+    @since Qore 2.3
+*/
+DLLEXPORT QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink);
 
 //! concatenates a numeric value to the QoreString from the value
 DLLEXPORT void DBI_concat_numeric(QoreString* str, QoreValue v);
