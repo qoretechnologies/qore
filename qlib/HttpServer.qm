@@ -2354,7 +2354,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
-                if (!is_http2 && rv."code" >= 200) {
+                if (is_http2 && async_response_out) {
+                    # Async HTTP/2 mode: the handler claimed reply_sent but didn't actually send
+                    # a response; generate a 500 error for the controller to send
+                    string err = sprintf("handler %y set reply_sent without sending a response",
+                        cx.handler_name);
+                    logError("%s", err);
+                    async_response_out = buildAsyncErrorResponse(500, err, cx, listener, s, False);
+                } else if (!is_http2 && rv."code" >= 200) {
                     cx."response-sent" = True;
                 }
                 return;
@@ -2380,11 +2387,41 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             on_exit if (s.pendingHttpChunkedBody())
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
-            sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
+            if (async_response_out) {
+                # Async mode: capture the error response for the controller to send
+                # Sending synchronously via execHttp2PollOperation from the handler thread
+                # races with the async I/O controller on HTTP/2 connections
+                async_response_out = buildAsyncErrorResponse(500, str, cx, listener, s, !is_http2);
+            } else {
+                sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
+            }
             logError("%s", str);
         }
     }
     #! @endcond
+
+    # Builds an async error response for the controller to send
+    # Used in async mode to avoid synchronous sends that race with the I/O controller
+    hash<HttpAsyncResponseInfo> buildAsyncErrorResponse(int status_code, string msg,
+            hash<auto> cx, HttpListener listener, Socket s, bool close) {
+        *string encoding = cx."response-encoding";
+        if (!encoding) {
+            encoding = s.getEncoding().lwr();
+        }
+        string err_body = acceptsHtml(cx) ? getHtmlErrorMessage(status_code, msg) : msg;
+        hash<auto> err_hdr = self.hdr + {
+            "Content-Type": MimeTypeHtml + ";charset=" + encoding,
+            "Date": getDateHeader(),
+        };
+        return <HttpAsyncResponseInfo>{
+            "code": status_code,
+            "hdr": err_hdr,
+            "body": err_body,
+            "close": close,
+            "cx": cx,
+            "listener": listener,
+        };
+    }
 
     # sends a reply to a request
     # If async_response_out is provided, capture response info instead of sending
@@ -4218,9 +4255,26 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Handler failed to send response - send 500 error
             string err = sprintf("handler %y returned without sending a response", cx.handler_name);
             logError("%s", err);
-            if (!is_http2) {
-                cx.close = True;
+            if (is_http2) {
+                # HTTP/2: return the error response for the controller to send asynchronously
+                # Do NOT call sendHttpError synchronously - it races with the async I/O controller
+                hash<HttpAsyncResponseInfo> err_resp = serv.buildAsyncErrorResponse(500, err, cx,
+                    self, s, False);
+                if (err_resp.body && !err_resp.hdr."Content-Length") {
+                    err_resp.hdr."Content-Length" = string(err_resp.body.size());
+                }
+                logResponse(cx, err_resp);
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                    "code": 500,
+                    "status_message": HttpServer::HttpCodes{500},
+                    "hdr": err_resp.hdr,
+                    "body": err_resp.body,
+                    "close": False,
+                    "return_to_idle": True,
+                    "ttl": serv.getTtl(),
+                };
             }
+            cx.close = True;
             serv.sendHttpError(self, cx, s, 500, err, NOTHING, NOTHING, cx."response-encoding", False);
         }
 
