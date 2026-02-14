@@ -112,7 +112,9 @@ public class QorePercentileProcessor inherits AbstractAnalyticsProcessor {
         # compute percentiles via linear interpolation
         hash<auto> pcts;
         foreach float p in (pct_values) {
-            pcts{"p" + string(int(p))} = computePercentile(sorted, p);
+            # use integer key if percentile is an integer value, otherwise use float string
+            string key = p == float(int(p)) ? ("p" + string(int(p))) : ("p" + sprintf("%g", p));
+            pcts{key} = computePercentile(sorted, p);
         }
 
         # IQR

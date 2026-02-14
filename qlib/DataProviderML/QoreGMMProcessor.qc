@@ -135,6 +135,11 @@ public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("n_components must be >= 1; got %d", n_components);
         }
+        if (window_size < n_components) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("window_size (%d) must be >= n_components (%d); GMM requires at least "
+                    "as many data points as components", window_size, n_components);
+        }
         if (exists copts.covariance_type) {
             covariance_type = copts.covariance_type;
         }

@@ -127,7 +127,7 @@ public hashdecl PercentileEventInfo inherits AnalyticsEventInfo {
     float max_val;
     #! Skewness of the distribution (0 = symmetric, positive = right-skewed)
     float skewness;
-    #! Kurtosis of the distribution (3 = normal/mesokurtic)
+    #! Excess kurtosis of the distribution (0 = normal/mesokurtic; Fisher's definition)
     float kurtosis;
     #! Number of values in the window
     int count;

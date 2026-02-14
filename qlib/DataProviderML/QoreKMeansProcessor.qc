@@ -125,6 +125,11 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("k must be >= 1; got %d", k);
         }
+        if (window_size < k) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("window_size (%d) must be >= k (%d); KMeans requires at least "
+                    "as many data points as clusters", window_size, k);
+        }
         if (exists copts.online) {
             online = copts.online;
         }

@@ -121,6 +121,11 @@ public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
         if (exists copts.k) {
             k = copts.k;
         }
+        if (window_size <= k) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("window_size (%d) must be greater than k (%d); LOF requires at least "
+                    "k + 1 data points", window_size, k);
+        }
         if (exists copts.threshold) {
             threshold = copts.threshold;
         }

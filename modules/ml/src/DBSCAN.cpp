@@ -109,7 +109,8 @@ QoreListNode* QoreDBSCAN::cluster(const MatrixXd& data, ExceptionSink* xsink) {
 
     for (int i = 0; i < n; ++i) {
         all_neighbors[i] = findNeighbors(dist_matrix, i);
-        if (static_cast<int>(all_neighbors[i].size()) >= min_points) {
+        // MinPts includes the point itself; findNeighbors() excludes it
+        if (static_cast<int>(all_neighbors[i].size()) + 1 >= min_points) {
             is_core[i] = true;
         }
     }

@@ -86,9 +86,9 @@ void QoreLOF::fit(const MatrixXd& data, ExceptionSink* xsink) {
     }
 
     int n = static_cast<int>(data.rows());
-    if (n < k) {
+    if (n <= k) {
         xsink->raiseException("ML-LOF-ERROR",
-            "k (%d) is larger than the number of samples (%d); reduce k or provide more data",
+            "k (%d) must be less than the number of samples (%d); reduce k or provide more data",
             k, n);
         return;
     }

@@ -471,6 +471,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "k": 0,
             });
         });
+        # window_size < k
+        assertThrows("CONSTRUCTOR-ERROR", "must be >= k", sub() {
+            new DataProviderML::QoreKMeansProcessor({
+                "fields": "x",
+                "window_size": 3,
+                "k": 5,
+            });
+        });
     }
 
     # ===================== PCA Tests =====================
@@ -908,6 +916,21 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "window_size": 1,
             });
         });
+        # window_size <= k
+        assertThrows("CONSTRUCTOR-ERROR", "must be greater than k", sub() {
+            new DataProviderML::QoreLOFProcessor({
+                "fields": "x",
+                "window_size": 5,
+                "k": 5,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "must be greater than k", sub() {
+            new DataProviderML::QoreLOFProcessor({
+                "fields": "x",
+                "window_size": 10,
+                "k": 20,
+            });
+        });
     }
 
     # ===================== GMM Tests =====================
@@ -996,6 +1019,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "fields": "x",
                 "window_size": 1,
                 "n_components": 2,
+            });
+        });
+        # window_size < n_components
+        assertThrows("CONSTRUCTOR-ERROR", "must be >= n_components", sub() {
+            new DataProviderML::QoreGMMProcessor({
+                "fields": "x",
+                "window_size": 3,
+                "n_components": 5,
             });
         });
     }
@@ -1208,7 +1239,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             {"fields": "x", "target_field": "y", "window_size": 10});
         assertTrue(exists lr.getPipelineProcessorOutputType());
 
-        DataProviderML::QoreLOFProcessor lof({"fields": "x,y", "window_size": 10});
+        DataProviderML::QoreLOFProcessor lof({"fields": "x,y", "window_size": 10, "k": 5});
         assertTrue(exists lof.getPipelineProcessorOutputType());
 
         DataProviderML::QoreGMMProcessor gmm(
