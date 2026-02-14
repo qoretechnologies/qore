@@ -42,6 +42,11 @@ public class QoreProcessorsDataProvider inherits AbstractDataProvider {
             "remove-fields": "QoreRemoveFieldsProcessor",
             "search-replace": "QoreSearchReplaceProcessor",
             "record-limit": "QoreRecordLimitProcessor",
+            "running-stats": "QoreRunningStatsProcessor",
+            "moving-average": "QoreMovingAverageProcessor",
+            "trend-analysis": "QoreTrendAnalysisProcessor",
+            "anomaly-detection": "QoreAnomalyDetectionProcessor",
+            "group-by": "QoreGroupByProcessor",
         };
     }
 
@@ -58,7 +63,7 @@ public class QoreProcessorsDataProvider inherits AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return "Root data provider for built-in Qore data pipeline processors providing filtering, "
-            "transformation, and record manipulation capabilities";
+            "transformation, aggregation, analytics, and record manipulation capabilities";
     }
 
     #! Returns data provider static info
@@ -86,6 +91,16 @@ public class QoreProcessorsDataProvider inherits AbstractDataProvider {
                 return new QoreSearchReplaceProcessor();
             case "record-limit":
                 return new QoreRecordLimitProcessor();
+            case "running-stats":
+                return new QoreRunningStatsProcessor();
+            case "moving-average":
+                return new QoreMovingAverageProcessor();
+            case "trend-analysis":
+                return new QoreTrendAnalysisProcessor();
+            case "anomaly-detection":
+                return new QoreAnomalyDetectionProcessor();
+            case "group-by":
+                return new QoreGroupByProcessor();
         }
     }
 }

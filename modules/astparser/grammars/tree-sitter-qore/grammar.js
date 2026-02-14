@@ -188,7 +188,6 @@ module.exports = grammar({
         '%no-transient',
         '%no-new',
         '%lockdown',
-        '%exec-class',
         '%modern',
         seq('%append-include-path', $.string),
         seq('%append-module-path', $.string),
@@ -214,6 +213,10 @@ module.exports = grammar({
       // Parse option stack (can appear between any declarations)
       seq('%push-parse-options', /[^\n]*/),
       seq('%pop-parse-options', /[^\n]*/),
+      // Module command directive (consumes entire line as opaque token)
+      seq('%module-cmd', /[^\n]*/),
+      // Exec-class with class name argument
+      seq('%exec-class', /[^\n]*/),
     )),
 
     module_name: $ => choice(
@@ -296,7 +299,7 @@ module.exports = grammar({
     member_group: $ => seq(
       $.access_modifier,
       '{',
-      repeat(choice($.member_declaration, $.parse_directive)),
+      repeat(choice($.member_declaration, $.constant_declaration, $.parse_directive)),
       '}',
     ),
 
