@@ -689,6 +689,11 @@ class QoreBreakpoint;
 
 class qore_program_private : public qore_program_private_base {
 public:
+    //! Returns true if a debugger is currently attached to this program
+    DLLLOCAL bool hasDebuggerAttached() const {
+        return dpgm != nullptr;
+    }
+
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
     // map for line to statement
     typedef std::map<int, AbstractStatement*> sline_statement_map_t;

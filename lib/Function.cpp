@@ -2630,6 +2630,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // assert(statements);
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
+
+    // When a debugger is attached, force AST execution so that all debug hooks
+    // (dbgFunctionEnter/Exit, dbgStep, checkBreakFlag) work correctly.
+    // IR interpreter and JIT-compiled code have no debug hooks, so promoted
+    // functions would be invisible to the debugger.
+    if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        tier = TIER_AST;
+    }
+
     // JIT/AOT tier: execute native function
     if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
@@ -2660,6 +2669,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     lv->instantiate(po);
                 }
 
+                // Set thread-local parse options so that builtin code called from
+                // JIT/AOT-compiled functions (e.g. RangeIterator checking
+                // PO_BROKEN_RANGE) sees the correct program parse options.
+                int64 saved_po = runtime_get_parse_options();
+                runtime_set_parse_options(po);
+
                 uint64_t result_bits;
                 if (cached_aot_ctx && cached_aot_fn) {
                     result_bits = cached_aot_fn(cached_aot_ctx, xsink);
@@ -2669,6 +2684,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreValue result;
                 std::memcpy(&result, &result_bits, sizeof(result));
                 val = result;
+
+                // Restore thread-local parse options
+                runtime_set_parse_options(saved_po);
 
                 // Uninstantiate in reverse order (LIFO)
                 for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
@@ -2727,6 +2745,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     lv->instantiate(po);
                 }
 
+                // Set thread-local parse options so that builtin code called from
+                // IR-interpreted functions sees the correct program parse options.
+                int64 saved_po = runtime_get_parse_options();
+                runtime_set_parse_options(po);
+
                 // Build set of pre-instantiated local variables for the IR interpreter.
                 // Parameter locals are already instantiated by setupCall() in eval().
                 // argvid/selfid are instantiated above in this function or by the caller
@@ -2768,6 +2791,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                     val = statements->exec(xsink);
                 }
+
+                // Restore thread-local parse options
+                runtime_set_parse_options(saved_po);
 
                 // Uninstantiate body locals in reverse order (LIFO)
                 for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {

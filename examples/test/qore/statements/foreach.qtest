@@ -16,6 +16,7 @@ class ForEachTest inherits QUnit::Test {
     constructor() : QUnit::Test("ForEachTest", "1.0", \ARGV) {
         addTestCase("weak reference tests", \weakReferenceTests());
         addTestCase("basic operator tests", \basicTests());
+        addTestCase("implicit element tests", \implicitElementTests());
         set_return_value(main());
     }
 
@@ -114,6 +115,113 @@ class ForEachTest inherits QUnit::Test {
             foreach string str in (map $1, (keys h))
                 l += str;
             assertEq(("a",), l);
+        }
+    }
+
+    implicitElementTests() {
+        # issue #5164: $# in foreach must work correctly in IR/JIT/tiered modes
+
+        # basic $# counting with list
+        {
+            list<int> indices;
+            foreach string item in (("a", "b", "c", "d")) {
+                indices += $#;
+            }
+            assertEq((0, 1, 2, 3), indices, "basic $# counting");
+        }
+
+        # $# used as index into another list
+        {
+            list<string> names = ("alice", "bob", "charlie");
+            list<int> ids = (10, 20, 30);
+            list<string> combined;
+            foreach string name in (names) {
+                combined += sprintf("%s=%d", name, ids[$#]);
+            }
+            assertEq(("alice=10", "bob=20", "charlie=30"), combined, "$# as index");
+        }
+
+        # $# with break
+        {
+            int last_idx = -1;
+            foreach string item in (("a", "b", "c", "d")) {
+                last_idx = $#;
+                if (item == "c") {
+                    break;
+                }
+            }
+            assertEq(2, last_idx, "$# with break");
+        }
+
+        # $# with continue
+        {
+            list<int> indices;
+            foreach string item in (("a", "b", "c", "d")) {
+                if (item == "b") {
+                    continue;
+                }
+                indices += $#;
+            }
+            assertEq((0, 2, 3), indices, "$# with continue");
+        }
+
+        # nested foreach with $#
+        {
+            list<list<int>> matrix = ((1, 2), (3, 4));
+            list<string> results;
+            foreach list<int> row in (matrix) {
+                int outer_idx = $#;
+                foreach int val in (row) {
+                    results += sprintf("%d-%d:%d", outer_idx, $#, val);
+                }
+            }
+            assertEq(("0-0:1", "0-1:2", "1-0:3", "1-1:4"), results, "nested foreach $#");
+        }
+
+        # $# with hash context iterator
+        {
+            hash<auto> h = {"id": (1, 2, 3), "name": ("a", "b", "c")};
+            list<int> indices;
+            foreach hash<auto> row in (h.contextIterator()) {
+                indices += $#;
+            }
+            assertEq((0, 1, 2), indices, "$# with hash contextIterator");
+        }
+
+        # $# ordering check (the original bug: checkMap pattern)
+        {
+            list<hash<auto>> l = (
+                {"id": 1, "string": "string_1"},
+                {"id": 2, "string": "string_2"},
+                {"id": 3, "string": "string_3"},
+            );
+            list<hash<auto>> ol = (
+                {"string": "string_1"},
+                {"string": "string_2"},
+                {"string": "string_3"},
+            );
+            foreach hash<auto> h in (l) {
+                assertEq(ol[$#].string, h.string, "ordering check row " + $#);
+            }
+        }
+
+        # $# with iterator (non-list)
+        {
+            list<int> indices;
+            foreach int i in ((1, 2, 3).iterator()) {
+                indices += $#;
+            }
+            assertEq((0, 1, 2), indices, "$# with list iterator");
+        }
+
+        # $# with empty list
+        {
+            list<int> indices;
+            list<int> empty_list = ();
+            foreach int i in (empty_list) {
+                indices += $#;
+            }
+            assertEq(0, indices.size(), "$# with empty list");
         }
     }
 }

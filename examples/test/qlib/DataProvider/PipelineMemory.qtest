@@ -251,6 +251,12 @@ public class PipelineMemoryTest inherits QUnit::Test {
         verbose_memory = m_options."verbose-memory" ?? False;
 
 %ifndef NoProcess
+        # JIT warmup: run enough records to trigger LLVM initialization and JIT
+        # compilation of all hot code paths before any memory measurements.
+        # LLVM initialization alone uses ~17 MiB, and is a one-time cost that
+        # should not count as pipeline memory growth.
+        jitWarmup();
+
         addTestCase("single pipeline memory stability", \singlePipelineTest());
         addTestCase("repeated pipelines memory stability", \repeatedPipelinesTest());
         addTestCase("multi-processor pipeline memory stability", \multiProcessorPipelineTest());
@@ -281,6 +287,53 @@ public class PipelineMemoryTest inherits QUnit::Test {
         printOption("-M,--max-rss-growth=N", "max RSS growth bytes [default: 5242880]", OptionColumn);
         printOption("-I,--iterations=N", "repeated pipeline iterations [default: 10]", OptionColumn);
         printOption("-V,--verbose-memory", "verbose memory diagnostics", OptionColumn);
+    }
+
+    #! JIT warmup: triggers LLVM initialization and JIT compilation of all hot code paths
+    /** In IR/tiered exec modes, LLVM initialization is deferred until the first function
+        reaches the JIT compilation threshold (default 1000 calls). This one-time cost is
+        approximately 17 MiB and must not be counted as pipeline memory growth.
+
+        This method runs enough pipeline records through each processor type used in the tests
+        to ensure all user code functions are JIT-compiled before any memory measurements begin.
+    */
+    private jitWarmup() {
+        # JIT threshold is 1000 calls; run 1100 records for margin
+        int jit_warmup_count = 1100;
+
+        logVerbose("JIT warmup: %d records (single processor)", jit_warmup_count);
+
+        # Single processor warmup -- triggers JIT for PassthroughProcessor::submitImpl
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "jit-warmup-single"});
+            pipe.append(new PassthroughProcessor());
+            pipe.submit(getGeneratorIterator(jit_warmup_count));
+            pipe.waitDone();
+        }
+
+        # Multi-processor warmup -- triggers JIT for TransformProcessor::submitImpl
+        {
+            DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "jit-warmup-multi"});
+            pipe.append(new PassthroughProcessor());
+            pipe.append(new TransformProcessor());
+            pipe.append(new PassthroughProcessor());
+            pipe.submit(getGeneratorIterator(jit_warmup_count));
+            pipe.waitDone();
+        }
+
+        # Metrics warmup -- triggers JIT for metrics collection paths
+        {
+            LightweightMetricsCollector mc(100);
+            DataProviderPipeline pipe(<PipelineOptionInfo>{
+                "name": "jit-warmup-metrics",
+                "metrics_collector": mc,
+            });
+            pipe.append(new PassthroughProcessor());
+            pipe.submit(getGeneratorIterator(jit_warmup_count));
+            pipe.waitDone();
+        }
+
+        logVerbose("JIT warmup complete");
     }
 
     #! Returns a formatted memory size string

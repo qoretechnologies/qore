@@ -255,6 +255,7 @@ private:
         bool is_switch = false;
         size_t scope_stack_depth = 0;  //!< scope_stack depth when this flow target was created
         int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
+        QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
     };
     std::vector<FlowTarget> flow_stack;
     std::vector<QoreIRBasicBlock*> exception_stack;

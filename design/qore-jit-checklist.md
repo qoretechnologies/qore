@@ -448,8 +448,9 @@ memory safety verification, and CI integration.
 
 Known issues at aggressive thresholds only (pass at default thresholds):
 - `HTTPClient.qtest` / `FtpClient.qtest` — network timeout (not a code bug)
-- `test-debug.qtest` — debug introspection traces differ when functions execute via JIT
-  (debug hooks don't observe JIT-compiled execution steps; 1/97 assertions)
+- `test-debug.qtest` — 1/789 assertions: mid-execution debugger attachment edge case
+  (function already dispatched to IR when debugger attaches inside its body; see
+  "Debugger Support — Gap Analysis & Roadmap" section below for details and fix plan)
 
 ### Thread Safety Fixes
 
@@ -1316,6 +1317,120 @@ error handling for non-module files.
       binaries call `qore_aot_run_v2()`. Both entry points coexist in libqore.
       **New files**: `include/qore/intern/QoreAOTBinary.h`, `lib/QoreAOTBinary.cpp`.
       Output message: `"compiled (O%d, source-stripped): %s"`.
+
+---
+
+## Debugger Support — Gap Analysis & Roadmap
+
+### Current State (Phase 6+)
+
+The Qore debugger infrastructure (`QoreDebugProgram`, `ThreadLocalProgramData`) provides
+step-through debugging, breakpoints, and break-thread functionality. All debug hooks are
+embedded exclusively in the AST interpreter's execution path:
+
+| Hook | Location | Purpose |
+|------|----------|---------|
+| `dbgFunctionEnter`/`Exit` | `StatementBlock::exec()` | Function-level enter/exit events |
+| `dbgStep` | `StatementBlock::execIntern()` | Statement-level stepping |
+| `dbgBlock` | `StatementBlock::execIntern()` | Block-level scoping events |
+| `dbgException` | `StatementBlock::execIntern()` | Exception interception |
+| `checkBreakFlag` | `dbgStep()`/`dbgFunctionEnter()` | Async break from another thread |
+
+**IR interpreter** (`QoreIRInterpreter.cpp`): Zero references to any debug hooks.
+**JIT compiler** (`QoreIRToLLVM.cpp`, `JITRuntime.cpp`): Zero references to any debug hooks.
+
+### Mitigation: Dispatch-Time Override (Implemented)
+
+When a debugger is attached to a `QoreProgram` (i.e., `dpgm != nullptr`), the `evalTiered()`
+dispatch in `Function.cpp` forces execution back to `TIER_AST` regardless of the function's
+current promotion tier. This ensures:
+
+- All `dbgFunctionEnter`/`dbgFunctionExit` events fire for promoted functions
+- All `dbgStep` events fire within promoted function bodies
+- Breakpoints work inside promoted function bodies
+- `breakProgramThread()`/`breakProgram()` interrupts promoted functions via `checkBreakFlag`
+- Zero performance cost when no debugger is attached (the common case)
+- Tier promotion continues in the background; when the debugger detaches, functions resume
+  running at their promoted tier
+
+**Known limitation**: If a function attaches a debugger mid-execution (e.g., calls
+`DebugProgram::addProgram()` inside its body) and was already dispatched to IR/JIT for that
+call, debug step events from that function's own body are lost for the current invocation.
+Subsequent calls will be correctly forced to AST. This affects 1/789 assertions in
+`test-debug.qtest` at aggressive tiered thresholds (3/10); all 789/789 pass at default
+thresholds (100/1000).
+
+**Files**: `lib/Function.cpp` (dispatch-time check), `include/qore/intern/qore_program_private.h`
+(`hasDebuggerAttached()` accessor).
+
+### Phase 8: IR Interpreter Debug Hooks (TODO)
+
+Add statement-boundary debug hooks to the IR interpreter for full debug fidelity even when
+functions have been promoted to `TIER_IR`. This eliminates the mid-execution attachment
+limitation.
+
+#### Design
+
+1. **Statement boundary detection**: IR instructions carry source location (`QoreProgramLocation`).
+   Detect statement boundaries by checking when the source line changes between consecutive
+   instructions.
+
+2. **Conditional debug check**: At each statement boundary, check `tlpd->runtimeCheck()`.
+   Only call debug hooks when a debugger is actually attached. The branch is highly predictable
+   (almost never taken in production) and should have minimal performance impact.
+
+3. **Required hooks at statement boundaries**:
+   - `tlpd->dbgStep(stmt, next_stmt, xsink)` — step/breakpoint support
+   - `tlpd->dbgException(stmt, xsink)` — after exception-raising instructions
+   - `tlpd->checkBreakFlag()` — async break support (checked inside `dbgStep`)
+
+4. **Function enter/exit hooks**: Already handled by the dispatch-time override in
+   `evalTiered()`. The IR interpreter doesn't need to duplicate these; the caller's
+   `StatementBlock::exec()` wrapper handles them.
+
+5. **Block-scope hooks**: `dbgBlock()` events for entering/exiting statement blocks (if, while,
+   for, try, etc.). These require tracking the current statement block, which is available from
+   the IR instruction's source location.
+
+#### Implementation Plan
+
+- [ ] Add `ThreadLocalProgramData*` parameter to `QoreIRInterpreter::execute()`
+- [ ] Track current source line; emit `dbgStep` when line changes and `runtimeCheck()` is true
+- [ ] Emit `dbgException` after instructions that may throw (Invoke results)
+- [ ] Test: `test-debug.qtest` must pass at aggressive thresholds (3/10) with 789/789 assertions
+- [ ] Performance: benchmark IR interpreter with and without debug hooks (target: <5% overhead)
+
+### Phase 9: JIT Debug Hooks (TODO — Future)
+
+Full debug support in LLVM-generated native code. This is significantly more complex than IR
+interpreter hooks because native code cannot easily call into the debug infrastructure without
+major performance penalties.
+
+#### Approaches
+
+1. **Eager instrumentation**: Emit `dbgStep()`/`checkBreakFlag()` calls at every statement
+   boundary in generated LLVM IR. Pro: simple. Con: significant performance overhead
+   (estimated 2-3x slowdown from call overhead and cache pollution), negating much of the JIT
+   benefit.
+
+2. **Deoptimization**: When a debugger attaches, deoptimize (fall back to AST or IR
+   interpreter) for the affected program. The current dispatch-time override already does this
+   at function boundaries. Full deoptimization would handle mid-function attachment by
+   transferring execution state from native code back to the IR interpreter.
+
+3. **Patching**: Insert `nop` sleds at statement boundaries in generated code. When a
+   breakpoint is set, patch the `nop` to a `call` to the debug hook. Pro: zero overhead when
+   not debugging. Con: complex implementation, thread safety concerns, platform-specific.
+
+4. **Tiered deopt (recommended)**: Combine the current dispatch-time override with
+   deoptimization triggered by `attachDebug()`. When a debugger attaches:
+   a. Set `current_tier = TIER_AST` for all user variants in the program
+   b. Set a per-program flag that suppresses promotion
+   c. When the debugger detaches, clear the flag and allow re-promotion via `std::call_once`
+      replacement (use atomic counters instead of `std::once_flag`)
+
+   This gives full debug fidelity with zero cost when not debugging, at the expense of losing
+   JIT performance while the debugger is attached (acceptable tradeoff).
 
 ---
 

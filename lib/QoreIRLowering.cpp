@@ -425,19 +425,31 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
         QoreValue expr = ret_stmt->getExpression();
-        // Emit ScopeExit for all active scopes before returning
+        if (!expr || expr.isNothing()) {
+            // Emit ScopeExit for all active scopes before returning
+            emitScopeExits(0, false);
+            // Emit CatchCleanup for all active catch scopes before returning
+            for (int i = 0; i < catch_cleanup_depth; ++i) {
+                builder.createCatchCleanup(stmt->loc);
+            }
+            builder.createReturnNothing();
+            return true;
+        }
+        // Evaluate the return expression BEFORE firing on_exit handlers.
+        // In AST mode, ReturnStatement::execImpl evaluates the expression first,
+        // then the enclosing StatementBlock fires on_block_exit handlers after
+        // the statement loop breaks on RC_RETURN.  The return expression may
+        // reference resources (files, connections) that on_exit handlers clean up,
+        // so we must preserve this ordering in the IR path.
+        QoreIRValue lowered = lowerExpression(expr, error);
+        if (!lowered.isValid()) {
+            return false;
+        }
+        // Now emit ScopeExit for all active scopes (fires on_exit handlers)
         emitScopeExits(0, false);
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
-        }
-        if (!expr || expr.isNothing()) {
-            builder.createReturnNothing();
-            return true;
-        }
-        QoreIRValue lowered = lowerExpression(expr, error);
-        if (!lowered.isValid()) {
-            return false;
         }
         builder.createReturn(lowered);
         return true;
@@ -495,7 +507,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, {}});
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -537,7 +549,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, {}});
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -586,7 +598,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth});
+        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth, {}});
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -645,26 +657,41 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         // Create basic blocks for the loop structure AFTER evaluating the list
         // expression and creating the iterator
+        QoreIRBasicBlock* preheader_block = createBlock("foreach.preheader");
         QoreIRBasicBlock* header_block = createBlock("foreach.header");
         QoreIRBasicBlock* body_block = createBlock("foreach.body");
+        QoreIRBasicBlock* latch_block = createBlock("foreach.latch");
         QoreIRBasicBlock* exit_block = createBlock("foreach.exit");
-        if (!header_block || !body_block || !exit_block) {
+        if (!preheader_block || !header_block || !body_block || !latch_block || !exit_block) {
             error = "IR builder failed to create blocks for foreach";
             return false;
         }
         // Mark header block as loop header for OSR detection
         header_block->is_loop_header = true;
 
-        // Branch to header
+        // Branch to preheader
+        builder.createBranch(preheader_block, stmt->loc);
+
+        // Preheader: initialize index counter and branch to header
+        builder.setBlock(preheader_block);
+        QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
         builder.createBranch(header_block, stmt->loc);
 
-        // Header block: check for next value and branch
+        // Header block: PHI for index, check for next value and branch
         builder.setBlock(header_block);
+
+        // Create PHI for iteration index ($#) - will be completed after body
+        auto* index_phi = builder.createPhi({}, stmt->loc);
+        QoreIRValue index_val = index_phi->result;
+
         auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, stmt->loc);
         QoreIRValue value_val = next_inst->result;
 
-        // Body block: assign value to loop variable and execute body
+        // Body block: set $# via PushImplicitElement, assign value to loop variable, execute body
         builder.setBlock(body_block);
+
+        // Push the implicit element ($#) for the current iteration
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
 
         // Assign the value to the loop variable
         QoreValue var_expr = foreach_stmt->getVar();
@@ -677,7 +704,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         // Lower the loop body with proper break/continue targets
-        flow_stack.push_back({exit_block, header_block, false, scope_stack.size(), catch_cleanup_depth});
+        // break → exit_block (break handler pops $# via old_implicit_element)
+        // continue → latch_block (pops $# and increments index)
+        FlowTarget ft;
+        ft.break_target = exit_block;
+        ft.continue_target = latch_block;
+        ft.is_switch = false;
+        ft.scope_stack_depth = scope_stack.size();
+        ft.catch_cleanup_depth = catch_cleanup_depth;
+        ft.old_implicit_element = old_element;
+        flow_stack.push_back(ft);
         StatementBlock* body = foreach_stmt->getCode();
         if (body) {
             if (!lowerStatementBlock(body, error)) {
@@ -687,10 +723,26 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         flow_stack.pop_back();
 
-        // Branch back to header
+        // Normal body exit falls through to latch block
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(header_block, stmt->loc);
+            builder.createBranch(latch_block, stmt->loc);
         }
+
+        // Latch block: pop implicit element, increment index, branch to header
+        builder.setBlock(latch_block);
+        builder.createPopImplicitElement(old_element, stmt->loc);
+
+        // Increment index for next iteration
+        QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
+            stmt->loc)->result;
+        builder.createBranch(header_block, stmt->loc);
+
+        // Complete the PHI node with incoming values
+        index_phi->incoming.push_back({init_index, preheader_block});
+        index_phi->incoming.push_back({next_index, latch_block});
+        index_phi->operands.push_back(init_index);
+        index_phi->operands.push_back(next_index);
 
         // Exit block
         builder.setBlock(exit_block);
@@ -780,11 +832,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* target = nullptr;
         size_t target_scope_depth = 0;
         int target_catch_depth = 0;
+        QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
                 target = it->break_target;
                 target_scope_depth = it->scope_stack_depth;
                 target_catch_depth = it->catch_cleanup_depth;
+                old_elem = it->old_implicit_element;
                 break;
             }
         }
@@ -797,6 +851,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
+        }
+        // Restore $# for foreach loops before breaking out
+        if (old_elem.isValid()) {
+            builder.createPopImplicitElement(old_elem, stmt->loc);
         }
         builder.createBranch(target);
         return true;
@@ -823,6 +881,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
+        // Note: no need to pop $# here for foreach loops — the continue target
+        // (latch_block) already calls PopImplicitElement before incrementing the
+        // index and branching back to the header.
         builder.createBranch(target);
         return true;
     }
@@ -916,7 +977,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -994,7 +1055,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1119,7 +1180,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth});
+        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
