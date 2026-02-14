@@ -1,0 +1,379 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DataProviderML.qm module for ML-based data pipeline processors
+
+/*  DataProviderML.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires ml
+
+module DataProviderML {
+    version = "1.0.0";
+    desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the ML processors data provider factory
+        DataProvider::registerFactory(new MLProcessorsDataProviderFactory());
+
+        # register the ML Analytics app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": MLApp::AppName,
+            "display_name": "ML Analytics",
+            "short_desc": "Machine learning data pipeline processors",
+            "desc": "Machine learning data pipeline processors powered by the ml binary module "
+                "for anomaly detection, clustering, forecasting, dimensionality reduction, "
+                "and seasonal decomposition in data pipelines",
+            "logo": MLApp::MLLogo,
+            "logo_file_name": "qore-q-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::Analytics,),
+        });
+
+        # register isolation-forest action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/isolation-forest",
+            "action": "isolation-forest",
+            "display_name": "Detect Unusual Data Points",
+            "short_desc": "Finds anomalies using isolation forest algorithm",
+            "desc": "Detects unusual data points in multivariate data using the Isolation Forest "
+                "algorithm. Anomalies are identified by how quickly they can be isolated from "
+                "normal data. Each record is scored between 0.0 (normal) and 1.0 (anomalous). "
+                "For example, it can detect fraudulent transactions, sensor malfunctions, or "
+                "unusual user behavior patterns in a stream of records.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreIsolationForestProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreIsolationForestProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreIsolationForestProcessor::ConstructorOptions{
+                    "n_trees", "sample_size", "threshold",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register dbscan-clustering action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/dbscan-clustering",
+            "action": "dbscan-clustering",
+            "display_name": "Find Data Clusters",
+            "short_desc": "Discovers natural groupings using DBSCAN density clustering",
+            "desc": "Discovers natural groupings in multivariate data using the DBSCAN "
+                "density-based clustering algorithm. Unlike k-means, DBSCAN does not require "
+                "the number of clusters to be specified in advance and can find arbitrarily "
+                "shaped clusters. Points that don't belong to any cluster are marked as noise. "
+                "For example, it can identify customer segments, geographic hotspots, or "
+                "related event patterns.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDBSCANClusteringProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDBSCANClusteringProcessor::ConstructorOptions{
+                    "fields", "window_size", "epsilon",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDBSCANClusteringProcessor::ConstructorOptions{"min_points", "metric"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register kmeans-clustering action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/kmeans-clustering",
+            "action": "kmeans-clustering",
+            "display_name": "Segment Data into Groups",
+            "short_desc": "Partitions data into k groups using k-means clustering",
+            "desc": "Partitions multivariate data into a specified number of groups (k) using "
+                "k-means clustering. Each record is assigned to the nearest cluster centroid. "
+                "Supports online learning: once fitted, new windows update the model incrementally "
+                "rather than retraining from scratch. For example, it can segment customers by "
+                "purchasing behavior, classify documents by topic, or group sensor readings.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreKMeansProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKMeansProcessor::ConstructorOptions{"fields", "window_size", "k"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreKMeansProcessor::ConstructorOptions{"online",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register pca action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/pca",
+            "action": "pca",
+            "display_name": "Simplify Data Dimensions",
+            "short_desc": "Reduces dimensionality using principal component analysis",
+            "desc": "Reduces the number of dimensions in multivariate data using Principal "
+                "Component Analysis (PCA) while preserving the most important patterns. "
+                "This is useful for data visualization, noise reduction, and speeding up "
+                "downstream analysis. For example, it can compress 50 sensor readings into "
+                "3 principal components that capture 95%% of the variance.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QorePCAProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QorePCAProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QorePCAProcessor::ConstructorOptions{"n_components", "variance_threshold"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register holt-winters action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/holt-winters",
+            "action": "holt-winters",
+            "display_name": "Forecast Future Values",
+            "short_desc": "Forecasts values using Holt-Winters triple exponential smoothing",
+            "desc": "Forecasts future values using the Holt-Winters triple exponential smoothing "
+                "method, which accounts for level, trend, and seasonal patterns. After an "
+                "initial training period (2 * period records), each subsequent record produces "
+                "a forecast. Supports additive and multiplicative seasonality and optional "
+                "damped trends. For example, it can forecast sales volumes, resource usage, "
+                "or demand patterns with weekly or monthly seasonality.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProviderML::QoreHoltWintersProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreHoltWintersProcessor::ConstructorOptions{"fields", "window_size", "period"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreHoltWintersProcessor::ConstructorOptions{
+                    "alpha", "beta", "gamma", "forecast_steps",
+                    "seasonal_type", "damped", "phi",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register seasonal-decomposition action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/seasonal-decomposition",
+            "action": "seasonal-decomposition",
+            "display_name": "Separate Trends and Seasons",
+            "short_desc": "Decomposes time series into trend, seasonal, and residual components",
+            "desc": "Decomposes a time series into its trend, seasonal, and residual components "
+                "using classical seasonal decomposition. This reveals the underlying trend "
+                "direction, repeating seasonal patterns, and unexplained residual variation. "
+                "Supports both additive (constant amplitude) and multiplicative (proportional "
+                "amplitude) seasonality. For example, it can separate a monthly sales series "
+                "into its growth trend, seasonal shopping patterns, and random fluctuations.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProviderML::QoreSeasonalDecompositionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSeasonalDecompositionProcessor::ConstructorOptions{
+                    "fields", "window_size", "period",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSeasonalDecompositionProcessor::ConstructorOptions{"type",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage DataProviderML Module
+
+    @tableofcontents
+
+    @section dataprovidermlintro DataProviderML Module Introduction
+
+    The %DataProviderML module provides machine learning data pipeline processors that wrap the
+    \c ml binary module's algorithms for use in data pipelines via the action catalog.
+
+    The following processors are provided:
+
+    - @ref DataProviderML::QoreIsolationForestProcessor "isolation-forest": detect anomalous data points
+      using the Isolation Forest algorithm
+    - @ref DataProviderML::QoreDBSCANClusteringProcessor "dbscan-clustering": discover natural data clusters
+      using DBSCAN density-based clustering
+    - @ref DataProviderML::QoreKMeansProcessor "kmeans-clustering": segment data into k groups using
+      k-means clustering with optional online learning
+    - @ref DataProviderML::QorePCAProcessor "pca": reduce data dimensionality using Principal Component
+      Analysis
+    - @ref DataProviderML::QoreHoltWintersProcessor "holt-winters": forecast future values using
+      Holt-Winters triple exponential smoothing
+    - @ref DataProviderML::QoreSeasonalDecompositionProcessor "seasonal-decomposition": decompose time
+      series into trend, seasonal, and residual components
+
+    @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_0 DataProviderML v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the DataProviderML module
+public namespace DataProviderML {
+    #! Contains constants for the ML data pipeline processors app
+    public namespace MLApp {
+        #! The application name for the ML processors
+        public const AppName = "ML-Analytics";
+        #! Logo SVG data (ML-specific logo)
+        public const MLLogo = File::readTextFile(get_script_dir() + "/ml-logo.svg");
+    }
+
+    #! Isolation Forest anomaly event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl IsolationForestAnomalyEventInfo {
+        #! Event type identifier
+        string event_type = "isolation-forest";
+        #! Anomaly score between 0.0 (normal) and 1.0 (anomalous)
+        float anomaly_score;
+        #! Whether the record is classified as anomalous (score >= threshold)
+        bool is_anomaly;
+        #! Average path length in the isolation trees
+        float average_path_length;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! DBSCAN clustering event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl DBSCANClusteringEventInfo {
+        #! Event type identifier
+        string event_type = "dbscan-clustering";
+        #! Cluster assignment (-1 = noise)
+        int cluster;
+        #! Whether this point is a core point
+        bool is_core;
+        #! Number of neighbors within epsilon
+        int neighbor_count;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! KMeans clustering event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl KMeansClusteringEventInfo {
+        #! Event type identifier
+        string event_type = "kmeans-clustering";
+        #! Cluster assignment (0-based)
+        int cluster;
+        #! Distance to the assigned centroid
+        float distance;
+        #! Distances to all centroids
+        list<float> centroid_distances;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! PCA event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl PCAEventInfo {
+        #! Event type identifier
+        string event_type = "pca";
+        #! Principal component values
+        list<float> components;
+        #! Total explained variance ratio
+        float total_explained_variance;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! Holt-Winters forecast event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl HoltWintersForecastEventInfo inherits DataProvider::AnalyticsEventInfo {
+        #! Forecast value(s) for the next step(s)
+        list<float> forecast;
+        #! Current level component
+        float level;
+        #! Current trend component
+        float trend;
+        #! Current seasonal component
+        float seasonal;
+        #! Residual (actual - fitted)
+        float residual;
+    }
+
+    #! Seasonal decomposition event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl SeasonalDecompositionEventInfo inherits DataProvider::AnalyticsEventInfo {
+        #! Original observed value
+        float observed;
+        #! Trend component (may be NOTHING at edges)
+        *float trend_value;
+        #! Seasonal component
+        float seasonal_value;
+        #! Residual component (may be NOTHING at edges)
+        *float residual_value;
+        #! Decomposition type ("additive" or "multiplicative")
+        string decomposition_type;
+        #! Period used for decomposition
+        int period;
+    }
+}

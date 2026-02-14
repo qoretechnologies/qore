@@ -47,6 +47,7 @@ DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
     qlib/DpqlWebSocket \
     qlib/DataProvider \
+    qlib/DataProviderML \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
     qlib/EmpathicBuildingDataProvider \

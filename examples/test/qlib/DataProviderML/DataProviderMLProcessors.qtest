@@ -1,0 +1,778 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/DataProviderML
+
+%exec-class DataProviderMLProcessorsTest
+
+class DataProviderMLProcessorsTest inherits QUnit::Test {
+    constructor() : Test("DataProviderMLProcessorsTest", "1.0") {
+        # IsolationForest tests
+        addTestCase("isolation-forest - basic window", \iforestBasicWindow());
+        addTestCase("isolation-forest - anomaly detection", \iforestAnomalyDetection());
+        addTestCase("isolation-forest - flush partial", \iforestFlushPartial());
+        addTestCase("isolation-forest - not configured", \iforestNotConfigured());
+        addTestCase("isolation-forest - capabilities", \iforestCapabilities());
+        addTestCase("isolation-forest - constructor validation", \iforestConstructorValidation());
+
+        # DBSCAN tests
+        addTestCase("dbscan - basic clustering", \dbscanBasicClustering());
+        addTestCase("dbscan - noise detection", \dbscanNoiseDetection());
+        addTestCase("dbscan - flush partial", \dbscanFlushPartial());
+        addTestCase("dbscan - capabilities", \dbscanCapabilities());
+        addTestCase("dbscan - constructor validation", \dbscanConstructorValidation());
+
+        # KMeans tests
+        addTestCase("kmeans - basic clustering", \kmeansBasicClustering());
+        addTestCase("kmeans - online learning", \kmeansOnlineLearning());
+        addTestCase("kmeans - flush partial", \kmeansFlushPartial());
+        addTestCase("kmeans - capabilities", \kmeansCapabilities());
+        addTestCase("kmeans - constructor validation", \kmeansConstructorValidation());
+
+        # PCA tests
+        addTestCase("pca - basic reduction", \pcaBasicReduction());
+        addTestCase("pca - variance threshold", \pcaVarianceThreshold());
+        addTestCase("pca - flush partial", \pcaFlushPartial());
+        addTestCase("pca - capabilities", \pcaCapabilities());
+        addTestCase("pca - constructor validation", \pcaConstructorValidation());
+
+        # HoltWinters tests
+        addTestCase("holt-winters - basic forecast", \hwBasicForecast());
+        addTestCase("holt-winters - accumulation phase", \hwAccumulationPhase());
+        addTestCase("holt-winters - capabilities", \hwCapabilities());
+        addTestCase("holt-winters - constructor validation", \hwConstructorValidation());
+
+        # SeasonalDecomposition tests
+        addTestCase("seasonal-decomposition - additive", \sdAdditive());
+        addTestCase("seasonal-decomposition - multiplicative", \sdMultiplicative());
+        addTestCase("seasonal-decomposition - capabilities", \sdCapabilities());
+        addTestCase("seasonal-decomposition - constructor validation", \sdConstructorValidation());
+
+        # Integration tests
+        addTestCase("integration - factory registration", \integrationFactory());
+        addTestCase("integration - navigation children", \integrationNavigation());
+        addTestCase("integration - output types", \integrationOutputTypes());
+
+        set_return_value(main());
+    }
+
+    #! Collects a processor result into a results list, handling both single and list returns
+    static collectResult(reference<list<auto>> results, auto r) {
+        if (exists r) {
+            if (r.typeCode() == NT_LIST) {
+                results += r;
+            } else {
+                push results, r;
+            }
+        }
+    }
+
+    # ===================== IsolationForest Tests =====================
+
+    iforestBasicWindow() {
+        DataProviderML::QoreIsolationForestProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "n_trees": 50,
+            "sample_size": 8,
+            "threshold": 0.5,
+        });
+
+        # send 10 records (fills window)
+        list<auto> results;
+        for (int i = 0; i < 10; ++i) {
+            *auto r = proc.processRecord({"x": i * 1.0, "y": i * 2.0});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        # should emit 10 events when window fills
+        assertEq(10, results.lsize());
+        foreach auto event in (results) {
+            assertEq("isolation-forest", event.event_type);
+            assertTrue(event.anomaly_score >= 0.0);
+            assertTrue(event.anomaly_score <= 1.0);
+            assertTrue(event.hasKey("is_anomaly"));
+            assertTrue(event.hasKey("average_path_length"));
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    iforestAnomalyDetection() {
+        DataProviderML::QoreIsolationForestProcessor proc({
+            "fields": "x,y",
+            "window_size": 20,
+            "n_trees": 100,
+            "sample_size": 16,
+            "threshold": 0.6,
+        });
+
+        # fill a window with mostly normal data and one outlier
+        list<auto> results;
+        for (int i = 0; i < 19; ++i) {
+            *auto r = proc.processRecord({"x": 5.0 + (i % 5) * 0.1, "y": 5.0 + (i % 5) * 0.1});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+        # 20th record is an outlier
+        *auto r = proc.processRecord({"x": 100.0, "y": 100.0});
+        DataProviderMLProcessorsTest::collectResult(\results, r);
+
+        assertEq(20, results.lsize());
+
+        # the outlier (last record) should have a higher anomaly score than normal records
+        float outlier_score = results[19].anomaly_score;
+        float normal_score = results[0].anomaly_score;
+        assertTrue(outlier_score > normal_score,
+            sprintf("outlier score (%f) should be > normal score (%f)",
+                outlier_score, normal_score));
+    }
+
+    iforestFlushPartial() {
+        DataProviderML::QoreIsolationForestProcessor proc({
+            "fields": "x,y",
+            "window_size": 20,
+            "n_trees": 10,
+        });
+
+        # send 5 records (less than window)
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"x": i * 1.0, "y": i * 2.0});
+        }
+
+        # flush should emit events for the 5 buffered records
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    iforestNotConfigured() {
+        DataProviderML::QoreIsolationForestProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub() {
+            proc.processRecord({"x": 1.0});
+        });
+    }
+
+    iforestCapabilities() {
+        DataProviderML::QoreIsolationForestProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreIsolationForestProcessor", info{"type"});
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    iforestConstructorValidation() {
+        # missing required field
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreIsolationForestProcessor({
+                "fields": "x",
+            });
+        });
+        # invalid window_size
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreIsolationForestProcessor({
+                "fields": "x",
+                "window_size": 1,
+            });
+        });
+        # empty fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreIsolationForestProcessor({
+                "fields": " , ",
+                "window_size": 10,
+            });
+        });
+    }
+
+    # ===================== DBSCAN Tests =====================
+
+    dbscanBasicClustering() {
+        DataProviderML::QoreDBSCANClusteringProcessor proc({
+            "fields": "x,y",
+            "window_size": 8,
+            "epsilon": 2.0,
+            "min_points": 2,
+        });
+
+        # Two clusters: around (0,0) and (10,10)
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.5, "y": 0.5},
+            {"x": 0.3, "y": -0.2},
+            {"x": -0.4, "y": 0.3},
+            {"x": 10.0, "y": 10.0},
+            {"x": 10.5, "y": 10.5},
+            {"x": 10.2, "y": 9.8},
+            {"x": 9.7, "y": 10.3},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(8, results.lsize());
+
+        # first 4 should be in one cluster
+        int c0 = results[0].cluster;
+        assertEq(c0, results[1].cluster);
+        assertEq(c0, results[2].cluster);
+        assertEq(c0, results[3].cluster);
+
+        # last 4 should be in another cluster
+        int c1 = results[4].cluster;
+        assertEq(c1, results[5].cluster);
+        assertEq(c1, results[6].cluster);
+        assertEq(c1, results[7].cluster);
+
+        assertTrue(c0 != c1, "clusters should have different labels");
+
+        foreach auto event in (results) {
+            assertEq("dbscan-clustering", event.event_type);
+            assertTrue(event.hasKey("is_core"));
+            assertTrue(event.hasKey("neighbor_count"));
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    dbscanNoiseDetection() {
+        DataProviderML::QoreDBSCANClusteringProcessor proc({
+            "fields": "x,y",
+            "window_size": 5,
+            "epsilon": 1.0,
+            "min_points": 3,
+        });
+
+        # 4 dense points + 1 isolated
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.3, "y": 0.3},
+            {"x": 0.1, "y": 0.5},
+            {"x": -0.2, "y": 0.4},
+            {"x": 100.0, "y": 100.0},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(5, results.lsize());
+        assertTrue(results[0].cluster >= 0, "dense points should be in a cluster");
+        assertEq(-1, results[4].cluster, "isolated point should be noise");
+    }
+
+    dbscanFlushPartial() {
+        DataProviderML::QoreDBSCANClusteringProcessor proc({
+            "fields": "x,y",
+            "window_size": 20,
+            "epsilon": 2.0,
+        });
+
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"x": i * 1.0, "y": i * 2.0});
+        }
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    dbscanCapabilities() {
+        DataProviderML::QoreDBSCANClusteringProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    dbscanConstructorValidation() {
+        # missing epsilon
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDBSCANClusteringProcessor({
+                "fields": "x",
+                "window_size": 10,
+            });
+        });
+        # invalid window_size
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDBSCANClusteringProcessor({
+                "fields": "x",
+                "window_size": 1,
+                "epsilon": 1.0,
+            });
+        });
+    }
+
+    # ===================== KMeans Tests =====================
+
+    kmeansBasicClustering() {
+        DataProviderML::QoreKMeansProcessor proc({
+            "fields": "x,y",
+            "window_size": 6,
+            "k": 2,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.1, "y": 0.1},
+            {"x": 0.2, "y": 0.0},
+            {"x": 10.0, "y": 10.0},
+            {"x": 10.1, "y": 10.1},
+            {"x": 10.2, "y": 10.0},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(6, results.lsize());
+
+        # first 3 should be in one cluster, last 3 in another
+        int c0 = results[0].cluster;
+        assertEq(c0, results[1].cluster);
+        assertEq(c0, results[2].cluster);
+
+        int c1 = results[3].cluster;
+        assertEq(c1, results[4].cluster);
+        assertEq(c1, results[5].cluster);
+
+        assertTrue(c0 != c1, "clusters should have different labels");
+
+        foreach auto event in (results) {
+            assertEq("kmeans-clustering", event.event_type);
+            assertTrue(event.distance >= 0.0);
+            assertEq(2, event.centroid_distances.lsize());
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    kmeansOnlineLearning() {
+        DataProviderML::QoreKMeansProcessor proc({
+            "fields": "x,y",
+            "window_size": 6,
+            "k": 2,
+            "online": True,
+        });
+
+        # first window
+        for (int i = 0; i < 3; ++i) {
+            proc.processRecord({"x": 0.0 + i * 0.1, "y": 0.0});
+        }
+        for (int i = 0; i < 3; ++i) {
+            proc.processRecord({"x": 10.0 + i * 0.1, "y": 10.0});
+        }
+
+        # second window (should use online update)
+        list<auto> results;
+        for (int i = 0; i < 3; ++i) {
+            *auto r = proc.processRecord({"x": 0.0 + i * 0.05, "y": 0.0});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+        for (int i = 0; i < 3; ++i) {
+            *auto r = proc.processRecord({"x": 10.0 + i * 0.05, "y": 10.0});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(6, results.lsize());
+        # should still have valid clustering
+        int c0 = results[0].cluster;
+        int c1 = results[3].cluster;
+        assertTrue(c0 != c1, "online learning should maintain cluster separation");
+    }
+
+    kmeansFlushPartial() {
+        DataProviderML::QoreKMeansProcessor proc({
+            "fields": "x,y",
+            "window_size": 20,
+            "k": 2,
+        });
+
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"x": i * 1.0, "y": i * 2.0});
+        }
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    kmeansCapabilities() {
+        DataProviderML::QoreKMeansProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    kmeansConstructorValidation() {
+        # missing k
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKMeansProcessor({
+                "fields": "x",
+                "window_size": 10,
+            });
+        });
+        # invalid k
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKMeansProcessor({
+                "fields": "x",
+                "window_size": 10,
+                "k": 0,
+            });
+        });
+    }
+
+    # ===================== PCA Tests =====================
+
+    pcaBasicReduction() {
+        DataProviderML::QorePCAProcessor proc({
+            "fields": "x,y,z",
+            "window_size": 10,
+            "n_components": 2,
+        });
+
+        list<auto> results;
+        for (int i = 0; i < 10; ++i) {
+            float x = i * 1.0;
+            float y = i * 2.0;
+            float z = x + y + (i % 3) * 0.01;
+            *auto r = proc.processRecord({"x": x, "y": y, "z": z});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(10, results.lsize());
+        foreach auto event in (results) {
+            assertEq("pca", event.event_type);
+            assertEq(2, event.components.lsize());
+            assertTrue(event.total_explained_variance > 0.0);
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    pcaVarianceThreshold() {
+        DataProviderML::QorePCAProcessor proc({
+            "fields": "x,y,z",
+            "window_size": 10,
+            "variance_threshold": 0.95,
+        });
+
+        list<auto> results;
+        for (int i = 0; i < 10; ++i) {
+            *auto r = proc.processRecord({
+                "x": i * 1.0,
+                "y": i * 0.5,
+                "z": 5.0 + (i % 3) * 0.001,
+            });
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(10, results.lsize());
+        # should have fewer components than 3 features
+        int nc = results[0].components.lsize();
+        assertTrue(nc >= 1 && nc <= 3,
+            sprintf("PCA should select 1-3 components; got %d", nc));
+    }
+
+    pcaFlushPartial() {
+        DataProviderML::QorePCAProcessor proc({
+            "fields": "x,y",
+            "window_size": 20,
+        });
+
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"x": i * 1.0, "y": i * 2.0});
+        }
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    pcaCapabilities() {
+        DataProviderML::QorePCAProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    pcaConstructorValidation() {
+        # too few fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QorePCAProcessor({
+                "fields": "x",
+                "window_size": 10,
+            });
+        });
+        # invalid window_size
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QorePCAProcessor({
+                "fields": "x,y",
+                "window_size": 1,
+            });
+        });
+    }
+
+    # ===================== HoltWinters Tests =====================
+
+    hwBasicForecast() {
+        DataProviderML::QoreHoltWintersProcessor proc({
+            "fields": "value",
+            "window_size": 100,
+            "period": 4,
+            "alpha": 0.3,
+            "beta": 0.1,
+            "gamma": 0.3,
+            "forecast_steps": 2,
+        });
+
+        # create additive seasonal series
+        list<float> seasonal = (5.0, -3.0, 2.0, -4.0);
+        int min_history = 2 * 4; # 2 * period = 8
+
+        list<auto> results;
+        for (int i = 0; i < 20; ++i) {
+            float val = 100.0 + 0.5 * i + seasonal[i % 4];
+            *auto r = proc.processRecord({"value": val});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        # should have events for all 20 records
+        assertEq(20, results.lsize());
+
+        # first 7 events (before fitting) should have empty forecast
+        for (int i = 0; i < min_history - 1; ++i) {
+            assertEq("holt-winters", results[i].event_type);
+            assertEq(0, results[i].forecast.lsize(),
+                sprintf("record %d should have empty forecast during accumulation", i));
+        }
+
+        # the 8th event (when fitting happens) should have forecast
+        assertEq("holt-winters", results[min_history - 1].event_type);
+        assertTrue(results[min_history - 1].forecast.lsize() > 0,
+            "fitting event should produce forecast");
+
+        # subsequent events should have forecasts with forecast_steps values
+        for (int i = min_history; i < 20; ++i) {
+            assertEq(2, results[i].forecast.lsize(),
+                sprintf("record %d should have 2-step forecast", i));
+            assertTrue(results[i].level > 0.0);
+            assertTrue(results[i].hasKey("trend"));
+            assertTrue(results[i].hasKey("seasonal"));
+            assertTrue(results[i].hasKey("residual"));
+        }
+    }
+
+    hwAccumulationPhase() {
+        DataProviderML::QoreHoltWintersProcessor proc({
+            "fields": "temp",
+            "window_size": 100,
+            "period": 4,
+        });
+
+        # send fewer than 2*period records
+        list<auto> results;
+        for (int i = 0; i < 5; ++i) {
+            *auto r = proc.processRecord({"temp": 20.0 + i});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        # all events should indicate accumulation (empty forecast)
+        assertEq(5, results.lsize());
+        foreach auto event in (results) {
+            assertEq(0, event.forecast.lsize(),
+                "should have empty forecast during accumulation");
+        }
+    }
+
+    hwCapabilities() {
+        DataProviderML::QoreHoltWintersProcessor proc();
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    hwConstructorValidation() {
+        # missing period
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreHoltWintersProcessor({
+                "fields": "x",
+                "window_size": 10,
+            });
+        });
+        # invalid period
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreHoltWintersProcessor({
+                "fields": "x",
+                "window_size": 10,
+                "period": 1,
+            });
+        });
+        # invalid forecast_steps
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreHoltWintersProcessor({
+                "fields": "x",
+                "window_size": 10,
+                "period": 4,
+                "forecast_steps": 0,
+            });
+        });
+    }
+
+    # ===================== SeasonalDecomposition Tests =====================
+
+    sdAdditive() {
+        DataProviderML::QoreSeasonalDecompositionProcessor proc({
+            "fields": "value",
+            "window_size": 24,
+            "period": 4,
+            "type": "additive",
+        });
+
+        # create additive seasonal series
+        list<float> seasonal = (3.0, -1.0, -2.0, 0.0);
+        list<auto> results;
+        for (int i = 0; i < 24; ++i) {
+            float val = 10.0 + 0.5 * i + seasonal[i % 4];
+            *auto r = proc.processRecord({"value": val});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        # should emit 1 event (window size = 24, window-level mode)
+        assertEq(1, results.lsize());
+        auto event = results[0];
+        assertEq("seasonal-decomposition", event.event_type);
+        assertEq("value", event.field);
+        assertEq("additive", event.decomposition_type);
+        assertEq(4, event.period);
+        assertTrue(event.hasKey("observed"));
+        assertTrue(event.hasKey("seasonal_value"));
+    }
+
+    sdMultiplicative() {
+        DataProviderML::QoreSeasonalDecompositionProcessor proc({
+            "fields": "value",
+            "window_size": 24,
+            "period": 4,
+            "type": "multiplicative",
+        });
+
+        list<float> seasonal = (1.2, 0.8, 1.1, 0.9);
+        list<auto> results;
+        for (int i = 0; i < 24; ++i) {
+            float val = (100.0 + 2.0 * i) * seasonal[i % 4];
+            *auto r = proc.processRecord({"value": val});
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(1, results.lsize());
+        assertEq("multiplicative", results[0].decomposition_type);
+    }
+
+    sdCapabilities() {
+        DataProviderML::QoreSeasonalDecompositionProcessor proc();
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    sdConstructorValidation() {
+        # missing period
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreSeasonalDecompositionProcessor({
+                "fields": "x",
+                "window_size": 10,
+            });
+        });
+        # invalid period
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreSeasonalDecompositionProcessor({
+                "fields": "x",
+                "window_size": 10,
+                "period": 1,
+            });
+        });
+        # window_size too small for period
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreSeasonalDecompositionProcessor({
+                "fields": "x",
+                "window_size": 5,
+                "period": 4,
+            });
+        });
+    }
+
+    # ===================== Integration Tests =====================
+
+    integrationFactory() {
+        # check that the factory is registered
+        DataProvider::AbstractDataProviderFactory factory =
+            DataProvider::DataProvider::getFactory("ml-processors");
+        assertTrue(exists factory);
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("ml-processors", info.name);
+    }
+
+    integrationNavigation() {
+        DataProviderML::MLProcessorsDataProvider provider();
+        *list<string> children = provider.getChildProviderNames();
+        assertTrue(exists children);
+        assertEq(6, children.lsize());
+        assertTrue(children.contains("isolation-forest"));
+        assertTrue(children.contains("dbscan-clustering"));
+        assertTrue(children.contains("kmeans-clustering"));
+        assertTrue(children.contains("pca"));
+        assertTrue(children.contains("holt-winters"));
+        assertTrue(children.contains("seasonal-decomposition"));
+
+        # check that each child can be retrieved
+        foreach string name in (children) {
+            *DataProvider::AbstractDataProvider child = provider.getChildProvider(name);
+            assertTrue(exists child, sprintf("child '%s' should exist", name));
+        }
+    }
+
+    integrationOutputTypes() {
+        # verify each processor has an output type
+        DataProviderML::QoreIsolationForestProcessor iforest({"fields": "x", "window_size": 10});
+        assertTrue(exists iforest.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreDBSCANClusteringProcessor dbscan(
+            {"fields": "x", "window_size": 10, "epsilon": 1.0});
+        assertTrue(exists dbscan.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreKMeansProcessor kmeans(
+            {"fields": "x", "window_size": 10, "k": 2});
+        assertTrue(exists kmeans.getPipelineProcessorOutputType());
+
+        DataProviderML::QorePCAProcessor pca({"fields": "x,y", "window_size": 10});
+        assertTrue(exists pca.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreHoltWintersProcessor hw(
+            {"fields": "x", "window_size": 100, "period": 4});
+        assertTrue(exists hw.getPipelineProcessorOutputType());
+
+        DataProviderML::QoreSeasonalDecompositionProcessor sd(
+            {"fields": "x", "window_size": 24, "period": 4});
+        assertTrue(exists sd.getPipelineProcessorOutputType());
+    }
+}

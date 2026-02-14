@@ -108,6 +108,8 @@ public class DataProvider {
             # provided by the json module
             "mcpclient": "McpClientDataProvider",
 
+            "ml": "DataProviderML",
+
             "mailgun": "MailgunDataProvider",
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
