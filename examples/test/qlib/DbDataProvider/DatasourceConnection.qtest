@@ -1,0 +1,303 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%requires DbDataProvider
+%requires ConnectionProvider
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class DatasourceConnectionTest
+
+public class DatasourceConnectionTest inherits QUnit::Test {
+    constructor() : Test("DatasourceConnection test", "1.0") {
+        addTestCase("URL parsing", \testUrlParsing());
+        addTestCase("safe URL", \testSafeUrl());
+        addTestCase("sqlite3 paths", \testSqlite3Paths());
+        addTestCase("option validation", \testOptionValidation());
+        addTestCase("driver options", \testDriverOptions());
+        addTestCase("scheme registration", \testSchemeRegistration());
+        addTestCase("driver logos", \testDriverLogos());
+        addTestCase("connection info", \testConnectionInfo());
+        addTestCase("round trip", \testRoundTrip());
+        addTestCase("error cases", \testErrorCases());
+        addTestCase("invalid URL format", \testInvalidUrlFormat());
+%ifdef NoPgsql
+        addTestCase("data provider (no pgsql)", \testNoDataProvider());
+%else
+        addTestCase("data provider", \testDataProvider());
+%endif
+        addTestCase("minimal URL", \testMinimalUrl());
+
+        set_return_value(main());
+    }
+
+    testUrlParsing() {
+        DatasourceConnection conn("test", "test connection",
+            "db://pgsql:user/pass@dbname(utf8)%dbhost:5432");
+        hash<auto> urlh = conn.urlh;
+        assertEq("db", urlh.protocol);
+        assertEq("pgsql", urlh.type);
+        assertEq("user", urlh.user);
+        assertEq("pass", urlh.pass);
+        assertEq("dbname", urlh.db);
+        assertEq("utf8", urlh.charset);
+        assertEq("dbhost", urlh.host);
+        assertEq(5432, urlh.port);
+    }
+
+    testSafeUrl() {
+        {
+            DatasourceConnection conn("test", "test safe url",
+                "db://pgsql:user/pass@dbname%dbhost:5432");
+            string safe = conn.safe_url;
+            # safe URL must start with "db://"
+            assertTrue(safe =~ /^db:\/\//);
+            # safe URL must not contain password
+            assertFalse(safe =~ /pass/);
+            # safe URL must contain the driver, user, db, host
+            assertTrue(safe =~ /pgsql/);
+            assertTrue(safe =~ /user/);
+            assertTrue(safe =~ /dbname/);
+            assertTrue(safe =~ /dbhost/);
+        }
+        # no password case
+        {
+            DatasourceConnection conn("test", "test safe url no pass",
+                "db://pgsql:user@dbname");
+            string safe = conn.safe_url;
+            assertTrue(safe =~ /^db:\/\//);
+            assertTrue(safe =~ /user/);
+            assertTrue(safe =~ /dbname/);
+        }
+    }
+
+    testSqlite3Paths() {
+        # sqlite3 file path
+        {
+            DatasourceConnection conn("test", "sqlite3 file",
+                "db://sqlite3:@/tmp/test.db");
+            hash<auto> urlh = conn.urlh;
+            assertEq("db", urlh.protocol);
+            assertEq("sqlite3", urlh.type);
+            assertEq("/tmp/test.db", urlh.db);
+        }
+        # sqlite3 in-memory
+        {
+            DatasourceConnection conn("test", "sqlite3 memory",
+                "db://sqlite3:@:memory:");
+            hash<auto> urlh = conn.urlh;
+            assertEq("db", urlh.protocol);
+            assertEq("sqlite3", urlh.type);
+            assertEq(":memory:", urlh.db);
+        }
+    }
+
+    testOptionValidation() {
+        # both min and max present: OK
+        {
+            DatasourceConnection conn("test", "min/max ok",
+                "db://pgsql:user@dbname", {}, {"min": 2, "max": 5});
+            assertEq(2, conn.opts.min);
+            assertEq(5, conn.opts.max);
+        }
+
+        # only min provided: error
+        assertThrows("CONNECTION-OPTION-ERROR", "both", sub() {
+            new DatasourceConnection("test", "min only", "db://pgsql:user@dbname", {}, {"min": 2});
+        });
+
+        # only max provided: error
+        assertThrows("CONNECTION-OPTION-ERROR", "both", sub() {
+            new DatasourceConnection("test", "max only", "db://pgsql:user@dbname", {}, {"max": 5});
+        });
+
+        # min < 0: error
+        assertThrows("CONNECTION-OPTION-ERROR", "min", sub() {
+            new DatasourceConnection("test", "neg min", "db://pgsql:user@dbname", {}, {"min": -1, "max": 5});
+        });
+
+        # max < 1: error
+        assertThrows("CONNECTION-OPTION-ERROR", "max", sub() {
+            new DatasourceConnection("test", "zero max", "db://pgsql:user@dbname", {}, {"min": 0, "max": 0});
+        });
+
+        # max < min: error
+        assertThrows("CONNECTION-OPTION-ERROR", "max", sub() {
+            new DatasourceConnection("test", "max<min", "db://pgsql:user@dbname", {}, {"min": 5, "max": 2});
+        });
+
+        # min=0, max=1: OK (boundary case)
+        {
+            DatasourceConnection conn("test", "boundary",
+                "db://pgsql:user@dbname", {}, {"min": 0, "max": 1});
+            assertEq(0, conn.opts.min);
+            assertEq(1, conn.opts.max);
+        }
+    }
+
+    testDriverOptions() {
+        # driver hash should be unpacked into opts
+        {
+            DatasourceConnection conn("test", "driver opts",
+                "db://pgsql:user@dbname", {}, {"driver": {"ssl": True, "timeout": 30}});
+            assertTrue(conn.opts.ssl);
+            assertEq(30, conn.opts.timeout);
+            assertFalse(exists conn.opts.driver);
+        }
+    }
+
+    testSchemeRegistration() {
+        # verify "db" is registered in SchemeMap
+        assertEq("DbDataProvider", ConnectionSchemeCache::SchemeMap.db);
+
+        # verify we can look up the scheme
+        *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("db");
+        assertTrue(exists info);
+        assertEq("Database Connection", info.display_name);
+        assertTrue(info.schemes.db);
+    }
+
+    testDriverLogos() {
+        # known driver returns specific logo
+        {
+            hash<auto> logo = getDriverLogo("pgsql");
+            assertEq("pgsql-logo.svg", logo.logo_file_name);
+            assertEq(MimeTypeSvg, logo.logo_mime_type);
+            assertTrue(logo.logo.val());
+        }
+        # mysql
+        {
+            hash<auto> logo = getDriverLogo("mysql");
+            assertEq("mysql-logo.svg", logo.logo_file_name);
+        }
+        # oracle
+        {
+            hash<auto> logo = getDriverLogo("oracle");
+            assertEq("oracle-logo.svg", logo.logo_file_name);
+        }
+        # freetds
+        {
+            hash<auto> logo = getDriverLogo("freetds");
+            assertEq("freetds-logo.svg", logo.logo_file_name);
+        }
+        # sqlite3
+        {
+            hash<auto> logo = getDriverLogo("sqlite3");
+            assertEq("sqlite3-logo.svg", logo.logo_file_name);
+        }
+        # odbc
+        {
+            hash<auto> logo = getDriverLogo("odbc");
+            assertEq("odbc-logo.svg", logo.logo_file_name);
+        }
+        # unknown driver returns default logo
+        {
+            hash<auto> logo = getDriverLogo("unknown_driver");
+            assertEq("db-logo.svg", logo.logo_file_name);
+            assertEq(MimeTypeSvg, logo.logo_mime_type);
+        }
+        # NOTHING driver returns default logo
+        {
+            hash<auto> logo = getDriverLogo();
+            assertEq("db-logo.svg", logo.logo_file_name);
+        }
+    }
+
+    testConnectionInfo() {
+        DatasourceConnection conn("test-db", "test database connection",
+            "db://pgsql:user/pass@dbname%dbhost:5432");
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertEq("db", info.type);
+        assertEq("Db", info.app);
+        assertTrue(info.has_provider);
+        assertTrue(info.children_can_support_transactions);
+        assertTrue(info.children_can_support_records);
+        assertEq("test-db", info.name);
+
+        # URL in info should be safe (no password)
+        assertFalse(info.url =~ /pass/);
+    }
+
+    testRoundTrip() {
+        # URL -> connection -> getInfo -> verify fields
+        {
+            string url = "db://pgsql:user/pass@dbname(utf8)%dbhost:5432";
+            DatasourceConnection conn("roundtrip", "round trip test", url);
+            hash<ConnectionInfo> info = conn.getInfo({"with_passwords": True});
+            assertEq("db", info.type);
+            assertEq("pgsql", info.url_hash.type);
+            assertEq("user", info.url_hash.user);
+            assertEq("pass", info.url_hash.pass);
+            assertEq("dbname", info.url_hash.db);
+            assertEq("utf8", info.url_hash.charset);
+            assertEq("dbhost", info.url_hash.host);
+            assertEq(5432, info.url_hash.port);
+        }
+        # without password
+        {
+            string url = "db://pgsql:user/pass@dbname";
+            DatasourceConnection conn("roundtrip2", "round trip no pass", url);
+            hash<ConnectionInfo> info = conn.getInfo();
+            # password should be absent from url_hash in safe info
+            assertFalse(exists info.url_hash.pass);
+        }
+    }
+
+    testErrorCases() {
+        # empty datasource string after db:// prefix
+        assertThrows("DATASOURCE-PARSE-ERROR", sub() {
+            new DatasourceConnection("test", "empty ds", "db://");
+        });
+    }
+
+    testInvalidUrlFormat() {
+        # missing '@' delimiter — parse_datasource() rejects it
+        assertThrows("DATASOURCE-PARSE-ERROR", sub() {
+            new DatasourceConnection("test", "bad format", "db://badformat");
+        });
+        # missing driver type — parse_datasource returns an incomplete hash,
+        # causing make_datasource_string() to fail in getSafeUrl()
+        assertThrows("MAKE-DATASOURCE-STRING-ERROR", sub() {
+            new DatasourceConnection("test", "bad format", "db://:::@");
+        });
+    }
+
+%ifdef NoPgsql
+    testNoDataProvider() {
+        testSkip("pgsql module not available");
+    }
+%else
+    testDataProvider() {
+        DatasourceConnection conn("test", "data provider test",
+            "db://pgsql:user@dbname");
+        assertTrue(conn.hasDataProvider());
+        # getDataProvider() calls get() which opens a connection, so we can't test
+        # the full path without a real DB; verify the type info instead
+        assertEq("db", conn.getType());
+        assertEq("Db", conn.getAppName());
+    }
+%endif
+
+    testMinimalUrl() {
+        # minimal URL: driver + user + db
+        {
+            DatasourceConnection conn("test", "minimal",
+                "db://pgsql:user@dbname");
+            assertEq("pgsql", conn.urlh.type);
+            assertEq("user", conn.urlh.user);
+            assertEq("dbname", conn.urlh.db);
+        }
+        # URL options get moved to opts
+        {
+            DatasourceConnection conn("test", "with url opts",
+                "db://pgsql:user@dbname{timeout=30}");
+            assertTrue(exists conn.opts.timeout);
+        }
+    }
+}

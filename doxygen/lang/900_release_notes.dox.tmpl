@@ -769,6 +769,12 @@ cargo install tree-sitter-cli@0.26.5
       - preserves comments, parse directives, and string literals
       - idempotent formatting (formatting already-formatted code produces identical output)
 
+    - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
+      - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
+        connectivity using the \c db:// URL scheme with automatic connection scheme registration
+      - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
+        (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
+
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
       produce a warning when used, as the underlying parse options were never enforced:

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbDataProvider module definition
 
-/*  DbDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  DbDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,13 +39,19 @@
 # supports using the BulkSqlUtil module
 %requires(reexport) BulkSqlUtil
 
+# supports using the ConnectionProvider module
+%requires(reexport) ConnectionProvider
+
 module DbDataProvider {
-    version = "2.2";
+    version = "2.3";
     desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        # register the connection scheme
+        ConnectionSchemeCache::registerScheme("db", DatasourceConnection::ConnectionScheme);
+
         # register the data provider factory
         DataProvider::registerFactory(new DbDataProviderFactory());
 
@@ -208,6 +214,7 @@ module DbDataProvider {
 
     The following classes are provided by this module:
     - @ref DbDataProvider::AbstractDbTableBulkOperation "AbstractDbTableBulkOperation"
+    - @ref DbDataProvider::DatasourceConnection "DatasourceConnection"
     - @ref DbDataProvider::DbDataProvider "DbDataProvider"
     - @ref DbDataProvider::DbDataProviderFactory "DbDataProviderFactory"
     - @ref DbDataProvider::DbIndexDataType "DbIndexDataType"
@@ -219,6 +226,12 @@ module DbDataProvider {
     - @ref DbDataProvider::DbTableRecordIterator "DbTableRecordIterator"
 
     @section dbdataprovider_relnotes Release Notes
+
+    @subsection dbdataprovider_v2_3 DbDataProvider v2.3
+    - added the @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database connectivity
+      using the @c db:// URL scheme with automatic connection scheme registration
+    - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server (FreeTDS),
+      SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
     @subsection dbdataprovider_v2_2 DbDataProvider v2.2
     - optimized the data provider structure, added support for app actions, made the API more AI-friendly
@@ -254,4 +267,53 @@ module DbDataProvider {
 public namespace DbDataProvider {
 public const AppName = "Db";
 public const DbLogo = File::readTextFile(get_script_dir() + "/db-logo.svg");
+
+#! Per-database-driver logo registry
+public const DbDriverLogos = {
+    "pgsql": {
+        "logo": File::readTextFile(get_script_dir() + "/pgsql-logo.svg"),
+        "logo_file_name": "pgsql-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "mysql": {
+        "logo": File::readTextFile(get_script_dir() + "/mysql-logo.svg"),
+        "logo_file_name": "mysql-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "oracle": {
+        "logo": File::readTextFile(get_script_dir() + "/oracle-logo.svg"),
+        "logo_file_name": "oracle-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "freetds": {
+        "logo": File::readTextFile(get_script_dir() + "/freetds-logo.svg"),
+        "logo_file_name": "freetds-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "sqlite3": {
+        "logo": File::readTextFile(get_script_dir() + "/sqlite3-logo.svg"),
+        "logo_file_name": "sqlite3-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+    "odbc": {
+        "logo": File::readTextFile(get_script_dir() + "/odbc-logo.svg"),
+        "logo_file_name": "odbc-logo.svg",
+        "logo_mime_type": MimeTypeSvg,
+    },
+};
+
+#! Default logo info for unknown database drivers
+public const DbDefaultLogo = {
+    "logo": DbLogo,
+    "logo_file_name": "db-logo.svg",
+    "logo_mime_type": MimeTypeSvg,
+};
+
+#! Returns logo info for the given database driver
+/** @param driver the database driver name (e.g. @c "pgsql", @c "mysql", etc.)
+    @return a hash with @c logo, @c logo_file_name, and @c logo_mime_type keys
+*/
+public hash<auto> sub getDriverLogo(*string driver) {
+    return DbDriverLogos{driver} ?? DbDefaultLogo;
+}
 }

@@ -26,11 +26,11 @@
        gradientTransform="matrix(0.38165283,0,0,0.39473658,-19.726277,-229.89232)">
       <stop
          offset="0"
-         style="stop-color:#000000;stop-opacity:1;"
+         style="stop-color:#5D0E32;stop-opacity:1;"
          id="stop10" />
       <stop
          offset="1"
-         style="stop-color:#123AD0"
+         style="stop-color:#A11957"
          id="stop11" />
     </linearGradient>
     <linearGradient
@@ -43,11 +43,11 @@
        gradientTransform="matrix(0.38165283,0,0,0.39473658,-19.726277,-229.89232)">
       <stop
          offset="0"
-         style="stop-color:#000000;stop-opacity:1;"
+         style="stop-color:#5D0E32;stop-opacity:1;"
          id="stop8" />
       <stop
          offset="1"
-         style="stop-color:#123AD0"
+         style="stop-color:#A11957"
          id="stop9" />
     </linearGradient>
     <linearGradient
@@ -60,11 +60,11 @@
        gradientTransform="matrix(0.38165283,0,0,0.39473658,-19.726277,-229.89232)">
       <stop
          offset="0"
-         style="stop-color:#000000;stop-opacity:1;"
+         style="stop-color:#5D0E32;stop-opacity:1;"
          id="stop13" />
       <stop
          offset="1"
-         style="stop-color:#123AD0"
+         style="stop-color:#A11957"
          id="stop14" />
     </linearGradient>
   </defs>
@@ -88,30 +88,30 @@
      inkscape:current-layer="svg6" />
   <path
      d="m 117,608.4 v 178.5 c 1.5,93.69981 155.70048,169.5 395,169.5 239.29952,0 393.4,-75.80019 395,-169.5 V 608.4 h -3.17 c -22.82262,84.91789 -170.9928,158 -391.83,158 -220.83752,0 -369.09317,-73.08195 -391.85,-158 z"
-     style="fill:#9c0bd1;fill-opacity:1"
+     style="fill:#A11957;fill-opacity:1"
      id="path8" />
   <path
      d="M907 607.7c0 99.4-154.8 180-395 180s-395-80.6-395-180 154.8-180 395-180 395 80.5 395 180z"
      fill="#FFFFFF"
      id="path2"
-     style="fill:#000000;fill-opacity:0.89156628" />
+     style="fill:#6B1040;fill-opacity:1" />
   <path
      d="m 117,428.4 v 158.5 c 1.5,93.69991 155.70024,179.5 395,179.5 239.29976,0 393.4,-85.80009 395,-179.5 V 428.4 Z"
-     style="fill:#9c0bd0"
+     style="fill:#A11957"
      id="path7" />
   <path
      d="M907 427.7c0 99.4-154.8 180-395 180s-395-80.6-395-180 154.8-180 395-180 395 80.5 395 180z"
      fill="#FFFFFF"
      id="path4"
-     style="fill:#000000;fill-opacity:1" />
+     style="fill:#6B1040;fill-opacity:1" />
   <path
      d="M117 248.4v158.5c1.5 93.7 155.7 179.5 395 179.5s393.4-85.8 395-179.5V248.4H117z"
      fill="#1B9BDB"
      id="path5"
-     style="fill:#990bce;fill-opacity:1" />
+     style="fill:#8B1249;fill-opacity:1" />
   <path
      d="M907 247.7c0 99.4-154.8 180-395 180s-395-80.6-395-180 154.8-180 395-180 395 80.5 395 180z"
      fill="#3ED6FF"
      id="path6"
-     style="fill:#c252f5;fill-opacity:1" />
+     style="fill:#D44B85;fill-opacity:1" />
 </svg>
