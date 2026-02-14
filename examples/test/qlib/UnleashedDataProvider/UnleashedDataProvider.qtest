@@ -116,6 +116,22 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         client = new UnleashedRestClient::UnleashedRestClient(opts);
     }
 
+    #! Creates an UnleashedDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *UnleashedDataProvider::UnleashedDataProvider tryCreateProvider(hash<auto> opts) {
+        try {
+            return new UnleashedDataProvider::UnleashedDataProvider(opts);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Unleashed API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Check if json module is available
     private checkJson() {
 %ifdef NoJson
@@ -127,10 +143,13 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        UnleashedDataProvider::UnleashedDataProvider prov({
+        *UnleashedDataProvider::UnleashedDataProvider prov = tryCreateProvider({
             "api_id": "fake-api-id-for-testing",
             "apikey": "fake-key-for-testing",
         });
+        if (!prov) {
+            return;
+        }
         assertEq("unleashed", prov.getName());
         assertEq("Unleashed data provider for inventory management, sales orders, and customer management", prov.getDesc());
     }
@@ -154,10 +173,13 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        UnleashedDataProvider::UnleashedDataProvider prov({
+        *UnleashedDataProvider::UnleashedDataProvider prov = tryCreateProvider({
             "api_id": "x",
             "apikey": "x",
         });
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -181,10 +203,13 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        UnleashedDataProvider::UnleashedDataProvider prov({
+        *UnleashedDataProvider::UnleashedDataProvider prov = tryCreateProvider({
             "api_id": "x",
             "apikey": "x",
         });
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -354,10 +379,13 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        UnleashedDataProvider::UnleashedDataProvider prov({
+        *UnleashedDataProvider::UnleashedDataProvider prov = tryCreateProvider({
             "api_id": "invalid-api-id",
             "apikey": "invalid-key",
         });
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -375,12 +403,21 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test REST client URL
-        UnleashedRestClient::UnleashedRestClient client1({
-            "api_id": "x",
-            "apikey": "x",
-        });
-        assertTrue(client1.getURL() =~ /api\.unleashedsoftware\.com/);
-        assertFalse(client1.getURL() =~ /\/v2$/);
+        try {
+            UnleashedRestClient::UnleashedRestClient client1({
+                "api_id": "x",
+                "apikey": "x",
+            });
+            assertTrue(client1.getURL() =~ /api\.unleashedsoftware\.com/);
+            assertFalse(client1.getURL() =~ /\/v2$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Unleashed API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
     }
 
     #! Connection tests - verify connection scheme registration
