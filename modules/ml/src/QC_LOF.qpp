@@ -1,0 +1,234 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_LOF.qpp
+
+    Qore ml module - Local Outlier Factor class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_LOF.h"
+
+// Extern declaration for hashdecl (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclLOFResult;
+
+//! The LOF class implements the Local Outlier Factor anomaly detection algorithm
+/** LOF identifies anomalies by measuring the local density deviation of a data point
+    with respect to its neighbors. Points with substantially lower density than their
+    neighbors are considered outliers.
+
+    LOF scores greater than 1.0 indicate potential anomalies. The score represents the
+    ratio of the local density of a point's neighbors to the point's own local density.
+
+    @par Complexity
+    Fitting is O(n^2) where n is the number of reference data points (computes all
+    pairwise distances). Scoring a single query point is O(n*d) where d is the number
+    of features, dominated by computing distances to all n reference points. For large
+    reference sets, this can be slow.
+
+    Each instance is independent and thread-safe for concurrent scoring after fitting.
+
+    @par Example:
+    @code{.py}
+# Create an LOF model
+LOF lof({"k": 20, "threshold": 1.5});
+
+# Train on reference data
+list<hash<auto>> training_data = (
+    {"x": 1.0, "y": 1.0},
+    {"x": 1.1, "y": 0.9},
+    {"x": 0.9, "y": 1.1},
+    # ... more normal records
+);
+lof.fit(training_data);
+
+# Score a new record
+hash<LOFResult> result = lof.score({"x": 10.0, "y": 10.0});
+printf("LOF score: %f, is anomaly: %y\n", result.lof_score, result.is_anomaly);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass LOF [arg=QoreLOF* lof; ns=ML; flags=final];
+
+//! Creates an LOF model with the given options
+/** @param options a hash with the following optional keys:
+    - \c k (int): number of nearest neighbors to use (default: 20)
+    - \c threshold (float): LOF score threshold for anomaly classification (default: 1.5)
+
+    @par Example:
+    @code{.py}
+LOF lof({"k": 10, "threshold": 2.0});
+    @endcode
+
+    @throw ML-LOF-ERROR invalid option values
+*/
+LOF::constructor(*hash<auto> options) {
+    int64 k = 20;
+    double threshold = 1.5;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("k");
+        if (!v.isNullOrNothing()) {
+            k = v.getAsBigInt();
+        }
+        v = options->getKeyValue("threshold");
+        if (!v.isNullOrNothing()) {
+            threshold = v.getAsFloat();
+        }
+    }
+
+    if (k < 1) {
+        xsink->raiseException("ML-LOF-ERROR",
+            "k must be >= 1; got " QLLD, k);
+        return;
+    }
+    if (threshold <= 0.0) {
+        xsink->raiseException("ML-LOF-ERROR",
+            "threshold must be > 0.0; got %f", threshold);
+        return;
+    }
+
+    self->setPrivate(CID_LOF, new QoreLOF(static_cast<int>(k), threshold));
+}
+
+//! Creates a copy of the LOF model
+/** @throw COPY-ERROR LOF objects cannot be copied
+*/
+LOF::copy() {
+    xsink->raiseException("COPY-ERROR", "LOF objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records
+/** Stores the reference data and precomputes k-nearest neighbor information
+    for efficient scoring.
+
+    @param data a list of hashes where each hash represents a record; only numeric fields
+    (int, float) are used as features
+
+    @par Example:
+    @code{.py}
+lof.fit(data_records);
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-LOF-ERROR if fitting fails
+*/
+nothing LOF::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lof->setFieldNames(field_names);
+    lof->fit(matrix, xsink);
+}
+
+//! Trains the model on a numeric matrix
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @par Example:
+    @code{.py}
+lof.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+*/
+nothing LOF::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lof->fit(mat, xsink);
+}
+
+//! Scores a single record for anomalousness
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref LOFResult hash with:
+    - \c lof_score: Local Outlier Factor (> 1.0 indicates anomaly)
+    - \c is_anomaly: bool, true if score >= threshold
+    - \c k_distance: distance to the k-th nearest neighbor
+    - \c k: the k parameter used
+
+    @par Example:
+    @code{.py}
+hash<LOFResult> result = lof.score({"x": 10.0, "y": 10.0});
+    @endcode
+
+    @throw ML-LOF-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<LOFResult> LOF::score(hash<auto> record) {
+    const std::vector<std::string>& field_names = lof->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-LOF-ERROR",
+            "model was fitted with fitMatrix(); use scoreMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lof->score(point, xsink);
+}
+
+//! Scores multiple rows in matrix form
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @return a list of @ref LOFResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<LOFResult>> results = lof.scoreMatrix(test_data);
+    @endcode
+
+    @throw ML-LOF-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<LOFResult>> LOF::scoreMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lof->scoreMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!lof.isFitted()) {
+    lof.fit(data);
+}
+    @endcode
+*/
+bool LOF::isFitted() [flags=CONSTANT] {
+    return lof->isFitted();
+}
+
+//! Returns the k (number of neighbors) parameter
+/** @return the k parameter value
+*/
+int LOF::getK() [flags=CONSTANT] {
+    return lof->getK();
+}

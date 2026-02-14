@@ -1,0 +1,232 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_OnnxModel.qpp
+
+    Qore ml module - OnnxModel class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+
+#ifdef HAVE_ONNXRUNTIME
+
+#include "QC_OnnxModel.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclOnnxTensorInfo;
+extern const TypedHashDecl* hashdeclOnnxModelInfo;
+extern const TypedHashDecl* hashdeclOnnxProviderConfig;
+extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+
+//! The OnnxModel class loads and runs pre-trained ONNX models for inference
+/** Loads an ONNX model file and provides methods for running inference with
+    Qore data types. Input data is automatically converted to the appropriate
+    tensor types based on the model's input metadata.
+
+    @par Thread Safety
+    ONNX Runtime sessions are thread-safe for inference after creation, so
+    concurrent run() calls from multiple threads on the same OnnxModel instance
+    are safe. Metadata methods (getModelInfo(), getInputInfo(), getOutputInfo(),
+    getProviderInfo()) are also safe for concurrent use.
+
+    @par Example:
+    @code{.py}
+# Load an ONNX model
+OnnxModel model("/path/to/model.onnx");
+
+# Check model info
+hash<OnnxModelInfo> info = model.getModelInfo();
+printf("Producer: %s, Version: %d\n", info.producer_name, info.version);
+
+# Run inference
+hash<auto> result = model.run({"input": ((1.0, 2.0, 3.0),)});
+printf("Output: %y\n", result);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass OnnxModel [arg=QoreOnnxModel* model; ns=ML; flags=final; dom=FILESYSTEM];
+
+//! Creates an OnnxModel by loading the ONNX model from the given file path
+/** @param model_path the filesystem path to the .onnx model file
+
+    @par Example:
+    @code{.py}
+OnnxModel model("/path/to/model.onnx");
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model cannot be loaded
+*/
+OnnxModel::constructor(string model_path) {
+    ReferenceHolder<QoreOnnxModel> model_holder(
+        new QoreOnnxModel(model_path->c_str(), xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXMODEL, model_holder.release());
+}
+
+//! Creates an OnnxModel with session configuration options
+/** @param model_path the filesystem path to the .onnx model file
+    @param options session configuration including execution providers, threading, and optimization
+
+    @par Example:
+    @code{.py}
+hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
+    "providers": (<OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+    "intra_op_threads": 4,
+    "graph_optimization_level": 99,
+};
+OnnxModel model("/path/to/model.onnx", config);
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model cannot be loaded or config is invalid
+    @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+
+    @since ml 1.1
+*/
+OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
+    ReferenceHolder<QoreOnnxModel> model_holder(
+        new QoreOnnxModel(model_path->c_str(), options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXMODEL, model_holder.release());
+}
+
+//! Creates a copy of the OnnxModel
+/** @throw COPY-ERROR OnnxModel objects cannot be copied
+*/
+OnnxModel::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxModel objects cannot be copied");
+}
+
+//! Runs inference on the model with the given input tensors
+/** @param inputs a hash where keys are input tensor names and values are the tensor data;
+    scalars, lists, and nested lists are supported and automatically converted to the
+    appropriate tensor types
+
+    @return a hash where keys are output tensor names and values are the output data
+
+    @par Example:
+    @code{.py}
+hash<auto> outputs = model.run({"X": ((1.0, 2.0),)});
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails or input data is invalid
+*/
+hash<auto> OnnxModel::run(hash<auto> inputs) {
+    return model->run(inputs, xsink);
+}
+
+//! Runs batch inference on the model
+/** @param batch a list of input hashes; each hash has the same format as run()
+
+    @return a list of output hashes
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> results = model.runBatch((
+    {"X": ((1.0,),)},
+    {"X": ((2.0,),)},
+));
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model is not loaded
+    @throw ML-ONNX-INFERENCE-ERROR if inference fails
+*/
+list<hash<auto>> OnnxModel::runBatch(list<auto> batch) {
+    return model->runBatch(batch, xsink);
+}
+
+//! Returns model metadata
+/** @return an @ref OnnxModelInfo hash with model information including
+    producer name, description, version, and input/output tensor info
+
+    @par Example:
+    @code{.py}
+hash<OnnxModelInfo> info = model.getModelInfo();
+printf("Inputs: %y\n", info.inputs);
+    @endcode
+*/
+hash<OnnxModelInfo> OnnxModel::getModelInfo() {
+    return model->getModelInfo(xsink);
+}
+
+//! Returns input tensor metadata
+/** @return a list of @ref OnnxTensorInfo hashes describing each input tensor
+
+    @par Example:
+    @code{.py}
+list<hash<OnnxTensorInfo>> inputs = model.getInputInfo();
+for (hash<OnnxTensorInfo> inp in inputs) {
+    printf("Input: %s type=%s shape=%y\n", inp.name, inp.type, inp.shape);
+}
+    @endcode
+*/
+list<hash<OnnxTensorInfo>> OnnxModel::getInputInfo() {
+    return model->getInputInfo(xsink);
+}
+
+//! Returns output tensor metadata
+/** @return a list of @ref OnnxTensorInfo hashes describing each output tensor
+
+    @par Example:
+    @code{.py}
+list<hash<OnnxTensorInfo>> outputs = model.getOutputInfo();
+    @endcode
+*/
+list<hash<OnnxTensorInfo>> OnnxModel::getOutputInfo() {
+    return model->getOutputInfo(xsink);
+}
+
+//! Returns True if the model is loaded successfully
+/** @return True if the model is loaded and ready for inference
+*/
+bool OnnxModel::isLoaded() [flags=CONSTANT] {
+    return model->isLoaded();
+}
+
+//! Returns the configured execution provider name
+/** @return the name of the execution provider that was configured for this session
+    (e.g. \c "CPUExecutionProvider", \c "CUDAExecutionProvider")
+
+    @note This returns the provider that was successfully appended to the session
+    options during construction. ONNX Runtime may silently fall back to a different
+    provider (typically CPU) for individual operations if the configured provider
+    cannot handle them. There is no ONNX Runtime API to query the actual provider
+    used at runtime per operation.
+
+    @par Example:
+    @code{.py}
+string provider = model.getProviderInfo();
+printf("Configured provider: %s\n", provider);
+    @endcode
+
+    @since ml 1.1
+*/
+string OnnxModel::getProviderInfo() [flags=CONSTANT] {
+    return new QoreStringNode(model->getActiveProvider());
+}
+
+#endif // HAVE_ONNXRUNTIME

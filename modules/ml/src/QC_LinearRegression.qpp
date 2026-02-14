@@ -1,0 +1,305 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_LinearRegression.qpp
+
+    Qore ml module - LinearRegression class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_LinearRegression.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclLinearRegressionResult;
+extern const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+
+//! The LinearRegression class implements ordinary least squares linear regression
+/** LinearRegression fits a linear model to minimize the residual sum of squares between
+    the observed targets and the predictions. It uses QR decomposition of the normal
+    equations for numerical stability.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create a linear regression model
+LinearRegression lr({"fit_intercept": True});
+
+# Train on data with a target field
+list<hash<auto>> training_data = (
+    {"x1": 1.0, "x2": 2.0, "y": 5.0},
+    {"x1": 2.0, "x2": 3.0, "y": 8.0},
+    {"x1": 3.0, "x2": 4.0, "y": 11.0},
+);
+lr.fit(training_data, "y");
+
+# Predict
+hash<LinearRegressionResult> result = lr.predict({"x1": 4.0, "x2": 5.0});
+printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass LinearRegression [arg=QoreLinearRegression* lr; ns=ML; flags=final];
+
+//! Creates a LinearRegression with the given options
+/** @param options a hash with the following optional keys:
+    - \c fit_intercept (bool): whether to fit an intercept term (default: True)
+    - \c normalize (bool): whether to normalize features before fitting (default: False)
+
+    @par Example:
+    @code{.py}
+LinearRegression lr({"fit_intercept": True, "normalize": True});
+    @endcode
+*/
+LinearRegression::constructor(*hash<auto> options) {
+    bool fit_intercept = true;
+    bool normalize = false;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("fit_intercept");
+        if (!v.isNullOrNothing()) {
+            fit_intercept = v.getAsBool();
+        }
+        v = options->getKeyValue("normalize");
+        if (!v.isNullOrNothing()) {
+            normalize = v.getAsBool();
+        }
+    }
+
+    self->setPrivate(CID_LINEARREGRESSION, new QoreLinearRegression(fit_intercept, normalize));
+}
+
+//! Creates a copy of the LinearRegression
+/** @throw COPY-ERROR LinearRegression objects cannot be copied
+*/
+LinearRegression::copy() {
+    xsink->raiseException("COPY-ERROR", "LinearRegression objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the dependent variable.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field to predict
+
+    @par Example:
+    @code{.py}
+lr.fit(data_records, "price");
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-LINEAR-REGRESSION-ERROR if fitting fails
+*/
+nothing LinearRegression::fit(list<auto> data, string target_field) {
+    // Extract field names from first record, excluding target
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    // Collect numeric field names excluding target
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "no numeric feature fields found in data (excluding target '%s')",
+            target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    lr->setFieldNames(feat_names);
+    lr->setTargetField(target_str);
+    lr->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param X a list of lists where each inner list is a row of feature values
+    @param y a list of target values
+
+    @par Example:
+    @code{.py}
+lr.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (5.0, 11.0, 17.0));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-LINEAR-REGRESSION-ERROR if fitting fails
+*/
+nothing LinearRegression::fitMatrix(list<auto> X, list<auto> y) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->fit(mat, target, xsink);
+}
+
+//! Predicts the target value for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref LinearRegressionResult hash with prediction details
+
+    @par Example:
+    @code{.py}
+hash<LinearRegressionResult> result = lr.predict({"x1": 4.0, "x2": 5.0});
+    @endcode
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<LinearRegressionResult> LinearRegression::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = lr->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lr->predict(point, xsink);
+}
+
+//! Predicts target values for multiple rows in matrix form
+/** @param X a list of lists where each inner list is a row of feature values
+
+    @return a list of @ref LinearRegressionResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<LinearRegressionResult>> results = lr.predictMatrix(((4.0, 5.0), (6.0, 7.0)));
+    @endcode
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<LinearRegressionResult>> LinearRegression::predictMatrix(list<auto> X) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lr->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!lr.isFitted()) {
+    lr.fit(data, "target");
+}
+    @endcode
+*/
+bool LinearRegression::isFitted() [flags=CONSTANT] {
+    return lr->isFitted();
+}
+
+//! Returns model-level information in a single call
+/** @return a @ref LinearRegressionModelInfo hash with coefficients, intercept, R-squared,
+    and feature count
+
+    This is more efficient than calling getCoefficients(), getIntercept(), and getRSquared()
+    separately, and avoids the overhead of duplicating model parameters in each
+    @ref LinearRegressionResult returned by predict() or predictMatrix().
+
+    @par Example:
+    @code{.py}
+hash<LinearRegressionModelInfo> info = lr.getModelInfo();
+printf("R-squared: %f, Features: %d\n", info.r_squared, info.n_features);
+printf("Coefficients: %y\n", info.coefficients);
+    @endcode
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted
+*/
+hash<LinearRegressionModelInfo> LinearRegression::getModelInfo() {
+    return lr->getModelInfo(xsink);
+}
+
+//! Returns the model coefficients
+/** @return a list of coefficient values, one per feature
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted
+*/
+list<float> LinearRegression::getCoefficients() {
+    return lr->getCoefficients(xsink);
+}
+
+//! Returns the intercept value
+/** @return the intercept (bias) term; 0.0 if fit_intercept was False
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted
+*/
+float LinearRegression::getIntercept() {
+    return lr->getIntercept(xsink);
+}
+
+//! Returns the R-squared (coefficient of determination)
+/** @return R-squared value; 1.0 means perfect fit, 0.0 means no better than mean
+
+    @throw ML-LINEAR-REGRESSION-ERROR if the model has not been fitted
+*/
+float LinearRegression::getRSquared() {
+    return lr->getRSquared(xsink);
+}

@@ -1,0 +1,203 @@
+/** @mainpage Qore ml Module
+
+    @tableofcontents
+
+    @section mlintro ml Module Introduction
+
+    The \c ml module provides machine learning algorithms for %Qore programs, enabling
+    thread-safe ML inference and analysis for streaming data pipelines without external
+    dependencies like Python.
+
+    This module wraps the Eigen C++ linear algebra library to provide efficient, native
+    implementations of common ML algorithms. Optional ONNX Runtime support allows running
+    pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
+
+    @section mlalgorithms Available Algorithms
+
+    @subsection mlalgo_table Algorithm Overview
+
+    |Algorithm|Type|Use Case|
+    |---|---|---|
+    |@ref ML::IsolationForest "IsolationForest"|Anomaly Detection|Finds anomalies by measuring isolation in random trees|
+    |@ref ML::LOF "LOF"|Anomaly Detection|Detects local density-based anomalies using k-nearest neighbors|
+    |@ref ML::DBSCAN "DBSCAN"|Clustering|Discovers arbitrarily shaped clusters without specifying k|
+    |@ref ML::KMeans "KMeans"|Clustering|Partitions data into k groups with optional online updates|
+    |@ref ML::GMM "GMM"|Clustering|Probabilistic soft clustering using Gaussian mixtures (EM algorithm)|
+    |@ref ML::LinearRegression "LinearRegression"|Regression|Predicts a target variable from numeric features (OLS)|
+    |@ref ML::HoltWinters "HoltWinters"|Time Series|Triple exponential smoothing forecasting with seasonality|
+    |@ref ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Extracts trend, seasonal, and residual components|
+    |@ref ML::PCA "PCA"|Dimensionality Reduction|Reduces dimensions while preserving variance|
+    |@ref ML::OnnxModel "OnnxModel"|Inference|Runs pre-trained ONNX models (optional, requires ONNX Runtime)|
+
+    @subsection mlalgo_anomaly Anomaly Detection
+
+    - @ref ML::IsolationForest "IsolationForest" — Global anomaly detection using random partitioning.
+      Anomalous points are isolated in fewer splits than normal points. Best for identifying global
+      outliers in high-dimensional data.
+    - @ref ML::LOF "LOF" — Local Outlier Factor detects anomalies based on local density deviation
+      relative to neighbors. Catches anomalies that are normal in one region but unusual in another.
+
+    @subsection mlalgo_clustering Clustering
+
+    - @ref ML::DBSCAN "DBSCAN" — Density-based clustering that discovers clusters of arbitrary
+      shape. Does not require specifying the number of clusters. Points not belonging to any
+      cluster are labeled as noise.
+    - @ref ML::KMeans "KMeans" — Classic k-means clustering with k-means++ initialization and
+      optional online (mini-batch) updates for evolving data.
+    - @ref ML::GMM "GMM" — Gaussian Mixture Model provides probabilistic (soft) cluster
+      assignments. Each point gets a probability for each cluster, enabling uncertainty
+      estimation and overlapping cluster detection.
+
+    @subsection mlalgo_regression Regression
+
+    - @ref ML::LinearRegression "LinearRegression" — Ordinary least squares linear regression.
+      Fits a linear model y = Xw + b to predict a target variable from one or more numeric
+      features. Reports R-squared, coefficients, and intercept.
+
+    @subsection mlalgo_timeseries Time Series
+
+    - @ref ML::HoltWinters "HoltWinters" — Triple exponential smoothing (Holt-Winters method)
+      for forecasting values with trend and seasonal patterns. Supports additive and
+      multiplicative seasonality with optional damped trends.
+    - @ref ML::SeasonalDecomposition "SeasonalDecomposition" — Decomposes a time series into
+      trend, seasonal, and residual components. Supports additive and multiplicative models.
+
+    @subsection mlalgo_dimreduce Dimensionality Reduction
+
+    - @ref ML::PCA "PCA" — Principal Component Analysis projects high-dimensional data onto
+      principal components that capture the most variance. Supports fixed component count or
+      automatic selection via variance threshold.
+
+    @subsection mlalgo_onnx ONNX Model Inference
+
+    When compiled with ONNX Runtime support, the module provides:
+    - @ref ML::OnnxModel "OnnxModel" — Loads and runs pre-trained ONNX models for inference.
+      Supports float, double, int32, and int64 tensor types. ONNX Runtime sessions are
+      thread-safe for concurrent inference after model loading.
+
+    To check ONNX availability at runtime:
+    @code{.py}
+hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+if (caps.has_onnx) {
+    ML::OnnxModel model("/path/to/model.onnx");
+    hash<auto> result = model.run({"input": data});
+}
+    @endcode
+
+    This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
+    more information). The module is tagged as such in the module's header (meaning it can be loaded
+    unconditionally regardless of how the %Qore library was initialized).
+
+    To use the module in a %Qore script, use the \c %%requires directive as follows:
+    @code %requires ml @endcode
+
+    @section mlthread Thread Safety
+
+    All classes in this module are designed for thread-safe usage:
+    - Each class instance has independent state (no shared mutable globals)
+    - After fitting, scoring/prediction methods can be called concurrently from
+      multiple threads
+    - Each instance uses its own random number generator
+    - ONNX Runtime sessions are inherently thread-safe for inference
+
+    @section mlexamples Usage Examples
+
+    @subsection mlexample_iforest Anomaly Detection with IsolationForest
+
+    @code{.py}
+%requires ml
+
+# Create and configure
+ML::IsolationForest iforest({"n_trees": 100, "sample_size": 256, "threshold": 0.6});
+
+# Fit on normal data
+iforest.fit(training_records);
+
+# Score new records
+hash<ML::IsolationForestResult> result = iforest.score(new_record);
+if (result.is_anomaly) {
+    printf("Anomaly detected! Score: %f\n", result.anomaly_score);
+}
+    @endcode
+
+    @subsection mlexample_linreg Linear Regression
+
+    @code{.py}
+%requires ml
+
+# Create model
+ML::LinearRegression lr({"fit_intercept": True});
+
+# Fit on data with a target field
+lr.fit(training_data, "price");
+
+# Predict
+hash<ML::LinearRegressionResult> result = lr.predict(new_record);
+printf("Predicted price: %f (R²: %f)\n", result.prediction, result.r_squared);
+    @endcode
+
+    @subsection mlexample_gmm Probabilistic Clustering with GMM
+
+    @code{.py}
+%requires ml
+
+ML::GMM gmm({"n_components": 3, "seed": 42});
+gmm.fit(data);
+
+hash<ML::GMMResult> result = gmm.predict(new_point);
+printf("Cluster: %d (probability: %f)\n", result.cluster, result.max_probability);
+printf("All probabilities: %y\n", result.probabilities);
+    @endcode
+
+    @subsection mlexample_lof Local Outlier Factor
+
+    @code{.py}
+%requires ml
+
+ML::LOF lof({"k": 20, "threshold": 1.5});
+lof.fit(reference_data);
+
+hash<ML::LOFResult> result = lof.score(test_point);
+if (result.is_anomaly) {
+    printf("Local outlier detected! LOF score: %f\n", result.lof_score);
+}
+    @endcode
+
+    @subsection mlexample_onnx ONNX Model Inference
+
+    @code{.py}
+%requires ml
+
+hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+if (!caps.has_onnx) {
+    printf("ONNX Runtime not available\n");
+} else {
+    ML::OnnxModel model("/path/to/model.onnx");
+
+    # Check model metadata
+    hash<ML::OnnxModelInfo> info = model.getModelInfo();
+    printf("Model: %s (version %d)\n", info.producer_name, info.version);
+
+    # Run inference
+    hash<auto> result = model.run({"X": ((1.0, 2.0, 3.0),)});
+    printf("Output: %y\n", result);
+}
+    @endcode
+
+    @section mlreleasenotes ml Module Release Notes
+
+    @subsection ml_1_0 ml Module Version 1.0
+    - Initial release with 9 native ML algorithms:
+      - @ref ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
+      - @ref ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
+      - @ref ML::DBSCAN "DBSCAN" — density-based clustering
+      - @ref ML::KMeans "KMeans" — k-means clustering with online updates
+      - @ref ML::GMM "GMM" — Gaussian Mixture Model probabilistic clustering
+      - @ref ML::LinearRegression "LinearRegression" — ordinary least squares regression
+      - @ref ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
+      - @ref ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
+      - @ref ML::PCA "PCA" — principal component analysis
+    - Optional @ref ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+    - All algorithms use Eigen3 for efficient matrix operations
+    - \c ml_get_capabilities() function for runtime capability and ONNX support discovery
+*/

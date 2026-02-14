@@ -1,0 +1,255 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_KMeans.qpp
+
+    Qore ml module - KMeans class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_KMeans.h"
+
+extern const TypedHashDecl* hashdeclKMeansResult;
+
+//! The KMeans class implements K-Means clustering with optional mini-batch online updates
+/** K-Means partitions data into k clusters by iteratively assigning points to the nearest
+    centroid and updating centroids to be the mean of assigned points. Supports k-means++
+    initialization for better convergence.
+
+    @par Example:
+    @code{.py}
+KMeans km({"k": 3, "seed": 42});
+km.fitMatrix(training_data);
+hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
+    @endcode
+
+    @since ml 1.0
+*/
+qclass KMeans [arg=QoreKMeans* kmeans; ns=ML; flags=final];
+
+//! Creates a KMeans instance with the given options
+/** @param options a hash with the following keys:
+    - \c k (int, required): number of clusters
+    - \c max_iterations (int, default 100): maximum Lloyd iterations
+    - \c tolerance (float, default 1e-4): convergence tolerance
+    - \c seed (int, default 0 = random): random seed for reproducibility
+    - \c init (string, default "kmeans++"): initialization method ("kmeans++", "random")
+
+    @throw ML-KMEANS-ERROR invalid option values
+*/
+KMeans::constructor(hash<auto> options) {
+    int64 k = 0;
+    int64 max_iterations = 100;
+    double tolerance = 1e-4;
+    int64 seed = 0;
+    const char* init_method = "kmeans++";
+
+    QoreValue v = options->getKeyValue("k");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "required option 'k' not provided");
+        return;
+    }
+    k = v.getAsBigInt();
+
+    v = options->getKeyValue("max_iterations");
+    if (!v.isNullOrNothing()) {
+        max_iterations = v.getAsBigInt();
+    }
+    v = options->getKeyValue("tolerance");
+    if (!v.isNullOrNothing()) {
+        tolerance = v.getAsFloat();
+    }
+    v = options->getKeyValue("seed");
+    if (!v.isNullOrNothing()) {
+        seed = v.getAsBigInt();
+    }
+    v = options->getKeyValue("init");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        init_method = v.get<const QoreStringNode>()->c_str();
+    }
+
+    if (k < 1) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "k must be >= 1; got " QLLD, k);
+        return;
+    }
+
+    if (strcmp(init_method, "kmeans++") != 0 && strcmp(init_method, "random") != 0) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "init must be 'kmeans++' or 'random'; got '%s'", init_method);
+        return;
+    }
+
+    self->setPrivate(CID_KMEANS,
+        new QoreKMeans(static_cast<int>(k), static_cast<int>(max_iterations),
+            tolerance, seed, init_method));
+}
+
+//! Creates a copy of the KMeans instance
+/** @throw COPY-ERROR KMeans objects cannot be copied
+*/
+KMeans::copy() {
+    xsink->raiseException("COPY-ERROR", "KMeans objects cannot be copied");
+}
+
+//! Fits the model on a list of hash records
+/** @param data a list of hashes with numeric fields
+
+    @par Example:
+    @code{.py}
+km.fit(data_records);
+    @endcode
+
+    @throw ML-KMEANS-ERROR no data or k > n_samples
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->setFieldNames(field_names);
+    kmeans->fit(matrix, xsink);
+}
+
+//! Fits the model on a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw ML-KMEANS-ERROR no data or k > n_samples
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->fit(mat, xsink);
+}
+
+//! Performs a mini-batch online update with new data
+/** @param data a list of hashes with numeric fields
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::update(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->update(matrix, xsink);
+}
+
+//! Performs a mini-batch online update with a numeric matrix
+/** @param matrix a list of lists of numeric values
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing KMeans::updateMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    kmeans->update(mat, xsink);
+}
+
+//! Predicts cluster assignment for a single record
+/** @param record a hash with numeric fields
+    @return a @ref KMeansResult hash
+
+    @par Example:
+    @code{.py}
+hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
+printf("Cluster: %d, Distance: %.2f\n", result.cluster, result.distance);
+    @endcode
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+*/
+hash<KMeansResult> KMeans::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = kmeans->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return kmeans->predict(point, xsink);
+}
+
+//! Predicts cluster assignments for multiple rows in matrix form
+/** @param matrix a list of lists of numeric values
+    @return a list of @ref KMeansResult hashes
+
+    @throw ML-KMEANS-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<KMeansResult>> KMeans::predictMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return kmeans->predictMatrix(mat, xsink);
+}
+
+//! Returns the number of clusters
+/** @return the k value
+*/
+int KMeans::getK() [flags=CONSTANT] {
+    return kmeans->getK();
+}
+
+//! Returns True if the model has been fitted
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool KMeans::isFitted() [flags=CONSTANT] {
+    return kmeans->isFitted();
+}
+
+//! Returns the current centroids
+/** @return a list of lists of float values (k x n_features)
+
+    @throw ML-KMEANS-ERROR model not fitted
+*/
+list<auto> KMeans::getCentroids() {
+    return kmeans->getCentroids(xsink);
+}
+
+//! Returns the inertia (sum of squared distances to nearest centroid)
+/** @return the inertia value
+
+    @throw ML-KMEANS-ERROR model not fitted
+*/
+float KMeans::getInertia() {
+    if (!kmeans->isFitted()) {
+        xsink->raiseException("ML-KMEANS-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return QoreValue();
+    }
+    return kmeans->getInertia();
+}

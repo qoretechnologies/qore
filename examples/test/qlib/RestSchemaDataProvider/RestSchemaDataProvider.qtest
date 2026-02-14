@@ -74,8 +74,16 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
             assertEq("softstring", type.getFieldType("name").getName());
             assertEq(("id", "category", "name", "photoUrls", "tags", "status"), keys type.getFields());
 
-            assertThrows("SCHEMA-VALIDATION-ERROR", "enumerated values.*x", \p0.doRequest(),
-                {"query": {"status": ("x",)}});
+            try {
+                assertThrows("SCHEMA-VALIDATION-ERROR", "enumerated values.*x", \p0.doRequest(),
+                    {"query": {"status": ("x",)}});
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                        || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    testSkip(sprintf("cannot connect to petstore API: %s", ex.desc));
+                }
+                rethrow;
+            }
         }
 
         {

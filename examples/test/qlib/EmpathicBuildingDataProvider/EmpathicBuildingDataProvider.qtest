@@ -82,7 +82,8 @@ public class Main inherits QUnit::Test {
         try {
             prov = ebrc.getDataProvider();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 testSkip(sprintf("cannot connect to EmpathicBuilding API: %s", ex.desc));
             }
             rethrow;

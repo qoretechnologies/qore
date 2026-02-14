@@ -820,8 +820,8 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
         *list<string> children = root.getChildProviderNames();
         assertEq(True, exists children);
-        # 6 original + 4 analytics + 1 group-by = 11
-        assertEq(11, children.size());
+        # 6 original + 4 analytics + 1 group-by + 7 statistical = 18
+        assertEq(18, children.size());
 
         # verify new children are present
         list<string> new_children = ("running-stats", "moving-average",
@@ -856,8 +856,8 @@ class QoreAnalyticsProcessorsTest inherits QUnit::Test {
         assertEq(DPAT_PIPELINE_PROCESSOR, actions."group-by".action_code);
         assertEq(DPC_AGGREGATE, actions."group-by".processor_capabilities);
 
-        # verify total actions = 6 original + 4 analytics + 1 group-by = 11
-        assertEq(11, actions.size());
+        # verify total actions = 6 original + 4 analytics + 1 group-by + 7 statistical = 18
+        assertEq(18, actions.size());
     }
 
     integrationDpcAnalyticsConstant() {
