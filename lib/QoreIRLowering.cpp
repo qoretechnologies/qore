@@ -507,7 +507,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, {}});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -549,7 +549,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, {}});
+        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -598,7 +598,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth, {}});
+        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -977,7 +977,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1055,7 +1055,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
+            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1180,7 +1180,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, {}});
+        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {

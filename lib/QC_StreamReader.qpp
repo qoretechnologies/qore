@@ -34,7 +34,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 
-DLLEXPORT extern QoreClass* QC_INPUTSTREAM;
+extern QoreClass* QC_INPUTSTREAM;
 
 //! This class defines a stream reader for input streams.
 /** @since %Qore 0.8.13
