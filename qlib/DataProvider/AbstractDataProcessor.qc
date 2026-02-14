@@ -47,7 +47,7 @@ public const DPC_AGGREGATE = (1 << 3);
 #! Processor is a data sink: consumes records, writes to external target; may or may not pass through
 public const DPC_SINK = (1 << 4);
 #! Processor computes streaming analytics: accumulates data in windows and emits analytics events
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public const DPC_ANALYTICS = (1 << 5);
 #/@}
