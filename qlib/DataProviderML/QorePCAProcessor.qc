@@ -45,33 +45,39 @@ public class QorePCAProcessor inherits DataProvider::AbstractDataProvider {
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
-                "short_desc": "Comma-separated numeric field names to analyze",
-                "desc": "A comma-separated list of numeric field names to use as features "
-                    "for PCA; at least 2 fields are required for dimensionality reduction",
+                "short_desc": "Numeric fields to reduce",
+                "desc": "A comma-separated list of numeric field names from the input records "
+                    "to compress into fewer dimensions; for example, 50 sensor readings can be "
+                    "reduced to 3 combined values that capture the most important patterns; "
+                    "at least 2 fields are required",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
-                "short_desc": "Number of records per PCA window",
-                "desc": "The number of records to accumulate before fitting PCA and "
-                    "transforming all records in the window",
+                "short_desc": "Number of records to analyze together",
+                "desc": "The number of records to collect before analyzing patterns across all "
+                    "the fields and producing reduced outputs; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
             "n_components": <DataProviderOptionInfo>{
-                "display_name": "Number of Components",
-                "short_desc": "Number of principal components to keep",
-                "desc": "The number of principal components to keep; if not set, "
-                    "variance_threshold is used to determine the number automatically",
+                "display_name": "Number of Output Dimensions",
+                "short_desc": "How many combined dimensions to keep",
+                "desc": "The exact number of output dimensions to keep; if not set, the "
+                    "algorithm automatically determines the number based on the variance "
+                    "threshold; for example, setting this to 3 produces 3 values per record "
+                    "regardless of how many input fields there are",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "variance_threshold": <DataProviderOptionInfo>{
-                "display_name": "Variance Threshold",
-                "short_desc": "Minimum cumulative explained variance ratio",
-                "desc": "The minimum cumulative explained variance ratio (0.0-1.0) to "
-                    "determine how many components to keep; only used when n_components "
-                    "is not set; default: 0.95",
+                "display_name": "Information Preservation",
+                "short_desc": "How much of the original information to preserve",
+                "desc": "A value between 0.0 and 1.0 specifying what fraction of the total "
+                    "information (variance) must be preserved; the algorithm keeps just enough "
+                    "output dimensions to meet this threshold; 0.95 means keep 95%% of the "
+                    "information; only used when the number of output dimensions is not set "
+                    "explicitly; default: 0.95",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

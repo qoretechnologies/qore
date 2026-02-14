@@ -45,34 +45,37 @@ public class QoreKMeansProcessor inherits DataProvider::AbstractDataProvider {
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
-                "short_desc": "Comma-separated numeric field names to cluster",
-                "desc": "A comma-separated list of numeric field names to use as features "
-                    "for clustering; at least 1 field is required",
+                "short_desc": "Numeric fields to use for grouping",
+                "desc": "A comma-separated list of numeric field names from the input records "
+                    "to use for grouping; for example: \"age,income,spending_score\"; "
+                    "at least 1 field is required",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
-                "short_desc": "Number of records per clustering window",
-                "desc": "The number of records to accumulate before performing k-means "
-                    "clustering on the window",
+                "short_desc": "Number of records to group together",
+                "desc": "The number of records to collect before assigning them to groups; "
+                    "all records in a window are analyzed together; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
             "k": <DataProviderOptionInfo>{
-                "display_name": "Number of Clusters",
-                "short_desc": "Number of clusters to create",
-                "desc": "The number of clusters (k) to partition the data into; must be "
-                    "at least 1 and at most the number of records in the window",
+                "display_name": "Number of Groups",
+                "short_desc": "How many groups to create",
+                "desc": "The number of groups (clusters) to divide the data into; you must "
+                    "specify this in advance; must be at least 1 and no more than the "
+                    "number of records in the window",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
             "online": <DataProviderOptionInfo>{
-                "display_name": "Online Learning",
-                "short_desc": "Update model incrementally with new windows",
-                "desc": "When True, the first window fits the model and subsequent windows "
-                    "update it incrementally; when False, each window refits from scratch; "
-                    "default: True",
+                "display_name": "Incremental Learning",
+                "short_desc": "Continuously improve the model with new data",
+                "desc": "When enabled, the first batch of records creates the initial model "
+                    "and each subsequent batch refines it, allowing the groups to evolve over "
+                    "time; when disabled, each batch creates a completely new model; "
+                    "default: True (enabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };

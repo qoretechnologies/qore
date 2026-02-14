@@ -47,72 +47,86 @@ public class QoreHoltWintersProcessor inherits DataProvider::AbstractAnalyticsPr
         const ConstructorOptions = AbstractAnalyticsProcessor::BaseConstructorOptions + {
             "period": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Period",
-                "short_desc": "Number of records in one seasonal cycle",
-                "desc": "The number of records in one complete seasonal cycle; for example, "
-                    "7 for daily data with weekly seasonality, 12 for monthly data with "
-                    "yearly seasonality; must be >= 2",
+                "short_desc": "Records per seasonal cycle",
+                "desc": "The number of records that make up one complete repeating cycle; "
+                    "for example, 7 for daily data with weekly patterns, 12 for monthly "
+                    "data with yearly patterns, or 24 for hourly data with daily patterns; "
+                    "must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
             "alpha": <DataProviderOptionInfo>{
-                "display_name": "Level Smoothing (Alpha)",
-                "short_desc": "Smoothing parameter for the level component",
-                "desc": "Controls how quickly the level adapts to changes; values closer "
-                    "to 1.0 weight recent observations more heavily; default: auto-selected",
+                "display_name": "Level Sensitivity",
+                "short_desc": "How fast the baseline adapts to changes",
+                "desc": "Controls how quickly the baseline level responds to new data; "
+                    "a value between 0.0 and 1.0; higher values react faster to recent "
+                    "changes but may be noisier; lower values produce smoother forecasts; "
+                    "default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "beta": <DataProviderOptionInfo>{
-                "display_name": "Trend Smoothing (Beta)",
-                "short_desc": "Smoothing parameter for the trend component",
-                "desc": "Controls how quickly the trend adapts to changes; values closer "
-                    "to 1.0 weight recent trend changes more heavily; default: auto-selected",
+                "display_name": "Trend Sensitivity",
+                "short_desc": "How fast the trend adapts to changes",
+                "desc": "Controls how quickly the upward or downward trend responds to new "
+                    "data; a value between 0.0 and 1.0; higher values track trend changes "
+                    "more aggressively; default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "gamma": <DataProviderOptionInfo>{
-                "display_name": "Seasonal Smoothing (Gamma)",
-                "short_desc": "Smoothing parameter for the seasonal component",
-                "desc": "Controls how quickly the seasonal factors adapt to changes; values "
-                    "closer to 1.0 weight recent seasonal observations more heavily; "
-                    "default: auto-selected",
+                "display_name": "Seasonal Sensitivity",
+                "short_desc": "How fast seasonal patterns adapt to changes",
+                "desc": "Controls how quickly the repeating seasonal pattern adjusts to new "
+                    "observations; a value between 0.0 and 1.0; higher values allow the "
+                    "seasonal pattern to change more quickly over time; "
+                    "default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },
             "forecast_steps": <DataProviderOptionInfo>{
                 "display_name": "Forecast Steps",
-                "short_desc": "Number of steps ahead to forecast",
-                "desc": "The number of future steps to forecast for each record; "
-                    "default: 1",
+                "short_desc": "How many future values to predict",
+                "desc": "The number of future time steps to predict for each record; "
+                    "for example, with daily data and forecast_steps = 7, it predicts "
+                    "the next 7 days; default: 1",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "seasonal_type": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Type",
-                "short_desc": "Type of seasonal component",
-                "desc": "The type of seasonal component: 'additive' for constant seasonal "
-                    "amplitude, 'multiplicative' for seasonal amplitude proportional to "
-                    "the level; default: 'additive'",
+                "short_desc": "How seasonal patterns combine with the trend",
+                "desc": "Controls how seasonal patterns are applied to the underlying trend; "
+                    "default: additive",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "additive",
-                        "desc": "Constant seasonal amplitude",
+                        "display_name": "Additive (constant seasonal swings)",
+                        "desc": "Seasonal variations have a constant size regardless of the "
+                            "overall level; for example, sales always increase by 100 units "
+                            "in December",
                     },
                     <AllowedValueInfo>{
                         "value": "multiplicative",
-                        "desc": "Seasonal amplitude proportional to the level",
+                        "display_name": "Multiplicative (proportional seasonal swings)",
+                        "desc": "Seasonal variations scale with the overall level; for example, "
+                            "sales always increase by 20%% in December regardless of the "
+                            "base level",
                     },
                 ),
             },
             "damped": <DataProviderOptionInfo>{
                 "display_name": "Damped Trend",
-                "short_desc": "Whether to damp the trend component",
-                "desc": "When True, the trend is damped so long-range forecasts converge "
-                    "rather than growing indefinitely; default: False",
+                "short_desc": "Limit trend growth in long-range forecasts",
+                "desc": "When enabled, the trend gradually flattens out for distant future "
+                    "predictions instead of growing indefinitely; this produces more "
+                    "conservative long-range forecasts; default: False (disabled)",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
             "phi": <DataProviderOptionInfo>{
-                "display_name": "Damping Factor (Phi)",
-                "short_desc": "Damping coefficient for the trend",
-                "desc": "The damping factor (0.0-1.0) controlling how quickly the trend "
-                    "diminishes; only used when damped is True; default: auto-selected",
+                "display_name": "Damping Strength",
+                "short_desc": "How quickly the trend flattens out",
+                "desc": "A value between 0.0 and 1.0 controlling how rapidly the trend "
+                    "flattens in long-range forecasts; values closer to 1.0 allow the trend "
+                    "to persist longer; values closer to 0.0 flatten the trend more quickly; "
+                    "only used when damped trend is enabled; default: automatically selected",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

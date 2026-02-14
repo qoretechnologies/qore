@@ -43,10 +43,13 @@ module DataProviderML {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MLApp::AppName,
             "display_name": "ML Analytics",
-            "short_desc": "Machine learning data pipeline processors",
-            "desc": "Machine learning data pipeline processors powered by the ml binary module "
-                "for anomaly detection, clustering, forecasting, dimensionality reduction, "
-                "and seasonal decomposition in data pipelines",
+            "short_desc": "Analyze data with machine learning algorithms",
+            "desc": "Machine learning algorithms for automated data analysis in pipelines: "
+                "detect unusual data points (anomaly detection), discover natural groups "
+                "in data (clustering), predict future values (forecasting and regression), "
+                "simplify complex data (dimensionality reduction), and separate trends from "
+                "seasonal patterns (decomposition). All algorithms run natively without "
+                "external dependencies.",
             "logo": MLApp::MLLogo,
             "logo_file_name": "qore-q-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -59,12 +62,14 @@ module DataProviderML {
             "path": "/isolation-forest",
             "action": "isolation-forest",
             "display_name": "Detect Unusual Data Points",
-            "short_desc": "Finds anomalies using isolation forest algorithm",
-            "desc": "Detects unusual data points in multivariate data using the Isolation Forest "
-                "algorithm. Anomalies are identified by how quickly they can be isolated from "
-                "normal data. Each record is scored between 0.0 (normal) and 1.0 (anomalous). "
-                "For example, it can detect fraudulent transactions, sensor malfunctions, or "
-                "unusual user behavior patterns in a stream of records.",
+            "short_desc": "Finds anomalies by isolating unusual records from normal ones",
+            "desc": "Detects unusual data points by measuring how easy they are to separate "
+                "from the rest of the data. Normal data points are similar to many others and "
+                "hard to isolate, while anomalies stand out and can be isolated quickly. "
+                "Each record receives a score between 0.0 (normal) and 1.0 (highly unusual). "
+                "Records accumulate in a window; when the window is full, all records are "
+                "scored together. For example, this can detect fraudulent transactions, "
+                "sensor malfunctions, or unusual user behavior patterns.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreIsolationForestProcessor",
@@ -89,14 +94,15 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/dbscan-clustering",
             "action": "dbscan-clustering",
-            "display_name": "Find Data Clusters",
-            "short_desc": "Discovers natural groupings using DBSCAN density clustering",
-            "desc": "Discovers natural groupings in multivariate data using the DBSCAN "
-                "density-based clustering algorithm. Unlike k-means, DBSCAN does not require "
-                "the number of clusters to be specified in advance and can find arbitrarily "
-                "shaped clusters. Points that don't belong to any cluster are marked as noise. "
-                "For example, it can identify customer segments, geographic hotspots, or "
-                "related event patterns.",
+            "display_name": "Find Natural Groups in Data",
+            "short_desc": "Discovers groups based on data density without specifying how many",
+            "desc": "Automatically discovers natural groups (clusters) in data based on which "
+                "data points are close together. Unlike k-means, you do not need to specify "
+                "how many groups exist; the algorithm finds them automatically. It can discover "
+                "groups of any shape, and data points that do not belong to any group are "
+                "labeled as noise. Records accumulate in a window; when full, all records are "
+                "clustered together. For example, it can identify customer segments, geographic "
+                "hotspots, or related event patterns.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDBSCANClusteringProcessor",
@@ -121,13 +127,16 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/kmeans-clustering",
             "action": "kmeans-clustering",
-            "display_name": "Segment Data into Groups",
-            "short_desc": "Partitions data into k groups using k-means clustering",
-            "desc": "Partitions multivariate data into a specified number of groups (k) using "
-                "k-means clustering. Each record is assigned to the nearest cluster centroid. "
-                "Supports online learning: once fitted, new windows update the model incrementally "
-                "rather than retraining from scratch. For example, it can segment customers by "
-                "purchasing behavior, classify documents by topic, or group sensor readings.",
+            "display_name": "Divide Data into Groups",
+            "short_desc": "Assigns each record to one of a specified number of groups",
+            "desc": "Divides data into a specified number of groups by finding the best center "
+                "point for each group and assigning each record to its nearest group center. "
+                "You specify how many groups you want, and the algorithm finds the best "
+                "grouping. Supports incremental learning: once the initial groups are formed, "
+                "new batches of records refine the groups rather than starting over. Records "
+                "accumulate in a window; when full, all records are grouped together. For "
+                "example, it can segment customers by purchasing behavior or group sensor "
+                "readings into operational modes.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKMeansProcessor",
@@ -150,13 +159,14 @@ module DataProviderML {
             "app": MLApp::AppName,
             "path": "/pca",
             "action": "pca",
-            "display_name": "Simplify Data Dimensions",
-            "short_desc": "Reduces dimensionality using principal component analysis",
-            "desc": "Reduces the number of dimensions in multivariate data using Principal "
-                "Component Analysis (PCA) while preserving the most important patterns. "
-                "This is useful for data visualization, noise reduction, and speeding up "
-                "downstream analysis. For example, it can compress 50 sensor readings into "
-                "3 principal components that capture 95%% of the variance.",
+            "display_name": "Simplify Complex Data",
+            "short_desc": "Reduces many fields to fewer combined values preserving key patterns",
+            "desc": "Compresses data with many fields into fewer combined values while "
+                "preserving the most important patterns and relationships. This is useful "
+                "for simplifying complex data for visualization, removing noise, and speeding "
+                "up other analyses. Records accumulate in a window; when full, all records "
+                "are transformed. For example, it can compress 50 sensor readings into 3 "
+                "combined values that capture 95%% of the meaningful information.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QorePCAProcessor",
@@ -180,13 +190,14 @@ module DataProviderML {
             "path": "/holt-winters",
             "action": "holt-winters",
             "display_name": "Forecast Future Values",
-            "short_desc": "Forecasts values using Holt-Winters triple exponential smoothing",
-            "desc": "Forecasts future values using the Holt-Winters triple exponential smoothing "
-                "method, which accounts for level, trend, and seasonal patterns. After an "
-                "initial training period (2 * period records), each subsequent record produces "
-                "a forecast. Supports additive and multiplicative seasonality and optional "
-                "damped trends. For example, it can forecast sales volumes, resource usage, "
-                "or demand patterns with weekly or monthly seasonality.",
+            "short_desc": "Predicts future values accounting for trends and seasonal patterns",
+            "desc": "Predicts future values by learning from historical data that has both "
+                "a trend (going up or down over time) and repeating seasonal patterns "
+                "(e.g., weekly or monthly cycles). After an initial learning period of "
+                "2 x period records, each new record produces a forecast for the next "
+                "time step(s). For example, it can forecast sales volumes with monthly "
+                "seasonality, predict server load with daily patterns, or estimate demand "
+                "with weekly cycles.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreHoltWintersProcessor",
@@ -207,19 +218,158 @@ module DataProviderML {
             ),
         });
 
+        # register linear-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/linear-regression",
+            "action": "linear-regression",
+            "display_name": "Predict Values from Input Data",
+            "short_desc": "Learns a formula to predict a target value from input fields",
+            "desc": "Learns a mathematical formula that predicts a target value from one or "
+                "more input fields. The model finds the best straight-line relationship "
+                "between inputs and the target. Records accumulate in a window; when full, "
+                "the model learns from all records and produces a prediction for each one, "
+                "along with accuracy metrics. For example, it can predict prices from "
+                "property features, estimate delivery times from order details, or forecast "
+                "demand from historical indicators.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreLinearRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLinearRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLinearRegressionProcessor::ConstructorOptions{
+                    "fit_intercept", "normalize",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register lof action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/lof",
+            "action": "lof",
+            "display_name": "Detect Local Outliers",
+            "short_desc": "Finds points that are unusual compared to their neighbors",
+            "desc": "Detects data points that are unusual relative to their local neighborhood. "
+                "Unlike global anomaly detection, this method can find points that appear normal "
+                "overall but are unusual compared to nearby data. For each record, it compares "
+                "how densely packed the surrounding points are; outliers are in sparser regions "
+                "than their neighbors. Records accumulate in a window; when full, all records "
+                "are scored. For example, it can find unusual transactions within specific "
+                "customer segments or detect localized sensor anomalies.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreLOFProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLOFProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreLOFProcessor::ConstructorOptions{"k", "threshold"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register gmm action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/gmm",
+            "action": "gmm",
+            "display_name": "Group Data with Probabilities",
+            "short_desc": "Assigns each record to groups with probability scores",
+            "desc": "Groups data into clusters where each record gets a probability for each "
+                "group rather than a hard assignment. This means records near group boundaries "
+                "show split probabilities, reflecting genuine uncertainty. The algorithm can "
+                "find groups of different shapes and sizes. Records accumulate in a window; "
+                "when full, all records are grouped with probabilities. For example, it can "
+                "identify overlapping customer segments, classify uncertain data points, or "
+                "detect mixed populations in data.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreGMMProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGMMProcessor::ConstructorOptions{
+                    "fields", "window_size", "n_components",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGMMProcessor::ConstructorOptions{"covariance_type",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register onnx-model action (only when ONNX Runtime is available)
+        if (ML::ml_get_capabilities().has_onnx) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": MLApp::AppName,
+                "path": "/onnx-model",
+                "action": "onnx-model",
+                "display_name": "Run Pre-Trained Model",
+                "short_desc": "Runs a pre-trained ONNX model on data records",
+                "desc": "Runs data records through a pre-trained machine learning model in "
+                    "ONNX format. ONNX is a standard file format for exchanging models "
+                    "between ML frameworks. Records accumulate in a batch; when the batch "
+                    "is full, all records are passed through the model and results are "
+                    "emitted. This allows using complex models (neural networks, gradient "
+                    "boosting, etc.) trained in Python/R without needing those tools at "
+                    "runtime.",
+                "action_code": DPAT_PIPELINE_PROCESSOR,
+                "processor_capabilities": DPC_AGGREGATE,
+                "cls": "DataProviderML::QoreOnnxModelProcessor",
+                "groups": ("ML Analytics",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    QoreOnnxModelProcessor::ConstructorOptions{
+                        "model_path", "fields", "window_size",
+                    }, {
+                        "preselected": True,
+                        "required": True,
+                        "loc": "constructor",
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    QoreOnnxModelProcessor::ConstructorOptions{
+                        "input_tensor", "execution_providers",
+                        "cuda_device_id", "intra_op_threads",
+                        "inter_op_threads", "graph_optimization_level",
+                        "log_severity",
+                    }, {
+                        "loc": "constructor",
+                    }
+                ),
+            });
+        }
+
         # register seasonal-decomposition action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MLApp::AppName,
             "path": "/seasonal-decomposition",
             "action": "seasonal-decomposition",
-            "display_name": "Separate Trends and Seasons",
-            "short_desc": "Decomposes time series into trend, seasonal, and residual components",
-            "desc": "Decomposes a time series into its trend, seasonal, and residual components "
-                "using classical seasonal decomposition. This reveals the underlying trend "
-                "direction, repeating seasonal patterns, and unexplained residual variation. "
-                "Supports both additive (constant amplitude) and multiplicative (proportional "
-                "amplitude) seasonality. For example, it can separate a monthly sales series "
-                "into its growth trend, seasonal shopping patterns, and random fluctuations.",
+            "display_name": "Separate Trends and Seasonal Patterns",
+            "short_desc": "Breaks time series data into trend, seasonal, and leftover parts",
+            "desc": "Breaks a time series into three parts: the overall trend (going up or "
+                "down over time), the repeating seasonal pattern (e.g., monthly or weekly "
+                "cycles), and the leftover variation (residual). This helps understand what "
+                "drives changes in the data. Records accumulate per field in a window; when "
+                "full, all values are decomposed. For example, it can separate monthly sales "
+                "into growth trend, seasonal shopping patterns, and random fluctuations.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreSeasonalDecompositionProcessor",
@@ -254,21 +404,27 @@ module DataProviderML {
 
     - @ref DataProviderML::QoreIsolationForestProcessor "isolation-forest": detect anomalous data points
       using the Isolation Forest algorithm
+    - @ref DataProviderML::QoreLOFProcessor "lof": detect local outliers using Local Outlier Factor
     - @ref DataProviderML::QoreDBSCANClusteringProcessor "dbscan-clustering": discover natural data clusters
       using DBSCAN density-based clustering
     - @ref DataProviderML::QoreKMeansProcessor "kmeans-clustering": segment data into k groups using
       k-means clustering with optional online learning
+    - @ref DataProviderML::QoreGMMProcessor "gmm": probabilistic clustering using Gaussian Mixture Models
+    - @ref DataProviderML::QoreLinearRegressionProcessor "linear-regression": predict target values using
+      ordinary least squares linear regression
     - @ref DataProviderML::QorePCAProcessor "pca": reduce data dimensionality using Principal Component
       Analysis
     - @ref DataProviderML::QoreHoltWintersProcessor "holt-winters": forecast future values using
       Holt-Winters triple exponential smoothing
     - @ref DataProviderML::QoreSeasonalDecompositionProcessor "seasonal-decomposition": decompose time
       series into trend, seasonal, and residual components
+    - @ref DataProviderML::QoreOnnxModelProcessor "onnx-model": run pre-trained ONNX models for inference
+      (only available when ONNX Runtime is installed)
 
     @section dataproviderml_relnotes Release Notes
 
     @subsection dataproviderml_v1_0 DataProviderML v1.0
-    - initial release of the module
+    - initial release with 9 core ML pipeline processors and optional ONNX inference processor
 */
 
 #! Contains all public definitions in the DataProviderML module
@@ -357,6 +513,80 @@ public namespace DataProviderML {
         float seasonal;
         #! Residual (actual - fitted)
         float residual;
+    }
+
+    #! Linear regression event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl LinearRegressionEventInfo {
+        #! Event type identifier
+        string event_type = "linear-regression";
+        #! Predicted target value
+        float prediction;
+        #! Actual target value
+        float actual;
+        #! Residual (actual - prediction)
+        float residual;
+        #! R-squared (coefficient of determination) from the model
+        float r_squared;
+        #! Model coefficients (one per feature)
+        list<float> coefficients;
+        #! Intercept (bias) term
+        float intercept;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! LOF anomaly event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl LOFAnomalyEventInfo {
+        #! Event type identifier
+        string event_type = "lof";
+        #! Local Outlier Factor score (> 1.0 indicates anomaly)
+        float lof_score;
+        #! Whether the record is classified as anomalous (score >= threshold)
+        bool is_anomaly;
+        #! Distance to the k-th nearest neighbor
+        float k_distance;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! GMM clustering event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl GMMClusteringEventInfo {
+        #! Event type identifier
+        string event_type = "gmm";
+        #! Most likely cluster assignment (0-based)
+        int cluster;
+        #! Probability of the most likely cluster
+        float max_probability;
+        #! Probabilities for each cluster
+        list<float> probabilities;
+        #! Log-likelihood of the data point
+        float log_likelihood;
+        #! The original record values for the analyzed fields
+        hash<auto> record_values;
+    }
+
+    #! ONNX model inference event hashdecl
+    /** @since %DataProviderML 1.0
+    */
+    public hashdecl OnnxInferenceEventInfo {
+        #! Event type identifier
+        string event_type = "onnx-model";
+        #! Path to the ONNX model used
+        string model_path;
+        #! Active execution provider name (e.g. "CPUExecutionProvider", "CUDAExecutionProvider")
+        /** @since %DataProviderML 1.1
+        */
+        string execution_provider;
+        #! The original record values for the input fields
+        hash<auto> record_values;
+        #! Model output (keys are output tensor names, values are model output values)
+        hash<auto> model_output;
     }
 
     #! Seasonal decomposition event hashdecl

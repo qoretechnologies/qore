@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore QoreDBSCANClusteringProcessor class definition
+#! Qore QoreLOFProcessor class definition
 
-/** QoreDBSCANClusteringProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
+/** QoreLOFProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,17 +24,17 @@
 
 #! Contains all public definitions in the DataProviderML module
 public namespace DataProviderML {
-#! Pipeline processor that discovers data clusters using DBSCAN
-/** Accumulates records in windows and uses the ML::DBSCAN algorithm to
-    cluster records when the window is full or on flush.
+#! Pipeline processor that detects anomalies using Local Outlier Factor
+/** Accumulates records in windows and uses the ML::LOF algorithm to
+    score each record for anomalousness based on local density.
 
     @since %DataProviderML 1.0
 */
-public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreLOFProcessor inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "QoreDBSCANClusteringProcessor",
+            "type": "QoreLOFProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
             "pipeline_processor_options": ConstructorOptions,
@@ -44,67 +44,40 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
-                "short_desc": "Numeric fields to use for clustering",
+                "short_desc": "Numeric fields to analyze for anomalies",
                 "desc": "A comma-separated list of numeric field names from the input records "
-                    "to use for finding groups; for example: \"latitude,longitude\" or "
-                    "\"revenue,customer_count\"; at least 1 field is required",
+                    "to analyze; the algorithm compares each point's local neighborhood "
+                    "density to detect outliers; for example: \"temperature,pressure\"; "
+                    "at least 1 field is required",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
-                "short_desc": "Number of records to cluster together",
-                "desc": "The number of records to collect before grouping them into clusters; "
-                    "all records in a window are analyzed together; must be at least 2",
+                "short_desc": "Number of records to analyze together",
+                "desc": "The number of records to collect before analyzing them for local "
+                    "anomalies; all records in a window are compared against each other; "
+                    "must be larger than the number of neighbors; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
-            "epsilon": <DataProviderOptionInfo>{
-                "display_name": "Neighborhood Radius",
-                "short_desc": "How close points must be to form a cluster",
-                "desc": "The maximum distance between two data points for them to be "
-                    "considered neighbors; smaller values create tighter, more specific "
-                    "clusters; larger values merge nearby groups into larger clusters; "
-                    "the appropriate value depends on the scale of your data",
-                "type": AbstractDataProviderTypeMap."float",
-                "required": True,
-            },
-            "min_points": <DataProviderOptionInfo>{
-                "display_name": "Minimum Cluster Size",
-                "short_desc": "Minimum neighbors to form a cluster",
-                "desc": "The minimum number of nearby points required to start a cluster; "
-                    "points with fewer neighbors than this are labeled as noise (not "
-                    "belonging to any cluster); higher values require denser groups; "
-                    "default: 5",
+            "k": <DataProviderOptionInfo>{
+                "display_name": "Neighborhood Size",
+                "short_desc": "How many nearby points to compare against",
+                "desc": "The number of closest data points used to define each point's local "
+                    "neighborhood; larger values consider wider neighborhoods, making the "
+                    "algorithm less sensitive to small local variations; must be smaller "
+                    "than the window size; default: 20",
                 "type": AbstractDataProviderTypeMap."*int",
             },
-            "metric": <DataProviderOptionInfo>{
-                "display_name": "Distance Metric",
-                "short_desc": "How to measure distance between data points",
-                "desc": "The method used to measure how far apart two data points are; "
-                    "this affects how clusters are shaped and which points are considered "
-                    "neighbors; default: euclidean",
-                "type": AbstractDataProviderTypeMap."*string",
-                "allowed_values": (
-                    <AllowedValueInfo>{
-                        "value": "euclidean",
-                        "display_name": "Euclidean (straight-line distance)",
-                        "desc": "Straight-line distance between points; best for data where "
-                            "all dimensions have similar scales",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "manhattan",
-                        "display_name": "Manhattan (city-block distance)",
-                        "desc": "Sum of absolute differences along each dimension; less "
-                            "sensitive to large differences in a single dimension",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "cosine",
-                        "display_name": "Cosine (angular distance)",
-                        "desc": "Measures the angle between data points rather than magnitude; "
-                            "best when the direction matters more than the size of values",
-                    },
-                ),
+            "threshold": <DataProviderOptionInfo>{
+                "display_name": "Anomaly Threshold",
+                "short_desc": "Score cutoff for flagging anomalies",
+                "desc": "The outlier score cutoff; a score of 1.0 means a point has the "
+                    "same density as its neighbors (normal); scores significantly above "
+                    "1.0 indicate the point is in a less dense region than its neighbors "
+                    "(anomalous); lower thresholds flag more records; default: 1.5",
+                "type": AbstractDataProviderTypeMap."*float",
             },
         };
     }
@@ -116,14 +89,11 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         #! Configured window size
         int window_size;
 
-        #! Epsilon
-        float epsilon;
+        #! Number of neighbors
+        int k = 20;
 
-        #! Minimum points
-        int min_points = 5;
-
-        #! Distance metric
-        string metric = "euclidean";
+        #! Anomaly threshold
+        float threshold = 1.5;
 
         #! Accumulated records
         list<hash<auto>> buffer;
@@ -148,12 +118,11 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 2; got %d", window_size);
         }
-        epsilon = copts.epsilon;
-        if (exists copts.min_points) {
-            min_points = copts.min_points;
+        if (exists copts.k) {
+            k = copts.k;
         }
-        if (exists copts.metric) {
-            metric = copts.metric;
+        if (exists copts.threshold) {
+            threshold = copts.threshold;
         }
         buffer = ();
         configured = True;
@@ -161,14 +130,14 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
 
     #! Returns the name of this data provider
     string getName() {
-        return "dbscan-clustering";
+        return "lof";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Discovers natural data clusters using the DBSCAN density-based clustering "
-            "algorithm; accumulates records in windows, clusters them, and emits one "
-            "event per record with cluster assignment";
+        return "Detects anomalous data points using the Local Outlier Factor algorithm; "
+            "scores each record based on the local density deviation relative to "
+            "its neighbors";
     }
 
     #! Returns data provider static info
@@ -176,11 +145,11 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         return ProviderInfo;
     }
 
-    #! Accumulates records; emits clustered records when window is full
+    #! Accumulates records; emits scored records when window is full
     private *auto processRecordImpl(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
-                "QoreDBSCANClusteringProcessor: not configured; provide constructor options";
+                "QoreLOFProcessor: not configured; provide constructor options";
         }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
@@ -192,11 +161,16 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
     }
 
     #! Flushes remaining buffered data
+    /** @note If the buffer contains \c k or fewer records, the records are
+        discarded because LOF requires at least \a k + 1 data points
+        (k neighbors plus the query point). No results are emitted in this case.
+    */
     private *list<auto> flushRecordsImpl() {
         if (!configured || !buffer) {
             return;
         }
-        if (buffer.lsize() >= 2) {
+        # need at least k+1 records to compute LOF
+        if (buffer.lsize() > k) {
             list<auto> results = processWindow(buffer);
             buffer = ();
             return results;
@@ -205,7 +179,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         return;
     }
 
-    #! Processes a window of records through DBSCAN
+    #! Processes a window of records through LOF
     private list<auto> processWindow(list<hash<auto>> records) {
         # extract matrix from fields
         list<list<float>> matrix;
@@ -217,13 +191,16 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             push matrix, row;
         }
 
-        # create DBSCAN and cluster
-        ML::DBSCAN dbscan({
-            "epsilon": epsilon,
-            "min_points": min_points,
-            "metric": metric,
+        # create and fit LOF model
+        int actual_k = k < matrix.lsize() ? k : matrix.lsize() - 1;
+        ML::LOF lof({
+            "k": actual_k,
+            "threshold": threshold,
         });
-        list<hash<ML::DBSCANResult>> clusters = dbscan.clusterMatrix(matrix);
+        lof.fitMatrix(matrix);
+
+        # score all records
+        list<hash<ML::LOFResult>> scores = lof.scoreMatrix(matrix);
 
         # emit one event per record
         list<auto> events;
@@ -232,11 +209,11 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             foreach string f in (fields) {
                 record_values{f} = records[i]{f};
             }
-            push events, <DBSCANClusteringEventInfo>{
-                "event_type": "dbscan-clustering",
-                "cluster": clusters[i].cluster,
-                "is_core": clusters[i].is_core,
-                "neighbor_count": clusters[i].neighbor_count,
+            push events, <LOFAnomalyEventInfo>{
+                "event_type": "lof",
+                "lof_score": scores[i].lof_score,
+                "is_anomaly": scores[i].is_anomaly,
+                "k_distance": scores[i].k_distance,
                 "record_values": record_values,
             };
         }
@@ -255,7 +232,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
 
     #! Returns the output type
     private *DataProvider::AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
-        return new HashDeclDataType(TypedHash::forName("DataProviderML::DBSCANClusteringEventInfo"));
+        return new HashDeclDataType(TypedHash::forName("DataProviderML::LOFAnomalyEventInfo"));
     }
 }
 }

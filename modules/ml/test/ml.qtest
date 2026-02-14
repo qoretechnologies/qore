@@ -70,6 +70,45 @@ public class MlTest inherits QUnit::Test {
         addTestCase("PCA center and scale", \pcaCenterScaleTest());
         addTestCase("PCA fitTransform", \pcaFitTransformTest());
         addTestCase("PCA error cases", \pcaErrorTest());
+        addTestCase("LinearRegression basic y=2x+1", \lrBasicTest());
+        addTestCase("LinearRegression multivariate", \lrMultivariateTest());
+        addTestCase("LinearRegression hash API", \lrHashTest());
+        addTestCase("LinearRegression R-squared", \lrRSquaredTest());
+        addTestCase("LinearRegression no intercept", \lrNoInterceptTest());
+        addTestCase("LinearRegression normalize", \lrNormalizeTest());
+        addTestCase("LinearRegression error cases", \lrErrorTest());
+        addTestCase("LinearRegression copy error", \lrCopyTest());
+        addTestCase("LinearRegression getModelInfo", \lrGetModelInfoTest());
+        addTestCase("LOF basic outlier detection", \lofBasicTest());
+        addTestCase("LOF k parameter", \lofKParamTest());
+        addTestCase("LOF hash API", \lofHashTest());
+        addTestCase("LOF score range", \lofScoreRangeTest());
+        addTestCase("LOF deterministic", \lofDeterministicTest());
+        addTestCase("LOF error cases", \lofErrorTest());
+        addTestCase("LOF copy error", \lofCopyTest());
+        addTestCase("GMM basic 2-cluster", \gmmBasicTest());
+        addTestCase("GMM probabilities sum to 1", \gmmProbabilityTest());
+        addTestCase("GMM diagonal covariance", \gmmDiagonalTest());
+        addTestCase("GMM hash API", \gmmHashTest());
+        addTestCase("GMM convergence", \gmmConvergenceTest());
+        addTestCase("GMM reproducibility", \gmmReproducibilityTest());
+        addTestCase("GMM error cases", \gmmErrorTest());
+        addTestCase("GMM copy error", \gmmCopyTest());
+        addTestCase("OnnxModel load and metadata", \onnxLoadTest());
+        addTestCase("OnnxModel inference", \onnxInferenceTest());
+        addTestCase("OnnxModel batch inference", \onnxBatchTest());
+        addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
+        addTestCase("OnnxModel error cases", \onnxErrorTest());
+        addTestCase("OnnxModel copy error", \onnxCopyTest());
+        addTestCase("OnnxModel concurrent inference", \onnxConcurrentTest());
+        addTestCase("OnnxModel sklearn RandomForest", \onnxSklearnRFTest());
+        addTestCase("OnnxModel session config", \onnxSessionConfigTest());
+        addTestCase("OnnxModel provider introspection", \onnxProviderIntrospectionTest());
+        addTestCase("OnnxModel invalid provider", \onnxInvalidProviderTest());
+        addTestCase("OnnxModel invalid config", \onnxInvalidConfigTest());
+        addTestCase("OnnxModel backward compat", \onnxBackwardCompatTest());
+        addTestCase("OnnxModel empty providers", \onnxEmptyProvidersTest());
+        addTestCase("OnnxModel CUDA conditional", \onnxCudaTest());
         set_return_value(main());
     }
 
@@ -77,18 +116,26 @@ public class MlTest inherits QUnit::Test {
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
 
         assertEq(Type::Boolean, caps.has_onnx.type());
-        assertEq(False, caps.has_onnx);
         assertEq(Type::String, caps.eigen_version.type());
         assertTrue(caps.eigen_version.size() > 0);
 
         assertEq(Type::List, caps.native_algorithms.type());
-        assertEq(6, caps.native_algorithms.size());
         assertTrue(caps.native_algorithms.contains("IsolationForest"));
         assertTrue(caps.native_algorithms.contains("DBSCAN"));
         assertTrue(caps.native_algorithms.contains("KMeans"));
         assertTrue(caps.native_algorithms.contains("HoltWinters"));
         assertTrue(caps.native_algorithms.contains("PCA"));
         assertTrue(caps.native_algorithms.contains("SeasonalDecomposition"));
+        assertTrue(caps.native_algorithms.contains("LinearRegression"));
+        assertTrue(caps.native_algorithms.contains("LOF"));
+        assertTrue(caps.native_algorithms.contains("GMM"));
+
+        if (caps.has_onnx) {
+            assertTrue(caps.native_algorithms.contains("OnnxModel"));
+            assertEq(10, caps.native_algorithms.size());
+        } else {
+            assertEq(9, caps.native_algorithms.size());
+        }
     }
 
     iforestConstructorTest() {
@@ -1126,5 +1173,1014 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-PCA-ERROR", "fitMatrix", sub() {
             pca2.transform({"x": 1.0, "y": 2.0});
         });
+    }
+
+    # ===================== LinearRegression Tests =====================
+
+    lrBasicTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+
+        # y = 2*x + 1
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+
+        lr.fitMatrix(X, y);
+        assertTrue(lr.isFitted());
+
+        # Predict
+        list<hash<ML::LinearRegressionResult>> results = lr.predictMatrix(((6.0,), (7.0,)));
+        assertEq(2, results.size());
+        # y = 2*6 + 1 = 13
+        assertTrue(abs(results[0].prediction - 13.0) < 0.01,
+            sprintf("prediction for x=6 should be ~13.0; got %f", results[0].prediction));
+        # y = 2*7 + 1 = 15
+        assertTrue(abs(results[1].prediction - 15.0) < 0.01,
+            sprintf("prediction for x=7 should be ~15.0; got %f", results[1].prediction));
+
+        # Check coefficients
+        list<float> coefs = lr.getCoefficients();
+        assertEq(1, coefs.size());
+        assertTrue(abs(coefs[0] - 2.0) < 0.01,
+            sprintf("coefficient should be ~2.0; got %f", coefs[0]));
+
+        # Check intercept
+        float intercept = lr.getIntercept();
+        assertTrue(abs(intercept - 1.0) < 0.01,
+            sprintf("intercept should be ~1.0; got %f", intercept));
+    }
+
+    lrMultivariateTest() {
+        ML::LinearRegression lr();
+
+        # y = 1*x1 + 2*x2 + 3
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 50; ++i) {
+            float x1 = (i % 10) * 1.0;
+            float x2 = ((i * 3) % 10) * 1.0;
+            push X, (x1, x2);
+            push y, 1.0 * x1 + 2.0 * x2 + 3.0;
+        }
+
+        lr.fitMatrix(X, y);
+        assertTrue(lr.isFitted());
+
+        list<float> coefs = lr.getCoefficients();
+        assertEq(2, coefs.size());
+        assertTrue(abs(coefs[0] - 1.0) < 0.01,
+            sprintf("coef[0] should be ~1.0; got %f", coefs[0]));
+        assertTrue(abs(coefs[1] - 2.0) < 0.01,
+            sprintf("coef[1] should be ~2.0; got %f", coefs[1]));
+    }
+
+    lrHashTest() {
+        ML::LinearRegression lr();
+
+        # Train with hash data
+        list<hash<auto>> train = (
+            {"x1": 1.0, "x2": 2.0, "y": 8.0},
+            {"x1": 2.0, "x2": 3.0, "y": 13.0},
+            {"x1": 3.0, "x2": 4.0, "y": 18.0},
+            {"x1": 4.0, "x2": 5.0, "y": 23.0},
+            {"x1": 5.0, "x2": 6.0, "y": 28.0},
+        );
+        # y = 2*x1 + 3*x2 - 1  (approximately)
+        lr.fit(train, "y");
+        assertTrue(lr.isFitted());
+
+        # Predict single hash
+        hash<ML::LinearRegressionResult> result = lr.predict({"x1": 6.0, "x2": 7.0});
+        assertTrue(result.prediction > 30.0 && result.prediction < 40.0,
+            sprintf("prediction should be in reasonable range; got %f", result.prediction));
+        assertTrue(result.hasKey("coefficients"));
+        assertTrue(result.hasKey("intercept"));
+        assertTrue(result.hasKey("r_squared"));
+    }
+
+    lrRSquaredTest() {
+        ML::LinearRegression lr();
+
+        # Perfect linear relationship: R^2 should be ~1.0
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        lr.fitMatrix(X, y);
+
+        float r2 = lr.getRSquared();
+        assertTrue(r2 > 0.99,
+            sprintf("R-squared should be ~1.0 for perfect linear data; got %f", r2));
+
+        # Result hash should also contain R-squared
+        list<hash<ML::LinearRegressionResult>> results = lr.predictMatrix(((1.0,),));
+        assertEq(r2, results[0].r_squared);
+    }
+
+    lrNoInterceptTest() {
+        ML::LinearRegression lr({"fit_intercept": False});
+
+        # y = 3*x (no intercept)
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 6.0, 9.0, 12.0, 15.0);
+        lr.fitMatrix(X, y);
+
+        float intercept = lr.getIntercept();
+        assertEq(0.0, intercept, "intercept should be 0.0 when fit_intercept=False");
+
+        list<float> coefs = lr.getCoefficients();
+        assertTrue(abs(coefs[0] - 3.0) < 0.01,
+            sprintf("coefficient should be ~3.0; got %f", coefs[0]));
+    }
+
+    lrNormalizeTest() {
+        ML::LinearRegression lr({"normalize": True});
+
+        # y = 2*x1 + 1 with features at different scales
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 50; ++i) {
+            float x1 = i * 100.0;
+            push X, (x1,);
+            push y, 2.0 * x1 + 1.0;
+        }
+        lr.fitMatrix(X, y);
+
+        list<hash<ML::LinearRegressionResult>> results = lr.predictMatrix(((500.0,),));
+        assertTrue(abs(results[0].prediction - 1001.0) < 1.0,
+            sprintf("normalized prediction should be ~1001.0; got %f", results[0].prediction));
+    }
+
+    lrErrorTest() {
+        ML::LinearRegression lr();
+
+        # Not fitted
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.predictMatrix(((1.0,),));
+        });
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.getCoefficients();
+        });
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.getIntercept();
+        });
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.getRSquared();
+        });
+
+        # Empty data
+        assertThrows("ML-DATA-ERROR", sub() {
+            list<list<float>> empty_x = ();
+            list<float> empty_y = ();
+            lr.fitMatrix(empty_x, empty_y);
+        });
+
+        # X/y dimension mismatch
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.fitMatrix(((1.0,), (2.0,)), (1.0, 2.0, 3.0));
+        });
+
+        # Dimension mismatch after fit
+        lr.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (1.0, 2.0, 3.0));
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
+            lr.predictMatrix(((1.0, 2.0, 3.0),));
+        });
+
+        # hash-based predict after fitMatrix
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", "fitMatrix", sub() {
+            lr.predict({"a": 1.0, "b": 2.0});
+        });
+    }
+
+    lrCopyTest() {
+        ML::LinearRegression lr();
+        assertThrows("COPY-ERROR", sub() {
+            ML::LinearRegression copy = lr.copy();
+        });
+    }
+
+    lrGetModelInfoTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+
+        # getModelInfo before fitting should throw
+        assertThrows("ML-LINEAR-REGRESSION-ERROR", "not been fitted", sub() {
+            lr.getModelInfo();
+        });
+
+        # y = 2*x + 1
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+        lr.fitMatrix(X, y);
+
+        hash<ML::LinearRegressionModelInfo> info = lr.getModelInfo();
+        assertEq(1, info.n_features);
+        assertEq(1, info.coefficients.size());
+        assertTrue(abs(info.coefficients[0] - 2.0) < 0.01,
+            sprintf("coefficient should be ~2.0; got %f", info.coefficients[0]));
+        assertTrue(abs(info.intercept - 1.0) < 0.01,
+            sprintf("intercept should be ~1.0; got %f", info.intercept));
+        assertTrue(info.r_squared > 0.99,
+            sprintf("r_squared should be >0.99; got %f", info.r_squared));
+
+        # Verify it matches individual accessors
+        assertEq(info.coefficients, lr.getCoefficients());
+        assertTrue(abs(info.intercept - lr.getIntercept()) < 1e-10);
+        assertTrue(abs(info.r_squared - lr.getRSquared()) < 1e-10);
+    }
+
+    # ===================== LOF Tests =====================
+
+    lofBasicTest() {
+        ML::LOF lof({"k": 3, "threshold": 1.5});
+        assertEq(3, lof.getK());
+        assertEq(False, lof.isFitted());
+
+        # Create dense cluster with one outlier
+        list<list<float>> data;
+        for (int i = 0; i < 20; ++i) {
+            push data, (0.0 + (i % 5) * 0.1, 0.0 + (i % 4) * 0.1);
+        }
+        lof.fitMatrix(data);
+        assertTrue(lof.isFitted());
+
+        # Score a normal point (inside cluster)
+        list<hash<ML::LOFResult>> normal = lof.scoreMatrix(((0.2, 0.2),));
+        assertEq(1, normal.size());
+        assertTrue(normal[0].hasKey("lof_score"));
+        assertTrue(normal[0].hasKey("is_anomaly"));
+        assertTrue(normal[0].hasKey("k_distance"));
+        assertEq(3, normal[0].k);
+
+        # Score an outlier (far from cluster)
+        list<hash<ML::LOFResult>> outlier = lof.scoreMatrix(((100.0, 100.0),));
+        assertTrue(outlier[0].lof_score > normal[0].lof_score,
+            sprintf("outlier LOF (%f) should be > normal LOF (%f)",
+                outlier[0].lof_score, normal[0].lof_score));
+    }
+
+    lofKParamTest() {
+        # Different k values should produce different results
+        ML::LOF lof_small({"k": 3});
+        ML::LOF lof_large({"k": 10});
+
+        list<list<float>> data;
+        for (int i = 0; i < 30; ++i) {
+            push data, (0.0 + (i % 6) * 0.2, 0.0 + (i % 5) * 0.2);
+        }
+
+        lof_small.fitMatrix(data);
+        lof_large.fitMatrix(data);
+
+        list<hash<ML::LOFResult>> r_small = lof_small.scoreMatrix(((50.0, 50.0),));
+        list<hash<ML::LOFResult>> r_large = lof_large.scoreMatrix(((50.0, 50.0),));
+
+        # Both should detect the outlier
+        assertTrue(r_small[0].lof_score > 1.0,
+            sprintf("small k LOF should detect outlier; got %f", r_small[0].lof_score));
+        assertTrue(r_large[0].lof_score > 1.0,
+            sprintf("large k LOF should detect outlier; got %f", r_large[0].lof_score));
+    }
+
+    lofHashTest() {
+        ML::LOF lof({"k": 3});
+
+        list<hash<auto>> train = (
+            {"x": 0.0, "y": 0.0},
+            {"x": 0.1, "y": 0.1},
+            {"x": 0.2, "y": 0.0},
+            {"x": 0.0, "y": 0.2},
+            {"x": 0.1, "y": 0.3},
+        );
+        lof.fit(train);
+        assertTrue(lof.isFitted());
+
+        hash<ML::LOFResult> result = lof.score({"x": 0.1, "y": 0.1});
+        assertTrue(result.lof_score >= 0.0);
+        assertTrue(result.k_distance >= 0.0);
+    }
+
+    lofScoreRangeTest() {
+        ML::LOF lof({"k": 5});
+
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, ((i % 10) * 0.1, (i % 10) * 0.2);
+        }
+        lof.fitMatrix(data);
+
+        # Score many points - LOF scores should be > 0
+        list<list<float>> test;
+        for (int i = 0; i < 20; ++i) {
+            push test, (i * 1.0, i * 2.0);
+        }
+        list<hash<ML::LOFResult>> results = lof.scoreMatrix(test);
+        assertEq(20, results.size());
+        for (int i = 0; i < results.size(); ++i) {
+            assertTrue(results[i].lof_score >= 0.0,
+                sprintf("LOF score[%d]=%f should be >= 0", i, results[i].lof_score));
+        }
+    }
+
+    lofDeterministicTest() {
+        # LOF is deterministic (no random component)
+        ML::LOF lof1({"k": 3});
+        ML::LOF lof2({"k": 3});
+
+        list<list<float>> data = ((0.0, 0.0), (1.0, 1.0), (0.5, 0.5), (2.0, 2.0), (0.3, 0.7));
+        lof1.fitMatrix(data);
+        lof2.fitMatrix(data);
+
+        list<hash<ML::LOFResult>> r1 = lof1.scoreMatrix(((5.0, 5.0),));
+        list<hash<ML::LOFResult>> r2 = lof2.scoreMatrix(((5.0, 5.0),));
+
+        assertEq(r1[0].lof_score, r2[0].lof_score);
+    }
+
+    lofErrorTest() {
+        ML::LOF lof({"k": 5});
+
+        # Not fitted
+        assertThrows("ML-LOF-ERROR", sub() {
+            lof.scoreMatrix(((1.0, 2.0),));
+        });
+
+        # Invalid k
+        assertThrows("ML-LOF-ERROR", sub() {
+            ML::LOF bad({"k": 0});
+        });
+
+        # Invalid threshold
+        assertThrows("ML-LOF-ERROR", sub() {
+            ML::LOF bad({"threshold": -1.0});
+        });
+
+        # k larger than data
+        assertThrows("ML-LOF-ERROR", sub() {
+            ML::LOF lof_big({"k": 10});
+            lof_big.fitMatrix(((1.0,), (2.0,)));
+        });
+
+        # Dimension mismatch after fit
+        lof.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0), (9.0, 10.0)));
+        assertThrows("ML-LOF-ERROR", sub() {
+            lof.scoreMatrix(((1.0, 2.0, 3.0),));
+        });
+
+        # hash-based score after fitMatrix
+        assertThrows("ML-LOF-ERROR", "fitMatrix", sub() {
+            lof.score({"a": 1.0, "b": 2.0});
+        });
+    }
+
+    lofCopyTest() {
+        ML::LOF lof();
+        assertThrows("COPY-ERROR", sub() {
+            ML::LOF copy = lof.copy();
+        });
+    }
+
+    # ===================== GMM Tests =====================
+
+    gmmBasicTest() {
+        ML::GMM gmm({"n_components": 2, "seed": 42});
+        assertEq(2, gmm.getNumComponents());
+        assertEq(False, gmm.isFitted());
+
+        # Two well-separated clusters
+        list<list<float>> data;
+        for (int i = 0; i < 30; ++i) {
+            push data, (0.0 + (i % 5) * 0.1, 0.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 30; ++i) {
+            push data, (10.0 + (i % 5) * 0.1, 10.0 + (i % 5) * 0.1);
+        }
+
+        gmm.fitMatrix(data);
+        assertTrue(gmm.isFitted());
+
+        # Predict - points near each cluster should get different labels
+        list<hash<ML::GMMResult>> results = gmm.predictMatrix(((0.2, 0.2), (10.2, 10.2)));
+        assertEq(2, results.size());
+        assertTrue(results[0].cluster != results[1].cluster,
+            "points in different clusters should get different labels");
+
+        # Check means
+        list<auto> means = gmm.getMeans();
+        assertEq(2, means.size());
+        assertEq(2, means[0].size());
+    }
+
+    gmmProbabilityTest() {
+        ML::GMM gmm({"n_components": 3, "seed": 42});
+
+        list<list<float>> data;
+        for (int i = 0; i < 100; ++i) {
+            push data, ((i % 10) * 1.0, (i % 10) * 2.0);
+        }
+        gmm.fitMatrix(data);
+
+        list<hash<ML::GMMResult>> results = gmm.predictMatrix(((5.0, 10.0),));
+        assertEq(1, results.size());
+
+        # Probabilities should sum to ~1.0
+        assertEq(3, results[0].probabilities.size());
+        float prob_sum = 0.0;
+        foreach float p in (results[0].probabilities) {
+            prob_sum += p;
+            assertTrue(p >= 0.0 && p <= 1.0,
+                sprintf("probability %f should be in [0,1]", p));
+        }
+        assertTrue(abs(prob_sum - 1.0) < 0.01,
+            sprintf("probabilities should sum to ~1.0; got %f", prob_sum));
+
+        # max_probability should match the highest probability
+        assertTrue(results[0].max_probability > 0.0);
+    }
+
+    gmmDiagonalTest() {
+        ML::GMM gmm({"n_components": 2, "covariance_type": "diagonal", "seed": 42});
+
+        list<list<float>> data;
+        for (int i = 0; i < 30; ++i) {
+            push data, (0.0 + (i % 5) * 0.1, 0.0 + (i % 5) * 0.1);
+        }
+        for (int i = 0; i < 30; ++i) {
+            push data, (10.0 + (i % 5) * 0.1, 10.0 + (i % 5) * 0.1);
+        }
+
+        gmm.fitMatrix(data);
+        assertTrue(gmm.isFitted());
+
+        list<hash<ML::GMMResult>> results = gmm.predictMatrix(((0.2, 0.2), (10.2, 10.2)));
+        assertEq(2, results.size());
+        assertTrue(results[0].cluster != results[1].cluster);
+    }
+
+    gmmHashTest() {
+        ML::GMM gmm({"n_components": 2, "seed": 42});
+
+        list<hash<auto>> train;
+        for (int i = 0; i < 20; ++i) {
+            push train, {"x": 0.0 + (i % 5) * 0.1, "y": 0.0 + (i % 5) * 0.1};
+        }
+        for (int i = 0; i < 20; ++i) {
+            push train, {"x": 10.0 + (i % 5) * 0.1, "y": 10.0 + (i % 5) * 0.1};
+        }
+
+        gmm.fit(train);
+        assertTrue(gmm.isFitted());
+
+        hash<ML::GMMResult> result = gmm.predict({"x": 0.1, "y": 0.1});
+        assertTrue(result.hasKey("cluster"));
+        assertTrue(result.hasKey("max_probability"));
+        assertTrue(result.hasKey("probabilities"));
+        assertTrue(result.hasKey("log_likelihood"));
+    }
+
+    gmmConvergenceTest() {
+        # GMM should converge (log-likelihood should be finite)
+        ML::GMM gmm({"n_components": 2, "seed": 42, "max_iterations": 200});
+
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, (0.0 + (i % 10) * 0.2, 0.0 + (i % 10) * 0.2);
+        }
+        for (int i = 0; i < 50; ++i) {
+            push data, (10.0 + (i % 10) * 0.2, 10.0 + (i % 10) * 0.2);
+        }
+
+        gmm.fitMatrix(data);
+        float ll = gmm.getLogLikelihood();
+        # Log-likelihood should be a finite negative number
+        assertTrue(ll == ll,  # NaN != NaN, so this fails only for NaN
+            sprintf("log-likelihood should be finite; got %f", ll));
+    }
+
+    gmmReproducibilityTest() {
+        list<list<float>> data;
+        for (int i = 0; i < 50; ++i) {
+            push data, ((i % 10) * 1.0, (i % 10) * 2.0);
+        }
+
+        ML::GMM gmm1({"n_components": 2, "seed": 12345});
+        gmm1.fitMatrix(data);
+        list<hash<ML::GMMResult>> r1 = gmm1.predictMatrix(((5.0, 10.0),));
+
+        ML::GMM gmm2({"n_components": 2, "seed": 12345});
+        gmm2.fitMatrix(data);
+        list<hash<ML::GMMResult>> r2 = gmm2.predictMatrix(((5.0, 10.0),));
+
+        assertEq(r1[0].cluster, r2[0].cluster);
+        assertTrue(abs(r1[0].max_probability - r2[0].max_probability) < 0.01);
+    }
+
+    gmmErrorTest() {
+        # Missing required option
+        assertThrows("ML-GMM-ERROR", sub() {
+            ML::GMM bad({});
+        });
+        assertThrows("ML-GMM-ERROR", sub() {
+            ML::GMM bad({"n_components": 0});
+        });
+
+        # Invalid covariance_type
+        assertThrows("ML-GMM-ERROR", sub() {
+            ML::GMM bad({"n_components": 2, "covariance_type": "invalid"});
+        });
+
+        ML::GMM gmm({"n_components": 2});
+
+        # Not fitted
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm.predictMatrix(((1.0, 2.0),));
+        });
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm.getMeans();
+        });
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm.getLogLikelihood();
+        });
+
+        # n_components > n_samples
+        assertThrows("ML-GMM-ERROR", sub() {
+            ML::GMM big({"n_components": 10});
+            big.fitMatrix(((1.0,), (2.0,)));
+        });
+
+        # Dimension mismatch after fit
+        gmm.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+        assertThrows("ML-GMM-ERROR", sub() {
+            gmm.predictMatrix(((1.0, 2.0, 3.0),));
+        });
+
+        # hash-based predict after fitMatrix
+        assertThrows("ML-GMM-ERROR", "fitMatrix", sub() {
+            gmm.predict({"a": 1.0, "b": 2.0});
+        });
+    }
+
+    gmmCopyTest() {
+        ML::GMM gmm({"n_components": 2});
+        assertThrows("COPY-ERROR", sub() {
+            ML::GMM copy = gmm.copy();
+        });
+    }
+
+    private string getTestModelPath() {
+        # Find the test model relative to this test file
+        string dir = get_script_dir();
+        string path = dir + "/../../modules/ml/test/data/test_linear.onnx";
+        if (!is_file(path)) {
+            # Try alternate relative paths
+            path = dir + "/../../../modules/ml/test/data/test_linear.onnx";
+        }
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_linear.onnx";
+        }
+        return path;
+    }
+
+    private bool skipOnnx() {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        if (!caps.has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return True;
+        }
+        string path = getTestModelPath();
+        if (!is_file(path)) {
+            testSkip("test ONNX model not found at: " + path);
+            return True;
+        }
+        return False;
+    }
+
+    onnxLoadTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+        assertTrue(model.isLoaded());
+
+        # Check model info
+        hash<ML::OnnxModelInfo> info = model.getModelInfo();
+        assertEq("qore-ml-test", info.producer_name);
+        assertEq("Test model: y = 2*x + 1", info.description);
+
+        # Check inputs
+        list<hash<ML::OnnxTensorInfo>> inputs = model.getInputInfo();
+        assertEq(1, inputs.size());
+        assertEq("X", inputs[0].name);
+        assertEq("float", inputs[0].type);
+        assertEq(2, inputs[0].shape.size());
+        assertEq(1, inputs[0].shape[1]);
+
+        # Check outputs
+        list<hash<ML::OnnxTensorInfo>> outputs = model.getOutputInfo();
+        assertEq(1, outputs.size());
+        assertEq("Y", outputs[0].name);
+        assertEq("float", outputs[0].type);
+    }
+
+    onnxInferenceTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+
+        # Test y = 2*x + 1
+        hash<auto> result = model.run({"X": ((1.0,), (2.0,), (3.0,), (0.0,), (-1.0,))});
+        assertTrue(result.hasKey("Y"));
+
+        # The output is a list of values
+        list<auto> y_vals = result.Y;
+        assertEq(5, y_vals.size());
+        # y = 2*x + 1 → 3.0, 5.0, 7.0, 1.0, -1.0
+        assertFloat(3.0, y_vals[0], 1e-5);
+        assertFloat(5.0, y_vals[1], 1e-5);
+        assertFloat(7.0, y_vals[2], 1e-5);
+        assertFloat(1.0, y_vals[3], 1e-5);
+        assertFloat(-1.0, y_vals[4], 1e-5);
+    }
+
+    onnxBatchTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+
+        list<hash<auto>> batch = (
+            {"X": ((1.0,),)},
+            {"X": ((5.0,),)},
+            {"X": ((10.0,),)},
+        );
+        list<hash<auto>> results = model.runBatch(batch);
+        assertEq(3, results.size());
+
+        # y = 2*x + 1; output shape is [1, 1], so Y is a list of 1 scalar
+        assertFloat(3.0, results[0].Y[0], 1e-5);
+        assertFloat(11.0, results[1].Y[0], 1e-5);
+        assertFloat(21.0, results[2].Y[0], 1e-5);
+    }
+
+    onnxSingleValueTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+
+        # Single value inference: x = 42.0 → y = 85.0
+        # Output shape is [1, 1], so Y is a list of 1 scalar
+        hash<auto> result = model.run({"X": ((42.0,),)});
+        assertTrue(result.hasKey("Y"));
+        assertFloat(85.0, result.Y[0], 1e-4);
+    }
+
+    onnxErrorTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Load error — non-existent file
+        assertThrows("ML-ONNX-ERROR", sub() {
+            ML::OnnxModel model("/nonexistent/model.onnx");
+        });
+
+        # Inference error — missing input tensor
+        ML::OnnxModel model(getTestModelPath());
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "missing required input", sub() {
+            model.run({"wrong_name": ((1.0,),)});
+        });
+    }
+
+    onnxCopyTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+        assertThrows("COPY-ERROR", sub() {
+            ML::OnnxModel copy = model.copy();
+        });
+    }
+
+    onnxConcurrentTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(getTestModelPath());
+
+        Counter cnt(4);
+        list<auto> results;
+        Mutex mtx();
+        for (int i = 0; i < 4; ++i) {
+            float x = (i + 1).toFloat();
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    hash<auto> result = model.run({"X": ((x,),)});
+                    {
+                        AutoLock al(mtx);
+                        push results, {"x": x, "y": result.Y[0]};
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    {
+                        AutoLock al(mtx);
+                        push results, {"x": x, "error": ex.err + ": " + ex.desc};
+                    }
+                }
+            }();
+        }
+        cnt.waitForZero();
+
+        assertEq(4, results.size());
+        # Verify all results are correct: y = 2*x + 1
+        foreach hash<auto> r in (results) {
+            assertFalse(r.hasKey("error"), r.error ?? "no error");
+            float expected = 2.0 * r.x + 1.0;
+            assertFloat(expected, r.y, 1e-4);
+        }
+    }
+
+    private string getSklearnModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/data/test_sklearn_rf.onnx";
+        return path;
+    }
+
+    onnxSklearnRFTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        string path = getSklearnModelPath();
+        if (!is_file(path)) {
+            testSkip("sklearn test model not found at: " + path);
+            return;
+        }
+
+        ML::OnnxModel model(path);
+        assertTrue(model.isLoaded());
+
+        # Check model info
+        hash<ML::OnnxModelInfo> info = model.getModelInfo();
+        assertEq("skl2onnx", info.producer_name);
+
+        # Check inputs - should be a single float tensor [N, 4]
+        list<hash<ML::OnnxTensorInfo>> inputs = model.getInputInfo();
+        assertEq(1, inputs.size());
+        assertEq("X", inputs[0].name);
+        assertEq("float", inputs[0].type);
+
+        # Check outputs - should have label (int64) and probabilities (float)
+        list<hash<ML::OnnxTensorInfo>> outputs = model.getOutputInfo();
+        assertEq(2, outputs.size());
+
+        # Iris setosa sample: sepal_length=5.1, sepal_width=3.5, petal_length=1.4, petal_width=0.2
+        # This is a classic Iris setosa sample that should be classified as class 0
+        hash<auto> result = model.run({"X": ((5.1, 3.5, 1.4, 0.2),)});
+
+        # Verify we got both outputs
+        assertEq(2, result.size());
+
+        # Find label and probability outputs by checking output metadata
+        string label_key;
+        string prob_key;
+        foreach hash<ML::OnnxTensorInfo> out in (outputs) {
+            if (out.type == "int64") {
+                label_key = out.name;
+            } else if (out.type == "float") {
+                prob_key = out.name;
+            }
+        }
+        assertTrue(label_key.val(), "should have an int64 output for labels");
+        assertTrue(prob_key.val(), "should have a float output for probabilities");
+
+        # Verify label is a valid Iris class (0, 1, or 2)
+        auto label = result{label_key};
+        # label could be a scalar int or a list with one element
+        int predicted_class;
+        if (label.typeCode() == NT_LIST) {
+            predicted_class = label[0].toInt();
+        } else {
+            predicted_class = label.toInt();
+        }
+        assertTrue(predicted_class >= 0 && predicted_class <= 2,
+            sprintf("predicted class should be 0-2, got %d", predicted_class));
+        # Setosa sample should be classified as class 0
+        assertEq(0, predicted_class, "Iris setosa should be class 0");
+
+        # Verify probabilities
+        auto probs = result{prob_key};
+        # Should have 3 probabilities (one per Iris class) per sample
+        assertTrue(probs.typeCode() == NT_LIST, "probabilities should be a list");
+
+        # Batch inference: one sample from each class
+        hash<auto> batch_result = model.run({"X": (
+            (5.1, 3.5, 1.4, 0.2),   # setosa (class 0)
+            (7.0, 3.2, 4.7, 1.4),   # versicolor (class 1)
+            (6.3, 3.3, 6.0, 2.5),   # virginica (class 2)
+        )});
+
+        # Verify batch labels
+        auto batch_labels = batch_result{label_key};
+        assertTrue(batch_labels.typeCode() == NT_LIST, "batch labels should be a list");
+        assertEq(3, batch_labels.size());
+        assertEq(0, batch_labels[0].toInt(), "first sample should be setosa (class 0)");
+        assertEq(1, batch_labels[1].toInt(), "second sample should be versicolor (class 1)");
+        assertEq(2, batch_labels[2].toInt(), "third sample should be virginica (class 2)");
+
+        # Verify batch probabilities are 2D (3 samples x 3 classes)
+        auto batch_probs = batch_result{prob_key};
+        assertTrue(batch_probs.typeCode() == NT_LIST, "batch probabilities should be a list");
+        assertEq(3, batch_probs.size());
+        # Each row should have 3 probabilities
+        assertEq(3, batch_probs[0].size());
+    }
+
+    onnxSessionConfigTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Test new constructor with threading and optimization config
+        hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
+            "intra_op_threads": 2,
+            "inter_op_threads": 1,
+            "graph_optimization_level": 99,
+            "log_severity": 3,
+        };
+        ML::OnnxModel model(getTestModelPath(), config);
+        assertTrue(model.isLoaded());
+
+        # CPU inference should still work
+        hash<auto> result = model.run({"X": ((3.0,),)});
+        assertTrue(result.hasKey("Y"));
+        assertFloat(7.0, result.Y[0], 1e-5);
+
+        # Test with minimal config (just threads)
+        hash<ML::OnnxSessionConfig> config2 = <ML::OnnxSessionConfig>{
+            "intra_op_threads": 4,
+        };
+        ML::OnnxModel model2(getTestModelPath(), config2);
+        assertTrue(model2.isLoaded());
+        hash<auto> result2 = model2.run({"X": ((5.0,),)});
+        assertFloat(11.0, result2.Y[0], 1e-5);
+    }
+
+    onnxProviderIntrospectionTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # ml_get_onnx_providers() should return a list with CPUExecutionProvider
+        list<string> providers = ML::ml_get_onnx_providers();
+        assertTrue(providers.size() > 0, "should have at least one provider");
+        assertTrue(providers.contains("CPUExecutionProvider"),
+            sprintf("providers should include CPUExecutionProvider; got %y", providers));
+
+        # ml_get_capabilities().onnx_providers should be populated
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        assertTrue(caps.onnx_providers.size() > 0,
+            "capabilities onnx_providers should not be empty");
+        assertTrue(caps.onnx_providers.contains("CPUExecutionProvider"),
+            sprintf("onnx_providers should include CPUExecutionProvider; got %y",
+                caps.onnx_providers));
+
+        # getModelInfo().active_provider should be set
+        ML::OnnxModel model(getTestModelPath());
+        hash<ML::OnnxModelInfo> info = model.getModelInfo();
+        assertEq("CPUExecutionProvider", info.active_provider);
+
+        # getProviderInfo() should work
+        assertEq("CPUExecutionProvider", model.getProviderInfo());
+    }
+
+    onnxInvalidProviderTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Non-existent provider should throw ML-ONNX-PROVIDER-ERROR
+        hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
+            "providers": (
+                <ML::OnnxProviderConfig>{"name": "NonExistentProvider123"},
+            ),
+        };
+        assertThrows("ML-ONNX-PROVIDER-ERROR", sub() {
+            ML::OnnxModel model(getTestModelPath(), config);
+        });
+    }
+
+    onnxInvalidConfigTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Invalid log_severity (5)
+        assertThrows("ML-ONNX-ERROR", "log_severity", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "log_severity": 5,
+            });
+        });
+
+        # Invalid graph_optimization_level (42)
+        assertThrows("ML-ONNX-ERROR", "graph_optimization_level", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "graph_optimization_level": 42,
+            });
+        });
+
+        # Invalid intra_op_threads (0)
+        assertThrows("ML-ONNX-ERROR", "intra_op_threads", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "intra_op_threads": 0,
+            });
+        });
+
+        # Invalid inter_op_threads (-1)
+        assertThrows("ML-ONNX-ERROR", "inter_op_threads", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "inter_op_threads": -1,
+            });
+        });
+    }
+
+    onnxBackwardCompatTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Original single-arg constructor should still work and return CPUExecutionProvider
+        ML::OnnxModel model(getTestModelPath());
+        assertTrue(model.isLoaded());
+        assertEq("CPUExecutionProvider", model.getProviderInfo());
+
+        # Inference should still work
+        hash<auto> result = model.run({"X": ((2.0,),)});
+        assertFloat(5.0, result.Y[0], 1e-5);
+
+        # getModelInfo should have active_provider
+        hash<ML::OnnxModelInfo> info = model.getModelInfo();
+        assertEq("CPUExecutionProvider", info.active_provider);
+    }
+
+    onnxEmptyProvidersTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Empty providers list should default to CPU and work fine
+        hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
+            "providers": (),
+        };
+        ML::OnnxModel model(getTestModelPath(), config);
+        assertTrue(model.isLoaded());
+        assertEq("CPUExecutionProvider", model.getProviderInfo());
+
+        # Inference should work
+        hash<auto> result = model.run({"X": ((4.0,),)});
+        assertFloat(9.0, result.Y[0], 1e-5);
+
+        # Config with only CPU provider explicitly
+        hash<ML::OnnxSessionConfig> config2 = <ML::OnnxSessionConfig>{
+            "providers": (
+                <ML::OnnxProviderConfig>{"name": "CPU"},
+            ),
+        };
+        ML::OnnxModel model2(getTestModelPath(), config2);
+        assertTrue(model2.isLoaded());
+        assertEq("CPUExecutionProvider", model2.getProviderInfo());
+    }
+
+    onnxCudaTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # Check if CUDA is available
+        list<string> providers = ML::ml_get_onnx_providers();
+        if (!providers.contains("CUDAExecutionProvider")) {
+            testSkip("CUDA execution provider not available");
+            return;
+        }
+
+        # Test CUDA provider config with device_id
+        hash<ML::OnnxSessionConfig> config = <ML::OnnxSessionConfig>{
+            "providers": (
+                <ML::OnnxProviderConfig>{
+                    "name": "CUDA",
+                    "options": {"device_id": "0"},
+                },
+            ),
+        };
+        ML::OnnxModel model(getTestModelPath(), config);
+        assertTrue(model.isLoaded());
+        assertEq("CUDAExecutionProvider", model.getProviderInfo());
+
+        # Verify inference works on CUDA
+        hash<auto> result = model.run({"X": ((3.0,),)});
+        assertFloat(7.0, result.Y[0], 1e-4);
+    }
+
+    private assertFloat(float expected, auto actual, float tolerance) {
+        float diff = abs(expected - actual.toFloat());
+        assertTrue(diff < tolerance,
+            sprintf("expected %f, got %f (diff=%f, tolerance=%f)", expected, actual, diff,
+                tolerance));
     }
 }

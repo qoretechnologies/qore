@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore QoreIsolationForestProcessor class definition
+#! Qore QoreLinearRegressionProcessor class definition
 
-/** QoreIsolationForestProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
+/** QoreLinearRegressionProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,17 +24,17 @@
 
 #! Contains all public definitions in the DataProviderML module
 public namespace DataProviderML {
-#! Pipeline processor that detects anomalous data points using Isolation Forest
-/** Accumulates records in windows and uses the ML::IsolationForest algorithm to
-    score each record for anomalousness when the window is full or on flush.
+#! Pipeline processor that performs linear regression on data windows
+/** Accumulates records in windows and uses the ML::LinearRegression algorithm to
+    fit a model and predict target values for each record.
 
     @since %DataProviderML 1.0
 */
-public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreLinearRegressionProcessor inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "QoreIsolationForestProcessor",
+            "type": "QoreLinearRegressionProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
             "pipeline_processor_options": ConstructorOptions,
@@ -43,70 +43,70 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         #! Constructor options
         const ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
-                "display_name": "Field Names",
-                "short_desc": "Numeric fields to analyze for anomalies",
-                "desc": "A comma-separated list of numeric field names from the input records "
-                    "to analyze; these are the measurements the algorithm will use to determine "
-                    "if a data point is unusual; for example: \"temperature,pressure,humidity\"; "
-                    "at least 1 field is required",
+                "display_name": "Input Fields",
+                "short_desc": "Numeric fields used to make predictions",
+                "desc": "A comma-separated list of numeric field names that the model uses "
+                    "to predict the target; for example, if predicting price, the input "
+                    "fields might be \"square_feet,bedrooms,bathrooms\"; at least 1 field "
+                    "is required",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
+            "target_field": <DataProviderOptionInfo>{
+                "display_name": "Target Field",
+                "short_desc": "The field to predict",
+                "desc": "The name of the numeric field that the model will learn to predict; "
+                    "for example, \"price\" or \"sales_volume\"; this field must exist in "
+                    "the input records",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
-                "short_desc": "Number of records to analyze together",
-                "desc": "The number of records to collect before analyzing them as a group; "
-                    "the algorithm learns what is normal from this group and then scores each "
-                    "record; larger windows provide more context but use more memory; "
-                    "must be at least 2",
+                "short_desc": "Number of records to learn from",
+                "desc": "The number of records to collect before fitting the model and "
+                    "generating predictions; the model learns the relationship between "
+                    "input fields and the target from this batch; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
-            "n_trees": <DataProviderOptionInfo>{
-                "display_name": "Number of Trees",
-                "short_desc": "More trees give more stable results",
-                "desc": "The number of random decision trees used to detect anomalies; "
-                    "more trees produce more reliable anomaly scores but take longer to "
-                    "compute; default: 100",
-                "type": AbstractDataProviderTypeMap."*int",
+            "fit_intercept": <DataProviderOptionInfo>{
+                "display_name": "Fit Intercept",
+                "short_desc": "Include a baseline constant in the model",
+                "desc": "When enabled, the model includes a baseline constant (intercept); "
+                    "this should almost always be enabled unless you know the target is "
+                    "zero when all inputs are zero; default: True (enabled)",
+                "type": AbstractDataProviderTypeMap."*bool",
             },
-            "sample_size": <DataProviderOptionInfo>{
-                "display_name": "Sample Size",
-                "short_desc": "Records sampled per tree",
-                "desc": "The number of records randomly sampled to build each tree; smaller "
-                    "values make it easier to detect anomalies but may reduce accuracy for "
-                    "subtle outliers; should be less than the window size; default: 256",
-                "type": AbstractDataProviderTypeMap."*int",
-            },
-            "threshold": <DataProviderOptionInfo>{
-                "display_name": "Anomaly Threshold",
-                "short_desc": "Score cutoff for flagging anomalies",
-                "desc": "A value between 0.0 and 1.0 that determines when a record is "
-                    "flagged as anomalous; records scoring at or above this threshold are "
-                    "classified as anomalies; lower values flag more records as anomalous, "
-                    "higher values flag fewer; default: 0.5",
-                "type": AbstractDataProviderTypeMap."*float",
+            "normalize": <DataProviderOptionInfo>{
+                "display_name": "Normalize Input",
+                "short_desc": "Scale input fields to comparable ranges",
+                "desc": "When enabled, input fields are scaled to have similar ranges before "
+                    "fitting; this can improve accuracy when input fields have very different "
+                    "units or magnitudes (e.g., mixing square feet and number of rooms); "
+                    "default: False (disabled)",
+                "type": AbstractDataProviderTypeMap."*bool",
             },
         };
     }
 
     private {
-        #! Configured field names
+        #! Configured feature field names
         list<string> fields;
+
+        #! Target field name
+        string target_field;
 
         #! Configured window size
         int window_size;
 
-        #! Number of trees
-        int n_trees = 100;
+        #! Fit intercept option
+        bool fit_intercept = True;
 
-        #! Sample size
-        int sample_size = 256;
+        #! Normalize option
+        bool do_normalize = False;
 
-        #! Anomaly threshold
-        float threshold = 0.5;
-
-        #! Accumulated records (list of hashes)
+        #! Accumulated records
         list<hash<auto>> buffer;
 
         #! Whether configured
@@ -124,19 +124,20 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
+        target_field = copts.target_field;
+        if (!target_field.val()) {
+            throw "CONSTRUCTOR-ERROR", "target_field option is required";
+        }
         window_size = copts.window_size;
         if (window_size < 2) {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 2; got %d", window_size);
         }
-        if (exists copts.n_trees) {
-            n_trees = copts.n_trees;
+        if (exists copts.fit_intercept) {
+            fit_intercept = copts.fit_intercept;
         }
-        if (exists copts.sample_size) {
-            sample_size = copts.sample_size;
-        }
-        if (exists copts.threshold) {
-            threshold = copts.threshold;
+        if (exists copts.normalize) {
+            do_normalize = copts.normalize;
         }
         buffer = ();
         configured = True;
@@ -144,14 +145,14 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
 
     #! Returns the name of this data provider
     string getName() {
-        return "isolation-forest";
+        return "linear-regression";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Detects anomalous data points using the Isolation Forest algorithm; "
-            "accumulates records in windows, fits a forest, and scores each record "
-            "for anomalousness";
+        return "Performs linear regression on data windows; accumulates records, "
+            "fits a model, and emits predictions for each record with R-squared "
+            "and coefficient information";
     }
 
     #! Returns data provider static info
@@ -159,11 +160,11 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         return ProviderInfo;
     }
 
-    #! Accumulates records; emits scored records when window is full
+    #! Accumulates records; emits predictions when window is full
     private *auto processRecordImpl(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
-                "QoreIsolationForestProcessor: not configured; provide constructor options";
+                "QoreLinearRegressionProcessor: not configured; provide constructor options";
         }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
@@ -179,7 +180,6 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         if (!configured || !buffer) {
             return;
         }
-        # need at least 2 records to fit
         if (buffer.lsize() >= 2) {
             list<auto> results = processWindow(buffer);
             buffer = ();
@@ -189,28 +189,29 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
         return;
     }
 
-    #! Processes a window of records through Isolation Forest
+    #! Processes a window of records through LinearRegression
     private list<auto> processWindow(list<hash<auto>> records) {
-        # extract matrix from fields
+        # extract feature matrix and target vector
         list<list<float>> matrix;
+        list<float> targets;
         foreach hash<auto> rec in (records) {
             list<float> row;
             foreach string f in (fields) {
                 push row, rec{f}.toFloat();
             }
             push matrix, row;
+            push targets, rec{target_field}.toFloat();
         }
 
-        # create and fit isolation forest
-        ML::IsolationForest iforest({
-            "n_trees": n_trees,
-            "sample_size": sample_size > matrix.lsize() ? matrix.lsize() : sample_size,
-            "threshold": threshold,
+        # create and fit model
+        ML::LinearRegression lr({
+            "fit_intercept": fit_intercept,
+            "normalize": do_normalize,
         });
-        iforest.fitMatrix(matrix);
+        lr.fitMatrix(matrix, targets);
 
-        # score all records
-        list<hash<ML::IsolationForestResult>> scores = iforest.scoreMatrix(matrix);
+        # predict all records
+        list<hash<ML::LinearRegressionResult>> predictions = lr.predictMatrix(matrix);
 
         # emit one event per record
         list<auto> events;
@@ -219,11 +220,15 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
             foreach string f in (fields) {
                 record_values{f} = records[i]{f};
             }
-            push events, <IsolationForestAnomalyEventInfo>{
-                "event_type": "isolation-forest",
-                "anomaly_score": scores[i].anomaly_score,
-                "is_anomaly": scores[i].is_anomaly,
-                "average_path_length": scores[i].average_path_length,
+            record_values{target_field} = records[i]{target_field};
+            push events, <LinearRegressionEventInfo>{
+                "event_type": "linear-regression",
+                "prediction": predictions[i].prediction,
+                "actual": targets[i],
+                "residual": targets[i] - predictions[i].prediction,
+                "r_squared": predictions[i].r_squared,
+                "coefficients": predictions[i].coefficients,
+                "intercept": predictions[i].intercept,
                 "record_values": record_values,
             };
         }
@@ -242,7 +247,7 @@ public class QoreIsolationForestProcessor inherits DataProvider::AbstractDataPro
 
     #! Returns the output type
     private *DataProvider::AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
-        return new HashDeclDataType(TypedHash::forName("DataProviderML::IsolationForestAnomalyEventInfo"));
+        return new HashDeclDataType(TypedHash::forName("DataProviderML::LinearRegressionEventInfo"));
     }
 }
 }

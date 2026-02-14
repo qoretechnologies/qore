@@ -508,15 +508,20 @@ cargo install tree-sitter-cli@0.26.5
     - \c ml module
       - new builtin module providing machine learning algorithms powered by Eigen3
       - Isolation Forest for unsupervised anomaly detection
+      - Local Outlier Factor (LOF) for density-based anomaly detection using k-nearest neighbors
       - DBSCAN density-based clustering with euclidean, manhattan, and cosine distance metrics
       - KMeans clustering with k-means++ initialization and online mini-batch updates
+      - Gaussian Mixture Model (GMM) for probabilistic soft clustering using EM algorithm
+      - Linear Regression for supervised prediction using ordinary least squares
       - PCA for dimensionality reduction with variance threshold auto-selection
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
+      - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
     - @ref dataprovidermlintro "DataProviderML" module
       - new module providing data pipeline processors wrapping the ml binary module
-      - 6 ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
-        holt-winters, and seasonal-decomposition
+      - 9 core ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
+        holt-winters, seasonal-decomposition, linear-regression, lof, and gmm
+      - optional onnx-model pipeline processor for ONNX Runtime inference
       - action catalog integration with the "ML Analytics" app
     - @ref mongodb "mongodb" module
       - new builtin module providing MongoDB client connectivity using libmongoc

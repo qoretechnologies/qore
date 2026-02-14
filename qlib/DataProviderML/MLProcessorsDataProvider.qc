@@ -34,20 +34,30 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "children_can_support_pipeline_processors": True,
         };
 
-        #! Child processor names
-        const Children = {
+        #! Core child processor names (always available)
+        const CoreChildren = {
             "isolation-forest": "QoreIsolationForestProcessor",
             "dbscan-clustering": "QoreDBSCANClusteringProcessor",
             "kmeans-clustering": "QoreKMeansProcessor",
             "pca": "QorePCAProcessor",
             "holt-winters": "QoreHoltWintersProcessor",
             "seasonal-decomposition": "QoreSeasonalDecompositionProcessor",
+            "linear-regression": "QoreLinearRegressionProcessor",
+            "lof": "QoreLOFProcessor",
+            "gmm": "QoreGMMProcessor",
         };
+
+        #! Full child processor names including optional ones
+        hash<string, string> Children;
     }
 
     #! Creates the object
     constructor(*hash<auto> options) {
         checkOptions("CONSTRUCTOR-ERROR", NOTHING, options);
+        Children = CoreChildren;
+        if (ML::ml_get_capabilities().has_onnx) {
+            Children."onnx-model" = "QoreOnnxModelProcessor";
+        }
     }
 
     #! Returns the name of this data provider
@@ -86,6 +96,17 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreHoltWintersProcessor();
             case "seasonal-decomposition":
                 return new QoreSeasonalDecompositionProcessor();
+            case "linear-regression":
+                return new QoreLinearRegressionProcessor();
+            case "lof":
+                return new QoreLOFProcessor();
+            case "gmm":
+                return new QoreGMMProcessor();
+            case "onnx-model":
+                if (ML::ml_get_capabilities().has_onnx) {
+                    return new QoreOnnxModelProcessor();
+                }
+                break;
         }
     }
 }

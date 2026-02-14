@@ -28,6 +28,9 @@
 #include "qore/Qore.h"
 
 #include <Eigen/Dense>
+#ifdef HAVE_ONNXRUNTIME
+#include <onnxruntime_cxx_api.h>
+#endif
 
 // Extern declarations for hashdecl globals (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclIsolationForestResult;
@@ -36,7 +39,17 @@ extern const TypedHashDecl* hashdeclKMeansResult;
 extern const TypedHashDecl* hashdeclHoltWintersResult;
 extern const TypedHashDecl* hashdeclPCAResult;
 extern const TypedHashDecl* hashdeclSeasonalDecompositionResult;
+extern const TypedHashDecl* hashdeclLinearRegressionResult;
+extern const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+extern const TypedHashDecl* hashdeclLOFResult;
+extern const TypedHashDecl* hashdeclGMMResult;
 extern const TypedHashDecl* hashdeclMLCapabilities;
+#ifdef HAVE_ONNXRUNTIME
+extern const TypedHashDecl* hashdeclOnnxTensorInfo;
+extern const TypedHashDecl* hashdeclOnnxModelInfo;
+extern const TypedHashDecl* hashdeclOnnxProviderConfig;
+extern const TypedHashDecl* hashdeclOnnxSessionConfig;
+#endif
 
 //! Result of Isolation Forest anomaly scoring
 /** @since ml 1.0
@@ -116,6 +129,159 @@ hashdecl SeasonalDecompositionResult {
     int period;
 }
 
+//! Result of linear regression prediction
+/** @since ml 1.0
+*/
+hashdecl LinearRegressionResult {
+    //! predicted target value
+    float prediction;
+    //! model coefficients (one per feature)
+    list<float> coefficients;
+    //! intercept (bias) term
+    float intercept;
+    //! R-squared (coefficient of determination) from training
+    float r_squared;
+}
+
+//! Linear regression model information (model-level parameters independent of individual predictions)
+/** Use getModelInfo() to retrieve model parameters once, instead of extracting them from each
+    individual @ref LinearRegressionResult returned by predict() or predictMatrix().
+
+    @since ml 1.0
+*/
+hashdecl LinearRegressionModelInfo {
+    //! model coefficients (one per feature)
+    list<float> coefficients;
+    //! intercept (bias) term; 0.0 if fit_intercept was False
+    float intercept;
+    //! R-squared (coefficient of determination) from training; 1.0 = perfect fit
+    float r_squared;
+    //! number of features the model was trained with
+    int n_features;
+}
+
+//! Result of Local Outlier Factor scoring
+/** @since ml 1.0
+*/
+hashdecl LOFResult {
+    //! local outlier factor score (> 1.0 indicates anomaly)
+    float lof_score;
+    //! whether the score exceeds the configured threshold
+    bool is_anomaly;
+    //! distance to the k-th nearest neighbor
+    float k_distance;
+    //! k parameter used
+    int k;
+}
+
+//! Result of Gaussian Mixture Model prediction
+/** @since ml 1.0
+*/
+hashdecl GMMResult {
+    //! most likely cluster assignment
+    int cluster;
+    //! probability of the most likely cluster
+    float max_probability;
+    //! probabilities for each cluster
+    list<float> probabilities;
+    //! log-likelihood of the data point
+    float log_likelihood;
+}
+
+#ifdef HAVE_ONNXRUNTIME
+//! ONNX tensor metadata
+/** @since ml 1.0
+*/
+hashdecl OnnxTensorInfo {
+    //! tensor name
+    string name;
+    //! element data type (e.g. "float", "double", "int64")
+    string type;
+    //! tensor shape dimensions (-1 for dynamic dimensions)
+    list<int> shape;
+}
+
+//! ONNX execution provider configuration
+/** Configures a single execution provider for an ONNX Runtime session.
+
+    Providers are tried in the order specified; if a provider is not available or
+    fails to initialize, the next one in the list is used. The CPU provider is
+    always available as a fallback.
+
+    @par Example:
+    @code{.py}
+hash<OnnxProviderConfig> cuda_cfg = <OnnxProviderConfig>{
+    "name": "CUDA",
+    "options": {"device_id": "0"},
+};
+    @endcode
+
+    @since ml 1.1
+*/
+hashdecl OnnxProviderConfig {
+    //! provider name (e.g. "CUDA", "TensorRT", "OpenVINO", "CoreML", "DirectML", "CPU")
+    string name;
+    //! provider-specific key-value config (e.g. @code{"device_id": "0"}@endcode)
+    *hash<string, string> options;
+}
+
+//! ONNX session configuration
+/** Controls ONNX Runtime session options including execution providers, threading,
+    and graph optimization.
+
+    @par Example:
+    @code{.py}
+hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
+    "providers": (<OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+    "intra_op_threads": 4,
+    "graph_optimization_level": 99,
+};
+ML::OnnxModel model("/path/to/model.onnx", config);
+    @endcode
+
+    @since ml 1.1
+*/
+hashdecl OnnxSessionConfig {
+    //! execution providers in priority order; CPU is always available as fallback
+    /** Providers are tried in order from first to last; the first one that is available
+        on the system and initializes successfully is used for inference. If none succeed,
+        CPU is used as the fallback.
+
+        Common providers: \c "CUDA" (NVIDIA GPU), \c "TensorRT" (NVIDIA optimized),
+        \c "OpenVINO" (Intel), \c "DirectML" (Windows GPU), \c "CoreML" (macOS/iOS)
+    */
+    *list<hash<OnnxProviderConfig>> providers;
+    //! number of threads for parallelism within a single operation (e.g. one large matrix multiply); default 1; must be >= 1
+    *int intra_op_threads;
+    //! number of threads for running independent operations in parallel (e.g. two unrelated layers); 0 = let the runtime decide; must be >= 0
+    *int inter_op_threads;
+    //! how aggressively to optimize the model graph before inference: 0=disabled, 1=basic, 2=extended, 99=all; default 99
+    *int graph_optimization_level;
+    //! diagnostic log verbosity: 0=verbose, 1=info, 2=warning, 3=error, 4=fatal; default 2 (warning)
+    *int log_severity;
+}
+
+//! ONNX model metadata
+/** @since ml 1.0
+*/
+hashdecl OnnxModelInfo {
+    //! producer framework name (e.g. "pytorch", "sklearn")
+    string producer_name;
+    //! model description (may be @ref nothing)
+    *string description;
+    //! model version
+    int version;
+    //! input tensor metadata
+    list<hash<OnnxTensorInfo>> inputs;
+    //! output tensor metadata
+    list<hash<OnnxTensorInfo>> outputs;
+    //! active execution provider name (e.g. "CPUExecutionProvider")
+    /** @since ml 1.1
+    */
+    *string active_provider;
+}
+#endif
+
 //! ML module capability information
 /** @since ml 1.0
 */
@@ -126,6 +292,10 @@ hashdecl MLCapabilities {
     list<string> native_algorithms;
     //! Eigen version string
     string eigen_version;
+    //! available ONNX execution providers (empty if no ONNX Runtime)
+    /** @since ml 1.1
+    */
+    list<string> onnx_providers;
 }
 
 /** @defgroup ml_functions ML Functions
@@ -162,6 +332,12 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("HoltWinters"), xsink);
     algos->push(new QoreStringNode("PCA"), xsink);
     algos->push(new QoreStringNode("SeasonalDecomposition"), xsink);
+    algos->push(new QoreStringNode("LinearRegression"), xsink);
+    algos->push(new QoreStringNode("LOF"), xsink);
+    algos->push(new QoreStringNode("GMM"), xsink);
+#ifdef HAVE_ONNXRUNTIME
+    algos->push(new QoreStringNode("OnnxModel"), xsink);
+#endif
     rv->setKeyValue("native_algorithms", algos.release(), xsink);
 
     // Eigen version string
@@ -169,7 +345,41 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     eigen_ver->sprintf("%d.%d.%d", EIGEN_WORLD_VERSION, EIGEN_MAJOR_VERSION, EIGEN_MINOR_VERSION);
     rv->setKeyValue("eigen_version", eigen_ver, xsink);
 
+    // ONNX providers
+    ReferenceHolder<QoreListNode> providers(new QoreListNode(stringTypeInfo), xsink);
+#ifdef HAVE_ONNXRUNTIME
+    {
+        std::vector<std::string> available = Ort::GetAvailableProviders();
+        for (const auto& p : available) {
+            providers->push(new QoreStringNode(p), xsink);
+        }
+    }
+#endif
+    rv->setKeyValue("onnx_providers", providers.release(), xsink);
+
     return rv.release();
 }
+
+#ifdef HAVE_ONNXRUNTIME
+//! Returns the list of available ONNX Runtime execution providers
+/** @return a list of provider name strings (e.g. "CPUExecutionProvider", "CUDAExecutionProvider")
+
+    @par Example:
+    @code{.py}
+list<string> providers = ml_get_onnx_providers();
+printf("Available providers: %y\n", providers);
+    @endcode
+
+    @since ml 1.1
+*/
+list<string> ml_get_onnx_providers() [flags=CONSTANT; dom=DEFAULT] {
+    std::vector<std::string> available = Ort::GetAvailableProviders();
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (const auto& p : available) {
+        rv->push(new QoreStringNode(p), xsink);
+    }
+    return rv.release();
+}
+#endif
 
 ///@}

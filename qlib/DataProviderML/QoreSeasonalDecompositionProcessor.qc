@@ -46,27 +46,33 @@ public class QoreSeasonalDecompositionProcessor inherits DataProvider::AbstractA
         const ConstructorOptions = AbstractAnalyticsProcessor::BaseConstructorOptions + {
             "period": <DataProviderOptionInfo>{
                 "display_name": "Seasonal Period",
-                "short_desc": "Number of records in one seasonal cycle",
-                "desc": "The number of records in one complete seasonal cycle; the window "
-                    "size must be >= 2 * period for decomposition to work; must be >= 2",
+                "short_desc": "Records per seasonal cycle",
+                "desc": "The number of records that make up one complete repeating cycle; "
+                    "for example, 7 for daily data with weekly patterns, 12 for monthly "
+                    "data with yearly patterns; the window size must be at least twice this "
+                    "value; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
             "type": <DataProviderOptionInfo>{
                 "display_name": "Decomposition Type",
-                "short_desc": "Type of seasonal decomposition",
-                "desc": "The type of decomposition: 'additive' for constant seasonal "
-                    "amplitude, 'multiplicative' for seasonal amplitude proportional to "
-                    "the level; default: 'additive'",
+                "short_desc": "How seasonal patterns combine with the trend",
+                "desc": "Controls how the seasonal component relates to the trend; "
+                    "default: additive",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "additive",
-                        "desc": "Constant seasonal amplitude",
+                        "display_name": "Additive (constant seasonal swings)",
+                        "desc": "Seasonal variations have a constant size regardless of the "
+                            "overall level; best when the seasonal pattern does not grow or "
+                            "shrink as the data increases",
                     },
                     <AllowedValueInfo>{
                         "value": "multiplicative",
-                        "desc": "Seasonal amplitude proportional to the level",
+                        "display_name": "Multiplicative (proportional seasonal swings)",
+                        "desc": "Seasonal variations scale with the overall level; best when "
+                            "the seasonal pattern grows as the data values increase",
                     },
                 ),
             },

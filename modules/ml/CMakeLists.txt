@@ -67,6 +67,9 @@ set(ML_QPP_SRC
     src/QC_HoltWinters.qpp
     src/QC_PCA.qpp
     src/QC_SeasonalDecomposition.qpp
+    src/QC_LinearRegression.qpp
+    src/QC_LOF.qpp
+    src/QC_GMM.qpp
     src/ql_ml.qpp
 )
 
@@ -80,6 +83,9 @@ set(ML_CPP_SRC
     src/HoltWinters.cpp
     src/PCA.cpp
     src/SeasonalDecomposition.cpp
+    src/LinearRegression.cpp
+    src/LOF.cpp
+    src/GMM.cpp
 )
 
 # Conditional ONNX sources
@@ -87,6 +93,8 @@ if (ONNXRUNTIME_FOUND)
     message(STATUS "ONNX Runtime found - building with ONNX model support")
     add_definitions(-DHAVE_ONNXRUNTIME)
     set(HAVE_ONNXRUNTIME TRUE)
+    list(APPEND ML_QPP_SRC src/QC_OnnxModel.qpp)
+    list(APPEND ML_CPP_SRC src/OnnxModel.cpp)
 else()
     message(STATUS "ONNX Runtime not found - building native algorithms only")
 endif()

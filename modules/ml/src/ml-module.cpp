@@ -33,6 +33,12 @@
 #include "QC_HoltWinters.h"
 #include "QC_PCA.h"
 #include "QC_SeasonalDecomposition.h"
+#include "QC_LinearRegression.h"
+#include "QC_LOF.h"
+#include "QC_GMM.h"
+#ifdef HAVE_ONNXRUNTIME
+#include "QC_OnnxModel.h"
+#endif
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -63,6 +69,16 @@ DLLLOCAL TypedHashDecl* init_hashdecl_KMeansResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_HoltWintersResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_PCAResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SeasonalDecompositionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LOFResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_GMMResult(QoreNamespace& ns);
+#ifdef HAVE_ONNXRUNTIME
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxTensorInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderConfig(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxModelInfo(QoreNamespace& ns);
+#endif
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -72,6 +88,16 @@ const TypedHashDecl* hashdeclKMeansResult;
 const TypedHashDecl* hashdeclHoltWintersResult;
 const TypedHashDecl* hashdeclPCAResult;
 const TypedHashDecl* hashdeclSeasonalDecompositionResult;
+const TypedHashDecl* hashdeclLinearRegressionResult;
+const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+const TypedHashDecl* hashdeclLOFResult;
+const TypedHashDecl* hashdeclGMMResult;
+#ifdef HAVE_ONNXRUNTIME
+const TypedHashDecl* hashdeclOnnxTensorInfo;
+const TypedHashDecl* hashdeclOnnxProviderConfig;
+const TypedHashDecl* hashdeclOnnxSessionConfig;
+const TypedHashDecl* hashdeclOnnxModelInfo;
+#endif
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -85,6 +111,12 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitHoltWintersClass();
     preinitPCAClass();
     preinitSeasonalDecompositionClass();
+    preinitLinearRegressionClass();
+    preinitLOFClass();
+    preinitGMMClass();
+#ifdef HAVE_ONNXRUNTIME
+    preinitOnnxModelClass();
+#endif
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -93,6 +125,16 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclHoltWintersResult = init_hashdecl_HoltWintersResult(MLNS);
     hashdeclPCAResult = init_hashdecl_PCAResult(MLNS);
     hashdeclSeasonalDecompositionResult = init_hashdecl_SeasonalDecompositionResult(MLNS);
+    hashdeclLinearRegressionResult = init_hashdecl_LinearRegressionResult(MLNS);
+    hashdeclLinearRegressionModelInfo = init_hashdecl_LinearRegressionModelInfo(MLNS);
+    hashdeclLOFResult = init_hashdecl_LOFResult(MLNS);
+    hashdeclGMMResult = init_hashdecl_GMMResult(MLNS);
+#ifdef HAVE_ONNXRUNTIME
+    hashdeclOnnxTensorInfo = init_hashdecl_OnnxTensorInfo(MLNS);
+    hashdeclOnnxProviderConfig = init_hashdecl_OnnxProviderConfig(MLNS);
+    hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
+    hashdeclOnnxModelInfo = init_hashdecl_OnnxModelInfo(MLNS);
+#endif
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -102,6 +144,12 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initHoltWintersClass(MLNS));
     MLNS.addSystemClass(initPCAClass(MLNS));
     MLNS.addSystemClass(initSeasonalDecompositionClass(MLNS));
+    MLNS.addSystemClass(initLinearRegressionClass(MLNS));
+    MLNS.addSystemClass(initLOFClass(MLNS));
+    MLNS.addSystemClass(initGMMClass(MLNS));
+#ifdef HAVE_ONNXRUNTIME
+    MLNS.addSystemClass(initOnnxModelClass(MLNS));
+#endif
 
     // Add namespace-level functions
     init_ml_functions(MLNS);

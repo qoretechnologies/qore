@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore QoreDBSCANClusteringProcessor class definition
+#! Qore QoreGMMProcessor class definition
 
-/** QoreDBSCANClusteringProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
+/** QoreGMMProcessor.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,17 +24,17 @@
 
 #! Contains all public definitions in the DataProviderML module
 public namespace DataProviderML {
-#! Pipeline processor that discovers data clusters using DBSCAN
-/** Accumulates records in windows and uses the ML::DBSCAN algorithm to
-    cluster records when the window is full or on flush.
+#! Pipeline processor that performs probabilistic clustering using Gaussian Mixture Models
+/** Accumulates records in windows and uses the ML::GMM algorithm to
+    assign each record to a cluster with probability scores.
 
     @since %DataProviderML 1.0
 */
-public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreGMMProcessor inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "QoreDBSCANClusteringProcessor",
+            "type": "QoreGMMProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
             "pipeline_processor_options": ConstructorOptions,
@@ -46,63 +46,48 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
                 "display_name": "Field Names",
                 "short_desc": "Numeric fields to use for clustering",
                 "desc": "A comma-separated list of numeric field names from the input records "
-                    "to use for finding groups; for example: \"latitude,longitude\" or "
-                    "\"revenue,customer_count\"; at least 1 field is required",
+                    "to use for grouping; for example: \"revenue,frequency,recency\"; "
+                    "at least 1 field is required",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
             "window_size": <DataProviderOptionInfo>{
                 "display_name": "Window Size",
                 "short_desc": "Number of records to cluster together",
-                "desc": "The number of records to collect before grouping them into clusters; "
-                    "all records in a window are analyzed together; must be at least 2",
+                "desc": "The number of records to collect before assigning them to groups "
+                    "with probability scores; must be at least 2",
                 "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
-            "epsilon": <DataProviderOptionInfo>{
-                "display_name": "Neighborhood Radius",
-                "short_desc": "How close points must be to form a cluster",
-                "desc": "The maximum distance between two data points for them to be "
-                    "considered neighbors; smaller values create tighter, more specific "
-                    "clusters; larger values merge nearby groups into larger clusters; "
-                    "the appropriate value depends on the scale of your data",
-                "type": AbstractDataProviderTypeMap."float",
+            "n_components": <DataProviderOptionInfo>{
+                "display_name": "Number of Groups",
+                "short_desc": "How many groups to discover",
+                "desc": "The number of groups (clusters) the algorithm should find in the "
+                    "data; unlike k-means, each record gets a probability for each group "
+                    "rather than a hard assignment; must be at least 1 and no more than "
+                    "the number of records in the window",
+                "type": AbstractDataProviderTypeMap."int",
                 "required": True,
             },
-            "min_points": <DataProviderOptionInfo>{
-                "display_name": "Minimum Cluster Size",
-                "short_desc": "Minimum neighbors to form a cluster",
-                "desc": "The minimum number of nearby points required to start a cluster; "
-                    "points with fewer neighbors than this are labeled as noise (not "
-                    "belonging to any cluster); higher values require denser groups; "
-                    "default: 5",
-                "type": AbstractDataProviderTypeMap."*int",
-            },
-            "metric": <DataProviderOptionInfo>{
-                "display_name": "Distance Metric",
-                "short_desc": "How to measure distance between data points",
-                "desc": "The method used to measure how far apart two data points are; "
-                    "this affects how clusters are shaped and which points are considered "
-                    "neighbors; default: euclidean",
+            "covariance_type": <DataProviderOptionInfo>{
+                "display_name": "Covariance Type",
+                "short_desc": "How cluster shapes are modeled",
+                "desc": "Controls the shape of the clusters that the model can discover; "
+                    "default: full",
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
-                        "value": "euclidean",
-                        "display_name": "Euclidean (straight-line distance)",
-                        "desc": "Straight-line distance between points; best for data where "
-                            "all dimensions have similar scales",
+                        "value": "full",
+                        "display_name": "Full (elliptical clusters)",
+                        "desc": "Allows clusters to be elliptical in any orientation; "
+                            "captures correlations between fields but requires more data "
+                            "to estimate accurately",
                     },
                     <AllowedValueInfo>{
-                        "value": "manhattan",
-                        "display_name": "Manhattan (city-block distance)",
-                        "desc": "Sum of absolute differences along each dimension; less "
-                            "sensitive to large differences in a single dimension",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "cosine",
-                        "display_name": "Cosine (angular distance)",
-                        "desc": "Measures the angle between data points rather than magnitude; "
-                            "best when the direction matters more than the size of values",
+                        "value": "diagonal",
+                        "display_name": "Diagonal (axis-aligned clusters)",
+                        "desc": "Clusters are axis-aligned ellipses; faster and more stable "
+                            "with limited data but cannot capture correlations between fields",
                     },
                 ),
             },
@@ -116,14 +101,11 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         #! Configured window size
         int window_size;
 
-        #! Epsilon
-        float epsilon;
+        #! Number of components
+        int n_components;
 
-        #! Minimum points
-        int min_points = 5;
-
-        #! Distance metric
-        string metric = "euclidean";
+        #! Covariance type
+        string covariance_type = "full";
 
         #! Accumulated records
         list<hash<auto>> buffer;
@@ -148,12 +130,13 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 2; got %d", window_size);
         }
-        epsilon = copts.epsilon;
-        if (exists copts.min_points) {
-            min_points = copts.min_points;
+        n_components = copts.n_components;
+        if (n_components < 1) {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("n_components must be >= 1; got %d", n_components);
         }
-        if (exists copts.metric) {
-            metric = copts.metric;
+        if (exists copts.covariance_type) {
+            covariance_type = copts.covariance_type;
         }
         buffer = ();
         configured = True;
@@ -161,14 +144,14 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
 
     #! Returns the name of this data provider
     string getName() {
-        return "dbscan-clustering";
+        return "gmm";
     }
 
     #! Returns the data provider description
     *string getDesc() {
-        return "Discovers natural data clusters using the DBSCAN density-based clustering "
-            "algorithm; accumulates records in windows, clusters them, and emits one "
-            "event per record with cluster assignment";
+        return "Performs probabilistic clustering using Gaussian Mixture Models; "
+            "accumulates records in windows, fits a GMM, and emits cluster "
+            "assignments with probability scores for each record";
     }
 
     #! Returns data provider static info
@@ -180,7 +163,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
     private *auto processRecordImpl(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
-                "QoreDBSCANClusteringProcessor: not configured; provide constructor options";
+                "QoreGMMProcessor: not configured; provide constructor options";
         }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
@@ -192,11 +175,15 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
     }
 
     #! Flushes remaining buffered data
+    /** @note If the buffer contains fewer records than \c n_components, the
+        records are discarded because GMM requires at least \c n_components
+        data points to fit the model. No results are emitted in this case.
+    */
     private *list<auto> flushRecordsImpl() {
         if (!configured || !buffer) {
             return;
         }
-        if (buffer.lsize() >= 2) {
+        if (buffer.lsize() >= n_components) {
             list<auto> results = processWindow(buffer);
             buffer = ();
             return results;
@@ -205,7 +192,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
         return;
     }
 
-    #! Processes a window of records through DBSCAN
+    #! Processes a window of records through GMM
     private list<auto> processWindow(list<hash<auto>> records) {
         # extract matrix from fields
         list<list<float>> matrix;
@@ -217,13 +204,15 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             push matrix, row;
         }
 
-        # create DBSCAN and cluster
-        ML::DBSCAN dbscan({
-            "epsilon": epsilon,
-            "min_points": min_points,
-            "metric": metric,
+        # create and fit GMM
+        ML::GMM gmm({
+            "n_components": n_components,
+            "covariance_type": covariance_type,
         });
-        list<hash<ML::DBSCANResult>> clusters = dbscan.clusterMatrix(matrix);
+        gmm.fitMatrix(matrix);
+
+        # predict cluster assignments
+        list<hash<ML::GMMResult>> predictions = gmm.predictMatrix(matrix);
 
         # emit one event per record
         list<auto> events;
@@ -232,11 +221,12 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
             foreach string f in (fields) {
                 record_values{f} = records[i]{f};
             }
-            push events, <DBSCANClusteringEventInfo>{
-                "event_type": "dbscan-clustering",
-                "cluster": clusters[i].cluster,
-                "is_core": clusters[i].is_core,
-                "neighbor_count": clusters[i].neighbor_count,
+            push events, <GMMClusteringEventInfo>{
+                "event_type": "gmm",
+                "cluster": predictions[i].cluster,
+                "max_probability": predictions[i].max_probability,
+                "probabilities": predictions[i].probabilities,
+                "log_likelihood": predictions[i].log_likelihood,
                 "record_values": record_values,
             };
         }
@@ -255,7 +245,7 @@ public class QoreDBSCANClusteringProcessor inherits DataProvider::AbstractDataPr
 
     #! Returns the output type
     private *DataProvider::AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
-        return new HashDeclDataType(TypedHash::forName("DataProviderML::DBSCANClusteringEventInfo"));
+        return new HashDeclDataType(TypedHash::forName("DataProviderML::GMMClusteringEventInfo"));
     }
 }
 }
