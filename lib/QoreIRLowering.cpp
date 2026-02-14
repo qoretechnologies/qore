@@ -524,6 +524,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         builder.createBranchIf(cond, body_block, exit_block);
 
+        // Move exit_block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the do-while body lowering.
+        builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
         return true;
     }
@@ -559,6 +562,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         flow_stack.pop_back();
 
+        // Move exit_block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the while body lowering.
+        builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
         return true;
     }
@@ -620,6 +626,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(cond_block);
         }
 
+        // Move exit_block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the for body lowering.
+        builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
         return true;
     }
@@ -744,6 +753,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         index_phi->operands.push_back(init_index);
         index_phi->operands.push_back(next_index);
 
+        // Move exit_block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the foreach body lowering.
+        builder.getFunction()->moveBlockToEnd(exit_block);
         // Exit block
         builder.setBlock(exit_block);
         return true;

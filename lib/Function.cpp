@@ -2631,10 +2631,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
 
-    // When a debugger is attached, force AST execution so that all debug hooks
-    // (dbgFunctionEnter/Exit, dbgStep, checkBreakFlag) work correctly.
-    // IR interpreter and JIT-compiled code have no debug hooks, so promoted
-    // functions would be invisible to the debugger.
+    // When a debugger is attached at dispatch time, force AST execution so
+    // that all debug events (dbgFunctionEnter/Exit, dbgStep with onBlock/onStep,
+    // dbgException) are generated with full fidelity. JIT has no debug hooks;
+    // IR interpreter has hooks but only generates onStep events (no onBlock),
+    // so it can't match AST fidelity for dispatch-time debugging.
+    // The IR interpreter's debug hooks handle the mid-execution attachment case
+    // (debugger attaches while a function is already executing in IR).
     if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         tier = TIER_AST;
     }
@@ -2777,7 +2780,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
-                    nullptr, nullptr, &pre_instantiated);
+                    nullptr, nullptr, &pre_instantiated, statements, pgm);
                 if (ok && !*xsink) {
                     val = ir_return_value;
                 } else if (*xsink) {

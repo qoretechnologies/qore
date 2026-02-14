@@ -40,8 +40,10 @@
 
 class ExceptionSink;
 class LocalVar;
+class QoreProgram;
 class QoreValue;
 class AbstractStatement;
+class StatementBlock;
 
 class QoreIRInterpreter {
 public:
@@ -68,7 +70,8 @@ public:
     static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
             const std::vector<QoreValue>* closure = nullptr,
-            const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr);
+            const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
+            const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr);
 };
 
 #endif

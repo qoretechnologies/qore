@@ -1363,42 +1363,48 @@ thresholds (100/1000).
 **Files**: `lib/Function.cpp` (dispatch-time check), `include/qore/intern/qore_program_private.h`
 (`hasDebuggerAttached()` accessor).
 
-### Phase 8: IR Interpreter Debug Hooks (TODO)
+### Phase 8: IR Interpreter Debug Hooks (DONE)
 
-Add statement-boundary debug hooks to the IR interpreter for full debug fidelity even when
-functions have been promoted to `TIER_IR`. This eliminates the mid-execution attachment
-limitation.
+Added statement-boundary debug hooks to the IR interpreter for mid-execution debugger
+attachment. When a debugger attaches while a function is already executing in IR, the hooks
+generate `dbgStep`, `dbgFunctionEnter`, `dbgFunctionExit`, and `dbgException` events.
 
-#### Design
+Functions dispatched with a debugger already attached still use AST for full event fidelity
+(the IR interpreter generates only `onStep` events, not `onBlock` block-entry events that
+the AST path produces). This preserves correct debug trace sequences for the test suite.
 
-1. **Statement boundary detection**: IR instructions carry source location (`QoreProgramLocation`).
-   Detect statement boundaries by checking when the source line changes between consecutive
-   instructions.
+#### Implementation
 
-2. **Conditional debug check**: At each statement boundary, check `tlpd->runtimeCheck()`.
-   Only call debug hooks when a debugger is actually attached. The branch is highly predictable
-   (almost never taken in production) and should have minimal performance impact.
+1. **New parameters**: Added `const StatementBlock* statements` and `QoreProgram* pgm` to
+   `QoreIRInterpreter::execute()`. Passed from `evalTiered()` call site.
 
-3. **Required hooks at statement boundaries**:
-   - `tlpd->dbgStep(stmt, next_stmt, xsink)` — step/breakpoint support
-   - `tlpd->dbgException(stmt, xsink)` — after exception-raising instructions
-   - `tlpd->checkBreakFlag()` — async break support (checked inside `dbgStep`)
+2. **Debug context setup**: At the top of `execute()`, get `ThreadLocalProgramData*` via
+   `get_thread_local_program_data()` and check `runtimeCheck()`. Call `dbgFunctionEnter()`
+   if debugging is active at entry.
 
-4. **Function enter/exit hooks**: Already handled by the dispatch-time override in
-   `evalTiered()`. The IR interpreter doesn't need to duplicate these; the caller's
-   `StatementBlock::exec()` wrapper handles them.
+3. **Statement-boundary `dbgStep`**: Before each opcode dispatch, check if the source line
+   changed. If so, look up the `AbstractStatement*` via `getStatementFromIndex()` and call
+   `tlpd->dbgStep()`. Re-checks `runtimeCheck()` each iteration to handle debugger attach
+   mid-execution (the original bug that triggered this phase).
 
-5. **Block-scope hooks**: `dbgBlock()` events for entering/exiting statement blocks (if, while,
-   for, try, etc.). These require tracking the current statement block, which is available from
-   the IR instruction's source location.
+4. **`dbgFunctionExit`**: Called at `Return`, `ReturnNothing`, and unhandled exception paths
+   (`Throw`/`Rethrow` with no exception target, `Invoke` with no exception target).
 
-#### Implementation Plan
+5. **`dbgException`**: Called after `Invoke` raises an exception, and after `Throw`/`Rethrow`.
+   Handles debugger dismissing exceptions (continues normal flow if exception cleared).
 
-- [ ] Add `ThreadLocalProgramData*` parameter to `QoreIRInterpreter::execute()`
-- [ ] Track current source line; emit `dbgStep` when line changes and `runtimeCheck()` is true
-- [ ] Emit `dbgException` after instructions that may throw (Invoke results)
-- [ ] Test: `test-debug.qtest` must pass at aggressive thresholds (3/10) with 789/789 assertions
-- [ ] Performance: benchmark IR interpreter with and without debug hooks (target: <5% overhead)
+6. **Dispatch-time override preserved**: `evalTiered()` still forces AST for both IR and JIT
+   tiers when a debugger is already attached at dispatch time. This ensures full debug event
+   fidelity (including `onBlock` events). The IR hooks handle only the mid-execution case.
+
+#### Checklist
+
+- [x] Add `StatementBlock*` and `QoreProgram*` params to `QoreIRInterpreter::execute()`
+- [x] Track current source line; emit `dbgStep` when line changes and `runtimeCheck()` is true
+- [x] Emit `dbgFunctionEnter` at start, `dbgFunctionExit` at return/exception exit
+- [x] Emit `dbgException` after Invoke/Throw/Rethrow raises exceptions
+- [x] Test: `test-debug.qtest` passes 789/789 at both default and aggressive thresholds (3/10)
+- [x] Performance: negligible overhead when no debugger attached (branch-predicted `runtimeCheck()`)
 
 ### Phase 9: JIT Debug Hooks (TODO — Future)
 

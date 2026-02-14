@@ -18,6 +18,7 @@
 #include <qore/QoreStringNode.h>
 #include <qore/DateTimeNode.h>
 #include <qore/intern/AbstractStatement.h>
+#include <qore/intern/qore_program_private.h>
 #include <qore/intern/DebugStatement.h>
 #include <qore/intern/AssertStatement.h>
 #include <qore/intern/ContextStatement.h>
@@ -1117,7 +1118,8 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
-        const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated) {
+        const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
+        const StatementBlock* statements, QoreProgram* pgm) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;
@@ -1218,6 +1220,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             cleanupInstantiatedLocals(locals, xsink, pre_instantiated);
         }
     } local_cleanup{instantiated_locals, xsink, pre_instantiated};
+
+    // Debug hook support
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    // can_debug: invariant within this function — tlpd, statements, pgm won't change.
+    // Only runtimeCheck() can change (debugger attaches mid-execution).
+    bool can_debug = tlpd && statements && pgm;
+    bool debug_active = can_debug && tlpd->runtimeCheck();
+    int last_debug_line = -1;  // track line changes for dbgStep
+
+    // Call dbgFunctionEnter if debug is active
+    if (debug_active) {
+        tlpd->dbgFunctionEnter(statements, xsink);
+        if (*xsink) {
+            return false;  // local_cleanup RAII handles cleanup
+        }
+    }
+
     if (func.blocks.empty()) {
         if (xsink) {
             xsink->raiseException("IR-EXEC-ERROR", "function has no basic blocks");
@@ -1304,6 +1323,40 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return false;
         }
         QoreIRInstruction* inst = block->instructions[ip].get();
+
+        // Debug: fire dbgStep on source line changes.
+        // Re-check runtimeCheck() each iteration to detect mid-execution debugger attachment.
+        if (debug_active || (can_debug && tlpd->runtimeCheck())) {
+            debug_active = true;  // latch on once debugger is detected
+            if (inst->loc && inst->loc->start_line != last_debug_line) {
+                last_debug_line = inst->loc->start_line;
+                // start_line + offset: statements are indexed by this combined value
+                // (see QoreProgram.cpp addStatementToIndexIntern); start_line is the
+                // absolute line in the file, offset adjusts for embedded sources.
+                AbstractStatement* dbg_stmt = qore_program_private::get(*pgm)->getStatementFromIndex(
+                    inst->loc->getFile(), inst->loc->start_line + inst->loc->offset);
+                if (dbg_stmt) {
+                    int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                    if (dbg_rc || *xsink) {
+                        if (dbg_rc == RC_RETURN || *xsink) {
+                            if (debug_active) {
+                                tlpd->dbgFunctionExit(statements, return_value, xsink);
+                            }
+                            executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
+                            return dbg_rc == RC_RETURN;
+                        }
+                        // RC_BREAK/RC_CONTINUE: not easily translatable to IR control flow
+                        // Fall through for now
+                    }
+                }
+            }
+        }
+
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
@@ -1794,6 +1847,36 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(threadlocals, nullptr);
                 cleanupStoredValues(closures, nullptr);
                 if (xsink && *xsink) {
+                    if (debug_active) {
+                        tlpd->dbgException(nullptr, xsink);
+                        // dbgException may dismiss the exception
+                        if (!*xsink) {
+                            // Exception was dismissed by debugger — continue normal flow.
+                            // NOTE: the invoke's result slot (values[inv->result]) contains
+                            // NOTHING since the call raised an exception before producing a
+                            // result. Code on the normal path may read this slot expecting a
+                            // valid value. This is inherent to debugger exception dismissal;
+                            // the debugger is responsible for understanding this risk.
+                            prev_block = block;
+                            block = inv->normal_target;
+                            ip = 0;
+                            break;
+                        }
+                    }
+                    if (!inv->exception_target) {
+                        // No exception target (no try/catch): propagate exception to caller.
+                        // Fire debug exit, on_block_exit handlers, and full cleanup.
+                        if (debug_active) {
+                            tlpd->dbgFunctionExit(statements, return_value, xsink);
+                        }
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
+                        return false;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     prev_block = block;
                     block = inv->exception_target;
@@ -4396,6 +4479,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseExceptionArg("IR-EXEC-THROW", owned_arg, "throw");
                     }
                 }
+                if (debug_active && xsink && *xsink) {
+                    tlpd->dbgException(nullptr, xsink);
+                }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 if (throw_inst->exception_target) {
                     prev_block = block;
@@ -4406,6 +4492,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // No exception target: fire all scope exits after raising the exception.
                 // The exception is now on xsink, so on_error handlers can access it
                 // via CatchExceptionHelper for rethrow support.
+                if (debug_active) {
+                    tlpd->dbgFunctionExit(statements, return_value, xsink);
+                }
                 fireScopeExits();
                 cleanupStoredValues(locals, nullptr);
                 cleanupStoredValues(globals, nullptr);
@@ -4429,6 +4518,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 } else {
                     qore_es_private::get(*xsink)->rethrow(ex);
                 }
+                if (debug_active && *xsink) {
+                    tlpd->dbgException(nullptr, xsink);
+                }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
                     if (!catch_exception_stack.empty()) {
@@ -4451,6 +4543,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // No exception target: fire all scope exits after rethrowing.
                 // The rethrown exception is now on xsink, so on_error handlers
                 // can access it via CatchExceptionHelper.
+                if (debug_active) {
+                    tlpd->dbgFunctionExit(statements, return_value, xsink);
+                }
                 fireScopeExits();
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupStoredValues(locals, nullptr);
@@ -4477,6 +4572,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 } else {
                     return_value = QoreValue();
                 }
+                if (debug_active) {
+                    tlpd->dbgFunctionExit(statements, return_value, xsink);
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupStoredValues(locals, xsink);
@@ -4487,6 +4585,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::ReturnNothing:
                 return_value = QoreValue();
+                if (debug_active) {
+                    tlpd->dbgFunctionExit(statements, return_value, xsink);
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupStoredValues(locals, xsink);
