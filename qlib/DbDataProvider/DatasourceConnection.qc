@@ -69,7 +69,7 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         };
     }
 
-    private:internal {
+    private {
         #! The parsed datasource URL hash (without the "db://" prefix)
         hash<auto> ds_urlh;
     }
@@ -115,6 +115,13 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
     #! Returns the data provider application name
     *string getAppName() {
         return AppName;
+    }
+
+    #! Returns the parsed datasource URL hash
+    /** @return the parsed datasource URL hash without the @c "db://" prefix
+    */
+    hash<auto> getDatasourceHash() {
+        return ds_urlh;
     }
 
     #! Returns logo info for the connection's database driver
@@ -218,23 +225,28 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
             opts += urlh.options;
         }
 
-        # validate min/max pool options
+        # validate min/max pool options: both must be present or both are stripped
         if (exists opts.min || exists opts.max) {
             if (!exists opts.min || !exists opts.max) {
-                throw "CONNECTION-OPTION-ERROR", sprintf("connection %y: both 'min' and 'max' pool options must "
-                    "be provided together; got min: %y, max: %y", name, opts.min, opts.max);
-            }
-            if (opts.min < 0) {
-                throw "CONNECTION-OPTION-ERROR", sprintf("connection %y: 'min' pool option must be >= 0; "
-                    "got: %y", name, opts.min);
-            }
-            if (opts.max < 1) {
-                throw "CONNECTION-OPTION-ERROR", sprintf("connection %y: 'max' pool option must be > 0; "
-                    "got: %y", name, opts.max);
-            }
-            if (opts.max < opts.min) {
-                throw "CONNECTION-OPTION-ERROR", sprintf("connection %y: 'max' (%d) must be >= 'min' (%d)",
-                    name, opts.max, opts.min);
+                # silently strip incomplete min/max pair
+                opts -= ("min", "max");
+            } else {
+                # ensure it's always integer for safe comparisons
+                opts.min = int(opts.min);
+                opts.max = int(opts.max);
+
+                if (opts.min < 0) {
+                    throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'min' pool option must be >= 0; "
+                        "got: %y", name, opts.min);
+                }
+                if (opts.max < 1) {
+                    throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'max' pool option must be > 0; "
+                        "got: %y", name, opts.max);
+                }
+                if (opts.max < opts.min) {
+                    throw "DATASOURCE-CONNECTION-ERROR", sprintf("connection %y: 'max' (%d) must be >= 'min' (%d)",
+                        name, opts.max, opts.min);
+                }
             }
         }
 

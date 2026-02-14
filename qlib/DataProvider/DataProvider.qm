@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.5.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -770,6 +770,16 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_5 DataProvider v3.5
+    - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
+      @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously
+      defined only in child hashdecls and are now shared across all option types
+    - @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo": added @c connection_options and @c auto_url
+      fields to support per-app connection option overrides for connection creation forms
+    - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
+      resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
+      compatibility
 
     @subsection dataprovider_v3_4 DataProvider v3.4
     - added streaming analytics pipeline processors for real-time data analysis:

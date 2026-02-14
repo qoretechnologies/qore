@@ -26,24 +26,6 @@
 
 #! Contains all public definitions in the ConnectionProvider module
 public namespace ConnectionProvider {
-#! Connection option information
-public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
-    #! Option value type
-    string type;
-
-    #! Should the option be preselected in UIs?
-    bool preselected = False;
-
-    #! Do environment variable substitution on the value?
-    bool subst_env_vars = False;
-
-    #! Modifier for the "file-as-string" type; can a freeform location option be returned?
-    bool freeform = False;
-
-    #! Ignore types for backwards compatibility when an option changes type
-    *hash<string, bool> ignore_types;
-}
-
 #! Connection provider information
 public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
     #! Connection scheme set; scheme -> True

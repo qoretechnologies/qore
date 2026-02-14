@@ -819,18 +819,35 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
     #! Returns a ConnectionOptionInfo hash from a DataProviderOptionInfo hash
     static hash<ConnectionOptionInfo> getConnectionOptionInfo(hash<DataProviderOptionInfo> dinfo) {
-        hash<ConnectionOptionInfo> rv = cast<hash<ConnectionOptionInfo>>(dinfo{CommonConnectionKeys});
-        rv.type = dinfo.type[0].getBaseTypeName();
-        rv.type =~ s/<.*>//;
-        return rv;
+        string type_str = dinfo.type[0].getBaseTypeName();
+        type_str =~ s/<.*>//;
+        return <ConnectionOptionInfo>{
+            "display_name": dinfo.display_name,
+            "short_desc": dinfo.short_desc,
+            "desc": dinfo.desc,
+            "sensitive": dinfo.sensitive,
+            "allowed_values": dinfo.allowed_values,
+            "allowed_values_creatable": dinfo.allowed_values_creatable,
+            "default_value": dinfo.default_value,
+            "example_value": dinfo.example_value,
+            "required": dinfo.required,
+            "readonly": dinfo.readonly,
+            "disabled": dinfo.disabled,
+            "preselected": dinfo.preselected,
+            "has_dependents": dinfo.has_dependents,
+            "depends_on": dinfo.depends_on,
+            "on_change": dinfo.on_change,
+            "type": type_str,
+        };
     }
 
     #! Returns a hash of ConnectionOptionInfo hashes from a hash of DataProviderOptionInfo hashes
     static hash<string, hash<ConnectionOptionInfo>> getConnectionOptionInfo(
                 hash<string, hash<DataProviderOptionInfo>> dinfo) {
-        return cast<hash<string, hash<ConnectionOptionInfo>>>(map {
-            $1.key: AbstractConnection::getConnectionOptionInfo($1.value)
-        }, dinfo.pairIterator());
+        hash<string, hash<ConnectionOptionInfo>> rv;
+        map rv{$1.key} = AbstractConnection::getConnectionOptionInfo($1.value),
+            dinfo.pairIterator();
+        return rv;
     }
 
     #! Returns the real URL for a connection URL

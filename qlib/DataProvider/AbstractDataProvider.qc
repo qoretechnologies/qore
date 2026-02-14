@@ -88,18 +88,42 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
         @since %DataProvider 3.3
     */
     *string ui_type;
+
+    #! Required flag
+    bool required = False;
+
+    #! Is this option read-only?
+    bool readonly = False;
+
+    #! Is this option disabled?
+    bool disabled = False;
+
+    #! Should the option be preselected in UIs?
+    bool preselected = False;
+
+    #! Does any other option depend on this one?
+    bool has_dependents = False;
+
+    #! A list of other options that must be set before this option can be chosen
+    /** Each element is either:
+        - a string: a single option name that must have a value (e.g. @c "driver")
+        - a string with @c "=": option must equal a specific value (e.g. @c "driver=jdbc")
+        - a list of strings: a group where at least one must have a value
+
+        @since %DataProvider 3.5
+    */
+    *softlist<softstring> depends_on;
+
+    #! How to react to changes (e.g. @c "refetch" to reload options from the server)
+    /** @since %DataProvider 3.5
+    */
+    *softlist<softstring> on_change;
 }
 
 #! Data provider option info
 public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! The option value type or types
     softlist<AbstractDataProviderType> type;
-
-    #! Required flag
-    /** @note This attribute is ignored for cases when multiple combinations of options may be valid such as for
-        data provider constructor options
-    */
-    bool required = False;
 
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
@@ -127,11 +151,6 @@ public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! A tag allowing the default value for the option to be returned dynamically
     *string default_ref_data;
 
-    #! Should this option be preselected?
-    *bool preselected;
-
-    #! Any information about how to react to changes
-    *softlist<softstring> on_change;
 }
 
 #! Data provider summary info
