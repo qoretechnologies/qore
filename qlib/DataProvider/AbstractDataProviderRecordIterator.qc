@@ -129,7 +129,7 @@ public const DP_FUNC_KEY = "key";
     }
     @endcode
 
-    @since DataProvider 3.4
+    @since DataProvider 3.3
 */
 public const DP_EXPR_VALUE = "value";
 #/@}

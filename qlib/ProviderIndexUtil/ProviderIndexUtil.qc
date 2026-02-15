@@ -420,8 +420,22 @@ public class ProviderIndexUtil {
         try {
             rv = cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
             if (rv.appinfomap) {
+                TypedHash conn_opt_th = TypedHash::forName("ConnectionProvider::ConnectionOptionInfo");
                 rv.appinfomap = map {
-                    $1.key: app_info_th.doCast($1.value),
+                    $1.key: app_info_th.doCast($1.value + (
+                        $1.value.connection_options
+                        ? {
+                            "connection_options": map {
+                                $1.key: conn_opt_th.doCast($1.value + {
+                                    "allowed_values": (map cast<hash<AllowedValueInfo>>($1),
+                                        $1.value.allowed_values),
+                                    "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
+                                        $1.value.element_allowed_values),
+                                }),
+                            }, $1.value.connection_options.pairIterator(),
+                        }
+                        : {}
+                    )),
                 }, rv.appinfomap.pairIterator();
             }
             if (rv.actioninfomap) {

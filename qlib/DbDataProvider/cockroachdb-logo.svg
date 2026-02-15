@@ -1,0 +1,9 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <title>CockroachDB</title>
+  <!-- CockroachDB logo - stylized hexagonal shape -->
+  <path d="M16 2L4 9v14l12 7 12-7V9L16 2z" fill="#6933FF"/>
+  <path d="M16 6.5L8 11v10l8 4.5 8-4.5V11L16 6.5z" fill="#fff" fill-opacity="0.2"/>
+  <path d="M16 8l-6 3.5v7L16 22l6-3.5v-7L16 8z" fill="none" stroke="#fff" stroke-width="0.8"/>
+  <circle cx="16" cy="15" r="3" fill="#fff"/>
+  <path d="M16 12v-4M16 18v4M12.5 13l-3.5-2M19.5 17l3.5 2M12.5 17l-3.5 2M19.5 13l3.5-2" stroke="#fff" stroke-width="0.8" stroke-linecap="round"/>
+</svg>
