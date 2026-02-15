@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugProgramControl.qm Debug common code
 
-/*  DebugProgramControl.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugProgramControl.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1117,16 +1117,10 @@ public namespace DebugProgramControl {
             }
 
             hash ctxCT;
-            {
-                rwlConnection.writeLock();
-                on_exit rwlConnection.writeUnlock();
-                # default values
-                if (exists refName) {
-                    ctxCT{refName} = refValue;
-                }
-                ctxCT.frameId = 0;
-                ctxConnection{ctx.id}.thread{tid} = ctxCT;
+            if (exists refName) {
+                ctxCT{refName} = refValue;
             }
+            ctxCT.frameId = 0;
             # wait to process command passed as marshalled call from websocket thread
             bool ret = False;
             while (!ret) {

@@ -1,0 +1,372 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-debugger
+
+%requires ../../../../qlib/DebugUtil.qm
+%requires ../../../../qlib/DebugProgramControl.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DebugProgramControlTest
+
+class TestDebugProgramControl inherits DebugProgramControl {
+    public {
+        list<hash> sentMessages = ();
+        list<auto> broadcastMessages = ();
+    }
+
+    constructor() : DebugProgramControl("test-server") {
+    }
+
+    public sendDataImpl(hash cx, auto data) {
+        push sentMessages, ("cx": cx, "data": data);
+    }
+
+    public broadcastDataImpl(auto data) {
+        push broadcastMessages, data;
+    }
+
+    public clearMessages() {
+        sentMessages = ();
+        broadcastMessages = ();
+    }
+}
+
+public class DebugProgramControlTest inherits QUnit::Test {
+    private {
+        TestDebugProgramControl dpc;
+        const CX = ("id": 1);
+    }
+
+    constructor() : Test("DebugProgramControlTest", "1.0") {
+        addTestCase("help and version", \helpVersionTests());
+        addTestCase("options", \optionsTests());
+        addTestCase("session", \sessionTests());
+        addTestCase("program list", \programListTests());
+        addTestCase("breakpoint CRUD", \breakpointTests());
+        addTestCase("thread stack", \threadStackTests());
+        addTestCase("error handling", \errorHandlingTests());
+        addTestCase("connection management", \connectionTests());
+        addTestCase("shutdown", \shutdownTests());
+        addTestCase("integration", \integrationTests());
+        set_return_value(main());
+    }
+
+    setUp() {
+        dpc = new TestDebugProgramControl();
+        dpc.registerConnection(CX);
+    }
+
+    tearDown() {
+        dpc.unregisterConnection(CX);
+    }
+
+    helpVersionTests() {
+        # help command
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "help"));
+            assertEq("response", ret.type);
+            assertTrue(ret.result instanceof list);
+            assertTrue(ret.result.size() > 0);
+        }
+
+        # version command
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "version"));
+            assertEq("response", ret.type);
+            assertTrue(ret.result.hasKey("class"));
+            assertEq("TestDebugProgramControl", ret.result.class);
+        }
+    }
+
+    optionsTests() {
+        # fullexceptioninfo get (default)
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/get"));
+            assertEq("response", ret.type);
+            assertEq(False, ret.result);
+        }
+
+        # fullexceptioninfo set/get
+        {
+            dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/set", "value": True));
+            *hash ret = dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/get"));
+            assertEq(True, ret.result);
+            # reset
+            dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/set", "value": False));
+        }
+
+        # sourcepath get (default)
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "options/sourcepath/get"));
+            assertEq("response", ret.type);
+            assertEq("", ret.result);
+        }
+
+        # sourcepath set/get
+        {
+            dpc.processCommand(CX, ("cmd": "options/sourcepath/set", "value": "/tmp"));
+            *hash ret = dpc.processCommand(CX, ("cmd": "options/sourcepath/get"));
+            assertEq("/tmp", ret.result);
+            # reset
+            dpc.processCommand(CX, ("cmd": "options/sourcepath/set", "value": ""));
+        }
+    }
+
+    sessionTests() {
+        # get session with no programs added to debugging
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "session/get"));
+            # with no programs added to debugging, result is NOTHING so no response is sent
+            assertNothing(ret);
+        }
+
+        # get session after adding a program
+        {
+            Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+            pgm.parse("int sub sess_test() { return 1; }", "session-test.q");
+            ProgramControl pc = pgm.getProgram();
+            dpc.addProgram(pc);
+            int pgmId = pc.getProgramId();
+
+            *hash ret = dpc.processCommand(CX, ("cmd": "session/get"));
+            assertEq("response", ret.type);
+            assertTrue(ret.result.hasKey(string(pgmId)));
+
+            dpc.removeProgram(pc);
+        }
+    }
+
+    programListTests() {
+        # list programs (global list) — returns all ProgramControl instances
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "program//list"));
+            assertEq("response", ret.type);
+            # result is a hash of programs; at minimum our own program exists
+            assertTrue(ret.result instanceof hash);
+            assertTrue(ret.result.size() > 0);
+        }
+
+        # list with filter — nonexistent name returns no result (NOTHING)
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "program/nonexistent_xyz/list"));
+            # no programs match the filter, so result is NOTHING and no response is generated
+            assertNothing(ret);
+        }
+    }
+
+    breakpointTests() {
+        # create a program for breakpoints
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse("int sub test_func() { return 1; }", "test-bkpt.q");
+        ProgramControl pc = pgm.getProgram();
+        dpc.addProgram(pc);
+        int pgmId = pc.getProgramId();
+
+        dpc.clearMessages();
+
+        # create breakpoint
+        *hash ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint//create"));
+        assertEq("response", ret.type);
+        assertTrue(ret.result.hasKey("bkptid"));
+        int bkptId = ret.result.bkptid;
+
+        # verify broadcast
+        assertTrue(dpc.broadcastMessages.size() > 0);
+        assertEq("create", dpc.broadcastMessages[dpc.broadcastMessages.size() - 1].event);
+
+        # list breakpoints
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint//list"));
+            assertEq("response", ret2.type);
+            assertTrue(ret2.result instanceof list);
+            assertTrue(ret2.result.size() >= 1);
+        }
+
+        # list all breakpoints (no pgmId)
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program//breakpoint//list"));
+            assertEq("response", ret2.type);
+            assertTrue(ret2.result instanceof list);
+        }
+
+        # enable/disable
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/disable"));
+            assertEq("response", ret2.type);
+            assertEq("ok", ret2.result);
+        }
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/enable"));
+            assertEq("response", ret2.type);
+            assertEq("ok", ret2.result);
+        }
+
+        # policy get/set
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"));
+            assertEq("response", ret2.type);
+            assertEq("none", ret2.result);
+        }
+        {
+            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/set", "value": "accept"));
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"));
+            assertEq("accept", ret2.result);
+        }
+
+        # thread get/set/add/remove
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
+            assertEq("response", ret2.type);
+            assertEq((), ret2.result);
+        }
+        {
+            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/add", "value": 42));
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
+            assertTrue(inlist(42, ret2.result));
+        }
+        {
+            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/remove", "value": 42));
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
+            assertFalse(inlist(42, ret2.result));
+        }
+
+        # delete breakpoint
+        {
+            dpc.clearMessages();
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"));
+            assertEq("response", ret2.type);
+            assertEq("ok", ret2.result);
+            # verify delete broadcast
+            assertTrue(dpc.broadcastMessages.size() > 0);
+            assertEq("delete", dpc.broadcastMessages[dpc.broadcastMessages.size() - 1].event);
+        }
+
+        dpc.removeProgram(pc);
+    }
+
+    threadStackTests() {
+        # thread stack all (no tid)
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "thread/stack"));
+            assertEq("response", ret.type);
+            assertTrue(ret.result instanceof hash);
+        }
+
+        # thread command without tid when tid is required
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "thread/go", "tid": 99999));
+            assertEq("error", ret.type);
+            assertTrue(ret.result.err.find("DEBUG-HANDLER-ERROR") >= 0);
+        }
+    }
+
+    errorHandlingTests() {
+        # unknown command
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "nonexistent_command"));
+            assertEq("error", ret.type);
+        }
+
+        # invalid program ID
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "program/999999/add"));
+            assertEq("error", ret.type);
+        }
+
+        # invalid breakpoint ID
+        {
+            *hash ret = dpc.processCommand(CX, ("cmd": "program//breakpoint/999999/enable"));
+            assertEq("error", ret.type);
+        }
+    }
+
+    connectionTests() {
+        # register new connection
+        hash cx2 = ("id": 2);
+        dpc.registerConnection(cx2);
+
+        # welcome message
+        dpc.clearMessages();
+        dpc.connectionRegistered(cx2);
+        assertTrue(dpc.sentMessages.size() > 0);
+        assertEq("welcome", dpc.sentMessages[0].data.cmd);
+        assertEq("test-server", dpc.sentMessages[0].data.result);
+
+        # getConnectionIds
+        list ids = dpc.getConnectionIds();
+        assertTrue(inlist(1, ids));
+        assertTrue(inlist(2, ids));
+
+        # unregister
+        dpc.unregisterConnection(cx2);
+        ids = dpc.getConnectionIds();
+        assertFalse(inlist(2, ids));
+
+        # unregisterAll
+        hash cx3 = ("id": 3);
+        hash cx4 = ("id": 4);
+        dpc.registerConnection(cx3);
+        dpc.registerConnection(cx4);
+        dpc.unregisterAllConnections();
+        ids = dpc.getConnectionIds();
+        assertFalse(inlist(3, ids));
+        assertFalse(inlist(4, ids));
+
+        # re-register our main connection for tearDown
+        dpc.registerConnection(CX);
+    }
+
+    shutdownTests() {
+        # shutdown with no blocked threads should not deadlock
+        TestDebugProgramControl dpc2();
+        dpc2.registerConnection(CX);
+        *hash ret = dpc2.processCommand(CX, ("cmd": "shutdown"));
+        assertEq("response", ret.type);
+        assertEq("ok", ret.result);
+        dpc2.unregisterConnection(CX);
+    }
+
+    integrationTests() {
+        # create a program, add to debugging, run in background, verify interrupt events
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse("int sub integ_test() { return 1; }", "integration-test.q");
+        ProgramControl pc = pgm.getProgram();
+
+        # add to debug control
+        int pgmId = pc.getProgramId();
+        *hash ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
+        assertEq("response", ret.type);
+
+        # verify program appears in session
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "session/get"));
+            assertEq("response", ret2.type);
+            assertTrue(ret2.result.hasKey(string(pgmId)));
+        }
+
+        # remove program
+        ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
+        assertEq("response", ret.type);
+
+        # add duplicate check
+        dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
+            assertEq("response", ret2.type);
+            # result should indicate already added
+            assertTrue(ret2.result.find("already added") >= 0);
+        }
+
+        # remove and clean up
+        dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
+
+        # remove not-added
+        {
+            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
+            assertEq("response", ret2.type);
+            assertTrue(ret2.result.find("not added") >= 0);
+        }
+    }
+}

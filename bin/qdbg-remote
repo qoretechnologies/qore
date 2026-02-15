@@ -3,13 +3,16 @@
 
 %modern
 
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires WebSocketClient
 %requires yaml >= 0.5
 %requires DebugCmdLine
 %requires DebugLinenoiseCmdLine
 %requires ConnectionProvider
 %requires Logger
+
+%allow-debugger
+%no-debugging
 
 %exec-class DebugWrapper
 

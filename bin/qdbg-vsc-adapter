@@ -3,7 +3,7 @@
 
 %modern
 
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires VscDebugAdapter
 %requires DebugProgramControl >= 0.1.2
 
@@ -16,7 +16,7 @@
 
 %exec-class DebugWrapper
 
-sub get_full_log_file_path(string ext) {
+string sub get_full_log_file_path(string ext) {
     if (PlatformOS == "Windows") {
         return getenv("APPDATA") + DirSep + "QoreDebugAdapter" + DirSep + "qda" + ext;
     } else {
@@ -94,7 +94,7 @@ class DebugProgramControlLocal inherits DebugProgramControl {
         }
     }
     public broadcastDataImpl(auto data) {
-        logger.debug("broadcastDataImpl: %y: %y", data);
+        logger.debug("broadcastDataImpl: %y", data);
         vda.pushEvent(data);
     }
 }
@@ -187,15 +187,15 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
         }
     }
 
-    public wscLog(s) {
+    public wscLog(string s) {
         logger.info(s);
     }
 
-    public wscDebug(s) {
+    public wscDebug(string s) {
         logger.debug(s);
     }
 
-    public wscErr(s) {
+    public wscErr(string s) {
         logger.info(s);
         #stderr.print(s+"\n");
     }
@@ -309,7 +309,7 @@ class DebugWrapper {
                 cast<VscDebugAdapterRemote>(vda).connect();
             }
             if (opt.execute) {
-                logger.debug("Execute command: %y");
+                logger.debug("Execute command: %y", opt.execute);
                 vda.execute(opt.execute);
             } else {
                 logger.debug("Run vda adapter");

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugUtil.qm Debug common code
 
-/*  DebugUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -64,7 +64,7 @@ public namespace DebugUtil {
         - target program filename
         - program arguments
 
-        The class support argument parsing for such a case.
+        The class supports argument parsing for such a case.
 
         Examples:
         @verbatim
@@ -73,44 +73,45 @@ public namespace DebugUtil {
                 'verbose': 'v,verbose',
                 'listen': 'l,listen=s@',
             );
-            wrapper-prog -v -l xxx xxx -v -l    # the second xxx is target program name
-            wrapper-prog -v -h xxx xxx          # the first xxx is target program name
-            wrapper-prog -v --listen=xxx xxx    # the second xxx is target program name
-            wrapper-prog -v --listen xxx xxx    # the second xxx is target program name
+            wrapper-prog -v -l xxx trg -v -l    # trg is the target program name
+            wrapper-prog -v -h trg xxx          # trg is the target program name
+            wrapper-prog -v --listen=xxx trg    # trg is the target program name
+            wrapper-prog -v --listen xxx trg    # trg is the target program name
         @endverbatim
     **/
     public class WrapperGetOpt inherits GetOpt {
-        public constructor(hash options): GetOpt(options) {
+        #! create the object with the given @ref Qore::GetOpt "GetOpt" option hash
+        public constructor(hash options) : GetOpt(options) {
         }
 
         #! Parses input arguments until a standalone argument is found.
         /**
             @param args @ref list of arguments passed to wrapper, typically ARGV
             @param wrp_args returns list of wrapper arguments
-            @param pgm_name returns target program filename. "" is considered as special file name (stdin), NOTHING when no name provided
+            @param pgm_name returns the target program filename; "" is considered a special file name (meaning \c stdin), NOTHING when no name provided
             @param pgm_args return @ref list of target program arguments
 
             @par Example:
             @code{.py}
             hash opts = (
-    		    'help': 'h,help',
-    	    	'verbose': 'v,verbose',
+                'help': 'h,help',
+                'verbose': 'v,verbose',
                 'listen': 'l,listen=s@',
             );
-    		WrapperGetOpt g(opts);
-		    list dargs;
-    		hash opt;
+            WrapperGetOpt g(opts);
+            list dargs;
+            hash opt;
             *string fileName;
-		    g.split(ARGV, \dargs, \fileName, \ARGV);
+            g.split(ARGV, \dargs, \fileName, \ARGV);
 
             try {
                 opt = g.parse2(\dargs);
-            } catch (hash ex) {
+            } catch (hash<ExceptionInfo> ex) {
                 stderr.printf("%s: %s\n", ex.err, ex.desc);
                 help(-1);
             }
 
-            if (exists fileName) {
+            if (!exists fileName) {
                 stderr.print("No input file\n");
                 exit(-1);
             }
@@ -258,7 +259,7 @@ public namespace DebugUtil {
                 case NT_NUMBER:
                     return sv.value;
                 default:
-                    throw "DEBUG-ERROR", sprintf("Cannot assing value of type: %y", sv.type);
+                    throw "DEBUG-ERROR", sprintf("Cannot assign value of type: %y", sv.type);
                 }
             } else {
                 return sv;

@@ -3,8 +3,9 @@
 
 %modern
 %allow-debugger
+%no-debugging
 
-%requires qore >= 1.0
+%requires qore >= 2.0
 %requires HttpServer
 %requires DebugProgramControl
 %requires DebugHandler

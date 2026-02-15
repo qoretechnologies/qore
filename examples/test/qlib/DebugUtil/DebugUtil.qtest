@@ -1,0 +1,342 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/DebugUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DebugUtilTest
+
+public class DebugUtilTest inherits QUnit::Test {
+    constructor() : Test("DebugUtilTest", "1.0") {
+        addTestCase("serialize/unserialize round-trip tests", \serializeTests());
+        addTestCase("unserialize error tests", \unserializeErrorTests());
+        addTestCase("enumFilter tests", \enumFilterTests());
+        addTestCase("evalCondition tests", \evalConditionTests());
+        addTestCase("WrapperGetOpt.split tests", \wrapperGetOptTests());
+        addTestCase("constants tests", \constantsTests());
+        set_return_value(main());
+    }
+
+    serializeTests() {
+        # NOTHING round-trip
+        {
+            hash sv = AbstractDebugControl::serialize(NOTHING);
+            assertEq("nothing", sv.type);
+            assertFalse(sv.hasKey("value"));
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertNothing(val);
+        }
+
+        # NULL round-trip
+        {
+            hash sv = AbstractDebugControl::serialize(NULL);
+            assertEq("NULL", sv.type);
+            assertFalse(sv.hasKey("value"));
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(NULL, val);
+        }
+
+        # int round-trip
+        {
+            hash sv = AbstractDebugControl::serialize(42);
+            assertEq("integer", sv.type);
+            assertEq(42, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(42, val);
+        }
+
+        # float round-trip
+        {
+            hash sv = AbstractDebugControl::serialize(3.14);
+            assertEq("float", sv.type);
+            assertEq(3.14, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(3.14, val);
+        }
+
+        # string round-trip
+        {
+            hash sv = AbstractDebugControl::serialize("hello");
+            assertEq("string", sv.type);
+            assertEq("hello", sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq("hello", val);
+        }
+
+        # bool round-trip
+        {
+            hash sv = AbstractDebugControl::serialize(True);
+            assertEq("bool", sv.type);
+            assertEq(True, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(True, val);
+        }
+
+        {
+            hash sv = AbstractDebugControl::serialize(False);
+            assertEq("bool", sv.type);
+            assertEq(False, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(False, val);
+        }
+
+        # date round-trip
+        {
+            date d = 2026-01-15T10:30:00Z;
+            hash sv = AbstractDebugControl::serialize(d);
+            assertEq("date", sv.type);
+            assertEq(d, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(d, val);
+        }
+
+        # binary round-trip
+        {
+            binary b = <deadbeef>;
+            hash sv = AbstractDebugControl::serialize(b);
+            assertEq("binary", sv.type);
+            assertEq(b, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(b, val);
+        }
+
+        # number round-trip
+        {
+            number n = 123.456n;
+            hash sv = AbstractDebugControl::serialize(n);
+            assertEq("number", sv.type);
+            assertEq(n, sv.value);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(n, val);
+        }
+
+        # list round-trip (mixed types)
+        {
+            list l = (1, "two", 3.0, True);
+            hash sv = AbstractDebugControl::serialize(l);
+            assertEq("list", sv.type);
+            assertEq(4, sv.value.size());
+            # verify each element is serialized
+            assertEq("integer", sv.value[0].type);
+            assertEq("string", sv.value[1].type);
+            assertEq("float", sv.value[2].type);
+            assertEq("bool", sv.value[3].type);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(l, val);
+        }
+
+        # hash round-trip
+        {
+            hash h = ("key1": 1, "key2": "val");
+            hash sv = AbstractDebugControl::serialize(h);
+            assertEq("hash", sv.type);
+            assertEq("integer", sv.value.key1.type);
+            assertEq("string", sv.value.key2.type);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(h, val);
+        }
+
+        # nested structure round-trip
+        {
+            hash nested = ("list": (1, ("inner": "val")), "num": 42);
+            hash sv = AbstractDebugControl::serialize(nested);
+            assertEq("hash", sv.type);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertEq(nested, val);
+        }
+
+        # object serialization preserves class name
+        {
+            Mutex m();
+            hash sv = AbstractDebugControl::serialize(m);
+            assertEq("object", sv.type);
+            assertEq("Mutex", sv.value.class);
+        }
+
+        # unsupported type (code/closure) — no value in serialized form
+        {
+            code c = sub() {};
+            hash sv = AbstractDebugControl::serialize(c);
+            assertEq("closure", sv.type);
+            assertFalse(sv.hasKey("value"));
+        }
+
+        # empty list serializes, unserialize returns empty list via push
+        {
+            list l = ();
+            hash sv = AbstractDebugControl::serialize(l);
+            assertEq("list", sv.type);
+            assertEq((), sv.value);
+            # unserialize uses push loop over empty list -> returns NOTHING
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertNothing(val);
+        }
+
+        # empty hash serializes, unserialize iterates over empty keys -> returns NOTHING
+        {
+            hash h = {};
+            hash sv = AbstractDebugControl::serialize(h);
+            assertEq("hash", sv.type);
+            auto val = AbstractDebugControl::unserialize(sv);
+            assertNothing(val);
+        }
+
+        # pass-through: non-hash input to unserialize returns as-is
+        {
+            assertEq(42, AbstractDebugControl::unserialize(42));
+            assertEq("str", AbstractDebugControl::unserialize("str"));
+        }
+    }
+
+    unserializeErrorTests() {
+        # unknown type throws DEBUG-ERROR
+        assertThrows("DEBUG-ERROR", sub() {
+            AbstractDebugControl::unserialize(("type": "unknown_type", "value": 1));
+        });
+    }
+
+    enumFilterTests() {
+        list items = ("alpha", "beta", "gamma", "alphabet");
+
+        # no path returns all
+        assertEq(items, AbstractDebugControl::enumFilter(items, NOTHING));
+        assertEq(items, AbstractDebugControl::enumFilter(items, ""));
+
+        # prefix match
+        assertEq(("alpha", "alphabet"), AbstractDebugControl::enumFilter(items, "alpha"));
+
+        # exact match with = prefix
+        assertEq(list("alpha"), AbstractDebugControl::enumFilter(items, "=alpha"));
+
+        # no match
+        assertEq((), AbstractDebugControl::enumFilter(items, "xyz"));
+
+        # empty list
+        assertEq((), AbstractDebugControl::enumFilter((), "alpha"));
+
+        # single character prefix
+        assertEq(("alpha", "alphabet"), AbstractDebugControl::enumFilter(items, "a"));
+    }
+
+    evalConditionTests() {
+        # no condition returns True
+        assertTrue(AbstractDebugControl::evalCondition("anything", NOTHING));
+        assertTrue(AbstractDebugControl::evalCondition("anything", ""));
+
+        # exact match with = prefix
+        assertTrue(AbstractDebugControl::evalCondition("test", "=test"));
+        assertFalse(AbstractDebugControl::evalCondition("testing", "=test"));
+
+        # prefix match (default)
+        assertTrue(AbstractDebugControl::evalCondition("testing", "test"));
+        assertFalse(AbstractDebugControl::evalCondition("test", "testing"));
+
+        # numeric values
+        assertTrue(AbstractDebugControl::evalCondition(123, "=123"));
+        assertTrue(AbstractDebugControl::evalCondition(123, "12"));
+    }
+
+    wrapperGetOptTests() {
+        hash opts = (
+            'help': 'h,help',
+            'verbose': 'v,verbose',
+            'listen': 'l,listen=s@',
+        );
+
+        # standard args: wrapper opts, then program name, then program args
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(("-v", "myfile.q", "-my", "params"), \wrp_args, \pgm_name, \pgm_args);
+            assertEq("myfile.q", pgm_name);
+            assertEq(("-v",), wrp_args);
+            assertEq(("-my", "params"), pgm_args);
+        }
+
+        # -- for stdin
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(("-v", "--"), \wrp_args, \pgm_name, \pgm_args);
+            assertEq("", pgm_name);
+            assertEq(("-v",), wrp_args);
+        }
+
+        # all option args, no program name
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(("-v", "-h"), \wrp_args, \pgm_name, \pgm_args);
+            assertNothing(pgm_name);
+        }
+
+        # --listen=xxx style: option with value, then program
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(("-v", "--listen=localhost", "myfile.q"), \wrp_args, \pgm_name, \pgm_args);
+            assertEq("myfile.q", pgm_name);
+        }
+
+        # --listen xxx style
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(("-v", "--listen", "localhost", "myfile.q"), \wrp_args, \pgm_name, \pgm_args);
+            assertEq("myfile.q", pgm_name);
+        }
+
+        # empty args
+        {
+            WrapperGetOpt g(opts);
+            list<string> wrp_args;
+            *string pgm_name;
+            list<string> pgm_args;
+            g.split(new list<string>(), \wrp_args, \pgm_name, \pgm_args);
+            assertNothing(pgm_name);
+            assertEq(new list<string>(), wrp_args);
+        }
+    }
+
+    constantsTests() {
+        # QoreDebugWsProtocolHeader
+        assertEq("QoreDebugWsProtocol", QoreDebugWsProtocolHeader);
+
+        # QoreDebugProtocolVersion
+        assertEq("0.1", QoreDebugProtocolVersion);
+
+        # runStateStrings contains expected keys
+        assertTrue(AbstractDebugControl::runStateStrings.hasKey("detach"));
+        assertTrue(AbstractDebugControl::runStateStrings.hasKey("run"));
+        assertTrue(AbstractDebugControl::runStateStrings.hasKey("step"));
+        assertTrue(AbstractDebugControl::runStateStrings.hasKey("stepover"));
+        assertTrue(AbstractDebugControl::runStateStrings.hasKey("untilreturn"));
+
+        # flowStrings
+        assertTrue(AbstractDebugControl::flowStrings.hasKey("none"));
+        assertTrue(AbstractDebugControl::flowStrings.hasKey("return"));
+        assertTrue(AbstractDebugControl::flowStrings.hasKey("break"));
+        assertTrue(AbstractDebugControl::flowStrings.hasKey("continue"));
+
+        # boolStrings
+        assertEq(False, AbstractDebugControl::boolStrings.false);
+        assertEq(True, AbstractDebugControl::boolStrings.true);
+
+        # policyStrings
+        assertTrue(AbstractDebugControl::policyStrings.hasKey("none"));
+        assertTrue(AbstractDebugControl::policyStrings.hasKey("accept"));
+        assertTrue(AbstractDebugControl::policyStrings.hasKey("reject"));
+    }
+}

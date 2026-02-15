@@ -4,11 +4,12 @@
 %modern
 
 %requires linenoise
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires DebugCmdLine
 %requires DebugLinenoiseCmdLine
 %requires DebugProgramControl
 %requires Util
+%requires Logger
 
 %allow-debugger
 %no-debugging
@@ -67,7 +68,7 @@ class DebugProgramControlLocal inherits DebugProgramControl {
         }
     }
     public nothing broadcastDataImpl(any data) {
-        debug("broadcastDataImpl: %y: %y", data);
+        debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
     }
 }
@@ -87,7 +88,7 @@ class DebugWrapper {
             "session": "s,session=s",
         );
         DebugCommandLineLocal dcl;
-        DebugLogger logger;
+        Logger logger;
     }
 
     constructor() {
@@ -115,21 +116,26 @@ class DebugWrapper {
         if (opt.help) {
             help();
         }
-        logger = new DebugLogger();
-        if (opt.verbose) {
-            logger.verbose = opt.verbose;
+        logger = new Logger();
+        logger.addAppender(new StdoutAppender());
+        if (opt.verbose > 1) {
+            logger.setLevel("DEBUG");
+        } else if (opt.verbose) {
+            logger.setLevel("INFO");
+        } else {
+            logger.setLevel("ERROR");
         }
         DebugProgramControlLocal dpcl();
         dcl = new DebugCommandLineLocal(dpcl);
-        dcl.logger = logger;
-        dcl.dpc.logger = logger;
+        dcl.setLogger(logger);
+        dcl.dpc.setLogger(logger);
         try {
             if (fileName == "--") {
                 fileName = "/dev/stdin";
             }
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
-                logger.log(DUV_INFO, "run program");
+                logger.info("run program");
                 background pgm.run();
                 # Seems workaround no more needed
                 #sleep(1);  # to avoid OBJECT-ALREADY-DELETED: attempt to access member 'pgm' of an already-deleted object of class 'DebugWrapper'

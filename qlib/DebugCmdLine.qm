@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugCmdLine.qm Debug common code
 
-/*  DebugCmdLine.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugCmdLine.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,87 +62,6 @@ module DebugCmdLine {
 
 #! the DebugCmdLine namespace contains all the definitions in the DebugCmdLine module
 public namespace DebugCmdLine {
-
-    /**
-        When implementing a wrapper which executes program whose name is passed at command line then we can divide
-        arguments usually into 3 groups, internal wrapper arguments, target program filename and program arguments.
-        The class support argument parsing for such a case.
-
-        Examples:
-            (   # GetOpt options
-                'help': 'h,help',
-                'verbose': 'v,verbose',
-                'listen': 'l,listen=s@',
-            );
-            wrapper-prog -v -l xxx trg -v -l    # trg is the target program name
-            wrapper-prog -v -h trg xxx          # trg is the target program name
-            wrapper-prog -v --listen=xxx trg    # trg is the target program name
-            wrapper-prog -v --listen xxx trg    # trg is the target program name
-        **/
-    public class WrapperGetOpt inherits GetOpt {
-        #! create the object with the given @ref Qore::GetOpt "GetOpt" option hash
-        public constructor(hash options) : GetOpt(options) {
-        }
-
-        #! Parses input arguments until a standalone argument is found.
-        /**
-            @param args @ref list of arguments passed to wrapper, typically ARGV
-            @param wrp_args returns list of wrapper arguments
-            @param pgm_name returns the target program filename; "" is considered a special file name (meaning \c stdin), NOTHING when no name provided
-            @param pgm_args return @ref list of target program arguments
-
-            @par Example:
-            @code{.py}
-            hash opts = (
-                'help': 'h,help',
-                'verbose': 'v,verbose',
-                'listen': 'l,listen=s@',
-            );
-            WrapperGetOpt g(opts);
-            list dargs;
-            hash opt;
-            *string fileName;
-            g.split(ARGV, \dargs, \fileName, \ARGV);
-
-            try {
-                opt = g.parse2(\dargs);
-            } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("%s: %s\n", ex.err, ex.desc);
-                help(-1);
-            }
-
-            if (exists fileName) {
-                stderr.print("No input file\n");
-                exit(-1);
-            }
-            @endcode
-        **/
-        public split(list<string> args, reference<list<string>> wrp_args, reference<*string> pgm_name, reference<list<string>> pgm_args) {
-            pgm_name = NOTHING;
-            wrp_args = new list<string>();
-            pgm_args = new list<string>();
-            while (args) {
-                string s = shift args;
-                push wrp_args, s;
-                if (s !~ /^\-/ ) {
-                    list a = wrp_args;
-                    parse(\a);
-                    if (a) {
-                        # last arg is filename
-                        pgm_name = s;
-                        pop wrp_args;
-                        break;
-                    }
-                } else if (s == '--') {
-                    pgm_name = '';
-                    pop wrp_args;
-                    break;
-                }
-            }
-            pgm_args = args;
-        }
-    }
-
     #! debug command line class
     public class DebugCommandLine inherits AbstractDebugControl {
         public {
@@ -291,7 +210,7 @@ public namespace DebugCmdLine {
                                     'get': (
                                         'desc': 'get current logger verbosity level',
                                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
-                                            printfImpl("Logging level: %d\n", logger.getLevel().getStr());
+                                            printfImpl("Logging level: %s\n", logger.getLevel().getStr());
                                         },
                                     ),
                                 },

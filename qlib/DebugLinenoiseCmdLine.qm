@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugLinenoiseCmdLine.qm Debug common code
 
-/*  DebugLinenoiseCmdLine.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugLinenoiseCmdLine.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires DebugCmdLine
 %requires linenoise
 

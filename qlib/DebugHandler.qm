@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugHandler.qm Qore handler definition for the HttpServer module for providing debug server via WebSocket server services
 
-/*  DebugHandler.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugHandler.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,12 +22,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 1.19 or better
-%requires qore >= 1.19
+# minimum required Qore version
+%requires qore >= 2.0
 
 %requires WebSocketUtil
 %requires WebSocketHandler
-%requires yaml >= 0.5
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
 %requires HttpServerUtil >= 0.3.11
 %requires DebugUtil
 %requires DebugProgramControl
@@ -213,6 +215,7 @@ public namespace DebugHandler {
         }
     }
 
+%ifndef NoYaml
     #! the main web socket debug handler class implementing internal protocol in YAML format.
     public class WebSocketDebugHandler inherits AbstractWebSocketDebugHandler {
         #! create the object optionally with the given @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator"
@@ -258,6 +261,7 @@ public namespace DebugHandler {
         }
 
     }
+%endif
 
     #! debug program control via @ref AbstractWebSocketDebugHandler
     /**
