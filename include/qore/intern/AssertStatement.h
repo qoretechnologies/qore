@@ -48,6 +48,9 @@ public:
 
     DLLLOCAL virtual ~AssertStatement();
 
+    //! Returns the condition expression for IR lowering
+    DLLLOCAL QoreValue getCondition() const { return condition; }
+
 private:
     QoreValue condition{};  //!< The condition to assert
     QoreValue message{};    //!< Optional message/format args on failure (can be list for sprintf)

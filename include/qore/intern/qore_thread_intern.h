@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -261,6 +261,7 @@ DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
 DLLLOCAL int64 parse_get_parse_options();
 DLLLOCAL int64 runtime_get_parse_options();
+DLLLOCAL void runtime_set_parse_options(int64 po);
 DLLLOCAL int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(int64 o);
@@ -580,6 +581,7 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
@@ -636,8 +638,10 @@ public:
 };
 
 DLLLOCAL const QoreListNode* thread_get_implicit_args();
+DLLLOCAL void thread_set_implicit_args(QoreListNode* args);
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
+DLLLOCAL LocalVarValue* thread_find_lvar_maybe(const char* id);
 
 // to get the current runtime object
 DLLLOCAL QoreObject* runtime_get_stack_object();

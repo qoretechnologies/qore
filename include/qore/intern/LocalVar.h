@@ -291,6 +291,15 @@ public:
         return VarValueBase::finalize();
     }
 
+    //! Clears the variable's value under the write lock (runs destructor via decref)
+    /** Unlike finalize(), this does not set the finalized flag — it just clears the value.
+        Used at block scope exit to trigger timely destruction without popping the cvstack.
+    */
+    DLLLOCAL void clearValue(ExceptionSink* xsink) {
+        QoreSafeVarRWWriteLocker sl(rml);
+        val.removeValue(true).discard(xsink);
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         QoreSafeVarRWReadLocker sl(rml);
         if (val.getType() == NT_REFERENCE) {
@@ -453,7 +462,21 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // First try the cvstack — this finds the correct entry for the current function instance
+        // in recursive calls.  When a function with closure_use locals is called from within a
+        // closure's execution context (e.g., recursive call from do_eq), the closure_rt_env
+        // points to the calling closure's environment, which contains the OUTER variable.
+        // The cvstack always has the most recently pushed (innermost) entry on top.
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        if (!val) {
+            // Fall back to the closure runtime environment — needed for background thread
+            // closure execution and closures that outlive their enclosing function (cvstack
+            // entries have been popped).
+            val = thread_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
         return val->eval(needs_deref, xsink);
     }
 
@@ -479,7 +502,17 @@ public:
     }
 
     DLLLOCAL bool isRef() const {
-        return !closure_use ? get_var()->isRef() : thread_find_closure_var(name.c_str())->isRef();
+        if (!closure_use) {
+            return get_var()->isRef();
+        }
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        if (!val) {
+            val = thread_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->isRef();
     }
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
@@ -490,7 +523,15 @@ public:
             return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
-        return thread_find_closure_var(name.c_str())->getLValue(lvh, for_remove);
+        // First try the cvstack — see comment in eval() for rationale
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        if (!val) {
+            val = thread_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->getLValue(lvh, for_remove);
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
@@ -498,7 +539,15 @@ public:
             return get_var()->remove(lvrh, typeInfo);
         }
 
-        return thread_find_closure_var(name.c_str())->remove(lvrh);
+        // First try the cvstack — see comment in eval() for rationale
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        if (!val) {
+            val = thread_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            val = thread_find_closure_var(name.c_str());
+        }
+        return val->remove(lvrh);
     }
 
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {

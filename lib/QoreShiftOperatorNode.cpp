@@ -53,7 +53,13 @@ int QoreShiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
     fh.setFlags(PF_FOR_ASSIGNMENT);
 
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (exp) {
         const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
@@ -79,6 +85,17 @@ int QoreShiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     parse_context.typeInfo = returnTypeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

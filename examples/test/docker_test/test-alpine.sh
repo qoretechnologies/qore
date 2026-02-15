@@ -39,6 +39,23 @@ fi
 
 find / -name "libqore.so*" -exec rm -f {} \;
 
+# ensure LLVM static libraries are installed (needed for JIT/AOT linking)
+# Alpine splits static libs into -static and -gtest packages
+echo "-- ensuring LLVM static libraries --"
+apk update
+LLVM_VER=$(ls -d /usr/lib/llvm* 2>/dev/null | sed 's|.*/llvm||' | sort -n | tail -1)
+if [ -n "$LLVM_VER" ]; then
+    apk add --no-cache llvm${LLVM_VER}-static llvm${LLVM_VER}-gtest
+fi
+
+# ensure CMAKE_PREFIX_PATH includes LLVM (for images without it in env.sh)
+if [ -z "${CMAKE_PREFIX_PATH}" ]; then
+    LLVM_PREFIX=$(ls -d /usr/lib/llvm* 2>/dev/null | sort -V | tail -1)
+    if [ -n "$LLVM_PREFIX" ]; then
+        export CMAKE_PREFIX_PATH="${LLVM_PREFIX}"
+    fi
+fi
+
 # install tree-sitter CLI for astparser module build
 if ! command -v tree-sitter > /dev/null 2>&1; then
     echo && echo "-- installing tree-sitter CLI --"
@@ -50,7 +67,7 @@ echo && echo "-- building Qore --"
 cd ${QORE_SRC_DIR}
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 make -j${MAKE_JOBS}
 make install
 

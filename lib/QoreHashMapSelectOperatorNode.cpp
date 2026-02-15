@@ -54,7 +54,16 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
     assert(!parse_context.typeInfo);
     // check iterator expression
-    int err = parse_init_value(e[2], parse_context);
+    QoreParseAnalysis iterator_analysis;
+    QoreParseAnalysis key_analysis;
+    QoreParseAnalysis value_analysis;
+    QoreParseAnalysis select_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(e[2], parse_context);
+        iterator_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     const QoreTypeInfo* expTypeInfo2;
@@ -67,24 +76,50 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
         // check key expression
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(e[0], parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(e[0], parse_context) && !err) {
+                err = -1;
+            }
+            key_analysis = parse_context.analysis;
         }
         // check value expression2
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(e[1], parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(e[1], parse_context) && !err) {
+                err = -1;
+            }
+            value_analysis = parse_context.analysis;
         }
         expTypeInfo2 = parse_context.typeInfo;
         // check select expression
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(e[3], parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(e[3], parse_context) && !err) {
+                err = -1;
+            }
+            select_analysis = parse_context.analysis;
         }
     }
 
     parse_context.typeInfo = QoreHashMapOperatorNode::setReturnTypeInfo(returnTypeInfo, expTypeInfo2,
         iteratorTypeInfo);
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (iterator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && key_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && value_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && select_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

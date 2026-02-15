@@ -54,10 +54,24 @@ int QoreBackgroundOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     QoreParseContextFlagHelper fh(parse_context);
     fh.setFlags(PF_BACKGROUND | PF_RETURN_VALUE_IGNORED);
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(exp, parse_context) && !err) {
-        err = -1;
+    QoreParseAnalysis operand_analysis;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(exp, parse_context) && !err) {
+            err = -1;
+        }
+        operand_analysis = parse_context.analysis;
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

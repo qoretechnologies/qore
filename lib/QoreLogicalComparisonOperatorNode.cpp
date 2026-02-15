@@ -34,6 +34,23 @@
 
 QoreString QoreLogicalComparisonOperatorNode::logical_comparison_str("logical comparison (<=>) operator expression");
 
+static void set_binary_analysis_cmp(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreLogicalComparisonOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder l(left, xsink);
     if (*xsink)
@@ -52,10 +69,21 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
 
     // FIXME: check args to see if comparisons are possible and issue warnings / errors as appropriate
@@ -73,6 +101,8 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
             if (**xsink) {
                 err = -1;
             }
+            parse_context.typeInfo = val.getFullTypeInfo();
+            set_binary_analysis_cmp(parse_context, left_analysis, right_analysis);
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
             del.release();
@@ -80,6 +110,7 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    set_binary_analysis_cmp(parse_context, left_analysis, right_analysis);
     return err;
 }
 

@@ -97,6 +97,11 @@ protected:
 public:
     DLLLOCAL ParseObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_exp, char* n_method);
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! Returns the object expression (for IR local variable analysis)
+    DLLLOCAL const QoreValue& getExp() const {
+        return exp;
+    }
 };
 
 class ParseSelfMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {

@@ -92,6 +92,22 @@ public:
             return nullptr;
         return new QoreExtractOperatorNode(get_runtime_location(), n_lv.release(), n_of.release(), n_ln.release(), n_nw.release());
     }
+
+    DLLLOCAL QoreValue getLValue() const {
+        return lvalue_exp;
+    }
+
+    DLLLOCAL QoreValue getOffset() const {
+        return offset_exp;
+    }
+
+    DLLLOCAL QoreValue getLength() const {
+        return length_exp;
+    }
+
+    DLLLOCAL QoreValue getNewValue() const {
+        return new_exp;
+    }
 };
 
 #endif

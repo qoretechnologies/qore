@@ -87,6 +87,8 @@ public:
 };
 
 class QoreAbstractModule {
+    friend class QoreModuleManager;
+
 public:
     version_list_t version_list;
     // list of dependent modules to reexport
@@ -441,6 +443,27 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! Import a module's namespace into a program without acquiring the lock
+    /** This is for use by AOT runtime code that is called from within a locked context
+        (e.g., qore_aot_module_init called from loadBinaryModuleFromDesc).
+        @param name the module name to import
+        @param pgm the target QoreProgram
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink);
+
+    //! Import a module's namespace into a program (locked version)
+    /** @param name the module feature name
+        @param pgm the target QoreProgram
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int importModuleNS(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
+        AutoLocker al(mutex);
+        return importModuleNSUnlocked(name, pgm, xsink);
+    }
+
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false);
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
@@ -470,8 +493,15 @@ public:
             return;
 
         const char* old_name = get_module_context_name();
-        if (old_name)
-            setUserModuleDependency(mi->getName(), old_name);
+        if (old_name) {
+            // Only track dependency if the dependent module is also a user module.
+            // Binary modules (including AOT modules) are not cleaned up via delUser(),
+            // so tracking their dependencies would cause assertion failures.
+            QoreAbstractModule* dep_mi = findModuleUnlocked(old_name);
+            if (dep_mi && dep_mi->isUser()) {
+                setUserModuleDependency(mi->getName(), old_name);
+            }
+        }
         trySetUserModule(mi->getName());
     }
 
@@ -795,6 +825,7 @@ public:
 
 private:
     QoreModuleManager::module_load_map_t::iterator i;
+    bool did_unlock;  // true if we unlocked the mutex (and should re-lock it)
 };
 
 #endif

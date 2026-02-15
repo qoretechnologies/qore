@@ -520,7 +520,8 @@ public:
 
 qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std::string&& path, int64 dom,
         QoreClassTypeInfo* n_typeInfo)
-        : name(nme),
+        : loc(nullptr),
+        name(nme),
         path(path),
         cls(n_cls),
         constlist(this),        // constants
@@ -700,7 +701,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_private* ns, QoreProgram* spgm,
         const char* new_name, bool inject, const qore_class_private* injectedClass, q_setpub_t set_pub)
         // issue #3179: we force a deep copy of "name" to work around COW issues with std::string with GNU libstdc++ 6+
-        : name(new_name ? new_name : old.name.c_str()),
+        : loc(old.loc),
+        name(new_name ? new_name : old.name.c_str()),
         path(old.path),
         ns(ns),
         ahm(old.ahm),
@@ -2897,6 +2899,10 @@ void QoreClass::addBaseClass(QoreClass* qc, bool virt) {
     priv->addBaseClass(qc, virt);
 }
 
+void QoreClass::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
+    priv->addBaseClass(qc, access, virt);
+}
+
 int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
     return priv->runtimeCheckInstantiateClass(xsink);
 }
@@ -2908,6 +2914,21 @@ void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
         scl = new BCList;
     }
     scl->push_back(new BCNode(&loc_builtin, qc, virt));
+
+    // add parent classes of new base class
+    if (qc->priv->scl && qc->priv->scl->valid) {
+        qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
+    }
+    scl->sml.add(cls, qc, virt);
+}
+
+void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
+    assert(qc);
+    //printd(5, "adding %s as base class to %s (virt: %d access: %d)\n", qc->priv->name.c_str(), name.c_str(), virt, access);
+    if (!scl) {
+        scl = new BCList;
+    }
+    scl->push_back(new BCNode(&loc_builtin, qc, access, virt));
 
     // add parent classes of new base class
     if (qc->priv->scl && qc->priv->scl->valid) {
@@ -3448,8 +3469,6 @@ void BCSMList::align(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     qc->priv->ref();
 
     // append to the end of the vector
-    //printd(5, "BCSMList::align() adding %p '%s' (virt: %d) as a base class of %p '%s'\n", qc, qc->getName(),
-    //    is_virtual, thisclass, thisclass->getName());
     push_back(std::make_pair(qc, is_virtual));
 }
 
@@ -3468,7 +3487,9 @@ int BCSMList::addBaseClassesToSubclass(QoreClass* thisclass, QoreClass* sc, bool
 int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
     if (thisclass->getID() == qc->getID()) {
         thisclass->priv->scl->valid = false;
-        parse_error(*thisclass->priv->loc, "class '%s' cannot inherit itself", thisclass->getName());
+        if (thisclass->priv->loc) {
+            parse_error(*thisclass->priv->loc, "class '%s' cannot inherit itself", thisclass->getName());
+        }
         return -1;
     }
 
@@ -3478,9 +3499,21 @@ int BCSMList::add(QoreClass* thisclass, QoreClass* qc, bool is_virtual) {
         if (i->first->getID() == qc->getID())
             return 0;
         if (i->first->getID() == thisclass->getID()) {
+            // Check if this is actually a circular reference or just a shared-priv situation
+            // When classes are copied during module merging, they share priv and thus have
+            // the same ID. If the entry points to the same priv as thisclass, it's the same
+            // logical class, not a circular reference - skip this entry silently.
+            if (i->first->priv == thisclass->priv) {
+                printd(5, "BCSMList::add() skipping apparent self-reference for '%s' (shared priv)\n",
+                    thisclass->getName());
+                ++i;
+                continue;
+            }
             thisclass->priv->scl->valid = false;
-            parse_error(*thisclass->priv->loc, "circular reference in class hierarchy, '%s' is an ancestor of itself",
-                thisclass->getName());
+            if (thisclass->priv->loc) {
+                parse_error(*thisclass->priv->loc, "circular reference in class hierarchy, '%s' is an ancestor of itself",
+                    thisclass->getName());
+            }
             return -1;
         }
         ++i;
@@ -5622,7 +5655,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     }
 
     if (!constructorPrelude(thisclass, ceh, self, bcl, bceal, xsink)) {
-        evalIntern(uveh.getArgv(), 0, xsink).discard(xsink);
+        evalIntern("constructor", uveh.getArgv(), 0, xsink).discard(xsink);
     }
 
     // uninstantiate argv
@@ -5655,9 +5688,11 @@ int UserConstructorVariant::parseInit(QoreFunction* f) {
 
     //printd(5, "UserConstructorVariant::parseInitConstructor() this: %p %s::constructor() params: %d\n", this,
     //    parent_class.getName(), signature.numParams());
-    // must be called even if statements is NULL
-    if (statements->parseInitConstructor(parent_class.getTypeInfo(), this, bcal, parent_class) && !err) {
-        err = -1;
+    // For AOT-compiled methods, statements is null (pre-compiled code)
+    if (statements) {
+        if (statements->parseInitConstructor(parent_class.getTypeInfo(), this, bcal, parent_class) && !err) {
+            err = -1;
+        }
     }
 
     // recheck types against committed types if necessary
@@ -5715,7 +5750,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
         }
     }
 
-    evalIntern(uveh.getArgv(), self, xsink).discard(xsink);
+    evalIntern("copy", uveh.getArgv(), self, xsink).discard(xsink);
 }
 
 int UserCopyVariant::parseInit(QoreFunction* f) {
@@ -5737,9 +5772,11 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
     // push return type on stack (no return value can be used)
     ParseCodeInfoHelper rtih("copy", nothingTypeInfo);
 
-    // must be called even if statements is NULL
-    if (statements->parseInitMethod(parent_class.getTypeInfo(), this) && !err) {
-        err = -1;
+    // For AOT-compiled methods, statements is null (pre-compiled code)
+    if (statements) {
+        if (statements->parseInitMethod(parent_class.getTypeInfo(), this) && !err) {
+            err = -1;
+        }
     }
 
     // see if there is a type specification for the sole parameter and make sure it matches the class if there is

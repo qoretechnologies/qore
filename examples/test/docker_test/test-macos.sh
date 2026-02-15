@@ -26,12 +26,48 @@ fi
 echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
+# Find LLVM installation (Homebrew, MacPorts, manual install, or llvm-config)
+LLVM_PREFIX=""
+for dir in /opt/homebrew/opt/llvm /usr/local/opt/llvm /opt/homebrew/opt/llvm@* /usr/local/opt/llvm@*; do
+    if [ -d "$dir" ]; then
+        LLVM_PREFIX="$dir"
+    fi
+done
+# Check MacPorts (highest version)
+if [ -z "$LLVM_PREFIX" ]; then
+    for dir in /opt/local/libexec/llvm-*; do
+        if [ -d "$dir" ]; then
+            LLVM_PREFIX="$dir"
+        fi
+    done
+fi
+# Check for manually installed LLVM (e.g., /usr/local/Cellar/llvm/*)
+if [ -z "$LLVM_PREFIX" ]; then
+    for dir in /usr/local/Cellar/llvm/*/lib/cmake/llvm; do
+        if [ -d "$dir" ]; then
+            LLVM_PREFIX="$(dirname "$(dirname "$(dirname "$dir")")")"
+        fi
+    done
+fi
+# Try llvm-config as last resort (works for manual/source installs)
+if [ -z "$LLVM_PREFIX" ]; then
+    if command -v llvm-config >/dev/null 2>&1; then
+        LLVM_PREFIX="$(llvm-config --prefix)"
+    fi
+fi
+
+CMAKE_PREFIX_PATH="/opt/local"
+if [ -n "$LLVM_PREFIX" ]; then
+    echo "Found LLVM at: $LLVM_PREFIX"
+    CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH};${LLVM_PREFIX}"
+fi
+
 # Configure with CMake
-# CMAKE_PREFIX_PATH=/opt/local enables MacPorts-installed dependencies (Eigen3, ONNX Runtime, etc.)
+# CMAKE_PREFIX_PATH includes /opt/local for MacPorts dependencies and LLVM prefix if found
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
     -DSINGLE_COMPILATION_UNIT=1 \
-    -DCMAKE_PREFIX_PATH=/opt/local
+    -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}"
 
 # Build
 make -j${MAKE_JOBS}

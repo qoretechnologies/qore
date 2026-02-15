@@ -33,9 +33,12 @@
 
 #define _QORE_PARSENODE_H
 
+#include "qore/intern/QoreParseAnalysis.h"
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
+
+struct QoreParseContext;
 
 class ParseNode : public SimpleQoreNode {
 public:
@@ -86,13 +89,27 @@ public:
         return ref_rv;
     }
 
+    DLLLOCAL const QoreParseAnalysis& getParseAnalysis() const {
+        return parse_analysis;
+    }
+
+    DLLLOCAL void setParseAnalysis(const QoreParseAnalysis& analysis) {
+        parse_analysis = analysis;
+        parse_init = true;
+    }
+
     DLLLOCAL virtual int parseInit(QoreValue& val, QoreParseContext& parse_context) {
         if (parse_init) {
             parse_context.typeInfo = getTypeInfo();
+            parse_context.analysis = parse_analysis;
             return 0;
         }
         parse_init = true;
-        return parseInitImpl(val, parse_context);
+        int rc = parseInitImpl(val, parse_context);
+        if (val.hasNode() && val.getInternalNode() == this) {
+            parse_analysis = parse_context.analysis;
+        }
+        return rc;
     }
 
 private:
@@ -111,6 +128,7 @@ protected:
 
     //! if the node has undergone "parse initialization"
     bool parse_init : 1;
+    QoreParseAnalysis parse_analysis;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) = 0;
 

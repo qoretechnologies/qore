@@ -38,6 +38,20 @@ fi
 
 export MAKE_JOBS=6
 
+# ensure LLVM dev libraries are installed (needed for JIT/AOT)
+if ! dpkg -l llvm-dev >/dev/null 2>&1; then
+    echo "-- installing llvm-dev --"
+    apt-get -y update && apt-get -y install --no-install-recommends llvm-dev
+fi
+
+# ensure CMAKE_PREFIX_PATH includes LLVM (for images without it in env.sh)
+if [ -z "${CMAKE_PREFIX_PATH}" ]; then
+    LLVM_PREFIX=$(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V | tail -1)
+    if [ -n "$LLVM_PREFIX" ]; then
+        export CMAKE_PREFIX_PATH="${LLVM_PREFIX}"
+    fi
+fi
+
 # install tree-sitter CLI for astparser module build
 if ! command -v tree-sitter > /dev/null 2>&1; then
     echo && echo "-- installing tree-sitter CLI --"

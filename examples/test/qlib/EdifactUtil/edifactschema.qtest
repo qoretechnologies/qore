@@ -47,8 +47,16 @@ public class EdifactSchemaTest inherits QUnit::Test {
         return NOTHING;
     }
 
+    private string getFixturesRoot() {
+        string script_path = get_script_path();
+        if (!script_path || script_path == NOTHING) {
+            script_path = getcwd();
+        }
+        return normalize_dir(dirname(script_path)) + DirSep + "fixtures" + DirSep;
+    }
+
     schemaLoaderFixtureTest() {
-        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string fixtures_root = getFixturesRoot();
 
         string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
         string cache_dir = base_cache_dir + DirSep + "cache";
@@ -404,7 +412,7 @@ public class EdifactSchemaTest inherits QUnit::Test {
     }
 
     schemaLoaderRawStorageTest() {
-        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string fixtures_root = getFixturesRoot();
 
         string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
         string cache_dir = base_cache_dir + DirSep + "cache";
@@ -462,7 +470,7 @@ public class EdifactSchemaTest inherits QUnit::Test {
     }
 
     schemaLoaderCacheBehaviorTest() {
-        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string fixtures_root = getFixturesRoot();
 
         string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
         string cache_dir = base_cache_dir + DirSep + "cache";
@@ -519,7 +527,7 @@ public class EdifactSchemaTest inherits QUnit::Test {
     }
 
     schemaLoaderStrictEdgeFixtureTest() {
-        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string fixtures_root = getFixturesRoot();
 
         string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
         string cache_dir = base_cache_dir + DirSep + "cache";
@@ -552,7 +560,7 @@ public class EdifactSchemaTest inherits QUnit::Test {
     }
 
     schemaLoaderInvalidFixtureTest() {
-        string fixtures_root = normalize_dir(dirname(get_script_path())) + DirSep + "fixtures" + DirSep;
+        string fixtures_root = getFixturesRoot();
         string invalid_root = fixtures_root + "invalid" + DirSep;
 
         list<hash<auto>> bad = (

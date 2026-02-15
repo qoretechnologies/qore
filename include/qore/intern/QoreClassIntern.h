@@ -38,6 +38,8 @@
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
 #include "qore/intern/VRMutex.h"
+#include "qore/QoreProgram.h"
+#include "qore/intern/LocalVar.h"
 #include "qore/vector_map"
 #include "qore/vector_set"
 
@@ -375,13 +377,15 @@ public:
 
         int err = 0;
 
-        // must be called even if "statements" is NULL
-        if (!mf->isStatic()) {
-            if (!isAbstract()) {
-                err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (!mf->isStatic()) {
+                if (!isAbstract()) {
+                    err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+                }
+            } else {
+                err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
             }
-        } else {
-            err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
         }
 
         // recheck types against committed types if necessary
@@ -451,9 +455,11 @@ public:
         // push return type on stack (no return value can be used)
         ParseCodeInfoHelper rtih("destructor", nothingTypeInfo);
 
-        // must be called even if statements is NULL
-        if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
-            err = -1;
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
+                err = -1;
+            }
         }
 
         // only 1 variant is possible, no need to recheck types
@@ -1480,6 +1486,11 @@ public:
             access(Public), is_virtual(n_virtual) {
     }
 
+    // for builtin base classes with explicit access level
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
+            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual) {
+    }
+
     // called at runtime with committed classes
     DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), sclass(old.sclass), access(old.access),
             is_virtual(old.is_virtual) {
@@ -2036,6 +2047,9 @@ public:
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
 
+    // add a base class to this class with explicit access level
+    DLLLOCAL void addBaseClass(QoreClass* qc, ClassAccess access, bool virt);
+
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
 
@@ -2539,6 +2553,12 @@ public:
         if (!sys) {
             sys = committed = true;
         }
+        constlist.add(cname, value, cTypeInfo, access);
+    }
+
+    //! Add a constant to a user class during AOT deserialization (does NOT set sys flag)
+    DLLLOCAL void addUserConstant(const char* cname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* cTypeInfo = nullptr) {
+        assert(!constlist.inList(cname));
         constlist.add(cname, value, cTypeInfo, access);
     }
 

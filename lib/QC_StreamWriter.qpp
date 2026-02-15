@@ -34,7 +34,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 
-DLLEXPORT extern QoreClass* QC_OUTPUTSTREAM;
+extern QoreClass* QC_OUTPUTSTREAM;
 
 //! This class defines a stream writer for output streams.
 /** @since %Qore 0.8.13

@@ -58,25 +58,41 @@ struct TypedefEntry {
     QoreParseTypeInfo* parseTypeInfo = nullptr;  //!< parse-time type info (before resolution)
     const QoreTypeInfo* typeInfo = nullptr;      //!< resolved type info (after resolution)
     bool pub = false;                            //!< is this typedef public?
+    std::string from_module;                     //!< module that defined this typedef
 
     //! Constructor for parse-time type info only
     DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, bool p = false)
             : loc(loc), parseTypeInfo(pti), pub(p) {
+        assignModule();
     }
 
     //! Constructor for both resolved type info and parse-time type info
     DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, const QoreTypeInfo* ti, QoreParseTypeInfo* pti,
             bool p = false)
             : loc(loc), parseTypeInfo(pti), typeInfo(ti), pub(p) {
+        assignModule();
     }
 
     DLLLOCAL TypedefEntry(const TypedefEntry& old)
             : loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
-              typeInfo(old.typeInfo), pub(old.pub) {
+              typeInfo(old.typeInfo), pub(old.pub), from_module(old.from_module) {
     }
 
     DLLLOCAL ~TypedefEntry() {
         delete parseTypeInfo;
+    }
+
+    //! Returns the module name where this typedef was defined
+    DLLLOCAL const char* getModuleName() const {
+        return from_module.empty() ? nullptr : from_module.c_str();
+    }
+
+    //! Sets the module name from the current module context
+    DLLLOCAL void assignModule() {
+        const char* mod_name = get_module_context_name();
+        if (mod_name) {
+            from_module = mod_name;
+        }
     }
 };
 

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,11 +36,23 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRInterpreter.h"
+#include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRPrinter.h"
+#include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
+
+// Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
@@ -291,6 +303,29 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
 void StatementBlock::exec() {
     ExceptionSink xsink;
     exec(&xsink);
+}
+
+static bool isIRTerminatorOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Throw:
+        case QoreIROpcode::Rethrow:
+        case QoreIROpcode::ThreadExit:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool irBlockHasTerminator(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    return isIRTerminatorOpcode(block->instructions.back()->opcode);
 }
 
 static void push_top_level_local_var(LocalVar* lv, const QoreProgramLocation* loc) {
@@ -665,6 +700,30 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     hwm = statement_list.last();
 }
 
+TopLevelStatementBlock::~TopLevelStatementBlock() {
+    delete cached_toplevel_aot_ctx;
+    delete cached_toplevel_ir;
+}
+
+void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
+    // Copy LocalVar* pointers from the AOT context to the statement block's LVList
+    // This ensures pointer consistency between AOT-compiled code and runtime
+    if (!ctx || !ctx->locals || ctx->num_locals == 0) {
+        return;
+    }
+    const LVList* lv_list = getLVList();
+    if (!lv_list) {
+        return;
+    }
+    // Update the LVList entries from the AOT context
+    size_t count = std::min(static_cast<size_t>(lv_list->size()),
+                            static_cast<size_t>(ctx->num_locals));
+    for (size_t i = 0; i < count; ++i) {
+        // Note: this modifies const data, but it's needed for pointer consistency
+        const_cast<LVList*>(lv_list)->lv[i] = ctx->locals[i];
+    }
+}
+
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
@@ -673,11 +732,196 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
 int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
 
-    // Get the parse options from the current program at runtime
-    // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
-    // before the program's pwo is initialized (due to C++ member initialization order)
-    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    // Get the parse options from the current program at runtime.
+    // Use getProgram() (the thread-local current program set by ProgramThreadCountContextHelper)
+    // rather than rc.getProgram() which may return the outer/calling program.
+    // NOTE: We can't use pwo.parse_options because the TopLevelStatementBlock is constructed
+    // before the program's pwo is initialized (due to C++ member initialization order).
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        pgm = rc.getProgram();
+    }
     int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+
+    // AOT pre-compiled top-level function — execute directly if registered
+    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
+            // Instantiate nested body locals before AOT execution.
+            // Top-level locals are pre-instantiated by QoreProgram, but nested
+            // locals from for/while/try blocks need to be instantiated here.
+            const LVList* toplevel_lvars = getLVList();
+            std::unordered_set<const LocalVar*> toplevel_set;
+            if (toplevel_lvars) {
+                for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+                    toplevel_set.insert(toplevel_lvars->lv[i]);
+                }
+            }
+            std::vector<LocalVar*> nested_locals;
+            for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
+                if (toplevel_set.count(lv) == 0) {
+                    lv->instantiate(runtime_parse_options);
+                    nested_locals.push_back(lv);
+                }
+            }
+
+            uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+
+            // Uninstantiate nested locals after AOT execution (reverse order)
+            for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+                (*it)->uninstantiate(xsink);
+            }
+
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
+        }
+        if (cached_toplevel_jit_fn) {
+            uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
+        }
+    }
+
+    // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
+    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
+        // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
+        // but only for %modern programs — legacy parse options are not supported by IR
+        if (exec_mode == QEM_IR || exec_mode == QEM_JIT
+            || (exec_mode == QEM_TIERED
+                && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
+            // Try to use cached IR if available
+            QoreIRFunction* ir_func = cached_toplevel_ir;
+            bool need_lower = !ir_func && !toplevel_ir_failed;
+
+            if (need_lower) {
+                std::call_once(toplevel_ir_once, [this, pgm]() {
+                    // Make the top-level function name unique per TopLevelStatementBlock
+                    // to avoid name collisions in the JIT's compiled_functions map.
+                    // Different child Programs each have their own TopLevelStatementBlock
+                    // with different LocalVar* pointers baked into JIT code.
+                    std::string unique_name = std::string("_toplevel@")
+                        + std::to_string((uintptr_t)this);
+                    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+
+                    // Collect ALL body locals from the statement tree (top-level + nested blocks
+                    // from fully-lowered statements like if/for/while/try/switch).  These are
+                    // marked as pre-instantiated so the JIT skips instantiation/uninstantiation.
+                    // Using collectAllStatementLocals ensures the same LocalVar* pointers are
+                    // captured in all_body_locals and used for pre_instantiated_locals, avoiding
+                    // pointer mismatches at runtime.
+                    collectAllStatementLocals(this, func->all_body_locals);
+                    for (LocalVar* lv : func->all_body_locals) {
+                        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+
+                    QoreIRBuilder builder(func);
+                    auto* entry = func->createBlock("entry");
+                    builder.setBlock(entry);
+
+                    QoreParseContext parse_context(pgm);
+                    QoreIRLowering lowering(builder, &parse_context);
+                    std::string error;
+                    if (!lowering.lowerStatementBlock(this, error)) {
+                        toplevel_ir_failed = true;
+                        delete func;
+                        printd(1, "IR lowering failed: %s\n", error.c_str());
+                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                            printe("IR exec fallback to AST: %s\n", error.c_str());
+                        }
+                        qore_program_private::get(*pgm)->recordIRFallback(std::string("lowering: ") + error);
+                        return;
+                    }
+                    if (!irBlockHasTerminator(builder.getBlock())) {
+                        builder.createReturnNothing();
+                    }
+                    if (!QoreIRVerifier::verify(*func, error)) {
+                        toplevel_ir_failed = true;
+                        delete func;
+                        printd(1, "IR verification failed: %s\n", error.c_str());
+                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                            printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
+                        }
+                        qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
+                        return;
+                    }
+                    // Classify locals as IR-only vs AST-visible for optimization
+                    func->computeIROnlyLocals();
+                    cached_toplevel_ir = func;
+                });
+                ir_func = cached_toplevel_ir;
+            }
+
+            if (ir_func) {
+                if (qore_program_private::get(*pgm)->ir_dump) {
+                    QoreIRPrinter::print(*ir_func, std::cout);
+                }
+                QoreValue ir_return_value;
+                bool ok;
+                // Build set of pre-instantiated local variables from the IR function's
+                // all_body_locals.  This ensures the pointers match those embedded in
+                // the JIT-compiled code (captured at IR creation time).
+                std::unordered_set<const LocalVar*> pre_instantiated;
+                for (LocalVar* lv : ir_func->all_body_locals) {
+                    pre_instantiated.insert(lv);
+                }
+
+                // Instantiate nested body locals before JIT execution.
+                // Top-level locals are pre-instantiated by QoreProgram, but nested
+                // locals from for/while/try blocks need to be instantiated here.
+                const LVList* toplevel_lvars = getLVList();
+                std::unordered_set<const LocalVar*> toplevel_set;
+                if (toplevel_lvars) {
+                    for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+                        toplevel_set.insert(toplevel_lvars->lv[i]);
+                    }
+                }
+                std::vector<LocalVar*> nested_locals;
+                for (LocalVar* lv : ir_func->all_body_locals) {
+                    if (toplevel_set.count(lv) == 0) {
+                        lv->instantiate(runtime_parse_options);
+                        nested_locals.push_back(lv);
+                    }
+                }
+
+                std::string error;
+                if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                    ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
+                        &pre_instantiated);
+                } else {
+                    ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
+                        nullptr, nullptr, &pre_instantiated);
+                }
+
+                // Uninstantiate nested locals after JIT execution (reverse order)
+                for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+                    (*it)->uninstantiate(xsink);
+                }
+
+                if (ok && !*xsink) {
+                    return_value = ir_return_value;
+                    return 0;
+                }
+                // If IR execution raised an exception, propagate it
+                if (*xsink) {
+                    return 0;
+                }
+                // IR execution failed without exception — fall through to AST
+                printd(1, "IR execution failed without exception, falling back to AST\n");
+                if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                    printe("IR exec fallback to AST: execution failed\n");
+                }
+                qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
+            }
+        }
+    }
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
     // This is determined by the execution high water mark (ehwm)

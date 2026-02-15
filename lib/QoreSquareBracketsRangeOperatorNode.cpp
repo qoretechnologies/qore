@@ -52,16 +52,32 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
 
     assert(!typeInfo);
 
-    int err = parse_init_value(e[0], parse_context);
+    QoreParseAnalysis seq_analysis;
+    QoreParseAnalysis start_analysis;
+    QoreParseAnalysis end_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(e[0], parse_context);
+        seq_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* typeInfo0 = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[1], parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[1], parse_context) && !err) {
+            err = -1;
+        }
+        start_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* typeInfo1 = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[2], parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[2], parse_context) && !err) {
+            err = -1;
+        }
+        end_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* typeInfo2 = parse_context.typeInfo;
 
@@ -114,6 +130,19 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     }
 
     parse_context.typeInfo = typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (seq_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && start_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && end_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

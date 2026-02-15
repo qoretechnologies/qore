@@ -34,6 +34,17 @@
 #define _QORE_QOREDOTEVALOPERATORNODE_H
 
 #include "qore/intern/qore_string_private.h"
+
+//! Check if a hash member is a call reference or closure
+/** Used by both AST (evalWithBase) and JIT (qore_rt_dot_eval_method_direct)
+    to dispatch hash-member call references.
+*/
+static inline const AbstractQoreNode* check_call_ref(const AbstractQoreNode* op, const char* name) {
+    const QoreHashNode* h = reinterpret_cast<const QoreHashNode*>(op);
+    const QoreValue ref = h->getKeyValue(name);
+    return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
+}
+
 class QoreDotEvalOperatorNode : public QoreOperatorNode {
 protected:
     static QoreString name;
@@ -104,6 +115,12 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const;
+
+    //! Evaluate the method call dispatch on a pre-evaluated base value.
+    /** Used by JIT/IR to avoid double-evaluating the base expression.
+        The caller is responsible for managing the lifetime of @a base.
+    */
+    DLLLOCAL QoreValue evalWithBase(QoreValue base, ExceptionSink* xsink) const;
 };
 
 #endif

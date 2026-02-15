@@ -432,6 +432,44 @@ public:
         expression_mode : 1
         ;
 
+    qore_exec_mode_t exec_mode = QEM_AST;
+    bool ir_dump = false;
+    bool ir_fallback_warn = false;
+    bool ir_fallback_warned = false;
+    bool ir_fallback_report = false;
+
+    // IR fallback tracking - counts by category
+    mutable QoreThreadLock ir_fallback_lock;
+    typedef std::map<std::string, int> ir_fallback_counts_t;
+    mutable ir_fallback_counts_t ir_fallback_counts;
+
+    //! Records an IR fallback event for later reporting
+    DLLLOCAL void recordIRFallback(const std::string& reason) const {
+        if (ir_fallback_report) {
+            AutoLocker al(ir_fallback_lock);
+            ir_fallback_counts[reason]++;
+        }
+    }
+
+    //! Prints the IR fallback report to stderr
+    DLLLOCAL void printIRFallbackReport() const {
+        if (!ir_fallback_report) {
+            return;
+        }
+        AutoLocker al(ir_fallback_lock);
+        if (ir_fallback_counts.empty()) {
+            return;
+        }
+        printe("\n=== IR Fallback Report ===\n");
+        int total = 0;
+        for (const auto& entry : ir_fallback_counts) {
+            printe("  %s: %d\n", entry.first.c_str(), entry.second);
+            total += entry.second;
+        }
+        printe("  Total fallbacks: %d\n", total);
+        printe("==========================\n");
+    }
+
     typedef std::set<q_exp_t> q_exp_set_t;
     q_exp_set_t exp_set;
     q_exp_t new_expression = nullptr;
@@ -651,6 +689,11 @@ class QoreBreakpoint;
 
 class qore_program_private : public qore_program_private_base {
 public:
+    //! Returns true if a debugger is currently attached to this program
+    DLLLOCAL bool hasDebuggerAttached() const {
+        return dpgm != nullptr;
+    }
+
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
     // map for line to statement
     typedef std::map<int, AbstractStatement*> sline_statement_map_t;
@@ -1709,9 +1752,14 @@ public:
 
         QoreStringNodeHolder d(desc);
         if (!requires_exception) {
+            ExceptionSink* sink = parseSink ? parseSink : pendingParseSink;
+            if (!sink) {
+                pendingParseSink = new ExceptionSink;
+                sink = pendingParseSink;
+            }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
-                parseSink->raiseException(ne);
+                sink->raiseException(ne);
             }
             exceptions_raised++;
         }

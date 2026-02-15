@@ -1,0 +1,2136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class AOTSmokeTest
+
+class AOTSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        # Determine the directory containing libqore (for compile/link)
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("AOT hello world", \testHelloWorld());
+        addTestCase("AOT arithmetic", \testArithmetic());
+        addTestCase("AOT control flow", \testControlFlow());
+        addTestCase("AOT functions", \testFunctions());
+        addTestCase("AOT string operations", \testStringOps());
+        addTestCase("AOT exit code", \testExitCode());
+        addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
+        addTestCase("AOT error handling", \testErrorHandling());
+        addTestCase("AOT compile missing file", \testCompileMissingFile());
+        addTestCase("AOT compile default output", \testCompileDefaultOutput());
+        # Phase 7b: pointer indirection tests
+        addTestCase("AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
+        addTestCase("AOT local variable scoping", \testLocalVariableScoping());
+        addTestCase("AOT lvalue operations", \testLvalueOps());
+        addTestCase("AOT multiple user functions", \testMultipleUserFunctions());
+        addTestCase("AOT method calls", \testMethodCalls());
+        addTestCase("AOT hash operations", \testHashOps());
+        addTestCase("AOT list operations", \testListOps());
+        addTestCase("AOT nested function calls", \testNestedFunctionCalls());
+        addTestCase("AOT on_exit blocks", \testOnExitBlocks());
+        addTestCase("AOT type conversions", \testTypeConversions());
+        # AOT opt-level, cross-compilation, and static linking tests
+        addTestCase("AOT optimization levels", \testAOTOptLevels());
+        addTestCase("AOT target triple", \testAOTTargetTriple());
+        addTestCase("AOT static linking", \testAOTStaticLink());
+        addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
+        # Module compilation tests
+        addTestCase("AOT module compile", \testAOTModuleCompile());
+        addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
+        addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
+        addTestCase("AOT module compile error", \testAOTModuleCompileError());
+        # Split module tests
+        addTestCase("AOT split module basic", \testAOTSplitModuleBasic());
+        addTestCase("AOT split module qm only", \testAOTSplitModuleQmOnly());
+        addTestCase("AOT split module missing qm", \testAOTSplitModuleMissingQm());
+        addTestCase("AOT split module auto detect", \testAOTSplitModuleAutoDetect());
+        addTestCase("AOT split module trailing slash", \testAOTSplitModuleTrailingSlash());
+        # Source stripping tests (Phase 8)
+        addTestCase("AOT strip source basic", \testStripSourceBasic());
+        addTestCase("AOT strip source arithmetic", \testStripSourceArithmetic());
+        addTestCase("AOT strip source strings", \testStripSourceStrings());
+        addTestCase("AOT strip source multiple functions", \testStripSourceMultipleFunctions());
+        addTestCase("AOT strip source binary size", \testStripSourceBinarySize());
+        addTestCase("AOT strip source backward compat", \testStripSourceBackwardCompat());
+        addTestCase("AOT strip source compile output", \testStripSourceCompileOutput());
+        addTestCase("AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
+        # Strip source type export tests (Phase 9)
+        addTestCase("AOT strip source hashdecl", \testStripSourceHashDecl());
+        addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
+        addTestCase("AOT strip source enum", \testStripSourceEnum());
+        addTestCase("AOT strip source module dependency", \testStripSourceModuleDependency());
+        # Class inheritance and static member tests
+        addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
+        addTestCase("AOT strip source static members", \testStripSourceStaticMembers());
+        # Map optimization opcodes
+        addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
+        addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
+        set_return_value(main());
+    }
+
+    #! Write code to a temp .q file and return {src_path, out_path}
+    private hash<auto> writeTempScript(string code) {
+        # Use a unique name with proper .q extension
+        string base = sprintf("/tmp/aot_test_%d_%d", getpid(), rand());
+        string src_path = base + ".q";
+        string out_path = base;
+
+        File f();
+        f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+
+        return {
+            "src": src_path,
+            "out": out_path,
+        };
+    }
+
+    #! Compile a script with extra compile flags, run it, and return {compile_out, run_out}
+    private hash<auto> compileWithFlags(string code, list<string> compile_flags, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Build compile command with extra flags (flags must come BEFORE the source file)
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        string compile_out = backquote(compile_cmd);
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "";
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Try to compile with extra flags and return compile output (no run)
+    private string compileOnly(string code, list<string> compile_flags) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+            unlink(paths.out + ".o");
+        }
+
+        # Flags must come BEFORE the source file
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        return backquote(compile_cmd);
+    }
+
+    #! Compile a script to a standalone executable, run it, and return stdout
+    private string compileAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile (set QORE_LIBDIR so the AOT linker finds the correct libqore)
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Verify the executable was created
+        if (!is_file(paths.out)) {
+            return "COMPILE_FAILED: " + compile_out;
+        }
+
+        # Run the compiled executable
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                run_cmd += " " + run_args[i];
+            }
+        }
+        run_cmd += " 2>&1";
+        return backquote(run_cmd);
+    }
+
+    #! Compile a script and return {compile_out, run_out, all_precompiled}
+    private hash<auto> compileCheckAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Parse "N/M functions pre-compiled" from compile output
+        bool all_precompiled = False;
+        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
+        if (match) {
+            all_precompiled = (match[0] == match[1]);
+        }
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+        };
+    }
+
+    #! Run a script with the interpreter and return stdout
+    private string runInterpreted(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string cmd = sprintf("%s -b --enable-debug %s", qore_bin, paths.src);
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                cmd += " " + run_args[i];
+            }
+        }
+        cmd += " 2>&1";
+        return backquote(cmd);
+    }
+
+    testHelloWorld() {
+        string code = "%modern\nprintf(\"Hello, World!\\n\");\n";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT hello world output matches interpreter");
+    }
+
+    testArithmetic() {
+        string code = "%modern
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+
+int a = 100;
+int b = 37;
+printf(\"add: %d\\n\", a + b);
+printf(\"sub: %d\\n\", a - b);
+printf(\"mul: %d\\n\", a * b);
+printf(\"div: %d\\n\", a / b);
+printf(\"mod: %d\\n\", a % b);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT arithmetic output matches interpreter");
+    }
+
+    testControlFlow() {
+        string code = "%modern
+int x = 42;
+if (x > 40) {
+    printf(\"big\\n\");
+} else {
+    printf(\"small\\n\");
+}
+
+int count = 0;
+while (count < 5) {
+    ++count;
+}
+printf(\"count: %d\\n\", count);
+
+int total = 0;
+int i = 0;
+do {
+    total += i;
+    ++i;
+} while (i < 5);
+printf(\"total: %d\\n\", total);
+
+switch (x) {
+    case 42:
+        printf(\"matched\\n\");
+        break;
+    default:
+        printf(\"no match\\n\");
+        break;
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT control flow output matches interpreter");
+    }
+
+    testFunctions() {
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+int sub fibonacci(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+printf(\"fact(10): %d\\n\", factorial(10));
+printf(\"fib(10): %d\\n\", fibonacci(10));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT function output matches interpreter");
+    }
+
+    testStringOps() {
+        string code = "%modern
+string s = \"Hello\";
+s += \", World!\";
+printf(\"%s\\n\", s);
+printf(\"len: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT string ops output matches interpreter");
+    }
+
+    testExitCode() {
+        # AOT binary should return 0 on success
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"ok\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT executable was created");
+        int rc = system(sprintf("LD_LIBRARY_PATH=%s %s -b > /dev/null 2>&1", libqore_dir, paths.out));
+        assertEq(0, rc, "AOT binary exits with code 0");
+    }
+
+    testArgvPassthrough() {
+        string code = "%modern
+list<auto> args = ARGV;
+for (int i = 0; i < args.size(); ++i) {
+    printf(\"arg%d: %s\\n\", i, args[i]);
+}
+";
+        list<string> args = ("foo", "bar", "baz");
+        string aot_out = compileAndRun(code, args);
+        string interp_out = runInterpreted(code, args);
+        assertEq(interp_out, aot_out, "AOT ARGV passthrough matches interpreter");
+    }
+
+    testErrorHandling() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT error handling matches interpreter");
+    }
+
+    testCompileMissingFile() {
+        # Compiling a non-existent file should fail
+        string cmd = sprintf("QORE_LIBDIR=%s %s -b --compile /tmp/nonexistent_file_12345.q --output /tmp/nonexistent_out 2>&1",
+            libqore_dir, qore_bin);
+        string out = backquote(cmd);
+        assertTrue(out.size() > 0, "error message for missing source file");
+    }
+
+    testCompileDefaultOutput() {
+        # Test that --output can be omitted (default output name derived from source)
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"default\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile without --output
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s 2>&1",
+            libqore_dir, qore_bin, paths.src);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT default output file was created");
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out));
+        assertEq("default\n", out, "default output binary runs correctly");
+    }
+
+    # ---- Phase 7b: Pointer Indirection Tests ----
+
+    testAllFunctionsPrecompiled() {
+        # Verify that ALL functions (including _toplevel) are pre-compiled with pointer indirection
+        string code = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+
+int sub multiply(int a, int b) {
+    return a * b;
+}
+
+string sub greet(string name) {
+    return \"Hello, \" + name + \"!\";
+}
+
+printf(\"%d\\n\", add(3, 4));
+printf(\"%d\\n\", multiply(5, 6));
+printf(\"%s\\n\", greet(\"World\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multi-function AOT output matches interpreter");
+    }
+
+    testLocalVariableScoping() {
+        # Test local variable assignment, reassignment, and scoping
+        string code = "%modern
+int x = 10;
+printf(\"x=%d\\n\", x);
+x = 20;
+printf(\"x=%d\\n\", x);
+
+{
+    int y = 30;
+    printf(\"y=%d\\n\", y);
+    x = x + y;
+}
+printf(\"x=%d\\n\", x);
+
+# Test multiple locals in a function
+int sub compute(int a, int b, int c) {
+    int temp1 = a + b;
+    int temp2 = temp1 * c;
+    int result = temp2 - a;
+    return result;
+}
+printf(\"result=%d\\n\", compute(3, 4, 5));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "local scoping: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "local variable scoping output matches interpreter");
+    }
+
+    testLvalueOps() {
+        # Test pre-increment/decrement and compound assignment
+        # NOTE: post-increment (a++) on typed int vars uses QoreIntPostIncrementOperatorNode
+        # which is not yet handled by IR lowering; pre-increment (++a) works via
+        # QorePreIncrementOperatorNode
+        string code = "%modern
+int a = 10;
+++a;
+printf(\"++a: %d\\n\", a);
+--a;
+printf(\"--a: %d\\n\", a);
+
+# Compound assignment operators
+int b = 100;
+b += 10;
+printf(\"b+=10: %d\\n\", b);
+b -= 30;
+printf(\"b-=30: %d\\n\", b);
+b *= 2;
+printf(\"b*=2: %d\\n\", b);
+b /= 4;
+printf(\"b/=4: %d\\n\", b);
+b %= 7;
+printf(\"b%%=7: %d\\n\", b);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "lvalue ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "lvalue operations output matches interpreter");
+    }
+
+    testMultipleUserFunctions() {
+        # Test multiple user functions calling each other and _toplevel
+        string code = "%modern
+int sub square(int n) {
+    return n * n;
+}
+
+int sub sum_of_squares(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; ++i) {
+        total += square(i);
+    }
+    return total;
+}
+
+string sub format_result(string label, int value) {
+    return sprintf(\"%s: %d\", label, value);
+}
+
+printf(\"%s\\n\", format_result(\"sq(5)\", square(5)));
+printf(\"%s\\n\", format_result(\"sum_sq(5)\", sum_of_squares(5)));
+printf(\"%s\\n\", format_result(\"sq(10)+sq(20)\", square(10) + square(20)));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "multi-func: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multiple user functions output matches interpreter");
+    }
+
+    testMethodCalls() {
+        # Test various method calls on built-in types (DotEvalInt, DotEvalString, etc.)
+        string code = "%modern
+# String methods
+string s = \"Hello, World!\";
+printf(\"size: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+printf(\"substr: %s\\n\", s.substr(0, 5));
+
+# List methods
+list<int> l = (3, 1, 4, 1, 5, 9);
+printf(\"list size: %d\\n\", l.size());
+
+# Number operations
+float f = 3.14159;
+printf(\"float: %g\\n\", f);
+printf(\"int cast: %d\\n\", int(f));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "method calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "method calls output matches interpreter");
+    }
+
+    testHashOps() {
+        # Test hash construction, access, and method calls
+        string code = "%modern
+hash<auto> h = {
+    \"name\": \"Alice\",
+    \"age\": 30,
+    \"active\": True,
+};
+printf(\"name: %s\\n\", h.name);
+printf(\"age: %d\\n\", h.age);
+printf(\"keys: %d\\n\", h.size());
+
+# Hash modification
+h.email = \"alice@example.com\";
+printf(\"updated keys: %d\\n\", h.size());
+
+# Hash iteration via keys()
+list<string> key_list = keys(h);
+printf(\"first key: %s\\n\", key_list[0]);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "hash ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "hash operations output matches interpreter");
+    }
+
+    testListOps() {
+        # Test list construction, access, and operations
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+printf(\"size: %d\\n\", nums.size());
+printf(\"first: %d\\n\", nums[0]);
+printf(\"last: %d\\n\", nums[4]);
+
+# Build list with push
+list<string> words = ();
+words += \"hello\";
+words += \"world\";
+printf(\"words: %d\\n\", words.size());
+
+# List in for loop
+int total = 0;
+for (int i = 0; i < nums.size(); ++i) {
+    total += nums[i];
+}
+printf(\"total: %d\\n\", total);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "list ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "list operations output matches interpreter");
+    }
+
+    testNestedFunctionCalls() {
+        # Test deeply nested function calls with multiple locals
+        string code = "%modern
+string sub wrap(string s, string prefix, string suffix) {
+    return prefix + s + suffix;
+}
+
+string sub format(int n) {
+    return sprintf(\"%d\", n);
+}
+
+int sub double_val(int n) {
+    return n * 2;
+}
+
+# Nested: wrap(format(double_val(5)), \"[\", \"]\")
+printf(\"%s\\n\", wrap(format(double_val(5)), \"[\", \"]\"));
+printf(\"%s\\n\", wrap(wrap(\"core\", \"<\", \">\"), \"[\", \"]\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "nested calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "nested function calls output matches interpreter");
+    }
+
+    testOnExitBlocks() {
+        # Test on_exit / on_success blocks with user functions
+        # NOTE: We call functions and store results before passing to printf
+        # to avoid double-evaluation (Call instruction re-evaluates the full
+        # expression from the AST, including sub-expressions as arguments)
+        string code = "%modern
+string sub test_on_exit(string label) {
+    string result = \"\";
+    on_exit {
+        printf(\"exit: %s\\n\", label);
+    }
+    result = \"body: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string sub test_on_success(string label) {
+    string result = \"\";
+    on_success {
+        printf(\"success: %s\\n\", label);
+    }
+    result = \"body2: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string rv1 = test_on_exit(\"A\");
+printf(\"rv: %s\\n\", rv1);
+string rv2 = test_on_success(\"B\");
+printf(\"rv: %s\\n\", rv2);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "on_exit: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "on_exit blocks output matches interpreter");
+    }
+
+    testTypeConversions() {
+        # Test implicit and explicit type conversions
+        string code = "%modern
+# int to string
+int n = 42;
+string s = sprintf(\"%d\", n);
+printf(\"str: %s\\n\", s);
+
+# string to int
+string num_str = \"123\";
+int parsed = int(num_str);
+printf(\"int: %d\\n\", parsed);
+
+# float to int
+float f = 3.7;
+int truncated = int(f);
+printf(\"trunc: %d\\n\", truncated);
+
+# bool
+bool t = True;
+bool f2 = False;
+printf(\"true: %s\\n\", string(t));
+printf(\"false: %s\\n\", string(f2));
+
+# int arithmetic chain
+int x = int(\"10\") + int(\"20\");
+printf(\"chain: %d\\n\", x);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "type conversions: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "type conversions output matches interpreter");
+    }
+
+    # ---- AOT Optimization Levels and Cross-Compilation Tests ----
+
+    testAOTOptLevels() {
+        # Test that --opt-level=0 through --opt-level=3 all produce correct output
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+printf(\"fact(10): %d\\n\", factorial(10));
+int sum = 0;
+for (int i = 0; i < 100; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        string interp_out = runInterpreted(code);
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            hash<auto> result = compileWithFlags(code, (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("O%d: compilation succeeded", level));
+            # Verify output message includes opt level
+            assertTrue(result.compile_out.regex(sprintf("compiled \\(O%d\\)", level)),
+                sprintf("O%d: output shows opt level", level));
+            assertEq(interp_out, result.run_out,
+                sprintf("O%d: output matches interpreter", level));
+        }
+
+        # Test invalid --opt-level value
+        string err_out = compileOnly(code, ("--opt-level=5",));
+        assertTrue(err_out.regex("invalid --opt-level"),
+            "invalid opt-level produces error");
+
+        # Test non-numeric --opt-level value
+        string err_out2 = compileOnly(code, ("--opt-level=abc",));
+        assertTrue(err_out2.regex("invalid --opt-level"),
+            "non-numeric opt-level produces error");
+    }
+
+    testAOTTargetTriple() {
+        string code = "%modern
+printf(\"hello\\n\");
+";
+        # Compile with --target set to an invalid triple — should produce an error
+        string err_out = compileOnly(code, ("--target=invalid-unknown-triple",));
+        assertTrue(err_out.regex("(failed to look up target|error|No available targets)"),
+            "invalid target triple produces error: " + err_out);
+    }
+
+    testAOTStaticLink() {
+        # Check if static libqore is available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (!is_file(static_lib)) {
+            testSkip("static libqore not built (requires -DBUILD_STATIC_LIBQORE=ON)");
+            return;
+        }
+
+        string code = "%modern
+printf(\"static hello\\n\");
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        # Compile with --static
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s --static %s 2>&1",
+            libqore_dir, qore_bin, paths.out, paths.src);
+        string compile_out = backquote(compile_cmd);
+        assertTrue(is_file(paths.out), "static compilation succeeded: " + compile_out);
+
+        # Run the static binary — still needs transitive .so deps (libjsig, etc.)
+        # but does NOT need libqore.so on LD_LIBRARY_PATH.
+        # Detect extra library paths needed for transitive deps (e.g., libjsig from JVM)
+        string extra_ld = "";
+        *string jsig = backquote("find /usr/lib/jvm -name 'libjsig.so' 2>/dev/null | head -1");
+        if (jsig.val()) {
+            # Remove trailing newline
+            jsig =~ s/\n$//;
+            extra_ld = ":" + dirname(jsig);
+        }
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s%s %s -b 2>&1",
+            libqore_dir, extra_ld, paths.out));
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, run_out, "static binary output matches interpreter");
+
+        # Verify the binary does not dynamically link libqore.so
+        string ldd_out = backquote(sprintf("ldd %s 2>&1", paths.out));
+        assertFalse(ldd_out.regex("libqore\\.so"),
+            "static binary does not link libqore.so dynamically");
+    }
+
+    testAOTStaticLinkNotBuilt() {
+        # Test that --static gives a clear error when libqore_static.a is not available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (is_file(static_lib)) {
+            testSkip("static libqore is built — cannot test missing-lib error");
+            return;
+        }
+
+        string code = "%modern\nprintf(\"hello\\n\");\n";
+        string err_out = compileOnly(code, ("--static",));
+        assertTrue(err_out.regex("(static libqore not found|BUILD_STATIC_LIBQORE)"),
+            "missing static lib produces helpful error: " + err_out);
+    }
+
+    # ---- Module Compilation Tests ----
+
+    #! Write a .qm module file to temp and return the path
+    private string writeTempModule(string code) {
+        string path = sprintf("/tmp/aot_test_mod_%d_%d.qm", getpid(), rand());
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    #! Compile a .qm module with --compile-module, return {compile_out, so_path, compiled}
+    private hash<auto> compileModuleFile(string qm_path, *string output_path, *list<string> extra_flags) {
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: strip .qm extension, add .qmod
+            so_path = qm_path;
+            so_path =~ s/\.qm$//;
+            so_path += ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTModuleCompile() {
+        # Use a temp directory so we can control module naming
+        string tmp_dir = sprintf("/tmp/aot_mod_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            # Clean up the entire temp directory
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Write a test module with a filename matching the module name
+        string mod_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module AOTTestMod {
+    version = \"1.0\";
+    desc = \"AOT test module\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestMod {
+    public string sub hello(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+
+    public int sub add(int a, int b) {
+        return a + b;
+    }
+
+    public int sub factorial(int n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTTestMod.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        # Compile the module (produces AOTTestMod.qmod by default)
+        string qmod_path = tmp_dir + "/AOTTestMod.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+
+        assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled module \\(O2\\)"),
+            "compile output shows module compilation: " + result.compile_out);
+        assertTrue(result.compile_out.regex("3/3 functions pre-compiled"),
+            "all module functions pre-compiled: " + result.compile_out);
+
+        # Write a test script that loads the compiled module
+        string test_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires AOTTestMod
+
+printf(\"%s\\n\", AOTTestMod::hello(\"World\"));
+printf(\"%d\\n\", AOTTestMod::add(10, 20));
+printf(\"%d\\n\", AOTTestMod::factorial(10));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod binary module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm user module (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module output matches interpreted module");
+        assertEq("Hello, World!\n30\n3628800\n", aot_out, "module functions produce correct results");
+    }
+
+    testAOTModuleCompileCustomOutput() {
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module AOTTestOut {
+    version = \"1.0\";
+    desc = \"Test custom output\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestOut {
+    public int sub square(int n) {
+        return n * n;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        string custom_path = sprintf("/tmp/aot_custom_out_%d.qmod", getpid());
+        on_exit {
+            unlink(qm_path);
+            unlink(custom_path);
+        }
+
+        # Compile with custom --output
+        hash<auto> result = compileModuleFile(qm_path, custom_path);
+        assertTrue(result.compiled, "custom output module compiled: " + result.compile_out);
+        assertEq(custom_path, result.so_path, "output path matches custom path");
+    }
+
+    testAOTModuleCompileOptLevels() {
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module AOTOptMod {
+    version = \"1.0\";
+    desc = \"Test opt levels\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTOptMod {
+    public int sub compute(int n) {
+        int result = 0;
+        for (int i = 0; i < n; ++i) {
+            result += i * i;
+        }
+        return result;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        on_exit {
+            unlink(qm_path);
+        }
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            string qmod_path = sprintf("/tmp/aot_opt%d_%d.qmod", level, getpid());
+            on_exit {
+                unlink(qmod_path);
+            }
+
+            hash<auto> result = compileModuleFile(qm_path, qmod_path,
+                (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("module O%d compiled: %s", level, result.compile_out));
+            assertTrue(result.compile_out.regex(sprintf("compiled module \\(O%d\\)", level)),
+                sprintf("O%d: shows correct opt level: %s", level, result.compile_out));
+        }
+    }
+
+    testAOTModuleCompileError() {
+        # Test compiling a non-module file with --compile-module
+        string bad_code = "%modern
+printf(\"not a module\\n\");
+";
+        string qm_path = writeTempModule(bad_code);
+        on_exit {
+            unlink(qm_path);
+            # Clean up any .qmod that might have been created
+            string qmod_path = qm_path;
+            qmod_path =~ s/\.qm$/.qmod/;
+            unlink(qmod_path);
+        }
+
+        hash<auto> result = compileModuleFile(qm_path);
+        assertTrue(result.compile_out.regex("(failed|error|no module declaration)"),
+            "non-module file produces error: " + result.compile_out);
+    }
+
+    #! Helper to create a split module directory structure
+    #! The directory name must match the module name for split module compilation
+    private hash<auto> createSplitModuleDir(string mod_name, string qm_code, *hash<string, string> component_files) {
+        # Create a unique parent dir, then create the module dir inside it with the correct name
+        string parent_dir = sprintf("/tmp/aot_split_test_%d_%d", getpid(), rand());
+        mkdir(parent_dir);
+        string mod_dir = parent_dir + "/" + mod_name;
+        mkdir(mod_dir);
+
+        # Create the main .qm file (must match directory name)
+        string qm_path = mod_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(qm_code);
+            f.close();
+        }
+
+        # Create any component files (.qc, .ql)
+        if (component_files) {
+            HashIterator it(component_files);
+            while (it.next()) {
+                string comp_path = mod_dir + "/" + it.getKey();
+                File f();
+                f.open2(comp_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(it.getValue());
+                f.close();
+            }
+        }
+
+        return {
+            "parent_dir": parent_dir,  # For cleanup
+            "dir": mod_dir,            # Module directory
+            "qm_path": qm_path,
+        };
+    }
+
+    #! Compile a split module directory, return {compile_out, so_path, compiled}
+    private hash<auto> compileSplitModule(string dir_path, *string output_path, *list<string> extra_flags) {
+        string mod_name = basename(dir_path);
+        # Handle trailing slash
+        if (mod_name == "") {
+            mod_name = basename(dirname(dir_path));
+        }
+
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: module_name.qmod in the directory
+            so_path = dir_path + "/" + mod_name + ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, dir_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTSplitModuleBasic() {
+        # Create a split module with .qm + .qc + .ql files
+        string mod_name = "AOTSplitTest";
+        string qm_code = "%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+module AOTSplitTest {
+    version = \"1.0\";
+    desc = \"AOT split module test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitTest {
+    public int sub main_func() {
+        return 42;
+    }
+}
+";
+
+        # Helper class in .qc file
+        string qc_code = "
+public namespace AOTSplitTest {
+    public class Helper {
+        private {
+            int value = 100;
+        }
+
+        int getValue() {
+            return value;
+        }
+
+        int addTo(int n) {
+            return value + n;
+        }
+    }
+}
+";
+
+        # Helper function in .ql file
+        string ql_code = "
+public namespace AOTSplitTest {
+    public int sub add_numbers(int a, int b) {
+        return a + b;
+    }
+
+    public string sub greet(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code, {
+            "Helper.qc": qc_code,
+            "funcs.ql": ql_code,
+        });
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "split module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module \\(O2\\)"),
+            "compile output shows split module compilation: " + result.compile_out);
+
+        # Test script that uses all parts of the split module
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires AOTSplitTest
+
+printf(\"%d\\n\", AOTSplitTest::main_func());
+printf(\"%d\\n\", AOTSplitTest::add_numbers(10, 20));
+printf(\"%s\\n\", AOTSplitTest::greet(\"World\"));
+auto h = new AOTSplitTest::Helper();
+printf(\"%d\\n\", h.getValue());
+printf(\"%d\\n\", h.addTo(50));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled split module output matches interpreted");
+        assertEq("42\n30\nHello, World!\n100\n150\n", aot_out, "split module functions produce correct results");
+    }
+
+    testAOTSplitModuleQmOnly() {
+        # Test a split module directory that contains only the main .qm file (no .qc/.ql)
+        string mod_name = "AOTSplitQmOnly";
+        string qm_code = "%modern
+%require-types
+%strict-args
+
+module AOTSplitQmOnly {
+    version = \"1.0\";
+    desc = \"Split module with only .qm\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitQmOnly {
+    public int sub get_value() {
+        return 99;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module (directory with only .qm)
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "qm-only split module compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitQmOnly
+printf(\"%d\\n\", AOTSplitQmOnly::get_value());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with compiled module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("99\n", aot_out, "qm-only split module works correctly");
+    }
+
+    testAOTSplitModuleMissingQm() {
+        # Test error case: directory without matching .qm file
+        string tmp_dir = sprintf("/tmp/aot_split_missing_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Create a .qc file but no .qm file
+        string qc_path = tmp_dir + "/Helper.qc";
+        {
+            File f();
+            f.open2(qc_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("public namespace Test { public int sub foo() { return 1; } }");
+            f.close();
+        }
+
+        # Try to compile - should fail
+        hash<auto> result = compileSplitModule(tmp_dir);
+
+        assertFalse(result.compiled, "missing .qm produces no output");
+        assertTrue(result.compile_out.regex("(not found|does not exist|cannot open|failed)"),
+            "error message for missing .qm: " + result.compile_out);
+    }
+
+    testAOTSplitModuleAutoDetect() {
+        # Test that directory input auto-detects as module mode
+        string mod_name = "AOTSplitAuto";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitAuto {
+    version = \"1.0\";
+    desc = \"Auto-detect test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitAuto {
+    public int sub auto_val() {
+        return 777;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile without -m flag - should auto-detect directory as module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "auto-detected module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module"),
+            "output shows split module compilation: " + result.compile_out);
+    }
+
+    testAOTSplitModuleTrailingSlash() {
+        # Test that directory path with trailing slash works
+        string mod_name = "AOTSplitSlash";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitSlash {
+    version = \"1.0\";
+    desc = \"Trailing slash test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitSlash {
+    public int sub slash_val() {
+        return 888;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile with trailing slash
+        string dir_with_slash = mod_info.dir + "/";
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(dir_with_slash, qmod_path);
+
+        assertTrue(result.compiled, "trailing slash path compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitSlash
+printf(\"%d\\n\", AOTSplitSlash::slash_val());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("888\n", aot_out, "trailing slash module works correctly");
+    }
+
+    #! Compile with --strip-source flag and run
+    private hash<auto> compileStripSourceAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile with --strip-source
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Parse pre-compile stats
+        bool all_precompiled = False;
+        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
+        if (match) {
+            all_precompiled = (match[0] == match[1]);
+        }
+
+        string run_out;
+        int binary_size = 0;
+        if (is_file(paths.out)) {
+            binary_size = hstat(paths.out).size;
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+            "binary_size": binary_size,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Compile with --strip-source and return binary path (caller must clean up)
+    private hash<auto> compileStripSourceGetPath(string code) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "out_path": paths.out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    # ---- Source stripping tests (Phase 8) ----
+
+    testStripSourceBasic() {
+        string code = "%modern
+printf(\"Hello, World!\\n\");
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source basic compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "compile output mentions source-stripped: " + result.compile_out);
+        assertEq("Hello, World!\n", result.run_out, "strip-source basic output correct");
+    }
+
+    testStripSourceArithmetic() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+int sub multiply(int a, int b) { return a * b; }
+int sub subtract(int a, int b) { return a - b; }
+printf(\"%d %d %d\\n\", add(10, 20), multiply(3, 7), subtract(100, 42));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source arithmetic compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source arithmetic matches interpreter");
+    }
+
+    testStripSourceStrings() {
+        string code = "%modern
+string sub greet(string name) { return \"Hello, \" + name + \"!\"; }
+string sub concat3(string a, string b, string c) { return a + b + c; }
+printf(\"%s\\n\", greet(\"World\"));
+printf(\"%s\\n\", concat3(\"A\", \"B\", \"C\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source strings compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source strings matches interpreter");
+    }
+
+    testStripSourceMultipleFunctions() {
+        string code = "%modern
+int sub square(int x) { return x * x; }
+int sub cube(int x) { return x * x * x; }
+int sub sum_squares(int a, int b) { return square(a) + square(b); }
+printf(\"square(5)=%d\\n\", square(5));
+printf(\"cube(3)=%d\\n\", cube(3));
+printf(\"sum_squares(3,4)=%d\\n\", sum_squares(3, 4));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source multi-func compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "strip-source all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source multi-func matches interpreter");
+    }
+
+    testStripSourceBinarySize() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_result = compileStripSourceAndRun(code);
+        assertTrue(strip_result.compiled, "strip-source compiled: " + strip_result.compile_out);
+
+        # Compile without strip-source for comparison
+        hash<auto> normal_result = compileCheckAndRun(code);
+        assertTrue(normal_result.run_out.regex("result: 3"), "normal AOT runs correctly");
+
+        # Both should produce correct output
+        assertEq(strip_result.run_out, normal_result.run_out,
+            "strip-source output matches normal AOT output");
+
+        # The strip-source compile output should mention "source-stripped"
+        assertTrue(strip_result.compile_out.regex("source-stripped"),
+            "compile output mentions source-stripped");
+    }
+
+    testStripSourceBackwardCompat() {
+        # Verify that normal (non-stripped) AOT binaries still work after our changes
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "non-stripped AOT still works correctly");
+    }
+
+    testStripSourceCompileOutput() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source compiled");
+        # Verify compile output shows metadata blob size
+        assertTrue(result.compile_out.regex("metadata blob:.*bytes"),
+            "compile output shows metadata blob size: " + result.compile_out);
+        # Verify compile output shows source-stripped
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "compile output shows source-stripped: " + result.compile_out);
+        # Verify it reports functions pre-compiled
+        assertTrue(result.compile_out.regex("\\d+/\\d+ functions pre-compiled"),
+            "compile output shows pre-compile stats: " + result.compile_out);
+    }
+
+    testStripSourceNoSourceInBinary() {
+        # Verify that the source code string is NOT present in the stripped binary
+        string code = "%modern
+int sub add_unique_marker_12345(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add_unique_marker_12345(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_paths = compileStripSourceGetPath(code);
+        on_exit {
+            unlink(strip_paths.out_path);
+        }
+        assertTrue(strip_paths.compiled, "strip-source compiled: " + strip_paths.compile_out);
+
+        # Also compile WITHOUT strip-source for comparison
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        # Use the `strings` command to extract printable strings from both binaries
+        # The source code "int sub add_unique_marker_12345" should appear in the
+        # non-stripped binary (embedded source) but NOT in the stripped binary
+        string strip_strings = backquote(sprintf("strings %s 2>&1", strip_paths.out_path));
+        string normal_strings = backquote(sprintf("strings %s 2>&1", paths.out));
+
+        # The non-stripped binary should contain the source declaration
+        assertTrue(normal_strings.regex("int sub add_unique_marker_12345"),
+            "non-stripped binary contains source function declaration");
+
+        # The stripped binary should NOT contain the source declaration
+        assertFalse(strip_strings.regex("int sub add_unique_marker_12345"),
+            "strip-source binary does not contain source function declaration");
+    }
+
+    # ---- Strip source type export tests (Phase 9) ----
+
+    #! Compile a module with --strip-source and return info
+    private hash<auto> compileStripSourceModule(string mod_code, string mod_name) {
+        string tmp_dir = sprintf("/tmp/aot_strip_mod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+
+        string qm_path = tmp_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/" + mod_name + ".qmod";
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "tmp_dir": tmp_dir,
+            "qm_path": qm_path,
+            "qmod_path": qmod_path,
+            "compile_out": compile_out,
+            "compiled": is_file(qmod_path),
+        };
+    }
+
+    testStripSourceHashDecl() {
+        # Create a module with a hashdecl
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripHashDeclMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclMod {
+    public hashdecl TestInfo {
+        string name;
+        int value;
+    }
+
+    public hash<TestInfo> sub getInfo(string name, int value) {
+        return <TestInfo>{\"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl compiled: " + mod_info.compile_out);
+        assertTrue(mod_info.compile_out.regex("source-stripped"),
+            "compile output shows source-stripped: " + mod_info.compile_out);
+
+        # Create a test script that uses the hashdecl
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripHashDeclMod
+
+hash<StripHashDeclMod::TestInfo> info = StripHashDeclMod::getInfo(\"test\", 42);
+printf(\"name: %s, value: %d\\n\", info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("name: test, value: 42\n", out, "hashdecl from strip-source module works correctly");
+    }
+
+    testStripSourceHashDeclInheritance() {
+        # Create a module with hashdecl inheritance
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripHashDeclInhMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclInhMod {
+    public hashdecl BaseInfo {
+        string id;
+    }
+
+    public hashdecl ExtendedInfo inherits BaseInfo {
+        string name;
+        int value;
+    }
+
+    public hash<ExtendedInfo> sub getExtendedInfo(string id, string name, int value) {
+        return <ExtendedInfo>{\"id\": id, \"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the derived hashdecl
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripHashDeclInhMod
+
+hash<StripHashDeclInhMod::ExtendedInfo> info = StripHashDeclInhMod::getExtendedInfo(\"id123\", \"test\", 99);
+printf(\"id: %s, name: %s, value: %d\\n\", info.id, info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("id: id123, name: test, value: 99\n", out,
+            "hashdecl inheritance from strip-source module works correctly");
+    }
+
+    testStripSourceEnum() {
+        # Create a module with an enum
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripEnumMod {
+    version = \"1.0\";
+    desc = \"Test enum export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripEnumMod {
+    public enum Status {
+        Pending = 0,
+        Active = 1,
+        Completed = 2,
+    }
+
+    public int sub getStatusValue(Status s) {
+        return int(s);
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripEnumMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with enum compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the enum
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripEnumMod
+
+printf(\"Pending=%d\\n\", StripEnumMod::Status::Pending);
+printf(\"Active=%d\\n\", StripEnumMod::Status::Active);
+printf(\"Completed=%d\\n\", StripEnumMod::Status::Completed);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Pending=0\nActive=1\nCompleted=2\n", out, "enum from strip-source module works correctly");
+    }
+
+    testStripSourceModuleDependency() {
+        # Create a base module with types
+        string base_mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripBaseTypes {
+    version = \"1.0\";
+    desc = \"Base types module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripBaseTypes {
+    public hashdecl PersonInfo {
+        string name;
+        int age;
+    }
+
+    public enum Gender {
+        Unknown = 0,
+        Male = 1,
+        Female = 2,
+    }
+}
+";
+        hash<auto> base_info = compileStripSourceModule(base_mod_code, "StripBaseTypes");
+        on_exit {
+            backquote(sprintf("rm -rf %s", base_info.tmp_dir));
+        }
+        assertTrue(base_info.compiled, "base types module compiled: " + base_info.compile_out);
+
+        # Create a dependent module that uses the types from base
+        string dep_mod_code = "%new-style
+%require-types
+%strict-args
+
+%requires StripBaseTypes
+
+module StripDepMod {
+    version = \"1.0\";
+    desc = \"Dependent module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripDepMod {
+    public hash<StripBaseTypes::PersonInfo> sub createPerson(string name, int age) {
+        return <StripBaseTypes::PersonInfo>{\"name\": name, \"age\": age};
+    }
+
+    public string sub genderName(StripBaseTypes::Gender g) {
+        switch (g) {
+            case StripBaseTypes::Gender::Male: return \"Male\";
+            case StripBaseTypes::Gender::Female: return \"Female\";
+            default: return \"Unknown\";
+        }
+    }
+}
+";
+        # Write dependent module to the same directory
+        string dep_qm_path = base_info.tmp_dir + "/StripDepMod.qm";
+        {
+            File f();
+            f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(dep_mod_code);
+            f.close();
+        }
+        string dep_qmod_path = base_info.tmp_dir + "/StripDepMod.qmod";
+        string dep_compile_cmd = sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, dep_qmod_path, dep_qm_path);
+        string dep_compile_out = backquote(dep_compile_cmd);
+
+        assertTrue(is_file(dep_qmod_path), "dependent module compiled: " + dep_compile_out);
+
+        # Create a test script that uses both modules
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripBaseTypes
+%requires StripDepMod
+
+hash<StripBaseTypes::PersonInfo> p = StripDepMod::createPerson(\"Alice\", 30);
+printf(\"Person: %s, age %d\\n\", p.name, p.age);
+printf(\"Gender: %s\\n\", StripDepMod::genderName(StripBaseTypes::Gender::Female));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with both compiled strip-source .qmod files
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Person: Alice, age 30\nGender: Female\n", out,
+            "strip-source module dependency with types works correctly");
+    }
+
+    testStripSourceClassInheritance() {
+        # Create a module with class inheritance
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripClassInhMod {
+    version = \"1.0\";
+    desc = \"Test class inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripClassInhMod {
+    public class BaseClass {
+        private {
+            int base_value;
+        }
+
+        constructor(int v) {
+            base_value = v;
+        }
+
+        int getBaseValue() {
+            return base_value;
+        }
+    }
+
+    public class DerivedClass inherits BaseClass {
+        private {
+            string name;
+        }
+
+        constructor(string n, int v) : BaseClass(v) {
+            name = n;
+        }
+
+        string getName() {
+            return name;
+        }
+
+        string describe() {
+            return sprintf(\"%s: %d\", name, getBaseValue());
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripClassInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with class inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses class inheritance
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripClassInhMod
+
+auto d = new StripClassInhMod::DerivedClass(\"Test\", 42);
+printf(\"Name: %s\\n\", d.getName());
+printf(\"Base value: %d\\n\", d.getBaseValue());
+printf(\"Description: %s\\n\", d.describe());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Name: Test\nBase value: 42\nDescription: Test: 42\n", out,
+            "class inheritance from strip-source module works correctly");
+    }
+
+    testStripSourceStaticMembers() {
+        # Create a module with static class members and methods
+        string mod_code = "%new-style
+%require-types
+%strict-args
+
+module StripStaticMod {
+    version = \"1.0\";
+    desc = \"Test static member export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripStaticMod {
+    public class Helper {
+        public {
+            static string prefix = \"[Static]\";
+        }
+
+        static string format(string msg) {
+            return Helper::prefix + \" \" + msg;
+        }
+
+        static int double_val(int n) {
+            return n * 2;
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripStaticMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with static members compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses static methods
+        string test_code = "%modern
+%require-types
+%strict-args
+
+%requires StripStaticMod
+
+printf(\"%s\\n\", StripStaticMod::Helper::format(\"Hello\"));
+printf(\"%d\\n\", StripStaticMod::Helper::double_val(21));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("[Static] Hello\n42\n", out,
+            "static members from strip-source module work correctly");
+    }
+
+    testAOTMapHashKeyOpcodes() {
+        # MapHashKeyValue: map $1.key, list<hash<auto>>
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": \"a\"}, {\"val\": \"b\"}, {\"val\": \"c\"});
+list<auto> result = map $1.val, items;
+printf(\"%s:%s:%s\\n\", result[0], result[1], result[2]);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyValue matches interpreter");
+
+        # HashMapTwoKeys: map {$1.k1: $1.k2}, list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys matches interpreter");
+
+        # HashMapTwoKeys with duplicate keys
+        code = "%modern
+list<hash<auto>> items = ({\"k\": \"x\", \"v\": 1}, {\"k\": \"x\", \"v\": 2}, {\"k\": \"y\", \"v\": 3});
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d:%d\\n\", result.size(), result.x, result.y);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys duplicate keys matches interpreter");
+
+        # MapHashKeyOffsetInt: map ($1.key + N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 10), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyOffsetInt matches interpreter");
+
+        # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 5}, {\"val\": 10}, {\"val\": 15});
+list<auto> result = map ($1.val * 3), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyScaleInt matches interpreter");
+
+        # Empty list edge case
+        code = "%modern
+list<hash<auto>> empty = ();
+list<auto> result = map $1.val, empty;
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKey empty list matches interpreter");
+    }
+
+    testAOTDirectIndexMapHeapResults() {
+        # map with method call returning heap-allocated results (tests refSelf fix)
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+string result = (map $1.toString(), scaled).join(\",\");
+printf(\"%s\\n\", result);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map toString over direct-index result");
+
+        # map with hash key access + computation
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 1), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map hash key add computation");
+
+        # Direct-index select on typed list
+        code = "%modern
+list<int> nums = (1, -2, 3, -4, 5);
+list<auto> pos = (select nums, $1 > 0);
+printf(\"%d\\n\", pos.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT select on typed int list");
+    }
+}

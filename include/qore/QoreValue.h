@@ -482,7 +482,11 @@ public:
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {
         assert(isShortString());
-        return (bits >> 48) & 0xF;
+        size_t len = (bits >> 48) & 0xF;
+        if (len > SHORTSTR_MAX_BYTES) {
+            len = SHORTSTR_MAX_BYTES;
+        }
+        return len;
     }
 
     //! Extract short string into buffer (must have space for at least 7 bytes)

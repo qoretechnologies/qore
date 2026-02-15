@@ -36,12 +36,18 @@
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
+#include <memory>
+#include <mutex>
 #include <set>
 #include <vector>
+
+#include "qore/intern/LocalVar.h"
 #include <typeinfo>
 
 // all definitions in this file are private to the library and subject to change
 class BCAList;
+class QoreIRFunction;
+struct QoreAOTContext;
 class BCList;
 
 class LVList {
@@ -59,6 +65,14 @@ public:
             lv[i] = old.lv[i];
 
         //printd(5, "LVList::LVList() populated with %d vars\n", lv.size());
+    }
+
+    //! Constructor from an array of LocalVar pointers (for AOT deserialization)
+    DLLLOCAL LVList(LocalVar** vars, int num) {
+        lv.resize(num);
+        for (int i = 0; i < num; ++i) {
+            lv[i] = vars[i];
+        }
     }
 
     DLLLOCAL ~LVList() {
@@ -113,6 +127,8 @@ class qore_program_private_base;
 
 class StatementBlock : public AbstractStatement {
 public:
+    typedef safe_dslist<AbstractStatement*> statement_list_t;
+
     DLLLOCAL StatementBlock(int sline, int eline);
 
     // line numbers on statement blocks are set later
@@ -152,6 +168,20 @@ public:
         return lvars;
     }
 
+    DLLLOCAL const statement_list_t& getStatements() const {
+        return statement_list;
+    }
+
+    //! Returns true if this block has on_exit/on_success/on_error handlers
+    DLLLOCAL bool hasOnBlockExit() const {
+        return !on_block_exit_list.empty();
+    }
+
+    //! Returns the list of on_exit/on_success/on_error handlers
+    DLLLOCAL const block_list_t& getOnBlockExitList() const {
+        return on_block_exit_list;
+    }
+
     DLLLOCAL virtual bool hasFinalReturn() const {
         if (statement_list.empty())
             return false;
@@ -170,7 +200,6 @@ public:
     }
 
 protected:
-    typedef safe_dslist<AbstractStatement*> statement_list_t;
     statement_list_t statement_list;
     block_list_t on_block_exit_list;
     LVList* lvars = nullptr;
@@ -193,8 +222,7 @@ public:
             ehwm(statement_list.end()), first(true) {
     }
 
-    DLLLOCAL virtual ~TopLevelStatementBlock() {
-    }
+    DLLLOCAL virtual ~TopLevelStatementBlock();
 
     using StatementBlock::parseInit;
     DLLLOCAL int parseInit();
@@ -245,6 +273,39 @@ protected:
     statement_list_t::iterator ehwm;
     // true only the first time parseInit() is called
     bool first;
+
+    // Cached IR for top-level code (avoids re-lowering on repeat calls)
+    mutable QoreIRFunction* cached_toplevel_ir = nullptr;
+    mutable std::once_flag toplevel_ir_once;
+    mutable bool toplevel_ir_failed = false;
+
+    // AOT pre-compiled top-level function pointer
+    using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
+    mutable JitFunctionPtr cached_toplevel_jit_fn = nullptr;
+
+    // AOT pre-compiled top-level function with context
+    using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+    mutable AotFunctionPtr cached_toplevel_aot_fn = nullptr;
+    mutable QoreAOTContext* cached_toplevel_aot_ctx = nullptr;
+
+public:
+    //! Register a pre-compiled AOT function pointer for top-level code
+    DLLLOCAL void registerPrecompiledTopLevel(JitFunctionPtr fn) {
+        cached_toplevel_jit_fn = fn;
+    }
+
+    //! Register a pre-compiled AOT function pointer with context for top-level code
+    DLLLOCAL void registerPrecompiledAOTTopLevel(AotFunctionPtr fn, QoreAOTContext* ctx) {
+        cached_toplevel_aot_fn = fn;
+        cached_toplevel_aot_ctx = ctx;
+    }
+
+    //! Set the local variable list from AOT context (for stripped binary deserialization)
+    /** This must be called after registerPrecompiledAOTTopLevel() so that doTopLevelInstantiation()
+        can properly instantiate the local variables before the JIT code runs.
+        @param ctx the AOT context containing LocalVar* pointers
+    */
+    DLLLOCAL void setLVarsFromAOTContext(QoreAOTContext* ctx);
 };
 
 // parse variable stack

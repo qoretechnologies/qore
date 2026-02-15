@@ -200,6 +200,7 @@ int VarRefNode::parseInitIntern(QoreParseContext& parse_context, bool is_new) {
 
 int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = nullptr;
+    parse_context.analysis.clear();
     int err = parseInitIntern(parse_context);
 
     bool is_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
@@ -226,6 +227,28 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         if (ref.var && ref.var->isAutoType() && ref.var->parseGetNarrowedType()) {
             parse_context.pflag |= PF_NARROWED_TYPE;
         }
+    }
+
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+    }
+
+    if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+        if (ref.id && ref.id->isAssigned()) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
+        if (ref.id && ref.id->parseGetNarrowedType()) {
+            parse_context.analysis.narrowed_type = ref.id->parseGetNarrowedType();
+        }
+    } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+        if (ref.var && ref.var->parseGetNarrowedType()) {
+            parse_context.analysis.narrowed_type = ref.var->parseGetNarrowedType();
+        }
+    }
+
+    if (parse_context.analysis.narrowed_type) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
     return err;
@@ -493,6 +516,27 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
 
     parse_context.typeInfo = typeInfo;
     return err;
+}
+
+QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
+    // NOTE: VRN_OBJECT is handled separately by the NewObject IR opcode, which calls
+    // qore_class_private::execConstructor() directly. This method only handles the
+    // non-object typed container construction cases.
+    switch (vrn_type) {
+        case VRN_HASHDECL:
+            return typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(typeInfo))
+                ->newHash(parse_args, runtime_check, xsink);
+
+        case VRN_COMPLEXHASH:
+            return qore_hash_private::newComplexHash(typeInfo, parse_args, xsink);
+
+        case VRN_COMPLEXLIST:
+            return qore_list_private::newComplexList(typeInfo, new_args, xsink);
+
+        default:
+            assert(false);
+            return QoreValue();
+    }
 }
 
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

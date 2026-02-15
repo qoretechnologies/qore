@@ -170,6 +170,8 @@ enum q_setpub_t : unsigned char {
     CSP_SETPUB = 2,
 };
 
+#include "qore/intern/QoreParseAnalysis.h"
+
 struct QoreParseContext {
     QoreProgram* pgm;
     LocalVar* oflag = nullptr;
@@ -177,6 +179,7 @@ struct QoreParseContext {
     int pflag = 0;
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
+    QoreParseAnalysis analysis;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -197,6 +200,59 @@ struct QoreParseContext {
         int rv = pflag;
         pflag |= flags;
         return rv;
+    }
+
+    DLLLOCAL bool isLocalDefinitelyAssigned(LocalVar* local) const;
+
+    DLLLOCAL bool needsGuardForLocal(LocalVar* local) const;
+
+    DLLLOCAL const QoreTypeInfo* guaranteedType(LocalVar* local) const;
+
+    DLLLOCAL void markLocalAssignment(LocalVar* local, bool assigned, const QoreTypeInfo* type = nullptr);
+
+    DLLLOCAL bool expressionCanThrow() const {
+        return !analysis.neverThrows();
+    }
+
+    DLLLOCAL void markExpressionNeverThrows() {
+        analysis.setFlag(QoreParseAnalysis::NeverThrows);
+    }
+
+    DLLLOCAL void markExpressionMayThrow() {
+        analysis.flags &= ~QoreParseAnalysis::NeverThrows;
+    }
+
+    DLLLOCAL bool isExpressionDefinitelyAssigned() const {
+        return analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+
+    DLLLOCAL bool isExpressionNeverNothing() const {
+        return analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    DLLLOCAL const QoreTypeInfo* expressionAnalysisType() const {
+        return analysis.known_type ? analysis.known_type : analysis.narrowed_type;
+    }
+
+    DLLLOCAL bool expressionHasKnownType() const {
+        return analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
+    }
+
+    DLLLOCAL void markExpressionType(const QoreTypeInfo* typeInfo) {
+        analysis.known_type = typeInfo;
+        if (typeInfo) {
+            analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        } else {
+            analysis.flags &= ~QoreParseAnalysis::KnownTypeInfo;
+        }
+    }
+
+    DLLLOCAL void markExpressionNeverNothing() {
+        analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    DLLLOCAL void markExpressionMayBeNothing() {
+        analysis.flags &= ~QoreParseAnalysis::NeverNothing;
     }
 };
 
@@ -230,6 +286,21 @@ public:
 private:
     QoreParseContext& parse_context;
     int pflag;
+};
+
+class QoreParseContextAnalysisHelper {
+public:
+    DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)
+            : parse_context(parse_context), saved(parse_context.analysis) {
+    }
+
+    DLLLOCAL ~QoreParseContextAnalysisHelper() {
+        parse_context.analysis = saved;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    QoreParseAnalysis saved;
 };
 
 class QoreParseContextLvarHelper {

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,11 +37,27 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRInterpreter.h"
+#include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreJIT.h"
+#include "qore/intern/IfStatement.h"
+#include "qore/intern/ForStatement.h"
+#include "qore/intern/ForEachStatement.h"
+#include "qore/intern/WhileStatement.h"
+#include "qore/intern/TryStatement.h"
+#include "qore/intern/SwitchStatement.h"
+#include "qore/intern/DebugStatement.h"
+#include "qore/intern/QoreAOT.h"
+#include "qore/intern/FunctionCallNode.h"
 
 #include <cassert>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
@@ -168,7 +184,8 @@ static void add_args(QoreStringNode &desc, const QoreListNode* args) {
     for (unsigned i = 0; i < args->size(); ++i) {
         const QoreValue n = args->retrieveEntry(i);
         QoreString scratch;
-        desc.concat(n.getFullTypeName(true, scratch));
+        const char* tname = n.getFullTypeName(true, scratch);
+        desc.concat(tname);
         if (i != (args->size() - 1))
             desc.concat(", ");
     }
@@ -249,6 +266,12 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
+#ifdef QORE_MANAGE_STACK
+    if (check_stack(xsink)) {
+        return;
+    }
+#endif
+
     // set the program context if necessary
     if (pgm_ctx) {
         set(xsink, pgm_ctx, true);
@@ -288,7 +311,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             return;
         }
     } else {
-    if (findVariant(func, variant, cctx)) {
+        if (findVariant(func, variant, cctx)) {
             return;
         }
         // get default argument list of variant
@@ -722,6 +745,62 @@ int UserSignature::pushParam(VarRefNode* v, QoreValue defArg, bool needs_types) 
     return err;
 }
 
+void UserSignature::setupFromAOTMetadata(
+        QoreProgram* pgm,
+        const QoreTypeInfo* retType,
+        const std::vector<std::string>& paramNames,
+        const std::vector<const QoreTypeInfo*>& paramTypes,
+        const std::vector<QoreValue>& defaults,
+        bool hasVarargs) {
+    // Set return type
+    returnTypeInfo = retType;
+
+    // Set parameter types and names
+    typeList = paramTypes;
+    names = paramNames;
+
+    // Set default arguments (ref values for storage)
+    defaultArgList.resize(paramTypes.size());
+    for (size_t i = 0; i < defaults.size() && i < paramTypes.size(); ++i) {
+        defaultArgList[i] = defaults[i].refSelf();
+    }
+
+    // Create LocalVar* for each parameter via the program's local var allocator
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    lv.resize(paramTypes.size());
+    for (size_t i = 0; i < paramTypes.size(); ++i) {
+        const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
+        lv[i] = pp->createLocalVar(pname, paramTypes[i]);
+    }
+
+    // Create argv local var - always created (matches parseInitPushLocalVars behavior)
+    // evalTiered() unconditionally instantiates argvid
+    argvid = pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+
+    // Set flags
+    varargs = hasVarargs;
+    // NOTE: Don't set resolved = true here. The signature will be marked as resolved
+    // when parseCommit() is called on the function (which calls resolve() on each variant).
+    // Setting it to true here would cause parseCheckDuplicateSignature() to fail when
+    // adding multiple variants, as it expects all pending variants to be unresolved.
+
+    // Count param types
+    num_param_types = 0;
+    min_param_types = 0;
+    for (size_t i = 0; i < typeList.size(); ++i) {
+        if (typeList[i]) {
+            ++num_param_types;
+            if (i >= defaultArgList.size() || !defaultArgList[i]) {
+                ++min_param_types;
+            }
+        }
+    }
+
+    // Build signature string
+    str.clear();
+    addAbstractParameterSignature(str);
+}
+
 void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     lv.reserve(parseTypeList.size());
 
@@ -1144,9 +1223,6 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                     rc = QTI_IGNORE;
                 } else {
                     rc = QoreTypeInfo::runtimeAcceptsValue(t, n);
-                    //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) i: %d param: %s arg: %s rc: %d\n",
-                    //    this, getName(), sig->getSignatureText(), pi, QoreTypeInfo::getName(t), n.getFullTypeName(),
-                    //    rc);
                     if (rc == QTI_NOT_EQUAL) {
                         ok = false;
                         break;
@@ -2017,12 +2093,29 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
 }
 
 UserVariantBase::~UserVariantBase() {
+    delete cached_aot_ctx;
+    delete cached_ir;
     delete gate;
     delete statements;
 }
 
 int64 UserVariantBase::getParseOptions(int64 po) const {
     return statements ? statements->pwo.parse_options : po;
+}
+
+const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
+    if (cached_aot_ctx) {
+        return cached_aot_ctx->all_body_locals;
+    }
+    assert(cached_ir);
+    return cached_ir->all_body_locals;
+}
+
+bool UserVariantBase::areAllBodyLocalsIROnly() const {
+    if (cached_aot_ctx) {
+        return cached_aot_ctx->all_body_locals_ir_only;
+    }
+    return all_body_locals_ir_only;
 }
 
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
@@ -2083,13 +2176,768 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     return 0;
 }
 
-QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const {
+// helper: collect LVList locals into a vector
+static void collectBlockLocals(const LVList* lvars, std::vector<LocalVar*>& locals) {
+    if (lvars) {
+        for (unsigned i = 0; i < lvars->size(); ++i) {
+            locals.push_back(lvars->lv[i]);
+        }
+    }
+}
+
+// forward declaration
+static void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+
+// helper: collect all locals from a single statement and recurse into nested blocks.
+// Only recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block).
+// Statements delegated to AST via special IR opcodes (foreach, on_block_exit, context, etc.)
+// are skipped because the AST's LVListInstantiator handles their locals.
+static void collectStatementLocals(const AbstractStatement* stmt, std::vector<LocalVar*>& locals) {
+    if (!stmt) {
+        return;
+    }
+    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+        collectAllStatementLocals(block, locals);
+    } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        collectBlockLocals(if_stmt->getLVList(), locals);
+        collectAllStatementLocals(if_stmt->getIfCode(), locals);
+        collectAllStatementLocals(if_stmt->getElseCode(), locals);
+    } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+        collectBlockLocals(for_stmt->getLVList(), locals);
+        collectAllStatementLocals(for_stmt->getCode(), locals);
+    } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+        // Also covers DoWhileStatement (inherits from WhileStatement)
+        collectBlockLocals(while_stmt->getLVList(), locals);
+        collectAllStatementLocals(while_stmt->getCode(), locals);
+    } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+        collectAllStatementLocals(try_stmt->getTryBlock(), locals);
+        // Collect the catch variable (it's a separate LocalVar, not part of catch_block's LVList)
+        if (LocalVar* catch_var = try_stmt->getCatchVar()) {
+            locals.push_back(catch_var);
+        }
+        collectAllStatementLocals(try_stmt->getCatchBlock(), locals);
+    } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+        collectBlockLocals(sw_stmt->lvars, locals);
+        const CaseNode* cn = sw_stmt->getCases();
+        while (cn) {
+            collectAllStatementLocals(cn->code, locals);
+            cn = cn->next;
+        }
+    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+        // Only collect foreach locals for non-reference iteration (fully lowered to IR).
+        // Reference iteration falls back to AST which handles locals via LVListInstantiator.
+        if (!foreach_stmt->isRef()) {
+            collectBlockLocals(foreach_stmt->getLVList(), locals);
+            collectAllStatementLocals(foreach_stmt->getCode(), locals);
+        }
+    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+        // Debug is now fully lowered to IR: expression form has no locals,
+        // block form recurses into the statement block.
+        if (StatementBlock* block = debug_stmt->getBlock()) {
+            collectAllStatementLocals(block, locals);
+        }
+    }
+    // OnBlockExitStatement, ContextStatement, SummarizeStatement,
+    // AssertStatement: these generate special IR opcodes that call into the AST,
+    // which handles their locals via LVListInstantiator. Skip them.
+}
+
+// Recursively collect all local variables from a StatementBlock and all nested blocks
+// that are fully lowered to IR.  This collects the block's own LVList plus all nested
+// block locals from if/for/while/try/switch statements.
+// Note: this function is non-static because it's also used by StatementBlock.cpp for
+// top-level code IR lowering.
+void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
+    if (!block) {
+        return;
+    }
+    // Collect this block's own locals
+    collectBlockLocals(block->getLVList(), locals);
+    // Recurse into child statements
+    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
+        collectStatementLocals(*it, locals);
+    }
+}
+
+// helper: check if an IR basic block has a terminator instruction
+static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    auto op = block->instructions.back()->opcode;
+    switch (op) {
+        case QoreIROpcode::Return:
+        case QoreIROpcode::ReturnNothing:
+        case QoreIROpcode::Br:
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::Rethrow:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void UserVariantBase::attemptIRLowering(const char* name) const {
+    assert(pgm);
+    assert(statements);
+
+    // Make the IR function name unique per variant to avoid name collisions in the
+    // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
+    // share the same display name (e.g. "<anonymous closure>"), but each variant has
+    // its own LocalVar pointers baked into IR/JIT code, so they must compile to
+    // distinct JIT entries.
+    std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this);
+    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // Record which locals are pre-instantiated by the calling convention so the JIT
+    // skips instantiation/uninstantiation for them.
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
+    }
+    if (signature.argvid) {
+        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
+    }
+    if (signature.selfid) {
+        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
+    }
+    // Collect ALL body locals from the statement tree (top-level + nested blocks from
+    // fully-lowered statements).  These are instantiated by evalTiered() before IR/JIT
+    // execution so AST Invoke callbacks can find them on the thread-local stack.
+    collectAllStatementLocals(statements, func->all_body_locals);
+    for (LocalVar* lv : func->all_body_locals) {
+        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+    }
+    QoreIRBuilder builder(func);
+    auto* entry = func->createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreParseContext parse_context(pgm);
+    QoreIRLowering lowering(builder, &parse_context);
+    std::string error;
+    if (!lowering.lowerStatementBlock(statements, error)) {
+        ir_lower_failed = true;
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' failed: %s\n", name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("lowering: ") + error).c_str());
+        }
+        return;
+    }
+    if (!irBlockHasTerminatorFunc(builder.getBlock())) {
+        builder.createReturnNothing();
+    }
+    if (!QoreIRVerifier::verify(*func, error)) {
+        ir_lower_failed = true;
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' verification failed: %s\n", name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("verification: ") + error).c_str());
+        }
+        return;
+    }
+    // Classify locals as IR-only vs AST-visible for optimization
+    func->computeIROnlyLocals();
+    // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
+    all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
+    // Initialize type profiling for guards
+    func->initGuardProfiles();
+    cached_ir = func;
+    current_tier.store(TIER_IR, std::memory_order_release);
+    if (getenv("QORE_IR_TRACE")) {
+        const QoreProgramLocation* loc = signature.getParseLocation();
+        fprintf(stderr, "IR-PROMOTE: '%s' promoted to IR tier (exec_count=%lu) [%s:%d]\n",
+            name, (unsigned long)exec_count.load(std::memory_order_relaxed),
+            loc ? loc->getFile() : "?", loc ? loc->start_line : 0);
+        fflush(stderr);
+    }
+    printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
+        name, func->num_guards);
+}
+
+// Check if a callee is eligible for Approach B (direct LLVM arg passing).
+// Requirements: all params and body locals are IR-only, no varargs,
+// no reference-type params, no closure-captured params, same QoreProgram.
+static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
+        QoreProgram* root_pgm) {
+    bool debug = getenv("QORE_BATCH_DEBUG") != nullptr;
+
+    // Must be same program (no ProgramThreadCountContextHelper needed)
+    if (uvb->pgm != root_pgm) {
+        if (debug) {
+            fprintf(stderr, "  APPROACH_B: '%s' ineligible: different program\n",
+                callee_ir->name.c_str());
+        }
+        return false;
+    }
+
+    // All body locals must be IR-only (or no body locals at all).
+    // areAllBodyLocalsIROnly() returns false when all_body_locals is empty,
+    // but for Approach B, no body locals is trivially fine.
+    if (!callee_ir->all_body_locals.empty() && !callee_ir->areAllBodyLocalsIROnly()) {
+        if (debug) {
+            fprintf(stderr, "  APPROACH_B: '%s' ineligible: body locals not all IR-only"
+                " (body_locals=%d, ir_only=%d)\n",
+                callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
+                (int)callee_ir->ir_only_locals.size());
+        }
+        return false;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+
+    // If the callee uses argvid in its IR (it's in ir_only_locals), it would get
+    // NOTHING in the fast entry which is wrong.  Check that argvid is not referenced.
+    if (sig->argvid) {
+        const void* argv_key = reinterpret_cast<const void*>(sig->argvid);
+        if (callee_ir->ir_only_locals.count(argv_key)) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: argvid referenced in IR\n",
+                    callee_ir->name.c_str());
+            }
+            return false;
+        }
+    }
+
+    // Check all params
+    unsigned num_params = sig->numParams();
+    for (unsigned i = 0; i < num_params; ++i) {
+        const LocalVar* lv = sig->lv[i];
+        const void* key = reinterpret_cast<const void*>(lv);
+
+        // Param must be IR-only
+        if (!callee_ir->ir_only_locals.count(key)) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+
+        // No closure-captured params
+        if (lv->closureUse()) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+
+        // No reference-type params
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            if (debug) {
+                fprintf(stderr, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
+                    callee_ir->name.c_str(), lv->getName());
+            }
+            return false;
+        }
+    }
+
+    if (debug) {
+        fprintf(stderr, "  APPROACH_B: '%s' eligible (%d params)\n",
+            callee_ir->name.c_str(), num_params);
+    }
+    return true;
+}
+
+// Collect direct callees from an IR function's CallDirect instructions.
+// Returns a vector of BatchCallee entries for callees that have cached IR.
+static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func,
+        QoreProgram* root_pgm) {
+    std::vector<QoreJIT::BatchCallee> callees;
+    std::unordered_set<const AbstractQoreFunctionVariant*> seen;
+
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            const char* callee_name = nullptr;
+
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                variant = direct->variant;
+                if (direct->func) {
+                    callee_name = direct->func->getName();
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode());
+                    if (call) {
+                        variant = call->getVariant();
+                        if (call->getFunction()) {
+                            callee_name = call->getFunction()->getName();
+                        }
+                    }
+                }
+            }
+
+            if (!variant || seen.count(variant)) {
+                continue;
+            }
+            seen.insert(variant);
+
+            // Check if the variant is a user function eligible for fast calls
+            const UserVariantBase* uvb = variant->getUserVariantBase();
+            if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+                continue;
+            }
+
+            // If the callee doesn't have cached IR yet, attempt IR lowering now.
+            // This enables batch compilation even when the callee hasn't been called yet
+            // (common in --exec-mode=jit where the caller is compiled on first call).
+            const QoreIRFunction* callee_ir = uvb->getCachedIR();
+            if (!callee_ir && callee_name) {
+                // Force IR lowering for the callee — must go through forceIRLowering
+                // which handles the call_once flag properly
+                uvb->forceIRLowering(callee_name);
+                callee_ir = uvb->getCachedIR();
+                if (!callee_ir) {
+                    continue;
+                }
+            }
+            if (!callee_ir) {
+                continue;
+            }
+
+            // Skip self-recursion (the root function is already being compiled)
+            if (callee_ir->name == func.name) {
+                continue;
+            }
+
+            // Include callees even if already JIT-compiled — the batch module
+            // can emit direct LLVM calls to the callee's in-module function,
+            // bypassing the qore_rt_call_fast() runtime dispatch overhead.
+
+            // Check Approach B eligibility (direct LLVM arg passing)
+            bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+            unsigned num_params = uvb->getUserSignature()->numParams();
+
+            callees.push_back(QoreJIT::BatchCallee{
+                callee_ir,
+                uvb->getDeoptCounterPtr(),
+                variant,
+                approach_b,
+                num_params
+            });
+        }
+    }
+
+    return callees;
+}
+
+void UserVariantBase::attemptJITCompilation() const {
+    assert(cached_ir);
+
+    std::string error;
+    void* deopt_ptr = getDeoptCounterPtr();
+
+    // Collect direct callees that have cached IR for batch compilation
+    auto callees = collectDirectCallees(*cached_ir, pgm);
+
+    bool success;
+    if (!callees.empty()) {
+        // Batch compile: root function + callees in a shared LLVM module
+        if (getenv("QORE_BATCH_DEBUG")) {
+            fprintf(stderr, "BATCH: '%s' compiling with %d callees:",
+                cached_ir->name.c_str(), (int)callees.size());
+            for (const auto& c : callees) {
+                fprintf(stderr, " %s%s", c.ir_func->name.c_str(),
+                    c.approach_b_eligible ? "(B)" : "");
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
+        printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch compiling with %d callees\n",
+            cached_ir->name.c_str(), (int)callees.size());
+        success = QoreJIT::instance().compileFunctionBatch(*cached_ir, error, deopt_ptr, callees);
+    } else {
+        // No eligible callees: single-function compilation
+        success = QoreJIT::instance().compileFunction(*cached_ir, error, deopt_ptr);
+    }
+
+    if (!success) {
+        jit_compile_failed = true;
+        printd(2, "UserVariantBase::attemptJITCompilation() '%s' failed: %s\n",
+            cached_ir->name.c_str(), error.c_str());
+        return;
+    }
+
+    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
+    if (!fn) {
+        jit_compile_failed = true;
+        printd(2, "UserVariantBase::attemptJITCompilation() '%s' lookup failed\n", cached_ir->name.c_str());
+        return;
+    }
+    cached_jit_fn = fn;
+    current_tier.store(TIER_JIT, std::memory_order_release);
+    printd(3, "UserVariantBase::attemptJITCompilation() '%s' promoted to JIT tier\n", cached_ir->name.c_str());
+
+    // Register compiled function pointers for callees that were batch-compiled.
+    // This promotes them to JIT tier immediately, bypassing their own tiered
+    // compilation warmup.
+    for (const auto& callee : callees) {
+        JitFunctionPtr callee_fn = QoreJIT::instance().lookupFunction(callee.ir_func->name);
+        if (callee_fn) {
+            const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();
+            if (callee_uvb) {
+                const_cast<UserVariantBase*>(callee_uvb)->registerPrecompiledFunction(callee_fn);
+                printd(3, "UserVariantBase::attemptJITCompilation() batch-promoted callee '%s' to JIT tier\n",
+                    callee.ir_func->name.c_str());
+            }
+        }
+    }
+}
+
+void UserVariantBase::attemptJITRecompilation() const {
+    assert(cached_ir);
+
+    // Demote to IR tier while recompiling
+    cached_jit_fn = nullptr;
+    current_tier.store(TIER_IR, std::memory_order_release);
+
+    // Reset deopt counter before recompilation
+    deopt_count.store(0, std::memory_order_relaxed);
+
+    // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
+    std::string orig_name = cached_ir->name;
+    cached_ir->name = orig_name + "_reopt";
+
+    // Recompile with the accumulated type profiles and deopt tracking
+    std::string error;
+    if (!QoreJIT::instance().compileFunction(*cached_ir, error,
+            const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
+        cached_ir->name = orig_name;
+        printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
+            orig_name.c_str(), error.c_str());
+        return;
+    }
+    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
+    cached_ir->name = orig_name;
+    if (!fn) {
+        printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",
+            orig_name.c_str());
+        return;
+    }
+    cached_jit_fn = fn;
+    current_tier.store(TIER_JIT, std::memory_order_release);
+    printd(2, "UserVariantBase::attemptJITRecompilation() '%s' recompiled with profiled guards\n",
+        orig_name.c_str());
+}
+
+QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+        ExceptionSink* xsink) const {
+    assert(pgm);
+    // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
+    // assert(statements);
+
+    ExecutionTier tier = current_tier.load(std::memory_order_acquire);
+
+    // When a debugger is attached at dispatch time, force AST execution so
+    // that all debug events (dbgFunctionEnter/Exit, dbgStep with onBlock/onStep,
+    // dbgException) are generated with full fidelity. JIT has no debug hooks;
+    // IR interpreter has hooks but only generates onStep events (no onBlock),
+    // so it can't match AST fidelity for dispatch-time debugging.
+    // The IR interpreter's debug hooks handle the mid-execution attachment case
+    // (debugger attaches while a function is already executing in IR).
+    if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+        tier = TIER_AST;
+    }
+
+    // JIT/AOT tier: execute native function
+    if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
+        printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
+            name, exec_count.load(), (void*)cached_aot_ctx);
+
+        // self might be 0 if instantiated by a constructor call
+        if (self && signature.selfid) {
+            signature.selfid->instantiateSelf(self);
+        }
+
+        assert(signature.argvid);
+        signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+
+        QoreValue val{};
+        {
+            ArgvContextHelper argv_helper(argv.release(), xsink);
+
+            if (!gate || (gate->enter(xsink) >= 0)) {
+                // Get body locals from AOT context or cached IR
+                const std::vector<LocalVar*>& body_locals = cached_aot_ctx
+                    ? cached_aot_ctx->all_body_locals
+                    : cached_ir->all_body_locals;
+
+                // Instantiate ALL body locals (top-level + nested blocks) so that
+                // AST Invoke callbacks can find them on the thread-local stack.
+                int64 po = pgm->getParseOptions64();
+                for (LocalVar* lv : body_locals) {
+                    lv->instantiate(po);
+                }
+
+                // Set thread-local parse options so that builtin code called from
+                // JIT/AOT-compiled functions (e.g. RangeIterator checking
+                // PO_BROKEN_RANGE) sees the correct program parse options.
+                int64 saved_po = runtime_get_parse_options();
+                runtime_set_parse_options(po);
+
+                uint64_t result_bits;
+                if (cached_aot_ctx && cached_aot_fn) {
+                    result_bits = cached_aot_fn(cached_aot_ctx, xsink);
+                } else {
+                    result_bits = cached_jit_fn(xsink);
+                }
+                QoreValue result;
+                std::memcpy(&result, &result_bits, sizeof(result));
+                val = result;
+
+                // Restore thread-local parse options
+                runtime_set_parse_options(saved_po);
+
+                // Uninstantiate in reverse order (LIFO)
+                for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                    body_locals[i]->uninstantiate(xsink);
+                }
+
+                if (gate) {
+                    gate->exit();
+                }
+            }
+        }
+
+        signature.argvid->uninstantiate(xsink);
+        if (self && signature.selfid) {
+            signature.selfid->uninstantiateSelf();
+        }
+
+        // Check if profiled guards triggered deopts; if so, attempt recompilation
+        // with updated type profiles (one-time, via std::call_once)
+        uint32_t deopts = deopt_count.load(std::memory_order_relaxed);
+        if (deopts >= 10 && cached_ir) {
+            std::call_once(jit_recompile_once, [this]() {
+                attemptJITRecompilation();
+            });
+        }
+
+        if (!*xsink && val.isNothing()) {
+            const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*signature.getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        }
+        return val;
+    }
+
+    // IR tier: execute via IR interpreter
+    if (tier == TIER_IR && cached_ir) {
+        if (self && signature.selfid) {
+            signature.selfid->instantiateSelf(self);
+        }
+
+        assert(signature.argvid);
+        signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+
+        QoreValue val{};
+        {
+            ArgvContextHelper argv_helper(argv.release(), xsink);
+
+            if (!gate || (gate->enter(xsink) >= 0)) {
+                // Instantiate ALL body locals (top-level + nested) so that AST Invoke
+                // callbacks can find them on the thread-local variable stack.
+                int64 po = pgm->getParseOptions64();
+                for (LocalVar* lv : cached_ir->all_body_locals) {
+                    lv->instantiate(po);
+                }
+
+                // Set thread-local parse options so that builtin code called from
+                // IR-interpreted functions sees the correct program parse options.
+                int64 saved_po = runtime_get_parse_options();
+                runtime_set_parse_options(po);
+
+                // Build set of pre-instantiated local variables for the IR interpreter.
+                // Parameter locals are already instantiated by setupCall() in eval().
+                // argvid/selfid are instantiated above in this function or by the caller
+                //   (e.g. UserConstructorVariant::evalConstructor() pushes selfid before
+                //    calling evalIntern() with self=0).
+                // Body locals are instantiated just above.
+                // All must be in pre_instantiated so the IR interpreter doesn't
+                // re-instantiate them (which would push a new frame with value 0).
+                std::unordered_set<const LocalVar*> pre_instantiated;
+                for (unsigned i = 0; i < signature.numParams(); ++i) {
+                    pre_instantiated.insert(signature.lv[i]);
+                }
+                if (signature.argvid) {
+                    pre_instantiated.insert(signature.argvid);
+                }
+                // Always add selfid to pre_instantiated when it exists; even when
+                // self==nullptr (constructor case), the caller has already pushed
+                // selfid onto the thread-local variable stack.
+                if (signature.selfid) {
+                    pre_instantiated.insert(signature.selfid);
+                }
+                for (LocalVar* lv : cached_ir->all_body_locals) {
+                    pre_instantiated.insert(lv);
+                }
+
+                QoreValue ir_return_value;
+                bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
+                    nullptr, nullptr, &pre_instantiated, statements, pgm);
+                if (ok && !*xsink) {
+                    val = ir_return_value;
+                } else if (*xsink) {
+                    // exception raised — propagate
+                } else {
+                    // IR execution failed without exception — fall through to AST
+                    printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', falling back to AST\n",
+                        name);
+                    if (pgm) {
+                        pgm->recordIRFallback("execution: runtime failure");
+                    }
+                    val = statements->exec(xsink);
+                }
+
+                // Restore thread-local parse options
+                runtime_set_parse_options(saved_po);
+
+                // Uninstantiate body locals in reverse order (LIFO)
+                for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
+                    cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                }
+
+                if (gate) {
+                    gate->exit();
+                }
+            }
+        }
+
+        signature.argvid->uninstantiate(xsink);
+        if (self && signature.selfid) {
+            signature.selfid->uninstantiateSelf();
+        }
+
+        // Check for JIT promotion while on IR tier
+        uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+        printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
+            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
+        // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
+        if (cached_ir->osr_jit_requested && !jit_compile_failed) {
+            cached_ir->osr_jit_requested = false;  // Reset flag
+            std::call_once(jit_compile_once, [this]() {
+                printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
+                    cached_ir->name.c_str());
+                attemptJITCompilation();
+            });
+        } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
+            std::call_once(jit_compile_once, [this]() {
+                attemptJITCompilation();
+            });
+        }
+
+        if (!*xsink && val.isNothing()) {
+            const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*signature.getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        }
+        return val;
+    }
+
+    // AST tier: check thresholds and possibly promote
+    uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+
+    // Check for JIT promotion (IR already cached from a previous call)
+    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
+        std::call_once(jit_compile_once, [this]() {
+            attemptJITCompilation();
+        });
+        // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
+    }
+
+    // Check for IR promotion
+    if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
+        std::call_once(ir_lower_once, [this, name]() {
+            attemptIRLowering(name);
+        });
+        // If promotion succeeded, the next call will use IR tier
+    }
+
+    // Fall through to AST execution (bypass the tiered check)
+    QoreValue val{};
+    if (self && signature.selfid) {
+        signature.selfid->instantiateSelf(self);
+    }
+
+    assert(signature.argvid);
+    signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+
+        if (!gate || (gate->enter(xsink) >= 0)) {
+            val = statements->exec(xsink);
+            if (gate) {
+                gate->exit();
+            }
+        }
+    }
+
+    signature.argvid->uninstantiate(xsink);
+    if (self && signature.selfid) {
+        signature.selfid->uninstantiateSelf();
+    }
+
+    if (!*xsink && val.isNothing()) {
+        const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+        if (*xsink) {
+            xsink->overrideLocation(*signature.getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    }
+    return val;
+}
+
+QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+        ExceptionSink* xsink) const {
     //QORE_TRACE("UserVariantBase::evalIntern()");
+
+    // Tiered compilation dispatch
+    // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
+    if (pgm) {
+        bool has_aot = current_tier.load(std::memory_order_acquire) == TIER_JIT && cached_aot_fn;
+        if (statements || has_aot) {
+            qore_exec_mode_t mode = pgm->getExecMode();
+            printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d\n",
+                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot);
+            // AOT dispatch: always use evalTiered when a cached AOT function is
+            // available (tier==TIER_JIT && cached_aot_fn). This covers both
+            // strip-source (no AST body) and normal AOT with AST body.
+            // The AOT context is valid because registerPrecompiledAOTFunction()
+            // set it up during program initialization.
+            if (has_aot) {
+                return evalTiered(name, argv, self, xsink);
+            }
+            // Tiered promotion for JIT/IR/tiered modes with %modern code.
+            // Skip if function already has an AOT fn registered — the AOT path
+            // in evalTiered would dispatch to the AOT-compiled code, which may
+            // have stale expression slots when called outside tiered mode.
+            if (statements && !has_aot
+                    && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
+                int64 po = pgm->getParseOptions64();
+                if ((po & PO_MODERN) == PO_MODERN) {
+                    return evalTiered(name, argv, self, xsink);
+                }
+            }
+        }
+    }
+
     QoreValue val{};  // value-initialized to NOTHING (bits=0)
     if (statements) {
         // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid)
+        if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
+        }
 
         // instantiate argv and push id on stack
         assert(signature.argvid);
@@ -2115,8 +2963,9 @@ QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreO
 
         // if self then uninstantiate
         // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid)
+        if (self && signature.selfid) {
             signature.selfid->uninstantiateSelf();
+        }
     } else {
         argv = nullptr; // dereference argv now
     }
@@ -2148,14 +2997,13 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
 
     assert(!self || (ceh ? ceh->getClass() : qc));
 
-    // UserVariantExecHelper sets the Program thread context
     UserVariantExecHelper uveh(this, ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
 
     CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr));
-    return evalIntern(uveh.getArgv(), self, xsink);
+    return evalIntern(name, uveh.getArgv(), self, xsink);
 }
 
 void UserVariantBase::parseCommit() {
@@ -2497,8 +3345,8 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
     // set implicit argv arg type as unknown
     ParseImplicitArgTypeHelper pia(nullptr);
 
-    // can (and must) be called even if statements is NULL
-    int err = statements->parseInit(this);
+    // For AOT-compiled functions, statements is null (pre-compiled code)
+    int err = statements ? statements->parseInit(this) : 0;
 
     // recheck types against committed types if necessary
     if (recheck && f->parseCheckDuplicateSignatureCommitted(&signature) && !err) {
@@ -2515,8 +3363,11 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
 
-    if (statements->parseInitClosure(this, cf) && !err) {
-        err = -1;
+    // For AOT-compiled closures, statements is null (pre-compiled code)
+    if (statements) {
+        if (statements->parseInitClosure(this, cf) && !err) {
+            err = -1;
+        }
     }
 
     // only one variant is possible, no need to recheck types

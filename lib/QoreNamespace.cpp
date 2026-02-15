@@ -211,10 +211,12 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclSandboxConfigInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
+const QoreEnumDecl* enumExecMode;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
+DLLLOCAL QoreEnumDecl* init_enum_ExecMode(QoreNamespace& ns);
 
 GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, qore_var_t type) :
@@ -223,6 +225,7 @@ GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreType
         ? new Var(loc, name->getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL)
         : new Var(loc, name->getIdentifier(), parseTypeInfo, type == VT_THREAD_LOCAL)
     ) {
+    var->assignModule();
 }
 
 void GVEntryBase::clear() {
@@ -1219,6 +1222,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);
+    enumExecMode = init_enum_ExecMode(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 
@@ -2647,6 +2651,7 @@ bool qore_root_ns_private::parseResolveGlobalVarsAndClassHierarchiesIntern() {
 Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         const QoreTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -2656,6 +2661,7 @@ Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramL
 Var* qore_root_ns_private::parseAddGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         QoreParseTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);

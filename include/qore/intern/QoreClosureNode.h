@@ -34,6 +34,7 @@
 #define _QORE_QORECLOSURENODE_H
 
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/LocalVar.h"
 
 #include <map>
 

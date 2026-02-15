@@ -53,10 +53,22 @@ QoreValue QoreDeleteOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
 
 int QoreDeleteOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     if (!err && exp && checkLValue(exp, parse_context.pflag)) {
         err = -1;
     }
     parse_context.typeInfo = nothingTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

@@ -58,7 +58,14 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     // check iterator expression
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis iterator_analysis;
+    QoreParseAnalysis select_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        iterator_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     // get element type for the iterator (works for both list<T> and iterator classes)
@@ -70,9 +77,11 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         // set implicit argv arg type
         ParseImplicitArgTypeHelper pia(elementTypeInfo);
 
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        select_analysis = parse_context.analysis;
     }
 
     // use lazy evaluation if the iterator expression supports it
@@ -108,6 +117,19 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // If we have element type info, create a properly typed list
     if (parse_context.typeInfo == listTypeInfo && elementTypeInfo) {
         parse_context.typeInfo = qore_get_complex_list_type(elementTypeInfo);
+    }
+
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (iterator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && select_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
 
     return err;

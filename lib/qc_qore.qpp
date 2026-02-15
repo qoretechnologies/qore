@@ -33,8 +33,8 @@
 #include <qore/QoreHttpClientObject.h>
 #include "qore/intern/QC_File.h"
 
-DLLEXPORT extern QoreClass* QC_FILEINPUTSTREAM;
-DLLEXPORT extern QoreClass* QC_FILEOUTPUTSTREAM;
+extern QoreClass* QC_FILEINPUTSTREAM;
+extern QoreClass* QC_FILEOUTPUTSTREAM;
 
 #ifdef WORDS_BIGENDIAN
 #define Q_MACHINE_MSB 1

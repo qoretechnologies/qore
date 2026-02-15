@@ -32,6 +32,19 @@
 
 QoreString QoreLogicalLessThanOperatorNode::op_str("< operator expression");
 
+static void set_binary_analysis_lt(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     if (pfunc) {
         return (this->*pfunc)(xsink);
@@ -53,11 +66,22 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
@@ -68,6 +92,7 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
         SimpleRefHolder<QoreLogicalLessThanOperatorNode> del(this);
         ParseExceptionSink xsink;
         val = doLessThan(left, right, *xsink);
+        set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
         return **xsink ? -1 : 0;
     }
 
@@ -85,6 +110,7 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
         }
     }
 
+    set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
     return err;
 }
 

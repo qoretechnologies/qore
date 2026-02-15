@@ -54,10 +54,21 @@ int QoreModuloOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
 
     // FIXME: check types and issue a warning / error if appropriate
@@ -81,5 +92,13 @@ int QoreModuloOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

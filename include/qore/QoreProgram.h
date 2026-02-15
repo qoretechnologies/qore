@@ -35,6 +35,7 @@
 
 #define _QORE_QOREPROGRAM_H
 
+#include <qore/common.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/Restrictions.h>
 #include <qore/OutputStream.h>
@@ -798,6 +799,36 @@ public:
         @since %Qore 0.9
     */
     DLLEXPORT QoreHashNode* getThreadData();
+
+    //! sets the execution mode for this program
+    DLLEXPORT void setExecMode(qore_exec_mode_t mode);
+
+    //! gets the current execution mode for this program
+    DLLEXPORT qore_exec_mode_t getExecMode() const;
+
+    //! enables or disables IR dump before execution
+    DLLEXPORT void setIRDump(bool dump);
+
+    //! returns true if IR dump is enabled
+    DLLEXPORT bool getIRDump() const;
+
+    //! enables or disables IR fallback warnings to stderr
+    DLLEXPORT void setIRFallbackWarn(bool warn);
+
+    //! returns true if IR fallback warnings are enabled
+    DLLEXPORT bool getIRFallbackWarn() const;
+
+    //! enables or disables IR fallback reporting (counts by category at exit)
+    DLLEXPORT void setIRFallbackReport(bool report);
+
+    //! returns true if IR fallback reporting is enabled
+    DLLEXPORT bool getIRFallbackReport() const;
+
+    //! records an IR fallback event for later reporting
+    DLLEXPORT void recordIRFallback(const char* reason) const;
+
+    //! prints the IR fallback report to stderr (called at program exit)
+    DLLEXPORT void printIRFallbackReport() const;
 
     //! issues a module command for the given module; the module is loaded into the current %Program object if it is not already present
     /** @param module the module name; must be in the default character encoding (normally UTF-8)

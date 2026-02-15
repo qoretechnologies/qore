@@ -40,16 +40,24 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     assert(!parse_context.typeInfo);
     int err;
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
     {
         QoreParseContextFlagHelper fh(parse_context);
         fh.setFlags(PF_FOR_ASSIGNMENT);
+        QoreParseContextAnalysisHelper ah(parse_context);
         err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
 
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
 
     if (left) {
@@ -75,6 +83,18 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         }
     }
     parse_context.typeInfo = returnTypeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

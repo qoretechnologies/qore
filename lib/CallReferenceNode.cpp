@@ -116,8 +116,11 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
+    parse_context.analysis.clear();
+    QoreParseAnalysis arg_analysis;
     int err = parse_init_value(exp, parse_context);
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
 
     if (!err && expTypeInfo && codeTypeInfo && QoreTypeInfo::hasType(expTypeInfo)
         && !QoreTypeInfo::parseAccepts(codeTypeInfo, expTypeInfo)) {
@@ -131,14 +134,22 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 
     if (parse_args) {
         type_vec_t argTypeInfo;
-        if (parse_args->initArgs(parse_context, argTypeInfo, args) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_args->initArgs(parse_context, argTypeInfo, args) && !err) {
+                err = -1;
+            }
+            arg_analysis = parse_context.analysis;
         }
         parse_args = nullptr;
     }
 
     // call reference calls can return any value
     parse_context.typeInfo = nullptr;
+    parse_context.analysis.clear();
+    if (arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

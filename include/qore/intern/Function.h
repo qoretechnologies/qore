@@ -33,15 +33,22 @@
 
 #define _QORE_FUNCTION_H
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 
 class qore_class_private;
+class QoreIRFunction;
+struct QoreAOTContext;
+using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
+using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
@@ -230,6 +237,25 @@ public:
     int err = 0;
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, int64 po);
+
+    //! Set up a fully-resolved signature from AOT binary metadata (no parsing required)
+    /** Used during AOT binary deserialization to construct a variant with known parameter types
+        without going through the parse-time path.
+
+        @param pgm the QoreProgram that owns the LocalVar objects
+        @param retType the resolved return type info
+        @param paramNames parameter names
+        @param paramTypes resolved parameter type info pointers
+        @param defaults default argument values (ref'd for storage)
+        @param hasVarargs true if the function has varargs
+    */
+    DLLLOCAL void setupFromAOTMetadata(
+        QoreProgram* pgm,
+        const QoreTypeInfo* retType,
+        const std::vector<std::string>& paramNames,
+        const std::vector<const QoreTypeInfo*>& paramTypes,
+        const std::vector<QoreValue>& defaults,
+        bool hasVarargs);
 
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
@@ -597,6 +623,10 @@ class UserVariantExecHelper;
 class UserVariantBase {
     friend class UserVariantExecHelper;
 
+public:
+    //! Tiered compilation execution tier
+    enum ExecutionTier : uint8_t { TIER_AST = 0, TIER_IR = 1, TIER_JIT = 2 };
+
 protected:
     UserSignature signature;
     StatementBlock* statements;
@@ -612,11 +642,42 @@ protected:
     // flag to tell if variant has been initialized or not (still in pending list)
     bool init;
 
-    DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
+    // Tiered compilation state
+    mutable std::atomic<uint64_t> exec_count{0};
+    mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
+    mutable QoreIRFunction* cached_ir = nullptr;
+    mutable JitFunctionPtr cached_jit_fn = nullptr;
+    mutable AotFunctionPtr cached_aot_fn = nullptr;
+    mutable QoreAOTContext* cached_aot_ctx = nullptr;
+    mutable std::once_flag ir_lower_once;
+    mutable std::once_flag jit_compile_once;
+    mutable bool ir_lower_failed = false;
+    mutable bool jit_compile_failed = false;
+    bool is_closure = false;  //!< true for closure variants
+    //! Deopt counter: incremented on JIT guard failure, triggers recompilation
+    mutable std::atomic<uint32_t> deopt_count{0};
+    //! Flag to allow a single recompilation attempt after deopt
+    mutable std::once_flag jit_recompile_once;
+    //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
+    mutable bool all_body_locals_ir_only = false;
+
+    DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
+
+    //! Tiered compilation dispatch path
+    DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink) const;
+    //! Attempt to lower to IR; called via std::call_once
+    DLLLOCAL void attemptIRLowering(const char* name) const;
+
+    //! Attempt JIT compilation; called via std::call_once
+    DLLLOCAL void attemptJITCompilation() const;
+    //! Attempt JIT recompilation with updated type profiles after deopt
+    DLLLOCAL void attemptJITRecompilation() const;
 
 public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
@@ -656,6 +717,74 @@ public:
     }
 
     DLLLOCAL void parseCommit();
+
+    //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
+        cached_jit_fn = fn;
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
+
+    //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
+        cached_aot_fn = fn;
+        cached_aot_ctx = ctx;
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
+
+    //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
+    DLLLOCAL bool hasCachedFunction() const {
+        return current_tier.load(std::memory_order_acquire) == TIER_JIT
+            && (cached_jit_fn || cached_aot_fn);
+    }
+
+    //! Execute the cached JIT/AOT function directly (caller must set up locals)
+    DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink) const {
+        if (cached_aot_ctx && cached_aot_fn) {
+            return cached_aot_fn(cached_aot_ctx, xsink);
+        }
+        return cached_jit_fn(xsink);
+    }
+
+    //! Returns the body locals vector for fast call setup
+    DLLLOCAL const std::vector<LocalVar*>& getBodyLocals() const;
+
+    //! Returns true if all body locals are IR-only (can skip instantiation in fast call path)
+    DLLLOCAL bool areAllBodyLocalsIROnly() const;
+
+    //! Returns the cached IR function (if at IR tier or higher), or nullptr
+    DLLLOCAL const QoreIRFunction* getCachedIR() const {
+        return cached_ir;
+    }
+
+    //! Returns a pointer to the deopt counter for JIT guard failure tracking
+    DLLLOCAL void* getDeoptCounterPtr() const {
+        return const_cast<void*>(static_cast<const void*>(&deopt_count));
+    }
+
+    //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
+    //! to ensure callees have IR before the root function is JIT-compiled.
+    DLLLOCAL void forceIRLowering(const char* name) const {
+        std::call_once(ir_lower_once, [this, name]() {
+            attemptIRLowering(name);
+        });
+    }
+
+    //! Returns true if this variant is statically eligible for the fast call path
+    //! (no default args, not synchronized). Runtime readiness (has cached function)
+    //! is checked separately by qore_rt_call_fast() which falls back if not ready.
+    DLLLOCAL bool isStaticallyFastCallEligible() const {
+        if (isSynchronized()) {
+            return false;
+        }
+        // Check for default args
+        const arg_vec_t& defaults = signature.getDefaultArgList();
+        for (size_t i = 0; i < defaults.size(); ++i) {
+            if (defaults[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 // the following defines the pure virtual functions that are common to all user variants
@@ -1405,6 +1534,7 @@ class UserClosureVariant : public UserFunctionVariant {
 protected:
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
+        is_closure = true;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

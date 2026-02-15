@@ -288,6 +288,13 @@ void Var::deref(ExceptionSink* xsink) {
     }
 }
 
+void Var::assignModule() {
+    const char* mod_name = get_module_context_name();
+    if (mod_name) {
+        from_module = mod_name;
+    }
+}
+
 ObjCountRec::ObjCountRec(const QoreListNode* c) : con(c), before((bool)qore_list_private::getScanCount(*c)) {
     //printd(5, "ObjCountRec::ObjCountRec() list %p count: %d\n", c, qore_list_private::getScanCount(*c));
 }

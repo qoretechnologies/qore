@@ -199,7 +199,7 @@ void QoreEventNotifier::notify() {
 void QoreEventNotifier::acknowledge(ExceptionSink* xsink) {
 #ifdef __linux__
     // eventfd: read the counter to acknowledge all pending notifications
-    uint64_t val;
+    uint64_t val = 0;
     ssize_t rc;
     do {
         rc = ::read(notify_fd, &val, sizeof(val));

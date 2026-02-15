@@ -86,7 +86,9 @@ struct qore_list_private {
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
-            xsink->raiseException("LIST-ERROR", "Cannot modify a list that has already gone out of scope");
+            if (xsink) {
+                xsink->raiseException("LIST-ERROR", "Cannot modify a list that has already gone out of scope");
+            }
             return -1;
         }
         return 0;

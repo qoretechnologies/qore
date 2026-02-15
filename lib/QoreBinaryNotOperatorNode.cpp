@@ -61,7 +61,13 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     assert(exp);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
         parse_context.typeInfo->doNonNumericWarning(loc, "the operand of the 'binary not' operator (^) expression " \
@@ -81,6 +87,15 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             val = result;
             if (**xsink) {
                 err = -1;
+            } else {
+                parse_context.typeInfo = val.getFullTypeInfo();
+                parse_context.analysis.clear();
+                parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+                parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+                if (!val.isNothing()) {
+                    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+                }
+                parse_context.analysis.known_type = parse_context.typeInfo;
             }
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
@@ -89,5 +104,12 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

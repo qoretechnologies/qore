@@ -67,9 +67,9 @@ class Test inherits QUnit::Test {
         on_exit unlink(file);
         testAssertion("file content check", \w1.write(), (Data,), new TestResultValue(DataText));
 
-        MyFixedLengthDataWriter2 w2(Specs, GlobalOptions);
         code wr = sub (list d) {
-            w2.write(d);
+            MyFixedLengthDataWriter2 w2_local(Specs, GlobalOptions);
+            w2_local.write(d);
         };
         testAssertion("record transition negative test", wr, (Data,), new TestResultExceptionType("RECORD-TRANSITION-ERROR"));
     }

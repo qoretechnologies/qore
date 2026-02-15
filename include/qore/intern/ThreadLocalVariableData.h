@@ -133,6 +133,22 @@ public:
         return 0;
     }
 
+    // returns nullptr if not found; avoids assertions for lookup checks
+    DLLLOCAL LocalVarValue* findMaybe(const char* id) {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                LocalVarValue* var = &w->var[p];
+                if (var->id == id && !var->frame_boundary)
+                    return var;
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
     DLLLOCAL void pushFrameBoundary() {
         ++frame_count;
         //printd(5, "ThreadLocalVariableData::pushFrameBoundary(): fc:%d\n", frame_count);

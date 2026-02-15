@@ -83,6 +83,11 @@ lib/ql_thread.cpp
 lib/ql_time.cpp
 lib/ql_type.cpp
 
+# Generated SCU (autotools in-tree builds)
+lib/generated-scu.cpp
+# Generated SCU (CMake in-tree builds)
+lib/single-compilation-unit.cpp
+
 # Bison & Flex
 lib/parser.cpp
 lib/parser.hpp

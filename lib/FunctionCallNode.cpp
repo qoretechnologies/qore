@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -148,6 +148,7 @@ static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int6
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns) {
     int err = 0;
+    QoreParseAnalysis arg_analysis;
 
     // number of arguments in call
     unsigned num_args = parse_args ? parse_args->size() : 0;
@@ -160,7 +161,11 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // issue #2993: do not initialize args with the "return value ignored" parse flag set
         QoreParseContextFlagHelper fh(parse_context);
         fh.unsetFlags(PF_RETURN_VALUE_IGNORED | PF_BACKGROUND);
-        err = parse_args->initArgs(parse_context, argTypeInfo, args);
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            err = parse_args->initArgs(parse_context, argTypeInfo, args);
+            arg_analysis = parse_context.analysis;
+        }
         parse_args = nullptr;
     }
     parse_context.typeInfo = nullptr;
@@ -268,6 +273,18 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p args: %p (%zd)\n", this,
     //    func ? func->getName() : "n/a", variant, args, args ? args->size() : 0);
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
@@ -460,8 +477,6 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     if (!call_pgm) {
         call_pgm = getProgram();
     }
-    printd(5, "FunctionCallNode::evalImpl(rc) this: %p '%s' tmp_args: %d args: %p '%s' (%zd)\n", this,
-        func->getName(), tmp_args, args, args ? get_full_type_name(args) : "n/a", args ? args->size() : 0);
     return tmp_args
         ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink)
         : func->evalFunction(variant, args, call_pgm, rc, xsink);
@@ -617,7 +632,8 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
 int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     assert(fe);
-    return parseArgs(parse_context, fe->getFunction(), fe->getNamespace());
+    QoreFunction* func = fe->getFunction();
+    return parseArgs(parse_context, func, fe->getNamespace());
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {
@@ -700,9 +716,12 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         //qore_class_private::parseInit(*const_cast<QoreClass*>(oc));
 
         parse_context.typeInfo = oc->getTypeInfo();
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
         desc.sprintf("new %s", oc->getName());
     } else {
         parse_context.typeInfo = nullptr;
+        parse_context.analysis.clear();
     }
 
     //printd(5, "ScopedObjectCallNode::parseInitImpl() this: %p constructor: %p variant: %p\n", this, constructor,

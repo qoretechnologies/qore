@@ -36,6 +36,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/ParseNode.h"
 
 QoreString QoreParseCastOperatorNode::cast_str("cast operator expression");
 
@@ -53,17 +54,45 @@ int QoreParseCastOperatorNode::getAsString(QoreString& str, int foff, ExceptionS
 int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
 
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     //printd(5, "QoreParseCastOperatorNode::parseInitImp() this: %p exp: %s (err: %d)\n", this, exp.getFullTypeName(),
     //    err);
 
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
+
+    auto set_cast_analysis = [&]() {
+        parse_context.analysis.clear();
+        if (parse_context.typeInfo) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.known_type = parse_context.typeInfo;
+            if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+        }
+        if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
+        if (val.hasNode()) {
+            auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+            if (parse_node) {
+                parse_node->setParseAnalysis(parse_context.analysis);
+            }
+        }
+    };
 
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
     bool or_nothing = (pti->or_nothing || (getProgram()->getParseOptions64() & PO_BROKEN_CAST));
     if (!exp && or_nothing) {
         ReferenceHolder<> holder(this, nullptr);
         val = QoreValue();
+        set_cast_analysis();
         return 0;
     }
 
@@ -86,6 +115,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreClassCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
             }
+            set_cast_analysis();
             // parse exception already raised; current expression invalid
             return err;
         }
@@ -104,6 +134,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreHashDeclCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
             }
+            set_cast_analysis();
             // parse exception already raised; current expression invalid
             return err;
         }
@@ -123,6 +154,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreComplexListCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
             }
+            set_cast_analysis();
             // parse exception already raised; current expression invalid
             return err;
         }
@@ -150,6 +182,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreClassCastOperatorNode(loc, qc, takeExp(), or_nothing);
             }
+            set_cast_analysis();
             return err;
         }
     }
@@ -172,6 +205,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                     parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to (hashdecl) %s",
                         QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
                         QoreTypeInfo::getName(expTypeInfo), QoreTypeInfo::getName(parse_context.typeInfo));
+                    set_cast_analysis();
                     return -1;
                 }
             }
@@ -180,6 +214,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreHashDeclCastOperatorNode(loc, hd, takeExp(), or_nothing);
+                set_cast_analysis();
                 return err;
             }
         }
@@ -200,6 +235,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                     parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to hash<string, %s>",
                         QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
                         QoreTypeInfo::getName(expTypeInfo), QoreTypeInfo::getName(ti));
+                    set_cast_analysis();
                     return -1;
                 }
             }
@@ -207,6 +243,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreComplexHashCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                set_cast_analysis();
                 return err;
             }
         }
@@ -231,6 +268,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                         parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to %s",
                             QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
                             QoreTypeInfo::getName(expTypeInfo), QoreTypeInfo::getName(parse_context.typeInfo));
+                        set_cast_analysis();
                         return -1;
                     }
                 }
@@ -239,6 +277,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreComplexListCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                set_cast_analysis();
                 return err;
             }
         }
@@ -267,12 +306,14 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
                 val = new QoreEnumCastOperatorNode(loc, ed, parse_context.typeInfo, takeExp(), or_nothing);
+                set_cast_analysis();
                 return err;
             }
         }
     }
 
     parse_error(*loc, "cannot cast<> to type '%s'", QoreTypeInfo::getName(parse_context.typeInfo));
+    set_cast_analysis();
     return -1;
 }
 

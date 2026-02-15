@@ -51,6 +51,10 @@ public:
         return is_declaration;
     }
 
+    DLLLOCAL QoreValue getExpression() const {
+        return exp;
+    }
+
 private:
     QoreValue exp{};
     bool is_declaration;

@@ -1,0 +1,5632 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class JITSmokeTest
+
+class JITSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("JIT integer arithmetic", \testJitIntArithmetic());
+        addTestCase("JIT integer comparisons", \testJitIntComparisons());
+        addTestCase("JIT float arithmetic", \testJitFloatArithmetic());
+        addTestCase("JIT float comparisons", \testJitFloatComparisons());
+        addTestCase("JIT mixed int/float arithmetic", \testJitMixedIntFloatArithmetic());
+        addTestCase("JIT mixed int/float comparisons", \testJitMixedIntFloatComparisons());
+        addTestCase("JIT boolean operations", \testJitBoolOps());
+        addTestCase("JIT control flow", \testJitControlFlow());
+        addTestCase("JIT bitwise operations", \testJitBitwiseOps());
+        addTestCase("JIT division by zero", \testJitDivisionByZero());
+        addTestCase("JIT nested if/else", \testJitNestedIfElse());
+        addTestCase("JIT loop computation", \testJitLoopComputation());
+        addTestCase("JIT fallback to IR", \testJitFallbackToIr());
+        addTestCase("JIT non-modern fallback", \testJitNonModernFallback());
+        addTestCase("JIT try/catch exception", \testJitTryCatch());
+        addTestCase("JIT float division by zero", \testJitFloatDivByZero());
+        addTestCase("JIT modulo by zero", \testJitModuloByZero());
+        addTestCase("JIT unary operations", \testJitUnaryOps());
+        addTestCase("JIT mixed arithmetic", \testJitMixedArithmetic());
+        addTestCase("JIT string operations", \testJitStringOps());
+        addTestCase("JIT switch statement", \testJitSwitch());
+        addTestCase("JIT while loop", \testJitWhileLoop());
+        addTestCase("JIT do-while loop", \testJitDoWhileLoop());
+        addTestCase("JIT correctness across modes", \testJitCorrectnessAcrossModes());
+        addTestCase("JIT hash construction and access", \testJitHashAccess());
+        addTestCase("JIT list construction and access", \testJitListOps());
+        addTestCase("JIT string concatenation", \testJitStringConcat());
+        addTestCase("JIT dynamic comparison ops", \testJitDynamicComparisons());
+        addTestCase("JIT dynamic bitwise ops", \testJitDynamicBitwise());
+        addTestCase("JIT dynamic unary ops", \testJitDynamicUnary());
+        addTestCase("JIT compound assignment ops", \testJitCompoundAssign());
+        addTestCase("JIT compound assign bitwise", \testJitCompoundAssignBitwise());
+        addTestCase("JIT compound assign float", \testJitCompoundAssignFloat());
+        addTestCase("JIT compound assign any", \testJitCompoundAssignAny());
+        addTestCase("JIT compound assign any bitwise", \testJitCompoundAssignAnyBitwise());
+        addTestCase("JIT compound assign any NOTHING", \testJitCompoundAssignAnyNothing());
+        addTestCase("JIT compound assign loop", \testJitCompoundAssignLoop());
+        addTestCase("JIT compound assign overflow", \testJitCompoundAssignOverflow());
+        addTestCase("JIT division inline zero-check", \testJitDivisionInlineZeroCheck());
+        addTestCase("JIT throw with list args", \testJitThrowList());
+        addTestCase("JIT multiple exceptions", \testJitMultipleExceptions());
+        addTestCase("JIT scoped object construction", \testJitScopedObjectConstruction());
+        # Phase 5b optimization tests
+        addTestCase("JIT hash key access fast-path", \testJitHashKeyFastPath());
+        addTestCase("JIT list index access fast-path", \testJitListIndexFastPath());
+        addTestCase("JIT string concat fast-path", \testJitStringConcatFastPath());
+        addTestCase("JIT any arithmetic fast-path", \testJitAnyArithFastPath());
+        addTestCase("JIT any comparison fast-path", \testJitAnyCmpFastPath());
+        addTestCase("JIT any arithmetic mixed types", \testJitAnyArithMixed());
+        addTestCase("JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
+        # Phase 5c debug info tests
+        addTestCase("JIT debug info compile", \testJitDebugInfoCompile());
+        addTestCase("JIT debug info multi-line", \testJitDebugInfoMultiLine());
+        # Double-eval regression tests
+        addTestCase("side-effecting args", \testJitSideEffectingArgs());
+        addTestCase("tracked side effects", \testJitTrackedSideEffects());
+        addTestCase("nested call side effects", \testJitNestedCallSideEffects());
+        addTestCase("binary invoke try/catch", \testJitBinaryInvokeTryCatch());
+        addTestCase("call cross-mode", \testJitCallCrossMode());
+        # Bug fix regression tests
+        addTestCase("no-arg function call", \testJitNoArgCall());
+        addTestCase("int post-increment", \testJitIntPostIncrement());
+        addTestCase("int post-decrement", \testJitIntPostDecrement());
+        addTestCase("ternary operator", \testJitTernary());
+        # DotEval double-evaluation regression tests
+        addTestCase("dot-eval method call single eval", \testJitDotEvalSingleEval());
+        addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
+        addTestCase("dot-eval chained methods", \testJitDotEvalChained());
+        addTestCase("dot-eval hash member access", \testJitDotEvalHashMember());
+        # Regex double-evaluation regression tests
+        addTestCase("regex match single eval", \testJitRegexMatchSingleEval());
+        addTestCase("regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
+        addTestCase("regex extract single eval", \testJitRegexExtractSingleEval());
+        addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
+        # Optimized higher-order function tests
+        addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
+        addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
+        addTestCase("optimized map patterns", \testJitMapOptimized());
+        addTestCase("optimized select patterns", \testJitSelectOptimized());
+        addTestCase("fused map+select patterns", \testJitFusedMapSelect());
+        addTestCase("fused map+foldl patterns", \testJitFusedMapFoldl());
+        addTestCase("IR foreach lowering", \testIRForeachLowering());
+        addTestCase("typed string concatenation", \testTypedStringConcat());
+        addTestCase("typed string equality", \testTypedStringEquality());
+        addTestCase("string switch optimization", \testStringSwitchOptimization());
+        addTestCase("final class devirtualization", \testFinalClassDevirtualization());
+        addTestCase("string builder optimization", \testStringBuilderOptimization());
+        addTestCase("native map with method call", \testNativeMapWithMethodCall());
+        addTestCase("native select with comparison", \testNativeSelectWithComparison());
+        addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
+        addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
+        addTestCase("on_block_exit in try-catch with invoke", \testOnBlockExitTryCatchInvoke());
+        addTestCase("on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
+        addTestCase("invoke method direct", \testInvokeMethodDirect());
+        addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
+        addTestCase("invoke result in loop", \testInvokeResultInLoop());
+        addTestCase("big int boxing inline", \testBigIntBoxingInline());
+        addTestCase("lvalue compound assign NOTHING", \testLValueCompoundAssignNothing());
+        addTestCase("lvalue compound assign int fast path", \testLValueCompoundAssignInt());
+        addTestCase("lvalue compound assign float fast path", \testLValueCompoundAssignFloat());
+        addTestCase("lvalue compound assign string slow path", \testLValueCompoundAssignString());
+        addTestCase("lvalue compound assign loop", \testLValueCompoundAssignLoop());
+        addTestCase("lvalue compound assign bitwise", \testLValueCompoundAssignBitwise());
+        addTestCase("lvalue compound assign div/mod slow path", \testLValueCompoundAssignDivMod());
+        addTestCase("range lvalue delegate-to-AST", \testRangeLValueDelegate());
+        addTestCase("self member access", \testSelfMemberAccess());
+        addTestCase("static class variable access", \testStaticClassVarAccess());
+        addTestCase("new object instantiation", \testNewObjectInstantiation());
+        addTestCase("runtime constants", \testRuntimeConstants());
+        addTestCase("closure creation", \testClosureCreation());
+        addTestCase("foldr native", \testFoldrNative());
+        addTestCase("empty-list fold min/max returns NOTHING", \testEmptyListFoldMinMax());
+        addTestCase("map+select fused", \testMapSelectFused());
+        addTestCase("hash map native", \testHashMapNative());
+        addTestCase("hash map+select native", \testHashMapSelectNative());
+        addTestCase("hash map over typed hash list", \testHashMapOverTypedHashList());
+        addTestCase("map tuple over typed hash list", \testMapTupleOverTypedHashList());
+        addTestCase("typed container construction", \testTypedContainerConstruction());
+        addTestCase("call references", \testCallReferences());
+        addTestCase("parse references", \testParseReferences());
+        addTestCase("reference write-through", \testReferenceWriteThrough());
+        addTestCase("NOTHING input to iterators", \testNothingInputIterators());
+        addTestCase("VarRefNewObjectNode split", \testVarRefNewObjectSplit());
+        addTestCase("VarRefNewObjectNode typed containers", \testVrnTypedContainers());
+        addTestCase("direct function call", \testCallDirect());
+        addTestCase("function call in loop (stack safety)", \testCallInLoopStackSafety());
+        addTestCase("fast function call", \testFastCall());
+        addTestCase("fast method call", \testFastMethodCall());
+        addTestCase("fast closure/callref call", \testFastClosureCall());
+        addTestCase("IR-only body locals skip instantiation", \testIROnlyBodyLocals());
+        addTestCase("assert with IR-only locals", \testAssertIROnly());
+        addTestCase("on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
+        addTestCase("multi-function batch compilation", \testBatchCompilation());
+        addTestCase("direct-index foldl on typed lists", \testDirectIndexFoldl());
+        addTestCase("direct-index map on typed lists", \testDirectIndexMap());
+        addTestCase("call closure/callref direct", \testCallClosureDirect());
+        addTestCase("dot-eval method fast call", \testDotEvalMethodFastCall());
+        addTestCase("builtin function fast call", \testBuiltinFastCall());
+        addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
+        addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
+        addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
+        addTestCase("hash key access int opcode", \testHashKeyAccessInt());
+        addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
+        addTestCase("hash map duplicate keys", \testHashMapDuplicateKeys());
+        addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
+        set_return_value(main());
+    }
+
+    private string runScript(string code, *string exec_mode) {
+        string mode = exec_mode ?? "jit";
+        TmpFile tmp(".q");
+        tmp.file.write(code);
+        tmp.file.close();
+        string path = tmp.path;
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, path);
+        return backquote(cmd);
+    }
+
+    testJitIntArithmetic() {
+        # Test that JIT or fallback produces correct integer arithmetic
+        string code = "%modern
+int sub compute(int a, int b) {
+    int sum = a + b;
+    int diff = a - b;
+    int prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%d\\n\", compute(10, 3));
+";
+        string result = trim(runScript(code));
+        assertEq("50", result, "integer arithmetic: (10+3) + (10-3) + (10*3) = 13+7+30 = 50");
+    }
+
+    testJitIntComparisons() {
+        string code = "%modern
+int a = 5;
+int b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "integer comparisons");
+    }
+
+    testJitFloatArithmetic() {
+        string code = "%modern
+float sub fcompute(float a, float b) {
+    float sum = a + b;
+    float diff = a - b;
+    float prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%.1f\\n\", fcompute(10.0, 3.0));
+";
+        string result = trim(runScript(code));
+        assertEq("50.0", result, "float arithmetic");
+    }
+
+    testJitMixedIntFloatArithmetic() {
+        string code = "%modern
+float f = 2.5;
+int i = 3;
+# mixed int/float arithmetic should promote to float
+float r1 = f + i;
+float r2 = f * i;
+float r3 = f - i;
+float r4 = i / f;
+printf(\"%.1f,%.1f,%.1f,%.1f\\n\", r1, r2, r3, r4);
+";
+        string result = trim(runScript(code));
+        assertEq("5.5,7.5,-0.5,1.2", result, "mixed int/float arithmetic");
+    }
+
+    testJitFloatComparisons() {
+        string code = "%modern
+float a = 1.5;
+float b = 2.5;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "float comparisons");
+    }
+
+    testJitMixedIntFloatComparisons() {
+        string code = "%modern
+float f = 2.5;
+int i = 3;
+list<string> results = ();
+if (f < i) { results += \"f_lt_i\"; }
+if (f <= i) { results += \"f_le_i\"; }
+if (i > f) { results += \"i_gt_f\"; }
+if (i >= f) { results += \"i_ge_f\"; }
+if (f == 2.5) { results += \"f_eq_lit\"; }
+if (f != i) { results += \"f_ne_i\"; }
+# int compared to float literal
+if (i > 2.0) { results += \"i_gt_flit\"; }
+if (i < 4.0) { results += \"i_lt_flit\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("f_lt_i,f_le_i,i_gt_f,i_ge_f,f_eq_lit,f_ne_i,i_gt_flit,i_lt_flit", result,
+            "mixed int/float comparisons");
+    }
+
+    testJitBoolOps() {
+        string code = "%modern
+bool a = True;
+bool b = False;
+list<string> results = ();
+if (a) { results += \"a_true\"; }
+if (!b) { results += \"b_false\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("a_true,b_false,ne", result, "boolean operations");
+    }
+
+    testJitControlFlow() {
+        string code = "%modern
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(10));
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "recursive fibonacci");
+    }
+
+    testJitBitwiseOps() {
+        string code = "%modern
+int a = 0xFF;
+int b = 0x0F;
+int and_result = a & b;
+int or_result = a | b;
+int xor_result = a ^ b;
+int shl_result = 1 << 8;
+int shr_result = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_result, or_result, xor_result, shl_result, shr_result);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "bitwise operations");
+    }
+
+    testJitDivisionByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "division by zero exception");
+    }
+
+    testJitNestedIfElse() {
+        string code = "%modern
+int sub classify(int n) {
+    if (n < 0) {
+        return -1;
+    } else if (n == 0) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+printf(\"%d,%d,%d\\n\", classify(-5), classify(0), classify(5));
+";
+        string result = trim(runScript(code));
+        assertEq("-1,0,1", result, "nested if/else");
+    }
+
+    testJitLoopComputation() {
+        string code = "%modern
+int sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5050", result, "loop sum 1..100");
+    }
+
+    testJitFallbackToIr() {
+        # Test that JIT falls back gracefully for complex operations
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\"};
+printf(\"%s\\n\", h.key);
+";
+        string result = trim(runScript(code));
+        assertEq("value", result, "JIT fallback for hash access");
+    }
+
+    testJitNonModernFallback() {
+        # Non-%modern code should fall back to AST; check output contains "42"
+        string code = "printf(\"%d\\n\", 42);\n";
+        string result = runScript(code);
+        assertRegex("42", result, "non-modern fallback to AST produces correct output");
+    }
+
+    testJitTryCatch() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("TEST-ERROR:test message", result, "try/catch with throw");
+    }
+
+    testJitFloatDivByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    float zero = 0.0;
+    float x = 10.0 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "float division by zero");
+    }
+
+    testJitModuloByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 % zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "modulo by zero");
+    }
+
+    testJitUnaryOps() {
+        string code = "%modern
+int a = 42;
+int neg = -a;
+float f = 3.14;
+float fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "unary negation");
+    }
+
+    testJitMixedArithmetic() {
+        string code = "%modern
+int a = 7;
+int b = 3;
+int sum = a + b;
+int diff = a - b;
+int prod = a * b;
+int quot = a / b;
+int mod = a % b;
+printf(\"%d,%d,%d,%d,%d\\n\", sum, diff, prod, quot, mod);
+";
+        string result = trim(runScript(code));
+        assertEq("10,4,21,2,1", result, "mixed integer arithmetic");
+    }
+
+    testJitStringOps() {
+        string code = "%modern
+string s = \"hello\";
+printf(\"%s world\\n\", s);
+";
+        string result = trim(runScript(code));
+        assertEq("hello world", result, "string operations");
+    }
+
+    testJitSwitch() {
+        string code = "%modern
+int sub classify(int n) {
+    switch (n) {
+        case 1: return 10;
+        case 2: return 20;
+        case 3: return 30;
+        default: return -1;
+    }
+}
+printf(\"%d,%d,%d,%d\\n\", classify(1), classify(2), classify(3), classify(99));
+";
+        string result = trim(runScript(code));
+        assertEq("10,20,30,-1", result, "switch statement");
+
+        # Test integer switch optimization across all modes
+        string switch_code = "%modern
+int sub test_switch(int val) {
+    switch (val) {
+        case -5: return 100;
+        case 0: return 200;
+        case 7: return 300;
+        case 42: return 400;
+        case 1000: return 500;
+        default: return -999;
+    }
+}
+printf(\"%d,%d,%d,%d,%d,%d\\n\",
+    test_switch(-5), test_switch(0), test_switch(7),
+    test_switch(42), test_switch(1000), test_switch(99));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(switch_code, mode));
+            assertEq("100,200,300,400,500,-999", result, sprintf("integer switch optimization %s", mode));
+        }
+
+        # Test switch with fall-through cases (no return)
+        string fallthrough_code = "%modern
+int sub test_fallthrough(int val) {
+    int result = 0;
+    switch (val) {
+        case 1:
+        case 2:
+        case 3:
+            result = 10;
+            break;
+        case 4:
+        case 5:
+            result = 20;
+            break;
+        default:
+            result = -1;
+    }
+    return result;
+}
+printf(\"%d,%d,%d,%d,%d,%d\\n\",
+    test_fallthrough(1), test_fallthrough(2), test_fallthrough(3),
+    test_fallthrough(4), test_fallthrough(5), test_fallthrough(99));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(fallthrough_code, mode));
+            assertEq("10,10,10,20,20,-1", result, sprintf("switch fallthrough %s", mode));
+        }
+
+        # Test switch with string expression - should NOT use SwitchInt, must use soft-equal semantics
+        string string_switch_code = "%modern
+string sub test_string_switch(string val) {
+    switch (val) {
+        case \"1\": return \"one\";
+        case \"2\": return \"two\";
+        case \"hello\": return \"greeting\";
+        default: return \"unknown\";
+    }
+}
+printf(\"%s,%s,%s,%s\\n\",
+    test_string_switch(\"1\"), test_string_switch(\"2\"),
+    test_string_switch(\"hello\"), test_string_switch(\"other\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(string_switch_code, mode));
+            assertEq("one,two,greeting,unknown", result, sprintf("switch string expression %s", mode));
+        }
+
+        # Test switch with float expression - should NOT use SwitchInt
+        string float_switch_code = "%modern
+string sub test_float_switch(float val) {
+    switch (val) {
+        case 1.0: return \"one\";
+        case 2.5: return \"two-half\";
+        default: return \"other\";
+    }
+}
+printf(\"%s,%s,%s\\n\",
+    test_float_switch(1.0), test_float_switch(2.5), test_float_switch(3.0));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            result = trim(runScript(float_switch_code, mode));
+            assertEq("one,two-half,other", result, sprintf("switch float expression %s", mode));
+        }
+    }
+
+    testJitWhileLoop() {
+        string code = "%modern
+int n = 10;
+int sum = 0;
+int i = 1;
+while (i <= n) {
+    sum += i;
+    i++;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "while loop sum");
+    }
+
+    testJitDoWhileLoop() {
+        string code = "%modern
+int n = 5;
+int prod = 1;
+int i = 1;
+do {
+    prod *= i;
+    i++;
+} while (i <= n);
+printf(\"%d\\n\", prod);
+";
+        string result = trim(runScript(code));
+        assertEq("120", result, "do-while factorial");
+    }
+
+    testJitCorrectnessAcrossModes() {
+        # Verify identical output across all three modes for a non-trivial program
+        string code = "%modern
+int sub compute(int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 2 == 0) {
+            result += i * i;
+        } else {
+            result -= i;
+        }
+    }
+    return result;
+}
+printf(\"%d\\n\", compute(20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "IR produces same result as AST");
+        assertEq(ast_result, jit_result, "JIT produces same result as AST");
+    }
+
+    testJitHashAccess() {
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\", \"num\": 42};
+printf(\"%s:%d\\n\", h.key, h.num);
+";
+        string result = trim(runScript(code));
+        assertEq("value:42", result, "hash construction and dot-access");
+    }
+
+    testJitListOps() {
+        string code = "%modern
+list<int> l = (10, 20, 30, 40, 50);
+int sum = 0;
+for (int i = 0; i < l.size(); i++) {
+    sum += l[i];
+}
+printf(\"%d:%d\\n\", l.size(), sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5:150", result, "list construction, indexing, and size");
+    }
+
+    testJitStringConcat() {
+        string code = "%modern
+string a = \"hello\";
+string b = \" world\";
+string c = a + b;
+printf(\"%s:%d\\n\", c, c.size());
+";
+        string result = trim(runScript(code));
+        assertEq("hello world:11", result, "string concatenation and size");
+    }
+
+    testJitDynamicComparisons() {
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "dynamic auto comparison operators");
+    }
+
+    testJitDynamicBitwise() {
+        string code = "%modern
+auto a = 0xFF;
+auto b = 0x0F;
+auto and_r = a & b;
+auto or_r = a | b;
+auto xor_r = a ^ b;
+auto shl_r = 1 << 8;
+auto shr_r = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_r, or_r, xor_r, shl_r, shr_r);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "dynamic auto bitwise operators");
+    }
+
+    testJitDynamicUnary() {
+        string code = "%modern
+auto a = 42;
+auto neg = -a;
+auto f = 3.14;
+auto fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "dynamic auto unary negation");
+    }
+
+    testJitCompoundAssign() {
+        string code = "%modern
+int a = 10;
+a += 5;
+int b = 20;
+b -= 3;
+int c = 4;
+c *= 3;
+int d = 15;
+d /= 3;
+int e = 17;
+e %= 5;
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        string result = trim(runScript(code));
+        assertEq("15,17,12,5,2", result, "compound assignment operators");
+    }
+
+    testJitCompoundAssignBitwise() {
+        # Test native LLVM lowering for bitwise compound assignments
+        string code = "%modern
+int a = 0xFF;
+a &= 0x0F;      # AND
+int b = 0x0F;
+b |= 0xF0;      # OR
+int c = 0xFF;
+c ^= 0xAA;      # XOR
+int d = 1;
+d <<= 8;        # SHL
+int e = 256;
+e >>= 4;        # SHR
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result, sprintf("bitwise compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignFloat() {
+        # Test native LLVM lowering for float compound assignments
+        string code = "%modern
+float a = 10.0;
+a += 2.5;       # Add
+float b = 20.0;
+b -= 3.5;       # Sub
+float c = 4.0;
+c *= 2.5;       # Mul
+printf(\"%.1f,%.1f,%.1f\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12.5,16.5,10.0", result, sprintf("float compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAny() {
+        # Test fast-path for any-typed compound assignments (int+int and float+float)
+        string code = "%modern
+auto a = 10;
+a += 5;
+auto b = 20;
+b -= 3;
+auto c = 4;
+c *= 3;
+auto fa = 10.0;
+fa += 2.5;
+auto fb = 20.0;
+fb -= 3.5;
+printf(\"%d,%d,%d,%.1f,%.1f\\n\", a, b, c, fa, fb);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,17,12,12.5,16.5", result, sprintf("any compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAnyBitwise() {
+        # Test fast-path for any-typed bitwise compound assignments
+        string code = "%modern
+auto a = 0xFF;
+a &= 0x0F;
+auto b = 0x0F;
+b |= 0xF0;
+auto c = 0xFF;
+c ^= 0xAA;
+auto d = 1;
+d <<= 8;
+auto e = 256;
+e >>= 4;
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result, sprintf("any bitwise compound assign %s", mode));
+        }
+    }
+
+    testJitCompoundAssignAnyNothing() {
+        # Test AddAssignAny with NOTHING on left side (special case)
+        string code = "%modern
+auto a;  # NOTHING
+a += 42;
+auto b;
+b += \"hello\";
+printf(\"%d,%s\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,hello", result, sprintf("any compound assign NOTHING %s", mode));
+        }
+    }
+
+    testJitCompoundAssignLoop() {
+        # Test compound assignments in a tight loop (benchmark scenario)
+        string code = "%modern
+int sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+int prod = 1;
+for (int j = 1; j <= 10; j++) {
+    prod *= j;
+}
+printf(\"%d,%d\\n\", sum, prod);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5050,3628800", result, sprintf("compound assign loop %s", mode));
+        }
+    }
+
+    testJitCompoundAssignOverflow() {
+        # Test compound assignments with large values (edge case)
+        string code = "%modern
+int a = 9223372036854775800;  # Near max int64
+a += 7;
+int b = -9223372036854775800;  # Near min int64
+b -= 8;
+printf(\"%d,%d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9223372036854775807,-9223372036854775808", result,
+                    sprintf("compound assign overflow %s", mode));
+        }
+    }
+
+    testJitDivisionInlineZeroCheck() {
+        # Test inline zero-check for division/modulo operations
+        # This verifies that native LLVM division is used for non-zero divisors
+        # and runtime exception is raised for zero divisors
+        string code = "%modern
+int sub test_div_mod() {
+    int sum = 0;
+    # Normal division/modulo in loop (tests inline fast-path)
+    for (int i = 1; i <= 10; i++) {
+        sum += 100 / i;
+        sum += 100 % i;
+    }
+    # Compound division/modulo
+    int a = 1000;
+    a /= 10;
+    int b = 97;
+    b %= 10;
+    # Float division
+    float f = 100.0;
+    float g = 4.0;
+    float fdiv = f / g;
+    float h = 50.0;
+    h /= 5.0;
+    return sum + a + b + int(fdiv) + int(h);
+}
+printf(\"%d\\n\", test_div_mod());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("445", result, sprintf("division inline zero-check %s", mode));
+        }
+
+        # Test that zero divisor still raises exception with inline check
+        string zero_code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int a = 100;
+    int b = 0;
+    int c = a / b;
+    printf(\"ERROR\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\", ex.err);
+}
+";
+        assertEq("DIVISION-BY-ZERO", trim(runScript(zero_code, "jit")),
+                "inline zero-check raises DIVISION-BY-ZERO");
+    }
+
+    testJitThrowList() {
+        string code = "%modern
+try {
+    throw \"MY-ERROR\", \"my description\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("MY-ERROR:my description", result, "throw with err and desc args");
+    }
+
+    testJitMultipleExceptions() {
+        string code = "%modern
+list<string> results = ();
+for (int i = 0; i < 5; i++) {
+    try {
+        if (i % 2 == 0) {
+            throw \"EVEN-ERROR\", sprintf(\"i=%d\", i);
+        } else {
+            results += sprintf(\"ok:%d\", i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        results += sprintf(\"%s:%s\", ex.err, ex.desc);
+    }
+}
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("EVEN-ERROR:i=0,ok:1,EVEN-ERROR:i=2,ok:3,EVEN-ERROR:i=4", result, "multiple exceptions in loop");
+    }
+
+    testJitScopedObjectConstruction() {
+        # Test "ClassName var(args)" syntax (VarRefNewObjectNode)
+        string code = "%modern
+class Point {
+    public {
+        int x;
+        int y;
+    }
+    constructor(int a, int b) {
+        x = a;
+        y = b;
+    }
+}
+Point p(3, 7);
+printf(\"%d:%d\\n\", p.x, p.y);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("3:7", ast_result, "scoped object construction AST");
+        assertEq(ast_result, ir_result, "scoped object construction IR matches AST");
+        assertEq(ast_result, jit_result, "scoped object construction JIT matches AST");
+    }
+
+    # --- Phase 5b optimization tests ---
+
+    testJitHashKeyFastPath() {
+        # Test hash key access via DotEvalHash with constant string key
+        string code = "%modern
+hash<auto> h = {\"name\": \"alice\", \"age\": 30, \"score\": 99.5};
+printf(\"%s:%d:%.1f\\n\", h.name, h.age, h.score);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alice:30:99.5", ast_result, "hash key access AST");
+        assertEq(ast_result, jit_result, "hash key access JIT matches AST");
+    }
+
+    testJitListIndexFastPath() {
+        # Test list index access with integer index
+        string code = "%modern
+list<auto> l = (\"alpha\", 42, 3.14, True);
+printf(\"%s:%d:%.2f:%s\\n\", l[0], l[1], l[2], l[3] ? \"true\" : \"false\");
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alpha:42:3.14:true", ast_result, "list index access AST");
+        assertEq(ast_result, jit_result, "list index access JIT matches AST");
+    }
+
+    testJitStringConcatFastPath() {
+        # Test string concatenation through AddAny (auto-typed)
+        string code = "%modern
+auto a = \"hello\";
+auto b = \" world\";
+auto c = a + b;
+printf(\"%s\\n\", c);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("hello world", ast_result, "string concat AST");
+        assertEq(ast_result, jit_result, "string concat JIT matches AST");
+    }
+
+    testJitAnyArithFastPath() {
+        # Test inline int+int and float+float fast-paths for .any arithmetic
+        string code = "%modern
+auto a = 10;
+auto b = 20;
+auto sum = a + b;
+auto diff = a - b;
+auto prod = a * b;
+auto fa = 1.5;
+auto fb = 2.5;
+auto fsum = fa + fb;
+auto fdiff = fa - fb;
+auto fprod = fa * fb;
+printf(\"%d:%d:%d:%.1f:%.1f:%.2f\\n\", sum, diff, prod, fsum, fdiff, fprod);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("30:-10:200:4.0:-1.0:3.75", ast_result, "any arith AST");
+        assertEq(ast_result, jit_result, "any arith JIT matches AST");
+    }
+
+    testJitAnyCmpFastPath() {
+        # Test inline int-vs-int and float-vs-float fast-paths for comparisons
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> r = ();
+if (a == a) { r += \"eq\"; }
+if (a != b) { r += \"ne\"; }
+if (a < b) { r += \"lt\"; }
+if (a <= b) { r += \"le\"; }
+if (b > a) { r += \"gt\"; }
+if (b >= a) { r += \"ge\"; }
+auto fa = 1.5;
+auto fb = 2.5;
+if (fa == fa) { r += \"feq\"; }
+if (fa != fb) { r += \"fne\"; }
+if (fa < fb) { r += \"flt\"; }
+if (fb > fa) { r += \"fgt\"; }
+printf(\"%s\\n\", r.join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("eq,ne,lt,le,gt,ge,feq,fne,flt,fgt", ast_result, "any cmp AST");
+        assertEq(ast_result, jit_result, "any cmp JIT matches AST");
+    }
+
+    testJitAnyArithMixed() {
+        # Test .any arithmetic with mixed types (int+float should fall to slow path)
+        string code = "%modern
+auto a = 10;
+auto b = 2.5;
+auto result = a + b;
+printf(\"%.1f\\n\", result);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("12.5", ast_result, "mixed any arith AST");
+        assertEq(ast_result, jit_result, "mixed any arith JIT matches AST");
+    }
+
+    testJitPhase5bCrossMode() {
+        # Comprehensive test exercising hash, list, string, arith, and comparison
+        # across all execution modes
+        string code = "%modern
+auto sub compute(auto n) {
+    hash<auto> h = {\"val\": n, \"doubled\": n * 2};
+    list<auto> l = (h.val, h.doubled);
+    auto sum = l[0] + l[1];
+    if (sum > 10) {
+        return sum;
+    }
+    return 0;
+}
+list<auto> results = ();
+for (int i = 0; i < 10; i++) {
+    results += compute(i);
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "Phase 5b cross-mode: IR matches AST");
+        assertEq(ast_result, jit_result, "Phase 5b cross-mode: JIT matches AST");
+    }
+
+    # --- Phase 5c debug info tests ---
+
+    testJitDebugInfoCompile() {
+        # Simple function with local variables; verify correct result under JIT
+        # (exercises DIBuilder code path for every JIT compilation)
+        string code = "%modern
+int sub add_locals(int a, int b) {
+    int x = a + 1;
+    int y = b + 2;
+    int result = x + y;
+    return result;
+}
+printf(\"%d\\n\", add_locals(10, 20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("33", ast_result, "debug info compile AST");
+        assertEq(ast_result, jit_result, "debug info compile JIT matches AST");
+    }
+
+    testJitDebugInfoMultiLine() {
+        # Multi-line function with branches and loops; verify correct result
+        # (exercises per-instruction debug locations across blocks)
+        string code = "%modern
+int sub multi_line(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 3 == 0) {
+            total += i * 2;
+        } else if (i % 3 == 1) {
+            total -= 1;
+        } else {
+            total += i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", multi_line(15));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, jit_result, "debug info multi-line JIT matches AST");
+    }
+
+    # --- Double-eval regression tests ---
+
+    testJitSideEffectingArgs() {
+        # Verify that side-effecting function args are evaluated exactly once per call
+        string code = "%modern
+int counter = 0;
+int sub side_effect(int v) {
+    counter++;
+    return v;
+}
+int sub add(int a, int b) { return a + b; }
+int result = add(side_effect(10), side_effect(20));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:2", result, sprintf("side-effecting args %s", mode));
+        }
+    }
+
+    testJitTrackedSideEffects() {
+        # Verify tracked_inc() (a side-effecting call) evaluates once as arg
+        string code = "%modern
+int counter = 0;
+int sub tracked_inc(int v) {
+    counter++;
+    return v;
+}
+int sub identity(int v) { return v; }
+int i = 5;
+int result = identity(tracked_inc(i));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:1", result, sprintf("tracked side effects %s", mode));
+        }
+    }
+
+    testJitNestedCallSideEffects() {
+        # Verify nested calls with side effects: log should have exactly 3 entries
+        string code = "%modern
+list<int> log = ();
+int sub logged(int v) {
+    log += v;
+    return v;
+}
+int sub add3(int a, int b, int c) { return a + b + c; }
+int result = add3(logged(1), logged(2), logged(3));
+printf(\"%d:%d:%s\\n\", result, log.size(), (map $1.toString(), log).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6:3:1,2,3", result, sprintf("nested call side effects %s", mode));
+        }
+    }
+
+    testJitBinaryInvokeTryCatch() {
+        # Verify binary ops inside try/catch (Invoke path) work correctly
+        string code = "%modern
+auto a = 10;
+auto b = 0;
+string result;
+try {
+    auto r = a / b;
+    result = \"no-exception\";
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("DIVISION-BY-ZERO", result,
+                    sprintf("binary invoke try/catch %s", mode));
+        }
+    }
+
+    testJitCallCrossMode() {
+        # Verify call with side effects produces same results across modes
+        string code = "%modern
+int counter = 0;
+int sub bump() {
+    counter++;
+    return counter;
+}
+int a = bump();
+int b = bump();
+int c = bump();
+printf(\"%d:%d:%d:%d\\n\", a, b, c, counter);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("1:2:3:3", ast_result, "call cross-mode AST");
+        assertEq(ast_result, ir_result, "call cross-mode IR matches AST");
+        assertEq(ast_result, jit_result, "call cross-mode JIT matches AST");
+    }
+
+    # --- Bug fix regression tests ---
+
+    testJitNoArgCall() {
+        # Bug 2: zero-argument function calls failed IR lowering
+        string code = "%modern
+int sub no_arg_func() {
+    return 42;
+}
+printf(\"%d\\n\", no_arg_func());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result, sprintf("no-arg function call %s", mode));
+        }
+    }
+
+    testJitIntPostIncrement() {
+        # Bug 1: int-typed post-increment failed IR lowering (QoreIntPostIncrementOperatorNode
+        # does not inherit from QorePostIncrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i++;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:6", result, sprintf("int post-increment %s", mode));
+        }
+    }
+
+    testJitIntPostDecrement() {
+        # Bug 1: int-typed post-decrement failed IR lowering (QoreIntPostDecrementOperatorNode
+        # does not inherit from QorePostDecrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i--;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:4", result, sprintf("int post-decrement %s", mode));
+        }
+    }
+
+    testJitTernary() {
+        # Bug 3: ternary operator PHI node had zero incoming values in LLVM lowering
+        string code = "%modern
+int sub ternary_test(int x) {
+    int r = (x > 0) ? 10 : 20;
+    return r;
+}
+printf(\"%d:%d:%d\\n\", ternary_test(5), ternary_test(0), ternary_test(-3));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20:20", result, sprintf("ternary operator %s", mode));
+        }
+    }
+
+    testJitDotEvalSingleEval() {
+        # Bug A: DotEval double-evaluation — base expression f() should be called once, not twice
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 42; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().get();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42:1", result, sprintf("dot-eval single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalInvokeSingleEval() {
+        # Bug A: DotEval inside try/catch (Invoke path) — base called once
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 99; }
+}
+C sub f() { counter++; return new C(); }
+int r;
+try { r = f().get(); } catch (hash<auto> ex) { r = -1; }
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99:1", result, sprintf("dot-eval invoke single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalChained() {
+        # Bug A: chained method calls — each base evaluated once
+        string code = "%modern
+our int counter = 0;
+class C {
+    C next() { return new C(); }
+    int val() { return 7; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().next().val();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("7:1", result, sprintf("dot-eval chained %s", mode));
+        }
+    }
+
+    testJitDotEvalHashMember() {
+        # Bug A: hash member access on side-effecting base — evaluated once
+        string code = "%modern
+our int counter = 0;
+hash<auto> sub f() { counter++; return {\"key\": \"hello\"}; }
+auto r = f().key;
+printf(\"%s:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello:1", result, sprintf("dot-eval hash member %s", mode));
+        }
+    }
+
+    testJitRegexMatchSingleEval() {
+        # Regex match: subject f() should be called once, not twice
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"hello123world\"; }
+bool r = f() =~ /\\d+/;
+printf(\"%s:%d\\n\", r ? \"true\" : \"false\", counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("true:1", result, sprintf("regex match single eval %s", mode));
+        }
+    }
+
+    testJitRegexMatchInvokeSingleEval() {
+        # Regex match inside try/catch (Invoke path): f() called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"abc456def\"; }
+bool r;
+try { r = f() =~ /\\d+/; } catch (hash<auto> ex) { r = False; }
+printf(\"%s:%d\\n\", r ? \"true\" : \"false\", counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("true:1", result, sprintf("regex match invoke single eval %s", mode));
+        }
+    }
+
+    testJitRegexExtractSingleEval() {
+        # Regex extract: subject f() should be called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"abc123def456\"; }
+auto r = (f() =~ x/(\\d+)/);
+printf(\"%s:%d\\n\", r[0], counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("123:1", result, sprintf("regex extract single eval %s", mode));
+        }
+    }
+
+    testJitRegexExtractInvokeSingleEval() {
+        # Regex extract inside try/catch (Invoke path): f() called once
+        string code = "%modern
+our int counter = 0;
+string sub f() { counter++; return \"xyz789\"; }
+auto r;
+try { r = (f() =~ x/(\\d+)/); } catch (hash<auto> ex) { r = list(); }
+printf(\"%s:%d\\n\", r[0], counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("789:1", result, sprintf("regex extract invoke single eval %s", mode));
+        }
+    }
+
+    testJitFoldlSumProd() {
+        # Test optimized foldl with $1 + $2 and $1 * $2 patterns
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum_result = (foldl $1 + $2, nums);
+int prod_result = (foldl $1 * $2, nums);
+printf(\"%d:%d\\n\", sum_result, prod_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15:120", result, sprintf("foldl int sum/prod %s", mode));
+        }
+
+        # Test with floats
+        string float_code = "%modern
+list<float> nums = (1.5, 2.5, 3.0);
+float sum_f = (foldl $1 + $2, nums);
+float prod_f = (foldl $1 * $2, nums);
+printf(\"%.1f:%.2f\\n\", sum_f, prod_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_code, mode));
+            assertEq("7.0:11.25", result, sprintf("foldl float sum/prod %s", mode));
+        }
+
+        # Test with single element (edge case)
+        string single_code = "%modern
+list<int> single = (42,);
+int s = (foldl $1 + $2, single);
+int p = (foldl $1 * $2, single);
+printf(\"%d:%d\\n\", s, p);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            assertEq("42:42", result, sprintf("foldl single element %s", mode));
+        }
+    }
+
+    testJitFoldlDiffMinMax() {
+        # Test optimized foldl with $1 - $2 (diff) pattern
+        string diff_code = "%modern
+list<int> nums = (100, 20, 5, 3);
+int diff_result = (foldl $1 - $2, nums);
+printf(\"%d\\n\", diff_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(diff_code, mode));
+            # 100 - 20 - 5 - 3 = 72
+            assertEq("72", result, sprintf("foldl int diff %s", mode));
+        }
+
+        # Test min($1, $2) pattern
+        string min_code = "%modern
+list<int> nums = (5, 2, 8, 1, 9);
+int min_result = (foldl min($1, $2), nums);
+printf(\"%d\\n\", min_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(min_code, mode));
+            assertEq("1", result, sprintf("foldl int min %s", mode));
+        }
+
+        # Test max($1, $2) pattern
+        string max_code = "%modern
+list<int> nums = (5, 2, 8, 1, 9);
+int max_result = (foldl max($1, $2), nums);
+printf(\"%d\\n\", max_result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(max_code, mode));
+            assertEq("9", result, sprintf("foldl int max %s", mode));
+        }
+
+        # Test with floats
+        string float_diff_code = "%modern
+list<float> nums = (10.5, 2.5, 1.0);
+float diff_f = (foldl $1 - $2, nums);
+printf(\"%.1f\\n\", diff_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_diff_code, mode));
+            # 10.5 - 2.5 - 1.0 = 7.0
+            assertEq("7.0", result, sprintf("foldl float diff %s", mode));
+        }
+
+        string float_min_code = "%modern
+list<float> nums = (3.5, 1.2, 4.8);
+float min_f = (foldl min($1, $2), nums);
+printf(\"%.1f\\n\", min_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_min_code, mode));
+            assertEq("1.2", result, sprintf("foldl float min %s", mode));
+        }
+
+        string float_max_code = "%modern
+list<float> nums = (3.5, 1.2, 4.8);
+float max_f = (foldl max($1, $2), nums);
+printf(\"%.1f\\n\", max_f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_max_code, mode));
+            assertEq("4.8", result, sprintf("foldl float max %s", mode));
+        }
+
+        # Test with single element (edge case)
+        string single_code = "%modern
+list<int> single = (42,);
+int d = (foldl $1 - $2, single);
+int mi = (foldl min($1, $2), single);
+int ma = (foldl max($1, $2), single);
+printf(\"%d:%d:%d\\n\", d, mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            assertEq("42:42:42", result, sprintf("foldl diff/min/max single element %s", mode));
+        }
+
+        # Test with two elements
+        string two_code = "%modern
+list<int> two = (10, 3);
+int d = (foldl $1 - $2, two);
+int mi = (foldl min($1, $2), two);
+int ma = (foldl max($1, $2), two);
+printf(\"%d:%d:%d\\n\", d, mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(two_code, mode));
+            # 10 - 3 = 7, min(10,3) = 3, max(10,3) = 10
+            assertEq("7:3:10", result, sprintf("foldl diff/min/max two elements %s", mode));
+        }
+
+        # Test with negative numbers
+        string neg_code = "%modern
+list<int> nums = (-5, 3, -2, 8);
+int mi = (foldl min($1, $2), nums);
+int ma = (foldl max($1, $2), nums);
+printf(\"%d:%d\\n\", mi, ma);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(neg_code, mode));
+            assertEq("-5:8", result, sprintf("foldl min/max with negatives %s", mode));
+        }
+    }
+
+    testJitMapOptimized() {
+        # Test optimized map patterns: $1 * const (scale), $1 + const (offset), $1 * $1 (square)
+        string scale_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+printf(\"%s\\n\", (map $1.toString(), scaled).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(scale_code, mode));
+            assertEq("2,4,6,8,10", result, sprintf("map scale int %s", mode));
+        }
+
+        string offset_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> offset = (map $1 + 10, nums);
+printf(\"%s\\n\", (map $1.toString(), offset).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(offset_code, mode));
+            assertEq("11,12,13,14,15", result, sprintf("map offset int %s", mode));
+        }
+
+        string square_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> squared = (map $1 * $1, nums);
+printf(\"%s\\n\", (map $1.toString(), squared).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(square_code, mode));
+            assertEq("1,4,9,16,25", result, sprintf("map square int %s", mode));
+        }
+
+        # Test with floats
+        string float_scale_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+list<float> scaled = (map $1 * 2.5, nums);
+printf(\"%.1f,%.1f,%.1f\\n\", scaled[0], scaled[1], scaled[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_scale_code, mode));
+            assertEq("2.5,5.0,7.5", result, sprintf("map scale float %s", mode));
+        }
+
+        # Test with empty list (edge case)
+        string empty_code = "%modern
+list<int> empty = ();
+list<int> result = (map $1 * 2, empty);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("map empty list %s", mode));
+        }
+    }
+
+    testJitSelectOptimized() {
+        # Test optimized select patterns: $1 > 0 (positive), $1 != 0 (nonzero)
+        # Syntax: (select list, condition)
+        string positive_code = "%modern
+list<int> nums = (-3, -2, -1, 0, 1, 2, 3);
+list<int> positive = (select nums, $1 > 0);
+printf(\"%s\\n\", (map $1.toString(), positive).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(positive_code, mode));
+            assertEq("1,2,3", result, sprintf("select positive int %s", mode));
+        }
+
+        string nonzero_code = "%modern
+list<int> nums = (-2, -1, 0, 1, 2);
+list<int> nonzero = (select nums, $1 != 0);
+printf(\"%s\\n\", (map $1.toString(), nonzero).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nonzero_code, mode));
+            assertEq("-2,-1,1,2", result, sprintf("select nonzero int %s", mode));
+        }
+
+        # Test with floats
+        string float_positive_code = "%modern
+list<float> nums = (-1.5, 0.0, 1.5, 2.5);
+list<float> positive = (select nums, $1 > 0);
+printf(\"%.1f,%.1f\\n\", positive[0], positive[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_positive_code, mode));
+            assertEq("1.5,2.5", result, sprintf("select positive float %s", mode));
+        }
+
+        # Test with all-filtered-out list (edge case)
+        string all_filtered_code = "%modern
+list<int> nums = (-3, -2, -1);
+list<int> positive = (select nums, $1 > 0);
+printf(\"%d\\n\", positive.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(all_filtered_code, mode));
+            assertEq("0", result, sprintf("select all filtered %s", mode));
+        }
+
+        # Test with empty list (edge case)
+        string empty_code = "%modern
+list<int> empty = ();
+list<int> result = (select empty, $1 > 0);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("select empty list %s", mode));
+        }
+    }
+
+    testJitFusedMapSelect() {
+        # Test fused map+select patterns: (map expr, (select list, $1 > 0))
+        # This optimizes to a single-pass operation without intermediate list
+
+        # Pattern: (map $1 * 2, (select list, $1 > 0)) -> filter positive, then scale
+        string scale_positive_code = "%modern
+list<int> nums = (-3, -2, -1, 0, 1, 2, 3);
+list<int> result = (map $1 * 2, (select nums, $1 > 0));
+printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(scale_positive_code, mode));
+            # Positive values: 1, 2, 3 -> scaled by 2 -> 2, 4, 6
+            assertEq("2,4,6", result, sprintf("fused map scale select positive int %s", mode));
+        }
+
+        # Pattern: (map $1 + 10, (select list, $1 > 0)) -> filter positive, then offset
+        string offset_positive_code = "%modern
+list<int> nums = (-5, 0, 1, 2, 3);
+list<int> result = (map $1 + 10, (select nums, $1 > 0));
+printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(offset_positive_code, mode));
+            # Positive values: 1, 2, 3 -> plus 10 -> 11, 12, 13
+            assertEq("11,12,13", result, sprintf("fused map offset select positive int %s", mode));
+        }
+
+        # Pattern: (map $1 * $1, (select list, $1 > 0)) -> filter positive, then square
+        string square_positive_code = "%modern
+list<int> nums = (-3, -2, -1, 0, 1, 2, 3);
+list<int> result = (map $1 * $1, (select nums, $1 > 0));
+printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(square_positive_code, mode));
+            # Positive values: 1, 2, 3 -> squared -> 1, 4, 9
+            assertEq("1,4,9", result, sprintf("fused map square select positive int %s", mode));
+        }
+
+        # Float versions
+        string float_scale_code = "%modern
+list<float> nums = (-1.5, 0.0, 1.0, 2.0, 3.0);
+list<float> result = (map $1 * 2.0, (select nums, $1 > 0));
+printf(\"%.1f,%.1f,%.1f\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_scale_code, mode));
+            assertEq("2.0,4.0,6.0", result, sprintf("fused map scale select positive float %s", mode));
+        }
+
+        string float_square_code = "%modern
+list<float> nums = (-2.0, -1.0, 0.0, 1.0, 2.0, 3.0);
+list<float> result = (map $1 * $1, (select nums, $1 > 0));
+printf(\"%.1f,%.1f,%.1f\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_square_code, mode));
+            assertEq("1.0,4.0,9.0", result, sprintf("fused map square select positive float %s", mode));
+        }
+
+        # Edge case: all filtered out
+        string all_filtered_code = "%modern
+list<int> nums = (-3, -2, -1, 0);
+list<int> result = (map $1 * 2, (select nums, $1 > 0));
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(all_filtered_code, mode));
+            assertEq("0", result, sprintf("fused map select all filtered %s", mode));
+        }
+
+        # Edge case: single element
+        string single_code = "%modern
+list<int> nums = (5,);
+list<int> result = (map $1 * 3, (select nums, $1 > 0));
+printf(\"%s\\n\", (map $1.toString(), result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            assertEq("15", result, sprintf("fused map select single element %s", mode));
+        }
+    }
+
+    testJitFusedMapFoldl() {
+        # Test fused map+foldl patterns: foldl $1 + $2, (map $1 * c, list)
+        # This optimizes to a single-pass operation without intermediate list
+
+        # Pattern: foldl $1 + $2, (map $1 * 2, list) -> sum(list[i] * 2)
+        string sum_scale_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int result = (foldl $1 + $2, (map $1 * 2, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(sum_scale_code, mode));
+            # (1*2 + 2*2 + 3*2 + 4*2 + 5*2) = 2+4+6+8+10 = 30
+            assertEq("30", result, sprintf("fused map foldl sum scale int %s", mode));
+        }
+
+        # Pattern: foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
+        string sum_square_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int result = (foldl $1 + $2, (map $1 * $1, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(sum_square_code, mode));
+            # 1 + 4 + 9 + 16 + 25 = 55
+            assertEq("55", result, sprintf("fused map foldl sum square int %s", mode));
+        }
+
+        # Pattern: foldl $1 * $2, (map $1 * 2, list) -> prod(list[i] * 2)
+        string prod_scale_code = "%modern
+list<int> nums = (1, 2, 3);
+int result = (foldl $1 * $2, (map $1 * 2, nums));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(prod_scale_code, mode));
+            # (1*2) * (2*2) * (3*2) = 2 * 4 * 6 = 48
+            assertEq("48", result, sprintf("fused map foldl prod scale int %s", mode));
+        }
+
+        # Float versions
+        string float_sum_scale_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 + $2, (map $1 * 2.0, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_sum_scale_code, mode));
+            # (1*2 + 2*2 + 3*2) = 2+4+6 = 12.0
+            assertEq("12.0", result, sprintf("fused map foldl sum scale float %s", mode));
+        }
+
+        string float_sum_square_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 + $2, (map $1 * $1, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_sum_square_code, mode));
+            # 1 + 4 + 9 = 14.0
+            assertEq("14.0", result, sprintf("fused map foldl sum square float %s", mode));
+        }
+
+        # Edge case: single element
+        string single_code = "%modern
+list<int> single = (5,);
+int result = (foldl $1 + $2, (map $1 * 2, single));
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(single_code, mode));
+            # 5 * 2 = 10
+            assertEq("10", result, sprintf("fused map foldl single element %s", mode));
+        }
+
+        # Edge case: empty list
+        # AST mode returns NOTHING, IR/JIT return identity value (0 for sum, 1 for product)
+        # This is existing behavior difference between AST and IR/JIT optimized paths
+        string empty_code = "%modern
+list<int> empty = ();
+auto result = (foldl $1 + $2, (map $1 * 2, empty));
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        assertEq("NOTHING", trim(runScript(empty_code, "ast")), "fused map foldl empty list ast");
+        assertEq("0", trim(runScript(empty_code, "ir")), "fused map foldl empty list ir");
+        assertEq("0", trim(runScript(empty_code, "jit")), "fused map foldl empty list jit");
+
+        # Test float precision - ensure no truncation to int
+        string precision_code = "%modern
+list<float> nums = (0.5, 1.5, 2.5);
+float result = (foldl $1 + $2, (map $1 * 2.0, nums));
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(precision_code, mode));
+            # (0.5*2 + 1.5*2 + 2.5*2) = 1.0+3.0+5.0 = 9.0
+            assertEq("9.0", result, sprintf("fused map foldl float precision %s", mode));
+        }
+
+        # Test product with floats
+        string float_prod_code = "%modern
+list<float> nums = (1.0, 2.0, 3.0);
+float result = (foldl $1 * $2, (map $1 * 0.5, nums));
+printf(\"%.4f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(float_prod_code, mode));
+            # (1*0.5) * (2*0.5) * (3*0.5) = 0.5 * 1.0 * 1.5 = 0.75
+            assertEq("0.7500", result, sprintf("fused map foldl float product %s", mode));
+        }
+    }
+
+    testIRForeachLowering() {
+        # Test basic foreach loop lowering to IR
+        string basic_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(basic_code, mode));
+            assertEq("15", result, sprintf("foreach basic sum %s", mode));
+        }
+
+        # Test foreach with break
+        string break_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    if (n == 3) {
+        break;
+    }
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(break_code, mode));
+            # 1 + 2 = 3 (break before processing 3)
+            assertEq("3", result, sprintf("foreach break %s", mode));
+        }
+
+        # Test foreach with continue
+        string continue_code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+int sum = 0;
+foreach int n in (nums) {
+    if (n == 3) {
+        continue;
+    }
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(continue_code, mode));
+            # 1 + 2 + 4 + 5 = 12 (skip 3)
+            assertEq("12", result, sprintf("foreach continue %s", mode));
+        }
+
+        # Test foreach with empty list
+        string empty_code = "%modern
+list<int> empty = ();
+int sum = 0;
+foreach int n in (empty) {
+    sum += n;
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_code, mode));
+            assertEq("0", result, sprintf("foreach empty %s", mode));
+        }
+
+        # Test nested foreach
+        string nested_code = "%modern
+list<list<int>> nested = ((1, 2), (3, 4), (5, 6));
+int total = 0;
+foreach list<int> inner in (nested) {
+    foreach int n in (inner) {
+        total += n;
+    }
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_code, mode));
+            # 1+2+3+4+5+6 = 21
+            assertEq("21", result, sprintf("foreach nested %s", mode));
+        }
+    }
+
+    testTypedStringConcat() {
+        # Test basic typed string concatenation (AddString opcode)
+        string basic_code = "%modern
+string a = \"hello\";
+string b = \" world\";
+string result = a + b;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(basic_code, mode));
+            assertEq("hello world", result, sprintf("typed string concat basic %s", mode));
+        }
+
+        # Test chained string concatenation
+        string chain_code = "%modern
+string a = \"one\";
+string b = \"two\";
+string c = \"three\";
+string result = a + b + c;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(chain_code, mode));
+            assertEq("onetwothree", result, sprintf("typed string concat chain %s", mode));
+        }
+
+        # Test string concatenation with function return
+        string func_code = "%modern
+string sub getPrefix() { return \"prefix_\"; }
+string sub getSuffix() { return \"_suffix\"; }
+string middle = \"value\";
+string result = getPrefix() + middle + getSuffix();
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_code, mode));
+            assertEq("prefix_value_suffix", result, sprintf("typed string concat func %s", mode));
+        }
+
+        # Test string concatenation in loop
+        string loop_code = "%modern
+string result = \"\";
+for (int i = 0; i < 3; i++) {
+    result = result + \"x\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("xxx", result, sprintf("typed string concat loop %s", mode));
+        }
+    }
+
+    testTypedStringEquality() {
+        # Test typed string equality (EqString opcode)
+        string eq_code = "%modern
+string sub test_eq(string a, string b) {
+    if (a == b) {
+        return \"equal\";
+    }
+    return \"not equal\";
+}
+printf(\"%s,%s,%s\\n\",
+    test_eq(\"hello\", \"hello\"),
+    test_eq(\"hello\", \"world\"),
+    test_eq(\"\", \"\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(eq_code, mode));
+            assertEq("equal,not equal,equal", result, sprintf("typed string equality %s", mode));
+        }
+
+        # Test typed string inequality (NeString opcode)
+        string ne_code = "%modern
+string sub test_ne(string a, string b) {
+    if (a != b) {
+        return \"different\";
+    }
+    return \"same\";
+}
+printf(\"%s,%s,%s\\n\",
+    test_ne(\"hello\", \"world\"),
+    test_ne(\"hello\", \"hello\"),
+    test_ne(\"abc\", \"ABC\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(ne_code, mode));
+            assertEq("different,same,different", result, sprintf("typed string inequality %s", mode));
+        }
+
+        # Test string comparison in loop
+        string loop_code = "%modern
+int sub count_matches(list<string> items, string target) {
+    int count = 0;
+    foreach string s in (items) {
+        if (s == target) {
+            count++;
+        }
+    }
+    return count;
+}
+list<string> data = (\"a\", \"b\", \"a\", \"c\", \"a\");
+printf(\"%d,%d,%d\\n\",
+    count_matches(data, \"a\"),
+    count_matches(data, \"b\"),
+    count_matches(data, \"x\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("3,1,0", result, sprintf("typed string equality loop %s", mode));
+        }
+    }
+
+    testStringSwitchOptimization() {
+        # Test string switch with multiple cases (uses SwitchString opcode)
+        string switch_code = "%modern
+string sub classify(string val) {
+    switch (val) {
+        case \"red\": return \"color\";
+        case \"blue\": return \"color\";
+        case \"green\": return \"color\";
+        case \"apple\": return \"fruit\";
+        case \"banana\": return \"fruit\";
+        case \"orange\": return \"fruit\";
+        case \"dog\": return \"animal\";
+        case \"cat\": return \"animal\";
+        default: return \"unknown\";
+    }
+}
+printf(\"%s,%s,%s,%s,%s\\n\",
+    classify(\"red\"), classify(\"apple\"), classify(\"dog\"),
+    classify(\"blue\"), classify(\"xyz\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(switch_code, mode));
+            assertEq("color,fruit,animal,color,unknown", result, sprintf("string switch optimization %s", mode));
+        }
+
+        # Test string switch with empty string case
+        string empty_case_code = "%modern
+string sub check_empty(string val) {
+    switch (val) {
+        case \"\": return \"empty\";
+        case \"null\": return \"null string\";
+        default: return \"has value\";
+    }
+}
+printf(\"%s,%s,%s\\n\",
+    check_empty(\"\"), check_empty(\"null\"), check_empty(\"test\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(empty_case_code, mode));
+            assertEq("empty,null string,has value", result, sprintf("string switch empty case %s", mode));
+        }
+
+        # Test string switch with similar strings
+        string similar_code = "%modern
+string sub similar_test(string val) {
+    switch (val) {
+        case \"test\": return \"1\";
+        case \"test1\": return \"2\";
+        case \"test12\": return \"3\";
+        case \"test123\": return \"4\";
+        default: return \"0\";
+    }
+}
+printf(\"%s,%s,%s,%s,%s\\n\",
+    similar_test(\"test\"), similar_test(\"test1\"), similar_test(\"test12\"),
+    similar_test(\"test123\"), similar_test(\"test1234\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(similar_code, mode));
+            assertEq("1,2,3,4,0", result, sprintf("string switch similar strings %s", mode));
+        }
+    }
+
+    testFinalClassDevirtualization() {
+        # Test final class devirtualization - self.method() calls in final classes
+        # should use CallMethodDirect opcode instead of CallMethod
+
+        # Test 1: Final class with recursive self call
+        # The self.compute() call inside compute() should be devirtualized
+        string recursive_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class Calculator {
+    public {
+        int calls = 0;
+    }
+
+    int compute(int n) {
+        ++calls;
+        if (n <= 1) {
+            return 1;
+        }
+        return n * self.compute(n - 1);
+    }
+}
+
+Calculator c();
+int result = c.compute(5);
+printf(\"%d,%d\\n\", result, c.calls);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(recursive_code, mode));
+            # factorial(5) = 120, calls = 5 (5, 4, 3, 2, 1)
+            assertEq("120,5", result, sprintf("final class recursive self call %s", mode));
+        }
+
+        # Test 2: Final class with multiple self calls in one method
+        string multi_self_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MyCounter {
+    public {
+        int count = 0;
+    }
+
+    int inc() {
+        return ++count;
+    }
+
+    int getValue() {
+        return count;
+    }
+
+    # Multiple self calls - all should be devirtualized
+    int compute(int a, int b) {
+        return self.inc() + a + self.inc() + b + self.getValue();
+    }
+}
+
+MyCounter c();
+int result = c.compute(10, 20);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_self_code, mode));
+            # inc() returns 1, a=10, inc() returns 2, b=20, get() returns 2
+            # Total: 1 + 10 + 2 + 20 + 2 = 35
+            assertEq("35", result, sprintf("final class multiple self calls %s", mode));
+        }
+
+        # Test 3: Final class with exception in self call
+        string exception_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class SafeDiv {
+    int divide(int a, int b) {
+        if (b == 0) {
+            throw \"DIVISION-ERROR\", \"cannot divide by zero\";
+        }
+        return a / b;
+    }
+
+    int safeDivide(int a, int b) {
+        try {
+            return self.divide(a, b);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+}
+
+SafeDiv s();
+printf(\"%d,%d\\n\", s.safeDivide(10, 2), s.safeDivide(10, 0));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(exception_code, mode));
+            assertEq("5,-1", result, sprintf("final class self call with exception %s", mode));
+        }
+
+        # Test 4: Verify polymorphic calls still work correctly (NOT devirtualized)
+        string polymorphic_code = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+class Animal {
+    string speak() {
+        return \"...\";
+    }
+}
+
+class Dog inherits Animal {
+    string speak() {
+        return \"woof\";
+    }
+}
+
+class Cat inherits Animal {
+    string speak() {
+        return \"meow\";
+    }
+}
+
+list<Animal> animals = (new Dog(), new Cat(), new Animal());
+list<string> sounds = ();
+foreach Animal a in (animals) {
+    sounds += a.speak();
+}
+printf(\"%s\\n\", sounds.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(polymorphic_code, mode));
+            assertEq("woof,meow,...", result, sprintf("polymorphic calls (no devirt) %s", mode));
+        }
+    }
+
+    testStringBuilderOptimization() {
+        # Test string builder optimization - chains of string concatenation
+        # should use StringConcat opcode for efficiency
+
+        # Test 1: Simple 3-string chain
+        string simple_chain = "%modern
+string a = \"hello\";
+string b = \" \";
+string c = \"world\";
+string result = a + b + c;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(simple_chain, mode));
+            assertEq("hello world", result, sprintf("simple 3-string chain %s", mode));
+        }
+
+        # Test 2: Longer 5-string chain
+        string long_chain = "%modern
+string a = \"a\";
+string b = \"b\";
+string c = \"c\";
+string d = \"d\";
+string e = \"e\";
+string result = a + b + c + d + e;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(long_chain, mode));
+            assertEq("abcde", result, sprintf("5-string chain %s", mode));
+        }
+
+        # Test 3: Chain with string literals
+        string literal_chain = "%modern
+string prefix = \"Hello, \";
+string result = prefix + \"my \" + \"name \" + \"is \" + \"Qore\";
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(literal_chain, mode));
+            assertEq("Hello, my name is Qore", result, sprintf("chain with literals %s", mode));
+        }
+
+        # Test 4: Chain in function
+        string func_chain = "%modern
+string sub build_message(string name, string action) {
+    return \"User \" + name + \" has \" + action + \" successfully\";
+}
+printf(\"%s\\n\", build_message(\"Alice\", \"logged in\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_chain, mode));
+            assertEq("User Alice has logged in successfully", result, sprintf("chain in function %s", mode));
+        }
+
+        # Test 5: Nested chains (verify associativity)
+        string nested_chain = "%modern
+string a = \"1\";
+string b = \"2\";
+string c = \"3\";
+string d = \"4\";
+# (a + b) + (c + d) - both sides are chains
+string left = a + b;
+string right = c + d;
+string result = left + right;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_chain, mode));
+            assertEq("1234", result, sprintf("nested chains %s", mode));
+        }
+
+        # Test 6: Chain inside try block (tests invoke path)
+        string try_chain = "%modern
+string result;
+try {
+    string a = \"try\";
+    string b = \" \";
+    string c = \"block\";
+    string d = \" \";
+    string e = \"test\";
+    result = a + b + c + d + e;
+} catch (hash<auto> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(try_chain, mode));
+            assertEq("try block test", result, sprintf("chain in try block %s", mode));
+        }
+    }
+
+    testNativeMapWithMethodCall() {
+        # Test native IR lowering for map with method calls (non-optimized patterns)
+        # These patterns use the new native loop with implicit argument context
+
+        # Test map with toString() method call
+        string map_tostring = "%modern
+list<int> input = (1, 2, 3);
+list<string> result = (map $1.toString(), input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_tostring, mode));
+            assertEq("[\"1\", \"2\", \"3\"]", result, sprintf("map toString %s", mode));
+        }
+
+        # Test map with $# (element index)
+        string map_with_index = "%modern
+list<int> input = (10, 20, 30);
+list<int> result = (map $1 + $#, input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_with_index, mode));
+            assertEq("[10, 21, 32]", result, sprintf("map with index %s", mode));
+        }
+
+        # Test map with function call
+        string map_strlen = "%modern
+list<string> input = (\"a\", \"bb\", \"ccc\");
+list<int> result = (map $1.length(), input);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_strlen, mode));
+            assertEq("[1, 2, 3]", result, sprintf("map length %s", mode));
+        }
+    }
+
+    testNativeSelectWithComparison() {
+        # Test native IR lowering for select with non-optimized predicates
+
+        # Test select with > 5 comparison (not the optimized > 0 pattern)
+        string select_gt5 = "%modern
+list<int> input = (1, 5, 2, 8, 3, 10);
+list<int> result = (select input, $1 > 5);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_gt5, mode));
+            assertEq("[8, 10]", result, sprintf("select > 5 %s", mode));
+        }
+
+        # Test select with method call predicate
+        string select_method = "%modern
+list<string> input = (\"a\", \"bb\", \"ccc\", \"d\");
+list<string> result = (select input, $1.length() > 1);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_method, mode));
+            assertEq("[\"bb\", \"ccc\"]", result, sprintf("select method %s", mode));
+        }
+
+        # Test select with $# (element index) - select even indices
+        string select_even_idx = "%modern
+list<string> input = (\"a\", \"b\", \"c\", \"d\", \"e\");
+list<string> result = (select input, $# % 2 == 0);
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(select_even_idx, mode));
+            assertEq("[\"a\", \"c\", \"e\"]", result, sprintf("select even idx %s", mode));
+        }
+    }
+
+    testNativeFoldlWithFunctionCall() {
+        # Test native IR lowering for foldl with non-optimized operations
+
+        # Test foldl with string concatenation
+        string foldl_concat = "%modern
+list<string> input = (\"a\", \"b\", \"c\");
+string result = foldl $1 + $2, input;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_concat, mode));
+            assertEq("abc", result, sprintf("foldl concat %s", mode));
+        }
+
+        # Test foldl with complex expression
+        string foldl_complex = "%modern
+list<int> input = (1, 2, 3, 4);
+int result = foldl $1 + $2 * $2, input;
+printf(\"%d\\n\", result);
+";
+        # Result: ((1 + 2*2) + 3*3) + 4*4 = (5 + 9) + 16 = 30
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_complex, mode));
+            assertEq("30", result, sprintf("foldl complex %s", mode));
+        }
+
+        # Test foldl with single element (should return element)
+        string foldl_single = "%modern
+list<int> input = (42,);
+int result = foldl $1 + $2, input;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_single, mode));
+            assertEq("42", result, sprintf("foldl single %s", mode));
+        }
+    }
+
+    testOnBlockExitHandlers() {
+        # Test on_exit (unconditional - runs on both normal and exception exit)
+        string on_exit_test = "%modern
+list<string> log = ();
+sub test() {
+    on_exit log += \"exit\";
+    log += \"body\";
+}
+test();
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_exit_test, mode));
+            assertEq("[\"body\", \"exit\"]", result, sprintf("on_exit %s", mode));
+        }
+
+        # Test on_success (runs only on normal exit, not on exception)
+        string on_success_test = "%modern
+list<string> log = ();
+sub test() {
+    on_success log += \"success\";
+    on_error log += \"error\";
+    log += \"body\";
+}
+test();
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_success_test, mode));
+            assertEq("[\"body\", \"success\"]", result, sprintf("on_success %s", mode));
+        }
+
+        # Test on_error (runs only when exception occurs)
+        string on_error_test = "%modern
+list<string> log = ();
+sub test() {
+    on_success log += \"success\";
+    on_error log += \"error\";
+    log += \"body\";
+    throw \"TEST\", \"test exception\";
+}
+try {
+    test();
+} catch (hash<ExceptionInfo> ex) {
+    log += \"caught\";
+}
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_error_test, mode));
+            assertEq("[\"body\", \"error\", \"caught\"]", result, sprintf("on_error %s", mode));
+        }
+
+        # Test nested scopes with on_error
+        string nested_error_test = "%modern
+list<string> log = ();
+sub inner() {
+    on_error log += \"inner_error\";
+    throw \"TEST\", \"inner exception\";
+}
+sub outer() {
+    on_error log += \"outer_error\";
+    inner();
+}
+try {
+    outer();
+} catch (hash<ExceptionInfo> ex) {
+    log += \"caught\";
+}
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_error_test, mode));
+            assertEq("[\"inner_error\", \"outer_error\", \"caught\"]", result, sprintf("nested on_error %s", mode));
+        }
+    }
+
+    testOnBlockExitTryCatchInvoke() {
+        # Test on_error inside try-catch when exception comes from an invoke
+        # (function call that can throw). This tests the LLVM LandingPad handler
+        # that must execute on_error/on_exit handlers before entering the catch block.
+        string on_error_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_error { result = \"handled\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_error_invoke, mode));
+            assertEq("handled", result, sprintf("on_error invoke in try-catch %s", mode));
+        }
+
+        # Test on_exit inside try-catch with invoke exception
+        string on_exit_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_exit { result = \"exited\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_exit_invoke, mode));
+            assertEq("exited", result, sprintf("on_exit invoke in try-catch %s", mode));
+        }
+
+        # Test on_success should NOT fire when invoke throws
+        string on_success_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    string result = \"none\";
+    try {
+        {
+            on_success { result = \"success\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # caught
+    }
+    return result;
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(on_success_invoke, mode));
+            assertEq("none", result, sprintf("on_success should not fire on invoke exception %s", mode));
+        }
+
+        # Test nested on_error + on_exit inside try-catch with invoke
+        string nested_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    list<string> log = ();
+    try {
+        {
+            on_exit { log += \"outer_exit\"; }
+            {
+                on_error { log += \"inner_error\"; }
+                thrower();
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"caught\";
+    }
+    return log.join(\",\");
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(nested_invoke, mode));
+            assertEq("inner_error,outer_exit,caught", result,
+                sprintf("nested on_error+on_exit invoke in try-catch %s", mode));
+        }
+
+        # Test multiple scopes where exception occurs in middle scope
+        string multi_scope_invoke = "%modern
+sub thrower() { throw \"TEST\", \"test exception\"; }
+string sub test() {
+    list<string> log = ();
+    try {
+        {
+            on_exit { log += \"scope1_exit\"; }
+            log += \"scope1_body\";
+        }
+        {
+            on_error { log += \"scope2_error\"; }
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"caught\";
+    }
+    return log.join(\",\");
+}
+printf(\"%s\\n\", test());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_scope_invoke, mode));
+            assertEq("scope1_body,scope1_exit,scope2_error,caught", result,
+                sprintf("multi-scope invoke in try-catch %s", mode));
+        }
+    }
+
+    testOnBlockExitTopLevelLocalUpdate() {
+        # Test on_exit at top level modifies local variable correctly.
+        # Regression: on_exit handlers execute through the AST path, which modifies
+        # the thread-local variable stack, but IR/JIT cached the old value.
+        string toplevel_exit = "%modern
+int x = 0;
+{
+    on_exit x = 99;
+    x = 1;
+}
+printf(\"%d\\n\", x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(toplevel_exit, mode));
+            assertEq("99", result, sprintf("toplevel on_exit local update %s", mode));
+        }
+
+        # Test on_exit in function modifies local and returns updated value
+        string func_exit = "%modern
+int sub test_on_exit() {
+    int x = 0;
+    {
+        on_exit x = 42;
+        x = 1;
+    }
+    return x;
+}
+printf(\"%d\\n\", test_on_exit());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(func_exit, mode));
+            assertEq("42", result, sprintf("func on_exit local update %s", mode));
+        }
+
+        # Test on_success modifies local variable
+        string success_update = "%modern
+int x = 0;
+{
+    on_success x += 100;
+    x = 5;
+}
+printf(\"%d\\n\", x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(success_update, mode));
+            assertEq("105", result, sprintf("on_success local update %s", mode));
+        }
+
+        # Test on_exit with multiple variables
+        string multi_var = "%modern
+int a = 0;
+int b = 0;
+{
+    on_exit { a = 10; b = 20; }
+    a = 1;
+    b = 2;
+}
+printf(\"%d %d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(multi_var, mode));
+            assertEq("10 20", result, sprintf("on_exit multi-var update %s", mode));
+        }
+    }
+
+    testInvokeMethodDirect() {
+        # Test InvokeMethodDirect opcode - devirtualized method calls in try/catch blocks
+        # This tests the optimization path where final class method calls in try/catch
+        # use the direct InvokeMethodDirect opcode instead of falling back to AST evaluation
+
+        # Test 1: Multiple successive self method calls in try/catch (success path)
+        string success_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MethodCounter {
+    public {
+        int count = 0;
+    }
+
+    int increment() {
+        return ++count;
+    }
+
+    int run() {
+        int result;
+        try {
+            result = self.increment();
+            result += self.increment();
+            result += self.increment();
+        } catch (hash<auto> ex) {
+            result = -1;
+        }
+        return result;
+    }
+}
+
+MethodCounter c();
+printf(\"%d,%d\\n\", c.run(), c.count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(success_test, mode));
+            # increment returns 1, 2, 3; sum = 6; count = 3
+            assertEq("6,3", out, sprintf("invoke.method.direct success path %s", mode));
+        }
+
+        # Test 2: Exception in self method call routes to catch block correctly
+        string exception_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class Thrower {
+    nothing doThrow() {
+        throw \"TEST\", \"test error\";
+    }
+
+    string run() {
+        string result;
+        try {
+            self.doThrow();
+            result = \"no-catch\";
+        } catch (hash<auto> ex) {
+            result = \"caught:\" + ex.err;
+        }
+        return result;
+    }
+}
+
+Thrower t();
+printf(\"%s\\n\", t.run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(exception_test, mode));
+            assertEq("caught:TEST", out, sprintf("invoke.method.direct exception path %s", mode));
+        }
+
+        # Test 3: Mix of successful calls and exception - verify state consistency
+        string mixed_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class MixedOps {
+    public {
+        int count = 0;
+    }
+
+    int inc() {
+        return ++count;
+    }
+
+    nothing maybeThrow(int limit) {
+        if (count >= limit) {
+            throw \"LIMIT\", \"limit reached\";
+        }
+    }
+
+    int run() {
+        int result = 0;
+        try {
+            result += self.inc();      # count=1, result=1
+            self.maybeThrow(5);        # no throw
+            result += self.inc();      # count=2, result=3
+            self.maybeThrow(5);        # no throw
+            result += self.inc();      # count=3, result=6
+            self.maybeThrow(3);        # throws!
+            result += self.inc();      # not reached
+        } catch (hash<auto> ex) {
+            result = -result;          # negate to indicate exception path
+        }
+        return result;
+    }
+}
+
+MixedOps m();
+printf(\"%d,%d\\n\", m.run(), m.count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(mixed_test, mode));
+            # result was 6 before throw, negated to -6; count stays at 3
+            assertEq("-6,3", out, sprintf("invoke.method.direct mixed path %s", mode));
+        }
+
+        # Test 4: Nested try/catch with devirtualized self method calls
+        string nested_test = "%new-style
+%strict-args
+%require-types
+%disable-warning non-existent-method-call
+
+final class NestedOps {
+    int level1(int x) {
+        if (x <= 0) {
+            throw \"NEGATIVE\", \"x is non-positive\";
+        }
+        return x * 2;
+    }
+
+    int level2(int x) {
+        int result;
+        try {
+            result = self.level1(x);
+        } catch (hash<auto> ex) {
+            result = -1;
+        }
+        return result;
+    }
+
+    list<int> run() {
+        list<int> results = ();
+        try {
+            results += self.level2(5);   # returns 10
+            results += self.level2(0);   # inner catch, returns -1
+            results += self.level2(3);   # returns 6
+        } catch (hash<auto> ex) {
+            results += -100;  # not reached
+        }
+        return results;
+    }
+}
+
+NestedOps n();
+printf(\"%y\\n\", n.run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string out = trim(runScript(nested_test, mode));
+            assertEq("[10, -1, 6]", out, sprintf("invoke.method.direct nested try/catch %s", mode));
+        }
+    }
+
+    testBigIntLoopCorrectness() {
+        # Test big int (>48-bit) values in a loop — exercises boxValue cleanup
+        # in loops. Before the fix, the cleanup alloca was overwritten each
+        # iteration without decref'ing the previous QoreBigIntNode.
+        string code = "%modern
+int big = 9223372036854775800;
+for (int i = 0; i < 100; i++) {
+    big += 1;
+    big -= 1;
+}
+printf(\"%d\\n\", big);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9223372036854775800", result,
+                    sprintf("big int loop correctness %s", mode));
+        }
+    }
+
+    testInvokeResultInLoop() {
+        # Test Invoke results in a loop — exercises trackResultForCleanup in
+        # loops. Before the fix, the cleanup alloca was overwritten each
+        # iteration without decref'ing the previous result.
+        string code = "%modern
+list<string> results = ();
+for (int i = 0; i < 50; i++) {
+    string s = sprintf(\"%d\", i);
+    if (i == 0 || i == 49) {
+        results += s;
+    }
+}
+printf(\"%y\\n\", results);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[\"0\", \"49\"]", result,
+                    sprintf("invoke result in loop %s", mode));
+        }
+    }
+
+    testBigIntBoxingInline() {
+        # Test that boxIntInline handles both INT48 and big int paths correctly
+        string code = "%modern
+# INT48 range boundary values
+int a = 140737488355327;    # INT48_MAX = (1 << 47) - 1
+int b = -140737488355328;   # INT48_MIN = -(1 << 47)
+# Big int values outside INT48 range
+int c = 140737488355328;    # INT48_MAX + 1
+int d = -140737488355329;   # INT48_MIN - 1
+# Arithmetic that crosses the INT48 boundary
+int e = a + 1;              # INT48_MAX + 1 -> big int
+int f = b - 1;              # INT48_MIN - 1 -> big int
+printf(\"%d,%d,%d,%d,%d,%d\\n\", a, b, c, d, e, f);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("140737488355327,-140737488355328,140737488355328,"
+                    "-140737488355329,140737488355328,-140737488355329", result,
+                    sprintf("big int boxing inline %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignNothing() {
+        # Test NOTHING += value fast path (AddAssignLValue)
+        # NOTHING += int stores directly, NOTHING += hash/list performs type conversion
+        string code = "%modern
+auto a;     # NOTHING
+a += 42;    # NOTHING -> 42 via lvalue_store
+auto b;     # NOTHING
+b += {\"x\": 1};  # NOTHING -> hash<auto>
+auto c;     # NOTHING
+c += (1, 2, 3);  # NOTHING -> list<auto>
+printf(\"%d,%s,%s\\n\", a, b{\"x\"}, c[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,1,2", result,
+                    sprintf("lvalue compound assign NOTHING %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignInt() {
+        # Test INT48+INT48 fast path for lvalue compound assignments
+        string code = "%modern
+auto a = 10;
+a += 5;         # int fast path
+auto b = 20;
+b -= 3;         # int fast path
+auto c = 4;
+c *= 3;         # int fast path
+printf(\"%d,%d,%d\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,17,12", result,
+                    sprintf("lvalue compound assign int fast path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignFloat() {
+        # Test float+float fast path for lvalue compound assignments
+        string code = "%modern
+auto a = 10.0;
+a += 2.5;       # float fast path
+auto b = 20.0;
+b -= 3.5;       # float fast path
+auto c = 4.0;
+c *= 2.5;       # float fast path
+printf(\"%.1f,%.1f,%.1f\\n\", a, b, c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12.5,16.5,10.0", result,
+                    sprintf("lvalue compound assign float fast path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignString() {
+        # Test string concat via slow path (non-int/float)
+        string code = "%modern
+auto a = \"hello\";
+a += \" world\";  # slow path: string concat
+auto b = \"foo\";
+b += \"bar\";
+printf(\"%s,%s\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello world,foobar", result,
+                    sprintf("lvalue compound assign string slow path %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignLoop() {
+        # Test compound assign in a tight loop (stress test for refcounting/cleanup)
+        string code = "%modern
+auto sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+auto prod = 1;
+for (int j = 1; j <= 10; j++) {
+    prod *= j;
+}
+printf(\"%d,%d\\n\", sum, prod);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5050,3628800", result,
+                    sprintf("lvalue compound assign loop %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignBitwise() {
+        # Test bitwise compound assign on lvalues (int-only fast path)
+        string code = "%modern
+auto a = 0xFF;
+a &= 0x0F;      # AND fast path
+auto b = 0x0F;
+b |= 0xF0;      # OR fast path
+auto c = 0xFF;
+c ^= 0xAA;      # XOR fast path
+auto d = 1;
+d <<= 8;         # SHL fast path
+auto e = 256;
+e >>= 4;         # SHR fast path
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15,255,85,256,16", result,
+                    sprintf("lvalue compound assign bitwise %s", mode));
+        }
+    }
+
+    testLValueCompoundAssignDivMod() {
+        # Test div/mod lvalue ops (always slow path, no inline fast path)
+        string code = "%modern
+auto a = 100;
+a /= 5;
+auto b = 17;
+b %= 5;
+printf(\"%d,%d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20,2", result,
+                    sprintf("lvalue compound assign div/mod slow path %s", mode));
+        }
+    }
+
+    testRangeLValueDelegate() {
+        # Range lvalue operations (list[0..2] = x) are parse errors - the parser rejects them.
+        # The isRangeLValue() checks in IR lowering are defensive guards that delegate to AST
+        # if somehow reached. We verify non-range list index operations work correctly across
+        # all modes (regression test to ensure the defensive code changes don't break anything).
+
+        # Test list index assignment (non-range) still works in all modes
+        string code = "%modern
+list<auto> l = (1, 2, 3, 4, 5);
+l[2] = 30;
+printf(\"%y\\n\", l);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[1, 2, 30, 4, 5]", result,
+                    sprintf("list index assignment %s", mode));
+        }
+
+        # Test list index compound assignment
+        code = "%modern
+list<auto> l = (10, 20, 30, 40, 50);
+l[1] += 5;
+l[3] -= 10;
+printf(\"%d,%d\\n\", l[1], l[3]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("25,30", result,
+                    sprintf("list index compound assign %s", mode));
+        }
+
+        # Test list index increment/decrement
+        code = "%modern
+list<auto> l = (10, 20, 30);
+++l[0];
+l[2]--;
+printf(\"%d,%d\\n\", l[0], l[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("11,29", result,
+                    sprintf("list index inc/dec %s", mode));
+        }
+
+        # Test list range read works in all modes
+        code = "%modern
+list<auto> l = (1, 2, 3, 4, 5);
+list<auto> sub_list = l[1..3];
+printf(\"%y\\n\", sub_list);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[2, 3, 4]", result,
+                    sprintf("range read %s", mode));
+        }
+
+        # Test string range read
+        code = "%modern
+string s = \"hello world\";
+string substr = s[0..4];
+printf(\"%s\\n\", substr);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello", result,
+                    sprintf("string range read %s", mode));
+        }
+    }
+
+    testSelfMemberAccess() {
+        # Test basic self.x member access in a class
+        string code = "%modern
+class Foo {
+    public {
+        int x;
+        string name;
+    }
+    constructor(int n_x, string n_name) {
+        x = n_x;
+        name = n_name;
+    }
+    int getX() { return self.x; }
+    string getName() { return self.name; }
+    string getInfo() { return sprintf(\"%s:%d\", self.name, self.x); }
+}
+Foo f(42, \"test\");
+printf(\"%d,%s,%s\\n\", f.getX(), f.getName(), f.getInfo());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42,test,test:42", result,
+                    sprintf("self member access %s", mode));
+        }
+
+        # Test self member access in try/catch (invoke path)
+        code = "%modern
+class Bar {
+    public {
+        int val;
+    }
+    constructor(int v) { val = v; }
+    int getVal() {
+        try {
+            return self.val;
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+}
+Bar b(99);
+printf(\"%d\\n\", b.getVal());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99", result,
+                    sprintf("self member access invoke path %s", mode));
+        }
+
+        # Test self member access with multiple members and computation
+        code = "%modern
+class Point {
+    public {
+        float x;
+        float y;
+    }
+    constructor(float n_x, float n_y) { x = n_x; y = n_y; }
+    float distFromOrigin() {
+        return (self.x * self.x + self.y * self.y);
+    }
+}
+Point p(3.0, 4.0);
+printf(\"%.1f\\n\", p.distFromOrigin());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("25.0", result,
+                    sprintf("self member computation %s", mode));
+        }
+    }
+
+    testStaticClassVarAccess() {
+        # Test basic static class variable read
+        string code = "%modern
+class MyCounter {
+    public {
+        static int count = 0;
+    }
+    static int getCount() { return MyCounter::count; }
+    static nothing increment() { MyCounter::count++; }
+}
+MyCounter::increment();
+MyCounter::increment();
+MyCounter::increment();
+printf(\"%d\\n\", MyCounter::getCount());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3", result,
+                    sprintf("static var read %s", mode));
+        }
+
+        # Test static var access in try/catch (invoke path)
+        code = "%modern
+class MyConfig {
+    public {
+        static string name = \"default\";
+    }
+    static string getName() {
+        try {
+            return MyConfig::name;
+        } catch (hash<auto> ex) {
+            return \"error\";
+        }
+    }
+}
+printf(\"%s\\n\", MyConfig::getName());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("default", result,
+                    sprintf("static var invoke path %s", mode));
+        }
+
+        # Test static var with computation
+        code = "%modern
+class MyMathConst {
+    public {
+        static float pi = 3.14159;
+        static float e_val = 2.71828;
+    }
+    static float sumConst() {
+        return MyMathConst::pi + MyMathConst::e_val;
+    }
+}
+printf(\"%.5f\\n\", MyMathConst::sumConst());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5.85987", result,
+                    sprintf("static var computation %s", mode));
+        }
+    }
+
+    testNewObjectInstantiation() {
+        # Test basic new object creation with constructor args
+        string code = "%modern
+class MyPoint {
+    public {
+        int x;
+        int y;
+    }
+    constructor(int n_x, int n_y) { x = n_x; y = n_y; }
+    string toString() { return sprintf(\"%d,%d\", x, y); }
+}
+MyPoint p = new MyPoint(3, 4);
+printf(\"%s\\n\", p.toString());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3,4", result,
+                    sprintf("new object basic %s", mode));
+        }
+
+        # Test new object in try/catch (invoke path)
+        code = "%modern
+class MyBox {
+    public {
+        string label;
+    }
+    constructor(string l) { label = l; }
+    string getLabel() {
+        try {
+            MyBox inner = new MyBox(\"inner\");
+            return label + \":\" + inner.getLabel();
+        } catch (hash<auto> ex) {
+            return \"error\";
+        }
+    }
+}
+MyBox b = new MyBox(\"outer\");
+printf(\"%s\\n\", b.label);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("outer", result,
+                    sprintf("new object invoke path %s", mode));
+        }
+
+        # Test new object with no-arg constructor
+        code = "%modern
+class MyDefault {
+    public {
+        int val = 42;
+    }
+    int getVal() { return val; }
+}
+MyDefault d = new MyDefault();
+printf(\"%d\\n\", d.getVal());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("new object no-arg %s", mode));
+        }
+    }
+
+    testRuntimeConstants() {
+        # Basic constant usage
+        string code = "%modern
+const MY_CONST = 42;
+const MY_STR = \"hello\";
+printf(\"%d:%s\\n\", MY_CONST, MY_STR);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42:hello", result,
+                    sprintf("runtime constants basic %s", mode));
+        }
+
+        # Constant in try/catch (invoke path)
+        code = "%modern
+const TIMEOUT = 30;
+int sub get_timeout() {
+    try {
+        return TIMEOUT * 2;
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+}
+printf(\"%d\\n\", get_timeout());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("runtime constants invoke %s", mode));
+        }
+
+        # Constant in computation
+        code = "%modern
+const BASE = 100;
+const FACTOR = 3;
+int result = 0;
+for (int i = 0; i < 5; ++i) {
+    result += BASE + i * FACTOR;
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("530", result,
+                    sprintf("runtime constants computation %s", mode));
+        }
+    }
+
+    testClosureCreation() {
+        # Basic closure
+        string code = "%modern
+code adder = int sub(int x) { return x + 10; };
+printf(\"%d\\n\", adder(32));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("closure basic %s", mode));
+        }
+
+        # Closure with capture
+        code = "%modern
+int base = 100;
+code add_base = int sub(int x) { return x + base; };
+printf(\"%d\\n\", add_base(42));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("142", result,
+                    sprintf("closure capture %s", mode));
+        }
+
+        # Closure in method context
+        code = "%modern
+class MyAdder {
+    private { int offset; }
+    constructor(int o) { offset = o; }
+    code getAdder() {
+        return int sub(int x) { return x + offset; };
+    }
+}
+MyAdder a(10);
+code fn = a.getAdder();
+printf(\"%d\\n\", fn(32));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("closure method context %s", mode));
+        }
+
+        # Closure in try/catch
+        code = "%modern
+code fn;
+try {
+    fn = int sub(int x) { return x * 2; };
+} catch (hash<auto> ex) {
+    fn = int sub(int x) { return -1; };
+}
+printf(\"%d\\n\", fn(21));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("closure try/catch %s", mode));
+        }
+    }
+
+    testFoldrNative() {
+        # Basic foldr sum (same as foldl for commutative ops)
+        string code = "%modern
+list<int> l = (1, 2, 3, 4, 5);
+int result = (foldr $1 + $2, l);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("15", result,
+                    sprintf("foldr sum %s", mode));
+        }
+
+        # foldr string concatenation (processes right to left)
+        code = "%modern
+list<string> l = (\"a\", \"b\", \"c\");
+string result = (foldr $1 + $2, l);
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("cba", result,
+                    sprintf("foldr string concat %s", mode));
+        }
+
+        # foldr with NOTHING input
+        code = "%modern
+%disable-warning invalid-operation
+*int result = (foldr $1 + $2, NOTHING);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr NOTHING input %s", mode));
+        }
+    }
+
+    testEmptyListFoldMinMax() {
+        # Empty list foldl min should return NOTHING (not 0)
+        string foldl_min_empty = "%modern
+list<int> empty = ();
+auto result = (foldl min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_min_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl min empty list %s", mode));
+        }
+
+        # Empty list foldl max should return NOTHING (not 0)
+        string foldl_max_empty = "%modern
+list<int> empty = ();
+auto result = (foldl max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_max_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl max empty list %s", mode));
+        }
+
+        # Empty list foldr min should return NOTHING (not 0)
+        string foldr_min_empty = "%modern
+list<int> empty = ();
+auto result = (foldr min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_min_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr min empty list %s", mode));
+        }
+
+        # Empty list foldr max should return NOTHING (not 0)
+        string foldr_max_empty = "%modern
+list<int> empty = ();
+auto result = (foldr max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_max_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr max empty list %s", mode));
+        }
+
+        # Empty list foldl min float should return NOTHING (not 0.0)
+        string foldl_minf_empty = "%modern
+list<float> empty = ();
+auto result = (foldl min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_minf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl min float empty list %s", mode));
+        }
+
+        # Empty list foldl max float should return NOTHING (not 0.0)
+        string foldl_maxf_empty = "%modern
+list<float> empty = ();
+auto result = (foldl max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_maxf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl max float empty list %s", mode));
+        }
+
+        # Empty list foldr min float should return NOTHING
+        string foldr_minf_empty = "%modern
+list<float> empty = ();
+auto result = (foldr min($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_minf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr min float empty list %s", mode));
+        }
+
+        # Empty list foldr max float should return NOTHING
+        string foldr_maxf_empty = "%modern
+list<float> empty = ();
+auto result = (foldr max($1, $2), empty);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldr_maxf_empty, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldr max float empty list %s", mode));
+        }
+    }
+
+    testMapSelectFused() {
+        # Basic map+select
+        string code = "%modern
+list<int> l = (1, 2, 3, 4, 5, 6);
+list<int> result = (map $1 * 10, l, $1 > 3);
+printf(\"%s\\n\", (foldl $1 + \",\" + $2, (map string($1), result)));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("40,50,60", result,
+                    sprintf("map+select basic %s", mode));
+        }
+
+        # map+select with NOTHING input
+        code = "%modern
+%disable-warning invalid-operation
+auto result = (map $1 * 2, NOTHING, $1 > 0);
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("map+select NOTHING input %s", mode));
+        }
+
+        # map+select with $# (element index)
+        code = "%modern
+list<string> names = (\"alice\", \"bob\", \"charlie\");
+list<string> result = (map sprintf(\"%d:%s\", $#, $1), names, $# > 0);
+printf(\"%s\\n\", (foldl $1 + \",\" + $2, result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:bob,2:charlie", result,
+                    sprintf("map+select with index %s", mode));
+        }
+    }
+
+    testHashMapNative() {
+        # Basic hash map
+        string code = "%modern
+list<string> names = (\"a\", \"b\", \"c\");
+hash<auto> h = map {$1: $# + 1}, names;
+printf(\"%d:%d:%d\\n\", h.a, h.b, h.c);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:2:3", result,
+                    sprintf("hash map basic %s", mode));
+        }
+
+        # Hash map with NOTHING input
+        code = "%modern
+%disable-warning invalid-operation
+auto result = map {$1: $1}, NOTHING;
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("hash map NOTHING input %s", mode));
+        }
+
+        # Hash map with computation
+        code = "%modern
+list<int> vals = (10, 20, 30);
+hash<auto> h = map {string($1): $1 * 2}, vals;
+int total = 0;
+map (total += $1.value), h.pairIterator();
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("120", result,
+                    sprintf("hash map computation %s", mode));
+        }
+    }
+
+    testHashMapSelectNative() {
+        # Basic hash map+select
+        string code = "%modern
+list<int> vals = (1, 2, 3, 4, 5);
+hash<auto> h = map {string($1): $1 * 10}, vals, $1 > 2;
+printf(\"%d:%d:%d\\n\", h.\"3\", h.\"4\", h.\"5\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:40:50", result,
+                    sprintf("hash map+select basic %s", mode));
+        }
+
+        # Hash map+select with NOTHING input
+        code = "%modern
+%disable-warning invalid-operation
+auto result = map {$1: $1}, NOTHING, True;
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("hash map+select NOTHING input %s", mode));
+        }
+
+        # Hash map+select filtering
+        code = "%modern
+list<string> names = (\"alice\", \"bob\", \"charlie\", \"dave\");
+hash<auto> h = map {$1: $1.size()}, names, $1.size() > 3;
+printf(\"%d\\n\", h.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3", result,
+                    sprintf("hash map+select filtering %s", mode));
+        }
+    }
+
+    testHashMapOverTypedHashList() {
+        # map {} over list<hash<auto>> — direct-index optimization with hash key access
+        string code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, people;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:25", result,
+                    sprintf("hash map over typed hash list %s", mode));
+        }
+
+        # map {} over list<hash<auto>> with value computation
+        code = "%modern
+list<hash<auto>> items = ({\"k\": \"x\", \"v\": 10}, {\"k\": \"y\", \"v\": 20}, {\"k\": \"z\", \"v\": 30});
+hash<auto> result = map {$1.k: $1.v * 2}, items;
+printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:40:60", result,
+                    sprintf("hash map over typed hash list computation %s", mode));
+        }
+
+        # empty list<hash<auto>> — should return empty hash
+        code = "%modern
+list<hash<auto>> empty = ();
+hash<auto> result = map {$1.name: $1.age}, empty;
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0", result,
+                    sprintf("hash map over empty typed hash list %s", mode));
+        }
+
+        # map {} over list<hash<auto>> with select
+        code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25}, {\"name\": \"charlie\", \"age\": 35});
+hash<auto> result = map {$1.name: $1.age}, people, $1.age > 28;
+printf(\"%d:%d\\n\", result.size(), result.alice + result.charlie);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:65", result,
+                    sprintf("hash map+select over typed hash list %s", mode));
+        }
+    }
+
+    testMapTupleOverTypedHashList() {
+        # map () over list<hash<auto>> — direct-index with tuple construction
+        string code = "%modern
+list<hash<auto>> people = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+list<auto> result = map ($1.name, $1.age), people;
+printf(\"%s:%d:%s:%d\\n\", result[0][0], result[0][1], result[1][0], result[1][1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("alice:30:bob:25", result,
+                    sprintf("map tuple over typed hash list %s", mode));
+        }
+
+        # map with hash key access and computation
+        code = "%modern
+list<hash<auto>> items = ({\"x\": 10, \"y\": 20}, {\"x\": 30, \"y\": 40});
+list<int> sums = map ($1.x + $1.y), items;
+printf(\"%d:%d\\n\", sums[0], sums[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:70", result,
+                    sprintf("map hash key access computation %s", mode));
+        }
+
+        # map single hash key access
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<int> vals = map $1.val, items;
+printf(\"%d\\n\", (foldl $1 + $2, vals));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6", result,
+                    sprintf("map single hash key access %s", mode));
+        }
+    }
+
+    testTypedContainerConstruction() {
+        # Hashdecl construction
+        string code = "%modern
+hashdecl MyPoint {
+    int x;
+    int y;
+}
+hash<MyPoint> p = new hash<MyPoint>({\"x\": 3, \"y\": 4});
+printf(\"%d:%d\\n\", p.x, p.y);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3:4", result,
+                    sprintf("hashdecl construction %s", mode));
+        }
+
+        # Typed list from cast
+        code = "%modern
+list<auto> src = (1, 2, 3);
+list<int> l = cast<list<int>>(src);
+printf(\"%d\\n\", (foldl $1 + $2, l));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6", result,
+                    sprintf("typed list construction %s", mode));
+        }
+
+        # Typed hash construction
+        code = "%modern
+hash<string, int> h = new hash<string, int>({\"a\": 1, \"b\": 2});
+printf(\"%d\\n\", h.a + h.b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("3", result,
+                    sprintf("typed hash construction %s", mode));
+        }
+    }
+
+    testCallReferences() {
+        # Function call reference
+        string code = "%modern
+int sub double_it(int x) { return x * 2; }
+code ref = \\double_it();
+printf(\"%d\\n\", ref(21));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("function call ref %s", mode));
+        }
+
+        # Method call reference
+        code = "%modern
+class MyCalc {
+    int mul(int x, int y) { return x * y; }
+}
+MyCalc c();
+code ref = \\c.mul();
+printf(\"%d\\n\", ref(6, 7));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("method call ref %s", mode));
+        }
+
+        # Call ref in try/catch
+        code = "%modern
+int sub add(int a, int b) { return a + b; }
+code ref;
+try {
+    ref = \\add();
+} catch (hash<auto> ex) {
+    ref = int sub(int a, int b) { return -1; };
+}
+printf(\"%d\\n\", ref(20, 22));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("call ref try/catch %s", mode));
+        }
+    }
+
+    testParseReferences() {
+        # Basic parse reference
+        string code = "%modern
+int val = 10;
+reference<int> ref = \\val;
+ref = 42;
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result,
+                    sprintf("parse reference basic %s", mode));
+        }
+
+        # Parse reference in try/catch
+        code = "%modern
+int val = 0;
+reference<int> ref;
+try {
+    ref = \\val;
+    ref = 99;
+} catch (hash<auto> ex) {
+}
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99", result,
+                    sprintf("parse reference invoke %s", mode));
+        }
+    }
+
+    testReferenceWriteThrough() {
+        # Write-through updates target variable
+        string code = "%modern
+int val = 10;
+reference<int> ref = \\val;
+ref = 42;
+printf(\"val:%d ref:%d\\n\", val, ref);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("val:42 ref:42", result,
+                    sprintf("reference write-through %s", mode));
+        }
+
+        # Reference write-through in loop
+        code = "%modern
+int total = 0;
+reference<int> ref = \\total;
+for (int i = 0; i < 5; ++i) {
+    ref += i;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10", result,
+                    sprintf("reference write-through loop %s", mode));
+        }
+
+        # Multiple references
+        code = "%modern
+int a = 1;
+int b = 2;
+reference<int> r1 = \\a;
+reference<int> r2 = \\b;
+r1 = 10;
+r2 = 20;
+printf(\"%d:%d\\n\", a, b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20", result,
+                    sprintf("multiple references %s", mode));
+        }
+    }
+
+    testNothingInputIterators() {
+        # map with NOTHING → NOTHING
+        string code = "%modern
+%disable-warning invalid-operation
+auto result = map $1 * 2, NOTHING;
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("map NOTHING %s", mode));
+        }
+
+        # select with NOTHING → NOTHING
+        code = "%modern
+%disable-warning invalid-operation
+auto result = (select NOTHING, $1 > 0);
+printf(\"%s\\n\", exists result ? \"EXISTS\" : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("select NOTHING %s", mode));
+        }
+
+        # foldl with NOTHING → NOTHING
+        code = "%modern
+%disable-warning invalid-operation
+*int result = (foldl $1 + $2, NOTHING);
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("NOTHING", result,
+                    sprintf("foldl NOTHING %s", mode));
+        }
+
+        # map with single element
+        code = "%modern
+list<int> l = (42,);
+list<int> result = map $1 * 2, l;
+printf(\"%d\\n\", result[0]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("84", result,
+                    sprintf("map single element %s", mode));
+        }
+    }
+
+    testVarRefNewObjectSplit() {
+        # Basic VarRefNewObjectNode: Foo f(args) syntax
+        string code = "%modern
+class MyVrnPoint {
+    public { int x; int y; }
+    constructor(int n_x, int n_y) { x = n_x; y = n_y; }
+    int getX() { return x; }
+    int getY() { return y; }
+}
+MyVrnPoint p(10, 20);
+printf(\"%d:%d\\n\", p.getX(), p.getY());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20", result,
+                    sprintf("VarRefNewObject basic %s", mode));
+        }
+
+        # VarRefNewObjectNode in try/catch (invoke path)
+        code = "%modern
+class MyVrnObj {
+    public { string name; }
+    constructor(string n) { name = n; }
+    string getName() { return name; }
+}
+string result;
+try {
+    MyVrnObj obj(\"hello\");
+    result = obj.getName();
+} catch (hash<auto> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello", result,
+                    sprintf("VarRefNewObject invoke %s", mode));
+        }
+
+        # VarRefNewObjectNode with method calls on result
+        code = "%modern
+class MyVrnCounter {
+    public { int count = 0; }
+    constructor(int initial) { count = initial; }
+    MyVrnCounter increment() { count++; return self; }
+    int getCount() { return count; }
+}
+MyVrnCounter c(5);
+c.increment().increment().increment();
+printf(\"%d\\n\", c.getCount());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("8", result,
+                    sprintf("VarRefNewObject chain %s", mode));
+        }
+    }
+
+    testVrnTypedContainers() {
+        # VarRefNewObjectNode hashdecl construction (VRN_HASHDECL)
+        string code = "%modern
+hashdecl MyVrnPoint {
+    int x;
+    int y;
+}
+hash<MyVrnPoint> p({\"x\": 5, \"y\": 7});
+printf(\"%d\\n\", p.x + p.y);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("12", result,
+                    sprintf("VRN hashdecl construction %s", mode));
+        }
+
+        # VarRefNewObjectNode hashdecl in try/catch (invoke path)
+        code = "%modern
+hashdecl MyVrnData {
+    string name;
+    int value;
+}
+try {
+    hash<MyVrnData> d({\"name\": \"test\", \"value\": 42});
+    printf(\"%s:%d\\n\", d.name, d.value);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"ERROR\\n\");
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("test:42", result,
+                    sprintf("VRN hashdecl invoke %s", mode));
+        }
+
+        # VarRefNewObjectNode complex hash construction (VRN_COMPLEXHASH)
+        code = "%modern
+hash<string, int> h({\"a\": 10, \"b\": 20});
+printf(\"%d\\n\", h.a + h.b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("VRN complex hash construction %s", mode));
+        }
+
+        # VarRefNewObjectNode complex list construction (VRN_COMPLEXLIST)
+        code = "%modern
+list<int> l(1, 2, 3, 4);
+printf(\"%d\\n\", (foldl $1 + $2, l));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10", result,
+                    sprintf("VRN complex list construction %s", mode));
+        }
+
+        # Negative test: exception during hashdecl construction (unknown key at runtime)
+        code = "%modern
+hashdecl VrnStrict { int x; int y; }
+try {
+    auto val = {\"x\": 1, \"z\": 99};
+    hash<VrnStrict> h(val);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("HASHDECL-INIT-ERROR", result,
+                    sprintf("VRN hashdecl error propagation %s", mode));
+        }
+    }
+
+    testCallDirect() {
+        # Test CallDirect opcode: resolved function calls skip AST round-trip
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sub mul_nums(int a, int b) { return a * b; }
+int sum = 0;
+for (int i = 0; i < 100; ++i) {
+    sum = add_nums(sum, mul_nums(i, 3));
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("14850", result,
+                    sprintf("call.direct basic %s", mode));
+        }
+
+        # Test CallDirect with try/catch (invoke path)
+        code = "%modern
+int sub safe_div(int a, int b) { return a / b; }
+int result;
+try {
+    result = safe_div(10, 2);
+} catch (hash<ExceptionInfo> ex) {
+    result = -1;
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5", result,
+                    sprintf("call.direct in try/catch %s", mode));
+        }
+
+        # Test CallDirect with exception
+        code = "%modern
+int sub will_throw() { throw \"TEST-ERROR\", \"expected\"; }
+string result;
+try {
+    will_throw();
+    result = \"FAIL\";
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("TEST-ERROR", result,
+                    sprintf("call.direct exception propagation %s", mode));
+        }
+    }
+
+    testCallInLoopStackSafety() {
+        # Test that function calls in loops don't overflow the stack
+        # (tests alloca hoisting to entry block)
+        string code = "%modern
+int sub add_one(int x) { return x + 1; }
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    sum = add_one(sum);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1000000", result,
+                    sprintf("call in loop stack safety %s", mode));
+        }
+
+        # Test closure calls in loops (CallIndirect)
+        code = "%modern
+code adder = int sub(int x) { return x + 1; };
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    sum = adder(sum);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1000000", result,
+                    sprintf("closure call in loop stack safety %s", mode));
+        }
+
+        # Test list construction in loops (MakeList alloca)
+        code = "%modern
+int sum = 0;
+for (int i = 0; i < 1000000; ++i) {
+    list<auto> l = (i, i + 1, i + 2);
+    sum += l[0];
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("499999500000", result,
+                    sprintf("list construction in loop stack safety %s", mode));
+        }
+    }
+
+    testFastCall() {
+        # Test fast call path: simple function with no defaults, not synchronized
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sum = 0;
+for (int i = 0; i < 2000; ++i) {
+    sum = add_nums(sum, i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1999000", result,
+                    sprintf("fast call basic %s", mode));
+        }
+
+        # Test fast call with varargs
+        code = "%modern
+string sub join_args(string sep) {
+    string result = \"\";
+    for (int i = 0; i < elements argv; ++i) {
+        if (i > 0) { result += sep; }
+        result += string(argv[i]);
+    }
+    return result;
+}
+string r = join_args(\"-\", 1, 2, 3);
+printf(\"%s\\n\", r);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1-2-3", result,
+                    sprintf("fast call varargs %s", mode));
+        }
+
+        # Test fast call with exception in callee
+        code = "%modern
+int sub will_throw(int x) {
+    if (x > 5) { throw \"BIG\", \"too big\"; }
+    return x;
+}
+string result = \"\";
+for (int i = 0; i < 10; ++i) {
+    try {
+        result += string(will_throw(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"X\";
+    }
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("012345XXXX", result,
+                    sprintf("fast call exception %s", mode));
+        }
+
+        # Test fast call with recursive function
+        code = "%modern
+int sub fib(int n) {
+    if (n <= 1) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(15));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("610", result,
+                    sprintf("fast call recursive %s", mode));
+        }
+
+        # Test fast call with string args (node types need refSelf)
+        code = "%modern
+string sub greet(string name, string greeting) {
+    return greeting + \", \" + name + \"!\";
+}
+string result = \"\";
+for (int i = 0; i < 100; ++i) {
+    result = greet(\"world\", \"hello\");
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello, world!", result,
+                    sprintf("fast call string args %s", mode));
+        }
+    }
+
+    testFastMethodCall() {
+        # Test fast method call: basic final class method call in a loop
+        string code = "%new-style
+%strict-args
+%require-types
+
+final class FmCalc {
+    public {
+        int m_base;
+    }
+    constructor(int base) { m_base = base; }
+    int add(int x) { return m_base + x; }
+}
+FmCalc c(100);
+int sum = 0;
+for (int i = 0; i < 1000; ++i) {
+    sum += c.add(i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("599500", result,
+                    sprintf("fast method call basic %s", mode));
+        }
+
+        # Test fast method call with multiple methods
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmMath {
+    int multiply(int a, int b) { return a * b; }
+    int add(int a, int b) { return a + b; }
+    int compute(int x) { return self.add(self.multiply(x, x), x); }
+}
+FmMath m();
+string result = \"\";
+for (int i = 1; i <= 5; ++i) {
+    if (result.length() > 0) { result += \",\"; }
+    result += string(m.compute(i));
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2,6,12,20,30", result,
+                    sprintf("fast method call multiple %s", mode));
+        }
+
+        # Test fast method call in try/catch (InvokeMethodDirect path)
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmValidator {
+    int validate(int x) {
+        if (x < 0) { throw \"INVALID\", \"negative\"; }
+        return x * 2;
+    }
+}
+FmValidator v();
+string result = \"\";
+for (int i = -2; i <= 3; ++i) {
+    try {
+        result += string(v.validate(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"E\";
+    }
+    result += \",\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("E,E,0,2,4,6,", result,
+                    sprintf("fast method call try/catch %s", mode));
+        }
+
+        # Test fast method call with string args (node types need refSelf)
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmGreeter {
+    string greet(string name) { return \"Hello, \" + name + \"!\"; }
+}
+FmGreeter g();
+string result = \"\";
+for (int i = 0; i < 50; ++i) {
+    result = g.greet(\"world\");
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("Hello, world!", result,
+                    sprintf("fast method call string args %s", mode));
+        }
+
+        # Test fast method call with recursive self-calls
+        code = "%new-style
+%strict-args
+%require-types
+
+final class FmFib {
+    int fib(int n) {
+        if (n <= 1) { return n; }
+        return self.fib(n - 1) + self.fib(n - 2);
+    }
+}
+FmFib f();
+printf(\"%d\\n\", f.fib(15));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("610", result,
+                    sprintf("fast method call recursive %s", mode));
+        }
+    }
+
+    testFastClosureCall() {
+        # Test fast closure call: basic closure in a loop
+        string code = "%new-style
+%strict-args
+%require-types
+
+code adder = int sub(int a, int b) { return a + b; };
+int sum = 0;
+for (int i = 0; i < 1000; ++i) {
+    sum = adder(sum, i);
+}
+printf(\"%d\\n\", sum);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("499500", result,
+                    sprintf("fast closure call basic %s", mode));
+        }
+
+        # Test closure capturing outer variable
+        code = "%new-style
+%strict-args
+%require-types
+
+int base = 100;
+code add_base = int sub(int x) { return x + base; };
+int result = add_base(42);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("142", result,
+                    sprintf("fast closure capture %s", mode));
+        }
+
+        # Test function call reference
+        code = "%new-style
+%strict-args
+%require-types
+
+int sub multiply(int a, int b) { return a * b; }
+code mul_ref = \\multiply();
+int result = mul_ref(7, 8);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("56", result,
+                    sprintf("fast callref call %s", mode));
+        }
+
+        # Test closure in try/catch
+        code = "%new-style
+%strict-args
+%require-types
+
+code checker = int sub(int x) {
+    if (x < 0) { throw \"NEG\", \"negative\"; }
+    return x * 3;
+};
+string result = \"\";
+for (int i = -2; i <= 2; ++i) {
+    try {
+        result += string(checker(i));
+    } catch (hash<ExceptionInfo> ex) {
+        result += \"E\";
+    }
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("EE036", result,
+                    sprintf("fast closure try/catch %s", mode));
+        }
+
+        # Test closure call in tight loop (stack safety)
+        code = "%new-style
+%strict-args
+%require-types
+
+code inc = int sub(int x) { return x + 1; };
+int val = 0;
+for (int i = 0; i < 100000; ++i) {
+    val = inc(val);
+}
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("100000", result,
+                    sprintf("fast closure loop %s", mode));
+        }
+    }
+
+    testIROnlyBodyLocals() {
+        # Test function with IR-only body locals (int) — verifies that the fast call
+        # path correctly skips body local instantiation when all body locals are IR-only
+        string code = "%modern
+int sub compute(int a, int b) {
+    int x = a * 2;
+    int y = b + 3;
+    int z = x + y;
+    return z;
+}
+int result = 0;
+for (int i = 0; i < 100; ++i) {
+    result = compute(10, 20);
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("43", result,
+                    sprintf("ir-only body locals int %s", mode));
+        }
+
+        # Test function with IR-only body locals (float) — native float locals
+        code = "%modern
+float sub compute_float(float a, float b) {
+    float x = a * 2.0;
+    float y = b + 3.0;
+    float z = x + y;
+    return z;
+}
+float result = 0.0;
+for (int i = 0; i < 100; ++i) {
+    result = compute_float(10.0, 20.0);
+}
+printf(\"%d\\n\", int(result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("43", result,
+                    sprintf("ir-only body locals float %s", mode));
+        }
+
+        # Test function with IR-only body locals in conditional branches
+        code = "%modern
+int sub branched(int n) {
+    int result;
+    if (n > 10) {
+        int high = n * 2;
+        result = high;
+    } else {
+        int low = n + 5;
+        result = low;
+    }
+    return result;
+}
+int r1 = branched(20);
+int r2 = branched(5);
+printf(\"%d %d\\n\", r1, r2);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("40 10", result,
+                    sprintf("ir-only body locals branches %s", mode));
+        }
+    }
+
+    testAssertIROnly() {
+        # Test that @assert with inline condition lowering works correctly
+        # and doesn't prevent locals from being IR-only
+        string code = "%modern
+int sub checked_add(int a, int b) {
+    int result = a + b;
+    @assert(result >= 0);
+    return result;
+}
+int val = 0;
+for (int i = 0; i < 100; ++i) {
+    val = checked_add(10, 20);
+}
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("assert passing %s", mode));
+        }
+
+        # Test assertion failure raises ASSERTION-ERROR
+        code = "%modern
+int sub must_fail(int x) {
+    @assert(x > 100, \"value too small: %d\", x);
+    return x;
+}
+try {
+    must_fail(5);
+    printf(\"FAIL\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("ASSERTION-ERROR", result,
+                    sprintf("assert failing %s", mode));
+        }
+
+        # Test assert in loop with IR-only body locals
+        code = "%modern
+int sub sum_with_asserts(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += i;
+        @assert(total >= 0);
+    }
+    return total;
+}
+printf(\"%d\\n\", sum_with_asserts(10));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("45", result,
+                    sprintf("assert in loop %s", mode));
+        }
+    }
+
+    testOnBlockExitWithIROnlyLocals() {
+        # Test 1: on_exit handler does NOT reference an IR-only local
+        # The IR-only local (total) should keep its value through on_exit execution
+        string code = "%modern
+int sub compute() {
+    int total = 0;
+    {
+        on_exit { printf(\"exit\\n\"); }
+        for (int i = 0; i < 5; ++i) {
+            total += i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", compute());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("exit\n10", result,
+                    sprintf("on_exit with IR-only local %s", mode));
+        }
+
+        # Test 2: on_exit handler DOES reference a local — that local must work correctly
+        code = "%modern
+int sub compute_with_cleanup() {
+    int total = 0;
+    {
+        on_exit { total = 99; }
+        total = 42;
+    }
+    return total;
+}
+printf(\"%d\\n\", compute_with_cleanup());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99", result,
+                    sprintf("on_exit modifying local %s", mode));
+        }
+
+        # Test 3: on_success handler — only runs when no exception
+        code = "%modern
+int sub test_on_success() {
+    int total = 0;
+    {
+        on_success { total += 100; }
+        total = 5;
+    }
+    return total;
+}
+printf(\"%d\\n\", test_on_success());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("105", result,
+                    sprintf("on_success handler %s", mode));
+        }
+
+        # Test 4: on_error handler — only runs on exception
+        code = "%modern
+string sub test_on_error() {
+    string result = \"none\";
+    try {
+        {
+            on_error { result = \"caught\"; }
+            throw \"TEST-ERROR\", \"test\";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        # exception was raised
+    }
+    return result;
+}
+printf(\"%s\\n\", test_on_error());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("caught", result,
+                    sprintf("on_error handler %s", mode));
+        }
+
+        # Test 5: Nested scopes with on_exit and IR-only locals
+        code = "%modern
+int sub test_nested_scopes() {
+    int a = 0;
+    int b = 0;
+    {
+        on_exit { a += 10; }
+        a = 1;
+        {
+            on_exit { b += 20; }
+            b = 2;
+        }
+    }
+    return a + b;
+}
+printf(\"%d\\n\", test_nested_scopes());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("33", result,
+                    sprintf("nested on_exit scopes %s", mode));
+        }
+
+        # Test 6: on_exit in a loop — handler executes each iteration
+        code = "%modern
+int sub test_loop_on_exit() {
+    int count = 0;
+    int total = 0;
+    for (int i = 0; i < 3; ++i) {
+        {
+            on_exit { count += 1; }
+            total += i;
+        }
+    }
+    return count * 100 + total;
+}
+printf(\"%d\\n\", test_loop_on_exit());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("303", result,
+                    sprintf("on_exit in loop %s", mode));
+        }
+    }
+
+    testBatchCompilation() {
+        # Test 1: Basic multi-function batch compilation — caller calls callee
+        string code = "%modern
+int sub add_nums(int a, int b) { return a + b; }
+int sub compute(int n) {
+    int sum = 0;
+    for (int i = 0; i < n; ++i) {
+        sum = add_nums(sum, i);
+    }
+    return sum;
+}
+printf(\"%d\\n\", compute(100));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("4950", result,
+                    sprintf("batch basic %s", mode));
+        }
+
+        # Test 2: Multiple callees in the same caller
+        code = "%modern
+int sub square(int x) { return x * x; }
+int sub cube(int x) { return x * x * x; }
+int sub add(int a, int b) { return a + b; }
+int sub compute_all(int n) {
+    return add(square(n), cube(n));
+}
+printf(\"%d\\n\", compute_all(5));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("150", result,
+                    sprintf("batch multiple callees %s", mode));
+        }
+
+        # Test 3: Callee with exception (try/catch invoke path)
+        code = "%modern
+int sub safe_div(int a, int b) {
+    if (b == 0) { throw \"DIV-ZERO\", \"division by zero\"; }
+    return a / b;
+}
+string sub test_div() {
+    string result = \"\";
+    for (int i = -2; i <= 2; ++i) {
+        try {
+            result += string(safe_div(10, i));
+        } catch (hash<ExceptionInfo> ex) {
+            result += \"E\";
+        }
+        result += \" \";
+    }
+    return trim(result);
+}
+printf(\"%s\\n\", test_div());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("-5 -10 E 10 5", result,
+                    sprintf("batch exception callee %s", mode));
+        }
+
+        # Test 4: Chain of calls (A calls B calls C)
+        code = "%modern
+int sub inc(int x) { return x + 1; }
+int sub double_inc(int x) { return inc(inc(x)); }
+int sub quad_inc(int x) { return double_inc(double_inc(x)); }
+printf(\"%d\\n\", quad_inc(10));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("14", result,
+                    sprintf("batch call chain %s", mode));
+        }
+
+        # Test 5: Batch with recursive function
+        code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) { return 1; }
+    return n * factorial(n - 1);
+}
+int sub compute_factorials() {
+    int sum = 0;
+    for (int i = 1; i <= 10; ++i) {
+        sum += factorial(i);
+    }
+    return sum;
+}
+printf(\"%d\\n\", compute_factorials());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("4037913", result,
+                    sprintf("batch recursive %s", mode));
+        }
+    }
+
+    testDirectIndexFoldl() {
+        # Test foldl on typed list<int> — should use direct-index loop
+        string foldl_int_sum = "%modern
+list<int> input = (1, 2, 3, 4, 5);
+int result = foldl $1 + $2, input;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_int_sum, mode));
+            assertEq("15", result, sprintf("foldl int sum direct-index %s", mode));
+        }
+
+        # Test foldl on typed list<float> — should use direct-index loop
+        string foldl_float_sum = "%modern
+list<float> input = (1.5, 2.5, 3.0);
+float result = foldl $1 + $2, input;
+printf(\"%.1f\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_float_sum, mode));
+            assertEq("7.0", result, sprintf("foldl float sum direct-index %s", mode));
+        }
+
+        # Test foldl on typed list<int> with complex expression (not simple $1+$2)
+        string foldl_complex = "%modern
+list<int> input = (1, 2, 3, 4);
+int result = foldl $1 + $2 * $2, input;
+printf(\"%d\\n\", result);
+";
+        # Result: ((1 + 2*2) + 3*3) + 4*4 = (5 + 9) + 16 = 30
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_complex, mode));
+            assertEq("30", result, sprintf("foldl complex direct-index %s", mode));
+        }
+
+        # Test foldl on typed list<string> — should use iterator fallback
+        string foldl_string = "%modern
+list<string> input = (\"hello\", \" \", \"world\");
+string result = foldl $1 + $2, input;
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_string, mode));
+            assertEq("hello world", result, sprintf("foldl string concat %s", mode));
+        }
+
+        # Test foldl on empty typed list
+        # AST returns NOTHING, IR/JIT return identity value (0 for sum) — known behavior difference
+        string foldl_empty = "%modern
+list<int> input = ();
+auto result = foldl $1 + $2, input;
+printf(\"%s\\n\", exists result ? string(result) : \"NOTHING\");
+";
+        assertEq("NOTHING", trim(runScript(foldl_empty, "ast")), "foldl empty direct-index ast");
+        assertEq("0", trim(runScript(foldl_empty, "ir")), "foldl empty direct-index ir");
+        assertEq("0", trim(runScript(foldl_empty, "jit")), "foldl empty direct-index jit");
+
+        # Test foldl on single-element typed list
+        string foldl_single = "%modern
+list<int> input = (42,);
+int result = foldl $1 + $2, input;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_single, mode));
+            assertEq("42", result, sprintf("foldl single direct-index %s", mode));
+        }
+
+        # Test foldl on typed list with range() (generates list<int>)
+        string foldl_range = "%modern
+int result = foldl $1 + $2, range(10);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(foldl_range, mode));
+            assertEq("45", result, sprintf("foldl range direct-index %s", mode));
+        }
+    }
+
+    testDirectIndexMap() {
+        # Test map on typed list<int> — should use direct-index loop with pre-sized list
+        string map_int = "%modern
+list<int> input = (1, 2, 3, 4, 5);
+list<auto> result = map $1 * 2, input;
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_int, mode));
+            assertEq("[2, 4, 6, 8, 10]", result, sprintf("map int direct-index %s", mode));
+        }
+
+        # Test map on typed list<float>
+        string map_float = "%modern
+list<float> input = (1.5, 2.5, 3.0);
+list<auto> result = map $1 * 2.0, input;
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_float, mode));
+            assertEq("[3.0, 5.0, 6.0]", result, sprintf("map float direct-index %s", mode));
+        }
+
+        # Test map on typed list with complex expression
+        string map_complex = "%modern
+list<int> input = (1, 2, 3, 4);
+list<auto> result = map $1 * $1 + 1, input;
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_complex, mode));
+            assertEq("[2, 5, 10, 17]", result, sprintf("map complex direct-index %s", mode));
+        }
+
+        # Test map on typed list with $# (element index)
+        string map_with_index = "%modern
+list<int> input = (10, 20, 30);
+list<auto> result = map $1 + $#, input;
+printf(\"%y\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_with_index, mode));
+            assertEq("[10, 21, 32]", result, sprintf("map with index direct-index %s", mode));
+        }
+
+        # Test map on empty typed list — returns empty list (not NOTHING)
+        string map_empty = "%modern
+list<int> input = ();
+auto result = map $1 * 2, input;
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_empty, mode));
+            assertEq("list 0", result, sprintf("map empty direct-index %s", mode));
+        }
+
+        # Test map on typed list preserves output size
+        string map_size = "%modern
+list<int> input = (1, 2, 3, 4, 5);
+list<auto> result = map $1 * 10, input;
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(map_size, mode));
+            assertEq("5", result, sprintf("map size direct-index %s", mode));
+        }
+    }
+
+    testCallClosureDirect() {
+        # Test basic closure call via CallClosureDirect
+        string closure_basic = "%modern
+code add = int sub(int a, int b) { return a + b; };
+int result = add(3, 4);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(closure_basic, mode));
+            assertEq("7", result, sprintf("closure basic %s", mode));
+        }
+
+        # Test closure with captured variable
+        string closure_capture = "%modern
+int factor = 10;
+code mult = int sub(int x) { return x * factor; };
+int result = mult(5);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(closure_capture, mode));
+            assertEq("50", result, sprintf("closure capture %s", mode));
+        }
+
+        # Test call reference (not closure)
+        string callref_test = "%modern
+int sub double_it(int x) { return x * 2; }
+code ref = \\double_it();
+int result = ref(21);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(callref_test, mode));
+            assertEq("42", result, sprintf("callref %s", mode));
+        }
+
+        # Test closure call in a loop
+        string closure_loop = "%modern
+code add_one = int sub(int x) { return x + 1; };
+int sum = 0;
+for (int i = 0; i < 5; ++i) {
+    sum += add_one(i);
+}
+printf(\"%d\\n\", sum);
+";
+        # 1 + 2 + 3 + 4 + 5 = 15
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(closure_loop, mode));
+            assertEq("15", result, sprintf("closure loop %s", mode));
+        }
+
+        # Test closure call in try/catch (invoke path)
+        string closure_trycatch = "%modern
+code div = auto sub(int a, int b) { return a / b; };
+try {
+    auto result = div(10, 0);
+    printf(\"unexpected: %y\\n\", result);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(closure_trycatch, mode));
+            assertEq("DIVISION-BY-ZERO", result, sprintf("closure trycatch %s", mode));
+        }
+    }
+
+    testDotEvalMethodFastCall() {
+        # Test method call on object (should use fast path for JIT-compiled methods)
+        string method_basic = "%modern
+class MyCalc {
+    private { int val; }
+    constructor(int v) { val = v; }
+    int add(int x) { return val + x; }
+}
+MyCalc c(10);
+int result = c.add(5);
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(method_basic, mode));
+            assertEq("15", result, sprintf("method fast call %s", mode));
+        }
+
+        # Test method call in loop
+        string method_loop = "%modern
+class MyAccumulator {
+    private { int val = 0; }
+    int add(int x) { val += x; return val; }
+    int getVal() { return val; }
+}
+MyAccumulator acc();
+for (int i = 1; i <= 5; ++i) {
+    acc.add(i);
+}
+printf(\"%d\\n\", acc.getVal());
+";
+        # 1+2+3+4+5 = 15
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(method_loop, mode));
+            assertEq("15", result, sprintf("method loop fast call %s", mode));
+        }
+    }
+
+    testBuiltinFastCall() {
+        # Test builtin function calls (strlen, type, etc.) go through fast path
+        string builtin_basic = "%modern
+string s = \"hello world\";
+int len = strlen(s);
+string t = type(s);
+int abs_val = abs(-42);
+printf(\"%d,%s,%d\\n\", len, t, abs_val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(builtin_basic, mode));
+            assertEq("11,string,42", result, sprintf("builtin basic %s", mode));
+        }
+
+        # Test builtin calls in a loop
+        string builtin_loop = "%modern
+int total = 0;
+for (int i = 0; i < 10; ++i) {
+    total += strlen(string(i));
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(builtin_loop, mode));
+            assertEq("10", result, sprintf("builtin loop %s", mode));
+        }
+
+        # Test builtin call in try/catch (invoke path)
+        string builtin_invoke = "%modern
+int result;
+try {
+    result = strlen(\"test\");
+} catch (hash<auto> ex) {
+    result = -1;
+}
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(builtin_invoke, mode));
+            assertEq("4", result, sprintf("builtin invoke %s", mode));
+        }
+
+        # Test builtin with no args
+        string builtin_noargs = "%modern
+int pid = getpid();
+printf(\"%s\\n\", type(pid));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(builtin_noargs, mode));
+            assertEq("integer", result, sprintf("builtin no args %s", mode));
+        }
+
+        # Test builtin with exception (parse_url with invalid URL)
+        string builtin_exception = "%modern
+%disable-warning unreferenced-variable
+string result;
+try {
+    hash<auto> h = parse_url(\"://\");
+    result = \"no_error\";
+} catch (hash<auto> ex) {
+    result = \"caught\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(builtin_exception, mode));
+            assertEq("caught", result, sprintf("builtin exception %s", mode));
+        }
+    }
+
+    testMapHashKeyOpcodes() {
+        # MapHashKeyValue: map $1.key, list<hash<auto>>
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": \"a\"}, {\"val\": \"b\"}, {\"val\": \"c\"});
+list<auto> result = map $1.val, items;
+printf(\"%s:%s:%s\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a:b:c", result,
+                    sprintf("MapHashKeyValue %s", mode));
+        }
+
+        # MapHashKeyValue with int values
+        code = "%modern
+list<hash<auto>> items = ({\"n\": 10}, {\"n\": 20}, {\"n\": 30});
+list<auto> result = map $1.n, items;
+printf(\"%d\\n\", (foldl $1 + $2, result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("MapHashKeyValue int values %s", mode));
+        }
+
+        # MapHashKeyOffsetInt: map ($1.key + N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 100), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("101:102:103", result,
+                    sprintf("MapHashKeyOffsetInt %s", mode));
+        }
+
+        # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
+list<auto> result = map ($1.val * 10), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:30:50", result,
+                    sprintf("MapHashKeyScaleInt %s", mode));
+        }
+
+        # HashMapTwoKeys: map {$1.k1: $1.k2}, list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:25", result,
+                    sprintf("HashMapTwoKeys %s", mode));
+        }
+
+        # Empty list - all hash-key opcodes should handle gracefully
+        code = "%modern
+list<hash<auto>> empty = ();
+list<auto> r1 = map $1.val, empty;
+printf(\"%s %d\\n\", r1.type(), r1.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("list 0", result,
+                    sprintf("MapHashKey empty list %s", mode));
+        }
+
+        # MapHashKeyOffsetInt with const + $1.key (reversed)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map (100 + $1.val), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("101:102:103", result,
+                    sprintf("MapHashKeyOffsetInt reversed %s", mode));
+        }
+
+        # MapHashKeyScaleInt with const * $1.key (reversed)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
+list<auto> result = map (10 * $1.val), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("20:30:50", result,
+                    sprintf("MapHashKeyScaleInt reversed %s", mode));
+        }
+
+        # HashMapTwoKeys with more items
+        code = "%modern
+list<hash<auto>> items = (
+    {\"k\": \"x\", \"v\": 10},
+    {\"k\": \"y\", \"v\": 20},
+    {\"k\": \"z\", \"v\": 30},
+);
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20:30", result,
+                    sprintf("HashMapTwoKeys three items %s", mode));
+        }
+    }
+
+    testDirectIndexSelect() {
+        # Select on typed hash list (direct-index optimization)
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": 10}, {\"val\": 5}, {\"val\": 20}, {\"val\": 3});
+list<auto> result = (select items, $1.val > 8);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select on typed hash list %s", mode));
+        }
+
+        # Select on typed int list (direct-index)
+        code = "%modern
+list<int> vals = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+list<auto> result = (select vals, $1 > 5);
+printf(\"%d:%d\\n\", result.size(), (foldl $1 + $2, result));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:40", result,
+                    sprintf("select on typed int list %s", mode));
+        }
+
+        # Select on typed float list (direct-index)
+        code = "%modern
+list<float> vals = (1.5, 2.5, 3.5, 0.5);
+list<auto> result = (select vals, $1 > 2.0);
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select on typed float list %s", mode));
+        }
+
+        # Map+select on typed hash list (direct-index)
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"a\", \"val\": 10}, {\"name\": \"b\", \"val\": 5}, {\"name\": \"c\", \"val\": 20});
+list<auto> result = map $1.name, items, $1.val > 8;
+printf(\"%s:%s\\n\", result[0], result[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a:c", result,
+                    sprintf("map+select on typed hash list %s", mode));
+        }
+
+        # Empty list select (direct-index)
+        code = "%modern
+list<int> empty = ();
+list<auto> result = (select empty, $1 > 0);
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("list 0", result,
+                    sprintf("select on empty typed list %s", mode));
+        }
+
+        # Map+select on typed int list (direct-index)
+        code = "%modern
+list<int> vals = (1, 2, 3, 4, 5);
+list<auto> result = map $1 * 10, vals, $1 > 2;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:40:50", result,
+                    sprintf("map+select on typed int list %s", mode));
+        }
+    }
+
+    testHashKeyAccessSkipInvoke() {
+        # Plain hash access inside try-catch should not use invoke path
+        string code = "%modern
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+int total = 0;
+try {
+    total = h.a + h.b + h.c;
+} catch (hash<auto> ex) {
+    total = -1;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6", result,
+                    sprintf("hash key access in try-catch %s", mode));
+        }
+
+        # Missing key on plain hash returns NOTHING, doesn't throw
+        code = "%modern
+hash<auto> h = {\"a\": 1};
+string result;
+try {
+    auto v = h.missing_key;
+    result = exists v ? \"exists\" : \"nothing\";
+} catch (hash<auto> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("nothing", result,
+                    sprintf("missing key plain hash try-catch %s", mode));
+        }
+    }
+
+    testHashKeyAccessInt() {
+        # hash<string, int> key access returns native int (HashKeyAccessInt opcode)
+        string code = "%modern
+hash<string, int> h = {\"a\": 10, \"b\": 20, \"c\": 30};
+int total = h.a + h.b + h.c;
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("hash<string,int> key access %s", mode));
+        }
+
+        # hash<string, int> key access with arithmetic
+        code = "%modern
+hash<string, int> h = {\"x\": 5, \"y\": 3};
+int result = h.x * h.y + h.x - h.y;
+printf(\"%d\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("17", result,
+                    sprintf("hash<string,int> key arithmetic %s", mode));
+        }
+
+        # hash<string, int> key access in a loop
+        code = "%modern
+hash<string, int> h = {\"val\": 7};
+int total = 0;
+for (int i = 0; i < 100; ++i) {
+    total += h.val;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("700", result,
+                    sprintf("hash<string,int> key in loop %s", mode));
+        }
+
+        # hash<string, int> missing key - accessing non-existent key returns 0 via auto conversion
+        code = "%modern
+hash<string, int> h = {\"a\": 42, \"b\": 0};
+int val = h.b;
+printf(\"%d\\n\", val);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0", result,
+                    sprintf("hash<string,int> zero value key %s", mode));
+        }
+
+        # map with hash<string, int> element access (combines with map optimization)
+        code = "%modern
+list<hash<string, int>> data = ({\"v\": 1}, {\"v\": 2}, {\"v\": 3}, {\"v\": 4}, {\"v\": 5});
+list<int> result = map $1.v * 2, data;
+int total = 0;
+foreach int x in (result) {
+    total += x;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30", result,
+                    sprintf("map over hash<string,int> list %s", mode));
+        }
+    }
+
+    testDirectIndexMapHeapResults() {
+        # map with method call returning heap-allocated QoreStringNode
+        # Tests that ListSetValue correctly handles refcounting when
+        # trackResultForCleanup also tracks the invoke result
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+string result = (map $1.toString(), scaled).join(\",\");
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2,4,6,8,10", result,
+                    sprintf("map toString over direct-index result %s", mode));
+        }
+
+        # map with hash key access returning string values (heap-allocated)
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\"}, {\"name\": \"bob\"}, {\"name\": \"charlie\"});
+list<auto> names = map $1.name, items;
+printf(\"%s\\n\", names.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("alice,bob,charlie", result,
+                    sprintf("map hash key string values %s", mode));
+        }
+
+        # map with computation producing heap-allocated result ($1.val + 1)
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 1), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:3:4", result,
+                    sprintf("map hash key add computation %s", mode));
+        }
+
+        # Chained maps: result of first map used in second map
+        code = "%modern
+list<int> nums = (10, 20, 30);
+list<auto> strs = map $1.toString() + \"x\", nums;
+printf(\"%s\\n\", strs.join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10x,20x,30x", result,
+                    sprintf("map toString + string concat %s", mode));
+        }
+    }
+
+    testHashMapDuplicateKeys() {
+        # HashMapTwoKeys with duplicate keys — last value wins
+        string code = "%modern
+list<hash<auto>> items = (
+    {\"name\": \"alice\", \"age\": 30},
+    {\"name\": \"alice\", \"age\": 25},
+    {\"name\": \"bob\", \"age\": 35},
+);
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.size(), result.alice);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2:25", result,
+                    sprintf("HashMapTwoKeys duplicate keys %s", mode));
+        }
+
+        # All duplicate keys — result should have 1 entry
+        code = "%modern
+list<hash<auto>> items = (
+    {\"k\": \"x\", \"v\": 1},
+    {\"k\": \"x\", \"v\": 2},
+    {\"k\": \"x\", \"v\": 3},
+);
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d\\n\", result.size(), result.x);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:3", result,
+                    sprintf("HashMapTwoKeys all duplicates %s", mode));
+        }
+    }
+
+    testHashKeyAccessIntMissingKey() {
+        # HashKeyAccessInt: present key returns correct value
+        string code = "%modern
+hash<string, int> h = {\"a\": 1, \"b\": 2};
+int present = h.a;
+printf(\"%d\\n\", present);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1", result,
+                    sprintf("HashKeyAccessInt present key %s", mode));
+        }
+
+        # Missing key in hash<string, int> assigned to auto — returns NOTHING in AST,
+        # returns 0 in IR/JIT (native int64_t has no NOTHING representation)
+        code = "%modern
+hash<string, int> h = {\"a\": 1, \"b\": 2};
+auto missing = h.nonexistent;
+printf(\"%s\\n\", exists missing ? string(missing) : \"NOTHING\");
+";
+        assertEq("NOTHING", trim(runScript(code, "ast")),
+                "HashKeyAccessInt missing key ast returns NOTHING");
+        assertEq("0", trim(runScript(code, "ir")),
+                "HashKeyAccessInt missing key ir returns 0");
+        assertEq("0", trim(runScript(code, "jit")),
+                "HashKeyAccessInt missing key jit returns 0");
+
+        # Map over hash<string, int> with present keys — all modes agree
+        code = "%modern
+list<hash<string, int>> items = ({\"val\": 10}, {\"val\": 20}, {\"val\": 30});
+int total = 0;
+foreach hash<string, int> item in (items) {
+    total += item.val;
+}
+printf(\"%d\\n\", total);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("60", result,
+                    sprintf("hash<string,int> foreach sum %s", mode));
+        }
+    }
+}

@@ -269,6 +269,14 @@ typedef long long int64;
 //! runtime code execution flags
 typedef uint64_t q_rt_flags_t;
 
+//! runtime execution mode
+enum qore_exec_mode_t {
+    QEM_AST = 0,
+    QEM_IR = 1,
+    QEM_JIT = 2,
+    QEM_TIERED = 3,
+};
+
 //! Serialization flag; include static class vars
 constexpr size_t QSF_INCLUDE_STATIC_CLASS_VARS = (1 << 0);
 

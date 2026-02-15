@@ -1171,6 +1171,11 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.find(id);
 }
 
+LocalVarValue* thread_find_lvar_maybe(const char* id) {
+    ThreadData* td = thread_data.get();
+    return td->tlpd->lvstack.findMaybe(id);
+}
+
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
@@ -1194,6 +1199,10 @@ void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
 
 ClosureVarValue* thread_find_closure_var(const char* id) {
     return thread_data.get()->tlpd->cvstack.find(id);
+}
+
+ClosureVarValue* thread_try_find_closure_var(const char* id) {
+    return thread_data.get()->tlpd->cvstack.try_find(id);
 }
 
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
@@ -1231,7 +1240,8 @@ void thread_set_closure_parse_env(ClosureParseEnvironment* cenv) {
 }
 
 ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
-    return thread_data.get()->closure_rt_env->find(id);
+    const QoreClosureBase* rt_env = thread_data.get()->closure_rt_env;
+    return rt_env ? rt_env->find(id) : nullptr;
 }
 
 ClosureParseEnvironment* thread_get_closure_parse_env() {
@@ -2170,6 +2180,10 @@ const QoreListNode* thread_get_implicit_args() {
     return thread_data.get()->current_implicit_arg;
 }
 
+void thread_set_implicit_args(QoreListNode* args) {
+    thread_data.get()->current_implicit_arg = args;
+}
+
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
     ThreadData* td = thread_data.get();
     return (td->current_obj == o && td->current_code == name) ? true : false;
@@ -2490,6 +2504,10 @@ int64 parse_get_parse_options() {
 
 int64 runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
+}
+
+void runtime_set_parse_options(int64 po) {
+    thread_data.get()->runtime_po = po;
 }
 
 int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {

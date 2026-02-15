@@ -43,7 +43,14 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
 
     assert(!parse_context.typeInfo);
     // check iterator expression
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
 
     // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
@@ -61,9 +68,11 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     {
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
@@ -199,6 +208,18 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     }
 
     typeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
+    if (typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = typeInfo;
+        if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

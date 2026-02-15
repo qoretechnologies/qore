@@ -152,6 +152,142 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
     @endparblock
 
+    @par New Required Library: LLVM (JIT Compilation)
+    @parblock
+    %Qore now requires LLVM 16 or later for JIT (Just-In-Time) compilation support.  The
+    \c --exec-mode=jit command-line option compiles hot paths to native code via LLVM's ORC JIT,
+    with automatic fallback to the IR interpreter for unsupported operations.
+
+    Install the LLVM development packages:
+    - <b>Debian/Ubuntu:</b> \c llvm-dev (or version-specific, e.g. \c llvm-20-dev)
+    - <b>RHEL/Fedora:</b> \c llvm-devel
+    - <b>Alpine:</b> \c llvm-dev
+
+    Four execution modes are available via \c --exec-mode:
+    - \c ast (default): traditional AST interpreter
+    - \c ir: IR-based interpreter
+    - \c jit: LLVM JIT with automatic fallback to IR
+    - \c tiered: automatic per-function tier promotion (AST → IR → JIT)
+
+    In \c tiered mode, functions start on the AST interpreter and are automatically promoted to
+    IR after a configurable number of calls (default: 100), then to native JIT after a higher
+    threshold (default: 1000).  Promotion thresholds are configurable via \c --jit-ir-threshold=N
+    and \c --jit-jit-threshold=N.  Failed IR lowering or JIT compilation is permanent per function:
+    the function stays at its current tier.  Non-@ref modern "%modern" code is never promoted.
+
+    JIT compilation is transparent and preserves %Qore semantics including exception handling,
+    NaN-boxed values, and reference counting.  Non-@ref modern "%modern" code automatically
+    falls back to the AST interpreter.
+
+    All IR opcodes have LLVM lowering support, ensuring universal JIT coverage for any function
+    that can be lowered to IR.  Operations not yet natively implemented in LLVM IR use generic
+    runtime helpers that delegate to the IR interpreter, providing functional correctness while
+    allowing future native optimizations.  This includes object member access, closures, method
+    calls, dynamic type operations, compound assignments, regex operations, higher-order
+    functions (map, select, fold), and all statement types (foreach, on_block_exit, context,
+    etc.).
+
+    Several common operations now have specialized native implementations that bypass the
+    generic runtime dispatch path:
+    - <b>Hash key access</b>: \c h.key and \c h{"key"} are lowered to direct hash node lookups
+      when the key is a compile-time constant string, avoiding AST node creation and dispatch
+    - <b>List index access</b>: \c l[i] is lowered to direct array access with bounds checking,
+      bypassing the full expression evaluation path
+    - <b>String concatenation</b>: string \c + string is handled by a specialized helper that
+      avoids the generic operator dispatch for the common case of two string operands
+    - <b>Inline arithmetic fast-paths</b>: dynamic-typed (\c auto) addition, subtraction, and
+      multiplication emit inline LLVM IR that checks for int+int and float+float at the
+      machine-code level, executing native CPU instructions for the common cases and falling
+      back to runtime helpers only for mixed-type or complex-type operands
+    - <b>Inline comparison fast-paths</b>: dynamic-typed equality, inequality, less-than,
+      less-or-equal, greater-than, and greater-or-equal comparisons emit inline type checks
+      for int-vs-int and float-vs-float, using native CPU comparison instructions for the
+      common cases
+
+    JIT-compiled code supports debugger integration via the GDB JIT interface, allowing
+    debuggers like GDB (7.0+) and LLDB to see symbols and source locations in JIT-compiled
+    %Qore functions.  See @ref jit_debugging "Debugging JIT-Compiled Code" for details.
+    @endparblock
+
+    @par AOT (Ahead-of-Time) Compilation
+    @parblock
+    %Qore now supports AOT compilation, which compiles %Qore scripts and modules to standalone
+    native executables or binary modules that can run without the original source code.  This
+    provides faster startup times (no parse phase), intellectual property protection, and
+    simplified deployment.
+
+    <b>Compiling Scripts to Standalone Executables:</b>
+
+    The \c --compile-script option compiles a %Qore script to a standalone ELF executable:
+    @code{.sh}
+qore --compile-script myscript.q -o myscript
+./myscript [args...]
+    @endcode
+
+    The resulting executable:
+    - Links against \c libqore.so at runtime (no static linking)
+    - Contains compiled native code for all functions
+    - Includes embedded source code by default for error messages and debugging
+    - Supports all command-line arguments the original script accepted
+
+    <b>Compiling Modules to Binary Modules:</b>
+
+    The \c --compile-module option compiles a %Qore module (\c .qm) to a binary module (\c .qmod):
+    @code{.sh}
+qore --compile-module MyModule.qm
+# Creates MyModule.qmod in the same directory
+    @endcode
+
+    Binary modules:
+    - Load faster than source modules (no parse phase)
+    - Are searched before source modules with the same base name
+    - Support all module features including classes, functions, and constants
+
+    <b>Source Stripping for IP Protection:</b>
+
+    The \c --strip-source option removes source code from compiled binaries:
+    @code{.sh}
+qore --compile-script myscript.q --strip-source -o myscript
+qore --compile-module MyModule.qm --strip-source
+    @endcode
+
+    Source-stripped binaries:
+    - Contain no readable source code (only binary metadata and native code)
+    - Use the QORD binary format (magic: \c 0x514F5244) for metadata serialization
+    - Provide full functionality including exception handling and \c on_block_exit
+    - Show \c "[AOT-compiled]" in stack traces instead of source lines
+    - Cannot be decompiled back to source code
+
+    <b>Requirements and Limitations:</b>
+    - AOT compilation requires @ref modern "%modern" code (non-modern code is rejected)
+    - Source stripping is one-way: stripped binaries cannot recover source code
+    - Compiled executables require the same major version of \c libqore.so at runtime
+    - Debug information (line numbers, variable names) is preserved for diagnostics
+    @endparblock
+
+    @par Programmatic Execution Mode Control
+    @parblock
+    The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide
+    type-safe programmatic control over execution modes:
+
+    - new @ref Qore::ExecMode "ExecMode" enum with values @ref Qore::ExecMode::EM_AST "EM_AST",
+      @ref Qore::ExecMode::EM_IR "EM_IR", @ref Qore::ExecMode::EM_JIT "EM_JIT", and
+      @ref Qore::ExecMode::EM_TIERED "EM_TIERED"
+    - new @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" method to set the
+      execution mode for a @ref Qore::Program "Program" object
+    - new @ref Qore::Program::getExecMode() "Program::getExecMode()" method to query the current
+      execution mode
+
+    Example:
+    @code{.py}
+    Program pgm(PO_MODERN);
+    pgm.setExecMode(ExecMode::EM_JIT);  # Use JIT for this program
+    pgm.parse("int sub compute() { return 42; }", "code");
+    @endcode
+
+    See @ref execution_modes for complete documentation of execution modes.
+    @endparblock
+
     @par New Build Requirement: Rust Toolchain and tree-sitter CLI
     @parblock
     The \c astparser module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based

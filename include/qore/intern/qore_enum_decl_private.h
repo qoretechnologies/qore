@@ -105,6 +105,11 @@ public:
         return baseTypeInfo;
     }
 
+    //! Set the base type info (for deferred resolution in AOT deserialization)
+    DLLLOCAL void setBaseTypeInfo(const QoreTypeInfo* ti) {
+        baseTypeInfo = ti;
+    }
+
     DLLLOCAL bool isPublic() const {
         return pub;
     }

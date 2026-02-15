@@ -40,6 +40,23 @@
 
 QoreString QoreMapOperatorNode::map_str("map operator expression");
 
+static void set_analysis_map(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 // if del is true, then the returned QoreString * should be mapd, if false, then it must not be
 QoreString* QoreMapOperatorNode::getAsString(bool &del, int foff, ExceptionSink *xsink) const {
     del = false;
@@ -84,8 +101,15 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
     // check iterator expression
-    int err = parse_init_value(right, parse_context);
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(right, parse_context);
+        right_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     // check iterated expression
@@ -96,8 +120,12 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(left, parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(left, parse_context) && !err) {
+                err = -1;
+            }
+            left_analysis = parse_context.analysis;
         }
         expTypeInfo = parse_context.typeInfo;
     }
@@ -138,6 +166,7 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         parse_context.typeInfo = nullptr;
     }
 
+    set_analysis_map(parse_context, left_analysis, right_analysis);
     return err;
 }
 

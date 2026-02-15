@@ -32,6 +32,8 @@
 #ifndef _QORE_QOREPOSTINCREMENTOPERATORNODE_H
 #define _QORE_QOREPOSTINCREMENTOPERATORNODE_H
 
+#include "qore/intern/QoreParseAnalysis.h"
+
 class QorePostIncrementOperatorNode : public QoreSingleExpressionOperatorNode<LValueOperatorNode> {
 OP_COMMON
 protected:
@@ -47,7 +49,13 @@ protected:
         fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
         assert(!parse_context.typeInfo);
-        int err = parse_init_value(exp, parse_context);
+        QoreParseAnalysis operand_analysis;
+        int err = 0;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            err = parse_init_value(exp, parse_context);
+            operand_analysis = parse_context.analysis;
+        }
         ti = parse_context.typeInfo;
 
         if (!err && checkLValue(exp, parse_context.pflag)) {
@@ -61,6 +69,17 @@ protected:
 
         // returns the left side
         parse_context.typeInfo = ti;
+        parse_context.analysis.clear();
+        if (ti) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.known_type = ti;
+            if (QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+        }
+        if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
         return err;
     }
 

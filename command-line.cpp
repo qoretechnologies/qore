@@ -35,6 +35,8 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include <qore/safe_dslist>
+#include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
 #include "command-line.h"
 
@@ -45,6 +47,8 @@
 #include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
+#include <cerrno>
+#include <sys/stat.h>
 #include <termios.h>
 #include <poll.h>
 #include <sys/ioctl.h>
@@ -67,6 +71,7 @@ static cl_mod_list_t cl_mod_list;
 static int64 parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
+static qore_exec_mode_t exec_mode = QEM_AST;
 
 // lock options
 static bool lock_options = false;
@@ -98,6 +103,43 @@ static bool interactive_mode = false;
 // disable automatic REPL mode when stdin is a tty
 static bool no_repl = false;
 
+// dump IR before execution
+static bool ir_dump = false;
+
+// warn on IR fallback to AST
+static bool ir_fallback_warn = false;
+
+// report IR fallback counts at exit
+static bool ir_fallback_report = false;
+
+// tiered compilation thresholds (0 = use defaults)
+static uint64_t jit_ir_threshold = 0;
+static uint64_t jit_jit_threshold = 0;
+
+// AOT compilation mode
+static bool compile_mode = false;
+
+// AOT output file
+static const char* aot_output = nullptr;
+
+// AOT optimization level (0-3, default 2)
+static int aot_opt_level = 2;
+
+// AOT target triple for cross-compilation
+static const char* aot_target = nullptr;
+
+// AOT static linking
+static bool aot_static = false;
+
+// AOT module compilation mode
+static bool compile_module_mode = false;
+
+// AOT strip-source mode (binary metadata instead of embedded source)
+static bool aot_strip_source = false;
+
+// show supported target architectures
+static bool show_targets = false;
+
 // program text given on the command-line
 static const char* cl_pgm = 0;
 
@@ -125,6 +167,12 @@ static defmap_t defmap;
 
 static int opt_errors = 0;
 
+//! Check if a path is a directory
+static bool is_directory(const char* path) {
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
 static const char usage[] = "usage: %s [option(s)]... [program file]\n";
 static const char suggest[] = "try '%s -h' for more information.\n";
 
@@ -135,6 +183,15 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
+   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or tiered\n"
+   "                               (tiered auto-promotes AST->IR->JIT per function)\n"
+   "      --ir-dump                dump IR representation before execution\n"
+   "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
+   "      --ir-fallback-report     print IR fallback counts by category at exit\n"
+   "      --jit-ir-threshold=N     tiered mode: calls before IR promotion (default:\n"
+   "                               100)\n"
+   "      --jit-jit-threshold=N    tiered mode: calls before JIT promotion (default:\n"
+   "                               1000)\n"
    "  -g, --disable-gc             disable the garbage collector\n"
    "  -h, --help                   shows this help text and exit\n"
    "  -i, --list-warnings          list all warnings and quit\n"
@@ -168,6 +225,22 @@ static const char helpstr[] =
    "  -z, --time-zone=arg          sets the time zone from the argument; can be\n"
    "                               either a region name (ex: 'Europe/Prague') or a\n"
    "                               UTC offset with format S[DD[:DD[:DD]]], S=+ or -\n"
+   "\n"
+   " AOT COMPILATION:\n"
+   "      --compile                compile to a standalone executable\n"
+   "      --output=file            set output file for --compile (default: strip\n"
+   "                               extension from input file)\n"
+   "      --opt-level=N            optimization level for --compile (0-3,\n"
+   "                               default: 2)\n"
+   "      --target=TRIPLE          target triple for cross-compilation\n"
+   "                               (default: native host)\n"
+   "      --show-targets           show supported target architectures and quit\n"
+   "      --static                 statically link libqore (requires\n"
+   "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
+   "      --compile-module         compile a .qm user module to a native\n"
+   "                               shared library (.so) binary module\n"
+   "      --strip-source          strip source from AOT binary; embed\n"
+   "                               serialized metadata instead (IP protection)\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -998,6 +1071,110 @@ static void set_exec(const char* arg) {
     cl_pgm = arg;
 }
 
+static void set_exec_mode(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --exec-mode requires a value (ast, ir, or jit)\n");
+        opt_errors++;
+        return;
+    }
+    if (!strcasecmp(arg, "ast")) {
+        exec_mode = QEM_AST;
+        return;
+    }
+    if (!strcasecmp(arg, "ir")) {
+        exec_mode = QEM_IR;
+        return;
+    }
+    if (!strcasecmp(arg, "jit")) {
+        exec_mode = QEM_JIT;
+        return;
+    }
+    if (!strcasecmp(arg, "tiered")) {
+        exec_mode = QEM_TIERED;
+        return;
+    }
+    printe("error: invalid --exec-mode value '%s' (use ast, ir, jit, or tiered)\n", arg);
+    opt_errors++;
+}
+static void set_ir_dump(const char* arg) {
+    ir_dump = true;
+}
+
+static void set_ir_fallback_warn(const char* arg) {
+    ir_fallback_warn = true;
+}
+
+static void set_ir_fallback_report(const char* arg) {
+    ir_fallback_report = true;
+}
+
+static void set_jit_ir_threshold(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --jit-ir-threshold requires a numeric value\n");
+        opt_errors++;
+        return;
+    }
+    jit_ir_threshold = strtoull(arg, nullptr, 10);
+}
+
+static void set_jit_jit_threshold(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --jit-jit-threshold requires a numeric value\n");
+        opt_errors++;
+        return;
+    }
+    jit_jit_threshold = strtoull(arg, nullptr, 10);
+}
+
+static void set_compile_mode(const char* arg) {
+    compile_mode = true;
+}
+
+static void set_aot_output(const char* arg) {
+    aot_output = arg;
+}
+
+static void set_opt_level(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --opt-level requires a value (0-3)\n");
+        opt_errors++;
+        return;
+    }
+    int level = atoi(arg);
+    if (level < 0 || level > 3 || (strlen(arg) != 1) || !isdigit(arg[0])) {
+        printe("error: invalid --opt-level value '%s' (use 0, 1, 2, or 3)\n", arg);
+        opt_errors++;
+        return;
+    }
+    aot_opt_level = level;
+}
+
+static void set_aot_target(const char* arg) {
+    if (!arg || !*arg) {
+        printe("error: --target requires a target triple\n");
+        opt_errors++;
+        return;
+    }
+    aot_target = arg;
+}
+
+static void set_show_targets(const char* arg) {
+    show_targets = true;
+}
+
+static void set_aot_static(const char* arg) {
+    aot_static = true;
+}
+
+static void set_compile_module(const char* arg) {
+    compile_module_mode = true;
+    compile_mode = true;
+}
+
+static void set_strip_source(const char* arg) {
+    aot_strip_source = true;
+}
+
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -1035,6 +1212,12 @@ static struct opt_struct_s {
    { 'B', "show-built-options",    ARG_NONE, show_build_options },
    { 'c', "charset",               ARG_MAND, set_charset },
    { 'e', "exec",                  ARG_MAND, set_exec },
+   { '\0', "exec-mode",            ARG_MAND, set_exec_mode },
+   { '\0', "ir-dump",              ARG_NONE, set_ir_dump },
+   { '\0', "ir-fallback-warn",    ARG_NONE, set_ir_fallback_warn },
+   { '\0', "ir-fallback-report", ARG_NONE, set_ir_fallback_report },
+   { '\0', "jit-ir-threshold",    ARG_MAND, set_jit_ir_threshold },
+   { '\0', "jit-jit-threshold",   ARG_MAND, set_jit_jit_threshold },
    { 'g', "disable-gc",            ARG_NONE, disable_gc },
    { 'h', "help",                  ARG_NONE, do_help },
    { 'i', "list-warnings",         ARG_NONE, list_warnings },
@@ -1099,6 +1282,15 @@ static struct opt_struct_s {
    { '\0', "module-api",           ARG_NONE, show_module_api },
    { '\0', "module-apis",          ARG_NONE, show_module_apis },
    { '\0', "latest-module-api",    ARG_NONE, show_latest_module_api },
+   // AOT compilation
+   { '\0', "compile",              ARG_NONE, set_compile_mode },
+   { '\0', "output",               ARG_MAND, set_aot_output },
+   { '\0', "opt-level",            ARG_MAND, set_opt_level },
+   { '\0', "target",               ARG_MAND, set_aot_target },
+   { '\0', "show-targets",         ARG_NONE, set_show_targets },
+   { '\0', "static",               ARG_NONE, set_aot_static },
+   { '\0', "compile-module",       ARG_NONE, set_compile_module },
+   { '\0', "strip-source",        ARG_NONE, set_strip_source },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1327,10 +1519,34 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    // initialize Qore subsystem
    qore_init(license, def_charset, show_mod_errs, qore_lib_options);
 
+   if (show_targets) {
+       QoreAOT::printSupportedTargets();
+       qore_cleanup();
+       return 0;
+   }
+
+   // apply tiered compilation thresholds from command-line
+   if (jit_ir_threshold) {
+       QoreJIT::setIRThreshold(jit_ir_threshold);
+   }
+   if (jit_jit_threshold) {
+       QoreJIT::setJITThreshold(jit_jit_threshold);
+   }
+
    ExceptionSink wsink, xsink;
    {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;
+      qpgm->setExecMode(exec_mode);
+      if (ir_dump) {
+          qpgm->setIRDump(true);
+      }
+      if (ir_fallback_warn) {
+          qpgm->setIRFallbackWarn(true);
+      }
+      if (ir_fallback_report) {
+          qpgm->setIRFallbackReport(true);
+      }
 
       // set parse defines
       qpgm->parseCmdLineDefines(xsink, wsink, warnings, defmap);
@@ -1390,17 +1606,19 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          }
 
-         // parse the program
-         if (cl_pgm)
+         // parse the program (skip for --compile-module which handles its own parsing)
+         if (compile_module_mode) {
+            // compileModule() creates its own QoreProgram with PO_IN_MODULE
+         } else if (cl_pgm) {
             qpgm->parse(cl_pgm, "<command-line>", &xsink, &wsink, warnings);
-         else if (program_file_name)
+         } else if (program_file_name) {
             qpgm->parseFile(program_file_name, &xsink, &wsink, warnings, only_first_except);
-         else if (interactive_mode || (!no_repl && isatty(STDIN_FILENO))) {
+         } else if (interactive_mode || (!no_repl && isatty(STDIN_FILENO))) {
             // enter REPL mode
             qpgm->parse(repl_pgm, "<repl>", &xsink, &wsink, warnings);
-         }
-         else
+         } else {
             qpgm->parse(stdin, "<stdin>", &xsink, &wsink, warnings);
+         }
       }
 
       // display any warnings now
@@ -1411,6 +1629,120 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             rc = 2; // set return code to 2 if there were parse warnings to be treated as errors
             goto exit;
          }
+      }
+
+      // AOT compilation mode: compile to standalone executable
+      if (compile_mode && !xsink.isException()) {
+         if (!program_file_name && !cl_pgm) {
+            fprintf(stderr, "error: --compile requires a source file or -e argument\n");
+            rc = 1;
+            goto exit;
+         }
+
+         // Check if input is a directory (split module)
+         bool is_split_module = program_file_name && is_directory(program_file_name);
+
+         // Auto-enable module mode for directories
+         if (is_split_module && !compile_module_mode) {
+            compile_module_mode = true;
+         }
+
+         // Read source text (skip for split modules)
+         std::string source_text;
+         std::string source_label;
+         if (!is_split_module) {
+            if (cl_pgm) {
+               source_text = cl_pgm;
+               source_label = "<command-line>";
+            } else {
+               // Read the source file
+               FILE* f = fopen(program_file_name, "rb");
+               if (!f) {
+                  fprintf(stderr, "error: cannot open '%s': %s\n", program_file_name, strerror(errno));
+                  rc = 1;
+                  goto exit;
+               }
+               fseek(f, 0, SEEK_END);
+               long fsize = ftell(f);
+               fseek(f, 0, SEEK_SET);
+               source_text.resize(fsize);
+               size_t nread = fread(&source_text[0], 1, fsize, f);
+               fclose(f);
+               source_text.resize(nread);
+               source_label = program_file_name;
+            }
+         }
+
+         // Determine output path
+         std::string output_path;
+         if (aot_output) {
+            output_path = aot_output;
+         } else if (program_file_name) {
+            if (is_split_module) {
+               // For split modules, derive output from directory basename
+               std::string dir_str(program_file_name);
+               // Remove trailing slashes
+               while (!dir_str.empty() && dir_str.back() == '/') {
+                  dir_str.pop_back();
+               }
+               // Extract basename
+               size_t last_slash = dir_str.rfind('/');
+               std::string basename = (last_slash != std::string::npos)
+                  ? dir_str.substr(last_slash + 1)
+                  : dir_str;
+               output_path = basename + ".qmod";
+            } else {
+               output_path = program_file_name;
+               // Strip extension
+               size_t dot = output_path.rfind('.');
+               if (dot != std::string::npos && dot > 0) {
+                  output_path = output_path.substr(0, dot);
+               }
+               // For module compilation, add .qmod extension (binary module format)
+               if (compile_module_mode) {
+                  output_path += ".qmod";
+               }
+            }
+         } else {
+            output_path = compile_module_mode ? "module.qmod" : "a.out";
+         }
+
+         std::string error;
+         if (is_split_module) {
+            // Compile split module directory
+            if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options, error,
+                     aot_opt_level, aot_target, aot_strip_source)) {
+               fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled split module (O%d%s): %s\n", aot_opt_level,
+                  aot_strip_source ? ", source-stripped" : "",
+                  output_path.c_str());
+            }
+         } else if (compile_module_mode) {
+            if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
+                     source_label.c_str(), output_path, parse_options, error,
+                     aot_opt_level, aot_target, aot_strip_source)) {
+               fprintf(stderr, "AOT module compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled module (O%d%s): %s\n", aot_opt_level,
+                  aot_strip_source ? ", source-stripped" : "",
+                  output_path.c_str());
+            }
+         } else {
+            if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
+                     source_label.c_str(), output_path, parse_options, error,
+                     aot_opt_level, aot_target, aot_static, aot_strip_source)) {
+               fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
+               rc = 1;
+            } else {
+               printf("compiled (O%d%s): %s\n", aot_opt_level,
+                  aot_strip_source ? ", source-stripped" : "",
+                  output_path.c_str());
+            }
+         }
+         goto exit;
       }
 
       // if there were no parse exceptions, execute the program
@@ -1432,6 +1764,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
       // run the default exception handler on any unhandled exceptions in the primary thread or during parsing
       xsink.handleExceptions();
+
+      // print IR fallback report if enabled
+      qpgm->printIRFallbackReport();
 
 exit:
       ;

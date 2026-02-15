@@ -48,7 +48,13 @@ int QoreRegexMatchOperatorNode::parseInitIntern(const char *name, QoreValue& val
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
         QoreStringMaker desc("the left side of the %s is ", op_str.c_str());
@@ -66,6 +72,15 @@ int QoreRegexMatchOperatorNode::parseInitIntern(const char *name, QoreValue& val
         // (constants may not be fully resolved at parse time, resulting in NOTHING)
         if (!result.isNothing()) {
             val = result;
+            parse_context.typeInfo = val.getFullTypeInfo();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!val.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
+            return err;
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
             del.release();
@@ -73,5 +88,12 @@ int QoreRegexMatchOperatorNode::parseInitIntern(const char *name, QoreValue& val
     }
 
     parse_context.typeInfo = boolTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

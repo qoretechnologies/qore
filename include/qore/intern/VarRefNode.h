@@ -33,6 +33,7 @@
 #define _QORE_VARREFNODE_H
 
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/LocalVar.h"
 
 class VarRefNewObjectNode;
 class LocalVar;
@@ -163,6 +164,30 @@ public:
     }
 
     DLLLOCAL bool scanMembers(RSetHelper& rsh);
+
+    //! Returns the declared type info for reference creation (no narrowing)
+    /** References allow write-back, so the declared type must be used instead of any
+        narrowed type. For reference parameters (reference<T> or *reference<T>), extracts
+        the inner type T to avoid double-wrapping in ParseReferenceNode::parseInitImpl().
+    */
+    DLLLOCAL const QoreTypeInfo* parseGetTypeInfoForReference() const {
+        const QoreTypeInfo* rv;
+        if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+            rv = ref.id->parseGetTypeInfoForInitialAssignment();
+        } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+            rv = ref.var->parseGetTypeInfoForInitialAssignment();
+        } else {
+            rv = nullptr;
+        }
+        // extract inner type from reference types to avoid double-wrapping
+        if (rv) {
+            const QoreTypeInfo* inner = QoreTypeInfo::getReferenceTarget(rv);
+            if (inner) {
+                return inner;
+            }
+        }
+        return rv;
+    }
 
 protected:
     NamedScope name;
@@ -420,6 +445,9 @@ public:
         parse_args = nullptr;
         return rv;
     }
+
+    //! Construct the value without assigning to the variable (for JIT split)
+    DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
 
 protected:
     enum vrn_type_e : unsigned char {

@@ -141,6 +141,9 @@ class NewObjectCallNode : public AbstractQoreNode, public FunctionCallBase {
 public:
     DLLLOCAL NewObjectCallNode(const QoreClass* qc, QoreListNode* args = nullptr);
 
+    //! Returns the class for the new object
+    DLLLOCAL const QoreClass* getClass() const { return qc; }
+
 protected:
     const QoreClass* qc;
 

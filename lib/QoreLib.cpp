@@ -541,6 +541,7 @@ bool qore_has_debug() {
 }
 
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
+    parse_context.analysis.clear();
     if (val.hasNode()) {
         AbstractQoreNode* n = val.getInternalNode();
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
@@ -548,6 +549,12 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     }
 
     parse_context.typeInfo = val.getFullTypeInfo();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    if (!val.isNothing()) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    parse_context.analysis.known_type = parse_context.typeInfo;
     return 0;
 }
 

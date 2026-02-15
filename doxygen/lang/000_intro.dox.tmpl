@@ -37,6 +37,9 @@
 <a href="http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">RAII idiom</a> for resource management with deterministic collection and
 destruction of objects even when objects participate in recursive directed graphs; see @ref garbage_collection for more information.
 
+    <b>Multiple Execution Modes and JIT Compilation</b>\n
+    %Qore supports multiple @ref execution_modes "execution modes" to optimize for different use cases. The default IR (Intermediate Representation) bytecode interpreter provides a good balance of startup time and execution speed. For compute-intensive applications, the @ref exec_mode_jit "JIT (Just-In-Time)" mode compiles code to native machine code via LLVM for maximum performance. The @ref exec_mode_tiered "tiered" mode provides adaptive compilation, automatically promoting hot code paths from interpretation to native compilation. For deployment scenarios, @ref exec_mode_aot "AOT (Ahead-of-Time)" compilation creates standalone executables or binary modules with optional source stripping for intellectual property protection. See @ref execution_modes for details.
+
     Additionally, every effort is made to find and fix bugs in %Qore before every release; for example <a href="http://www.valgrind.org">valgrind</a> is used on Linux and OSX and dbx on Solaris to check for memory leaks and memory errors.  Particular attention is paid to thread-safety of all %Qore components as well; %Qore aims to be a stable platform for enterprise development supporting both quick script-based solutions and as an encapsulating language for embedding (and protecting) code in a server application.
 
     @note %Qore is moving toward establishing @ref new-style "%new-style" as the default syntax; all examples given in the %Qore documentation are given assuming @ref new-style "%new-style".

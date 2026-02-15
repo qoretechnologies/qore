@@ -33,6 +33,17 @@
 
 QoreString QoreLogicalNotOperatorNode::LogicalNot_str("logical not operator expression");
 
+static void set_unary_analysis(QoreParseContext& parse_context,
+        const QoreParseAnalysis& operand) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 // if del is true, then the returned QoreString* should be deleted, if false, then it must not be
 QoreString* QoreLogicalNotOperatorNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
     del = false;
@@ -51,7 +62,13 @@ QoreValue QoreLogicalNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 }
 
 int QoreLogicalNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     parse_context.typeInfo = boolTypeInfo;
 
@@ -61,5 +78,6 @@ int QoreLogicalNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         val = !exp.getAsBool();
     }
 
+    set_unary_analysis(parse_context, operand_analysis);
     return err;
 }

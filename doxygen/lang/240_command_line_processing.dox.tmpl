@@ -56,6 +56,28 @@
     |<tt>--help</tt>|\c -h|Shows help text
     |<tt>--version</tt>|\c -v|Shows %Qore library version information and exits
 
+    <b>Execution Mode Command-Line Parameters</b>
+
+    These options control how %Qore code is executed. See @ref execution_modes for detailed information.
+
+    |!Long Param|!Short|!Description
+    |<tt>--exec-mode=</tt><em>arg</em>|n/a|Sets the @ref execution_modes "execution mode": \c ast (AST interpreter), \c ir (IR bytecode interpreter, default), \c jit (LLVM JIT compilation), or \c tiered (adaptive compilation)
+    |<tt>--jit-ir-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting a function to IR (default: 100)
+    |<tt>--jit-jit-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting a function to JIT (default: 1000)
+
+    <b>AOT Compilation Command-Line Parameters</b>
+
+    These options enable @ref exec_mode_aot "ahead-of-time compilation" of scripts and modules.
+
+    |!Long Param|!Short|!Description
+    |<tt>--compile</tt>|n/a|Compile the script to a standalone native executable
+    |<tt>--compile-module</tt>|n/a|Compile a \c .qm module to a binary module (\c .qmod)
+    |<tt>--output=</tt><em>path</em>|\c -o|Specify output path for compiled binary (default: script name without extension)
+    |<tt>--strip-source</tt>|n/a|Remove source code from compiled binary (for IP protection)
+    |<tt>--opt-level=</tt><em>N</em>|n/a|LLVM optimization level 0-3 (default: 2)
+    |<tt>--static</tt>|n/a|Static link against \c libqore_static.a (requires static library build)
+    |<tt>--target=</tt><em>triple</em>|n/a|Cross-compilation target triple (e.g., \c x86_64-linux-gnu)
+
     There are two additional options available with debugging versions of %Qore as follows:
 
     <b>Description of Debugging Command-Line Parameters</b>

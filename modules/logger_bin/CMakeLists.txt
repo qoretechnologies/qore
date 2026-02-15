@@ -93,7 +93,29 @@ add_custom_target(LOGGER_QPP_GENERATED_FILES DEPENDS qpp ${LOGGER_QPP_SOURCES} $
 set(logger_module_name "logger_bin")
 
 if (SINGLE_COMPILATION_UNIT)
-    add_library(${logger_module_name} MODULE src/logger_scu.cpp)
+    # Generate the SCU dynamically from source lists with dependency tracking
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src)
+    set(LOG_SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
+    set(LOG_SCU_DEPS "")
+    foreach(src ${LOGGER_CPP_SRC})
+        if (IS_ABSOLUTE "${src}")
+            set(abs_src "${src}")
+        else()
+            set(abs_src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
+        endif()
+        list(APPEND LOG_SCU_DEPS "${abs_src}")
+        string(APPEND LOG_SCU_CONTENT "#include \"${abs_src}\"\n")
+    endforeach()
+    foreach(src ${LOGGER_QPP_SOURCES})
+        string(APPEND LOG_SCU_CONTENT "#include \"${src}\"\n")
+        list(APPEND LOG_SCU_DEPS "${src}")
+    endforeach()
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/src/logger_scu.cpp "${LOG_SCU_CONTENT}")
+    add_library(${logger_module_name} MODULE
+        ${CMAKE_CURRENT_BINARY_DIR}/src/logger_scu.cpp)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/src/logger_scu.cpp
+        PROPERTIES OBJECT_DEPENDS "${LOG_SCU_DEPS}")
 else (SINGLE_COMPILATION_UNIT)
     add_library(${logger_module_name} MODULE ${LOGGER_CPP_SRC} ${LOGGER_QPP_SOURCES})
 endif (SINGLE_COMPILATION_UNIT)

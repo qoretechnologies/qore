@@ -563,6 +563,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_opti
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
+    // inherit parent's execution mode so sub-programs respect --exec-mode=ast
+    exec_mode = p_pgm->priv->exec_mode;
+
     // copy parent feature list
     for (auto& i : p_pgm->priv->featureList) {
         assert(featureList.find(i) == featureList.end());
@@ -1930,10 +1933,43 @@ void QoreProgram::parsePending(const char* code, const char* label, ExceptionSin
     priv->parsePending(code, label, xsink, wS, wm, source, offset);
 }
 
+static void ensureIrExecMode(qore_program_private* priv) {
+    // JIT/IR exec mode only supports PO_MODERN; fallback to AST otherwise.
+    if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT)
+        && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+        if (!priv->ir_fallback_warned) {
+            printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+            priv->ir_fallback_warned = true;
+            priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
+        }
+        priv->exec_mode = QEM_AST;
+    }
+}
+
 QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    ensureIrExecMode(priv);
+
+    // Save and set runtime_po for this program's top-level code.
+    // Without this, runtime_po retains the outer program's value,
+    // causing runtime_check_parse_option() to check the wrong program's
+    // options (e.g., PO_STRICT_ARGS from an outer %modern program leaking
+    // into a sub-program without it).
+    // RAII guard ensures restore even if an unexpected C++ exception propagates.
+    class RuntimePoGuard {
+    public:
+        RuntimePoGuard(int64 new_po) : saved_po(runtime_get_parse_options()) {
+            runtime_set_parse_options(new_po);
+        }
+        ~RuntimePoGuard() {
+            runtime_set_parse_options(saved_po);
+        }
+    private:
+        int64 saved_po;
+    };
+    RuntimePoGuard po_guard(priv->pwo.parse_options);
     return priv->sb.exec(xsink);
 }
 
@@ -1941,6 +1977,8 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
+
+    ensureIrExecMode(priv);
 
     const FunctionEntry* fe;
 
@@ -1978,7 +2016,48 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
     return priv->parseRollback(xsink);
 }
 
+void QoreProgram::setExecMode(qore_exec_mode_t mode) {
+    priv->exec_mode = mode;
+}
+
+qore_exec_mode_t QoreProgram::getExecMode() const {
+    return priv->exec_mode;
+}
+
+void QoreProgram::setIRDump(bool dump) {
+    priv->ir_dump = dump;
+}
+
+bool QoreProgram::getIRDump() const {
+    return priv->ir_dump;
+}
+
+void QoreProgram::setIRFallbackWarn(bool warn) {
+    priv->ir_fallback_warn = warn;
+}
+
+bool QoreProgram::getIRFallbackWarn() const {
+    return priv->ir_fallback_warn;
+}
+
+void QoreProgram::setIRFallbackReport(bool report) {
+    priv->ir_fallback_report = report;
+}
+
+bool QoreProgram::getIRFallbackReport() const {
+    return priv->ir_fallback_report;
+}
+
+void QoreProgram::recordIRFallback(const char* reason) const {
+    priv->recordIRFallback(reason);
+}
+
+void QoreProgram::printIRFallbackReport() const {
+    priv->printIRFallbackReport();
+}
+
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
+    ensureIrExecMode(priv);
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
     if (!qc) {
