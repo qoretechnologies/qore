@@ -5522,15 +5522,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!key_val) { return false; }
             auto* value_val = getVal(inst->operands[2].id, error);
             if (!value_val) { return false; }
-            // All three operands must be NaN-boxed i64 for the runtime helper
+            // All three operands must be NaN-boxed i64 for the runtime helper.
+            // Check LLVM types to use correct boxing: i1 -> boxBool,
+            // double -> boxFloat, i64 -> boxIntInline (ConstBool is i1,
+            // ConstFloat is double — boxIntInline would misinterpret them)
             if (!nanboxed_values.count(inst->operands[0].id)) {
-                hash_val = boxIntInline(hash_val);
+                if (hash_val->getType() == i1_type) {
+                    hash_val = boxBool(hash_val);
+                } else if (hash_val->getType() == double_type) {
+                    hash_val = boxFloat(hash_val);
+                } else {
+                    hash_val = boxIntInline(hash_val);
+                }
             }
             if (!nanboxed_values.count(inst->operands[1].id)) {
-                key_val = boxIntInline(key_val);
+                if (key_val->getType() == i1_type) {
+                    key_val = boxBool(key_val);
+                } else if (key_val->getType() == double_type) {
+                    key_val = boxFloat(key_val);
+                } else {
+                    key_val = boxIntInline(key_val);
+                }
             }
             if (!nanboxed_values.count(inst->operands[2].id)) {
-                value_val = boxIntInline(value_val);
+                if (value_val->getType() == i1_type) {
+                    value_val = boxBool(value_val);
+                } else if (value_val->getType() == double_type) {
+                    value_val = boxFloat(value_val);
+                } else {
+                    value_val = boxIntInline(value_val);
+                }
             }
             auto helper = module.getOrInsertFunction("qore_rt_hash_set_key_value",
                     llvm::FunctionType::get(void_type,

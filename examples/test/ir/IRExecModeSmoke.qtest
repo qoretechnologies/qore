@@ -154,6 +154,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR compound assign in try smoke", \testIrCompoundAssignInTrySmoke());
         addTestCase("IR hash slice smoke", \testIrHashSliceSmoke());
         addTestCase("IR map dot-eval in try smoke", \testIrMapDotEvalInTrySmoke());
+        addTestCase("IR map hash bool value smoke", \testIrMapHashBoolValueSmoke());
         set_return_value(main());
     }
 
@@ -5309,5 +5310,50 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("map-dot-try:ok\n", stdout_output, "map $1.fn() in try/catch should call closure");
+    }
+
+    testIrMapHashBoolValueSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test: map {$1: True} into hash<string, bool>
+        # Regression: HashSetKeyValue in LLVM lowering used boxIntInline()
+        # for all non-nanboxed operands, but ConstBool has LLVM type i1 —
+        # boxIntInline interprets i1 as integer, producing int instead of bool.
+        # Fix: check LLVM type and use boxBool() for i1, boxFloat() for double.
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("sub test_map() {\n");
+        script.file.write("    list<string> roles = (\"value\", \"key\");\n");
+        script.file.write("    *hash<string, bool> role_hash = map {$1: True}, roles;\n");
+        script.file.write("    if (role_hash.value.type() != \"bool\") {\n");
+        script.file.write("        printf(\"FAIL: expected bool, got %s\\n\", role_hash.value.type());\n");
+        script.file.write("        exit(1);\n");
+        script.file.write("    }\n");
+        script.file.write("}\n");
+        script.file.write("test_map();\n");
+        script.file.write("printf(\"map-hash-bool:ok\\n\");\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR map hash bool should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("map-hash-bool:ok\n", stdout_output, "map {$1: True} should preserve bool type");
     }
 }
