@@ -70,6 +70,7 @@ set(ML_QPP_SRC
     src/QC_LinearRegression.qpp
     src/QC_LOF.qpp
     src/QC_GMM.qpp
+    src/QC_OnnxModel.qpp
     src/ql_ml.qpp
 )
 
@@ -88,15 +89,14 @@ set(ML_CPP_SRC
     src/GMM.cpp
 )
 
-# Conditional ONNX sources
+# Conditional ONNX Runtime support
 if (ONNXRUNTIME_FOUND)
     message(STATUS "ONNX Runtime found - building with ONNX model support")
     add_definitions(-DHAVE_ONNXRUNTIME)
     set(HAVE_ONNXRUNTIME TRUE)
-    list(APPEND ML_QPP_SRC src/QC_OnnxModel.qpp)
     list(APPEND ML_CPP_SRC src/OnnxModel.cpp)
 else()
-    message(STATUS "ONNX Runtime not found - building native algorithms only")
+    message(STATUS "ONNX Runtime not found - OnnxModel class will throw MISSING-FEATURE-ERROR")
 endif()
 
 set(QORE_DOX_ML_TMPL_SRC

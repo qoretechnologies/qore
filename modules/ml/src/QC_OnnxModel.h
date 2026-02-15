@@ -28,21 +28,24 @@
 #ifndef _QORE_MODULE_ML_QC_ONNXMODEL_H
 #define _QORE_MODULE_ML_QC_ONNXMODEL_H
 
-#ifdef HAVE_ONNXRUNTIME
-
 #include <qore/Qore.h>
-#include <onnxruntime_cxx_api.h>
 
 #include <vector>
 #include <string>
 #include <memory>
+
+#ifdef HAVE_ONNXRUNTIME
+#include <onnxruntime_cxx_api.h>
 #include <unordered_map>
+#endif
 
 DLLEXPORT extern qore_classid_t CID_ONNXMODEL;
 DLLLOCAL extern QoreClass* QC_ONNXMODEL;
 
 DLLLOCAL void preinitOnnxModelClass();
 DLLLOCAL QoreClass* initOnnxModelClass(QoreNamespace& ns);
+
+#ifdef HAVE_ONNXRUNTIME
 
 //! Input/output tensor metadata
 struct TensorMeta {
@@ -155,6 +158,24 @@ private:
     //! Infer shape from Qore data (for dynamic shapes)
     DLLLOCAL std::vector<int64_t> inferShape(const QoreValue& val, const TensorMeta& meta,
         ExceptionSink* xsink);
+};
+
+#else // !HAVE_ONNXRUNTIME
+
+//! Stub class — always defined so the OnnxModel Qore class compiles without ONNX Runtime.
+//! Constructors throw MISSING-FEATURE-ERROR at the Qore level; these methods are never called.
+class QoreOnnxModel : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreHashNode* run(const QoreHashNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreListNode* getInputInfo(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL bool isLoaded() const { return false; }
+    DLLLOCAL const std::string& getActiveProvider() const {
+        static std::string empty;
+        return empty;
+    }
 };
 
 #endif // HAVE_ONNXRUNTIME
