@@ -48,8 +48,16 @@ public class Main inherits QUnit::Test {
 
         #assertThrows("CONNECTION-OPTION-ERROR", sub () { DiscordRestConnection swsc1("test", "test", url);});
 
-        DiscordRestClient client = drc.get(False);
-        assertEq(45000, client.getTimeout());
-        assertEq(45000, client.getConnectTimeout());
+        try {
+            DiscordRestClient client = drc.get(False);
+            assertEq(45000, client.getTimeout());
+            assertEq(45000, client.getConnectTimeout());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Discord API: %s", ex.desc));
+            }
+            rethrow;
+        }
     }
 }

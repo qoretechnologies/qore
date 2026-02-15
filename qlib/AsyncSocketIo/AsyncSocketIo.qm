@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file AsyncSocketIo.qm Qore user module providing an API for providing connections to %Qore
 
-/*  AsyncSocketIo.qm Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  AsyncSocketIo.qm Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,10 @@ module AsyncSocketIo {
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        # Pre-initialize the global controller singleton
+        AsyncSocketIo::globalController = new AsyncSocketIo::AsyncSocketIoController(True);
+    };
 }
 
 /** @mainpage AsyncSocketIo Module
@@ -56,6 +60,23 @@ module AsyncSocketIo {
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - the initial version of the AsyncSocketIo module
+
+    @section asyncsocketiointernals Internal Design
+
+    This module provides a shared async socket I/O controller used by HttpServerAsyncIo and other components.
+    The controller owns an I/O thread that blocks in Socket::poll() over a list of socket poll items. A pipe is
+    used as a control signal to wake the poll loop when commands are enqueued. Commands are queued under a
+    controller lock and processed in the I/O thread; completed operations are reported back to a coordinator
+    thread for higher-level handling.
+
+    Key concepts:
+    - The controller manages SocketPollOperation instances representing accepts and I/O work.
+    - A control pipe is always pollable so the I/O thread can be woken for new commands or shutdown.
+    - The command queue and control pipe are coordinated to avoid lost wakeups.
+    - Results are pushed to a result queue processed by the coordinator thread.
+
+    Consumers should not touch internal queues directly. All interaction must go through the controller API
+    and must respect the documented locking requirements.
 */
 
 #! The AsyncSocketIo namespace

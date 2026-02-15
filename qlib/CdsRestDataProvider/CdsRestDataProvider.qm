@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/*  CdsRestDataProvider.qm Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/*  CdsRestDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,6 +55,7 @@ module CdsRestDataProvider {
             "logo": DynamicsLogo,
             "logo_file_name": "dynamics-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -164,6 +165,7 @@ module CdsRestDataProvider {
             "logo": BusinessCentralLogo,
             "logo_file_name": "business-central-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -299,12 +301,12 @@ module CdsRestDataProvider {
 
     @section cdsrestdataproviderintro Introduction to the CdsRestDataProvider Module
 
-    The %CdsRestDataProvider module provides a @ref dataproviderintro "data provider" API for Microsoft Dynamics 365
+    The %CdsRestDataProvider module provides a \c dataproviderintro "data provider" API for Microsoft Dynamics 365
     Common Data Service REST services.  The
     @ref CdsRestDataProvider::CdsRestDataProvider "CdsRestDataProvider" class allows for
     introspecting a Microsoft Common Data Service application instance (such as Dynamics 365, for example), while the
     @ref CdsRestDataProvider::ODataEntityDataProvider "ODataEntityDataProvider" class
-    supports the @ref dataproviderintro "data provider" record-based API for querying and manipulating entity data in
+    supports the \c dataproviderintro "data provider" record-based API for querying and manipulating entity data in
     the application.
 
     CDS instances can be introspected with the following format:
@@ -317,8 +319,8 @@ module CdsRestDataProvider {
     The following classes are provided by this module for Dynamics 365:
     - @ref CdsRestDataProvider::CdsRestDataProvider "CdsRestDataProvider"
     - @ref CdsRestDataProvider::CdsRestDataProviderFactory "CdsRestDataProviderFactory"
-    - @ref CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider"
-    - @ref CdsRestDataProvider::CdsRestRecordIterator "CdsRestRecordIterator"
+    - \c CdsRestDataProvider::CdsEntityDataProvider "CdsEntityDataProvider"
+    - \c CdsRestDataProvider::CdsRestRecordIterator "CdsRestRecordIterator"
 
     The following classes are provided for Business Central:
     - @ref CdsRestDataProvider::BcRestDataProvider "BcRestDataProvider"
@@ -326,8 +328,8 @@ module CdsRestDataProvider {
     - @ref CdsRestDataProvider::BcCompaniesDataProvider "BcCompaniesDataProvider"
     - @ref CdsRestDataProvider::BcCompanyDataProvider "BcCompanyDataProvider"
     - @ref CdsRestDataProvider::BcTablesDataProvider "BcTablesDataProvider"
-    - @ref CdsRestDataProvider::BcEntityDataProvider "BcEntityDataProvider"
-    - @ref CdsRestDataProvider::BcRecordIterator "BcRecordIterator"
+    - \c CdsRestDataProvider::BcEntityDataProvider "BcEntityDataProvider"
+    - \c CdsRestDataProvider::BcRecordIterator "BcRecordIterator"
 
     @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
     - added support for Microsoft Dynamics 365 Business Central
@@ -355,12 +357,10 @@ public const DynamicsAppName = "Dynamics";
 
 #! Application name for Business Central
 public const BusinessCentralAppName = "BusinessCentral";
-}
 
-namespace Priv {
 # used in accordance with: https://learn.microsoft.com/en-us/dynamics365/get-started/icons#icon-updates
-const DynamicsLogo = File::readTextFile(get_script_dir() + "/dynamics-logo.svg");
+public const DynamicsLogo = File::readTextFile(get_script_dir() + "/dynamics-logo.svg");
 
 # Business Central logo - simplified building/chart icon based on Microsoft BC branding
-const BusinessCentralLogo = File::readTextFile(get_script_dir() + "/business-central-logo.svg");
+public const BusinessCentralLogo = File::readTextFile(get_script_dir() + "/business-central-logo.svg");
 }

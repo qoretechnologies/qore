@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/FunctionalOperator.h"
@@ -46,7 +47,7 @@ QoreString* QoreSelectOperatorNode::getAsString(bool& del, int foff, ExceptionSi
 }
 
 int QoreSelectOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&select_str);
+    qore_string_private::get(str)->concat(&select_str);
     return 0;
 }
 
@@ -81,7 +82,6 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // iterated expression
     if (QoreTypeInfo::hasType(iteratorTypeInfo)) {
         if (QoreTypeInfo::isType(iteratorTypeInfo, NT_NOTHING)) {
-            // FIXME: raise an exception with %strict-types
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
                 "the iterator expression with the select operator (the first expression) has no value (NOTHING) " \
                 "and therefore this expression will also return no value; update the expression to return a value " \

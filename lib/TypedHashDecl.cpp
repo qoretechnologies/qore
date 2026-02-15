@@ -157,12 +157,16 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
         orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
         parentHashDecl(old.parentHashDecl),
+        // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
+        // Use getPath() to get the full namespace path for cross-namespace inheritance
+        parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getPath() : ""),
         pub(false),
         sys(old.sys),
         parse_init_done(old.parse_init_done) {
     // copy member list
     for (auto& i : old.members.member_list) {
-        members.addNoCheck(strdup(i.first), i.second ? new HashDeclMemberInfo(*i.second) : nullptr);
+        HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
+        members.addNoCheck(strdup(i.first), new_member);
     }
 }
 
@@ -344,7 +348,9 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
 
 int typed_hash_decl_private::parseCheckComplexHashAssignment(const QoreProgramLocation* loc,
         const QoreTypeInfo* vti) const {
-    assert(QoreTypeInfo::hasType(vti));
+    if (!QoreTypeInfo::hasType(vti)) {
+        return 0;
+    }
     int err = 0;
     for (auto& i : members.member_list) {
         if (!QoreTypeInfo::parseAccepts(vti, i.second->getTypeInfo())) {
@@ -478,6 +484,12 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 return -1;
             }
 
+            // ensure the value is referenced before type acceptance, since the accept handler
+            // may discard the old value during type conversion; this includes complex type
+            // handling (e.g. list<string> from list, hash<string, int> from hash) where
+            // acceptInputComplexList/Hash creates a copy and discards the original, not just
+            // explicit filter maps
+            val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, xsink);
             if (*xsink) {
                 return -1;
@@ -487,29 +499,6 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             // issue #3481: maintain DGC counts
             if (needs_scan(v)) {
                 h_priv->incScanCount(1);
-            }
-        } else {
-            QoreProgram* pgm = getProgram();
-            // there may be no program context when an exception is thrown while attaching to a Program in an external thread
-            if (pgm && (pgm->getParseOptions64() & PO_STRICT_TYPES)) {
-                const QoreTypeInfo* key_type = i.second->getTypeInfo();
-                bool requires_value = !QoreTypeInfo::parseAcceptsReturns(key_type, NT_NOTHING);
-                if (!requires_value) {
-                    continue;
-                }
-                if (init) {
-                    xsink->raiseException("RUNTIME-TYPE-ERROR", "hash value to initialize hashdecl '%s' is missing a " \
-                        "%s value for key '%s'", name.c_str(), QoreTypeInfo::getName(key_type), i.first);
-                    return -1;
-                }
-                qore_hash_private* h_priv = qore_hash_private::get(*h);
-                QoreValue& v = h_priv->getValueRef(i.first);
-                assert(v.isNothing());
-                v = QoreTypeInfo::getDefaultQoreValue(i.second->getTypeInfo());
-                // issue #3481: maintain DGC counts
-                if (needs_scan(v)) {
-                    h_priv->incScanCount(1);
-                }
             }
         }
     }

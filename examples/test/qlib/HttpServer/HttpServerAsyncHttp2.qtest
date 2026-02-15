@@ -87,6 +87,42 @@ class SimpleHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns an empty body with HTTP 200
+class EmptyBodyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a mixed-case header
+class HeaderCaseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {
+            "Content-Type": "text/plain",
+            "X-Test-Header": "ok",
+        });
+    }
+}
+
+#! Handler that verifies request header names are lowercase
+class RequestHeaderLowercaseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        bool ok = True;
+        foreach string key in (keys hdr) {
+            if (key.startsWith(":")) {
+                continue;
+            }
+            if (key != key.lwr()) {
+                ok = False;
+                break;
+            }
+        }
+        return makeResponse(ok ? 200 : 400, ok ? "OK" : "BAD", {
+            "Content-Type": "text/plain",
+        });
+    }
+}
+
 #! Handler that returns a configurable status code
 class StatusCodeHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -97,6 +133,127 @@ class StatusCodeHandler inherits AbstractHttpRequestHandler {
             code = int(m[0]);
         }
         return makeResponse(code, sprintf("Response with status %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns SOAP XML
+class SoapHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string xml = "<?xml version=\"1.0\"?><soap:Envelope><soap:Body>OK</soap:Body></soap:Envelope>";
+        return makeResponse(200, xml, {"Content-Type": "application/soap+xml; charset=utf-8"});
+    }
+}
+
+#! Handler that returns gzip-compressed text
+class GzipHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-ok";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, gz, {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip",
+        });
+    }
+}
+
+#! Handler that returns gzip-compressed text via stream body
+class GzipStreamHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-stream";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, new BinaryInputStream(gz), {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip",
+        });
+    }
+}
+
+#! Handler that returns gzip-compressed text with multiple encodings
+class GzipMultiHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string msg = "gzip-multi";
+        binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+        return makeResponse(200, gz, {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "gzip, br",
+        });
+    }
+}
+
+#! Handler that returns a body with an unknown content-encoding
+class UnknownEncodingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "unknown-encoding", {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": "mystery",
+        });
+    }
+}
+
+#! Chunked stream request for HTTP/2 async response testing
+class ChunkedStreamRequest inherits AbstractStreamRequest {
+    private {
+        list<string> chunks;
+        int idx = 0;
+        *hash<auto> respHdr;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body, list<string> chunks, *hash<auto> respHdr)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.chunks = chunks;
+        self.respHdr = respHdr;
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Transfer-Encoding": "chunked",
+            } + respHdr,
+        };
+    }
+
+    private auto sendImpl() {
+        if (idx >= chunks.size()) {
+            return;
+        }
+        string chunk = chunks[idx];
+        idx += 1;
+        return chunk;
+    }
+}
+
+#! Handler that streams a chunked response via AbstractStreamRequest
+class ChunkedStreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        list<string> chunks = ("chunk-1-", "chunk-2-", "chunk-3");
+        return new ChunkedStreamRequest(listener, self, s, cx, hdr, body, chunks, {
+            "Content-Type": "text/plain",
+        });
+    }
+}
+
+#! Handler that returns an error without a body to trigger sendHttpError()
+class EmptyErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 404,
+        };
+    }
+}
+
+#! Handler that returns without sending a response (simulates a buggy handler)
+class NoResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "reply_sent": True,
+        };
     }
 }
 
@@ -169,6 +326,18 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
+        addTestCase("HTTP/2 empty body returns 204", \testHttp2EmptyBodyBecomes204());
+        addTestCase("HTTP/2 SOAP content-type body", \testSoapContentTypeHttp2());
+        addTestCase("HTTP/2 gzip decoded body", \testGzipContentTypeHttp2());
+        addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
+        addTestCase("HTTP/2 gzip multi-encoding body", \testGzipMultiEncodingHttp2());
+        addTestCase("HTTP/2 unknown encoding body", \testUnknownEncodingHttp2());
+        addTestCase("HTTP/2 gzip stream body", \testGzipStreamHttp2());
+        addTestCase("HTTP/2 chunked stream body", \testHttp2ChunkedStreamBody());
+        addTestCase("HTTP/2 error response headers", \testHttp2ErrorResponseHeaders());
+        addTestCase("HTTP/2 missing response fallback", \testHttp2MissingResponseFallback());
+        addTestCase("HTTP/2 header lowercase normalization", \testHttp2HeaderLowercase());
+        addTestCase("HTTP/2 request header lowercase normalization", \testHttp2RequestHeaderLowercase());
         addTestCase("multiple separate connections", \testMultipleSeparateConnections());
         addTestCase("large HTTP/2 async response", \testLargeHttp2Response());
         addTestCase("concurrent HTTP/2 async responses", \testConcurrentHttp2Responses());
@@ -199,10 +368,22 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Set up handlers
         mServer.setHandler("simple", "/simple", NOTHING, new SimpleHandler());
+        mServer.setHandler("empty-body", "/empty-body", NOTHING, new EmptyBodyHandler());
+        mServer.setHandler("header-case", "/header-case", NOTHING, new HeaderCaseHandler());
+        mServer.setHandler("request-header-case", "/request-header-case", NOTHING,
+            new RequestHeaderLowercaseHandler());
         mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
+        mServer.setHandler("soap", "/soap", NOTHING, new SoapHandler());
+        mServer.setHandler("gzip", "/gzip-plain", NOTHING, new GzipHandler());
+        mServer.setHandler("gzip-stream", "/gzip-stream", NOTHING, new GzipStreamHandler());
+        mServer.setHandler("gzip-multi", "/gzip-multi", NOTHING, new GzipMultiHandler());
+        mServer.setHandler("unknown-encoding", "/unknown-encoding", NOTHING, new UnknownEncodingHandler());
+        mServer.setHandler("chunked-stream", "/chunked-stream", NOTHING, new ChunkedStreamHandler());
+        mServer.setHandler("empty-error", "/empty-error", NOTHING, new EmptyErrorHandler());
+        mServer.setHandler("no-response", "/no-response", NOTHING, new NoResponseHandler());
 
         # Add HTTPS listener for HTTP/2 (HTTP/2 requires HTTPS via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -243,6 +424,264 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         if (m_options.verbose > 1) {
             printf("Basic HTTP/2 response: OK (http_version: %y)\n", resp.http_version);
+        }
+    }
+
+    testHttp2EmptyBodyBecomes204() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/empty-body");
+        assertEq(204, resp.status_code, "HTTP/2 empty-body response should return 204");
+        assertNothing(resp.body);
+    }
+
+    testHttp2ResponseHeadersNoHopByHop() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        hash<auto> info;
+        hash<auto> resp = rc.get("/simple", NOTHING, \info);
+        assertEq(200, resp.status_code, "HTTP/2 response should return 200");
+
+        if (!(resp.http_version == "HTTP/2" || resp.http_version == "2")) {
+            testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", resp.http_version));
+            return;
+        }
+
+        hash<auto> headers = info."response-headers" ?? {};
+        hash<auto> headers_raw = info."response-headers-raw" ?? {};
+
+        assertFalse(exists headers.connection, "HTTP/2 response must not include Connection");
+        assertFalse(exists headers."keep-alive", "HTTP/2 response must not include Keep-Alive");
+        assertFalse(exists headers."proxy-connection", "HTTP/2 response must not include Proxy-Connection");
+        assertFalse(exists headers."transfer-encoding", "HTTP/2 response must not include Transfer-Encoding");
+        assertFalse(exists headers.upgrade, "HTTP/2 response must not include Upgrade");
+        assertFalse(exists headers.te, "HTTP/2 response must not include TE");
+
+        assertFalse(exists headers_raw.Connection, "HTTP/2 raw response must not include Connection");
+        assertFalse(exists headers_raw."Keep-Alive", "HTTP/2 raw response must not include Keep-Alive");
+        assertFalse(exists headers_raw."Proxy-Connection", "HTTP/2 raw response must not include Proxy-Connection");
+        assertFalse(exists headers_raw."Transfer-Encoding", "HTTP/2 raw response must not include Transfer-Encoding");
+        assertFalse(exists headers_raw.Upgrade, "HTTP/2 raw response must not include Upgrade");
+        assertFalse(exists headers_raw.TE, "HTTP/2 raw response must not include TE");
+    }
+
+    testHttp2HeaderLowercase() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        hash<auto> info;
+        hash<auto> resp = rc.get("/header-case", NOTHING, \info);
+        assertEq(200, resp.status_code, "HTTP/2 response should return 200");
+
+        if (!(resp.http_version == "HTTP/2" || resp.http_version == "2")) {
+            testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", resp.http_version));
+            return;
+        }
+
+        hash<auto> headers = info."response-headers" ?? {};
+        hash<auto> headers_raw = info."response-headers-raw" ?? {};
+        bool has_lower = exists headers."x-test-header" || exists headers_raw."x-test-header";
+        bool has_upper = exists headers."X-Test-Header" || exists headers_raw."X-Test-Header";
+        assertTrue(has_lower, "HTTP/2 response headers should be lowercase");
+        assertFalse(has_upper, "HTTP/2 response headers should not preserve uppercase");
+    }
+
+    testHttp2RequestHeaderLowercase() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        hash<auto> info;
+        hash<auto> resp = rc.get("/request-header-case", {
+            "X-Mixed-Case": "1",
+        }, \info);
+        assertEq(200, resp.status_code, "HTTP/2 request should return 200");
+
+        if (!(resp.http_version == "HTTP/2" || resp.http_version == "2")) {
+            testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", resp.http_version));
+            return;
+        }
+    }
+
+    testSoapContentTypeHttp2() {
+        string xml = "<?xml version=\"1.0\"?><soap:Envelope><soap:Body>OK</soap:Body></soap:Envelope>";
+
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/soap");
+        assertEq(200, resp.status_code, "SOAP HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "SOAP body should be a string");
+        assertEq(xml, resp.body, "SOAP body should match");
+    }
+
+    testGzipContentTypeHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-plain");
+        assertEq(200, resp.status_code, "gzip HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip decoded body should be a string");
+        assertEq("gzip-ok", resp.body, "gzip decoded body should match");
+    }
+
+    testGzipPassthruHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "encoding_passthru": True,
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-plain");
+        assertEq(200, resp.status_code, "gzip passthru HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_BINARY, "gzip passthru body should be binary");
+        string decoded = AbstractHttpRequestHandler::decodeBody("gzip", resp.body, "utf-8");
+        assertEq("gzip-ok", decoded, "gzip passthru body should decode to expected string");
+    }
+
+    testGzipMultiEncodingHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-multi");
+        assertEq(200, resp.status_code, "gzip multi-encoding HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip multi-encoding body should be a string");
+        assertEq("gzip-multi", resp.body, "gzip multi-encoding body should match");
+    }
+
+    testUnknownEncodingHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/unknown-encoding");
+        assertEq(200, resp.status_code, "unknown encoding HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "unknown encoding body should be a string");
+        assertEq("unknown-encoding", resp.body, "unknown encoding body should match");
+    }
+
+    testGzipStreamHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/gzip-stream");
+        assertEq(200, resp.status_code, "gzip stream HTTP/2 GET should return 200");
+        assertTrue(resp.body.typeCode() == NT_STRING, "gzip stream body should be a string");
+        assertEq("gzip-stream", resp.body, "gzip stream body should match");
+    }
+
+    testHttp2ChunkedStreamBody() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/chunked-stream");
+        assertEq(200, resp.status_code, "HTTP/2 chunked stream should return 200");
+        assertEq("chunk-1-chunk-2-chunk-3", resp.body,
+            "HTTP/2 chunked stream should return full body");
+    }
+
+    testHttp2ErrorResponseHeaders() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        try {
+            rc.get("/empty-error", NOTHING, NOTHING);
+            assertTrue(False, "HTTP/2 error response should raise REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, "Expected REST-RESPONSE-ERROR for 404 response");
+            hash<auto> info = ex.arg ?? {};
+            assertEq(404, info.status_code, "HTTP/2 error response should return 404");
+            if (info.http_version != "2" && info.http_version != "HTTP/2") {
+                testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", info.http_version));
+                return;
+            }
+            assertTrue(exists info."content-length",
+                "HTTP/2 error responses should include Content-Length when body is buffered");
+            hash<auto> headers = info."response-headers" ?? {};
+            hash<auto> headers_raw = info."response-headers-raw" ?? {};
+            assertFalse(exists headers.connection, "HTTP/2 error response must not include Connection");
+            assertFalse(exists headers."keep-alive", "HTTP/2 error response must not include Keep-Alive");
+            assertFalse(exists headers."proxy-connection", "HTTP/2 error response must not include Proxy-Connection");
+            assertFalse(exists headers."transfer-encoding",
+                "HTTP/2 error response must not include Transfer-Encoding");
+            assertFalse(exists headers.upgrade, "HTTP/2 error response must not include Upgrade");
+            assertFalse(exists headers.te, "HTTP/2 error response must not include TE");
+            assertFalse(exists headers_raw.Connection, "HTTP/2 error response must not include Connection");
+            assertFalse(exists headers_raw."Keep-Alive", "HTTP/2 error response must not include Keep-Alive");
+            assertFalse(exists headers_raw."Proxy-Connection",
+                "HTTP/2 error response must not include Proxy-Connection");
+            assertFalse(exists headers_raw."Transfer-Encoding",
+                "HTTP/2 error response must not include Transfer-Encoding");
+            assertFalse(exists headers_raw.Upgrade, "HTTP/2 error response must not include Upgrade");
+            assertFalse(exists headers_raw.TE, "HTTP/2 error response must not include TE");
+        }
+    }
+
+    testHttp2MissingResponseFallback() {
+        RestClient rc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+            "http_version": "2.0",
+        });
+
+        try {
+            rc.get("/no-response", NOTHING, NOTHING);
+            assertTrue(False, "HTTP/2 missing response should raise REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, "Expected REST-RESPONSE-ERROR for missing response");
+            hash<auto> info = ex.arg ?? {};
+            assertEq(500, info.status_code, "HTTP/2 missing response should return 500");
+            if (info.http_version != "2" && info.http_version != "HTTP/2") {
+                testSkip(sprintf("HTTP/2 not negotiated (http_version: %y)", info.http_version));
+                return;
+            }
         }
     }
 

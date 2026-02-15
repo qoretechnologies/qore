@@ -3,16 +3,34 @@
 
 %modern
 
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
+%requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/SmtpClient.qm
 %requires ../../../../qlib/Pop3Client.qm
 %requires ../../../../qlib/QUnit.qm
 
 %exec-class Pop3ClientTest
 
 public class Pop3ClientTest inherits QUnit::Test {
+    private {
+        # Environment variables for live testing (e.g., against GreenMail Docker container)
+        *string pop3Host = ENV.POP3_TEST_HOST;
+        *string pop3Port = ENV.POP3_TEST_PORT;
+        *string smtpHost = ENV.SMTP_TEST_HOST;
+        *string smtpPort = ENV.SMTP_TEST_PORT;
+        *string testUser = ENV.POP3_TEST_USER;
+        *string testPass = ENV.POP3_TEST_PASS;
+    }
+
     constructor() : Test("Pop3ClientTest", "1.0") {
         addTestCase("Pop3Client tests", \pop3ClientTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("new API tests", \newApiTests());
+        addTestCase("polling API tests", \pollingApiTests());
+        addTestCase("live async ping tests", \liveAsyncPingTests());
         set_return_value(main());
     }
 
@@ -44,5 +62,191 @@ public class Pop3ClientTest inherits QUnit::Test {
         conn = new Pop3Connection("test", "test", url, {"monitor": False});
         client = conn.get(False);
         assertEq("localhost:8099", client.getTarget());
+    }
+
+    newApiTests() {
+        # Test that new API methods exist (Pop3Client 2.1)
+        # Use a very short connect timeout to avoid long waits when testing method existence
+        # These methods will try to connect, which will fail fast with the short timeout
+        Pop3Client p3c("pop3://user:pass@host.com", {"connect_timeout": 100});
+
+        # Verify the client is not connected initially
+        assertFalse(p3c.isConnected(), "client should not be connected initially");
+
+        # Test clearCapabilities() can be called without error
+        p3c.clearCapabilities();
+        assertTrue(True, "clearCapabilities() callable");
+
+        # Test that new methods exist by checking they throw connection errors (not method-not-found)
+        # capa() method - will try to connect and fail (fast due to short timeout)
+        try {
+            p3c.capa();
+            fail("capa() should throw on unconnected client");
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - should fail due to connection, not missing method
+            assertTrue(ex.err != "UNKNOWN-METHOD", "capa() method exists");
+        }
+
+        # hasCapability() method - will try to connect and fail
+        p3c.clearCapabilities();
+        try {
+            p3c.hasCapability("UIDL");
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected - connection required for hasCapability when no cache
+            assertTrue(ex.err != "UNKNOWN-METHOD", "hasCapability() method exists");
+        }
+
+        # uidl() method (no args) - will try to connect and fail
+        try {
+            p3c.uidl();
+            fail("uidl() should throw on unconnected client");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err != "UNKNOWN-METHOD", "uidl() method exists (no args)");
+        }
+
+        # uidl(msg) method - will try to connect and fail
+        try {
+            p3c.uidl("1");
+            fail("uidl(msg) should throw on unconnected client");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err != "UNKNOWN-METHOD", "uidl(msg) method exists");
+        }
+
+        # top() method - will try to connect and fail
+        try {
+            p3c.top("1", 0);
+            fail("top() should throw on unconnected client");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err != "UNKNOWN-METHOD", "top() method exists");
+        }
+
+        # getMessageHeaders() method - will try to connect and fail
+        try {
+            p3c.getMessageHeaders("1");
+            fail("getMessageHeaders() should throw on unconnected client");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err != "UNKNOWN-METHOD", "getMessageHeaders() method exists");
+        }
+
+        # Test getInfo() method - doesn't require connection
+        hash<auto> info = p3c.getInfo();
+        assertEq("host.com:110", info.target, "getInfo() returns correct target");
+        assertFalse(info.ssl, "getInfo() returns correct ssl flag");
+        assertEq("user", info.user, "getInfo() returns correct user");
+        assertEq("pass", info.pass, "getInfo() returns correct pass");
+    }
+
+    pollingApiTests() {
+        # Test that Pop3Connection supports the polling API
+        string url = "pop3s://user:pass@localhost:8099";
+        Pop3Connection conn("test", "test", url);
+
+        # Test supportsPollingApi()
+        assertTrue(conn.supportsPollingApi(), "Pop3Connection supports polling API");
+
+        # Test that startPollConnect() returns a valid poll operation
+        Qore::AbstractPollOperation poller = conn.startPollConnect();
+        assertEq("Pop3PingPollOperation", poller.className(), "startPollConnect returns Pop3PingPollOperation");
+        assertEq("ping", poller.getGoal(), "poll operation goal is 'ping'");
+        assertEq("connect", poller.getState(), "initial state is 'connect'");
+        assertFalse(poller.goalReached(), "goal not reached initially");
+
+        # Test that we can abort the operation
+        poller.abort();
+        assertTrue(True, "abort() callable");
+
+        # Test Pop3PingState enum values
+        assertEq("connect", Pop3PingState::Connect, "Pop3PingState::Connect");
+        assertEq("read-greeting", Pop3PingState::ReadGreeting, "Pop3PingState::ReadGreeting");
+        assertEq("send-stls", Pop3PingState::SendStls, "Pop3PingState::SendStls");
+        assertEq("upgrade-tls", Pop3PingState::UpgradeToTls, "Pop3PingState::UpgradeToTls");
+        assertEq("send-user", Pop3PingState::SendUser, "Pop3PingState::SendUser");
+        assertEq("send-pass", Pop3PingState::SendPass, "Pop3PingState::SendPass");
+        assertEq("send-apop", Pop3PingState::SendApop, "Pop3PingState::SendApop");
+        assertEq("send-xoauth2", Pop3PingState::SendXoauth2, "Pop3PingState::SendXoauth2");
+        assertEq("send-noop", Pop3PingState::SendNoop, "Pop3PingState::SendNoop");
+        assertEq("complete", Pop3PingState::Complete, "Pop3PingState::Complete");
+    }
+
+    liveAsyncPingTests() {
+        # Skip if no test server is configured
+        if (!pop3Host || !testUser || !testPass) {
+            testSkip("Live async ping tests skipped: set POP3_TEST_HOST, POP3_TEST_USER, POP3_TEST_PASS environment variables");
+            return;
+        }
+
+        string port = pop3Port ?? "110";
+        string smtpPortVal = smtpPort ?? "25";
+
+        # First send a test email if SMTP is available (to ensure the account has messages)
+        if (smtpHost) {
+            try {
+                string smtpUrl = sprintf("smtp://%s:%s@%s:%s", testUser, testPass, smtpHost, smtpPortVal);
+                SmtpClient smtp(smtpUrl);
+                MailMessage::Message msg(testUser, "Async Ping Test");
+                msg.setBody("Test email for async ping testing.");
+                msg.addTO(testUser);
+                smtp.sendMessage(msg);
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore SMTP errors - just trying to ensure the account exists
+            }
+        }
+
+        # Test Pop3Connection async ping
+        {
+            string url = sprintf("pop3://%s:%s@%s:%s", testUser, testPass, pop3Host, port);
+            Pop3Connection conn("test", "async ping test", url);
+
+            assertTrue(conn.supportsPollingApi(), "Pop3Connection supports polling API");
+
+            # Test the full async ping cycle with actual socket polling
+            Qore::AbstractPollOperation poller = conn.startPollConnect();
+
+            assertEq("Pop3PingPollOperation", poller.className(), "startPollConnect returns correct class");
+            assertEq("ping", poller.getGoal(), "goal is ping");
+            assertFalse(poller.goalReached(), "goal not reached initially");
+
+            # Run the poll loop
+            int iterations = 0;
+            int maxIterations = 100;
+            list<string> states = (poller.getState(),);
+
+            while (!poller.goalReached()) {
+                iterations++;
+
+                *hash<SocketPollInfo> pollInfo = poller.continuePoll();
+                string currentState = poller.getState();
+
+                # Track state transitions
+                if (states.last() != currentState) {
+                    states += currentState;
+                }
+
+                if (pollInfo) {
+                    # Use Socket::poll() for actual I/O waiting
+                    Socket::poll((pollInfo,), 5s);
+                }
+
+                if (iterations > maxIterations) {
+                    fail(sprintf("Async ping exceeded %d iterations", maxIterations));
+                    break;
+                }
+            }
+
+            assertTrue(poller.goalReached(), "async ping completed successfully");
+            assertTrue(iterations > 0, "async ping required iterations");
+            assertTrue(states.size() >= 2, "async ping had state transitions");
+            assertEq("complete", poller.getState(), "final state is complete");
+        }
+
+        # Test blocking ping for comparison
+        {
+            string url = sprintf("pop3://%s:%s@%s:%s", testUser, testPass, pop3Host, port);
+            Pop3Connection conn("test", "blocking ping test", url);
+
+            hash<PingInfo> pingResult = conn.ping();
+            assertTrue(pingResult.ok, "blocking ping succeeded");
+            assertTrue(pingResult.time.val(), "blocking ping measured time");
+        }
     }
 }

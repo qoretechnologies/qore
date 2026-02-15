@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Pop3ClientMessageGetDataProvider class definition
 
-/** Pop3ClientMessageGetDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** Pop3ClientMessageGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,7 +61,7 @@ public class Pop3ClientMessageGetDataProvider inherits Pop3ClientDataProviderBas
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        Message msg = pop3.getMessage(id);
+        MailMessage::Message msg = pop3.getMessage(id);
         return msg.getInfo();
     }
 

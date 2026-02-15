@@ -26,7 +26,7 @@
 public namespace DataProvider {
 
 #! Debug info operation types
-/** @since DataProvider 3.5
+/** @since DataProvider 3.3
 */
 public const DPDI_OP_REQUEST = "request";           #!< HTTP/REST request operation
 public const DPDI_OP_RESPONSE = "response";         #!< HTTP/REST response operation
@@ -38,7 +38,7 @@ public const DPDI_OP_RECEIVE = "receive";           #!< Message received (WebSoc
 #! Data provider debug info structure
 /** This hashdecl provides technical debugging information about data provider operations.
 
-    @since DataProvider 3.5
+    @since DataProvider 3.3
 */
 public hashdecl DataProviderDebugInfo {
     #! Operation type (e.g., "request", "response", "connect", "send", "receive")
@@ -124,10 +124,10 @@ public hashdecl DataProviderDebugInfo {
 }
 
 #! Abstract base class for debug info collection
-/** Data providers call the @ref collect() method with debug info for each operation.
+/** Data providers call the @ref DataProvider::AbstractDebugInfoCollector::collect method with debug info for each operation.
     Implementations can store, log, or process this information as needed.
 
-    @since DataProvider 3.5
+    @since DataProvider 3.3
 */
 public class AbstractDebugInfoCollector {
     #! Called by data provider with debug info for each operation
@@ -171,7 +171,7 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 }
     @endcode
 
-    @since DataProvider 3.5
+    @since DataProvider 3.3
 */
 public class BufferedDebugInfoCollector inherits AbstractDebugInfoCollector {
     private {
@@ -261,7 +261,7 @@ provider.setDebugCollector(collector);
 auto response = provider.doRequest(request);
     @endcode
 
-    @since DataProvider 3.5
+    @since DataProvider 3.3
 */
 public class ConsoleDebugInfoCollector inherits AbstractDebugInfoCollector {
     private {

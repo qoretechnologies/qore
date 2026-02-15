@@ -4,7 +4,7 @@
 
   Qore astparser module
 
-  Copyright (C) 2017 - 2024 Qore Technologies s.r.o.
+  Copyright (C) 2017 - 2026 Qore Technologies s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -36,40 +36,38 @@
 #include "../config.h"
 #endif
 
-QoreStringNode *astparser_module_init();
-void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns);
-void astparser_module_delete();
+static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
+static void astparser_module_delete();
 
-// qore module symbols
-DLLEXPORT char qore_module_name[] = "astparser";
-DLLEXPORT char qore_module_version[] = PACKAGE_VERSION;
-DLLEXPORT char qore_module_description[] = "Qore AST parser module";
-DLLEXPORT char qore_module_author[] = "Ondrej Musil <ondrej.musil@qoretechnologies.com>";
-DLLEXPORT char qore_module_url[] = "http://qore.org";
-DLLEXPORT int qore_module_api_major = QORE_MODULE_API_MAJOR;
-DLLEXPORT int qore_module_api_minor = QORE_MODULE_API_MINOR;
-DLLEXPORT qore_module_init_t qore_module_init = astparser_module_init;
-DLLEXPORT qore_module_ns_init_t qore_module_ns_init = astparser_module_ns_init;
-DLLEXPORT qore_module_delete_t qore_module_delete = astparser_module_delete;
-DLLEXPORT qore_license_t qore_module_license = QL_MIT;
-DLLEXPORT char qore_module_license_str[] = "MIT";
+extern "C" DLLEXPORT void astparser_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = "astparser";
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "Qore AST parser module";
+    mod_info.author = "Ondrej Musil <ondrej.musil@qoretechnologies.com>";
+    mod_info.url = "http://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = astparser_module_init;
+    mod_info.ns_init = astparser_module_ns_init;
+    mod_info.del = astparser_module_delete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+}
 
 QoreNamespace AstParserNS("Qore::astparser");
 
-QoreStringNode* astparser_module_init() {
+static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     AstParserNS.addSystemClass(initAstTreeClass(AstParserNS));
-    AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));
     AstParserNS.addSystemClass(initAstParserClass(AstParserNS));
+    AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));
     init_ast_constants(AstParserNS);
-
-    return nullptr;
 }
 
-void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns) {
+static void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     qns->addNamespace(AstParserNS.copy());
 }
 
-void astparser_module_delete() {
+static void astparser_module_delete() {
     // nothing to do here in this case
 }
-

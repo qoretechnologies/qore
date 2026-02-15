@@ -11,6 +11,8 @@
 const closure = string sub () { return "global const closure"; };
 const mclosure = string sub () { return "global const mclosure"; };
 
+our code vclosure;
+
 namespace Ns {
     our code vclosure;
 }
@@ -47,7 +49,7 @@ public class BarerefTest inherits QUnit::Test {
 
     closuresTest() {
         Ns::vclosure = string sub () { return "Ns var vclosure"; };
-        our code ::vclosure = string sub () { return "global var vclosure"; };
+        ::vclosure = string sub () { return "global var vclosure"; };
 
         testAssertion( "static method call 1", \t1(), NOTHING, new TestResultValue( "t1"));
         my code func = \t1();

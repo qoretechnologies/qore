@@ -144,6 +144,14 @@ class MyWsConnection inherits WebSocketConnection {
                 # echo the message back
                 send(msg.substr(4), WSOP_Text, True);
                 break;
+            case =~ /^BROADCAST/:
+                # broadcast message to all connections via handler
+                handler.sendAll(msg.substr(9));
+                break;
+            case =~ /^BCASTBIN/:
+                # broadcast binary message to all connections via handler
+                handler.sendAll(binary(msg.substr(8)));
+                break;
             case "WAIT":
                 send(strmul("x", 1024 * 1024 * 5), WSOP_Text, True);
                 break;
@@ -223,6 +231,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("WebSocketHandler tests", \webSocketHandlerTests());
         addTestCase("extension tests", \extensionTests());
         addTestCase("extension negative tests", \extensionNegativeTests());
+        addTestCase("sendAll extension tests", \sendAllExtensionTests());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -282,7 +291,8 @@ class WebSocketHandlerTest inherits QUnit::Test {
         s.setNoDelay(True);
         s.send(ws_encode_message("WAIT", WSOP_Text, True));
 
-        auto v = wsHandler.errs.get(1s);
+        # Use a longer timeout to avoid flakiness on slow or heavily loaded CI environments.
+        auto v = wsHandler.errs.get(5s);
         assertRegex("SOCKET-TIMEOUT", v);
     }
 
@@ -490,8 +500,196 @@ class WebSocketHandlerTest inherits QUnit::Test {
         }
     }
 
+    sendAllExtensionTests() {
+        # Create extension-enabled handler
+        MyWsHandlerWithExtensions extHandler({
+            "extensions": ("permessage-deflate",),
+            "logger": logger,
+            "heartbeat": 30,
+        });
+        mServer.setHandler("ws-sendall-ext", "/sendall-ext", NOTHING, extHandler);
+
+        # Test 1: sendAll with two extension clients
+        {
+            Queue msgs1();
+            Queue msgs2();
+            WebSocketClient wsc1(sub (*data msg) { msgs1.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "extensions": (new PerMessageDeflateExtension(),),
+                "logger": logger,
+            });
+            WebSocketClient wsc2(sub (*data msg) { msgs2.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "extensions": (new PerMessageDeflateExtension(),),
+                "logger": logger,
+            });
+            wsc1.connect();
+            wsc2.connect();
+            on_exit {
+                wsc1.disconnect();
+                wsc2.disconnect();
+            }
+            assertTrue(wsc1.isOpen());
+            assertTrue(wsc2.isOpen());
+            assertTrue(wsc1.hasPerMessageDeflate());
+            assertTrue(wsc2.hasPerMessageDeflate());
+
+            # Round-trip echo to confirm both are registered
+            wsc1.send("ECHO ping1");
+            assertEq(" ping1", msgs1.get(5s));
+            wsc2.send("ECHO ping2");
+            assertEq(" ping2", msgs2.get(5s));
+
+            # Trigger broadcast from wsc1 — small message
+            wsc1.send("BROADCAST hello all");
+            assertEq(" hello all", msgs1.get(5s));
+            assertEq(" hello all", msgs2.get(5s));
+
+            # Trigger broadcast — large message (well above compression threshold)
+            string large_msg = strmul("X", 4096);
+            wsc2.send("BROADCAST " + large_msg);
+            assertEq(" " + large_msg, msgs1.get(5s));
+            assertEq(" " + large_msg, msgs2.get(5s));
+        }
+
+        # Test 2: sendAll without extensions (backward compatibility)
+        {
+            Queue msgs1();
+            Queue msgs2();
+            WebSocketClient wsc1(sub (*data msg) { msgs1.push(msg); }, {
+                "url": "ws://localhost:" + port,
+                "logger": logger,
+            });
+            WebSocketClient wsc2(sub (*data msg) { msgs2.push(msg); }, {
+                "url": "ws://localhost:" + port,
+                "logger": logger,
+            });
+            wsc1.connect();
+            wsc2.connect();
+            on_exit {
+                wsc1.disconnect();
+                wsc2.disconnect();
+            }
+            assertTrue(wsc1.isOpen());
+            assertTrue(wsc2.isOpen());
+
+            # Round-trip echo to confirm both are registered
+            wsc1.send("ECHO ping1");
+            assertEq(" ping1", msgs1.get(5s));
+            wsc2.send("ECHO ping2");
+            assertEq(" ping2", msgs2.get(5s));
+
+            # Trigger broadcast
+            wsc1.send("BROADCAST no-ext test");
+            assertEq(" no-ext test", msgs1.get(5s));
+            assertEq(" no-ext test", msgs2.get(5s));
+        }
+
+        # Test 3: sendAll with mixed connections (one with extensions, one without)
+        {
+            Queue msgs1();
+            Queue msgs2();
+            # Client with permessage-deflate
+            WebSocketClient wsc1(sub (*data msg) { msgs1.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "extensions": (new PerMessageDeflateExtension(),),
+                "logger": logger,
+            });
+            # Client without extensions
+            WebSocketClient wsc2(sub (*data msg) { msgs2.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "logger": logger,
+            });
+            wsc1.connect();
+            wsc2.connect();
+            on_exit {
+                wsc1.disconnect();
+                wsc2.disconnect();
+            }
+            assertTrue(wsc1.isOpen());
+            assertTrue(wsc2.isOpen());
+            assertTrue(wsc1.hasPerMessageDeflate());
+
+            # Round-trip echo to confirm both are registered
+            wsc1.send("ECHO ping1");
+            assertEq(" ping1", msgs1.get(5s));
+            wsc2.send("ECHO ping2");
+            assertEq(" ping2", msgs2.get(5s));
+
+            # Trigger broadcast — small message
+            wsc1.send("BROADCAST mixed small");
+            assertEq(" mixed small", msgs1.get(5s));
+            assertEq(" mixed small", msgs2.get(5s));
+
+            # Trigger broadcast — large message
+            string large_msg = strmul("Y", 4096);
+            wsc2.send("BROADCAST " + large_msg);
+            assertEq(" " + large_msg, msgs1.get(5s));
+            assertEq(" " + large_msg, msgs2.get(5s));
+        }
+
+        # Test 4: sendAll with binary data (mixed clients)
+        {
+            Queue msgs1();
+            Queue msgs2();
+            WebSocketClient wsc1(sub (*data msg) { msgs1.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "extensions": (new PerMessageDeflateExtension(),),
+                "logger": logger,
+            });
+            WebSocketClient wsc2(sub (*data msg) { msgs2.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "logger": logger,
+            });
+            wsc1.connect();
+            wsc2.connect();
+            on_exit {
+                wsc1.disconnect();
+                wsc2.disconnect();
+            }
+            assertTrue(wsc1.isOpen());
+            assertTrue(wsc2.isOpen());
+
+            # Round-trip echo to confirm both are registered
+            wsc1.send("ECHO ping1");
+            assertEq(" ping1", msgs1.get(5s));
+            wsc2.send("ECHO ping2");
+            assertEq(" ping2", msgs2.get(5s));
+
+            # Trigger binary broadcast
+            wsc1.send("BCASTBIN\x00\x01\x02\x03test binary");
+            binary expected = binary("\x00\x01\x02\x03test binary");
+            assertEq(expected, msgs1.get(5s));
+            assertEq(expected, msgs2.get(5s));
+        }
+
+        # Test 5: sendOne with extensions (end-to-end)
+        {
+            Queue msgs1();
+            WebSocketClient wsc1(sub (*data msg) { msgs1.push(msg); }, {
+                "url": "ws://localhost:" + port + "/sendall-ext",
+                "extensions": (new PerMessageDeflateExtension(),),
+                "logger": logger,
+            });
+            wsc1.connect();
+            on_exit wsc1.disconnect();
+            assertTrue(wsc1.isOpen());
+            assertTrue(wsc1.hasPerMessageDeflate());
+
+            # The ECHO command triggers send() on the connection, which goes through sendWithExtensions
+            wsc1.send("ECHO sendOne ext test");
+            assertEq(" sendOne ext test", msgs1.get(5s));
+
+            # Large message to exercise compression
+            string large_msg = strmul("Z", 4096);
+            wsc1.send("ECHO " + large_msg);
+            assertEq(" " + large_msg, msgs1.get(5s));
+        }
+    }
+
     private log(string str) {
-        if (m_options.verbose > 2)
+        if (m_options.verbose > 2) {
             vprintf(str + "\n", argv);
+        }
     }
 }

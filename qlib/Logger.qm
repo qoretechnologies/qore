@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Logger.qm Logger library
 
-/*  Logger.qm Copyright 2018 - 2025 Qore Technologies, s.r.o.
+/*  Logger.qm Copyright 2018 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,9 +25,7 @@
 # minimum required Qore version
 %requires qore >= 1.0
 
-%require-types
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 
 %requires Util
@@ -52,7 +50,7 @@ module Logger {
     The %Logger module (aka <b>Log4q</b>) adopts its primary design from the well known
     <a href="https://logging.apache.org/log4j/2.x">log4j</a> library
 
-    Other classes can be found in the <a href="../../logger/html/index.html">logger</a> module for performance
+    Other classes can be found in the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance
     reasons, such as:
     - @ref Qore::Logger::Logger "Logger"
     - @ref Qore::Logger::LoggerAppender "LoggerAppender" (abstract)
@@ -216,6 +214,79 @@ module Logger {
     # wait till finished
     @endcode
 
+    @subsection logger_backpressure Memory-Based Backpressure
+
+    Starting with version 1.1, the @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" class supports
+    memory-based backpressure to prevent unbounded memory growth when log producers outpace consumers.
+
+    When using asynchronous logging with queues, if log messages are generated faster than they can be processed,
+    the queue can grow without limit, potentially causing out-of-memory conditions. This is especially problematic
+    when log messages contain large serialized data (such as context hashes formatted with \c %%N).
+
+    @par Enabling Backpressure
+
+    Starting with %Qore 2.3, backpressure is enabled by default with a 10 MiB limit:
+    @code{.py}
+# Create queue with default 10MB limit (recommended)
+LoggerAppenderQueue laq();
+# or explicitly
+LoggerAppenderQueue laq(0);
+
+# Create queue with custom 50MB limit
+LoggerAppenderQueue laq(50 * 1024 * 1024);
+
+# Create queue with no limit (not recommended for production)
+LoggerAppenderQueue laq(-1);
+    @endcode
+
+    @par Backpressure Behavior
+
+    When the queue reaches its memory limit, the @ref Qore::Logger::LoggerAppenderQueue::push() "push()" method
+    behavior depends on the timeout parameter:
+    - <b>Block indefinitely (timeout = 0, default):</b> The calling thread blocks until space becomes available
+    - <b>Block with timeout (timeout > 0):</b> Blocks up to the specified milliseconds, then throws \c QUEUE-TIMEOUT
+    - <b>Drop immediately (timeout < 0):</b> Returns @ref False immediately if the queue is full
+
+    @par Example: Production Logging with Backpressure
+    @code{.py}
+ThreadPool tp();
+# Create queue with 100MB limit and 5 worker threads
+LoggerAppenderQueueThreadPool laq(tp, 5, 100 * 1024 * 1024);
+
+LoggerAppenderFile la("app", new LoggerLayoutPattern(), "/var/log/app.log");
+la.setQueue(laq);
+la.open();
+
+Logger l("app", LoggerLevel::LevelInfo);
+l.addAppender(la);
+
+# Monitor queue status
+if (laq.isFull()) {
+    # Queue is at capacity, consider reducing log volume
+    stderr.printf("WARNING: Log queue at capacity (%d bytes)\n", laq.currentBytes());
+}
+    @endcode
+
+    @par Monitoring Methods
+
+    The following methods are available for monitoring queue status:
+    - @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()": Returns the memory limit (-1 if unlimited)
+    - @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()": Returns current queued bytes
+    - @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()": Returns @ref True if at or above the limit
+
+    @subsection logger_v1_1 v1.1
+    - Added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
+      to prevent unbounded memory growth when log producers outpace consumers
+      - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
+        configurable memory limit (default: 10 MiB, -1 for unlimited)
+      - new @ref Qore::Logger::LoggerAppenderQueue::push() "push()" timeout parameter for backpressure control:
+        block indefinitely, block with timeout, or drop immediately
+      - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()",
+        @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()",
+        @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()"
+    - Added \c max_bytes parameter to \c Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
+      constructor
+
     @subsection logger_v1_0 v1.0
     - Split classes into the <a href="../../logger_bin/html/index.html">logger_bin</a> module for performance reasons
       (<a href="https://github.com/qoretechnologies/qore/issues/4884">issue 4884</a>)
@@ -227,7 +298,7 @@ module Logger {
       (<a href="https://github.com/qoretechnologies/qore/issues/4842">issue 4842</a>)
 
     @subsection logger_v0_5 v0.5
-    - added \c LoggerInterface "LoggerInterface" and @ref Logger::LoggerWrapper "LoggerWrapper" classes
+    - added \c LoggerInterface "LoggerInterface" and \c Logger::LoggerWrapper "LoggerWrapper" classes
       (<a href="https://github.com/qoretechnologies/qore/issues/4776">issue 4776</a>)
 
     @subsection logger_v0_4 v0.4
@@ -350,12 +421,30 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
         #printf("<E:%y, tid: %d> ", id, gettid());
     }
 
-    #! Creates the object
-    /**
-        @param tp worker @ref Qore::Thread::ThreadPool "ThreadPool" where loggging events are submitted
-        @param max_threads max.number of worker threads, default value is \c -1, i.e. unlimited
+    #! Submits a worker task to the thread pool
+    /** This method ensures that each closure captures its own copy of the parameters,
+        avoiding the shared closure variable issue when called in a loop.
+
+        @param worker_id unique identifier for the worker
+        @param appender the appender to process events for
+        @param events the list of events to process
     */
-    constructor(ThreadPool tp, int max_threads = -1) {
+    private:internal submitWorker(string worker_id, LoggerAppender appender, list<auto> events) {
+        threadPool.submit(sub() { worker(worker_id, appender, events); });
+    }
+
+    #! Creates the object
+    /** @param tp worker @ref Qore::Thread::ThreadPool "ThreadPool" where loggging events are submitted
+        @param max_threads max.number of worker threads, default value is \c -1, i.e. unlimited
+        @param max_bytes maximum bytes allowed in the queue (for backpressure); see
+        \c LoggerAppenderQueue::constructor(softint) for details:
+        - -1 = unlimited (no backpressure, not recommended for production)
+        - 0 = use default limit (10 MiB)
+        - >0 = maximum bytes before backpressure is applied
+
+        @since %Qore 2.3 added max_bytes parameter
+    */
+    constructor(ThreadPool tp, int max_threads = -1, softint max_bytes = 0) : LoggerAppenderQueue(max_bytes) {
         threadPool = tp;
         maxThreads = max_threads;
     }
@@ -436,10 +525,6 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
 
         # now try push pending
         foreach string id in (keys pendingEvents) {
-            # remove meanwhile finished if any
-            while (finishedEvents.size() > 0) {
-                remove processingEvents{finishedEvents.get(-1)};
-            }
             # is available a free worker thread ?
             if (maxThreads >= 0 && processingEvents.size() >= maxThreads) {
                 return;
@@ -450,10 +535,11 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
             }
             hash<auto> e = remove pendingEvents{id};
             processingEvents{id} = e;
-            # When passing "id" then no copy is passed to submit pool queue and worker may get the wrong value
-            # so we must pass value in new variable which won't change meanwhile when the value is to be used.
-            # It is a feature of the "submit" implementation related to parameter passing
-            threadPool.submit(sub() { worker(e.id, e.appender, e.events); });
+            # Use submitWorker() to ensure each worker closure gets its own copy of the
+            # parameters; closures created in a loop capture shared variable references,
+            # so direct threadPool.submit() with a closure here would cause all workers
+            # to see the same (last) value of the loop variable
+            submitWorker(e.id, e.appender, e.events);
         }
     }
 

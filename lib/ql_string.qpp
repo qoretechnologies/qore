@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/ql_string.h"
 #include "qore/intern/qore_number_private.h"
 
@@ -435,10 +436,10 @@ QoreStringNode* join_intern(const QoreStringNode* p0, const QoreListNode* l, int
                 return nullptr;
             }
 
-            str->concat(*t);
+            qore_string_private::get(*str)->concat(*t);
         }
         if (i < (l->size() - 1)) {
-            str->concat(p0);
+            qore_string_private::get(*str)->concat(p0);
         }
     }
 
@@ -1492,7 +1493,7 @@ string replace(string str, string source, string target, int start = 0, int end 
             if (p != cstr) {
                 nstr->concat(cstr, p - cstr);
             }
-            nstr->concat(*t2);
+            qore_string_private::get(*nstr)->concat(*t2);
             cstr = p + plen;
         }
     }
@@ -1821,7 +1822,7 @@ string strmul(softstring str, softint smul, *softint offset) [flags=RET_VALUE_ON
 
    QoreStringNodeHolder ret(new QoreStringNode);
    while (smul > 0) {
-      ret->concat(str);
+      qore_string_private::get(*ret)->concat(str);
       --smul;
    }
 

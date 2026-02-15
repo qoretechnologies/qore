@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
 //#include <qore/intern/qore_program_private.h>
@@ -42,7 +43,7 @@ QoreString *QoreNullCoalescingOperatorNode::getAsString(bool &del, int foff, Exc
 }
 
 int QoreNullCoalescingOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat(&null_coalescing_str);
+    qore_string_private::get(str)->concat(&null_coalescing_str);
     return 0;
 }
 
@@ -60,8 +61,14 @@ int QoreNullCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 }
 
 QoreValue QoreNullCoalescingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue QoreNullCoalescingOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
     {
-        ValueEvalOptimizedRefHolder arg(left, xsink);
+        ValueEvalRefHolder arg(rc, left, xsink);
         if (*xsink)
             return QoreValue();
 
@@ -69,7 +76,7 @@ QoreValue QoreNullCoalescingOperatorNode::evalImpl(bool& needs_deref, ExceptionS
             return arg.takeValue(needs_deref);
     }
 
-    ValueEvalOptimizedRefHolder arg(right, xsink);
+    ValueEvalRefHolder arg(rc, right, xsink);
     if (*xsink)
         return QoreValue();
 

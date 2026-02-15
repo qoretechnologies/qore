@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -834,6 +834,17 @@ DLLEXPORT size_t q_thread_stack_remaining();
 */
 DLLEXPORT size_t q_thread_stack_used();
 
+//! Checks if the current thread's stack has exceeded its limit
+/** @param xsink if the stack limit has been exceeded, a \c STACK-LIMIT-EXCEEDED exception is raised here
+
+    @return 0 if OK, -1 if the stack limit has been exceeded (exception raised)
+
+    @note this function does nothing if the Qore library was not compiled with stack management support
+
+    @since %Qore 2.1
+*/
+DLLEXPORT int q_check_stack(ExceptionSink* xsink);
+
 //! Sets the thread stack limit on the primary thread
 /** @since %Qore 1.19
 */
@@ -848,7 +859,7 @@ DLLEXPORT bool q_active_exception();
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded
 
-    @ereturn 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.0.1
 */

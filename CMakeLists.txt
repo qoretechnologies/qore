@@ -75,6 +75,49 @@ endif()
 # simulate QoreConfig
 set(QORE_QDX_EXECUTABLE "${CMAKE_SOURCE_DIR}/doxygen/qdx")
 set(QORE_QJAR_EXECUTABLE "${CMAKE_SOURCE_DIR}/doxygen/qjar")
+set(QORE_INTERPRETER "$<TARGET_FILE:qore>")
+set(QORE_BINARY_MODULE_DIRS "")
+file(GLOB QORE_BINARY_MODULE_SOURCE_DIRS LIST_DIRECTORIES true "${CMAKE_SOURCE_DIR}/modules/*")
+foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
+    if (IS_DIRECTORY ${mod_dir})
+        get_filename_component(mod_name ${mod_dir} NAME)
+        list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
+    endif ()
+endforeach ()
+if (WIN32 OR MSYS OR MINGW)
+    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
+    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
+    string(REPLACE ";" "\\;" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
+else (WIN32 OR MSYS OR MINGW)
+    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
+    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
+    string(REPLACE ";" ":" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
+endif (WIN32 OR MSYS OR MINGW)
+set(QORE_DOC_DEFINES_LIST QORE_QDX_RUN)
+if (WIN32 OR MSYS OR MINGW)
+    list(APPEND QORE_DOC_DEFINES_LIST Windows)
+else (WIN32 OR MSYS OR MINGW)
+    list(APPEND QORE_DOC_DEFINES_LIST Unix)
+endif (WIN32 OR MSYS OR MINGW)
+if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
+    list(APPEND QORE_DOC_DEFINES_LIST QoreDebug)
+endif ()
+if (DEFINED HAVE_TERMIOS_H AND HAVE_TERMIOS_H)
+    list(APPEND QORE_DOC_DEFINES_LIST HAVE_TERMIOS)
+endif ()
+string(REPLACE ";" "," QORE_DOC_DEFINES "${QORE_DOC_DEFINES_LIST}")
+if (DEFINED ENV{QORE_DOC_DEFINES})
+    set(_QORE_DOC_DEFINES_ENV "$ENV{QORE_DOC_DEFINES}")
+    string(REGEX REPLACE "[ \t\r\n]+" "," _QORE_DOC_DEFINES_ENV "${_QORE_DOC_DEFINES_ENV}")
+    if (QORE_DOC_DEFINES AND _QORE_DOC_DEFINES_ENV)
+        set(QORE_DOC_DEFINES "${QORE_DOC_DEFINES},${_QORE_DOC_DEFINES_ENV}")
+    elseif (_QORE_DOC_DEFINES_ENV)
+        set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
+    endif ()
+endif ()
+set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
+set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
+set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
 
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake")
@@ -206,6 +249,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
+    lib/QC_EventLoop.qpp
+    lib/QC_EventNotifier.qpp
     lib/ql_misc.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
@@ -260,6 +305,8 @@ set(QORE_BIN_FILES
     bin/qdbg-vsc-adapter
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
+    bin/qfmt
+    bin/qls
 )
 
 set(QORE_DOX_TMPL_SRC
@@ -292,7 +339,9 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/210_constants.dox.tmpl
     doxygen/lang/215_classes.dox.tmpl
     doxygen/lang/217_hashdecl.dox.tmpl
+    doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
+    doxygen/lang/222_sandboxing.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
@@ -311,6 +360,10 @@ set(QORE_CPP_SRC command-line.cpp qore-main.cpp)
 # find needed libraries
 qore_find_pthreads()
 find_package(ICONV REQUIRED)
+# Allow BISON_EXECUTABLE to be set from environment variable
+if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
+    set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
+endif()
 find_package(BISON REQUIRED)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -529,10 +582,13 @@ set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
 target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 # libqore generators
-qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC ${LIBQORE_QPP_SRC})
-qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC ${PSEUDO_QPP_SRC})
+qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
+qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
 
 add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
+
+# install qpp metadata files
+install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
 add_custom_target(BISON_GENERATED_FILES DEPENDS ${BISON_qoreparser_OUTPUTS})
 add_custom_target(FLEX_GENERATED_FILES DEPENDS ${FLEX_qorescanner_OUTPUTS})
 
@@ -620,6 +676,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/QoreEventLoop.cpp
+    lib/QoreEventNotifier.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -638,6 +696,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreClassList.cpp
     lib/HashDeclList.cpp
     lib/EnumList.cpp
+    lib/RuntimeConfig.cpp
     lib/thread.cpp
     lib/AbstractThreadResource.cpp
     lib/ThreadResourceList.cpp
@@ -789,6 +848,12 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
+# Non-blocking I/O support for streams (used by HTTP/2 streaming to avoid buffering large responses in memory)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/InputStream.cpp
+    lib/OutputStream.cpp
+)
+
 # HTTP/2 support is always enabled (nghttp2 is required)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/Http2Session.cpp
@@ -891,6 +956,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -908,6 +975,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreClassList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/HashDeclList.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/EnumList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RuntimeConfig.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/thread.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AbstractThreadResource.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadResourceList.cpp\"
@@ -1156,6 +1224,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 
 #include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"
 
@@ -1173,6 +1243,9 @@ if (SINGLE_COMPILATION_UNIT)
 #ifdef DEBUG
 #include \"${CMAKE_SOURCE_DIR}/lib/ql_debug.cpp\"
 #endif
+// Non-blocking I/O support for streams
+#include \"${CMAKE_SOURCE_DIR}/lib/InputStream.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/OutputStream.cpp\"
 // HTTP/2 support is always enabled (nghttp2 is required)
 #include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
 ")
@@ -1209,7 +1282,8 @@ set_target_properties(libqore PROPERTIES OUTPUT_NAME qore)
 if (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
-    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR ${CMAKE_INSTALL_FULL_LIBDIR})
+    # Keep libqore's install name consistent between build and install to avoid dyld loading duplicates.
+    set_target_properties(libqore PROPERTIES INSTALL_NAME_DIR "@rpath")
 else (APPLE)
     set_target_properties(libqore PROPERTIES VERSION 20.0.0)
     set_target_properties(libqore PROPERTIES SOVERSION 20)
@@ -1226,8 +1300,9 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
-#set_target_properties(qore qr PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qore PROPERTIES INSTALL_RPATH_USE_LINK_PATH ${CMAKE_INSTALL_FULL_LIBDIR})
+# Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
+set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
+set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 if (DEFINED LIBJSIG AND APPLE)
     add_custom_command(TARGET qore
@@ -1324,11 +1399,12 @@ if (DOXYGEN_FOUND)
     add_custom_target(docs-lib
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/library/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lib
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
         COMMENT "Generating API documentation with Doxygen for: lib"
         VERBATIM
     )
+    add_dependencies(docs-lib qore)
     add_dependencies(docs docs-lib)
 
     # lang - two-pass build:
@@ -1336,16 +1412,21 @@ if (DOXYGEN_FOUND)
     # 2. docs-lang-final: rebuilds after modules are built, with module tagfiles for cross-referencing
     message(STATUS "Preparing Doxyfile for lang (initial pass, without module tags)")
     set(QORE_LANG_DOC_TAGFILES "" CACHE INTERNAL "Module tag files for lang docs cross-referencing")
+    set(QORE_LANG_DOC_PREDEFINED "" CACHE INTERNAL "Preprocessor definitions for lang docs (initial pass)")
+    set(QORE_LANG_DOC_SECTIONS "" CACHE INTERNAL "Enabled sections for lang docs (initial pass)")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial @ONLY)
+    # Suppress doc error warnings in initial pass (no module TAGFILES available yet)
+    file(APPEND ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial "\n# Suppress warnings for initial pass (no module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
     add_custom_target(docs-lang
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.initial
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         DEPENDS QORE_DOX_FILES QPP_GENERATED_FILES
         COMMENT "Generating API documentation with Doxygen for: lang (initial pass)"
         VERBATIM
     )
+    add_dependencies(docs-lang qore)
     # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
 endif (DOXYGEN_FOUND)
 
@@ -1355,7 +1436,9 @@ add_custom_target(install-docs
     COMMENT "Installing API documentation to: ${CMAKE_INSTALL_PREFIX}/share/doc/qore"
     VERBATIM
 )
-add_dependencies(install-docs docs)
+if (DOXYGEN_FOUND)
+    add_dependencies(install-docs docs)
+endif (DOXYGEN_FOUND)
 # end of documentation
 
 # astparser module
@@ -1364,6 +1447,8 @@ add_subdirectory(modules/astparser)
 add_subdirectory(modules/reflection)
 # logger module
 add_subdirectory(modules/logger_bin)
+# linenoise module
+add_subdirectory(modules/linenoise)
 # mongodb module (optional, requires libmongoc)
 # Try pkg-config first (more reliable, avoids broken cmake configs on some distros)
 set(MONGOC_FOUND FALSE)
@@ -1383,6 +1468,13 @@ if (MONGOC_FOUND)
 else()
     message(STATUS "libmongoc not found - mongodb module will not be built")
 endif()
+# ml module (requires Eigen3)
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if (Eigen3_FOUND)
+    add_subdirectory(modules/ml)
+else()
+    message(STATUS "Eigen not found - ml module will not be built")
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1399,13 +1491,19 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 qore_user_module("qlib/DatasourceProvider.qm" "")
 qore_user_module("qlib/DebugUtil.qm" "")
 qore_user_module("qlib/FsUtil.qm" "")
+qore_user_module("qlib/HttpStreamClient.qm" "")
 qore_user_module("qlib/Qdx.qm" "")
 qore_user_module("qlib/Qorize.qm" "")
-qore_user_module("qlib/QoreRepl.qm" "")
+qore_user_module("qlib/QoreHistory" "modules/linenoise/linenoise")
+qore_user_module("qlib/QoreRepl" "QoreHistory;modules/linenoise/linenoise")
 qore_user_module("qlib/Util.qm" "")
 qore_user_module("qlib/WebSocketUtil.qm" "")
 qore_user_module("qlib/MapperUtil.qm" "")
 qore_user_module("qlib/ProviderIndexUtil" "")
+qore_user_module("qlib/QoreApiMetadata" "modules/astparser/astparser")
+qore_user_module("qlib/QoreCodeCompletion" "")
+qore_user_module("qlib/QoreCodeFormat" "modules/astparser/astparser")
+qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;QoreCodeFormat;QoreApiMetadata;Util;Mime")
 
 # base 2 modules
 qore_user_module("qlib/FileLocationHandler" "Util")
@@ -1414,9 +1512,14 @@ qore_user_module("qlib/Logger.qm" "Util;modules/logger_bin/logger_bin")
 qore_user_module("qlib/Mime.qm" "Util")
 qore_user_module("qlib/QUnit.qm" "Util")
 qore_user_module("qlib/TextWrap.qm" "Util")
+qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
-qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg")
+qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;qore-q-logo.svg")
+if (Eigen3_FOUND)
+    qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+endif()
+qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
@@ -1441,6 +1544,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
+qore_user_module("qlib/Http2ClientIo" "Logger")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
@@ -1459,7 +1563,7 @@ qore_user_module("qlib/Sqlite3SqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/XdbcFirebirdSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/WebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;DataProvider")
 qore_user_module("qlib/TableMapper.qm" "MapperUtil;Mapper;SqlUtil;DataProvider")
-qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil")
+qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil;ConnectionProvider")
 qore_user_module("qlib/FtpPoller.qm" "FtpPollerUtil;Util;DataProvider")
 qore_user_module("qlib/SchemaReverse.qm" "Qorize;Schema;SqlUtil;Util")
 qore_user_module("qlib/DebugHandler.qm" "DebugProgramControl;DebugUtil;HttpServer;HttpServerUtil;WebSocketHandler;WebSocketUtil")
@@ -1490,12 +1594,25 @@ qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CdsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/FreshBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/WaveRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/GoogleRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/HueRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/JotformRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/MailgunRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
@@ -1505,6 +1622,7 @@ qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestCli
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
+qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
 qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")
 qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "redis-logo.svg")
@@ -1515,22 +1633,48 @@ qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestCli
 qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestClientDataProvider")
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")
 qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider" "discord-logo.svg")
+qore_user_module("qlib/FreshBooksDataProvider" "FreshBooksRestClient;RestClient;DataProvider" "freshbooks-logo.svg")
+qore_user_module("qlib/LinearDataProvider" "LinearRestClient;RestClient;DataProvider" "linear-logo.svg")
+qore_user_module("qlib/WaveDataProvider" "WaveRestClient;RestClient;DataProvider" "wave-logo.svg")
+qore_user_module("qlib/JotformDataProvider" "JotformRestClient;RestClient;DataProvider" "jotform-logo.svg")
+qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataProvider" "mailgun-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient" "openai-logo.svg")
 
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
 qore_user_module("qlib/GmailDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "gmail-logo.svg")
+qore_user_module("qlib/ZohoBooksDataProvider" "ZohoBooksRestClient;RestClient;DataProvider" "zohobooks-logo.svg")
+qore_user_module("qlib/ZohoInventoryDataProvider" "ZohoInventoryRestClient;RestClient;DataProvider" "zohoinventory-logo.svg")
+qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClient;DataProvider" "zohoinvoice-logo.svg")
+qore_user_module("qlib/ShipStationDataProvider" "ShipStationRestClient;RestClient;DataProvider" "shipstation-logo.svg")
+qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProvider" "shippo-logo.svg")
+qore_user_module("qlib/SquareDataProvider" "SquareRestClient;RestClient;DataProvider" "square-logo.svg")
+qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
+qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
-if (DOXYGEN_FOUND)
-    # Build TAGFILES string from collected module names
-    set(QORE_LANG_DOC_TAGFILES "")
+    if (DOXYGEN_FOUND)
+        # Build TAGFILES string from collected module names
+        set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
-        # Relative path to module html from lang html: ../modules/{mod}/html
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
+        # Relative path to module html from lang html: ../../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
     endforeach()
+    # Add binary module tag files required for lang cross-references.
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/astparser/astparser.tag=../../modules/astparser/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
+    if (Eigen3_FOUND)
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
+    endif()
+    if (MONGOC_FOUND)
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
+    endif()
+    set(QORE_LANG_DOC_PREDEFINED "QORE_LANG_FINAL" CACHE INTERNAL "Preprocessor definitions for lang docs (final pass)")
+    set(QORE_LANG_DOC_SECTIONS "QORE_LANG_FINAL" CACHE INTERNAL "Enabled sections for lang docs (final pass)")
     message(STATUS "Configuring Doxyfile for lang final pass with module cross-references")
     configure_file(${CMAKE_SOURCE_DIR}/doxygen/lang/Doxyfile.in ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final @ONLY)
 
@@ -1538,26 +1682,36 @@ if (DOXYGEN_FOUND)
     # This enables @ref links from lang docs to module symbols
     add_custom_target(docs-lang-final
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lang (final pass with module cross-references)"
         VERBATIM
     )
+    add_dependencies(docs-lang-final qore)
 
     # docs-lang-final-fast: same as docs-lang-final but without module dependencies
     # Use this for quick testing when module docs are already built manually
     add_custom_target(docs-lang-final-fast
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
-        COMMAND QORE_MODULE_DIR=${CMAKE_SOURCE_DIR}/qlib ${QORE_QDX_EXECUTABLE} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
+        COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lang (final pass, no module deps)"
         VERBATIM
     )
+    add_dependencies(docs-lang-final-fast qore)
 
     # docs-lang-final depends on all module docs (so their tagfiles exist)
     foreach(mod ${QORE_USER_MODULE_NAMES})
         add_dependencies(docs-lang-final docs-${mod})
     endforeach()
+    # Binary module doc dependencies
+    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise)
+    if (Eigen3_FOUND)
+        add_dependencies(docs-lang-final docs-ml)
+    endif()
+    if (MONGOC_FOUND)
+        add_dependencies(docs-lang-final docs-mongodb)
+    endif()
 
     # docs depends on docs-lang-final (the final lang docs with module cross-refs)
     add_dependencies(docs docs-lang-final)

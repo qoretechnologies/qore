@@ -34,7 +34,8 @@
 #include "qore/intern/QC_Serializable.h"
 
 static QoreHashNode* SSLCertificate_serializer(const QoreObject& self, const QoreSSLCertificate& cert,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     // we serialize with DER format as it's approx 2/3 the size of a PEM string
     SimpleRefHolder<BinaryNode> der(cert.getDER(xsink));
@@ -46,7 +47,8 @@ static QoreHashNode* SSLCertificate_serializer(const QoreObject& self, const Qor
 }
 
 static void SSLCertificate_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         // we serialize with DER format as it's approx 2/3 the size of a PEM string
         QoreValue val = sdata->getKeyValue("der");

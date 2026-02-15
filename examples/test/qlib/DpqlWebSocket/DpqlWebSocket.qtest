@@ -1,0 +1,454 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DpqlWebSocket.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/FsUtil.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/DpqlWebSocket
+%requires ../../../../qlib/CsvUtil
+
+%exec-class DpqlWebSocketTest
+
+public class DpqlWebSocketTest inherits QUnit::Test {
+    public {
+        HttpServer server;
+        DataProvider::DpqlWebSocketHandler ws_handler;
+        Logger logger;
+        int port;
+        TmpDir csv_dir;
+        string csv_path;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("DpqlWebSocketTest", "1.0") {
+        addTestCase("Handler options", \testHandlerOptions());
+        addTestCase("Session connection", \testSessionConnection());
+        addTestCase("Context response", \testContextResponse());
+        addTestCase("Tokenize request", \testTokenize());
+        addTestCase("Parse request", \testParse());
+        addTestCase("Validate request", \testValidate());
+        addTestCase("Completion request", \testComplete());
+        addTestCase("Serialize request", \testSerialize());
+        addTestCase("No-context completion error", \testNoContextCompletion());
+        addTestCase("Invalid JSON request", \testInvalidJson());
+        addTestCase("Unknown message type", \testUnknownMessage());
+        addTestCase("Authentication callback", \testAuthCallback());
+        addTestCase("Max connections", \testMaxConnections());
+
+        logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        csv_dir = new TmpDir("dpql-ws-");
+        csv_path = csv_dir.path + "/data.csv";
+        writeCsvFile();
+
+        ws_handler = new DataProvider::DpqlWebSocketHandler(NOTHING, {
+            "logger": logger,
+        });
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setHandler("dpql", "/ws/dpql", NOTHING, ws_handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit server.stop();
+
+        set_return_value(main());
+    }
+
+    private writeCsvFile() {
+        File f = new File();
+        f.open(csv_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write("name,age\nJohn,30\nJane,25\n");
+        f.close();
+    }
+
+    private string getProviderSpec() {
+        string path = replace(csv_path, "\"", "\\\"");
+        return sprintf("csvread{path=\"%s\",header_names=true,header_lines=1}", path);
+    }
+
+    private hash<auto> connectClient(string url) {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) { msgs.push(msg); }, {
+            "url": url,
+            "logger": logger,
+        });
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "Connection should be open");
+
+        hash<auto> session = parseJson(msgs.get(5s));
+        assertEq("session", session.type, "First message should be session");
+        assertEq("1.0", session.version, "Protocol version should be 1.0");
+
+        return {
+            "client": wsc,
+            "messages": msgs,
+        };
+    }
+
+    private hash<auto> waitMessage(Queue msgs, string type) {
+        for (int i = 0; i < 5; ++i) {
+            *string raw;
+            try {
+                raw = msgs.get(5s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    continue;
+                }
+                rethrow;
+            }
+            if (!raw) {
+                continue;
+            }
+            hash<auto> msg = parseJson(raw);
+            if (msg.type == type) {
+                return msg;
+            }
+        }
+        throw "TEST-ERROR", sprintf("Message %y not received", type);
+    }
+
+    private hash<auto> setContext(WebSocketClient client, Queue msgs) {
+        client.send(makeJson({
+            "type": "context",
+            "id": "ctx1",
+            "provider": getProviderSpec(),
+        }));
+        hash<auto> response = waitMessage(msgs, "context");
+        assertEq("ctx1", response.id, "Context response should echo ID");
+        return response;
+    }
+
+    private hash<auto> parseJson(string data) {
+%ifdef NoJson
+        throw "MODULE-ERROR", "json module not available";
+        return {};
+%else
+        return parse_json(data);
+%endif
+    }
+
+    private string makeJson(any value) {
+%ifdef NoJson
+        throw "MODULE-ERROR", "json module not available";
+        return "";
+%else
+        return make_json(value);
+%endif
+    }
+
+    testHandlerOptions() {
+        checkModule();
+        DataProvider::DpqlWebSocketHandler h();
+        assertEq(0, h.getMaxConnections(), "Default max connections should be 0");
+
+        h.setMaxConnections(3);
+        assertEq(3, h.getMaxConnections(), "Max connections should be 3");
+
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new DataProvider::DpqlWebSocketHandler(NOTHING, {"auth_callback": "not a code"});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new DataProvider::DpqlWebSocketHandler(NOTHING, {"max_connections": -1});
+        });
+    }
+
+    testSessionConnection() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        WebSocketClient client = cx.client;
+        client.disconnect();
+    }
+
+    testContextResponse() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        hash<auto> response = setContext(client, msgs);
+        assertTrue(response.fields.size() > 0, "Context should return field info");
+
+        bool has_name = False;
+        foreach hash<auto> f in (response.fields) {
+            if (f.name == "name") {
+                has_name = True;
+                break;
+            }
+        }
+        assertTrue(has_name, "Context should include 'name' field");
+
+        client.disconnect();
+    }
+
+    testTokenize() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        setContext(client, msgs);
+        client.send(make_json({"type": "tokenize", "id": "tok1", "text": '@name == "John"'}));
+        hash<auto> response = waitMessage(msgs, "tokens");
+        assertEq("tok1", response.id, "Token response should echo ID");
+        assertTrue(response.tokens.size() > 0, "Tokens should not be empty");
+        assertEq(DPQL_TOK_FIELD, response.tokens[0].type);
+
+        client.disconnect();
+    }
+
+    testParse() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        setContext(client, msgs);
+        client.send(make_json({"type": "parse", "id": "parse1", "text": "@name =="}));
+        hash<auto> response = waitMessage(msgs, "parse");
+        assertEq("parse1", response.id, "Parse response should echo ID");
+        assertFalse(response.success, "Parse should fail for invalid expression");
+        assertTrue(response.diagnostics.size() > 0, "Parse diagnostics expected");
+
+        client.disconnect();
+    }
+
+    testValidate() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        setContext(client, msgs);
+        client.send(make_json({"type": "validate", "id": "val1", "text": "@missing == 1"}));
+        hash<auto> response = waitMessage(msgs, "validate");
+        assertEq("val1", response.id, "Validate response should echo ID");
+        assertTrue(response.diagnostics.size() > 0, "Validation diagnostics expected");
+        assertTrue(response.diagnostics[0].code == "DPQL-E010", "Unknown field diagnostic");
+
+        client.disconnect();
+    }
+
+    testComplete() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        setContext(client, msgs);
+        client.send(make_json({"type": "complete", "id": "cmp1", "text": "@na", "position": 3}));
+        hash<auto> response = waitMessage(msgs, "completions");
+        assertEq("cmp1", response.id, "Completion response should echo ID");
+
+        bool has_name = False;
+        foreach hash<auto> item in (response.items) {
+            if (item.label == "name" && item.kind == "field") {
+                has_name = True;
+                break;
+            }
+        }
+        assertTrue(has_name, "Completion should include 'name'");
+
+        client.disconnect();
+    }
+
+    testSerialize() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        setContext(client, msgs);
+        client.send(make_json({
+            "type": "serialize",
+            "id": "ser1",
+            "expression": {
+                "exp": "==",
+                "args": (
+                    {"field": "name"},
+                    "John",
+                ),
+            },
+        }));
+        hash<auto> response = waitMessage(msgs, "serialize");
+        assertEq("ser1", response.id, "Serialize response should echo ID");
+        assertEq('@name == "John"', response.dpql);
+
+        client.disconnect();
+    }
+
+    testNoContextCompletion() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        client.send(make_json({"type": "complete", "id": "noc1", "text": "@na", "position": 3}));
+        hash<auto> response = waitMessage(msgs, "error");
+        assertEq("noc1", response.id, "Error response should echo ID");
+        assertEq("NO-CONTEXT", response.error);
+
+        client.disconnect();
+    }
+
+    testInvalidJson() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        client.send("{");
+        hash<auto> response = waitMessage(msgs, "error");
+        assertEq("JSON-PARSE-ERROR", response.error);
+
+        client.disconnect();
+    }
+
+    testUnknownMessage() {
+        checkModule();
+        hash<auto> cx = connectClient("ws://localhost:" + port + "/ws/dpql");
+        Queue msgs = cx.messages;
+        WebSocketClient client = cx.client;
+
+        client.send(make_json({"type": "not-a-real-type", "id": "unknown1"}));
+        hash<auto> response = waitMessage(msgs, "error");
+        assertEq("unknown1", response.id);
+        assertEq("UNKNOWN-MESSAGE-TYPE", response.error);
+
+        client.disconnect();
+    }
+
+    testAuthCallback() {
+        checkModule();
+        DataProvider::DpqlWebSocketHandler auth_handler(NOTHING, {
+            "logger": logger,
+            "auth_callback": bool sub (hash<auto> cx, hash<auto> hdr) {
+                return hdr."x-api-key" == "secret123";
+            },
+        });
+
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        int auth_port = server.addListener(linfo).port;
+        server.setHandler("dpql-auth", "/ws/auth-dpql", NOTHING, auth_handler);
+
+        bool connected = False;
+        try {
+            WebSocketClient bad_client(sub (*data msg) {}, {
+                "url": "ws://localhost:" + auth_port + "/ws/auth-dpql",
+                "logger": logger,
+            });
+            bad_client.connect();
+            connected = bad_client.isOpen();
+            if (connected) {
+                bad_client.disconnect();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # connection should fail
+        }
+        assertFalse(connected, "Connection should fail without auth");
+
+        Queue msgs();
+        WebSocketClient good_client(sub (*data msg) { msgs.push(msg); }, {
+            "url": "ws://localhost:" + auth_port + "/ws/auth-dpql",
+            "logger": logger,
+        });
+        good_client.connect({"hdr": {"X-API-Key": "secret123"}});
+        assertTrue(good_client.isOpen(), "Connection with auth should succeed");
+        hash<auto> session = parse_json(msgs.get(5s));
+        assertEq("session", session.type);
+        good_client.disconnect();
+    }
+
+    testMaxConnections() {
+        checkModule();
+        DataProvider::DpqlWebSocketHandler limit_handler(NOTHING, {
+            "logger": logger,
+            "max_connections": 1,
+        });
+
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        int limit_port = server.addListener(linfo).port;
+        server.setHandler("dpql-limit", "/ws/limit-dpql", NOTHING, limit_handler);
+
+        Queue msgs1();
+        WebSocketClient client1(sub (*data msg) { msgs1.push(msg); }, {
+            "url": "ws://localhost:" + limit_port + "/ws/limit-dpql",
+            "logger": logger,
+        });
+        client1.connect();
+        assertTrue(client1.isOpen(), "First connection should succeed");
+        msgs1.get(5s);
+
+        bool connected = False;
+        try {
+            WebSocketClient client2(sub (*data msg) {}, {
+                "url": "ws://localhost:" + limit_port + "/ws/limit-dpql",
+                "logger": logger,
+            });
+            client2.connect();
+            connected = client2.isOpen();
+            if (connected) {
+                client2.disconnect();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # connection should fail
+        }
+        assertFalse(connected, "Second connection should fail with error when max reached");
+
+        client1.disconnect();
+        usleep(500ms);
+
+        Queue msgs3();
+        WebSocketClient client3(sub (*data msg) { msgs3.push(msg); }, {
+            "url": "ws://localhost:" + limit_port + "/ws/limit-dpql",
+            "logger": logger,
+        });
+        client3.connect();
+        assertTrue(client3.isOpen(), "Connection after disconnect should succeed");
+        client3.disconnect();
+    }
+}

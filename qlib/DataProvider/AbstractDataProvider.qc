@@ -80,18 +80,50 @@ public hashdecl BaseOptionInfo inherits DisplayDescInfo {
 
     #! Any image info for the option
     *string image;
+
+    #! Optional UI type override for frontend rendering
+    /** If not set, the UI should derive ui_type from the base type (e.g., @c "string" → @c "richtext").
+        Set this to override the default mapping (e.g., @c "processor", @c "password", @c "file-picker").
+
+        @since %DataProvider 3.3
+    */
+    *string ui_type;
+
+    #! Required flag
+    bool required = False;
+
+    #! Is this option read-only?
+    bool readonly = False;
+
+    #! Is this option disabled?
+    bool disabled = False;
+
+    #! Should the option be preselected in UIs?
+    bool preselected = False;
+
+    #! Does any other option depend on this one?
+    bool has_dependents = False;
+
+    #! A list of other options that must be set before this option can be chosen
+    /** Each element is either:
+        - a string: a single option name that must have a value (e.g. @c "driver")
+        - a string with @c "=": option must equal a specific value (e.g. @c "driver=jdbc")
+        - a list of strings: a group where at least one must have a value
+
+        @since %DataProvider 3.3
+    */
+    *softlist<softstring> depends_on;
+
+    #! How to react to changes (e.g. @c "refetch" to reload options from the server)
+    /** @since %DataProvider 3.3
+    */
+    *softlist<softstring> on_change;
 }
 
 #! Data provider option info
 public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! The option value type or types
     softlist<AbstractDataProviderType> type;
-
-    #! Required flag
-    /** @note This attribute is ignored for cases when multiple combinations of options may be valid such as for
-        data provider constructor options
-    */
-    bool required = False;
 
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set; each group name is an arbitrary
@@ -119,11 +151,6 @@ public hashdecl DataProviderOptionInfo inherits BaseOptionInfo {
     #! A tag allowing the default value for the option to be returned dynamically
     *string default_ref_data;
 
-    #! Should this option be preselected?
-    *bool preselected;
-
-    #! Any information about how to react to changes
-    *softlist<softstring> on_change;
 }
 
 #! Data provider summary info
@@ -237,6 +264,21 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     /** @since DataProvider 3.0
     */
     bool children_identical = False;
+
+    #! Does the data provider support being used as a pipeline processor?
+    /** @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processor = False;
+
+    #! Processor capability bitfield (DPC_* constants)
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
+
+    #! Can any child data providers support being used as pipeline processors?
+    /** @since %DataProvider 3.3
+    */
+    bool children_can_support_pipeline_processors = False;
 }
 
 #! Data provider message and event info
@@ -587,7 +629,7 @@ public hashdecl DataProviderExpressionInfo {
     int type;
 
     #! The expression subtype
-    /** @ee @ref dataprovider_expression_subtype_codes
+    /** @see @ref dataprovider_expression_subtype_codes
     */
     int subtype = DES_Generic;
 
@@ -667,6 +709,20 @@ public hashdecl DataProviderExpressionInfo {
         @since DataProvider 3.3
     */
     *bool return_type_first_arg;
+}
+
+#! Range specification for DPQL slice accessors
+/** Represents a range with optional start and end bounds.
+    Either start or end (or both) must be present.
+    Both bounds are inclusive (Qore-style).
+
+    @since DataProvider 3.3
+*/
+public hashdecl DataProviderRangeSpec {
+    #! Start index of the range (NOTHING for open start, e.g., \c [..5])
+    *int start;
+    #! End index of the range (NOTHING for open end, e.g., \c [2..])
+    *int end;
 }
 
 #! Data provider field reference
@@ -1027,6 +1083,26 @@ public hashdecl DataProviderInfo {
 
     #! Any optional provider-specific information
     *hash<auto> info;
+
+    #! Does the data provider support being used as a pipeline processor?
+    /** @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processor = False;
+
+    #! Processor capability bitfield (DPC_* constants)
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
+
+    #! Pipeline processor options, if applicable
+    /** @since %DataProvider 3.3
+    */
+    *hash<string, hash<DataProviderOptionInfo>> pipeline_processor_options;
+
+    #! Can any child data providers support being used as pipeline processors?
+    /** @since %DataProvider 3.3
+    */
+    bool children_can_support_pipeline_processors = False;
 }
 
 #! Data provider connection info
@@ -1114,6 +1190,12 @@ public const RegularExpressionArgInfo = (
                     "newline in the subject string",
                 "value": "RE_MultiLine",
             },
+            <AllowedValueInfo>{
+                "display_name": "Global?",
+                "short_desc": "Match all occurrences, not just the first",
+                "desc": "Match all occurrences, not just the first",
+                "value": "RE_Global",
+            },
         ),
     },
 );
@@ -1134,7 +1216,7 @@ list<string> sub dp_get_all_typed_hash_member_names(TypedHash th) {
 }
 
 #! The AbstractDataProvider class
-public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable {
+public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializable, AbstractDataProcessor {
     public {
         #! Generic expression implementations for data providers without native search functionality
         const GenericExpressionImplementations = {
@@ -1529,6 +1611,114 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     return regex(str, pattern, opts);
                 },
             },
+            DP_EXPR_VALUE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_EXPR_VALUE,
+                    "display_name": "value",
+                    "short_desc": "Evaluates and returns a field reference value",
+                    "desc": "Evaluates the given field reference and returns its value. "
+                        "This allows field references to be used as standalone expressions.",
+                    "symbol": "",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                },
+            },
+            DP_FUNC_INDEX: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_INDEX,
+                    "display_name": "index",
+                    "short_desc": "Returns a single element from a list by index",
+                    "desc": "Returns a single element from a list by index; supports negative indices",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    int index = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                    if (value.typeCode() != NT_LIST) {
+                        throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of "
+                            "type %y", index, value.fullType());
+                    }
+                    int len = value.size();
+                    int idx = index >= 0 ? index : len + index;
+                    if (idx < 0 || idx >= len) {
+                        return NOTHING;
+                    }
+                    return value[idx];
+                },
+            },
+            DP_FUNC_SLICE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_SLICE,
+                    "display_name": "slice",
+                    "short_desc": "Returns a sub-list from a list by indices and/or ranges",
+                    "desc": "Returns a sub-list from a list by indices and/or ranges; supports negative indices "
+                        "and open-ended ranges",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    "varargs": True,
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    if (value.typeCode() != NT_LIST) {
+                        throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of "
+                            "type %y", value.fullType());
+                    }
+                    int len = value.size();
+                    list<auto> result = ();
+                    for (int i = 1; i < exp.args.size(); ++i) {
+                        auto item = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                        if (item.typeCode() == NT_HASH) {
+                            hash<auto> range = item;
+                            int start = exists range.start
+                                ? (range.start >= 0 ? range.start : len + range.start) : 0;
+                            int end = exists range.end
+                                ? (range.end >= 0 ? range.end : len + range.end) : len - 1;
+                            if (start < 0) start = 0;
+                            if (end >= len) end = len - 1;
+                            for (int j = start; j <= end; ++j) {
+                                result += value[j];
+                            }
+                        } else {
+                            int idx = item >= 0 ? item : len + item;
+                            if (idx >= 0 && idx < len) {
+                                result += value[idx];
+                            }
+                        }
+                    }
+                    return result;
+                },
+            },
+            DP_FUNC_KEY: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "role": ER_All,
+                    "name": DP_FUNC_KEY,
+                    "display_name": "key",
+                    "short_desc": "Returns hash values by key",
+                    "desc": "Returns hash values by one or more keys; for a single key returns the value directly; "
+                        "for multiple keys returns a hash subset; when applied to a list, maps over each element",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureStringType),
+                    "varargs": True,
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                    list<string> key_list = ();
+                    for (int i = 1; i < exp.args.size(); ++i) {
+                        key_list += AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                    }
+                    return AbstractDataProvider::applyKeyAccessorImpl(value, key_list);
+                },
+            },
         };
 
         #! Generic search operator expressions
@@ -1609,7 +1799,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     private:internal {
         #! Optional debug info collector
-        /** @since DataProvider 3.5
+        /** @since DataProvider 3.3
         */
         *AbstractDebugInfoCollector debug_collector;
     }
@@ -1878,7 +2068,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Upserts the given record in the data provider from upsert action options
     /** @param options upsert action options
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
 
@@ -1892,7 +2082,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param rec a hash representing a single input record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
     */
@@ -1904,7 +2094,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Upserts the given records in the data provider from upsert action options
     /** @param options upsert action options
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1920,7 +2110,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1939,7 +2129,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         values
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1967,7 +2157,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param stream a record stream for upserting records
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -1992,7 +2182,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param i a record iterator for upserting records
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
@@ -2024,6 +2214,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<auto> searchFirstRecordWithOptions(*hash<auto> options) {
         return searchFirstRecord(options.where_cond, options - "where_cond");
+    }
+
+    #! Returns the first record matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchFirstRecord(string dpql_where, *hash<auto> search_options) {
+        return searchFirstRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Returns the first record matching the search options
@@ -2073,6 +2276,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     *hash<auto> searchSingleRecordWithOptions(*hash<auto> options) {
         return searchSingleRecord(options.where_cond, options - "where_cond");
+    }
+
+    #! Returns a single record matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+        @throw MULTIPLE-RECORDS-ERROR multiple records found
+        @throw NO-DATA the \c required_result search option was set and no record was found
+
+        @since DataProvider 3.3
+    */
+    *hash<auto> searchSingleRecord(string dpql_where, *hash<auto> search_options) {
+        return searchSingleRecord(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Returns a single record matching the search options
@@ -2152,6 +2369,23 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return searchRecordsBulk(options.block_size, options.where_cond, options - ("block_size", "where_cond"));
     }
 
+    #! Returns an iterator for zero or more records matching the DPQL search expression
+    /** @param block_size the number of records in a read block; must be a positive number
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return a bulk record interface object that will return the records in bulk format
+
+        @throw INVALID-BLOCK-SIZE the block size must be a positive number
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderBulkRecordInterface searchRecordsBulk(int block_size = 1000,
+            string dpql_where, *hash<auto> search_options) {
+        return searchRecordsBulk(block_size, DataProvider::parseDpqlExpression(dpql_where), search_options);
+    }
+
     #! Returns an iterator for zero or more records matching the search options
     /** @param block_size the number of records in a read block; must be a positive number
         @param where_cond the search criteria; will be processed by processSearchParameters()
@@ -2206,6 +2440,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     AbstractDataProviderRecordIterator searchRecordsWithOptions(*hash<auto> options) {
         return searchRecords(options.where_cond, options - "where_cond");
+    }
+
+    #! Returns an iterator for zero or more records matching the DPQL search expression
+    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @throw INVALID-OPERATION the data provider does not support reading
+
+        @since DataProvider 3.3
+    */
+    AbstractDataProviderRecordIterator searchRecords(string dpql_where, *hash<auto> search_options) {
+        return searchRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -2343,6 +2589,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return updateRecords(options.set, options.where_cond, options - ("set", "where_cond"));
     }
 
+    #! Updates zero or more records matching the DPQL search expression
+    /** @param set the hash of field data to set
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return the number of records updated
+
+        @throw INVALID-OPERATION the data provider does not support record updating
+        @throw UPDATE-RECORDS-ERROR error updating records
+
+        @since DataProvider 3.3
+    */
+    int updateRecords(hash<auto> set, string dpql_where, *hash<auto> search_options) {
+        return updateRecords(set, DataProvider::parseDpqlExpression(dpql_where), search_options);
+    }
+
     #! Updates zero or more records matching the search options
     /** @param set the hash of field data to set
         @param where_cond a hash for identifying the record(s) to be updated; will be processed by
@@ -2410,6 +2672,22 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     int deleteRecordsWithOptions(*hash<auto> options) {
         return deleteRecords(options.where_cond, options - "where_cond");
+    }
+
+    #! Deletes zero or more records matching the DPQL search expression
+    /**
+        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param search_options the search options; will be processed by validateSearchOptions()
+
+        @return the number of records deleted
+
+        @throw INVALID-OPERATION the data provider does not support record deletion
+        @throw DELETE-RECORDS-ERROR error deleting records
+
+        @since DataProvider 3.3
+    */
+    int deleteRecords(string dpql_where, *hash<auto> search_options) {
+        return deleteRecords(DataProvider::parseDpqlExpression(dpql_where), search_options);
     }
 
     #! Deletes zero or more records
@@ -2765,6 +3043,64 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return getErrorResponseTypeImpl(error_code);
     }
 
+    #! Returns the input type for the pipeline processor, if any
+    /** @return the input type for the pipeline processor; NOTHING means any type is accepted
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorInputType() {
+        checkPipelineProcessor();
+        return getPipelineProcessorInputTypeImpl();
+    }
+
+    #! Returns the input type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the input type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is accepted
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about input data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorInputTypeWithOptions(*hash<auto> options) {
+        checkPipelineProcessor();
+        return getPipelineProcessorInputTypeWithOptionsImpl(options);
+    }
+
+    #! Returns the output type for the pipeline processor, if any
+    /** @return the output type for the pipeline processor; NOTHING means any type is produced
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorOutputType() {
+        checkPipelineProcessor();
+        return getPipelineProcessorOutputTypeImpl();
+    }
+
+    #! Returns the output type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the output type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is produced
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about output data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    *AbstractDataProviderType getPipelineProcessorOutputTypeWithOptions(*hash<auto> options) {
+        checkPipelineProcessor();
+        return getPipelineProcessorOutputTypeWithOptionsImpl(options);
+    }
+
     #! Returns the description of an observable event, if any
     /** @param event_id the event ID of the event
 
@@ -2823,7 +3159,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the event action
+        @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -2845,7 +3182,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an event action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the request action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an event action according to the available option data
 
@@ -2867,7 +3205,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a request action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the send message action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a request action according to the available option data
 
@@ -2889,7 +3228,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a send message action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the search action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a send message action according to the available option data
 
@@ -2911,7 +3251,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a search action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the create action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a search action according to the available option data
 
@@ -2933,7 +3274,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a create action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the upsert action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a create action according to the available option data
 
@@ -2955,7 +3297,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the update action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an upsert action according to the available option data
 
@@ -2977,7 +3320,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an update action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an update action according to the available option data
 
@@ -2997,7 +3341,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a delete action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the event action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a delete action according to the available option data
 
@@ -3015,6 +3360,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } catch (hash<ExceptionInfo> ex) {
             LoggerWrapper::error("Failed to get action options for delete with options (%y): %s", options,
                 get_exception_string(ex));
+        }
+    }
+
+    #! Returns action options corresponding to the given option data for a pipeline processor action
+    /** @param action action info for the pipeline processor action
+        @param options sample option data that can be used to determine the final type
+
+        @return action options for a pipeline processor action according to the available option data
+
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForPipelineProcessorWithOptions(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        try {
+            checkPipelineProcessor();
+            return tryGetActionOptionsForPipelineProcessorWithOptionsImpl(action, options);
+        } catch (hash<ExceptionInfo> ex) {
+            LoggerWrapper::error("Failed to get action options for pipeline processor with options (%y): %s",
+                options, get_exception_string(ex));
         }
     }
 
@@ -3493,6 +3861,19 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
     }
 
+    #! Ensures that the data provider supports the pipeline processor API
+    /**
+        @throw INVALID-OPERATION the data provider does not support the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    checkPipelineProcessor() {
+        if (!supportsPipelineProcessor()) {
+            throw "INVALID-OPERATION", sprintf("data provider %y (type %y) does not support the pipeline "
+                "processor API", getName(), self.className());
+        }
+    }
+
     #! Ensures that the data provider supports creating children
     /**
         @throw INVALID-OPERATION the data provider does not support the child creation API
@@ -3647,7 +4028,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns information on supported reference data
     /** @return a hash of supported reference data; keys in the hash returned are supported in calls to
-        @ref getReferenceData()
+        \c getReferenceData()
 
         @since DataProvider 3.0
     */
@@ -3827,7 +4208,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns information on supported reference data values
     /** @return a hash of supported reference data values; keys in the hash returned are supported in calls to
-        @ref getReferenceDataValue()
+        \c getReferenceDataValue()
 
         @since DataProvider 3.0
     */
@@ -3981,7 +4362,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an event action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the request action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an event action according to the available option data
 
@@ -4007,7 +4389,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a request action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the send message action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a request action according to the available option data
 
@@ -4033,7 +4416,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a send message action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the search action
+        @param options sample option data that can be used to determine the final type
 
         @return request options for a send message action according to the available option data
 
@@ -4059,7 +4443,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a search action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the create action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a search action according to the available option data
 
@@ -4076,7 +4461,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a create action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the upsert action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a create action according to the available option data
 
@@ -4090,7 +4476,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an upsert action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the update action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an upsert action according to the available option data
 
@@ -4104,7 +4491,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for an update action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for an update action according to the available option data
 
@@ -4129,7 +4517,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns action options corresponding to the given option data for a delete action
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info for the delete action
+        @param options sample option data that can be used to determine the final type
 
         @return action options for a delete action according to the available option data
 
@@ -4145,8 +4534,27 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         } + getSearchOptionsAsActionOptions();
     }
 
+    #! Returns action options corresponding to the given option data for a pipeline processor action
+    /** @param action action info for the pipeline processor action
+        @param options sample option data that can be used to determine the final type
+
+        @return action options for a pipeline processor action according to the available option data
+
+        The default implementation returns the static options unchanged; subclasses can override this to add
+        dynamic options (e.g. a \c where_cond option for filters).
+
+        @note This API is meant to provide information about options that can depend on option data
+
+        @since DataProvider 3.3
+    */
+    private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForPipelineProcessorWithOptionsImpl(
+            hash<DataProviderActionInfo> action, *hash<auto> options) {
+        return action.options;
+    }
+
     #! Returns action options corresponding to the given option data
-    /** @param options sample option data that can be used to determine the final type
+    /** @param action action info to determine options
+        @param options sample option data that can be used to determine the final type
 
         @return action options according to the available option data
 
@@ -4174,6 +4582,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 return tryGetActionOptionsForUpdateWithOptionsImpl(action, options);
             case DPAT_DELETE:
                 return tryGetActionOptionsForDeleteWithOptionsImpl(action, options);
+            case DPAT_PIPELINE_PROCESSOR:
+                return tryGetActionOptionsForPipelineProcessorWithOptionsImpl(action, options);
         }
         return action.options;
     }
@@ -4359,6 +4769,42 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             return AbstractDataProvider::evalGenericExpression(rec, val);
         }
         return val;
+    }
+
+    #! Applies key access to a value (used by DP_FUNC_KEY expression operator)
+    /** @param value the value to access (must be a hash, or a list to map over)
+        @param key_list the keys to access
+
+        @return for a single key, the value; for multiple keys, a hash subset
+
+        @since DataProvider 3.3
+    */
+    static auto applyKeyAccessorImpl(auto value, list<string> key_list) {
+        # Handle list values by mapping key accessor over each element
+        # Use push to preserve nesting (avoid flattening nested lists)
+        if (value.typeCode() == NT_LIST) {
+            list<auto> result = ();
+            foreach auto elem in (value) {
+                push result, applyKeyAccessorImpl(elem, key_list);
+            }
+            return result;
+        }
+        if (value.typeCode() != NT_HASH && value.typeCode() != NT_OBJECT) {
+            throw "INVALID-OPERATION", sprintf("key accessor applied to non-hash value of type %y",
+                value.fullType());
+        }
+        if (key_list.size() == 1) {
+            # Single key: return value directly
+            return value{key_list[0]};
+        }
+        # Multiple keys: return hash subset
+        hash<auto> result = {};
+        foreach string key in (key_list) {
+            if (value.hasKey(key)) {
+                result{key} = value{key};
+            }
+        }
+        return result;
     }
 
     #! Evaluates the given expression with the generic internal implementation and returns the result
@@ -5405,7 +5851,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /** @param rec a hash representing a single input record
         @param upsert_options the create options after processing by validateUpsertOptions()
 
-        @return see @ref db_provider_upsert_results for possible values
+        @return see UpsertResultInserted and related constants for possible values
     */
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
         throwUnimplementedException();
@@ -5416,7 +5862,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         lists of field values or a single value that applies to all records to be upserted
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
-        @return an array of upsert results corresponding to each record in order; see @ref db_provider_upsert_results
+        @return an array of upsert results corresponding to each record in order; see UpsertResultInserted and related constants
         for possible values
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
@@ -5988,7 +6434,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     #! Sets the debug info collector for this data provider
     /** @param collector the debug collector to use, or @ref nothing to disable debug collection
 
-        When a debug collector is set, the data provider will call the collector's @ref collect() method
+        When a debug collector is set, the data provider will call the collector's
+        @ref AbstractDebugInfoCollector::collect method
         with technical debug information about operations (HTTP requests, WebSocket messages, etc.).
 
         @par Example:
@@ -6003,7 +6450,7 @@ auto response = provider.doRequest(request);
 list<hash<DataProviderDebugInfo>> info = collector.getAll();
         @endcode
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     setDebugCollector(*AbstractDebugInfoCollector collector) {
         debug_collector = collector;
@@ -6012,7 +6459,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     #! Returns the current debug info collector, if any
     /** @return the current debug collector, or @ref nothing if none is set
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     *AbstractDebugInfoCollector getDebugCollector() {
         return debug_collector;
@@ -6024,7 +6471,7 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
         Subclasses should call this method to report debug information when performing operations.
         If no collector is registered, this method does nothing.
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     private collectDebugInfo(hash<DataProviderDebugInfo> info) {
         if (debug_collector) {
@@ -6035,10 +6482,98 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     #! Returns @ref True if debug collection is enabled
     /** @return @ref True if a debug collector is registered
 
-        @since DataProvider 3.5
+        @since DataProvider 3.3
     */
     bool debugCollectionEnabled() {
         return debug_collector.val();
+    }
+
+    #! Returns @ref True if the data provider supports being used as a pipeline processor
+    /** @return @ref True if the data provider supports pipeline processor capabilities
+
+        @since %DataProvider 3.3
+    */
+    bool supportsPipelineProcessor() {
+        return getStaticInfoImpl().supports_pipeline_processor;
+    }
+
+    #! Returns the input type for the pipeline processor, if any
+    /** @return the input type for the pipeline processor; NOTHING means any type is accepted
+
+        @note only called if the provider supports the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorInputTypeImpl() {
+    }
+
+    #! Returns the input type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the input type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is accepted
+
+        @note
+        - Only called if the provider supports the pipeline processor API
+        - This API is meant to provide information about input data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorInputTypeWithOptionsImpl(*hash<auto> options) {
+        return getPipelineProcessorInputTypeImpl();
+    }
+
+    #! Returns the output type for the pipeline processor, if any
+    /** @return the output type for the pipeline processor; NOTHING means any type is produced
+
+        @note only called if the provider supports the pipeline processor API
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeImpl() {
+    }
+
+    #! Returns the output type for the pipeline processor in the context of the given option data
+    /** @param options action option data for the data provider
+
+        @return the output type for the pipeline processor in the context of the given option data;
+        NOTHING means any type is produced
+
+        @note
+        - Only called if the provider supports the pipeline processor API
+        - This API is meant to provide information about output data types that can depend on the option data
+
+        @since DataProvider 3.3
+    */
+    private *AbstractDataProviderType getPipelineProcessorOutputTypeWithOptionsImpl(*hash<auto> options) {
+        return getPipelineProcessorOutputTypeImpl();
+    }
+
+    #! Overrides the processor API to throw by default
+    /** Data providers do not support the pipeline processor API by default; subclasses must override this method
+        to provide pipeline processor capabilities.
+
+        @throws UNIMPLEMENTED thrown if the data provider does not implement pipeline processor capabilities
+
+        @since %DataProvider 3.3
+    */
+    private *auto processRecordImpl(auto record) {
+        throw "UNIMPLEMENTED", sprintf("%s does not implement pipeline processor capabilities",
+            self.className());
+    }
+
+    #! Returns @ref True for the bulk API
+    /** @since %DataProvider 3.3
+    */
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+
+    #! Returns 0 (no processor capabilities) by default
+    /** @since %DataProvider 3.3
+    */
+    private int getProcessorCapabilitiesImpl() {
+        return 0;
     }
 }
 }

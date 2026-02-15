@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+class RuntimeConfig;
+
 class ReturnStatement : public AbstractStatement {
 public:
     DLLLOCAL ReturnStatement(int start_line, int end_line, QoreValue v = QoreValue())
@@ -57,6 +59,7 @@ private:
     QoreValue exp{};
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

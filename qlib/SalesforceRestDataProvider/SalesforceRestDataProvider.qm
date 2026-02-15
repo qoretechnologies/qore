@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SalesforceRestDataProvider module definition
 
-/*  SalesforceRestDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  SalesforceRestDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,6 +53,7 @@ module SalesforceRestDataProvider {
             "logo": SalesforceLogo,
             "logo_file_name": "salesforce-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales,),
         });
 
         # register all supported actions
@@ -178,12 +179,12 @@ module SalesforceRestDataProvider {
 
     @section salesforcerestdataproviderintro Introduction to the SalesforceRestDataProvider Module
 
-    The %SalesforceRestDataProvider module provides a @ref dataproviderintro "data provider" API for the Salesforce
+    The %SalesforceRestDataProvider module provides a \c dataproviderintro "data provider" API for the Salesforce
     REST API to work with data under the \c "sobjects" URI path.  The
     @ref SalesforceRestDataProvider::SalesforceRestDataProvider "SalesforceRestDataProvider" class allows for
     introspecting a Salesforce instance, while the
     @ref SalesforceRestDataProvider::SalesforceRestObjectDataProvider "SalesforceRestObjectDataProvider" class
-    supports the @ref dataproviderintro "data provider" record-based API for communication with REST servers and
+    supports the \c dataproviderintro "data provider" record-based API for communication with REST servers and
     querying and manipulating data in the Salesforce instance.
 
     Salesforce instances can be introspected with the following format:
@@ -208,8 +209,8 @@ module SalesforceRestDataProvider {
     recommended to limit query result set sizes using the \c limit search option.
 
     @see
-    - @ref soql_soql_cop_funcs
-    - @ref soql_op_funcs
+    - \c soql_soql_cop_funcs
+    - \c soql_op_funcs
 
     @section salesforcerestdataprovider_relnotes Release Notes
 
@@ -231,9 +232,7 @@ module SalesforceRestDataProvider {
 public namespace SalesforceRestDataProvider {
 #! Application name
 public const AppName = "Salesforce";
-}
 
-namespace Priv {
 # Salesforce(R) logo used under terms: https://www.salesforce.com/company/legal/intellectual/tmcusageguidelines/
-const SalesforceLogo = File::readTextFile(get_script_dir() + "/salesforce-logo.svg");
+public const SalesforceLogo = File::readTextFile(get_script_dir() + "/salesforce-logo.svg");
 }

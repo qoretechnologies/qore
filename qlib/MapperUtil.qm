@@ -26,13 +26,11 @@
 %requires qore >= 0.9.4
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not use "$" for vars
-%new-style
+%modern
 
 module MapperUtil {
     version = "1.0.1";
@@ -165,7 +163,7 @@ public namespace Mapper {
         #! The code to handle the key at runtime
         /** the signature of this closure or call reference depends on \a requires_roles:
             - \a requires_roles contains \a value:
-              <tt>auto sub (auto arg, auto val, hash<auto> ctx, *reference<bool> missing_input) {}</tt>
+              <tt>auto sub (auto arg, auto val, hash<auto> ctx, *reference&lt;bool&gt; missing_input) {}</tt>
               - parameters:
                 - \c arg: the argument to the runtime key in the mapping
                 - \c val: the current value of the mapping, if any
@@ -175,7 +173,7 @@ public namespace Mapper {
                 - \c missing_input: an output variable; set to True if the handler could not resolve the value because
                   input was missing
             - \a requires_roles does not contain \a value:
-              <tt>auto sub (auto arg, hash<auto> ctx, *reference<bool> missing_input) {}</tt>
+              <tt>auto sub (auto arg, hash<auto> ctx, *reference&lt;bool&gt; missing_input) {}</tt>
               - parameters:
                 - \c arg: the argument to the runtime key in the mapping
                 - \c ctx: mapper context info; will contain at least the following fields:

@@ -1,0 +1,277 @@
+# DPQL Syntax Reference
+
+This document describes the syntax of DPQL (Data Provider Query Language), a domain-specific
+language for filtering and querying data in the Qore DataProvider framework.
+
+## Field References
+
+Field references are prefixed with `@`:
+
+```dpql
+@name == "John"
+@age > 18
+```
+
+### Unquoted Field Names
+
+Unquoted field names can contain:
+- Letters (a-z, A-Z)
+- Digits (0-9)
+- Underscores (_)
+- Dots (.) for nested field access
+
+```dpql
+@user_name == "john"
+@user.email == "john@example.com"
+```
+
+Note: Dots in unquoted field names represent nested field access syntax, not literal
+dots in the field name.
+
+### Quoted Field Names
+
+Use double quotes for field names that:
+- Contain spaces
+- Contain special characters (brackets, operators, etc.)
+- Start with a digit
+- Contain literal dots (not for nested access)
+
+```dpql
+@"field with spaces" == "value"
+@"items[0]" == 1
+@"123field" == "value"
+@"user.email.address" == "literal.field.name"
+```
+
+### Escape Sequences
+
+Within quoted field names, use backslash to escape special characters:
+
+| Sequence | Meaning |
+|----------|---------|
+| `\"` | Double quote |
+| `\\` | Backslash |
+| `\n` | Newline |
+| `\r` | Carriage return |
+| `\t` | Tab |
+
+```dpql
+@"field\"name" == "value"    # Field name contains a quote
+@"path\\file" == "value"     # Field name contains a backslash
+```
+
+## Field Reference Operators
+
+Field reference operators allow extracting specific elements from field values.
+
+### Index Operator
+
+Access list elements by index (0-based, negative indices count from end):
+
+```dpql
+@items[0] == "first"     # First element
+@items[-1] == "last"     # Last element
+@items[2] == "third"     # Third element
+```
+
+Supports multiple indices and ranges in a single expression:
+
+```dpql
+@items[0..2, 5, 7]       # Elements 0-2, 5, and 7
+```
+
+### Slice Operator
+
+Extract a range of elements (inclusive on both ends, Qore-style):
+
+```dpql
+@items[0..2]             # Elements 0, 1, 2 (inclusive)
+@items[1..-1]            # All except first
+@items[2..]              # From index 2 to end
+@items[..5]              # From start through index 5
+```
+
+### Key Operator
+
+Access hash values by key:
+
+```dpql
+@record{name}            # Single key
+@record{name, age}       # Multiple keys (returns hash subset)
+@record{"key with spaces"}  # Quoted key name
+@record{123}             # Numeric key
+```
+
+### Dot Operator
+
+Access hash member (equivalent to single-key operator):
+
+```dpql
+@record.name             # Equivalent to @record{name}
+@user.address.city       # Nested access
+```
+
+### Chained Operators
+
+Field reference operators can be chained:
+
+```dpql
+@data[0]{user}.name      # First element's user's name
+@records[-1]{addresses}[0]  # Last record's first address
+@matrix[0][1]            # Nested list access
+```
+
+## Comparison Operators
+
+| Operator | Meaning |
+|----------|---------|
+| `==` | Equal |
+| `!=` | Not equal |
+| `>` | Greater than |
+| `>=` | Greater than or equal |
+| `<` | Less than |
+| `<=` | Less than or equal |
+
+## Logical Operators
+
+| Operator | Meaning |
+|----------|---------|
+| `&&` | Logical AND |
+| `\|\|` | Logical OR |
+| `!` | Logical NOT |
+
+## Set Operators
+
+```dpql
+@status in ("active", "pending")
+```
+
+## Range Operators
+
+```dpql
+@age between 18 and 65
+```
+
+## Pattern Matching
+
+```dpql
+@name =~ /^John/         # Regex match
+@name =~ /john/i         # Case-insensitive regex
+```
+
+Supported regex flags:
+- `i` — case-insensitive
+- `s` — dot matches newlines
+- `m` — multiline mode
+- `x` — extended syntax (ignore whitespace)
+- `u` — Unicode
+
+## Values
+
+### String Literals
+
+Double-quoted or single-quoted:
+
+```dpql
+@name == "John"
+@name == 'John'
+@desc == "Line 1\nLine 2"  # Escape sequences work
+```
+
+### Numeric Literals
+
+```dpql
+@age == 25
+@score >= 75.5
+@temp < -10
+@rate == 1.5e-3            # Scientific notation
+```
+
+### Boolean Literals
+
+```dpql
+@active == true
+@deleted == false
+```
+
+### Null
+
+```dpql
+@value != null
+```
+
+### Date Literals
+
+ISO-8601 format:
+
+```dpql
+@created < 2026-01-15
+@updated >= 2026-01-02T15:20:11.123+01:00
+```
+
+### Binary Literals
+
+Hex-encoded:
+
+```dpql
+@checksum == <deadbeef>
+```
+
+### List Literals
+
+```dpql
+@tags == (one, two, three)
+@ids == (1, 2, 3)
+```
+
+### Hash Literals
+
+```dpql
+@meta == {a=1, b=two}
+```
+
+### Unquoted Identifiers
+
+Unquoted identifiers on the right-hand side of an expression are treated as string values:
+
+```dpql
+@domain == omq             # Equivalent to @domain == "omq"
+@status == active          # Equivalent to @status == "active"
+```
+
+## Expressions
+
+Expressions can be grouped with parentheses:
+
+```dpql
+(@status == "active" || @status == "pending") && @age >= 18
+!(@deleted == true)
+```
+
+## Examples
+
+```dpql
+# Simple equality
+@name == "John"
+
+# Compound condition
+@status == "active" && @age >= 18 && @role in ("admin", "editor")
+
+# With field reference operators
+@users[0].name == "Admin" && @config{timeout} > 30
+
+# Field name with special characters
+@"response.body" != null && @"items[count]" > 0
+
+# Field name with escaped quote
+@"field\"with\"quotes" == "value"
+
+# Date comparison
+@created >= 2026-01-01 && @created < 2026-02-01
+
+# Regex with flags
+@email =~ /example\.com$/i
+
+# Chained field reference operators
+@orders[-1]{items}[0].product_id == 123
+```

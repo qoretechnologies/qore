@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -97,6 +97,33 @@ public:
     DLLLOCAL bool empty() const {
         return hm.empty();
     }
+
+    //! Updates parentHashDecl pointers after copying to point to hashdecls in this list
+    /** Phase 1 of parent pointer resolution - handles same-namespace parents only.
+        This is safe to call during namespace copy construction because it only looks
+        up parents in this HashDeclList, not in the broader namespace tree.
+
+        Cross-namespace parents are resolved later by resolveExternalParentHashDecls()
+        after the entire namespace tree is constructed.
+
+        @note Classes use a different mechanism (new_copy pointers) and don't need
+        cross-namespace resolution because parent classes in other namespaces
+        (system/module classes) live in persistent namespaces.
+    */
+    DLLLOCAL void updateLocalParentPointers();
+
+    //! Resolves cross-namespace parent hashdecl pointers using the root namespace
+    /** Phase 2 of parent pointer resolution - handles cross-namespace parents.
+        This must be called after the entire namespace tree is constructed, as it
+        uses getRoot() to traverse the namespace tree.
+
+        This resolves cases where a hashdecl inherits from a parent in a different
+        namespace. After copy, the parent pointer may reference the source tree;
+        this method updates it to reference the equivalent hashdecl in the new tree.
+
+        @param root the root namespace to use for lookups
+    */
+    DLLLOCAL void resolveExternalParentHashDecls(qore_root_ns_private* root);
 };
 
 class HashDeclListIterator {

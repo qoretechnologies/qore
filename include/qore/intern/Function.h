@@ -297,6 +297,7 @@ public:
 };
 
 class AbstractQoreFunctionVariant;
+class RuntimeConfig;
 
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
@@ -316,7 +317,7 @@ public:
 
         saves current program location in case there's an exception
     */
-    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
@@ -335,7 +336,7 @@ public:
         saves current program location in case there's an exception;
         performs destructive evaluation of "args"
     */
-    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, const QoreFunction* func,
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
@@ -389,7 +390,11 @@ public:
     }
 
     DLLLOCAL q_rt_flags_t getRuntimeFlags() const {
-        return rtflags;
+        return rc.getRuntimeFlags();
+    }
+
+    DLLLOCAL RuntimeConfig& getRuntimeConfig() const {
+        return rc;
     }
 
     DLLLOCAL const qore_class_private* getClass() const {
@@ -429,6 +434,7 @@ protected:
     qore_call_t ct;
     const char* name;
     ExceptionSink* xsink;
+    RuntimeConfig& rc;
     // method class
     const qore_class_private* qc;
     const QoreProgramLocation* loc;
@@ -436,11 +442,12 @@ protected:
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
-    q_rt_flags_t rtflags = 0; // runtime flags
     std::string callName;
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
+    q_rt_flags_t old_rtflags = 0;
     bool restore_stack = false;
+    bool restore_rtflags = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
@@ -1012,15 +1019,15 @@ public:
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-            QoreProgram* pgm, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
-            QoreProgram* pgm, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
-    DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
@@ -1308,6 +1315,8 @@ public:
             (*i).func = mfb->new_copy;
         }
     }
+
+    DLLLOCAL bool parseHasAmbiguousSignature(const MethodFunctionBase& other, bool relaxed_match) const;
 
     DLLLOCAL int parseInit();
     DLLLOCAL void parseCommit();

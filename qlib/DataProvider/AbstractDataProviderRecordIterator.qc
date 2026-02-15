@@ -97,6 +97,43 @@ public const DP_SEARCH_OP_IN = "in";
 public const DP_SEARCH_OP_NOT = "!";
 #/@}
 
+/** @defgroup dpql_function_ops DPQL Function Operator Constants
+    These constants define function operators for accessing data elements in DPQL expressions
+*/
+#/@{
+#! Index function: access a single element by index (e.g., \c index(\@items, 0))
+public const DP_FUNC_INDEX = "index";
+
+#! Slice function: access multiple elements by indices/ranges (e.g., \c slice(\@items, 0..3))
+public const DP_FUNC_SLICE = "slice";
+
+#! Key function: access hash values by key (e.g., \c key(\@record, "name"))
+public const DP_FUNC_KEY = "key";
+#/@}
+
+/** @defgroup dpql_expression_types DPQL Expression Type Constants
+    These constants define special expression types for DPQL
+*/
+#/@{
+#! Value expression type: evaluates and returns a field reference value
+/** This expression type wraps a bare field reference and returns its evaluated value.
+    It allows field references to be used as standalone expressions without requiring
+    a comparison operator.
+
+    @par Example:
+    @code
+    # "@name" parses to:
+    {
+        "exp": "value",
+        "args": (<DataProviderFieldReference>{"field": "name"},),
+    }
+    @endcode
+
+    @since DataProvider 3.3
+*/
+public const DP_EXPR_VALUE = "value";
+#/@}
+
 #! Operator alias map; maps from old operator names to canonical ones
 public const OperatorAliasMap = {
     "AND": DP_OP_AND,
@@ -114,7 +151,7 @@ public const OperatorAliasMap = {
     "IN": DP_SEARCH_OP_IN,
 };
 
-#! Generic operator info hash as returned by all @ref dataprovider_generic_search_op_funcs "generic search operator functions"
+#! Generic operator info hash as returned by generic dp_op_* helper functions
 public hashdecl SearchOperatorInfo {
     string op;   #!< the operator string code
     auto arg;    #!< optional argument
@@ -504,8 +541,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     }
 
     #! Checks if the current record matches the search criteria
-    /** in case of a hash value, if the hash was created by a
-        @ref dataprovider_generic_search_op_funcs "search operator function", then that search operation is applied to
+    /** in case of a hash value, if the hash was created by a generic dp_op_* helper function, then that search
+        operation is applied to
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */
@@ -514,8 +551,8 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     }
 
     #! Checks if the current record matches the search criteria
-    /** in case of a hash value, if the hash was created by a
-        @ref dataprovider_generic_search_op_funcs "search operator function", then that search operation is applied to
+    /** in case of a hash value, if the hash was created by a generic dp_op_* helper function, then that search
+        operation is applied to
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */

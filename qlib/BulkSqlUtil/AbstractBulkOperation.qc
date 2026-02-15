@@ -179,16 +179,16 @@ on_error ds.rollback();
             @endcode
 
             @param data the input record or record set in case a hash of lists is passed; each hash represents a row
-            (keys are column names and values are column values); when inserting, @ref sql_iop_funcs can also be used.
+            (keys are column names and values are column values); when inserting, \c sql_iop_funcs can also be used.
             If at least one hash value is a list, then any non-hash (indicating an
-            @ref sql_iop_funcs "insert opertor hash") and non-list values will be assumed to be constant values for
+            \c sql_iop_funcs "insert opertor hash") and non-list values will be assumed to be constant values for
             every row and therefore future calls of this method (and overloaded variants) will ignore any values given
             for such keys and use the values given in the first call.
 
             @note
             - the first row passed is taken as a template row; every other row must always have the same keys in the
               same order, otherwise the results are unpredictable
-            - if any @ref sql_iop_funcs are used, then they are assumed to be identical in every row
+            - if any \c sql_iop_funcs are used, then they are assumed to be identical in every row
             - make sure to call flush() before committing the transaction or discard() before rolling back the
               transaction or destroying the object when using this method
             - flush() or discard() needs to be executed individually for each bulk operation object used in the block
@@ -256,11 +256,11 @@ on_error ds.rollback();
 }
             @endcode
 
-            @param l a list of hashes representing the input row data; each hash represents a row (keys are column names and values are column values); when inserting, @ref sql_iop_funcs can also be used
+            @param l a list of hashes representing the input row data; each hash represents a row (keys are column names and values are column values); when inserting, \c sql_iop_funcs can also be used
 
             @note
             - the first row passed is taken as a template row; every other row must always have the same keys in the same order, otherwise the results are unpredictable
-            - if any @ref sql_iop_funcs are used, then they are assumed to be identical in every row
+            - if any \c sql_iop_funcs are used, then they are assumed to be identical in every row
             - make sure to call flush() before committing the transaction or discard() before rolling back the transaction or destroying the object when using this method
             - flush() or discard() needs to be executed individually for each bulk operation object used in the block whereas the DB transaction needs to be committed or rolled back once per datasource
 

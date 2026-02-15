@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@
 #include "qore/intern/ExecArgList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/ModuleInfo.h"
 
 #include <cerrno>
 #include <csignal>
@@ -46,6 +47,11 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <poll.h>
+#include <spawn.h>
+#include <sys/syscall.h>
+#endif
 
 #ifdef HAVE_GRP_H
 #include <grp.h>
@@ -83,6 +89,9 @@
 #define MAX_GIDS 100
 
 extern bool threads_initialized;
+#ifdef __linux__
+extern char **environ;
+#endif
 
 AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink) {
    QoreString have(func);
@@ -274,6 +283,12 @@ nothing exec(string command) [dom=EXTERNAL_PROCESS,PROCESS] {
 
     @return the exit code of the process executed
 
+    @par Process group behavior:
+    - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
+      that @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" can terminate the entire process group.
+    - Without a SandboxManager, the child stays in the current process group, so terminal signals (for example, Ctrl-C)
+      are delivered to both the parent and child as usual.
+
     @par Example:
     @code{.py}
 int rc = system("ls -l");
@@ -284,10 +299,156 @@ int rc = system("ls -l");
     - @ref backquote_operator "the backquote operator"
  */
 int system(string command) [dom=EXTERNAL_PROCESS] {
+    QoreSandboxManagerHelper smh;
+    const bool use_pgroup = (bool)smh;
+#ifdef __linux__
+    auto pidfd_open = [](pid_t target_pid) -> int {
+#ifdef SYS_pidfd_open
+        return syscall(SYS_pidfd_open, target_pid, 0);
+#else
+        return -1;
+#endif
+    };
+#endif
+
+    auto wait_for_process = [&xsink, use_pgroup
+#ifdef __linux__
+        , &pidfd_open
+#endif
+    ](pid_t pid, bool pgroup_ok) -> int {
+        int status = 0;
+#ifdef __linux__
+        int pidfd = pidfd_open(pid);
+        if (pidfd >= 0) {
+            while (true) {
+                if (qore_check_io_interrupt(xsink, "process wait")) {
+                    // Use SIGKILL to enforce immediate termination on interrupt.
+                    kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
+                    waitpid(pid, &status, 0);
+                    close(pidfd);
+                    return -1;
+                }
+
+                struct pollfd pfd;
+                pfd.fd = pidfd;
+                pfd.events = POLLIN;
+                pfd.revents = 0;
+                // Use a shorter interval here to reduce system() latency without changing global defaults.
+                const int system_poll_ms = 50;
+                int rc_local = poll(&pfd, 1, system_poll_ms);
+                if (rc_local > 0) {
+                    break;
+                }
+                if (rc_local == 0) {
+                    continue;
+                }
+#ifdef EINTR
+                if (errno == EINTR) {
+                    continue;
+                }
+#endif
+                break;
+            }
+            close(pidfd);
+            if (waitpid(pid, &status, 0) != pid) {
+                return -1;
+            }
+            return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        }
+#endif
+
+        while (true) {
+            // check for sandbox interrupt
+            if (qore_check_io_interrupt(xsink, "process wait")) {
+                // Use SIGKILL to enforce immediate termination on interrupt.
+                kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
+                waitpid(pid, &status, 0);
+                return -1;
+            }
+
+            // use WNOHANG for non-blocking check
+            int rc_local = waitpid(pid, &status, WNOHANG);
+            if (rc_local == pid) {
+                // child has exited
+                break;
+            }
+            if (rc_local == 0) {
+                // child still running, sleep briefly and retry
+                // Use a shorter interval here to reduce system() latency without changing global defaults.
+                const int system_poll_ms = 50;
+                usleep(system_poll_ms * 1000);
+                continue;
+            }
+#ifdef EINTR
+            if (rc_local == -1 && errno == EINTR) {
+                continue;
+            }
+#endif
+            // error
+            return -1;
+        }
+        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    };
+
+#if defined(__linux__) && defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
+    pid_t spawn_pid = -1;
+    bool spawn_pgroup_ok = false;
+    int spawn_rc = 0;
+    posix_spawnattr_t attr;
+    spawn_rc = posix_spawnattr_init(&attr);
+    if (spawn_rc == 0) {
+        short flags = static_cast<short>(POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF);
+        if (use_pgroup) {
+            flags |= POSIX_SPAWN_SETPGROUP;
+        }
+        spawn_rc = posix_spawnattr_setflags(&attr, flags);
+
+        if (spawn_rc == 0) {
+            sigset_t empty;
+            sigemptyset(&empty);
+            spawn_rc = posix_spawnattr_setsigmask(&attr, &empty);
+        }
+        if (spawn_rc == 0) {
+            sigset_t def;
+            sigemptyset(&def);
+            sigaddset(&def, SIGINT);
+            sigaddset(&def, SIGQUIT);
+            spawn_rc = posix_spawnattr_setsigdefault(&attr, &def);
+        }
+        if (spawn_rc == 0 && use_pgroup) {
+            spawn_rc = posix_spawnattr_setpgroup(&attr, 0);
+        }
+
+        if (spawn_rc == 0) {
+            const char* argv[] = {"sh", "-c", command->c_str(), nullptr};
+            spawn_rc = posix_spawn(&spawn_pid, "/bin/sh", nullptr, &attr, const_cast<char* const*>(argv), environ);
+        }
+        posix_spawnattr_destroy(&attr);
+    }
+    if (spawn_rc == 0) {
+        if (use_pgroup) {
+            if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
+                spawn_pgroup_ok = true;
+            }
+        }
+        return wait_for_process(spawn_pid, spawn_pgroup_ok);
+    }
+#endif
 #if defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     // on platforms with fork(2) and signal handling, we need to fork, enable all signals, then execl()
     pid_t pid;
+    bool pgroup_ok = false;
     if (!(pid = fork())) {
+        if (use_pgroup) {
+            setpgid(0, 0);
+        }
+
+        sigset_t empty;
+        sigemptyset(&empty);
+        sigprocmask(SIG_SETMASK, &empty, nullptr);
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+
         // exec pgm like system(): sh -c "command"
         execl("/bin/sh", "sh", "-c", command->c_str(), NULL);
         fprintf(stderr, "execl() failed in child process for target '/bin/sh' with error code %d: %s\n", errno,
@@ -298,38 +459,12 @@ int system(string command) [dom=EXTERNAL_PROCESS] {
     if (pid == -1) {
         return -1;
     }
+    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+        pgroup_ok = true;
+    }
 
     // wait for child to exit with interrupt checking
-    int status;
-    while (true) {
-        // check for sandbox interrupt
-        if (qore_check_io_interrupt(xsink, "process wait")) {
-            // kill the child process on interrupt
-            kill(pid, SIGKILL);
-            waitpid(pid, &status, 0);
-            return -1;
-        }
-
-        // use WNOHANG for non-blocking check
-        int rc = waitpid(pid, &status, WNOHANG);
-        if (rc == pid) {
-            // child has exited
-            break;
-        }
-        if (rc == 0) {
-            // child still running, sleep briefly and retry
-            usleep(QORE_IO_POLL_INTERVAL_MS * 1000);
-            continue;
-        }
-#ifdef EINTR
-        if (rc == -1 && errno == EINTR) {
-            continue;
-        }
-#endif
-        // error
-        break;
-    }
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return wait_for_process(pid, pgroup_ok);
 #elif defined(HAVE_SYSTEM)
     return system(command->c_str());
 #else
@@ -509,21 +644,21 @@ int sleep(softint seconds) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = seconds * 1000000ll;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during sleep");
             return -1;
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -561,21 +696,21 @@ int usleep(softint usecs) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = usecs;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
             return -1;
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -608,21 +743,21 @@ int usleep(date d) [dom=PROCESS] {
       return 0;
 
    // Check for sandbox interrupt support - break into 100ms chunks
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
+   QoreSandboxManagerHelper smh;
+   if (smh) {
       int64 remaining_usecs = usecs;
       const int64 chunk_usecs = 100000ll; // 100ms chunks
 
       while (remaining_usecs > 0) {
-         if (sm->isInterruptRequested()) {
+         if (smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted during usleep");
             return -1;
          }
 
          int64 sleep_time = (remaining_usecs > chunk_usecs) ? chunk_usecs : remaining_usecs;
-         int rc = qore_usleep(sleep_time);
-         if (rc != 0)
-            return rc;
+         int rc_local = qore_usleep(sleep_time);
+         if (rc_local != 0)
+            return rc_local;
          remaining_usecs -= sleep_time;
       }
       return 0;
@@ -1258,7 +1393,7 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
                 }
                 break;
             }
-#ifdef AF_PACKET
+#if defined(AF_PACKET) && defined(HAVE_LINUX_IF_PACKET_H)
             case AF_PACKET: {
                 struct sockaddr_ll* s = (struct sockaddr_ll*)ifa->ifa_addr;
                 QoreStringNode* addrstr = new QoreStringNode;
@@ -1327,15 +1462,15 @@ int qore_get_library_options() [dom=PROCESS] {
 
     This setting affects:
     - All new @ref Qore::HTTPClient "HTTPClient" connections
-    - All new @ref HttpServer "HttpServer" connections
-    - All HTTP-based connections including those via @ref ConnectionProvider "ConnectionProvider"
+    - All new \c HttpServer connections
+    - All HTTP-based connections including those via \c ConnectionProvider
 
-    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
 
     @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode string
 
-    @see set_global_http2_mode(int)
+    @see set_global_http2_mode(enum<HTTP2Mode>)
     @see get_global_http2_mode()
 
     @since %Qore 2.3
@@ -1358,10 +1493,10 @@ nothing set_global_http2_mode(string mode) [dom=PROCESS] {
 }
 
 //! Sets the global HTTP/2 mode that affects all new HTTP connections
-/** @param mode the HTTP/2 mode: @ref Qore::HTTP2_MODE_AUTO "HTTP2_MODE_AUTO" (default),
-    @ref Qore::HTTP2_MODE_DISABLED "HTTP2_MODE_DISABLED", or @ref Qore::HTTP2_MODE_REQUIRED "HTTP2_MODE_REQUIRED"
+/** @param mode the HTTP/2 mode: @ref Qore::HTTP2Mode "HTTP2Mode::Auto" (default),
+    @ref Qore::HTTP2Mode "HTTP2Mode::Disabled", or @ref Qore::HTTP2Mode "HTTP2Mode::Required"
 
-    @note This function requires @ref Qore::QDOM_PROCESS "QDOM_PROCESS" rights (not available with
+    @note This function requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights (not available with
     @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL")
 
     @throw SET-GLOBAL-HTTP2-MODE-ERROR invalid mode value
@@ -1371,14 +1506,15 @@ nothing set_global_http2_mode(string mode) [dom=PROCESS] {
 
     @since %Qore 2.3
 */
-nothing set_global_http2_mode(int mode) [dom=PROCESS] {
-    if (mode < HTTP2_MODE_DISABLED || mode > HTTP2_MODE_REQUIRED) {
+nothing set_global_http2_mode(enum<HTTP2Mode> mode) [dom=PROCESS] {
+    int64 mode_val = mode.getAsBigInt();
+    if (mode_val < HTTP2_MODE_DISABLED || mode_val > HTTP2_MODE_REQUIRED) {
         xsink->raiseException("SET-GLOBAL-HTTP2-MODE-ERROR",
             "invalid HTTP/2 mode %d; valid modes are: HTTP2_MODE_DISABLED (0), HTTP2_MODE_AUTO (1), "
-            "HTTP2_MODE_REQUIRED (2)", (int)mode);
+            "HTTP2_MODE_REQUIRED (2)", (int)mode_val);
         return QoreValue();
     }
-    qore_global_http2_mode.store((int)mode, std::memory_order_relaxed);
+    qore_global_http2_mode.store((int)mode_val, std::memory_order_relaxed);
 }
 
 //! Returns the current global HTTP/2 mode
@@ -1439,8 +1575,8 @@ int qore_add_module_to_blacklist_ex(string name, string msg = "by an API call") 
     if (*xsink) {
         return QoreValue();
     }
-    int rc = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
-    if (rc == -1) {
+    int rc_local = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
+    if (rc_local == -1) {
         xsink->raiseException("BLACKLIST-ERROR", "Cannot blacklist module \"%s\", as it is already loaded",
             n->c_str());
     }

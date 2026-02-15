@@ -40,7 +40,7 @@ public class ServerSentEventClientDataProviderFactory inherits AbstractDataProvi
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

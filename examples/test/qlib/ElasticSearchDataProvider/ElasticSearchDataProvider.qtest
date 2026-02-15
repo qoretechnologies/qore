@@ -522,7 +522,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
     private setupConnection() {
         *string url = m_options.url ?? ENV.ELASTICSEARCH_URL;
         if (!url) {
-            stderr.print("missing --url option or ELASTICSEARCH_URL environment variable\n");
+            return;
         }
 
         try {

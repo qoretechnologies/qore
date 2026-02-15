@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -49,12 +50,28 @@
 #include <set>
 #include <typeinfo>
 #include <vector>
+
+extern bool threads_initialized;
 #include <algorithm>
 #include <functional>
 #include <memory>
 #include <map>
 
 ParseOptionMaps pomaps;
+
+// Optional callback invoked before program data is cleared (issue #4816)
+// Can be used by modules to perform cleanup before namespace data is freed
+static qore_program_cleanup_callback_t program_cleanup_callback = nullptr;
+
+void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback) {
+    program_cleanup_callback = callback;
+}
+
+void qore_call_program_cleanup_callback(QoreProgram* pgm) {
+    if (program_cleanup_callback) {
+        program_cleanup_callback(pgm);
+    }
+}
 
 // note the number and order of the warnings has to correspond to those in QoreProgram.h
 static const char* qore_warnings_l[] = {
@@ -76,6 +93,8 @@ static const char* qore_warnings_l[] = {
     "module-only",
     "broken-logic-precedence",
     "invalid-catch",
+    "ambiguous-call-resolution",
+    "ambiguous-overload",
 };
 #define NUM_WARNINGS (sizeof(qore_warnings_l)/sizeof(const char* ))
 
@@ -164,7 +183,7 @@ ParseOptionMaps::ParseOptionMaps() {
     // 57
     doMap(PO_ALLOW_RETURNS, "PO_ALLOW_RETURNS");
     // 58
-    doMap(PO_STRICT_TYPES, "PO_STRICT_TYPES");
+    doMap(PO_BROKEN_NAMESPACE_RESOLUTION, "PO_BROKEN_NAMESPACE_RESOLUTION");
     // 59
     doMap(PO_BROKEN_RANGE, "PO_BROKEN_RANGE");
     // 60
@@ -672,6 +691,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 
+        // call optional cleanup callback before clearing namespace data
+        if (program_cleanup_callback) {
+            program_cleanup_callback(pgm);
+        }
+
         // delete all global variables, etc
         clearNamespaceData(xsink);
 
@@ -729,9 +753,16 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_rv = QoreValue();
 
         // clear sandbox manager if set
-        if (sandbox_manager) {
-            sandbox_manager->deref(xsink);
-            sandbox_manager = nullptr;
+        {
+            QoreSandboxManager* sm;
+            {
+                AutoLocker al(sm_lock);
+                sm = sandbox_manager;
+                sandbox_manager = nullptr;
+            }
+            if (sm) {
+                sm->deref(xsink);
+            }
         }
 
         // delete code
@@ -746,6 +777,22 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exp_set.clear();
 
         del(xsink);
+
+        // release parse caches now that the program is cleared
+        str_set.clear();
+        loc_set.clear();
+        str_vec.clear();
+        str_vec.shrink_to_fit();
+        pgmloc.clear();
+        pgmloc.shrink_to_fit();
+        statementIds.clear();
+        statementIds.shrink_to_fit();
+        reverseStatementIds.clear();
+
+        for (auto var : local_var_list) {
+            delete var;
+        }
+        local_var_list.clear();
 
         // clear program location
         //update_runtime_location(&loc_builtin);
@@ -928,8 +975,11 @@ void qore_program_private::runtimeImportSystemHashDecls(ExceptionSink* xsink) {
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
 
     runtimeImportSystemHashDeclsIntern(*spgm->priv, xsink);
+    // Resolve cross-namespace parent hashdecl pointers after import
+    qore_root_ns_private* rpriv = qore_root_ns_private::get(*RootNS);
+    rpriv->resolveExternalParentHashDeclsRecursive(rpriv);
     // issue #3461: must rebuild all indexes here or symbols will appear missing
-    qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
+    rpriv->rebuildAllIndexes();
 }
 
 void qore_program_private::runtimeImportSystemConstants(ExceptionSink* xsink) {
@@ -1113,6 +1163,13 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
         //printd(5, "qore_program_private::importHashDecl() this: %p path: %s nspath: %s tns: %p %s RootNS: %p %s\n",
         //  this, path, nspath.c_str(), tns, tns->getName(), RootNS, RootNS->getName());
         qore_root_ns_private::runtimeImportHashDecl(*RootNS, xsink, *tns, hd, from_pgm.pgm, set_pub, new_name);
+    }
+
+    // Resolve cross-namespace parent hashdecl pointer after import
+    // The imported hashdecl may have a parent in a different namespace
+    if (!*xsink) {
+        qore_root_ns_private* rpriv = qore_root_ns_private::get(*RootNS);
+        qore_ns_private::get(*tns)->hashDeclList.resolveExternalParentHashDecls(rpriv);
     }
 }
 
@@ -2372,11 +2429,48 @@ QoreObject* QoreProgram::findQoreObject() const {
 }
 
 QoreObject* QoreProgram::getQoreObject(QoreProgram* pgm) {
-   return qore_program_private::getQoreObject(pgm);
+    return qore_program_private::getQoreObject(pgm);
+}
+
+void qore_program_private::cleanupAllPrograms(ExceptionSink* xsink) {
+    if (!qore_shutdown.load(std::memory_order_relaxed)) {
+        return;
+    }
+
+    std::vector<std::pair<QoreProgram*, QoreObject*>> programs;
+    {
+        QoreAutoRWWriteLocker al(&lck_programMap);
+        programs.reserve(qore_program_to_object_map.size());
+        for (auto& i : qore_program_to_object_map) {
+            // Add a reference to each program/object while holding the lock to prevent
+            // deletion during iteration. Items in the map must have positive ref counts.
+            if (i.first) {
+                i.first->ref();
+            }
+            if (i.second) {
+                i.second->ref();
+            }
+            programs.push_back(std::make_pair(i.first, i.second));
+        }
+    }
+
+    for (auto& entry : programs) {
+        if (entry.second) {
+            // Deref twice: once for cleanup, once for the extra reference we added
+            entry.second->deref(xsink);
+            entry.second->deref(xsink);
+        }
+        if (entry.first) {
+            // waitForTerminationAndDeref does cleanup and one deref
+            entry.first->waitForTerminationAndDeref(xsink);
+            // Deref for the extra reference we added
+            entry.first->deref(xsink);
+        }
+    }
 }
 
 QoreListNode* QoreProgram::getAllQoreObjects(ExceptionSink* xsink) {
-   return qore_program_private::getAllQoreObjects(xsink);
+    return qore_program_private::getAllQoreObjects(xsink);
 }
 
 bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
@@ -2384,14 +2478,18 @@ bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
 }
 
 void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
-    if (priv->sandbox_manager) {
-        priv->sandbox_manager->deref(nullptr);
+    QoreSandboxManager* old;
+    {
+        AutoLocker al(priv->sm_lock);
+        old = priv->sandbox_manager;
+        priv->sandbox_manager = sm;
+        if (sm) {
+            sm->ref();
+        }
     }
-    priv->sandbox_manager = sm;
-}
-
-QoreSandboxManager* QoreProgram::getSandboxManager() const {
-    return priv->sandbox_manager;
+    if (old) {
+        old->deref(nullptr);
+    }
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FileDataProvider module definition
 
-/*  FileDataProvider.qm Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/*  FileDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,7 @@ module FileDataProvider {
             "logo": FileWhiteLogo,
             "logo_file_name": "generic-filesystem-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::FileSystem,),
         });
 
         # register all supported actions
@@ -212,7 +213,7 @@ module FileDataProvider {
     @section filedataproviderintro Introduction to the FileDataProvider Module
 
     The %FileDataProvider module provides a data provider API for the server filesystem through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref FileDataProvider::FileCopyDataProvider "FileCopyDataProvider"
@@ -255,10 +256,7 @@ module FileDataProvider {
 
 #! contains all public definitions in the FileDataProvider module
 public namespace FileDataProvider {
-}
+public const FileWhiteLogo = File::readTextFile(get_script_dir() + "/file-logo-white.svg");
 
-namespace Priv {
-const FileWhiteLogo = File::readTextFile(get_script_dir() + "/file-logo-white.svg");
-
-const FileBlackLogo = File::readTextFile(get_script_dir() + "/file-logo-black.svg");
+public const FileBlackLogo = File::readTextFile(get_script_dir() + "/file-logo-black.svg");
 }

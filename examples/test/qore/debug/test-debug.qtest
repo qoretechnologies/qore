@@ -26,6 +26,8 @@ const stResolve = (
     ST_DETACH: "onDetach",
 );
 
+int verbose_level = 0;
+
 # test top-level statement
 hash sub tstTlsGetStack() {return get_all_thread_call_stacks(){gettid()}[0];}
 nothing sub tstTlsFunction() {
@@ -51,7 +53,9 @@ class MyDebugProgram inherits DebugProgram {
     }
 
     constructor(): DebugProgram() {
-        printf("MyDebugProgram::constructor()\n");
+        if (verbose_level > 2) {
+            printf("MyDebugProgram::constructor()\n");
+        }
     }
 
     nothing setActions(list act, *softlist attach_only) {
@@ -179,6 +183,7 @@ class DebugTest inherits QUnit::Test {
     }
 
     constructor() : Test("Debug Test", "1.0") {
+        verbose_level = m_options.verbose ?? 0;
         addTestCase("ProgramTest", \programTest());
         addTestCase("StatementTest", \statementTest());
         addTestCase("TLSStatementTest", \tlsStatementTest());
@@ -315,7 +320,9 @@ class DebugTest inherits QUnit::Test {
         testAssertionValue(sprintf(name+':tracelog end check, i:%d', i), debugProgram.traceLog, ());
     }
     checkProgram(string name, list actions, list traceLog, auto expectedRet) {
-        printf("checkProgram(%y)\n", name);
+        if (verbose_level > 2) {
+            printf("checkProgram(%y)\n", name);
+        }
         debugProgram.setActions(actions);
 #printf("Actions: %N\n", debugProgram.actions);
         debugProgram.addProgram(thisProgram);
@@ -361,7 +368,9 @@ class DebugTest inherits QUnit::Test {
     }
 
     checkBreakProgram(string name, int tid, bool breakRes) {
-        printf("checkBreakProgram(%d)\n", tid);
+        if (verbose_level > 2) {
+            printf("checkBreakProgram(%d)\n", tid);
+        }
         debugProgram.waitForTerminationAndClear();
         debugProgram.setActions(list(DebugRun, ("flow": DebugFlowBreak, "runState": DebugDetach)), main_tid);
         semaphore.lock();

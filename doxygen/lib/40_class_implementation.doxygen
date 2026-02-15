@@ -65,7 +65,8 @@
     Here is an example of the Mutex' class copy method:
 
     @code{.cpp}
-    static void MUTEX_copy(QoreObject *self, QoreObject *old, SmartMutex *m, ExceptionSink *xsink)
+    static void MUTEX_copy(QoreObject *self, QoreObject *old, SmartMutex *m, RuntimeConfig& rc,
+        ExceptionSink *xsink)
     {
        // the "old" and "m" parameters representing the old object are ignored
        self->setPrivate(CID_MUTEX, new SmartMutex());
@@ -90,7 +91,7 @@
     The Mutex class can throw an exception when deleted (for example, if a thread is still holding the lock when the object should be deleted), here is the code:
 
     @code{.cpp}
-    static void MUTEX_destructor(QoreObject *self, SmartMutex *m, ExceptionSink *xsink)
+    static void MUTEX_destructor(QoreObject *self, SmartMutex *m, RuntimeConfig& rc, ExceptionSink *xsink)
     {
        // run the actual destructor code implemented in SmartMutex
        m->destructor(xsink);
@@ -113,7 +114,7 @@
 
     As with functions, if the method raises a Qore-language exception against the ExceptionSink pointer, the return value should be 0.  Argument handling is the same as with builtin functions.
 
-    Previously the \ref MUTEX_lock function implementation (for Qore class method Mutex::lock()) was given as an example, and here you can see how it's bound to the QoreClass object:
+    Previously the MUTEX_lock function implementation (for Qore class method Mutex::lock()) was given as an example, and here you can see how it's bound to the QoreClass object:
 
     @code{.cpp}
        QC_MUTEX->addMethod("lock",          (q_method_t)MUTEX_lock);

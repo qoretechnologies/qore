@@ -67,6 +67,29 @@ int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
+int IfStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    ValueEvalRefHolder val(rc, cond, xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    int rc_state = 0;
+    if (val->getAsBool()) {
+        if (if_code) {
+            rc_state = if_code->execImpl(rc, return_value, xsink);
+        }
+    } else {
+        if (else_code) {
+            rc_state = else_code->execImpl(rc, return_value, xsink);
+        }
+    }
+
+    return rc_state;
+}
+
 int IfStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

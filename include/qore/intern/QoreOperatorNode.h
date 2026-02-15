@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,8 +33,12 @@
 #define _QORE_QOREOPERATORNODE_H
 
 #include <cstdarg>
+#include "qore/intern/qore_string_private.h"
+
+class RuntimeConfig;
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
+DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);
 
 // type of logical operator function
 typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
@@ -298,7 +302,7 @@ public:
     DLLLOCAL static QoreString op_str;\
 public:\
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {del = false;return &op_str;}\
-    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {str.concat(&op_str);return 0;}\
+    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {qore_string_private::get(str)->concat(&op_str);return 0;}\
     DLLLOCAL virtual const char* getTypeName() const {return op_str.getBuffer();}
 
 template <unsigned int N, class T = QoreOperatorNode>

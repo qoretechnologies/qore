@@ -44,19 +44,19 @@ public namespace CsvUtil {
         |\c "encoding"|@ref string_type "string"|the @ref character_encoding "character encoding" for the file (and for tagging string data read); if the value of this key is not a string then it will be ignored
         |\c "eol"|@ref string_type "string"|the end of line character(s) (default: auto-detect); if the value of this key is not a string then it will be ignored
         |\c "info_log"|@ref code_type "code"|a call reference / closure for informational logging when performing bulk generation with write(Qore::SQL::SQLStatement); must take a single string argument
-        |\c "optimal_quotes"|@ref bool_type "bool"|set to @ref False "False" to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is @ref True "True"
+        |\c "optimal_quotes"|\c bool_type "bool"|set to @ref False "False" to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is @ref True "True"
         |\c "quote"|@ref string_type "string"|the field quote character (default: \c '\"')
         |\c "quote_escape"|@ref string_type "string"|the escape character(s) used for \c "quote" (default: \c '\\')
         |\c "separator"|@ref string_type "string"|the string separating the fields in the file (default: \c ",")
-        |\c "verify_columns"|@ref bool_type "bool"|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column count than other lines, a \c CSVFILEWRITER-DATA-ERROR exception is thrown
-        |\c "write_headers"|@ref bool_type "bool"|set to @ref False "False" to suppress the output of headers; the default is @ref True "True", meaning to output headers if they are present. The value is @ref False "False" for multi-type lines.
+        |\c "verify_columns"|\c bool_type "bool"|if @ref True "True" (the default is @ref False "False") then if a line is parsed with a different column count than other lines, a \c CSVFILEWRITER-DATA-ERROR exception is thrown
+        |\c "write_headers"|\c bool_type "bool"|set to @ref False "False" to suppress the output of headers; the default is @ref True "True", meaning to output headers if they are present. The value is @ref False "False" for multi-type lines.
 
         <b>AbstractCsvIterator Single-type-only Options </b>
         |!Option|!Data Type|!Description
         |\c "datamap"|@ref hash_type "hash"|a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1
         |\c "fields"|@ref hash_type "hash"|describes the data to be output; see @ref abstractcsviterator_option_field_hash "option field hash" and @ref abstractcsviterator_option_field_types "option field types" for more information on the possible values of this option; if no field type is given, the default is \c "*string"
         |\c "headers"|@ref list_type "list" of @ref string_type "strings"|list of header / column names for the data iterated.
-        |\c "header_reorder"|@ref bool_type "bool"|if @ref True "True" (default value) then if \"headers\" are provided by options then fields are reordered to follow headers. It has effect on expected field order as passed to write function via list. If @ref False "False" then fields not yet specified are pushed at the end of field definition.
+        |\c "header_reorder"|\c bool_type "bool"|if @ref True "True" (default value) then if \"headers\" are provided by options then fields are reordered to follow headers. It has effect on expected field order as passed to write function via list. If @ref False "False" then fields not yet specified are pushed at the end of field definition.
 
         @note the following options with dashes in their names are supported for backwards-compatibility:
         - \c "date-format"

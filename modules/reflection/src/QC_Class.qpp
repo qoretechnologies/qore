@@ -51,14 +51,16 @@
 #include <QC_Namespace.h>
 
 static QoreHashNode* QoreReflectionClass_serializer(const QoreObject& self, const QoreReflectionClass& cls,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("cls", new QoreStringNode(cls.cls->getPath()), xsink);
     return rv.release();
 }
 
 static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("cls");
         if (val) {
@@ -1121,7 +1123,11 @@ Type Class::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the class ptr must be valid
-    return new QoreObject(QC_TYPE, c->pgm, new QoreType(c->cls->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(c->cls->getTypeInfo(), c->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, c->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the "or nothing" type object for this class
@@ -1144,7 +1150,11 @@ Type Class::getOrNothingType() [flags=RET_VALUE_ONLY] {
     }
 
     // the class ptr must be valid
-    return new QoreObject(QC_TYPE, c->pgm, new QoreType(c->cls->getOrNothingTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(c->cls->getOrNothingTypeInfo(), c->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, c->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns a list of all unique classes in the class hierarchy (including classes inherited with @ref private_inheritance "private:internal" access protection) in constructor execution order; the current class is always returned in the last position of the list

@@ -1,0 +1,1829 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreApiMetadata.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreApiMetadata
+
+%exec-class QoreApiMetadataTest
+
+class QoreApiMetadataTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QoreApiMetadata", "1.0") {
+        addTestCase("hashdecl defaults", \testHashdeclDefaults());
+        addTestCase("doc comment: block comment basic", \testBlockCommentBasic());
+        addTestCase("doc comment: line comment basic", \testLineCommentBasic());
+        addTestCase("doc comment: hash comment basic", \testHashCommentBasic());
+        addTestCase("doc comment: @param tag", \testParamTag());
+        addTestCase("doc comment: @return/@returns/@retval", \testReturnTags());
+        addTestCase("doc comment: @throw/@throws/@exception", \testThrowTags());
+        addTestCase("doc comment: @since tag", \testSinceTag());
+        addTestCase("doc comment: @see tag", \testSeeTag());
+        addTestCase("doc comment: @deprecated tag", \testDeprecatedTag());
+        addTestCase("doc comment: @note and @warning", \testNoteWarningTags());
+        addTestCase("doc comment: @brief tag", \testBriefTag());
+        addTestCase("doc comment: @code/@endcode blocks", \testCodeBlocks());
+        addTestCase("doc comment: continuation lines", \testContinuationLines());
+        addTestCase("doc comment: paragraph breaks", \testParagraphBreaks());
+        addTestCase("doc comment: multiple params", \testMultipleParams());
+        addTestCase("doc comment: mixed tags", \testMixedTags());
+        addTestCase("doc comment: empty and whitespace", \testEmptyComments());
+        addTestCase("doc comment: multiple throws", \testMultipleThrows());
+        addTestCase("doc comment: multiple see also", \testMultipleSeeAlso());
+        addTestCase("doc comment: star-prefixed lines", \testStarPrefixedLines());
+        addTestCase("ast: class extraction", \testAstClassExtraction());
+        addTestCase("ast: function extraction", \testAstFunctionExtraction());
+        addTestCase("ast: hashdecl extraction", \testAstHashdeclExtraction());
+        addTestCase("ast: enum extraction", \testAstEnumExtraction());
+        addTestCase("ast: namespace hierarchy", \testAstNamespaceHierarchy());
+        addTestCase("ast: doc comments on members", \testAstDocComments());
+        addTestCase("ast: multiple classes", \testAstMultipleClasses());
+        addTestCase("ast: empty source", \testAstEmptySource());
+        addTestCase("reflection: builtin class", \testReflectionBuiltinClass());
+        addTestCase("reflection: builtin functions", \testReflectionBuiltinFunctions());
+        addTestCase("reflection: namespace hierarchy", \testReflectionNamespaceHierarchy());
+        addTestCase("reflection: method variants", \testReflectionMethodVariants());
+        addTestCase("reflection: typed hashes", \testReflectionTypedHashes());
+        addTestCase("reflection: no documentation", \testReflectionNoDocs());
+        addTestCase("qpp doc index: build from meta files", \testQppBuildFromMetaFiles());
+        addTestCase("qpp doc index: build from directory", \testQppBuildFromDirectory());
+        addTestCase("qpp doc index: class indexing", \testQppClassIndexing());
+        addTestCase("qpp doc index: function indexing", \testQppFunctionIndexing());
+        addTestCase("qpp doc index: hashdecl indexing", \testQppHashdeclIndexing());
+        addTestCase("qpp doc index: enum indexing", \testQppEnumIndexing());
+        addTestCase("qpp doc index: overloaded methods", \testQppOverloadedMethods());
+        addTestCase("qpp doc index: empty and missing files", \testQppEmptyAndMissing());
+        addTestCase("merger: reflection + ast docs", \testMergerReflectionAst());
+        addTestCase("merger: reflection + qpp docs", \testMergerReflectionQpp());
+        addTestCase("merger: ast priority over qpp", \testMergerAstPriorityOverQpp());
+        addTestCase("merger: param description enrichment", \testMergerParamEnrichment());
+        addTestCase("facade: fromSourceString", \testFacadeFromSourceString());
+        addTestCase("facade: fromRuntime", \testFacadeFromRuntime());
+        addTestCase("facade: searchSymbols", \testFacadeSearchSymbols());
+        addTestCase("facade: getSymbolInfo", \testFacadeGetSymbolInfo());
+        addTestCase("facade: JSON roundtrip", \testFacadeJsonRoundtrip());
+        addTestCase("facade: YAML roundtrip", \testFacadeYamlRoundtrip());
+        addTestCase("facade: schema version check", \testFacadeSchemaVersion());
+        addTestCase("facade: fromRuntimeWithDocs", \testFacadeFromRuntimeWithDocs());
+        addTestCase("doxygen: @ref conversion", \testDoxygenRef());
+        addTestCase("doxygen: @ref with display text", \testDoxygenRefDisplay());
+        addTestCase("doxygen: @par section header", \testDoxygenPar());
+        addTestCase("doxygen: \\c word to code", \testDoxygenBackslashC());
+        addTestCase("doxygen: \\a \\e word to italic", \testDoxygenBackslashA());
+        addTestCase("doxygen: \\b word to bold", \testDoxygenBackslashB());
+        addTestCase("doxygen: %ClassName stripping", \testDoxygenPercentClass());
+        addTestCase("doxygen: <tt>, <b>, <i> tags", \testDoxygenHtmlInline());
+        addTestCase("doxygen: @code/@endcode blocks", \testDoxygenCodeBlocks());
+        addTestCase("doxygen: @htmlonly/@endhtmlonly stripping", \testDoxygenHtmlOnly());
+        addTestCase("doxygen: HTML table conversion", \testDoxygenHtmlTable());
+        addTestCase("doxygen: HTML entities", \testDoxygenHtmlEntities());
+        addTestCase("doxygen: structural tag stripping", \testDoxygenStructuralTags());
+        addTestCase("doxygen: empty and NOTHING handling", \testDoxygenEmptyNothing());
+        addTestCase("doxygen: composite real-world description", \testDoxygenComposite());
+        addTestCase("doxygen: idempotency", \testDoxygenIdempotency());
+        addTestCase("doxygen: literal newline markers", \testDoxygenLiteralNewlines());
+        addTestCase("doxygen: DocCommentParser bug fix", \testDocCommentParserBugFix());
+        addTestCase("doxygen: DocCommentParser @par handling", \testDocCommentParserPar());
+        addTestCase("doxygen: integration pipeline", \testDoxygenIntegrationPipeline());
+        addTestCase("doxygen: all text fields converted", \testDoxygenAllFieldsConverted());
+        set_return_value(main());
+    }
+
+    testHashdeclDefaults() {
+        # ParameterInfo defaults
+        hash<QoreApiMetadata::ParameterInfo> pi({"name": "x", "type_name": "int"});
+        assertEq("x", pi.name);
+        assertEq("int", pi.type_name);
+        assertEq(NOTHING, pi.default_value);
+        assertEq(NOTHING, pi.description);
+
+        # MemberInfo defaults
+        hash<QoreApiMetadata::MemberInfo> mi({"name": "count", "type_name": "int"});
+        assertEq("public", mi.access);
+        assertEq(False, mi.is_static);
+
+        # MethodInfo defaults
+        hash<QoreApiMetadata::MethodInfo> meth({
+            "name": "test",
+            "full_name": "Foo::test",
+            "signature": "nothing test()",
+        });
+        assertEq("public", meth.access);
+        assertEq(False, meth.is_static);
+        assertEq(False, meth.is_abstract);
+        assertEq(False, meth.is_deprecated);
+        assertEq(0, meth.params.size());
+
+        # ClassInfo defaults
+        hash<QoreApiMetadata::ClassInfo> ci({
+            "name": "Foo",
+            "full_name": "Foo",
+        });
+        assertEq("public", ci.access);
+        assertEq(False, ci.is_abstract);
+        assertEq(False, ci.is_final);
+        assertEq(0, ci.static_methods.size());
+        assertEq(0, ci.instance_methods.size());
+        assertEq(0, ci.members.size());
+        assertEq(0, ci.constants.size());
+
+        # NamespaceInfo defaults
+        hash<QoreApiMetadata::NamespaceInfo> ni({
+            "name": "root",
+            "full_name": "root",
+        });
+        assertEq(0, ni.classes.size());
+        assertEq(0, ni.functions.size());
+        assertEq(0, ni.constants.size());
+        assertEq(0, ni.hashdecls.size());
+        assertEq(0, ni.enums.size());
+        assertEq(0, ni.namespaces.size());
+
+        # FunctionInfo defaults
+        hash<QoreApiMetadata::FunctionInfo> fi({
+            "name": "printf",
+            "full_name": "printf",
+            "signature": "nothing printf(string fmt, ...)",
+        });
+        assertEq(False, fi.is_deprecated);
+        assertEq(0, fi.params.size());
+
+        # EnumInfo defaults
+        hash<QoreApiMetadata::EnumInfo> ei({
+            "name": "Color",
+            "full_name": "Color",
+        });
+        assertEq(0, ei.values.size());
+
+        # HashdeclInfo defaults
+        hash<QoreApiMetadata::HashdeclInfo> hi({
+            "name": "MyHash",
+            "full_name": "MyHash",
+        });
+        assertEq(0, hi.members.size());
+    }
+
+    testBlockCommentBasic() {
+        string comment = "/** This is a basic description. */";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("This is a basic description.", result.description);
+    }
+
+    testLineCommentBasic() {
+        string comment = "//! This is a line comment description.";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("This is a line comment description.", result.description);
+    }
+
+    testHashCommentBasic() {
+        string comment = "#! This is a hash comment description.";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("This is a hash comment description.", result.description);
+    }
+
+    testParamTag() {
+        string comment = "/** Description here.\n"
+            "    @param name the name of the thing\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("Description here.", result.description);
+        assertEq("the name of the thing", result.params.name);
+    }
+
+    testReturnTags() {
+        # @return
+        hash<auto> r1 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @return the result value */");
+        assertEq("the result value", r1.return_description);
+
+        # @returns
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @returns the result value */");
+        assertEq("the result value", r2.return_description);
+
+        # @retval
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @retval the result value */");
+        assertEq("the result value", r3.return_description);
+    }
+
+    testThrowTags() {
+        # @throw
+        hash<auto> r1 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @throw PARSE-ERROR if parsing fails */");
+        assertEq(1, r1.throws.size());
+        assertEq("PARSE-ERROR", r1.throws[0].name);
+        assertEq("if parsing fails", r1.throws[0].description);
+
+        # @throws
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @throws TIMEOUT-ERROR on timeout */");
+        assertEq(1, r2.throws.size());
+        assertEq("TIMEOUT-ERROR", r2.throws[0].name);
+
+        # @exception
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @exception IO-ERROR on I/O failure */");
+        assertEq(1, r3.throws.size());
+        assertEq("IO-ERROR", r3.throws[0].name);
+    }
+
+    testSinceTag() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
+            "/** Desc.\n    @since 1.2.0 */");
+        assertEq("1.2.0", result.since);
+    }
+
+    testSeeTag() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
+            "/** Desc.\n    @see OtherClass::method() */");
+        assertEq(1, result.see_also.size());
+        assertEq("OtherClass::method()", result.see_also[0]);
+    }
+
+    testDeprecatedTag() {
+        # with reason
+        hash<auto> r1 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @deprecated Use newMethod() instead */");
+        assertEq("Use newMethod() instead", r1.deprecated);
+
+        # without reason
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @deprecated */");
+        assertEq(True, r2.deprecated);
+    }
+
+    testNoteWarningTags() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
+            "/** Desc.\n    @note This is important.\n    @warning Be careful! */");
+        assertEq(1, result.notes.size());
+        assertEq("This is important.", result.notes[0]);
+        assertEq(1, result.warnings.size());
+        assertEq("Be careful!", result.warnings[0]);
+    }
+
+    testBriefTag() {
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(
+            "/** @brief Short description.\n\n    Longer description here. */");
+        assertEq("Short description.", result.brief);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Short description.\n\nLonger description here.", result.description);
+
+        # brief without blank line — continuation belongs to brief
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @brief Short description.\n    Still brief. */");
+        assertEq("Short description. Still brief.", r2.brief);
+    }
+
+    testCodeBlocks() {
+        string comment = "/** Description.\n"
+            "    @code\n"
+            "    int x = 1;\n"
+            "    printf(\"%d\\n\", x);\n"
+            "    @endcode\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("Description.", result.description);
+        assertEq(1, result.examples.size());
+        assertRegex("int x = 1;", result.examples[0]);
+        assertRegex("printf", result.examples[0]);
+    }
+
+    testContinuationLines() {
+        string comment = "/** This is a long\n"
+            "    description that spans\n"
+            "    multiple lines.\n"
+            "    @param name the name\n"
+            "        which continues here\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("This is a long description that spans multiple lines.", result.description);
+        assertEq("the name which continues here", result.params.name);
+    }
+
+    testParagraphBreaks() {
+        # Blank lines between description paragraphs should produce \n\n
+        string comment = "/** Brief summary of the function.\n"
+            "\n"
+            "    Detailed description that provides more information\n"
+            "    about the function behavior.\n"
+            "\n"
+            "    Another paragraph with additional details.\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq("Brief summary of the function.\n\n"
+            "Detailed description that provides more information about the function behavior.\n\n"
+            "Another paragraph with additional details.", result.description);
+
+        # Single paragraph without blank lines should have no breaks
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse(
+            "/** Single paragraph\n    that continues here. */");
+        assertEq("Single paragraph that continues here.", r2.description);
+
+        # @brief + blank line + description paragraphs
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse(
+            "/** @brief Short summary.\n\n    First paragraph.\n\n    Second paragraph. */");
+        assertEq("Short summary.\n\nFirst paragraph.\n\nSecond paragraph.", r3.description);
+        assertEq("Short summary.", r3.brief);
+
+        # #! line comment followed by /** block comment should insert paragraph break
+        string comment4 = "#! creates a workflow order data instance in the database\n"
+            "/** Creates a workflow order data instance of the specified type.\n"
+            "\n"
+            "    @param name the workflow name\n"
+            "*/";
+        hash<auto> r4 = QoreApiMetadata::DocCommentParser::parse(comment4);
+        assertEq("creates a workflow order data instance in the database\n\n"
+            "Creates a workflow order data instance of the specified type.", r4.description);
+    }
+
+    testMultipleParams() {
+        string comment = "/** Do something.\n"
+            "    @param first the first param\n"
+            "    @param second the second param\n"
+            "    @param third the third param\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq(3, result.params.size());
+        assertEq("the first param", result.params.first);
+        assertEq("the second param", result.params.second);
+        assertEq("the third param", result.params.third);
+    }
+
+    testMixedTags() {
+        string comment = "/** Main description.\n"
+            "    @brief Brief text.\n"
+            "    @param x the x value\n"
+            "    @param y the y value\n"
+            "    @return the computed result\n"
+            "    @throws RANGE-ERROR if out of range\n"
+            "    @since 2.0\n"
+            "    @see relatedFunc()\n"
+            "    @deprecated Use newFunc() instead\n"
+            "    @note Thread-safe.\n"
+            "    @warning Expensive operation.\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        # description combines brief + detailed text with paragraph break
+        assertEq("Brief text.\n\nMain description.", result.description);
+        assertEq("Brief text.", result.brief);
+        assertEq(2, result.params.size());
+        assertEq("the x value", result.params.x);
+        assertEq("the y value", result.params.y);
+        assertEq("the computed result", result.return_description);
+        assertEq(1, result.throws.size());
+        assertEq("RANGE-ERROR", result.throws[0].name);
+        assertEq("2.0", result.since);
+        assertEq(1, result.see_also.size());
+        assertEq("relatedFunc()", result.see_also[0]);
+        assertEq("Use newFunc() instead", result.deprecated);
+        assertEq(1, result.notes.size());
+        assertEq("Thread-safe.", result.notes[0]);
+        assertEq(1, result.warnings.size());
+        assertEq("Expensive operation.", result.warnings[0]);
+    }
+
+    testEmptyComments() {
+        # empty comment
+        hash<auto> r1 = QoreApiMetadata::DocCommentParser::parse("/** */");
+        assertEq("", r1.description);
+        assertEq(0, r1.params.size());
+
+        # whitespace only
+        hash<auto> r2 = QoreApiMetadata::DocCommentParser::parse("/**   \n   */");
+        assertEq("", r2.description);
+
+        # empty string
+        hash<auto> r3 = QoreApiMetadata::DocCommentParser::parse("");
+        assertEq("", r3.description);
+    }
+
+    testMultipleThrows() {
+        string comment = "/** Do something risky.\n"
+            "    @throws IO-ERROR on I/O failure\n"
+            "    @throws TIMEOUT-ERROR on timeout\n"
+            "    @throws AUTH-ERROR on auth failure\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq(3, result.throws.size());
+        assertEq("IO-ERROR", result.throws[0].name);
+        assertEq("TIMEOUT-ERROR", result.throws[1].name);
+        assertEq("AUTH-ERROR", result.throws[2].name);
+        assertEq("on I/O failure", result.throws[0].description);
+    }
+
+    testMultipleSeeAlso() {
+        string comment = "/** Desc.\n"
+            "    @see Foo::bar()\n"
+            "    @see Baz::qux()\n"
+            "*/";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertEq(2, result.see_also.size());
+        assertEq("Foo::bar()", result.see_also[0]);
+        assertEq("Baz::qux()", result.see_also[1]);
+    }
+
+    testStarPrefixedLines() {
+        string comment = "/**\n"
+            " * This is a description\n"
+            " * with star-prefixed lines.\n"
+            " *\n"
+            " * @param x the parameter\n"
+            " * @return the result\n"
+            " */";
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+        assertRegex("This is a description", result.description);
+        assertRegex("star-prefixed lines", result.description);
+        assertEq("the parameter", result.params.x);
+        assertEq("the result", result.return_description);
+    }
+
+    testAstClassExtraction() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "class MyClass {\n"
+            "    public {\n"
+            "        int count;\n"
+            "        string name;\n"
+            "    }\n"
+            "\n"
+            "    constructor(int c, string n) {\n"
+            "        count = c;\n"
+            "        name = n;\n"
+            "    }\n"
+            "\n"
+            "    int getCount() {\n"
+            "        return count;\n"
+            "    }\n"
+            "\n"
+            "    static string format(int val) {\n"
+            "        return string(val);\n"
+            "    }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        # should have one class at root level
+        assertEq(1, result.classes.size());
+        hash<QoreApiMetadata::ClassInfo> ci = result.classes[0];
+        assertEq("MyClass", ci.name);
+        assertEq("MyClass", ci.full_name);
+
+        # should have members
+        assertTrue(ci.members.size() >= 2);
+
+        # should have instance methods (constructor + getCount)
+        assertTrue(ci.instance_methods.size() >= 1);
+
+        # check for static method
+        bool found_static = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.static_methods) {
+            if (m.name == "format") {
+                found_static = True;
+                assertTrue(m.is_static);
+                assertEq("MyClass::format", m.full_name);
+            }
+        }
+        assertTrue(found_static);
+    }
+
+    testAstFunctionExtraction() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "#! Add two numbers\n"
+            "/** @param a the first number\n"
+            "    @param b the second number\n"
+            "    @return the sum\n"
+            "*/\n"
+            "int sub add(int a, int b) {\n"
+            "    return a + b;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.functions.size());
+        hash<QoreApiMetadata::FunctionInfo> fi = result.functions[0];
+        assertEq("add", fi.name);
+        assertEq("add", fi.full_name);
+        assertRegex("add", fi.signature);
+    }
+
+    testAstHashdeclExtraction() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "#! A person record\n"
+            "hashdecl PersonInfo {\n"
+            "    string name;\n"
+            "    int age;\n"
+            "    *string email;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.hashdecls.size());
+        hash<QoreApiMetadata::HashdeclInfo> hi = result.hashdecls[0];
+        assertEq("PersonInfo", hi.name);
+        assertTrue(hi.members.size() >= 2);
+
+        # verify member types
+        bool found_name = False;
+        bool found_age = False;
+        foreach hash<QoreApiMetadata::MemberInfo> m in (hi.members) {
+            if (m.name == "name") {
+                assertEq("string", m.type_name);
+                found_name = True;
+            } else if (m.name == "age") {
+                assertEq("int", m.type_name);
+                found_age = True;
+            }
+        }
+        assertTrue(found_name);
+        assertTrue(found_age);
+    }
+
+    testAstEnumExtraction() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "#! Color values\n"
+            "enum Color {\n"
+            "    Red = 0,\n"
+            "    Green = 1,\n"
+            "    Blue = 2,\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.enums.size());
+        hash<QoreApiMetadata::EnumInfo> ei = result.enums[0];
+        assertEq("Color", ei.name);
+        assertTrue(ei.values.size() >= 2);
+    }
+
+    testAstNamespaceHierarchy() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "namespace Outer {\n"
+            "    namespace Inner {\n"
+            "        class Foo {\n"
+            "            int getValue() {\n"
+            "                return 42;\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "\n"
+            "    const MY_CONST = 1;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        # should have Outer namespace
+        assertTrue(result.namespaces.size() >= 1);
+        *hash<QoreApiMetadata::NamespaceInfo> outer;
+        foreach hash<QoreApiMetadata::NamespaceInfo> ns in (result.namespaces) {
+            if (ns.name == "Outer") {
+                outer = ns;
+                break;
+            }
+        }
+        assertTrue(exists outer);
+
+        # Outer should have the constant
+        assertTrue(outer.constants.size() >= 1);
+
+        # Outer should have Inner namespace
+        assertTrue(outer.namespaces.size() >= 1);
+        *hash<QoreApiMetadata::NamespaceInfo> inner;
+        foreach hash<QoreApiMetadata::NamespaceInfo> ns in (outer.namespaces) {
+            if (ns.name == "Inner") {
+                inner = ns;
+                break;
+            }
+        }
+        assertTrue(exists inner);
+
+        # Inner should have Foo class
+        assertTrue(inner.classes.size() >= 1);
+        assertEq("Foo", inner.classes[0].name);
+        assertEq("Outer::Inner::Foo", inner.classes[0].full_name);
+    }
+
+    testAstDocComments() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "#! A documented class\n"
+            "class DocClass {\n"
+            "    #! Get the value\n"
+            "    /** @param key the lookup key\n"
+            "        @return the value for the key\n"
+            "        @throws KEY-ERROR if key not found\n"
+            "    */\n"
+            "    string getValue(string key) {\n"
+            "        return key;\n"
+            "    }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.classes.size());
+        hash<QoreApiMetadata::ClassInfo> ci = result.classes[0];
+        assertRegex("documented class", ci.description);
+
+        # find the getValue method
+        bool found = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "getValue") {
+                found = True;
+                assertTrue(exists m.description);
+                assertEq("the value for the key", m.return_description);
+                assertEq(1, m.throws.size());
+                assertEq("KEY-ERROR", m.throws[0].name);
+                # check param descriptions
+                assertEq(1, m.params.size());
+                assertEq("key", m.params[0].name);
+                assertEq("the lookup key", m.params[0].description);
+                break;
+            }
+        }
+        assertTrue(found);
+    }
+
+    testAstMultipleClasses() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "class Foo {\n"
+            "    int x() { return 1; }\n"
+            "}\n"
+            "\n"
+            "class Bar {\n"
+            "    int y() { return 2; }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(2, result.classes.size());
+
+        # verify both classes present
+        hash<string, bool> names;
+        foreach hash<QoreApiMetadata::ClassInfo> c in (result.classes) {
+            names{c.name} = True;
+        }
+        assertTrue(exists names.Foo);
+        assertTrue(exists names.Bar);
+    }
+
+    testAstEmptySource() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString("");
+
+        assertEq("", result.name);
+        assertEq(0, result.classes.size());
+        assertEq(0, result.functions.size());
+        assertEq(0, result.constants.size());
+    }
+
+    testReflectionBuiltinClass() {
+        hash<QoreApiMetadata::ClassInfo> ci =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Mutex");
+
+        assertEq("Mutex", ci.name);
+        assertEq("Qore::Thread::Mutex", ci.full_name);
+        assertEq(False, ci.is_abstract);
+
+        # should have methods
+        assertTrue(ci.instance_methods.size() > 0);
+
+        # find the lock method
+        bool found_lock = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "lock") {
+                found_lock = True;
+                assertRegex("lock", m.signature);
+                assertEq("Qore::Thread::Mutex::lock", m.full_name);
+                break;
+            }
+        }
+        assertTrue(found_lock);
+    }
+
+    testReflectionBuiltinFunctions() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+
+        # should have functions
+        assertTrue(result.functions.size() > 100);
+
+        # find printf
+        bool found_printf = False;
+        foreach hash<QoreApiMetadata::FunctionInfo> f in (result.functions) {
+            if (f.name == "printf") {
+                found_printf = True;
+                assertRegex("printf", f.signature);
+                break;
+            }
+        }
+        assertTrue(found_printf);
+
+        # should have constants
+        assertTrue(result.constants.size() > 100);
+    }
+
+    testReflectionNamespaceHierarchy() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+
+        assertEq("Qore", result.name);
+
+        # should have child namespaces (Thread, Err, etc.)
+        assertTrue(result.namespaces.size() > 0);
+
+        # find Thread namespace
+        bool found_thread = False;
+        foreach hash<QoreApiMetadata::NamespaceInfo> ns in (result.namespaces) {
+            if (ns.name == "Thread") {
+                found_thread = True;
+                # Thread should have classes like Mutex, Counter
+                assertTrue(ns.classes.size() > 0);
+                break;
+            }
+        }
+        assertTrue(found_thread);
+    }
+
+    testReflectionMethodVariants() {
+        hash<QoreApiMetadata::ClassInfo> ci =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("File");
+
+        # File should have multiple methods
+        assertTrue(ci.instance_methods.size() > 5);
+
+        # find open2 which has params
+        bool found = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "open2") {
+                found = True;
+                # should have params
+                assertTrue(m.params.size() >= 1);
+                assertEq("path", m.params[0].name);
+                assertEq("string", m.params[0].type_name);
+                break;
+            }
+        }
+        assertTrue(found);
+    }
+
+    testReflectionTypedHashes() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+
+        # should have typed hashes like StatInfo
+        assertTrue(result.hashdecls.size() > 0);
+
+        # find StatInfo
+        bool found = False;
+        foreach hash<QoreApiMetadata::HashdeclInfo> h in (result.hashdecls) {
+            if (h.name == "StatInfo") {
+                found = True;
+                assertTrue(h.members.size() > 0);
+                break;
+            }
+        }
+        assertTrue(found);
+    }
+
+    testReflectionNoDocs() {
+        # reflection doesn't provide documentation — verify fields are empty
+        hash<QoreApiMetadata::ClassInfo> ci =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Mutex");
+
+        assertEq(NOTHING, ci.description);
+
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            assertEq(NOTHING, m.description);
+            assertEq(NOTHING, m.return_description);
+            break;
+        }
+    }
+
+    private string getMetaDir() {
+        # find the build directory containing .meta.json files
+        string base = get_script_dir() + "/../../../../build";
+        if (!is_dir(base)) {
+            # fall back to current working directory + build
+            base = getcwd() + "/build";
+        }
+        return base;
+    }
+
+    testQppBuildFromMetaFiles() {
+        string meta_dir = getMetaDir();
+        string mutex_path = meta_dir + "/QC_Mutex.meta.json";
+        if (!is_readable(mutex_path)) {
+            testSkip("build meta files not available");
+        }
+
+        list<string> paths = (mutex_path,);
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles(paths);
+
+        # should have indexed the Mutex class
+        assertTrue(index.size() > 0);
+        assertTrue(exists index."Qore::Thread::Mutex");
+        assertEq("class", index."Qore::Thread::Mutex".symbol_type);
+        assertEq("Mutex", index."Qore::Thread::Mutex".name);
+
+        # should have indexed Mutex methods
+        assertTrue(exists index."Qore::Thread::Mutex::lock");
+        assertEq("method", index."Qore::Thread::Mutex::lock".symbol_type);
+    }
+
+    testQppBuildFromDirectory() {
+        string meta_dir = getMetaDir();
+        if (!is_dir(meta_dir)) {
+            testSkip("build directory not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromDirectory(meta_dir);
+
+        # should have indexed many symbols from all .meta.json files
+        assertTrue(index.size() > 50);
+
+        # spot-check: Mutex class should be present
+        assertTrue(exists index."Qore::Thread::Mutex");
+
+        # spot-check: StatInfo hashdecl should be present
+        # (hashdecls from qpp don't have namespace_path, indexed as "StatInfo")
+        assertTrue(exists index."StatInfo");
+        assertEq("hashdecl", index."StatInfo".symbol_type);
+    }
+
+    testQppClassIndexing() {
+        string meta_dir = getMetaDir();
+        string mutex_path = meta_dir + "/QC_Mutex.meta.json";
+        if (!is_readable(mutex_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((mutex_path,));
+
+        # verify class has expected fields
+        hash<auto> mutex = index."Qore::Thread::Mutex";
+        assertEq("Mutex", mutex.name);
+        assertEq("Qore::Thread", mutex.namespace_path);
+        assertTrue(exists mutex.description);
+        assertTrue(mutex.description.size() > 0);
+        assertTrue(exists mutex.instance_methods);
+        assertTrue(mutex.instance_methods.size() > 0);
+
+        # verify source_file is set
+        assertTrue(exists mutex.source_file);
+
+        # verify parents
+        assertTrue(exists mutex.parents);
+        assertTrue(mutex.parents.size() >= 1);
+
+        # verify individual method indexing
+        hash<auto> lock_method = index."Qore::Thread::Mutex::lock";
+        assertEq("lock", lock_method.name);
+        assertEq("method", lock_method.symbol_type);
+        assertEq("Mutex", lock_method.class_name);
+        assertTrue(exists lock_method.description);
+    }
+
+    testQppFunctionIndexing() {
+        string meta_dir = getMetaDir();
+        string ql_file_path = meta_dir + "/ql_file.meta.json";
+        if (!is_readable(ql_file_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((ql_file_path,));
+
+        # should have functions
+        bool found_func = False;
+        foreach string key in (keys index) {
+            if (index{key}.symbol_type == "function") {
+                found_func = True;
+                # verify function has expected fields
+                assertTrue(exists index{key}.name);
+                assertTrue(exists index{key}.signature);
+                break;
+            }
+        }
+        assertTrue(found_func);
+    }
+
+    testQppHashdeclIndexing() {
+        string meta_dir = getMetaDir();
+        string ql_file_path = meta_dir + "/ql_file.meta.json";
+        if (!is_readable(ql_file_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((ql_file_path,));
+
+        # StatInfo hashdecl should be indexed
+        # (hashdecls from qpp don't have namespace_path)
+        assertTrue(exists index."StatInfo");
+        hash<auto> stat_info = index."StatInfo";
+        assertEq("hashdecl", stat_info.symbol_type);
+        assertEq("StatInfo", stat_info.name);
+        assertTrue(exists stat_info.description);
+
+        # verify members exist
+        assertTrue(exists stat_info.members);
+        assertTrue(stat_info.members.size() > 5);
+
+        # verify member fields
+        bool found_atime = False;
+        foreach hash<auto> m in (stat_info.members) {
+            if (m.name == "atime") {
+                found_atime = True;
+                assertEq("date", m.type_name);
+                assertTrue(exists m.description);
+                break;
+            }
+        }
+        assertTrue(found_atime);
+    }
+
+    testQppEnumIndexing() {
+        string meta_dir = getMetaDir();
+        string qc_qore_path = meta_dir + "/qc_qore.meta.json";
+        if (!is_readable(qc_qore_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((qc_qore_path,));
+
+        # HTTP2Mode enum should be indexed
+        # The enum may have a namespace path or not; find it
+        bool found_enum = False;
+        foreach string key in (keys index) {
+            if (index{key}.symbol_type == "enum"
+                    && index{key}.name == "HTTP2Mode") {
+                found_enum = True;
+                hash<auto> en = index{key};
+                assertTrue(exists en.description);
+                assertEq("int", en.base_type);
+                assertTrue(exists en.values);
+                assertTrue(en.values.size() >= 5);
+
+                # verify a specific value
+                bool found_auto = False;
+                foreach hash<auto> v in (en.values) {
+                    if (v.name == "Auto") {
+                        found_auto = True;
+                        assertEq("1", v.value);
+                        assertTrue(exists v.description);
+                        break;
+                    }
+                }
+                assertTrue(found_auto);
+                break;
+            }
+        }
+        assertTrue(found_enum);
+    }
+
+    testQppOverloadedMethods() {
+        string meta_dir = getMetaDir();
+        string mutex_path = meta_dir + "/QC_Mutex.meta.json";
+        if (!is_readable(mutex_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((mutex_path,));
+
+        # Mutex::lock has two variants (no-arg and timeout);
+        # one should be at "Qore::Thread::Mutex::lock" and the overload
+        # should have a signature-appended key
+        assertTrue(exists index."Qore::Thread::Mutex::lock");
+
+        # count all lock entries
+        int lock_count = 0;
+        foreach string key in (keys index) {
+            if (key =~ /Mutex::lock/) {
+                ++lock_count;
+            }
+        }
+        assertTrue(lock_count >= 2);
+    }
+
+    testQppEmptyAndMissing() {
+        # non-existent file path — should be skipped gracefully
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles(
+                ("/tmp/nonexistent_file_12345.meta.json",));
+        assertEq(0, index.size());
+
+        # empty list
+        hash<string, hash<auto>> index2 =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles(());
+        assertEq(0, index2.size());
+
+        # non-existent directory
+        hash<string, hash<auto>> index3 =
+            QoreApiMetadata::QppDocIndex::buildFromDirectory(
+                "/tmp/nonexistent_dir_12345");
+        assertEq(0, index3.size());
+    }
+
+    #! Build a mock reflection namespace with no documentation
+    private hash<QoreApiMetadata::NamespaceInfo> buildMockReflection() {
+        return <QoreApiMetadata::NamespaceInfo>{
+            "name": "Test",
+            "full_name": "Test",
+            "classes": (
+                <QoreApiMetadata::ClassInfo>{
+                    "name": "Foo",
+                    "full_name": "Test::Foo",
+                    "namespace_path": "Test",
+                    "instance_methods": (
+                        <QoreApiMetadata::MethodInfo>{
+                            "name": "bar",
+                            "full_name": "Test::Foo::bar",
+                            "signature": "int bar(string x)",
+                            "return_type": "int",
+                            "params": (
+                                <QoreApiMetadata::ParameterInfo>{
+                                    "name": "x",
+                                    "type_name": "string",
+                                },
+                            ),
+                        },
+                    ),
+                },
+            ),
+            "functions": (
+                <QoreApiMetadata::FunctionInfo>{
+                    "name": "doWork",
+                    "full_name": "Test::doWork",
+                    "namespace_path": "Test",
+                    "signature": "nothing doWork(int count)",
+                    "params": (
+                        <QoreApiMetadata::ParameterInfo>{
+                            "name": "count",
+                            "type_name": "int",
+                        },
+                    ),
+                },
+            ),
+            "constants": (
+                <QoreApiMetadata::ConstantInfo>{
+                    "name": "MY_CONST",
+                    "full_name": "Test::MY_CONST",
+                },
+            ),
+            "hashdecls": (
+                <QoreApiMetadata::HashdeclInfo>{
+                    "name": "MyInfo",
+                    "full_name": "Test::MyInfo",
+                    "namespace_path": "Test",
+                    "members": (
+                        <QoreApiMetadata::MemberInfo>{
+                            "name": "id",
+                            "type_name": "int",
+                        },
+                    ),
+                },
+            ),
+        };
+    }
+
+    #! Build a mock AST namespace with documentation
+    private hash<QoreApiMetadata::NamespaceInfo> buildMockAst() {
+        return <QoreApiMetadata::NamespaceInfo>{
+            "name": "Test",
+            "full_name": "Test",
+            "classes": (
+                <QoreApiMetadata::ClassInfo>{
+                    "name": "Foo",
+                    "full_name": "Test::Foo",
+                    "namespace_path": "Test",
+                    "description": "A test class from AST",
+                    "instance_methods": (
+                        <QoreApiMetadata::MethodInfo>{
+                            "name": "bar",
+                            "full_name": "Test::Foo::bar",
+                            "signature": "int bar(string x)",
+                            "description": "Bar method from AST",
+                            "return_description": "the bar result",
+                            "params": (
+                                <QoreApiMetadata::ParameterInfo>{
+                                    "name": "x",
+                                    "type_name": "string",
+                                    "description": "the x param from AST",
+                                },
+                            ),
+                            "throws": (
+                                <QoreApiMetadata::ThrowInfo>{
+                                    "name": "BAR-ERROR",
+                                    "description": "if bar fails",
+                                },
+                            ),
+                            "since": "1.0",
+                        },
+                    ),
+                },
+            ),
+            "functions": (
+                <QoreApiMetadata::FunctionInfo>{
+                    "name": "doWork",
+                    "full_name": "Test::doWork",
+                    "namespace_path": "Test",
+                    "signature": "nothing doWork(int count)",
+                    "description": "Does work from AST",
+                    "params": (
+                        <QoreApiMetadata::ParameterInfo>{
+                            "name": "count",
+                            "type_name": "int",
+                            "description": "number of items",
+                        },
+                    ),
+                },
+            ),
+            "constants": (
+                <QoreApiMetadata::ConstantInfo>{
+                    "name": "MY_CONST",
+                    "full_name": "Test::MY_CONST",
+                    "description": "A constant from AST",
+                },
+            ),
+        };
+    }
+
+    testMergerReflectionAst() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<QoreApiMetadata::NamespaceInfo> ast = buildMockAst();
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, ast);
+
+        # class should have AST description
+        assertEq(1, merged.classes.size());
+        assertEq("A test class from AST", merged.classes[0].description);
+
+        # method should have AST docs
+        assertEq(1, merged.classes[0].instance_methods.size());
+        hash<QoreApiMetadata::MethodInfo> m =
+            merged.classes[0].instance_methods[0];
+        assertEq("Bar method from AST", m.description);
+        assertEq("the bar result", m.return_description);
+        assertEq(1, m.throws.size());
+        assertEq("BAR-ERROR", m.throws[0].name);
+        assertEq("1.0", m.since);
+
+        # function should have AST docs
+        assertEq(1, merged.functions.size());
+        assertEq("Does work from AST", merged.functions[0].description);
+
+        # constant should have AST docs
+        assertEq(1, merged.constants.size());
+        assertEq("A constant from AST", merged.constants[0].description);
+
+        # structural info (types, params) should come from reflection
+        assertEq("string", m.params[0].type_name);
+        assertEq("int", m.return_type);
+    }
+
+    testMergerReflectionQpp() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+
+        # build a mock doc_index simulating qpp output
+        hash<string, hash<auto>> doc_index = {
+            "Test::Foo": {
+                "symbol_type": "class",
+                "name": "Foo",
+                "description": "//! A test class from qpp\n",
+            },
+            "Test::Foo::bar": {
+                "symbol_type": "method",
+                "name": "bar",
+                "class_name": "Foo",
+                "description":
+                    "//! Bar method from qpp\n"
+                    "/** @param x the x value\n"
+                    "    @return the bar result from qpp\n"
+                    "*/\n",
+            },
+            "Test::MY_CONST": {
+                "symbol_type": "constant",
+                "name": "MY_CONST",
+                "description": "//! A constant from qpp\n",
+            },
+        };
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, NOTHING, doc_index);
+
+        # class should have qpp description
+        assertEq("A test class from qpp",
+            merged.classes[0].description);
+
+        # method should have qpp docs
+        hash<QoreApiMetadata::MethodInfo> m =
+            merged.classes[0].instance_methods[0];
+        assertEq("Bar method from qpp", m.description);
+        assertEq("the bar result from qpp", m.return_description);
+        # param description should be enriched from qpp
+        assertEq("the x value", m.params[0].description);
+
+        # constant should have qpp description
+        assertEq("A constant from qpp",
+            merged.constants[0].description);
+    }
+
+    testMergerAstPriorityOverQpp() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<QoreApiMetadata::NamespaceInfo> ast = buildMockAst();
+
+        # qpp also provides docs — but AST should win
+        hash<string, hash<auto>> doc_index = {
+            "Test::Foo": {
+                "symbol_type": "class",
+                "name": "Foo",
+                "description": "//! Foo from qpp (should be overridden)\n",
+            },
+            "Test::Foo::bar": {
+                "symbol_type": "method",
+                "name": "bar",
+                "description": "//! bar from qpp (should be overridden)\n",
+            },
+        };
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, ast, doc_index);
+
+        # AST docs should take priority over qpp
+        assertEq("A test class from AST",
+            merged.classes[0].description);
+        assertEq("Bar method from AST",
+            merged.classes[0].instance_methods[0].description);
+    }
+
+    testMergerParamEnrichment() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<QoreApiMetadata::NamespaceInfo> ast = buildMockAst();
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, ast);
+
+        # method param should have description from AST
+        hash<QoreApiMetadata::MethodInfo> m =
+            merged.classes[0].instance_methods[0];
+        assertEq("the x param from AST", m.params[0].description);
+
+        # function param should have description from AST
+        assertEq("number of items",
+            merged.functions[0].params[0].description);
+    }
+
+    testFacadeFromSourceString() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "#! A simple class\n"
+            "class Simple {\n"
+            "    int getValue() { return 42; }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::QoreApiMetadata::fromSourceString(source);
+
+        assertEq(1, result.classes.size());
+        assertEq("Simple", result.classes[0].name);
+    }
+
+    testFacadeFromRuntime() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::QoreApiMetadata::fromRuntime("Qore::Thread");
+
+        assertEq("Thread", result.name);
+        assertTrue(result.classes.size() > 0);
+    }
+
+    testFacadeSearchSymbols() {
+        hash<QoreApiMetadata::NamespaceInfo> meta =
+            QoreApiMetadata::QoreApiMetadata::fromRuntime("Qore::Thread");
+
+        # search for Mutex
+        list<hash<auto>> results =
+            QoreApiMetadata::QoreApiMetadata::searchSymbols(meta, "*Mutex");
+
+        assertTrue(results.size() >= 1);
+        bool found = False;
+        foreach hash<auto> r in (results) {
+            if (r.name == "Mutex") {
+                found = True;
+                assertEq("class", r.symbol_type);
+                break;
+            }
+        }
+        assertTrue(found);
+
+        # search for lock methods
+        list<hash<auto>> lock_results =
+            QoreApiMetadata::QoreApiMetadata::searchSymbols(meta, "*::lock");
+
+        assertTrue(lock_results.size() >= 1);
+
+        # search with no matches
+        list<hash<auto>> no_results =
+            QoreApiMetadata::QoreApiMetadata::searchSymbols(
+                meta, "XYZ_NONEXISTENT*");
+        assertEq(0, no_results.size());
+    }
+
+    testFacadeGetSymbolInfo() {
+        hash<QoreApiMetadata::NamespaceInfo> meta =
+            QoreApiMetadata::QoreApiMetadata::fromRuntime("Qore::Thread");
+
+        # look up Mutex class
+        *hash<auto> mutex_info =
+            QoreApiMetadata::QoreApiMetadata::getSymbolInfo(
+                meta, "Qore::Thread::Mutex");
+
+        assertTrue(exists mutex_info);
+        assertEq("Mutex", mutex_info.name);
+        assertEq("class", mutex_info.symbol_type);
+
+        # look up non-existent symbol
+        *hash<auto> missing =
+            QoreApiMetadata::QoreApiMetadata::getSymbolInfo(
+                meta, "NonExistent::Symbol");
+        assertEq(NOTHING, missing);
+    }
+
+    testFacadeJsonRoundtrip() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "class JsonTest {\n"
+            "    int getValue() { return 1; }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> original =
+            QoreApiMetadata::QoreApiMetadata::fromSourceString(source);
+
+        # export to JSON
+        string json = QoreApiMetadata::QoreApiMetadata::toJson(original);
+        assertTrue(json.length() > 0);
+        assertRegex("schema_version", json);
+        assertRegex("JsonTest", json);
+
+        # import from JSON (returns hash<auto>, not typed hashdecl)
+        hash<auto> restored =
+            QoreApiMetadata::QoreApiMetadata::fromJson(json);
+
+        assertEq(original.classes.size(), restored.classes.size());
+        assertEq("JsonTest", restored.classes[0].name);
+    }
+
+    testFacadeYamlRoundtrip() {
+        string source = "%new-style\n"
+            "%strict-args\n"
+            "%require-types\n"
+            "\n"
+            "class YamlTest {\n"
+            "    int getValue() { return 1; }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> original =
+            QoreApiMetadata::QoreApiMetadata::fromSourceString(source);
+
+        # export to YAML
+        string yaml = QoreApiMetadata::QoreApiMetadata::toYaml(original);
+        assertTrue(yaml.length() > 0);
+        assertRegex("schema_version", yaml);
+        assertRegex("YamlTest", yaml);
+
+        # import from YAML (returns hash<auto>, not typed hashdecl)
+        hash<auto> restored =
+            QoreApiMetadata::QoreApiMetadata::fromYaml(yaml);
+
+        assertEq(original.classes.size(), restored.classes.size());
+        assertEq("YamlTest", restored.classes[0].name);
+    }
+
+    testFacadeSchemaVersion() {
+        # valid schema version should work
+        string valid_json = "{\"schema_version\": \"1.0\", \"data\": {"
+            "\"name\": \"\", \"full_name\": \"\"}}";
+        hash<auto> result =
+            QoreApiMetadata::QoreApiMetadata::fromJson(valid_json);
+        assertEq("", result.name);
+
+        # future major version should be rejected
+        string future_json = "{\"schema_version\": \"99.0\", \"data\": {"
+            "\"name\": \"\", \"full_name\": \"\"}}";
+        assertThrows("SCHEMA-VERSION-ERROR", sub () {
+            QoreApiMetadata::QoreApiMetadata::fromJson(future_json);
+        });
+
+        # missing schema_version should be rejected
+        string no_version_json = "{\"data\": {"
+            "\"name\": \"\", \"full_name\": \"\"}}";
+        assertThrows("SCHEMA-VERSION-ERROR", sub () {
+            QoreApiMetadata::QoreApiMetadata::fromJson(no_version_json);
+        });
+    }
+
+    testFacadeFromRuntimeWithDocs() {
+        string meta_dir = getMetaDir();
+        string mutex_path = meta_dir + "/QC_Mutex.meta.json";
+        if (!is_readable(mutex_path)) {
+            testSkip("build meta files not available");
+        }
+
+        # merge runtime Mutex with qpp docs
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::QoreApiMetadata::fromRuntimeWithDocs(
+                "Qore::Thread",
+                NOTHING,
+                (mutex_path,),
+            );
+
+        # should have classes
+        assertTrue(merged.classes.size() > 0);
+
+        # find Mutex class — should now have documentation from qpp
+        bool found_mutex = False;
+        foreach hash<QoreApiMetadata::ClassInfo> c in (merged.classes) {
+            if (c.name == "Mutex") {
+                found_mutex = True;
+                # should have description from qpp metadata
+                assertTrue(exists c.description);
+                assertTrue(c.description.length() > 0);
+
+                # methods should have docs too
+                bool found_lock = False;
+                foreach hash<QoreApiMetadata::MethodInfo> m
+                        in (c.instance_methods) {
+                    if (m.name == "lock") {
+                        found_lock = True;
+                        assertTrue(exists m.description);
+                        break;
+                    }
+                }
+                assertTrue(found_lock);
+                break;
+            }
+        }
+        assertTrue(found_mutex);
+    }
+
+    testDoxygenRef() {
+        # simple @ref
+        assertEq("`Foo::bar`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@ref Foo::bar"));
+        # @ref with surrounding text
+        assertEq("See `Mutex::lock` for details",
+            QoreApiMetadata::DoxygenToMarkdown::convert("See @ref Mutex::lock for details"));
+        # multiple @ref
+        assertEq("`Foo` and `Bar`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@ref Foo and @ref Bar"));
+    }
+
+    testDoxygenRefDisplay() {
+        # @ref with display text in quotes
+        assertEq("See the bar method for details",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "See @ref Foo::bar \"the bar method\" for details"));
+        # multiple @ref with display text
+        assertEq("use foo or bar",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "use @ref Foo \"foo\" or @ref Bar \"bar\""));
+    }
+
+    testDoxygenPar() {
+        # @par with colon
+        assertEq("**Section:**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Section:"));
+        # @par with colon and trailing text
+        assertEq("**Restrictions:** text after",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Restrictions: text after"));
+        # @par without colon
+        assertEq("**Overview**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("@par Overview"));
+    }
+
+    testDoxygenBackslashC() {
+        assertEq("`word`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\c word"));
+        assertEq("the `timeout` value",
+            QoreApiMetadata::DoxygenToMarkdown::convert("the \\c timeout value"));
+        # multiple \c
+        assertEq("`int` or `string`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\c int or \\c string"));
+    }
+
+    testDoxygenBackslashA() {
+        assertEq("*word*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\a word"));
+        assertEq("use *emphasis* here",
+            QoreApiMetadata::DoxygenToMarkdown::convert("use \\a emphasis here"));
+        # \e also works
+        assertEq("*italic*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\e italic"));
+    }
+
+    testDoxygenBackslashB() {
+        assertEq("**word**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("\\b word"));
+        assertEq("very **important** note",
+            QoreApiMetadata::DoxygenToMarkdown::convert("very \\b important note"));
+    }
+
+    testDoxygenPercentClass() {
+        assertEq("ClassName",
+            QoreApiMetadata::DoxygenToMarkdown::convert("%ClassName"));
+        assertEq("use Qore and Mutex",
+            QoreApiMetadata::DoxygenToMarkdown::convert("use %Qore and %Mutex"));
+        # % before lowercase should NOT be stripped
+        assertEq("%lowercase",
+            QoreApiMetadata::DoxygenToMarkdown::convert("%lowercase"));
+    }
+
+    testDoxygenHtmlInline() {
+        # <tt>
+        assertEq("`code here`",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<tt>code here</tt>"));
+        # <b>
+        assertEq("**bold text**",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<b>bold text</b>"));
+        # <i>
+        assertEq("*italic text*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<i>italic text</i>"));
+        # nested
+        assertEq("**bold** and *italic*",
+            QoreApiMetadata::DoxygenToMarkdown::convert("<b>bold</b> and <i>italic</i>"));
+    }
+
+    testDoxygenCodeBlocks() {
+        # basic @code/@endcode
+        string input = "@code\nint x = 1;\n@endcode";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("```qore", result);
+        assertRegex("int x = 1;", result);
+        assertRegex("```", result);
+
+        # @code{.py}
+        input = "@code{.py}\nfor i in range(10):\n    print(i)\n@endcode";
+        result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("```qore", result);
+        assertRegex("for i in range", result);
+    }
+
+    testDoxygenHtmlOnly() {
+        assertEq("Before  After",
+            QoreApiMetadata::DoxygenToMarkdown::convert(
+                "Before @htmlonly<div>HTML content</div>@endhtmlonly After"));
+        # multiline
+        string input = "Text\n@htmlonly\n<div>stuff</div>\n@endhtmlonly\nMore";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("Text", result);
+        assertRegex("More", result);
+        assertFalse(result.find("htmlonly") >= 0);
+    }
+
+    testDoxygenHtmlTable() {
+        string input = "<table><tr><th>Name</th><th>Type</th></tr>"
+            "<tr><td>foo</td><td>int</td></tr></table>";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertRegex("Name", result);
+        assertRegex("Type", result);
+        assertRegex("foo", result);
+        assertRegex("int", result);
+        assertRegex("\\|", result);
+        assertRegex("---", result);
+    }
+
+    testDoxygenHtmlEntities() {
+        assertEq("< > & \" text",
+            QoreApiMetadata::DoxygenToMarkdown::convert("&lt; &gt; &amp; &quot; text"));
+        assertEq("it's",
+            QoreApiMetadata::DoxygenToMarkdown::convert("it&#39;s"));
+        assertEq("a b",
+            QoreApiMetadata::DoxygenToMarkdown::convert("a&nbsp;b"));
+    }
+
+    testDoxygenStructuralTags() {
+        # @anchor, @section, etc. should be stripped
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(
+            "@anchor my_anchor\nSome text\n@section my_sec Title");
+        assertRegex("Some text", result);
+        assertFalse(result.find("@anchor") >= 0);
+        assertFalse(result.find("@section") >= 0);
+    }
+
+    testDoxygenEmptyNothing() {
+        assertEq("", QoreApiMetadata::DoxygenToMarkdown::convert(""));
+        assertEq("", QoreApiMetadata::DoxygenToMarkdown::convert(NOTHING));
+        assertEq("plain text", QoreApiMetadata::DoxygenToMarkdown::convert("plain text"));
+    }
+
+    testDoxygenComposite() {
+        # real-world-like description with multiple constructs
+        string input = "This class inherits @ref Qore::Thread::AbstractSmartLock "
+            "\"AbstractSmartLock\", so it can be used by "
+            "@ref Qore::Thread::Condition \"Condition\" objects.\n"
+            "@par Restrictions:\n"
+            "@ref Qore::PO_NO_THREAD_CLASSES\n"
+            "Use the \\c lock method with a \\c timeout parameter.\n"
+            "See <b>important</b> notes in <tt>README</tt>.";
+
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+
+        # @ref with display text should be plain text
+        assertRegex("AbstractSmartLock", result);
+        assertFalse(result.find("@ref") >= 0);
+        # @par should be bold
+        assertRegex("\\*\\*Restrictions:\\*\\*", result);
+        # \c should be backticked
+        assertRegex("`lock`", result);
+        assertRegex("`timeout`", result);
+        # HTML tags should be converted
+        assertRegex("\\*\\*important\\*\\*", result);
+        assertRegex("`README`", result);
+        # no doxygen constructs remain
+        assertFalse(result.find("\\c ") >= 0);
+        assertFalse(result.find("<b>") >= 0);
+        assertFalse(result.find("<tt>") >= 0);
+    }
+
+    testDoxygenIdempotency() {
+        # converting already-converted text should produce the same output
+        string input = "Use `code` and **bold** and *italic* text";
+        string first = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        string second = QoreApiMetadata::DoxygenToMarkdown::convert(first);
+        assertEq(first, second);
+
+        # also test with actual doxygen input
+        string doxy = "\\c word and @ref target and <b>bold</b>";
+        string pass1 = QoreApiMetadata::DoxygenToMarkdown::convert(doxy);
+        string pass2 = QoreApiMetadata::DoxygenToMarkdown::convert(pass1);
+        assertEq(pass1, pass2);
+    }
+
+    testDoxygenLiteralNewlines() {
+        # Test literal \n\n markers (from qpp meta files)
+        # In JSON, \\n becomes literal backslash+n in Qore
+        # We simulate by building the string directly
+        string input = "first" + "\\" + "n" + "\\" + "n" + "second";
+        string result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertEq("first\n\nsecond", result);
+
+        # single \n
+        input = "first" + "\\" + "n" + "second";
+        result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
+        assertEq("first\nsecond", result);
+    }
+
+    testDocCommentParserBugFix() {
+        # Before fix: multiple @ref tags would cause description to accumulate
+        # duplicates because current_text wasn't reset after flushTag()
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(
+            "/** First description.\n"
+            "    @ref Foo\n"
+            "    @ref Bar\n"
+            "*/");
+        # description should contain each piece once, not duplicated
+        # count occurrences of "First description"
+        int count = 0;
+        int pos = 0;
+        while (True) {
+            int idx = r.description.find("First description", pos);
+            if (idx < 0) {
+                break;
+            }
+            ++count;
+            pos = idx + 1;
+        }
+        assertEq(1, count, "description should not be duplicated");
+        # both refs should be present in converted form
+        assertRegex("`Foo`", r.description);
+        assertRegex("`Bar`", r.description);
+    }
+
+    testDocCommentParserPar() {
+        # @par should be treated as description text (not unknown tag)
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(
+            "/** Main description.\n"
+            "    @par Section:\n"
+            "    Section content here.\n"
+            "*/");
+        assertRegex("Main description", r.description);
+        # @par should be converted to bold section header
+        assertRegex("\\*\\*Section:\\*\\*", r.description);
+        assertRegex("Section content here", r.description);
+    }
+
+    testDoxygenIntegrationPipeline() {
+        # Full pipeline: DocCommentParser + converter produces clean Markdown
+        string comment = "/** Locks the %Mutex object; blocks if the lock is already held\n"
+            "    To release the %Mutex, use @ref Mutex::unlock()\n"
+            "    @par Example:\n"
+            "    @code{.py}\n"
+            "    mutex.lock();\n"
+            "    @endcode\n"
+            "    @param timeout_ms a \\c timeout value\n"
+            "    @return returns -1 for error, 0 for success\n"
+            "    @throws LOCK-ERROR lock called twice\n"
+            "    @note Thread-safe with <b>deadlock detection</b>.\n"
+            "*/";
+
+        hash<auto> result = QoreApiMetadata::DocCommentParser::parse(comment);
+
+        # description should have clean markdown, no doxygen
+        assertFalse(result.description.find("@ref") >= 0);
+        assertFalse(result.description.find("\\c ") >= 0);
+        assertRegex("`Mutex::unlock\\(\\)`", result.description);
+        assertRegex("Mutex", result.description);
+
+        # param should be converted
+        assertRegex("`timeout`", result.params.timeout_ms);
+
+        # note should have markdown bold
+        assertRegex("\\*\\*deadlock detection\\*\\*", result.notes[0]);
+
+        # return description should be clean
+        assertEq("returns -1 for error, 0 for success", result.return_description);
+    }
+
+    testDoxygenAllFieldsConverted() {
+        # Verify that ALL text fields go through conversion
+        string comment = "/** Main \\c desc text\n"
+            "    @brief Brief \\c text here\n"
+            "    @param x the \\c param value\n"
+            "    @return the \\c result value\n"
+            "    @throws ERR \\c error desc\n"
+            "    @note A \\c note here\n"
+            "    @warning A \\c warning here\n"
+            "    @deprecated Use \\c newFunc instead\n"
+            "    @see \\c OtherClass\n"
+            "*/";
+
+        hash<auto> r = QoreApiMetadata::DocCommentParser::parse(comment);
+
+        # all fields should have backtick-converted \c
+        assertRegex("`desc`", r.description);
+        assertRegex("`text`", r.brief);
+        assertRegex("`param`", r.params.x);
+        assertRegex("`result`", r.return_description);
+        assertRegex("`error`", r.throws[0].description);
+        assertRegex("`note`", r.notes[0]);
+        assertRegex("`warning`", r.warnings[0]);
+        assertRegex("`newFunc`", r.deprecated);
+        assertRegex("`OtherClass`", r.see_also[0]);
+    }
+}

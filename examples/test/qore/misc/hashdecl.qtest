@@ -34,6 +34,15 @@ hashdecl Issue3518 {
     int i;
 }
 
+# Hashdecl with complex type default value - tests that acceptInputComplexList
+# does not steal a reference from the shared default expression node
+public hashdecl ComplexDefaults {
+    string name;
+    list<string> items = ();
+    list<int> numbers = ();
+    hash<string, string> metadata = {};
+}
+
 hashdecl Issue3654 {
     bool b = False;
 }
@@ -87,7 +96,9 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("serialize imported", \serializeImportedTest());
         addTestCase("issue 3167", \issue3167());
         addTestCase("Test HashDecl", \testHashDecl());
+        addTestCase("namespaced typed hash literal", \namespacedTypedHashLiteral());
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
+        addTestCase("complex type defaults", \testComplexTypeDefaults());
         set_return_value(main());
     }
 
@@ -315,6 +326,30 @@ class HashDeclTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE|PO_NO_INHERIT_SYSTEM_HASHDECLS);
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {hash<ExceptionInfo> c; delete c;}", ""));
+        }
+    }
+
+    namespacedTypedHashLiteral() {
+        hash<Test::Container3> c = <Test::Container3>{};
+        assertEq(True, c instanceof hash<Test::Container3>);
+        assertEq(3, c.i);
+
+        hash<Test::Container3> c2 = <::Test::Container3>{};
+        assertEq(True, c2 instanceof hash<Test::Container3>);
+        assertEq(3, c2.i);
+
+        hash<Test::Container3> c3 = hash<Test::Container3>{};
+        assertEq(True, c3 instanceof hash<Test::Container3>);
+        assertEq(3, c3.i);
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {auto h = <Test::>{};}", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() {auto h = <::>{};}", ""));
         }
     }
 
@@ -653,6 +688,339 @@ class HashDeclTest inherits QUnit::Test {
             assertTrue(result[1]);   # C inherits from A (grandparent)
             assertTrue(result[2]);   # C inherits from B
             assertFalse(result[3]);  # A does NOT inherit from B
+        }
+
+        # Test 29: System hashdecl inheritance - DirStatInfo inherits StatInfo
+        {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("reflection");
+            p.parse("
+                list sub test() {
+                    TypedHash dir = TypedHash::forName('DirStatInfo');
+                    TypedHash stat = TypedHash::forName('StatInfo');
+                    *TypedHash parent = dir.getParentTypedHash();
+                    return (
+                        parent ? parent.getName() : NOTHING,
+                        dir.inheritsFrom(stat),
+                    );
+                }
+            ", "");
+            list result = p.callFunction("test");
+            assertEq("StatInfo", result[0]);
+            assertTrue(result[1]);
+        }
+
+        # Test 30: Import inherited hashdecls - tests parent pointer update after namespace copy
+        # This test specifically verifies that when hashdecls are copied to a new namespace,
+        # the parent pointer is correctly updated to avoid use-after-free bugs
+        {
+            # Create a Program that doesn't inherit user hashdecls automatically
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls with inheritance chain from the parent program
+            # importHashDecl imports from the calling program's namespace
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+            p.importHashDecl("DeeplyNested");
+
+            # Parse code that uses the imported hashdecls - this exercises parent member lookup
+            p.parse("
+                list sub test() {
+                    hash<ExtendedInfo> ext({'name': 'test', 'id': 42, 'created': now()});
+                    hash<DeeplyNested> deep({'name': 'deep', 'id': 99, 'created': now(), 'value': 3.14});
+                    return (
+                        ext.name,         # lookup from parent BaseInfo
+                        ext.id,           # lookup from parent BaseInfo
+                        exists ext.created, # local to ExtendedInfo
+                        deep.name,        # lookup from grandparent BaseInfo
+                        deep.id,          # lookup from grandparent BaseInfo
+                        exists deep.created, # lookup from parent ExtendedInfo
+                        deep.value,       # local to DeeplyNested
+                    );
+                }
+            ", "test-prog");
+
+            # Call the function to exercise the inheritance chain
+            list result = p.callFunction("test");
+            assertEq("test", result[0]);     # name from BaseInfo
+            assertEq(42, result[1]);         # id from BaseInfo
+            assertTrue(result[2]);           # created exists
+            assertEq("deep", result[3]);     # name from grandparent BaseInfo
+            assertEq(99, result[4]);         # id from grandparent BaseInfo
+            assertTrue(result[5]);           # created from parent ExtendedInfo
+            assertEq(3.14, result[6]);       # value local to DeeplyNested
+        }
+
+        # Test 31: Import namespaced inherited hashdecls - verifies namespace path handling
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls from the InheritTest namespace
+            p.importHashDecl("InheritTest::ParentDecl");
+            p.importHashDecl("InheritTest::ChildDecl");
+
+            p.parse("
+                list sub test_inheritance() {
+                    hash<InheritTest::ChildDecl> child();
+                    return (
+                        child.parent_id,    # inherited from ParentDecl
+                        child.parent_name,  # inherited from ParentDecl
+                        child.child_id,     # local
+                        child.child_name,   # local
+                    );
+                }
+            ", "test-prog-2");
+
+            list result = p.callFunction("test_inheritance");
+            assertEq(100, result[0]);       # parent_id default from ParentDecl
+            assertEq("parent", result[1]);  # parent_name default from ParentDecl
+            assertEq(200, result[2]);       # child_id default
+            assertEq("child", result[3]);   # child_name default
+        }
+
+        # Test 32: Import inherited hashdecls with default values
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import hashdecls with default values inheritance chain
+            p.importHashDecl("DefaultBase");
+            p.importHashDecl("DefaultChild");
+
+            p.parse("
+                list sub test_defaults() {
+                    hash<DefaultChild> d();
+                    return (
+                        d.base_str,     # inherited default
+                        d.base_val,     # inherited default
+                        d.child_str,    # local default
+                        d.child_val,    # local default
+                    );
+                }
+            ", "test-prog-3");
+
+            list result = p.callFunction("test_defaults");
+            assertEq("base_default", result[0]);  # inherited default
+            assertEq(10, result[1]);              # inherited default
+            assertEq("child_default", result[2]); # local default
+            assertEq(20, result[3]);              # local default
+        }
+
+        # Test 33: Cross-namespace parent resolution in child Program
+        # This test verifies that when a child Program is created, hashdecl parent
+        # pointers are correctly resolved to point to the copies in the new namespace tree
+        {
+            # Create a child Program that inherits hashdecls
+            Program p(PO_NEW_STYLE);
+
+            # Parse code that uses the inherited hashdecls with cross-namespace parents
+            p.parse("
+                hash<ExtendedInfo> sub test_cross_ns() {
+                    # ExtendedInfo inherits from BaseInfo
+                    # After namespace copy, the parent pointer should be updated
+                    return <ExtendedInfo>{
+                        'name': 'cross_ns_test',
+                        'id': 42,
+                        'created': now(),
+                    };
+                }
+            ", "cross-ns-test");
+
+            hash result = p.callFunction("test_cross_ns");
+            assertEq("cross_ns_test", result.name);  # inherited member
+            assertEq(42, result.id);                  # inherited member
+            assertEq(Type::Date, result.created.type());  # local member
+        }
+
+        # Test 34: Cross-namespace parent resolution with deeply nested inheritance in child Program
+        {
+            Program p(PO_NEW_STYLE);
+
+            p.parse("
+                hash<DeeplyNested> sub test_deep_cross_ns() {
+                    # DeeplyNested inherits from ExtendedInfo which inherits from BaseInfo
+                    return <DeeplyNested>{
+                        'name': 'deep_cross_ns',
+                        'id': 99,
+                        'created': now(),
+                        'value': 2.718,
+                    };
+                }
+            ", "deep-cross-ns-test");
+
+            hash result = p.callFunction("test_deep_cross_ns");
+            assertEq("deep_cross_ns", result.name);   # grandparent member
+            assertEq(99, result.id);                   # grandparent member
+            assertEq(Type::Date, result.created.type()); # parent member
+            assertEq(2.718, result.value);             # local member
+        }
+
+        # Test 35: Cross-namespace parent resolution with runtime importHashDecl
+        # This tests that parent pointers are correctly resolved when importing
+        # hashdecls one at a time at runtime
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import base first, then derived
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+
+            p.parse("
+                list sub test_runtime_import() {
+                    hash<ExtendedInfo> ext({'name': 'runtime_import', 'id': 123, 'created': now()});
+                    return (
+                        ext.name,   # should access inherited member
+                        ext.id,     # should access inherited member
+                    );
+                }
+            ", "runtime-import-test");
+
+            list result = p.callFunction("test_runtime_import");
+            assertEq("runtime_import", result[0]);
+            assertEq(123, result[1]);
+        }
+
+        # Test 36: Cross-namespace parent resolution with importHashDecl - derived first
+        # This tests a potential edge case where derived is imported before parent
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import derived first (parent doesn't exist yet in target)
+            p.importHashDecl("ExtendedInfo");
+            # Now import the parent
+            p.importHashDecl("BaseInfo");
+
+            p.parse("
+                list sub test_reverse_import() {
+                    hash<ExtendedInfo> ext({'name': 'reverse_import', 'id': 456, 'created': now()});
+                    return (
+                        ext.name,
+                        ext.id,
+                    );
+                }
+            ", "reverse-import-test");
+
+            list result = p.callFunction("test_reverse_import");
+            assertEq("reverse_import", result[0]);
+            assertEq(456, result[1]);
+        }
+
+        # Test 37: Multiple sequential imports with parent resolution
+        # Tests that importing hashdecls in batches correctly resolves parents
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            # Import the full inheritance chain
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+            p.importHashDecl("DeeplyNested");
+
+            p.parse("
+                list sub test_batch_import() {
+                    hash<DeeplyNested> deep({'name': 'batch', 'id': 777, 'created': now(), 'value': 1.23});
+                    return (
+                        deep.name,    # grandparent
+                        deep.id,      # grandparent
+                        deep.value,   # local
+                    );
+                }
+            ", "batch-import-test");
+
+            list result = p.callFunction("test_batch_import");
+            assertEq("batch", result[0]);
+            assertEq(777, result[1]);
+            assertEq(1.23, result[2]);
+        }
+
+        # Test 38: Verify type compatibility works after cross-namespace resolution
+        # Derived hashdecl should be assignable to base type after parent resolution
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+
+            p.importHashDecl("BaseInfo");
+            p.importHashDecl("ExtendedInfo");
+
+            p.parse("
+                hash<BaseInfo> sub test_type_compat() {
+                    hash<ExtendedInfo> ext({'name': 'compat', 'id': 888, 'created': now()});
+                    # Assign derived to base - should work after parent resolution
+                    return ext;
+                }
+            ", "type-compat-test");
+
+            hash result = p.callFunction("test_type_compat");
+            assertEq("compat", result.name);
+            assertEq(888, result.id);
+        }
+    }
+
+    testComplexTypeDefaults() {
+        # Test that hashdecl with complex type defaults (list<T>, hash<K,V>) works
+        # correctly when instantiated in a child Program.  This exercises the
+        # mergeUserPublic() copy path where the default value node is shared
+        # between two hashdecl copies.  Before the fix, acceptInputComplexList()
+        # would steal a reference from the shared default, causing use-after-free.
+
+        # Test 1: Direct instantiation
+        {
+            hash<ComplexDefaults> cd({"name": "test"});
+            assertEq("test", cd.name);
+            assertEq(0, cd.items.size());
+            assertEq("list<string>", cd.items.fullType());
+            assertEq(0, cd.numbers.size());
+            assertEq("list<int>", cd.numbers.fullType());
+            assertEq(0, cd.metadata.size());
+        }
+
+        # Test 2: Instantiation in a child Program (triggers mergeUserPublic copy)
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd({'name': 'child'});
+                    return (cd.name, cd.items.size(), cd.numbers.size(), cd.metadata.size());
+                }
+            ", "complex-defaults-test");
+
+            list result = p.callFunction("test");
+            assertEq("child", result[0]);
+            assertEq(0, result[1]);
+            assertEq(0, result[2]);
+            assertEq(0, result[3]);
+        }
+
+        # Test 3: Multiple instantiations in child Program
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd1({'name': 'first'});
+                    hash<ComplexDefaults> cd2({'name': 'second'});
+                    return (cd1.name, cd1.items.size(), cd2.name, cd2.items.size());
+                }
+            ", "complex-defaults-multi");
+
+            list result = p.callFunction("test");
+            assertEq("first", result[0]);
+            assertEq(0, result[1]);
+            assertEq("second", result[2]);
+            assertEq(0, result[3]);
+        }
+
+        # Test 4: Imported hashdecl with complex defaults
+        {
+            Program p(PO_NEW_STYLE|PO_NO_INHERIT_USER_HASHDECLS);
+            p.importHashDecl("ComplexDefaults");
+            p.parse("
+                list sub test() {
+                    hash<ComplexDefaults> cd({'name': 'imported'});
+                    return (cd.name, cd.items.size(), cd.numbers.size());
+                }
+            ", "complex-defaults-import");
+
+            list result = p.callFunction("test");
+            assertEq("imported", result[0]);
+            assertEq(0, result[1]);
+            assertEq(0, result[2]);
         }
     }
 }

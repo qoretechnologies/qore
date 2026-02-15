@@ -46,6 +46,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
@@ -57,6 +58,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
@@ -84,6 +86,46 @@ static thread_local int assert_paren_depth = 0;
 
 // Brace depth for @debug block skip state
 static thread_local int debug_brace_depth = 0;
+
+#ifdef AST_SCANNER
+static int brace_depth = 0;
+static std::vector<int> typed_hash_depths;
+
+static bool is_identifier_string(const QoreStringNode& str) {
+   const char* buf = str.c_str();
+   if (!buf || !buf[0]) {
+      return false;
+   }
+   unsigned char c0 = static_cast<unsigned char>(buf[0]);
+   if (!isalpha(c0) && c0 != '_') {
+      return false;
+   }
+   for (const char* p = buf + 1; *p; ++p) {
+      unsigned char c = static_cast<unsigned char>(*p);
+      if (!isalnum(c) && c != '_') {
+         return false;
+      }
+   }
+   return true;
+}
+
+#define AST_PEEK_NEXT_NONSPACE(scanner, out_c) \
+   do { \
+      std::vector<int> buf; \
+      int c = 0; \
+      do { \
+         c = yyinput(scanner); \
+         if (c == EOF) { \
+            break; \
+         } \
+         buf.push_back(c); \
+      } while (c == ' ' || c == '\\t' || c == '\\r' || c == '\\n'); \
+      for (int i = static_cast<int>(buf.size()) - 1; i >= 0; --i) { \
+         unput(buf[i]); \
+      } \
+      out_c = c; \
+   } while (false)
+#endif
 
 static int ascii_to_octal(char c) {
    assert(isoctaldigit(c));
@@ -241,7 +283,7 @@ static void scanner_process_path(QoreString& npath, char* ip) {
                 //printd(5, "OK: adding '%s' to path list\n", sp);
                 if (npath.strlen())
                    npath.concat(':');
-                npath.concat(&tpath);
+                qore_string_private::get(npath)->concat(&tpath);
              }
 
              if (!*p)
@@ -284,7 +326,7 @@ static QoreString* get_include_file_name(char* file) {
         if (SystemEnvironment::get(var.c_str(), val)) {
             rv->concat(file);
         } else {
-            rv->concat(&val);
+            qore_string_private::get(rv)->concat(&val);
             rv->concat(file + var.size() + 1);
         }
 
@@ -667,9 +709,37 @@ static void qore_parse_define(YYLTYPE* yylloc, const char* pstr) {
     qore_program_private::parseDefine(getProgram(), get_loc(yylloc), str.c_str(), v);
 }
 
+// Strip trailing line comment (# ...) or block comment (/* ... */) from a string.
+// Note: This naive approach is safe because %if/%elif expressions only support
+// defined(identifier), boolean operators (!, &&, ||), and parentheses - no string
+// literals where # or /* could appear as valid content.
+static void strip_trailing_comment(QoreString& str) {
+    // Find first # that starts a line comment
+    qore_offset_t hash_pos = str.find('#');
+    if (hash_pos >= 0) {
+        str.terminate(hash_pos);
+        str.trim();
+    }
+    // Find block comment /* ... */ and remove it
+    qore_offset_t block_start = str.find("/*");
+    if (block_start >= 0) {
+        qore_offset_t block_end = str.find("*/", block_start + 2);
+        if (block_end >= 0) {
+            // Remove the block comment
+            str.replace(block_start, block_end - block_start + 2, "");
+            str.trim();
+        } else {
+            // Unterminated block comment - just truncate at /*
+            str.terminate(block_start);
+            str.trim();
+        }
+    }
+}
+
 static bool parse_is_defined(YYLTYPE* yylloc, const char* pstr, bool def = true) {
     QoreString str(pstr);
     str.trim();
+    strip_trailing_comment(str);
     if (str.empty()) {
         parse_error(*get_loc(yylloc), "missing argument to %%if%sdef", def ? "" : "n");
         return false;
@@ -864,6 +934,7 @@ public:
 static bool parse_evaluate_condition(YYLTYPE* yylloc, const char* expr, bool& result) {
     QoreString str(expr);
     str.trim();
+    strip_trailing_comment(str);
     if (str.empty()) {
         parse_error(*get_loc(yylloc), "missing expression in %%if directive");
         return false;
@@ -991,7 +1062,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%old-style{WS}*$                       parse_disable_parse_options(yylloc, PO_NEW_STYLE);
 ^%modern{WS}*$                          {
                                            parse_set_parse_options(yylloc, PO_MODERN);
-                                           getProgram()->setWarningMask(-1);
+                                           getProgram()->setWarningMask(QP_WARN_ALL);
                                         }
 ^%perl-bool-eval{WS}*$                  parse_disable_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
 ^%strict-bool-eval{WS}*$                parse_set_parse_options(yylloc, PO_STRICT_BOOLEAN_EVAL);
@@ -1006,12 +1077,14 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%broken-int-assignments{WS}*$          parse_set_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
 ^%broken-operators{WS}*$                parse_set_parse_options(yylloc, PO_BROKEN_OPERATORS);
 ^%broken-narrowed-types{WS}*$           parse_set_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
+^%broken-namespace-resolution{WS}*$     parse_set_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION);
 ^%correct-list-parsing{WS}*$            parse_disable_parse_options(yylloc, PO_BROKEN_LIST_PARSING);
 ^%correct-logic-precedence{WS}*$        parse_disable_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE);
 ^%correct-loop-statement{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_LOOP_STATEMENT);
 ^%correct-int-assignments{WS}*$         parse_disable_parse_options(yylloc, PO_BROKEN_INT_ASSIGNMENTS);
 ^%correct-operators{WS}*$               parse_disable_parse_options(yylloc, PO_BROKEN_OPERATORS);
 ^%correct-narrowed-types{WS}*$          parse_disable_parse_options(yylloc, PO_BROKEN_NARROWED_TYPES);
+^%correct-namespace-resolution{WS}*$    parse_disable_parse_options(yylloc, PO_BROKEN_NAMESPACE_RESOLUTION);
 ^%loose-args{WS}*$                      parse_disable_parse_options(yylloc, PO_STRICT_ARGS);
 ^%broken-range{WS}*$                    parse_set_parse_options(yylloc, PO_BROKEN_RANGE);
 ^%correct-range{WS}*$                   parse_disable_parse_options(yylloc, PO_BROKEN_RANGE);
@@ -1068,8 +1141,16 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            QORE_FLEX_DO_EOF
                                         }
 ^%enable-all-warnings{WS}*$             {
-                                           if (getProgram()->setWarningMask(-1))
+                                           if (getProgram()->setWarningMask(QP_WARN_ALL))
                                               qore_program_private::makeParseWarning(getProgram(), *get_loc(yylloc), QP_WARN_WARNING_MASK_UNCHANGED, "CANNOT-UPDATE-WARNING-MASK", "this program has its warning mask locked; cannot enable all warnings");
+                                        }
+^%strict-warnings{WS}*$                 {
+                                           int warn_mask = getProgram()->getWarningMask() | QP_WARN_STRICT;
+                                           if (getProgram()->setWarningMask(warn_mask)) {
+                                              qore_program_private::makeParseWarning(getProgram(), *get_loc(yylloc),
+                                                 QP_WARN_WARNING_MASK_UNCHANGED, "CANNOT-UPDATE-WARNING-MASK",
+                                                 "this program has its warning mask locked; cannot enable strict warnings");
+                                           }
                                         }
 ^%disable-all-warnings{WS}*$            {
                                            if (getProgram()->setWarningMask(0))
@@ -1396,7 +1477,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else{WS}*$                            {
+^%else{WS}*(#.*|\/\*.*)?$                            {
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
                                                     parse_error(*get_loc(yylloc), "%%else found without %%if");
@@ -1409,7 +1490,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                         }
 <p_skip_to_endif>{
-   ^%endif{WS}*$                        {
+   ^%endif{WS}*(#.*|\/\*.*)?$                        {
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1419,7 +1500,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
-   ^%else{WS}*$                         {
+   ^%else{WS}*(#.*|\/\*.*)?$                         {
                                             // Check for duplicate %else at the current level
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 if (parse_cond_has_else()) {
@@ -1485,7 +1566,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             }
                                             // If not at top level, just continue skipping (stay in current state)
                                         }
-   ^%else{WS}*$                         {
+   ^%else{WS}*(#.*|\/\*.*)?$                         {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 // Check for duplicate %else
@@ -1498,7 +1579,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
-   ^%endif{WS}*$                        {
+   ^%endif{WS}*(#.*|\/\*.*)?$                   {
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
                                                 BEGIN(INITIAL);
@@ -1580,7 +1661,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif{WS}*$                           parse_cond_pop(get_loc(yylloc));
+^%endif{WS}*(#.*|\/\*.*)?$                           parse_cond_pop(get_loc(yylloc));
 ^%include{WS}*$                         { parse_error(*get_loc(yylloc), "missing argument to %%include"); }
 ^%include{WS}+                          BEGIN(incl);
 <exec_class_state>{
@@ -1658,7 +1739,22 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                         }
 \"                                      yylval->String = new QoreStringNode; yylloc->saveFirst(); BEGIN(str_state);
 <str_state>{
-      \"                                yylloc->restoreFirst(); BEGIN(INITIAL); return QUOTED_WORD;
+      \"                                {
+                                           yylloc->restoreFirst();
+                                           BEGIN(INITIAL);
+#ifdef AST_SCANNER
+                                           if (!typed_hash_depths.empty()) {
+                                              int c = 0;
+                                              AST_PEEK_NEXT_NONSPACE(yyscanner, c);
+                                              if (c == ':' && is_identifier_string(*yylval->String)) {
+                                                 yylval->string = strdup(yylval->String->c_str());
+                                                 yylval->String->deref();
+                                                 return IDENTIFIER;
+                                              }
+                                           }
+#endif
+                                           return QUOTED_WORD;
+                                        }
       \n                                yylval->String->concat('\n');
       {OCTAL_CONST}                     {
                                            int token_length = strlen(yytext);
@@ -2143,14 +2239,58 @@ class{WS}+{WORD}                        { yylval->string = trim(yytext + 6); par
 namespace{WS}+{WORD}                    { const char* ns = trim_inplace(yytext + 10); parse_push_ns_name(ns); return TOK_NAMESPACE; }
 module{WS}+{WORD}                       { const char* mod = trim_inplace(yytext + 7); parse_set_module_def_context_name(mod); return TOK_MODULE; }
 {WORD}                                  yylval->string = strdup(yytext); return IDENTIFIER;
+\<({WORD}::)+{WORD}\>\{                 {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+\<(::{WORD})+\>\{                       {
+                                            yylval->string = strdup(yytext + 1);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<({WORD}::)+{WORD}\>\{             {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
+hash\<(::{WORD})+\>\{                   {
+                                            yylval->string = strdup(yytext + 5);
+                                            yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
+                                            return HASHDECL_IDENTIFIER_OPENCURLY;
+                                        }
 \<{WORD}\>\{                            {
                                             yylval->string = strdup(yytext + 1);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 hash\<{WORD}\>\{                        {
                                             yylval->string = strdup(yytext + 5);
                                             yylval->string[strlen(yylval->string) - 2] = '\0';
+#ifdef AST_SCANNER
+                                            brace_depth++;
+                                            typed_hash_depths.push_back(brace_depth);
+#endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 {WORD}<[a-zA-Z\*<:_0-9 \t,!().]+>       {
@@ -2314,6 +2454,24 @@ hash\<{WORD}\>\{                        {
 }
 =\~                                     BEGIN(regex_googleplex); return REGEX_MATCH;
 \!\~                                    BEGIN(regex_negative_universe); return REGEX_NMATCH;
+\{                                      {
+#ifdef AST_SCANNER
+                                           brace_depth++;
+#endif
+                                           return yytext[0];
+                                        }
+\}                                      {
+#ifdef AST_SCANNER
+                                           if (brace_depth > 0) {
+                                              brace_depth--;
+                                           }
+                                           if (!typed_hash_depths.empty()
+                                              && brace_depth < typed_hash_depths.back()) {
+                                              typed_hash_depths.pop_back();
+                                           }
+#endif
+                                           return yytext[0];
+                                        }
 {WSNL}+                                 /* ignore whitespace */
 .                                       return yytext[0];
 %%

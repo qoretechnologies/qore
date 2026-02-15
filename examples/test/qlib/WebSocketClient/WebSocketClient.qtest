@@ -38,9 +38,11 @@ class MyWsConnection inherits WebSocketConnection {
 class MyWsHandler inherits WebSocketHandler {
     public {
         bool debug = False;
+        *hash<auto> last_hdr;
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        last_hdr = hdr;
         MyWsConnection conn(self);
         if (hdr."send-data") {
             conn.sendData();
@@ -67,6 +69,33 @@ class MyWsHandler inherits WebSocketHandler {
         if (debug) {
             vprintf("DEBUG " + fmt + "\n", argv);
         }
+    }
+}
+
+class HealthHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+class TempFile {
+    private {
+        string path;
+    }
+
+    constructor(string name, data content) {
+        path = sprintf("%s%s%s", tmp_location(), DirSep, name);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+    }
+
+    destructor() {
+        unlink(path);
+    }
+
+    string getPath() {
+        return path;
     }
 }
 
@@ -143,12 +172,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 -----END PRIVATE KEY-----";
     }
 
+    private {
+        *hash<auto> ext_h2info;
+        *TempFile ext_cert;
+        *TempFile ext_key;
+        *string ext_pidfile;
+        *string ext_log;
+        int ext_pid = 0;
+    }
+
+    private bool waitForConnectionState(WebSocketClientDelayedDataProvider prov, bool expected, date timeout = 5s) {
+        date start = now_us();
+        while (prov.isConnected() != expected) {
+            if (now_us() - start > timeout) {
+                return False;
+            }
+            sleep(100ms);
+        }
+        return True;
+    }
+
     constructor() : Test("WebSocketClientTest", "1.0") {
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("data provider test", \dataProviderTest());
         addTestCase("WebSocketClient tests", \webSocketClientTests());
+        addTestCase("HTTP/1.1 async WebSocket tests", \http1AsyncWebSocketTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("HTTP/2 WebSocket tests", \http2WebSocketTests());
+        addTestCase("HTTP/2 WebSocket external server tests", \http2WebSocketExternalTests());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -160,6 +211,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         };
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
+        mServer.setHandler("health-handler", "/health", "text/plain", new HealthHandler());
         mServer.setDefaultHandler("ws-handler", wsHandler);
         linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
 
@@ -171,6 +223,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "service": 0,
                 "cert": cert,
                 "key": key,
+                "http_version": "auto",
             });
         } catch (hash<ExceptionInfo> ex) {
             # SSL might not be available
@@ -179,6 +232,111 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         set_return_value(main());
 
         mServer.stop();
+    }
+
+    private bool waitForReadyMessage(string log_path, int port, int retries = 50) {
+        string expected = "READY " + port;
+        for (int i = 0; i < retries; ++i) {
+            if (log_path && is_file(log_path)) {
+                try {
+                    string content = ReadOnlyFile::readTextFile(log_path);
+                    if (content.find(expected) >= 0) {
+                        if (m_options.verbose > 2) {
+                            @debug {
+                                date now = now_us();
+                                printf("external ws: ready at %y\n", now);
+                            }
+                        }
+                        return True;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # ignore transient read errors
+                }
+            }
+            sleep(100ms);
+        }
+        return False;
+    }
+
+    private *hash<auto> startExternalHttp2WsServer() {
+        string node_bin = getenv("NODE_BIN") ?? "node";
+        if (system(node_bin + " -v > /dev/null 2>&1") != 0) {
+            return NOTHING;
+        }
+
+        string script = get_script_dir() + DirSep + "http2-ws-server.js";
+        if (!is_file(script)) {
+            return NOTHING;
+        }
+
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int port = s.getPort();
+        s.close();
+
+        ext_cert = new TempFile("http2-ws-cert-" + getpid() + ".pem", CertPem);
+        ext_key = new TempFile("http2-ws-key-" + getpid() + ".pem", KeyPem);
+
+        ext_log = tmp_location() + DirSep + "http2-ws-server-" + getpid() + ".log";
+        ext_pidfile = tmp_location() + DirSep + "http2-ws-server-" + getpid() + ".pid";
+
+        string cmd = sprintf("%s %s %d %s %s > %s 2>&1 & echo $! > %s",
+            node_bin, script, port, ext_cert.getPath(), ext_key.getPath(), ext_log, ext_pidfile);
+        if (m_options.verbose > 2) {
+            @debug {
+                date now = now_us();
+                printf("external ws: spawn at %y\n", now);
+            }
+        }
+        if (system(cmd) != 0) {
+            stopExternalHttp2WsServer();
+            return NOTHING;
+        }
+
+        try {
+            string pid_str = trim(ReadOnlyFile::readTextFile(ext_pidfile));
+            ext_pid = pid_str.toInt();
+        } catch (hash<ExceptionInfo> ex) {
+            stopExternalHttp2WsServer();
+            return NOTHING;
+        }
+
+        if (!ext_pid) {
+            stopExternalHttp2WsServer();
+            return NOTHING;
+        }
+
+        if (!waitForReadyMessage(ext_log, port)) {
+            stopExternalHttp2WsServer();
+            return NOTHING;
+        }
+
+        return {
+            "port": port,
+        };
+    }
+
+    private stopExternalHttp2WsServer() {
+        if (ext_pid) {
+            system("kill " + ext_pid + " > /dev/null 2>&1");
+            remove ext_pid;
+        }
+
+        if (ext_pidfile && is_file(ext_pidfile)) {
+            unlink(ext_pidfile);
+        }
+        remove ext_pidfile;
+        remove ext_log;
+
+        if (ext_cert) {
+            delete ext_cert;
+        }
+        if (ext_key) {
+            delete ext_key;
+        }
+        remove ext_cert;
+        remove ext_key;
+        remove ext_h2info;
     }
 
     reconnectTest() {
@@ -211,9 +369,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # stop the listener
         mServer.stopListenerID(linfo.id);
 
+        # wait for the client to detect disconnection
+        observer.wait(EVENT_WS_CLOSED);
+        observer.clear();
+
         # check reconnecting status
-        prov.sendMessage(MESSAGE_WS_PING);
-        assertFalse(prov.isConnected());
+        assertNothing(prov.sendMessage(MESSAGE_WS_PING),
+            "sending a ping while disconnected should not throw or return data");
+        assertTrue(waitForConnectionState(prov, False),
+            "expected WebSocket client to report disconnected state");
 
         cinfo = prov.getConnectionInfo();
         assertFalse(cinfo.connected);
@@ -315,6 +479,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         };
         WebSocketClient wsc(cb, opts);
         wsc.connect({"hdr": {"Send-Data": "1"}});
+        assertEq(13, wsHandler.last_hdr."sec-websocket-version".toInt(),
+            "WebSocket client should send Sec-WebSocket-Version");
         c.waitForZero();
         assertEq(Data, l);
         c.inc();
@@ -326,6 +492,36 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         wsc.send("REQUEST");
         c.waitForZero();
         assertEq(list("RESPONSE:REQUEST"), l);
+        wsc.disconnect();
+        delete wsc;
+    }
+
+    http1AsyncWebSocketTests() {
+        assertTrue(mServer.isAsyncMode(),
+            "HttpServer should run in async mode for HTTP/1.1 async WebSocket tests");
+
+        list<auto> l = ();
+        Counter c(1);
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                l += msg;
+                if (l.size() == responseSize) {
+                    c.dec();
+                }
+            }
+        };
+        responseSize = 1;
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+            "http_version": "1.1",
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        assertFalse(wsc.isHttp2(), "HTTP/1.1 WebSocket should not negotiate HTTP/2");
+        wsc.send("REQUEST");
+        c.waitForZero(5s);
+        assertEq(list("RESPONSE:REQUEST"), l, "HTTP/1.1 async WebSocket should echo message");
         wsc.disconnect();
         delete wsc;
     }
@@ -348,12 +544,76 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(url, client.getUrl());
         assertEq("user", client.getUsername());
         assertEq("pass", client.getPassword());
+
+        # Test polling API support
+        {
+            url = "ws://localhost:" + linfo.port;
+            conn = new WebSocketConnectionObject("test", "test", url);
+            assertTrue(conn.supportsPollingApi(), "WebSocketConnectionObject should support polling API");
+
+            # Test async ping with polling API
+            AbstractPollOperation poll_op = conn.startPollConnect(logger);
+            assertEq("ws-ping", poll_op.getGoal(), "WebSocket poll operation goal should be 'ws-ping'");
+
+            # Drive the poll operation to completion
+            date start = now_us();
+            date timeout = 10s;
+            while (!poll_op.goalReached()) {
+                if (now_us() - start > timeout) {
+                    throw "TIMEOUT", "WebSocket poll operation timed out";
+                }
+                *hash<SocketPollInfo> info = poll_op.continuePoll();
+                if (info) {
+                    # Wait for socket readiness using Socket::poll() with list argument
+                    Socket::poll((info,), 1s);
+                }
+            }
+            assertTrue(poll_op.goalReached(), "WebSocket poll operation should reach goal");
+            hash<auto> output = poll_op.getOutput();
+            assertEq(101, output.code, "WebSocket handshake should return 101 Switching Protocols");
+        }
     }
 
     #! HTTP/2 WebSocket tests (RFC 8441)
     http2WebSocketTests() {
         if (!h2info) {
             testSkip("HTTPS/HTTP/2 listener not available");
+        }
+
+        # Test 0: HTTP/2 auto negotiation prefers HTTP/2 when available
+        {
+            list<auto> l = ();
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    l += msg;
+                    if (l.size() == 1) {
+                        c.dec();
+                    }
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            try {
+                wsc.connect();
+                wsc.send("REQUEST");
+                c.waitForZero(5s);
+                assertEq(list("RESPONSE:REQUEST"), l, "HTTP/2 auto negotiation should echo messages");
+                if (!wsc.isHttp2()) {
+                    testSkip("HTTP/2 not negotiated (ALPN may not be available)");
+                } else {
+                    assertTrue(wsc.isHttp2(), "HTTP/2 auto negotiation should report http2=True");
+                }
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(False, sprintf("HTTP/2 auto negotiation failed: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
         }
 
         # Test 1: Basic HTTP/2 WebSocket connection and message exchange
@@ -372,7 +632,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             hash<auto> opts = {
                 "url": "wss://localhost:" + h2info.port,
                 "logger": logger,
-                "http_version": "auto",  # Enable HTTP/2 negotiation
+                "http_version": "2.0",  # Force HTTP/2 negotiation
                 "ssl_verify_cert": False,  # Accept self-signed certificate
             };
             WebSocketClient wsc(cb, opts);
@@ -381,18 +641,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 c.waitForZero(10s);
                 assertEq(Data, l, "HTTP/2 WebSocket should receive data");
 
-                # Check if HTTP/2 is being used
-                if (wsc.isHttp2()) {
-                    assertTrue(True, "WebSocket connected over HTTP/2");
-                } else {
-                    # HTTP/2 might not be negotiated if ALPN is not available
-                    testSkip("HTTP/2 not negotiated (ALPN may not be available)");
-                }
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
-                # HTTP/2 WebSocket might not be fully supported yet
-                testSkip(sprintf("HTTP/2 WebSocket not supported: %s: %s", ex.err, ex.desc));
+                assertTrue(False, sprintf("HTTP/2 WebSocket test failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }
@@ -416,7 +669,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             hash<auto> opts = {
                 "url": "wss://localhost:" + h2info.port,
                 "logger": logger,
-                "http_version": "auto",
+                "http_version": "2.0",
                 "pong_callback": pong_cb,
                 "ssl_verify_cert": False,  # Accept self-signed certificate
             };
@@ -425,9 +678,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 responseSize = 1;
                 wsc.connect();
 
-                if (!wsc.isHttp2()) {
-                    testSkip("HTTP/2 not negotiated");
-                }
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
                 # Send ping and wait for pong
                 wsc.ping("test-ping");
@@ -440,7 +691,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
-                testSkip(sprintf("HTTP/2 WebSocket ping test: %s: %s", ex.err, ex.desc));
+                assertTrue(False, sprintf("HTTP/2 WebSocket ping test failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }
@@ -451,25 +702,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             hash<auto> opts = {
                 "url": "wss://localhost:" + h2info.port,
                 "logger": logger,
-                "http_version": "auto",
+                "http_version": "2.0",
                 "ssl_verify_cert": False,  # Accept self-signed certificate
             };
             WebSocketClient wsc(cb, opts);
             try {
                 wsc.connect();
 
-                # isHttp2() should return True for HTTP/2 connections
-                bool is_h2 = wsc.isHttp2();
-                if (is_h2) {
-                    assertTrue(is_h2, "isHttp2() should return True for HTTP/2 WebSocket");
-                } else {
-                    # Fall back to HTTP/1.1 is acceptable if HTTP/2 negotiation fails
-                    assertFalse(is_h2, "isHttp2() returns False for HTTP/1.1 fallback");
-                }
+                assertTrue(wsc.isHttp2(), "isHttp2() should return True for HTTP/2 WebSocket");
 
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
-                testSkip(sprintf("HTTP/2 isHttp2() test: %s: %s", ex.err, ex.desc));
+                assertTrue(False, sprintf("HTTP/2 isHttp2() test failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }
@@ -488,7 +732,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             hash<auto> opts = {
                 "url": "wss://localhost:" + h2info.port,
                 "logger": logger,
-                "http_version": "auto",
+                "http_version": "2.0",
                 "ssl_verify_cert": False,
             };
             WebSocketClient wsc(cb, opts);
@@ -496,9 +740,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 # Connect with Send-Large-Data header to trigger server sending 32KB message
                 wsc.connect({"hdr": {"Send-Large-Data": "1"}});
 
-                if (!wsc.isHttp2()) {
-                    testSkip("HTTP/2 not negotiated");
-                }
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
 
                 c.waitForZero(10s);
                 assertEq(LargeData.size(), received_msg.size(),
@@ -507,9 +749,238 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
-                testSkip(sprintf("HTTP/2 WebSocket large message test: %s: %s", ex.err, ex.desc));
+                assertTrue(False, sprintf("HTTP/2 WebSocket large message test failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
+        }
+
+        # Test 5: HTTP/2 CONNECT handshake headers (Sec-WebSocket-Key/Accept)
+        {
+            hash<auto> http_opts = (
+                "url": "https://localhost:" + h2info.port,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+                "timeout": 5s,
+            );
+            HTTPClient hc(http_opts);
+            string key = get_random_string(16).toBase64();
+            hash<auto> info;
+            hash<auto> resp = hc.sendHttp2Connect("/", {"Sec-WebSocket-Key": key}, "websocket", \info);
+            assertEq(200, resp.status_code, "HTTP/2 WebSocket CONNECT should return 200");
+            hash<auto> rhdr = resp.headers ?? resp;
+            assertEq(ws_get_response_key(key), rhdr."sec-websocket-accept",
+                "HTTP/2 CONNECT should return Sec-WebSocket-Accept");
+
+            # Verify server is still functional via a separate connection;
+            # the active CONNECT stream blocks h2op on the original connection
+            # (HTTP/2 requests are serialized per connection in the server)
+            {
+                HTTPClient hc2(http_opts);
+                on_exit delete hc2;
+                hash<auto> health_resp = hc2.send(NOTHING, "GET", "/health");
+                assertEq(200, health_resp.status_code,
+                    "HTTP/2 GET should succeed on separate connection with active CONNECT stream");
+                assertEq("OK", health_resp.body, "HTTP/2 GET should return health response");
+            }
+
+            binary close_frame = ws_encode_message("", WSOP_Close);
+            hc.sendHttp2StreamData(resp.stream_id, close_frame, True);
+            delete hc;
+
+            HTTPClient bad_hc(http_opts);
+            hash<auto> no_key_resp = bad_hc.sendHttp2Connect("/", {}, "websocket", NOTHING);
+            assertEq(200, no_key_resp.status_code, "HTTP/2 CONNECT without key should return 200");
+            hash<auto> no_key_hdr = no_key_resp.headers ?? no_key_resp;
+            bool has_accept = (exists no_key_hdr."sec-websocket-accept") ?? False;
+            assertFalse(has_accept,
+                "HTTP/2 CONNECT without Sec-WebSocket-Key should not return Sec-WebSocket-Accept");
+            bad_hc.sendHttp2StreamData(no_key_resp.stream_id, close_frame, True);
+            delete bad_hc;
+        }
+    }
+
+    http2WebSocketExternalTests() {
+        ext_h2info = startExternalHttp2WsServer();
+        if (!ext_h2info) {
+            testSkip("External HTTP/2 WebSocket server not available");
+            return;
+        }
+        on_exit stopExternalHttp2WsServer();
+
+        # Test 1: Basic HTTP/2 WebSocket connection and echo
+        {
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: connect start %y\n", now);
+                }
+            }
+            list<auto> l = ();
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    l += msg;
+                    if (l.size() == 1) {
+                        c.dec();
+                    }
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + ext_h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            wsc.connect();
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: connect done %y\n", now);
+                }
+            }
+            assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
+
+            wsc.send("echo-test");
+            c.waitForZero(5s);
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: echo received %y\n", now);
+                }
+            }
+            assertEq(list("echo-test"), l, "External HTTP/2 WebSocket should echo messages");
+
+            wsc.disconnect();
+            if (m_options.verbose > 2) {
+                @debug {
+                    date now = now_us();
+                    printf("external ws: disconnect done %y\n", now);
+                }
+            }
+            delete wsc;
+        }
+
+        # Test 2: Initial data sent by server (mixed text/binary)
+        {
+            list<auto> l = ();
+            Counter c(1);
+            responseSize = Data.size();
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    l += msg;
+                    if (l.size() == responseSize) {
+                        c.dec();
+                    }
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + ext_h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            wsc.connect({"hdr": {"Send-Data": "1"}});
+            assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
+
+            c.waitForZero(5s);
+            assertEq(Data, l, "External HTTP/2 WebSocket should receive server data");
+
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        # Test 3: Large message handling
+        {
+            *string received_msg;
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    received_msg = msg;
+                    c.dec();
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + ext_h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            wsc.connect({"hdr": {"Send-Large-Data": "1"}});
+            assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
+
+            c.waitForZero(10s);
+            assertEq(LargeData.size(), received_msg.size(),
+                "External HTTP/2 WebSocket should receive complete large message (32KB)");
+            assertEq(LargeData, received_msg, "External HTTP/2 WebSocket large message content matches");
+
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        # Test 4: HTTP/2 ping/pong
+        {
+            bool got_pong = False;
+            code cb = sub (*data msg) {};
+            code pong_cb = sub (*data msg) {
+                got_pong = True;
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + ext_h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+                "pong_callback": pong_cb,
+            };
+            WebSocketClient wsc(cb, opts);
+            wsc.connect();
+            assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
+
+            wsc.ping("test-ping");
+            date start = now_us();
+            while (!got_pong && (now_us() - start) < 5s) {
+                sleep(100ms);
+            }
+            assertTrue(got_pong, "External HTTP/2 WebSocket should receive pong");
+
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        # Test 5: HTTP/2 CONNECT handshake headers
+        {
+            hash<auto> http_opts = (
+                "url": "https://localhost:" + ext_h2info.port,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+                "timeout": 5s,
+            );
+            HTTPClient hc(http_opts);
+            string key = get_random_string(16).toBase64();
+            hash<auto> info;
+            hash<auto> resp = hc.sendHttp2Connect("/",
+                {"Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13"}, "websocket", \info);
+            hash<auto> rhdr = resp.headers ?? resp;
+            assertEq(ws_get_response_key(key), rhdr."sec-websocket-accept",
+                "External HTTP/2 CONNECT should return Sec-WebSocket-Accept");
+
+            binary close_frame = ws_encode_message("", WSOP_Close);
+            hc.sendHttp2StreamData(resp.stream_id, close_frame, True);
+            delete hc;
+
+            HTTPClient bad_hc(http_opts);
+            assertThrows("HTTP2-CONNECT-ERROR", sub () {
+                bad_hc.sendHttp2Connect("/", {"Sec-WebSocket-Key": key}, "websocket", NOTHING);
+            });
+            delete bad_hc;
+
+            HTTPClient no_key_hc(http_opts);
+            assertThrows("HTTP2-CONNECT-ERROR", sub () {
+                no_key_hc.sendHttp2Connect("/", {"Sec-WebSocket-Version": "13"}, "websocket", NOTHING);
+            });
+            delete no_key_hc;
         }
     }
 }
@@ -546,26 +1017,26 @@ class MyObserver inherits Observer {
         on_exit m.unlock();
 
         bool found;
-        int last = l.size();
         while (!found) {
-            cond.wait(m, 1s);
-            date d = now_us() - start;
-            if (d > 5s) {
-                throw "ERROR", sprintf("no matching data received in timeout; msg: %y l: %y", msg, l);
-            }
             if (!msg.val()) {
                 if (l) {
                     found = True;
                 }
             } else {
-                # search new entries
-                for (int i = last; i < l.size(); ++i) {
+                # search all entries including those already in the list
+                for (int i = 0; i < l.size(); ++i) {
                     if (l[i].id == msg) {
                         found = True;
                         break;
                     }
                 }
-                last = l.size();
+            }
+            if (!found) {
+                cond.wait(m, 1s);
+                date d = now_us() - start;
+                if (d > 5s) {
+                    throw "ERROR", sprintf("no matching data received in timeout; msg: %y l: %y", msg, l);
+                }
             }
         }
     }

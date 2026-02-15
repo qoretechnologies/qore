@@ -74,7 +74,6 @@ int QoreTransliterationOperatorNode::parseInitImpl(QoreValue& val, QoreParseCont
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
 
     if (!QoreTypeInfo::parseAcceptsReturns(leftTypeInfo, NT_STRING)) {
-        // FIXME: raise exceptions with %strict-types
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the ");
         desc->sprintf("%s operator is ", op_str.c_str());
         QoreTypeInfo::getThisType(leftTypeInfo, *desc);

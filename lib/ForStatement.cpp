@@ -62,8 +62,8 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // execute "for" body
     while (!*xsink) {
         // Check for sandbox interrupt
-        QoreSandboxManager* sm = runtime_get_sandbox_manager();
-        if (sm && sm->isInterruptRequested()) {
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
             break;
         }
@@ -101,6 +101,64 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     }
 
     return rc;
+}
+
+int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // instantiate local variables
+    LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
+
+    // evaluate assignment expression and discard results if any
+    if (assignment) {
+        ValueEvalRefHolder tmp(rc, assignment, xsink);
+        if (*xsink) {
+            return 0;
+        }
+    }
+
+    int rc_state = 0;
+
+    // execute "for" body
+    while (!*xsink) {
+        // Check for sandbox interrupt
+        QoreSandboxManagerHelper smh;
+        if (smh && smh->isInterruptRequested()) {
+            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+            break;
+        }
+
+        // check conditional expression, exit "for" loop if condition is false
+        if (cond) {
+            ValueEvalRefHolder val(rc, cond, xsink);
+            if (*xsink || !val->getAsBool()) {
+                break;
+            }
+        }
+
+        // otherwise, execute "for" body
+        if (code) {
+            rc_state = code->execImpl(rc, return_value, xsink);
+            if (*xsink || rc_state == RC_BREAK) {
+                rc_state = 0;
+                break;
+            }
+
+            if (rc_state == RC_RETURN) {
+                break;
+            } else if (rc_state == RC_CONTINUE) {
+                rc_state = 0;
+            }
+        }
+
+        // evaluate iterator expression and discard results if any
+        if (iterator) {
+            ValueEvalRefHolder tmp(rc, iterator, xsink);
+            if (*xsink) {
+                break;
+            }
+        }
+    }
+
+    return rc_state;
 }
 
 int ForStatement::parseInitImpl(QoreParseContext& parse_context) {

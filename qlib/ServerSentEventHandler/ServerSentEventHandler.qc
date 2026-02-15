@@ -32,13 +32,13 @@ public namespace ServerSentEventHandler {
 
     @par Sending ServerSentEvent Message to Clients
     To send a message to an HTTP client, call one of the following methods:
-    - @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()": send a
+    - \c ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()": send a
       message to single connection given its connection ID
-    - @ref ServerSentEventHandler::ServerSentEventHandler::sendAll() "ServerSentEventHandler::sendAll()": send a
+    - \c ServerSentEventHandler::ServerSentEventHandler::sendAll() "ServerSentEventHandler::sendAll()": send a
       message to all connected clients
 
     ServerSentEvent connections are identified by their HTTP connection ID as passed in
-    @ref ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()" in
+    \c ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()" in
     the \c "cx.id" argument when the connection is first established.
 */
 public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandler, Logger::LoggerWrapper {
@@ -159,7 +159,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
         unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
-        @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
+        \c ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -170,7 +170,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         @return a hash representing the response to the client as follows; to accept a dedicated connection; make sure
         the \c "code" is 101 (ie \c "Switching Protocols") or the \c Content-Type headers is set to
         \c text/event-stream, and the \c "close" key is not @ref False "False":
-        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
+        - \c "code": the HTTP return code (see \c HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
           dedicated connection, in which case the start() method will be called)
         - \c "body": the message body to return in the response
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
@@ -360,9 +360,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! sends a message to all connected clients
-    /** @param d the data to send
+    /** @param msg the data to send
 
-        Messages are automatically encoded with @ref ServerSentEventUtil::ws_encode_message() before sending
+        Messages are automatically encoded with \c ServerSentEventUtil::ws_encode_message() before sending
     */
     sendAll(hash<SseMessageInfo> msg) {
         string str = encodeMessage(msg);
@@ -378,10 +378,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! sends a message to the given connection ID
     /** ServerSentEvent connections are identified by their HTTP connection ID as passed in
-        @ref ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()"
+        \c ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()"
         in the \c "cx.id" argument when the connection is first established.
 
-        Messages are automatically encoded with @ref ServerSentEventUtil::ws_encode_message() before sending
+        Messages are automatically encoded with \c ServerSentEventUtil::ws_encode_message() before sending
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
         string str = encodeMessage(msg);

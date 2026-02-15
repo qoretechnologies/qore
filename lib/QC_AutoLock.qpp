@@ -1,11 +1,11 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   QC_AutoLock.qpp
- 
+
   Qore Programming Language
- 
-  Copyright (C) 2003 - 2023 David Nichols
- 
+
+  Copyright (C) 2003 - 2026 David Nichols
+
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
   to deal in the Software without restriction, including without limitation
@@ -83,33 +83,33 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoLock::constructor(Mutex[SmartMutex] mutex) {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManager* sm = runtime_get_sandbox_manager();
-   if (sm) {
-      const int poll_ms = 500;  // 500ms polling interval
-      while (true) {
-         if (sm->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
-            return;
-         }
-         int rc = mutex->grab(xsink, poll_ms);
-         if (*xsink) {
-            return;  // Error occurred
-         }
-         if (rc == 0) {
-            // Lock acquired - create the AutoLock object with already-locked mutex
-            QoreAutoLock *qsl = new QoreAutoLock(mutex);
-            self->setPrivate(CID_AUTOLOCK, qsl);
-            return;
-         }
-         // rc != 0 means timeout, loop and check interrupt again
-      }
-   }
-   QoreAutoLock *qsl = new QoreAutoLock(mutex, xsink);
-   if (*xsink)
-      qsl->deref(xsink);
-   else
-      self->setPrivate(CID_AUTOLOCK, qsl);
+    ReferenceHolder<SmartMutex> holder(mutex, xsink);
+    // Check for sandbox interrupt - use polling if sandbox manager exists
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        const int poll_ms = 500;  // 500ms polling interval
+        while (true) {
+            if (smh->isInterruptRequested()) {
+                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
+                return;
+            }
+            int rc = mutex->grab(xsink, poll_ms);
+            if (*xsink) {
+                return;  // Error occurred
+            }
+            if (rc == 0) {
+                // Lock acquired - create the AutoLock object with already-locked mutex
+                QoreAutoLock *qsl = new QoreAutoLock(holder.release());
+                self->setPrivate(CID_AUTOLOCK, qsl);
+                return;
+            }
+            // rc != 0 means timeout, loop and check interrupt again
+        }
+    }
+    ReferenceHolder<QoreAutoLock> qsl(new QoreAutoLock(holder.release(), xsink), xsink);
+    if (!*xsink) {
+        self->setPrivate(CID_AUTOLOCK, qsl.release());
+    }
 }
 
 //! Calls @ref Qore::Thread::Mutex::unlock() "Mutex::unlock()" on the saved @ref Qore::Thread::Mutex "Mutex" object and destroys the AutoLock object
@@ -121,16 +121,16 @@ delete al;
     @endcode
  */
 AutoLock::destructor() {
-   al->destructor(xsink);
-   al->deref(xsink);
+    al->destructor(xsink);
+    al->deref(xsink);
 }
 
 //! Throws an exception; objects of this class cannot be copied
-/** 
+/**
     @throw AUTOLOCK-COPY-ERROR Objects of this class cannot be copied
  */
 AutoLock::copy() {
-   xsink->raiseException("AUTOLOCK-COPY-ERROR", "objects of this class cannot be copied");
+    xsink->raiseException("AUTOLOCK-COPY-ERROR", "objects of this class cannot be copied");
 }
 
 //! Attempts to relock the @ref Qore::Thread::Mutex "Mutex" object being managed
@@ -149,7 +149,7 @@ nothing AutoLock::lock() {
 }
 
 //! Attempts to relock the @ref Qore::Thread::Mutex "Mutex" object being managed; acquires the lock only if it is not already held; returns 0 for success (lock acquired) or -1 if the call would block
-/** 
+/**
     @return 0 for success (lock acquired) or -1 if the call would block (lock not acquired because it's held by another thread)
 
     @par Example:
@@ -161,11 +161,11 @@ int i = al.trylock();
     @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
 */
 int AutoLock::trylock() {
-   return al->trylock(); 
+    return al->trylock();
 }
 
 //! Unlocks the @ref Qore::Thread::Mutex "Mutex" object being managed; wakes up one thread if any threads are blocked on this lock
-/** 
+/**
     @par Example:
     @code{.py}
 al.unlock();
@@ -174,5 +174,5 @@ al.unlock();
     @throw LOCK-ERROR unlock called by a thread that does not own the lock or the lock is not locked, object deleted in another thread, etc
 */
 nothing AutoLock::unlock() {
-   al->unlock(xsink);
+    al->unlock(xsink);
 }

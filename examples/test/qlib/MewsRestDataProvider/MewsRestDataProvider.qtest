@@ -85,11 +85,27 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             assertEq(1, q.firstValue().lsize());
             assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
+            # Handle connection/protocol errors
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                delete mews;
+                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+            }
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
                 ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (!status_code) {
+                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
+                if (m) {
+                    status_code = int(m[0]);
+                }
+            }
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
+            }
+            if (status_code && status_code >= 500) {
+                delete mews;
+                testSkip("external service unavailable: HTTP " + status_code);
             }
             rethrow;
         }
@@ -132,11 +148,27 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             # assertLe(bound, actual) asserts actual <= bound
             assertLe(2, recs.size());
         } catch (hash<ExceptionInfo> ex) {
+            # Handle connection/protocol errors
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                delete mews;
+                testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
+            }
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
                 ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (!status_code) {
+                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
+                if (m) {
+                    status_code = int(m[0]);
+                }
+            }
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
+            }
+            if (status_code && status_code >= 500) {
+                delete mews;
+                testSkip("external service unavailable: HTTP " + status_code);
             }
             rethrow;
         }
@@ -176,7 +208,16 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
                 ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
+            if (!status_code) {
+                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
+                if (m) {
+                    status_code = int(m[0]);
+                }
+            }
             if (status_code == 429 || status_code == 408) {
+                delete mews;
+            }
+            if (status_code && status_code >= 500) {
                 delete mews;
             }
             rethrow;

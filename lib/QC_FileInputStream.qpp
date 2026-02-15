@@ -124,3 +124,56 @@ FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool non
 int FileInputStream::peek() {
    return is->peekHelper(xsink);
 }
+
+//! Returns @ref True since FileInputStream supports non-blocking I/O
+/**
+    @return @ref True
+
+    @since %Qore 2.2
+*/
+bool FileInputStream::supportsNonBlockingIo() [flags=CONSTANT] {
+    return true;
+}
+
+//! Returns the pollable file descriptor for this stream
+/**
+    @return the file descriptor
+
+    @since %Qore 2.2
+*/
+int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
+    return is->getPollableDescriptor();
+}
+
+//! Performs a non-blocking read of up to \a limit bytes; returns \ref NOTHING if no data available or end of stream
+/**
+    @param limit the maximum number of bytes to read
+
+    @return the read bytes or \ref NOTHING if no data is available or end of stream
+
+    @throw INPUT-STREAM-ERROR \a limit is not positive
+    @throw FILE-READ-ERROR if an I/O error occurs
+    @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+
+    @since %Qore 2.2
+*/
+*binary FileInputStream::readNonBlock(int limit) {
+    return is->readNonBlockHelper(limit, xsink);
+}
+
+//! Reads up to \a limit bytes with a timeout; returns \ref NOTHING if no data available
+/**
+    @param limit the maximum number of bytes to read
+    @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
+
+    @return the read bytes or \ref NOTHING if no data is available or end of stream
+
+    @throw INPUT-STREAM-ERROR \a limit is not positive
+    @throw FILE-READ-ERROR if an I/O error occurs
+    @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+
+    @since %Qore 2.2
+*/
+*binary FileInputStream::readWithTimeout(int limit, int timeout_ms) {
+    return is->readWithTimeoutHelper(limit, timeout_ms, xsink);
+}

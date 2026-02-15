@@ -39,6 +39,8 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
+class RuntimeConfig;
+
 class ForEachStatement : public AbstractStatement {
 public:
     DLLLOCAL ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd);
@@ -58,7 +60,9 @@ private:
     bool is_ref = false;
 
     DLLLOCAL int execRef(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL int execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

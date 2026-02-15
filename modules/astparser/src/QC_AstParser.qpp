@@ -3,7 +3,7 @@
 /*
   Qore AST Parser
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -30,8 +30,8 @@
 
 #include "AstParserHolder.h"
 #include "AstTreeHolder.h"
+#include "AstParser.h"
 #include "ast/ASTParseError.h"
-#include "ast/ASTTree.h"
 
 #include "QC_AstTree.h"
 
@@ -55,11 +55,11 @@ AstParser::constructor() {
     @return parsed AST tree
  */
 *AstTree AstParser::parseFile(string filename) {
-    std::unique_ptr<ASTTree> tree(aph->parseFile(filename->getBuffer()));
-    if (!tree)
+    std::unique_ptr<AstParseResult> result(aph->parseFile(filename->getBuffer()));
+    if (!result)
         return QoreValue();
 
-    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(tree.release()));
+    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());
 }
 
@@ -69,11 +69,11 @@ AstParser::constructor() {
     @return parsed AST tree
  */
 *AstTree AstParser::parseString(string str) {
-    std::unique_ptr<ASTTree> tree(aph->parseString(str->getBuffer()));
-    if (!tree)
+    std::unique_ptr<AstParseResult> result(aph->parseString(str->getBuffer()));
+    if (!result)
         return QoreValue();
 
-    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(tree.release()));
+    std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());
 }
 
@@ -89,7 +89,7 @@ int AstParser::getErrorCount() {
 /**
     @return list of diagnostic hashes
  */
-*list AstParser::getDiagnostics() {
+*list<auto> AstParser::getDiagnostics() {
     size_t errorCount = aph->getErrorCount();
     if (errorCount == 0)
         return QoreValue();
@@ -127,4 +127,34 @@ int AstParser::getErrorCount() {
     }
 
     return lst.release();
+}
+
+//! Enable or disable conditional parsing.
+/**
+    When enabled, conditional directives are evaluated and inactive branches are skipped.
+ */
+AstParser::setConditionalParsing(bool enabled) {
+    aph->setConditionalParsing(enabled);
+}
+
+//! Clear predefined symbols used for conditional parsing.
+/**/
+AstParser::clearDefines() {
+    aph->clearDefines();
+}
+
+//! Add a predefined symbol used for conditional parsing.
+/**
+    @param name symbol name
+ */
+AstParser::addDefine(string name) {
+    aph->addDefine(name->getBuffer());
+}
+
+//! Set predefined symbols used for conditional parsing.
+/**
+    @param names list of symbol names
+ */
+AstParser::setDefines(list<auto> names) {
+    aph->setDefines(names);
 }

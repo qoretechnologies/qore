@@ -139,6 +139,12 @@ ASTSymbolInfo FindSymbolInfoQuery::inDeclaration(std::vector<ASTNode*>* nodes, a
                 return ASTSymbolInfo(ASYK_Class, ASUK_TypedefTypeName, d->typeName.loc, d->typeName.name);
             break;
         }
+        case ASTDeclarationKind::ADK_Module: {
+            ASTModuleDeclaration* d = static_cast<ASTModuleDeclaration*>(decl);
+            if (d->name.loc.inside(line, col))
+                return ASTSymbolInfo(ASYK_Module, ASUK_ModuleDeclName, d->name.loc, d->name.name);
+            break;
+        }
         default:
             break;
     }

@@ -35,12 +35,44 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
     constructor() : Test("AsyncSocketIoTest Test", "1.0") {
         addTestCase("main", \mainTest());
+        addTestCase("owner required", \ownerRequiredTest());
+        addTestCase("cancel by owner", \cancelByOwnerTest());
+        addTestCase("wait ready", \waitReadyTest());
+        addTestCase("cancelEx", \cancelExTest());
+        addTestCase("submit replace", \submitReplaceTest());
+        addTestCase("stop clear", \stopClearTest());
+        addTestCase("stop", \stopTest());
+        addTestCase("shared result queue", \sharedResultQueueTest());
+        addTestCase("no timeout", \noTimeoutTest());
+        addTestCase("timeout timing", \timeoutTimingTest());
+        addTestCase("immediate timeout", \immediateTimeoutTest());
+        addTestCase("autostop", \autostopTest());
+        addTestCase("debug closed socket log", \debugClosedSocketLogTest());
+        addTestCase("concurrent submit", \concurrentSubmitTest());
+        addTestCase("submit racing stop", \submitRacingStopTest());
+        addTestCase("cancel by key", \cancelByKeyTest());
+        addTestCase("callback mode concurrent", \callbackConcurrentTest());
+        addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
+        addTestCase("callback exception safety", \callbackExceptionSafetyTest());
+        addTestCase("submit from callback", \submitFromCallbackTest());
+        addTestCase("addListener after stop", \addListenerAfterStopTest());
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("%Y\n", get_all_thread_call_stacks());
+            });
+        }
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
     }
 
     setUp() {
+        # Clear any pending interrupt window from a previous test's tearDown() so that
+        # interruptibleSleep() will actually block in this test (otherwise a 2-second
+        # window from a prior interruptSleep(False) can cause Wait-Forever handlers to
+        # return immediately, leading to flaky cancel-by-owner assertions)
+        SimpleStringHandler::resetInterruptWindow();
+
         LoggerLevel lvl = m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo;
         logger = new Logger("test", lvl);
         if (m_options.verbose > 2) {
@@ -57,6 +89,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
     }
 
     tearDown() {
+        SimpleStringHandler::interruptSleep(False);
         delete http;
     }
 
@@ -69,11 +102,14 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         auto ret = rest.get("/api_text");
         assertEq(VALUE_TEXT.output, ret.body);
 
+        string test_owner = "async-io-test";
+
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Do-Error": True});
         hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
             "to": 10s,
+            "owner": test_owner,
         });
         *hash<auto> out = spop.getOutput();
         assertEq(500, out."code");
@@ -83,6 +119,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "sock": rest,
             "spop": spop,
             "to": 10s,
+            "owner": test_owner,
         });
         out = spop.getOutput();
         assertEq(200, out."code");
@@ -94,20 +131,759 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "sock": rest,
             "spop": spop,
             "to": 100ms,
+            "owner": test_owner,
         });
         assertEq("SOCKET-TIMEOUT", info.ex.err);
         spop.abort();
-        SimpleStringHandler::interruptSleep();
+        SimpleStringHandler::interruptSleep(False);
 
         # test cancellation
-        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Secs": 30});
+        spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": spop,
+            "owner": test_owner,
         });
         io_controller.cancel(rest);
         info = q.get();
         assertTrue(info.canceled);
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    ownerRequiredTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+
+        # test that submitting without owner throws an error
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        assertThrows("CONTROLLER-ADD-ERROR", "Missing 'owner' value", \io_controller.exec(),
+            (<SocketPollOperationInfo>{
+                "sock": rest,
+                "spop": spop,
+                "to": 10s,
+            },));
+    }
+
+    cancelByOwnerTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # Create multiple RestClient connections for parallel operations
+        RestClient rest1({"url": "http://127.0.0.1:" + port});
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        RestClient rest3({"url": "http://127.0.0.1:" + port});
+
+        string owner_a = "owner-a";
+        string owner_b = "owner-b";
+
+        # Submit operations with different owners
+        AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop3 = rest3.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+
+        Queue q1 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest1,
+            "spop": spop1,
+            "owner": owner_a,
+        });
+        Queue q2 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "owner": owner_a,
+        });
+        Queue q3 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest3,
+            "spop": spop3,
+            "owner": owner_b,
+        });
+
+        # Cancel all operations for owner_a (should cancel 2 operations)
+        int canceled = io_controller.cancelByOwner(owner_a);
+        assertEq(2, canceled, "should cancel 2 operations for owner_a");
+
+        # Verify owner_a operations are canceled
+        hash<SocketPollResultInfo> info1 = q1.get(1s);
+        assertTrue(info1.canceled, "operation 1 should be canceled");
+        hash<SocketPollResultInfo> info2 = q2.get(1s);
+        assertTrue(info2.canceled, "operation 2 should be canceled");
+
+        # owner_b operation should still be running - cancel it
+        canceled = io_controller.cancelByOwner(owner_b);
+        assertEq(1, canceled, "should cancel 1 operation for owner_b");
+        hash<SocketPollResultInfo> info3 = q3.get(1s);
+        assertTrue(info3.canceled, "operation 3 should be canceled");
+
+        # Cleanup
+        spop1.abort();
+        spop2.abort();
+        spop3.abort();
+        SimpleStringHandler::interruptSleep(False);
+
+        # Test canceling non-existent owner returns 0
+        canceled = io_controller.cancelByOwner("non-existent-owner");
+        assertEq(0, canceled, "canceling non-existent owner should return 0");
+    }
+
+    waitReadyTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        assertFalse(io_controller.waitReady(50ms), "waitReady should return False when not started");
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "owner": "wait-ready-owner",
+        });
+
+        assertTrue(io_controller.waitReady(1s), "waitReady should return True when I/O thread is running");
+        io_controller.cancel(rest);
+        hash<SocketPollResultInfo> info = q.get(1s);
+        assertTrue(info.canceled, "operation should be canceled after waitReady test");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    cancelExTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        assertThrows("CONTROLLER-CANCEL-ERROR", \io_controller.cancelEx(), (rest,));
+    }
+
+    submitReplaceTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop1 = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q1 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop1,
+            "owner": "replace-owner",
+        });
+
+        # Abort the first operation so we can create a replacement poll operation on the same socket
+        spop1.abort();
+        AbstractPollOperation spop2 = rest.startPollSendRecv("GET", "/api_text");
+        Queue q2 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop2,
+            "owner": "replace-owner",
+        }, True);
+
+        hash<SocketPollResultInfo> info1 = q1.get(1s);
+        # ensure the original operation returns a result and does not deadlock
+        assertTrue(info1 != NOTHING);
+        hash<SocketPollResultInfo> info2 = q2.get(1s);
+        assertFalse(exists info2.ex, "replacement operation should succeed");
+        assertTrue(info2 != NOTHING, "replacement operation should return a result");
+
+        spop1.abort();
+        spop2.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    stopClearTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "owner": "stop-clear-owner",
+        });
+
+        io_controller.stopClear();
+        hash<SocketPollResultInfo> info = q.get(1s);
+        assertTrue(info.canceled, "stopClear should cancel outstanding operations");
+        assertFalse(io_controller.running(), "stopClear should stop the I/O thread");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    stopTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "owner": "stop-owner",
+        });
+
+        io_controller.stop();
+        hash<SocketPollResultInfo> info = q.get(1s);
+        assertTrue(info.canceled, "stop should cancel outstanding operations");
+        assertFalse(io_controller.running(), "stop should stop the I/O thread");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    sharedResultQueueTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest1({"url": "http://127.0.0.1:" + port});
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        Queue shared = new Queue();
+
+        AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text");
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text");
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest1,
+            "spop": spop1,
+            "owner": "shared-owner",
+            "other": {"goal": "shared-1"},
+            "resultQueue": shared,
+        });
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "owner": "shared-owner",
+            "other": {"goal": "shared-2"},
+            "resultQueue": shared,
+        });
+
+        hash<SocketPollResultInfo> r1 = shared.get(1s);
+        hash<SocketPollResultInfo> r2 = shared.get(1s);
+        assertFalse(exists r1.ex, "shared queue result 1 should succeed");
+        assertFalse(exists r2.ex, "shared queue result 2 should succeed");
+        assertTrue((r1.other.goal == "shared-1" && r2.other.goal == "shared-2")
+            || (r1.other.goal == "shared-2" && r2.other.goal == "shared-1"));
+    }
+
+    noTimeoutTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": -1s,
+            "owner": "no-timeout-owner",
+        });
+
+        usleep(200ms);
+        io_controller.cancel(rest);
+        hash<SocketPollResultInfo> info = q.get(1s);
+        assertFalse(info.ex && info.ex.err == "SOCKET-TIMEOUT",
+            "no-timeout operation should not report a timeout");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    timeoutTimingTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        SimpleStringHandler::resetInterruptWindow();
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 200ms,
+            "owner": "timeout-timing-owner",
+        });
+        on_exit {
+            io_controller.cancel(rest);
+            spop.abort();
+            SimpleStringHandler::interruptSleep(False);
+        }
+
+        date start = now_us();
+        *hash<SocketPollResultInfo> info = q.get(2s);
+        date elapsed = now_us() - start;
+
+        assertTrue(exists info, "timeout result should be returned within 2s");
+        assertEq("SOCKET-TIMEOUT", info.ex.err, "expected timeout result");
+        assertTrue(elapsed >= 50ms, sprintf("timeout should not be immediate (elapsed=%y)", elapsed));
+        assertTrue(elapsed < 2s, sprintf("timeout should not be delayed excessively (elapsed=%y)", elapsed));
+    }
+
+    immediateTimeoutTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 0s,
+            "owner": "immediate-timeout-owner",
+        });
+        assertEq("SOCKET-TIMEOUT", info.ex.err, "0s timeout should expire immediately");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    autostopTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 5s,
+            "owner": "autostop-owner",
+        });
+        assertFalse(exists info.ex, "exec should succeed for autostop test");
+
+        int attempts = 50;
+        while (io_controller.running() && attempts-- > 0) {
+            usleep(20ms);
+        }
+        assertFalse(io_controller.running(), "autostop should stop I/O thread after completion");
+    }
+
+    debugClosedSocketLogTest() {
+        setenv("QORE_ASYNCIO_DEBUG", "1");
+        on_exit unsetenv("QORE_ASYNCIO_DEBUG");
+
+        Logger debug_logger("async-io-debug", LoggerLevel::LevelDebug);
+        LoggerLayoutPattern layout("%m\n");
+        StringOutputStream sos();
+        StreamWriter sw(sos);
+        LoggerAppenderStream la("test", layout, sw);
+        la.setQueue(new LoggerAppenderQueue());
+        la.open();
+        debug_logger.addAppender(la);
+
+        AsyncSocketIoController io_controller(debug_logger);
+        on_exit delete io_controller;
+
+        int close_port = startCloseServer();
+        RestClient rest({"url": "http://127.0.0.1:" + close_port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 5s,
+            "owner": "debug-closed-socket",
+        });
+        assertTrue(exists info.ex, "expected an exception for closed server response");
+        assertEq("SOCKET-HTTP-ERROR", info.ex.err);
+        assertTrue(info.ex.desc =~ /remote end closed connection/,
+            "should report remote end closed connection");
+
+        int attempts = 50;
+        while (la.getQueue().size() == 0 && attempts-- > 0) {
+            usleep(20ms);
+        }
+        la.getQueue().process(100ms);
+        string log_data = sos.getData();
+        assertTrue(log_data =~ /remote end closed connection/,
+            "debug log should mention remote end closed connection");
+        assertFalse(log_data =~ /SOCKET-NOT-OPEN/,
+            "debug log should not access getPeerInfo on a closed socket");
+    }
+
+    private int startCloseServer() {
+        Socket server();
+        server.bind(0);
+        int listen_port = server.getSocketInfo().port;
+        server.listen();
+        background closeOnAccept(server);
+        return listen_port;
+    }
+
+    private closeOnAccept(Socket server) {
+        on_exit server.close();
+        Socket client = server.accept(5s);
+        if (client) {
+            try {
+                client.readHTTPHeader(5s);
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore read errors; the client still sees a closed response path.
+            }
+            client.close();
+        }
+    }
+
+    #! Tests concurrent submit from multiple threads
+    concurrentSubmitTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int num_threads = 8;
+        Queue results();
+        Counter cnt(num_threads);
+
+        for (int i = 0; i < num_threads; ++i) {
+            int tid = i;
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    RestClient rest({"url": "http://127.0.0.1:" + port});
+                    AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+                    hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+                        "sock": rest,
+                        "spop": spop,
+                        "to": 10s,
+                        "owner": sprintf("concurrent-%d", tid),
+                    });
+                    results.push({"tid": tid, "ok": !info.ex});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"tid": tid, "error": ex.err + ": " + ex.desc});
+                }
+            }();
+        }
+
+        cnt.waitForZero(15s);
+        int ok_count = 0;
+        while (results.size()) {
+            hash<auto> r = results.get();
+            if (r.ok) {
+                ++ok_count;
+            }
+        }
+        assertEq(num_threads, ok_count, "all concurrent submits should succeed");
+    }
+
+    #! Tests submit racing with stop — ensures no deadlock or crash
+    submitRacingStopTest() {
+        # Run multiple iterations to increase chance of hitting race windows
+        for (int iter = 0; iter < 5; ++iter) {
+            AsyncSocketIoController io_controller(logger);
+
+            # Submit several operations
+            list<Queue> queues;
+            list<AbstractPollOperation> ops;
+            for (int i = 0; i < 4; ++i) {
+                RestClient rest({"url": "http://127.0.0.1:" + port});
+                AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text",
+                    NOTHING, {"Wait-Forever": 1});
+                Queue q = io_controller.submit(<SocketPollOperationInfo>{
+                    "sock": rest,
+                    "spop": spop,
+                    "owner": sprintf("race-%d-%d", iter, i),
+                });
+                push queues, q;
+                push ops, spop;
+            }
+
+            # Stop from a background thread while main thread also calls cancelByOwner
+            Counter done(2);
+            background sub () {
+                on_exit done.dec();
+                io_controller.stop();
+            }();
+            background sub () {
+                on_exit done.dec();
+                # Try to cancel — may race with stop
+                try {
+                    io_controller.cancelByOwner(sprintf("race-%d-0", iter));
+                } catch () {
+                    # Expected if controller already stopped
+                }
+            }();
+
+            done.waitForZero(10s);
+
+            # Drain queues — all ops should have completed or been canceled
+            foreach Queue q in (queues) {
+                *hash<SocketPollResultInfo> info = q.get(2s);
+                assertTrue(exists info, sprintf("iter %d: all queued ops should deliver a result", iter));
+            }
+
+            foreach AbstractPollOperation op in (ops) {
+                op.abort();
+            }
+            SimpleStringHandler::interruptSleep(False);
+        }
+        assertTrue(True, "submit racing stop completed without deadlock");
+    }
+
+    #! Tests cancelByKey for operations with custom keys
+    cancelByKeyTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+        string custom_key = "my-custom-key-1";
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "key": custom_key,
+            "owner": "custom-key-owner",
+        });
+
+        # cancel(sock) should NOT find it (different key)
+        bool found = io_controller.cancel(rest);
+        assertFalse(found, "cancel(sock) should not find custom-keyed operation");
+
+        # cancelByKey should find it
+        found = io_controller.cancelByKey(custom_key);
+        assertTrue(found, "cancelByKey should find the operation");
+
+        hash<SocketPollResultInfo> info = q.get(2s);
+        assertTrue(info.canceled, "operation should be canceled via cancelByKey");
+
+        # cancelByKey on non-existent key
+        found = io_controller.cancelByKey("non-existent-key");
+        assertFalse(found, "cancelByKey should return False for non-existent key");
+
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests callback mode with multiple concurrent completions
+    callbackConcurrentTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int num_ops = 6;
+        Mutex cb_m();
+        list<hash<auto>> callback_results;
+        Counter cb_cnt(num_ops);
+
+        for (int i = 0; i < num_ops; ++i) {
+            RestClient rest({"url": "http://127.0.0.1:" + port});
+            AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+            io_controller.submit(<SocketPollOperationInfo>{
+                "sock": rest,
+                "spop": spop,
+                "to": 10s,
+                "owner": sprintf("cb-concurrent-%d", i),
+                "callback": code sub (hash<SocketPollResultInfo> result) {
+                    {
+                        AutoLock al(cb_m);
+                        push callback_results, {
+                            "index": i,
+                            "ok": !result.ex,
+                            "tid": gettid(),
+                        };
+                    }
+                    cb_cnt.dec();
+                },
+            });
+        }
+
+        cb_cnt.waitForZero(15s);
+        {
+            AutoLock al(cb_m);
+            assertEq(num_ops, callback_results.size(),
+                "all callback operations should complete");
+            int ok_count = (select callback_results, $1.ok).size();
+            assertEq(num_ops, ok_count, "all callbacks should report success");
+        }
+    }
+
+    #! Tests custom key operations with cancelByKey and cancelByOwner
+    sharedSocketCustomKeysTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # Use separate sockets with custom keys under the same owner
+        # This tests that cancelByOwner works correctly with custom-keyed operations
+        RestClient rest1({"url": "http://127.0.0.1:" + port});
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text",
+            NOTHING, {"Wait-Forever": 1});
+
+        string owner = "custom-key-owner";
+        Queue q1 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest1,
+            "spop": spop1,
+            "key": "custom:op:1",
+            "owner": owner,
+            "to": -1s,
+        });
+        Queue q2 = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "key": "custom:op:2",
+            "owner": owner,
+            "to": -1s,
+        });
+
+        # cancel(sock) should NOT find either — they have custom keys
+        assertFalse(io_controller.cancel(rest1), "cancel(sock) should miss custom-keyed op");
+
+        # cancelByOwner should cancel both
+        int canceled = io_controller.cancelByOwner(owner);
+        assertEq(2, canceled, "cancelByOwner should cancel both custom-keyed ops");
+
+        hash<SocketPollResultInfo> r1 = q1.get(5s);
+        hash<SocketPollResultInfo> r2 = q2.get(5s);
+        assertTrue(r1.canceled, "first custom-keyed op should be canceled");
+        assertTrue(r2.canceled, "second custom-keyed op should be canceled");
+
+        spop1.abort();
+        spop2.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests that a throwing callback does not crash the I/O thread or double-deliver
+    callbackExceptionSafetyTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        Mutex cb_m();
+        int callback_count = 0;
+        Counter done(1);
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "to": 10s,
+            "owner": "exception-safety-owner",
+            "callback": code sub (hash<SocketPollResultInfo> result) {
+                {
+                    AutoLock al(cb_m);
+                    ++callback_count;
+                }
+                done.dec();
+                # Throw from callback — must not cause double delivery or crash
+                throw "TEST-CALLBACK-ERROR", "intentional test exception";
+            },
+        });
+
+        done.waitForZero(10s);
+        usleep(200ms);  # Give time for any spurious re-delivery
+
+        {
+            AutoLock al(cb_m);
+            assertEq(1, callback_count, "callback should be invoked exactly once despite throwing");
+        }
+
+        # Verify the controller is still functional after a throwing callback
+        RestClient rest2({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text");
+        hash<SocketPollResultInfo> info = io_controller.exec(<SocketPollOperationInfo>{
+            "sock": rest2,
+            "spop": spop2,
+            "to": 10s,
+            "owner": "post-exception-owner",
+        });
+        assertFalse(exists info.ex, "controller should still work after callback exception");
+    }
+
+    #! Tests that submit() can be called from within a callback without deadlock
+    submitFromCallbackTest() {
+        AsyncSocketIoController ctrl(logger);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int listen_port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        bool submit_ok = False;
+        Counter done(1);
+
+        AbstractPollOperation op = server.startPollAccept();
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": op,
+            "key": "submit-cb-accept-1",
+            "owner": "submit-cb-test",
+            "to": 5s,
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                # Submit a new accept from within the callback — previously caused LOCK-ERROR
+                AbstractPollOperation op2 = server.startPollAccept();
+                ctrl.submit(<SocketPollOperationInfo>{
+                    "sock": server,
+                    "spop": op2,
+                    "key": "submit-cb-accept-2",
+                    "owner": "submit-cb-test",
+                    "to": 5s,
+                });
+                submit_ok = True;
+                done.dec();
+            },
+        });
+
+        # Connect a client to trigger the accept
+        Socket client();
+        client.connect("127.0.0.1:" + listen_port, 2s);
+        client.close();
+
+        done.waitForZero(5s);
+        assertTrue(submit_ok, "submit from callback should succeed without LOCK-ERROR");
+
+        ctrl.cancelByOwner("submit-cb-test");
+    }
+
+    #! Tests that addListener throws after the controller has been stopped
+    addListenerAfterStopTest() {
+        HttpAsyncSocketIoController ctrl(logger);
+        on_exit delete ctrl;
+
+        # Create a listener socket
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        StubAsyncTarget target();
+
+        # Add a listener — should succeed
+        ctrl.addListener(listener, target);
+
+        # Stop the controller
+        ctrl.stop();
+
+        # Create a new listener socket
+        Socket listener2();
+        listener2.bind("127.0.0.1:0");
+        listener2.listen();
+        on_exit listener2.close();
+
+        # Adding a listener after stop should throw
+        assertThrows("CONTROLLER-ADD-LISTENER-ERROR", \ctrl.addListener(),
+            (listener2, target));
+    }
+}
+
+#! Stub implementation of HttpAsyncTarget for unit tests
+class StubAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+    }
+
+    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    }
+
+    onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            object listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
     }
 }
 
@@ -118,8 +894,9 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
 
         static Mutex m();
         static Condition c();
-        static bool waitflag;
-        static bool sleeping;
+        static int interrupt_gen = 0;
+        static hash<string, int> sleeping_by_gen;
+        static *date pending_interrupt_until;
     }
 
     constructor(string mime, *string str) {
@@ -143,29 +920,61 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
 
     static interruptibleSleep() {
         AutoLock al(m);
-        sleeping = True;
+        if (pending_interrupt_until && now_us() < pending_interrupt_until) {
+            return;
+        }
+        int gen = interrupt_gen;
+        string gen_key = string(gen);
+        sleeping_by_gen{gen_key} = (sleeping_by_gen{gen_key} ?? 0) + 1;
         c.broadcast();  # Signal that we're now sleeping
-        waitflag = True;
-        while (waitflag) {
+        while (interrupt_gen == gen) {
             c.wait(m, 99999999);
         }
-        sleeping = False;
+        int remaining = (sleeping_by_gen{gen_key} ?? 1) - 1;
+        if (remaining > 0) {
+            sleeping_by_gen{gen_key} = remaining;
+        } else {
+            remove sleeping_by_gen{gen_key};
+            c.broadcast();
+        }
     }
 
-    static interruptSleep() {
+    static interruptSleep(*bool wait_for_exit = True) {
         AutoLock al(m);
+        pending_interrupt_until = now_us() + 2s;
+        int current_gen = interrupt_gen;
+        string current_key = string(current_gen);
+        if (!wait_for_exit) {
+            interrupt_gen++;
+            c.broadcast();
+            return;
+        }
         # Wait until handler has entered interruptibleSleep to avoid race condition
         # Use a timeout to avoid deadlock if the handler never received the request
         int max_attempts = 50;  # 5 seconds max (50 * 100ms)
-        while (!sleeping && max_attempts-- > 0) {
+        while (!(sleeping_by_gen{string(interrupt_gen)} ?? 0) && max_attempts-- > 0) {
             c.wait(m, 100ms);
         }
         # Only signal if the handler is actually sleeping
-        if (sleeping) {
-            waitflag = False;
-            sleeping = False;
+        if (sleeping_by_gen{current_key} ?? 0) {
+            interrupt_gen++;
+            c.broadcast();
+            while (sleeping_by_gen{current_key} ?? 0) {
+                c.wait(m, 100ms);
+            }
+        } else {
+            interrupt_gen++;
+            c.broadcast();
+        }
+    }
+
+    static resetInterruptWindow() {
+        AutoLock al(m);
+        pending_interrupt_until = NOTHING;
+        # Wake any sleepers deterministically
+        if (sleeping_by_gen{string(interrupt_gen)} ?? 0) {
+            ++interrupt_gen;
             c.broadcast();
         }
     }
 }
-

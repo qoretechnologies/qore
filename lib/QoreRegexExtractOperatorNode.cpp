@@ -50,7 +50,6 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     int err = parse_init_value(exp, parse_context);
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-        // FIXME: raise an exception with %strict-types
         QoreStringMaker desc("the left side of the %s is ", op_str.c_str());
         parse_context.typeInfo->doNonStringWarning(loc, desc.c_str());
     }

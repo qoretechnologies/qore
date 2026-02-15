@@ -7,7 +7,7 @@
 
     it should offer POSIX style command-line handling on any platform...
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,8 +45,13 @@
 #include <ctype.h>
 #include <strings.h>
 #include <unistd.h>
+#include <termios.h>
+#include <poll.h>
+#include <sys/ioctl.h>
 
+#include "version_animation_frames.h"
 #include <string>
+#include <vector>
 #include <map>
 
 #define is_assign_char(a) ((((a) == '=') || ((a) == ':')))
@@ -104,29 +109,7 @@ static const char repl_pgm[] =
    "%requires QoreRepl\n"
    "\n"
    "QoreRepl::QoreRepl repl();\n"
-   "\n"
-   "stdout.printf(\"Qore %s Interactive Shell\\nType /help for commands, /quit to exit\\n\", Qore::VersionString);\n"
-   "\n"
-   "while (True) {\n"
-   "    stdout.printf(repl.getPrompt());\n"
-   "    stdout.sync();\n"
-   "    *string line = stdin.readLine(False);\n"
-   "    if (!exists line) {\n"
-   "        break;\n"
-   "    }\n"
-   "    *hash<auto> result = repl.eval(line);\n"
-   "    if (result.exit) {\n"
-   "        break;\n"
-   "    }\n"
-   "    if (result.error) {\n"
-   "        stderr.printf(\"Error: %s\\n\", QoreRepl::QoreRepl::formatError(result.error));\n"
-   "    } else if (exists result.value) {\n"
-   "        stdout.printf(\"=> %s\\n\", QoreRepl::QoreRepl::formatValue(result.value));\n"
-   "    }\n"
-   "    if (result.timing) {\n"
-   "        stdout.printf(\"   (%s)\\n\", result.timing.format(\"HH:mm:SS.xx\"));\n"
-   "    }\n"
-   "}\n";
+   "repl.run();\n";
 
 // argument to evaluate given on the command-line
 static const char* eval_arg = 0;
@@ -174,8 +157,10 @@ static const char helpstr[] =
    "                               stop after 1st one\n"
    "  -s, --show-charsets          displays known character encodings\n"
    "  -V, --version                show program version information and quit\n"
+   "      --version-animation      show animated version display and quit\n"
    "      --short-version          show short version information and quit\n"
-   "  -W, --enable-all-warnings    turn on all warnings (recommended)\n"
+   "  -W, --enable-all-warnings    turn on all non-strict warnings (recommended)\n"
+   "      --strict-warnings        turn on strict warnings (ambiguous overloads/calls)\n"
    "  -w, --enable-warning=arg     turn on warning given by argument\n"
    "  -x, --exec-class[=arg]       instantiate class with same name as file name\n"
    "                               (override with arg, also sets --no-top-level)\n"
@@ -189,6 +174,9 @@ static const char helpstr[] =
    "      --no-repl                disable automatic REPL when stdin is a terminal\n"
    "\n"
    " PARSE OPTIONS:\n"
+   "  -G, --enable-debug           enable @debug and @assert statements\n"
+   "  -M, --modern                 turn on recommended parse options\n"
+   "      --no-global-vars         make global variable definitions illegal\n"
    "  -H, --parse-option-help      display options controlling parse options";
 
 static const char parseopts[] =    "qore options controlling parse options:\n"
@@ -196,7 +184,7 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
    "\n PARSE OPTIONS:\n"
    "  -A, --lock-warnings          do not allow changes in warning levels\n"
-   "      --enable-debug           enable @debug and @assert statements\n"
+   "  -G, --enable-debug           enable @debug and @assert statements\n"
    "      --lockdown               only allow single-threaded code execution with\n"
    "                               no external access or terminal or GUI I/O\n"
    "      --allow-bare-refs        allow refs to vars without '$' and refs to\n"
@@ -210,12 +198,14 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "      --no-external-info       disallow access to external info\n"
    "  -E, --no-external-process    make access to external processes illegal\n"
    "  -F, --no-filesystem          disallow access to the local filesystem\n"
-   "  -G, --no-global-vars         make global variable definitions illegal\n"
+   "      --no-global-vars         make global variable definitions illegal\n"
    "      --no-gui                 do not allow access to GUI functionality\n"
    "      --no-io                  do not allow any I/O of any sort,\n"
    "  -I, --no-child-restrictions  do not restrict subprograms' parse options\n"
    "  -K, --lock-options           disable changes to parse options in program\n"
    "  -L, --no-top-level           make top-level statements illegal\n"
+   "  -M, --modern                 turns on 'new-style', 'require-types', and\n"
+   "                               'strict-args' (recommended)\n"
    "  -n, --new-style              turns on 'allow-bare-refs' and 'assume-local'\n"
    "                               for programming style more similar to C++/Java\n"
    "  -O, --require-our            require 'our' with global vars (recommended)\n"
@@ -343,7 +333,7 @@ static void warn_to_err(const char* arg) {
 }
 
 static void enable_warnings(const char* arg) {
-   warnings = -1;
+   warnings = QP_WARN_ALL;
 }
 
 static void enable_warning(const char* arg) {
@@ -470,6 +460,10 @@ static void do_strict_args(const char* arg) {
    parse_options |= PO_STRICT_ARGS;
 }
 
+static void do_strict_warnings(const char* arg) {
+   warnings |= QP_WARN_STRICT;
+}
+
 static void do_lock_options(const char* arg) {
    lock_options = true;
 }
@@ -484,6 +478,10 @@ static void assume_local(const char* arg) {
 
 static void new_style(const char* arg) {
    parse_options |= PO_NEW_STYLE;
+}
+
+static void do_modern(const char* arg) {
+   parse_options |= PO_MODERN;
 }
 
 static void do_enable_debug(const char* arg) {
@@ -554,44 +552,430 @@ static void show_build_options(const char* arg) {
    exit(0);
 }
 
-static void do_version(const char* arg) {
-    printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2025 David Nichols\n", qore_target_os,
-        qore_target_arch, qore_target_bits);
+// word-wrap a string to max_width, returning wrapped lines
+// indent is prepended to continuation lines
+static std::vector<std::string> wrap_line(const std::string& line, int max_width,
+        const std::string& indent) {
+    std::vector<std::string> result;
+    if (max_width <= 0 || (int)line.size() <= max_width) {
+        result.push_back(line);
+        return result;
+    }
 
-    printf("version %s", qore_version_string);
+    std::string remaining = line;
+    bool first = true;
+    while (!remaining.empty()) {
+        int width = first ? max_width : max_width - (int)indent.size();
+        if (width <= 0) {
+            width = 1;
+        }
+        if ((int)remaining.size() <= width) {
+            result.push_back(first ? remaining : indent + remaining);
+            break;
+        }
+        // find last space within width
+        int split = width;
+        while (split > 0 && remaining[split] != ' ') {
+            --split;
+        }
+        if (split == 0) {
+            // no space found; hard break
+            split = width;
+        }
+        result.push_back((first ? "" : indent) + remaining.substr(0, split));
+        // skip the space at the split point
+        remaining = remaining.substr(remaining[split] == ' ' ? split + 1 : split);
+        first = false;
+    }
+    return result;
+}
+
+static const int ART_LINES = ANIM_FRAME_HEIGHT;
+static const int ART_WIDTH = ANIM_FRAME_WIDTH;
+static const int ART_GAP = 2;
+
+// Build version info lines, word-wrapped to fit the terminal
+static void build_version_info(std::vector<std::string>& info, int max_info, bool show_anim_hint = true) {
+    std::vector<std::string> raw_info;
+
+    QoreString buf;
+    buf.sprintf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2026 David Nichols",
+        qore_target_os, qore_target_arch, qore_target_bits);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("version %s", qore_version_string);
     FeatureList::iterator i = qoreFeatureList.begin();
     if (i != qoreFeatureList.end()) {
-        printf(" (builtin features: ");
+        buf.concat(" (builtin features: ");
         while (i != qoreFeatureList.end()) {
-            fputs((*i).c_str(), stdout);
+            buf.concat((*i).c_str());
             i++;
-            if (i != qoreFeatureList.end())
-                printf(", ");
+            if (i != qoreFeatureList.end()) {
+                buf.concat(", ");
+            }
         }
-        putchar(')');
+        buf.concat(')');
     }
+    raw_info.push_back(buf.c_str());
 
-    // show git hash
-    printf("\n  git hash: %s", qore_git_hash);
+    buf.clear();
+    buf.sprintf("git hash: %s", qore_git_hash);
+    raw_info.push_back(buf.c_str());
 
-    // show module api and compatible module apis
-    printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
-    if (qore_mod_api_list_len == 1)
-        printf("\n");
-    else {
-        printf(" (");
+    buf.clear();
+    buf.sprintf("module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
+    if (qore_mod_api_list_len > 1) {
+        buf.concat(" (");
         for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
-            printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
-            if (j != (qore_mod_api_list_len - 1))
-                printf(", ");
+            buf.sprintf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
+            if (j != (qore_mod_api_list_len - 1)) {
+                buf.concat(", ");
+            }
         }
-        printf(")\n");
+        buf.concat(")");
+    }
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("build host: %s", qore_build_host);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("C++ compiler: %s", qore_cplusplus_compiler);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("CFLAGS: %s", qore_cflags);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("LDFLAGS: %s", qore_ldflags);
+    raw_info.push_back(buf.c_str());
+
+    buf.clear();
+    buf.sprintf("MPFR: %s", mpfrInfo.getBuffer());
+    raw_info.push_back(buf.c_str());
+
+    raw_info.push_back("use -B to show build options");
+    if (show_anim_hint) {
+        raw_info.push_back("");
+        raw_info.push_back("run qore --version-animation to see a 3D version of the logo");
     }
 
-    printf("  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
+    for (const auto& line : raw_info) {
+        std::string indent;
+        size_t pos = line.find_first_not_of(' ');
+        if (pos != std::string::npos && pos > 0) {
+            indent = std::string(pos + 2, ' ');
+        } else {
+            indent = "    ";
+        }
+        auto wrapped = wrap_line(line, max_info, indent);
+        for (const auto& wl : wrapped) {
+            info.push_back(wl);
+        }
+    }
+}
+
+// Render static colored ASCII art with info text on the right
+static void render_static_version(const char* qc, const char* reset, bool use_color,
+                                  const std::vector<std::string>& info, int info_start,
+                                  int total_lines) {
+    for (int line = 0; line < total_lines; ++line) {
+        if (line < ART_LINES) {
+            bool in_color = false;
+            for (int c = 0; c < ART_WIDTH; ++c) {
+                char ch = anim_frames[0][line][c];
+                if (ch != ' ') {
+                    if (!in_color && use_color) {
+                        fputs(qc, stdout);
+                        in_color = true;
+                    }
+                    putchar(ch);
+                } else {
+                    if (in_color) {
+                        fputs(reset, stdout);
+                        in_color = false;
+                    }
+                    putchar(' ');
+                }
+            }
+            if (in_color) {
+                fputs(reset, stdout);
+            }
+        } else {
+            printf("%-*s", ART_WIDTH, "");
+        }
+
+        int info_idx = line - info_start;
+        if (info_idx >= 0 && info_idx < (int)info.size()) {
+            printf("  %s", info[info_idx].c_str());
+        }
+
+        putchar('\n');
+    }
+}
+
+static void do_version(const char* arg) {
+    bool is_tty = isatty(STDOUT_FILENO);
+
+    // Non-TTY: plain text output for machine parseability
+    if (!is_tty) {
+        printf("QORE for %s %s (%d-bit build), Copyright (C) 2003 - 2026 David Nichols\n",
+            qore_target_os, qore_target_arch, qore_target_bits);
+
+        printf("version %s", qore_version_string);
+        FeatureList::iterator i = qoreFeatureList.begin();
+        if (i != qoreFeatureList.end()) {
+            printf(" (builtin features: ");
+            while (i != qoreFeatureList.end()) {
+                fputs((*i).c_str(), stdout);
+                i++;
+                if (i != qoreFeatureList.end()) {
+                    printf(", ");
+                }
+            }
+            putchar(')');
+        }
+
+        printf("\n  git hash: %s", qore_git_hash);
+
+        printf("\n  module API: %d.%d", qore_mod_api_list[0].major, qore_mod_api_list[0].minor);
+        if (qore_mod_api_list_len > 1) {
+            printf(" (");
+            for (unsigned j = 1; j < qore_mod_api_list_len; ++j) {
+                printf("%d.%d", qore_mod_api_list[j].major, qore_mod_api_list[j].minor);
+                if (j != (qore_mod_api_list_len - 1)) {
+                    printf(", ");
+                }
+            }
+            printf(")");
+        }
+
+        printf("\n  build host: %s\n  C++ compiler: %s\n  CFLAGS: %s\n  LDFLAGS: %s\n  MPFR: %s\n",
             qore_build_host, qore_cplusplus_compiler, qore_cflags, qore_ldflags, mpfrInfo.getBuffer());
 
-    printf("use -B to show build options\n");
+        printf("use -B to show build options\n");
+        printf("\nrun qore --version-animation to see a 3D version of the logo\n");
+
+        exit(0);
+    }
+
+    // TTY: colored ASCII art with version info on the right
+    bool use_color = !getenv("NO_COLOR");
+    const char* qc = use_color ? "\033[1;38;2;255;50;140m" : "";
+    const char* reset = use_color ? "\033[0m" : "";
+
+    // Determine terminal width
+    int term_width = 0;
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        term_width = ws.ws_col;
+    }
+    int max_info = term_width > ART_WIDTH + ART_GAP ? term_width - ART_WIDTH - ART_GAP : 0;
+
+    std::vector<std::string> info;
+    build_version_info(info, max_info);
+
+    int info_start = (ART_LINES - (int)info.size()) / 2;
+    if (info_start < 0) {
+        info_start = 0;
+    }
+
+    int total_lines = ART_LINES;
+    if (info_start + (int)info.size() > total_lines) {
+        total_lines = info_start + (int)info.size();
+    }
+
+    render_static_version(qc, reset, use_color, info, info_start, total_lines);
+
+    exit(0);
+}
+
+static void do_version_animation(const char* arg) {
+    bool is_tty = isatty(STDOUT_FILENO);
+
+    // Non-TTY: fall back to static version
+    if (!is_tty) {
+        do_version(arg);
+        return;
+    }
+
+    // TTY: spinning coin animation followed by static art
+    bool use_color = !getenv("NO_COLOR");
+    const char* qc = use_color ? "\033[1;38;2;255;50;140m" : "";
+    const char* reset = use_color ? "\033[0m" : "";
+
+    // Determine terminal width
+    int term_width = 0;
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        term_width = ws.ws_col;
+    }
+    int max_info = term_width > ART_WIDTH + ART_GAP ? term_width - ART_WIDTH - ART_GAP : 0;
+
+    // Set stdin to raw non-blocking mode so we can detect keypress
+    struct termios orig_termios, raw_termios;
+    bool raw_mode = (tcgetattr(STDIN_FILENO, &orig_termios) == 0);
+    if (raw_mode) {
+        raw_termios = orig_termios;
+        raw_termios.c_lflag &= ~(ICANON | ECHO);
+        raw_termios.c_cc[VMIN] = 0;
+        raw_termios.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSANOW, &raw_termios);
+    }
+
+    std::vector<std::string> info;
+    build_version_info(info, max_info, false);
+    if (raw_mode) {
+        info.push_back("");
+        info.push_back("press any key to exit");
+    }
+
+    int info_start = (ART_LINES - (int)info.size()) / 2;
+    if (info_start < 0) {
+        info_start = 0;
+    }
+
+    int total_lines = ART_LINES;
+    if (info_start + (int)info.size() > total_lines) {
+        total_lines = info_start + (int)info.size();
+    }
+
+    // Per-frame interval for ~30 fps (180 frames over 6 seconds)
+    static const long FRAME_NS = 6000000000L / ANIM_FRAME_COUNT;
+
+    // --- Playback ---
+
+    // Hide cursor
+    fputs("\033[?25l", stdout);
+
+    struct timespec anim_start;
+    clock_gettime(CLOCK_MONOTONIC, &anim_start);
+
+    // Rolling frame deadline; incremented by FRAME_NS each iteration to avoid
+    // overflow from multiplying FRAME_NS * frame_num in unbounded raw_mode
+    struct timespec next_deadline = anim_start;
+
+    for (long frame_num = 0; raw_mode || frame_num < ANIM_FRAME_COUNT; ++frame_num) {
+        int frame = (int)(frame_num % ANIM_FRAME_COUNT);
+
+        // Move cursor up to top of art area (except for first frame)
+        if (frame_num > 0) {
+            printf("\033[%dA", total_lines);
+        }
+
+        for (int line = 0; line < total_lines; ++line) {
+            if (line < ART_LINES) {
+                bool in_color = false;
+                for (int x = 0; x < ART_WIDTH; ++x) {
+                    char ch = anim_frames[frame][line][x];
+                    if (ch != ' ') {
+                        if (!in_color && use_color) {
+                            fputs(qc, stdout);
+                            in_color = true;
+                        }
+                        putchar(ch);
+                    } else {
+                        if (in_color) {
+                            fputs(reset, stdout);
+                            in_color = false;
+                        }
+                        putchar(' ');
+                    }
+                }
+                if (in_color) {
+                    fputs(reset, stdout);
+                }
+            } else {
+                printf("%-*s", ART_WIDTH, "");
+            }
+
+            // Print info text only on first frame (it stays in place)
+            if (frame_num == 0) {
+                int info_idx = line - info_start;
+                if (info_idx >= 0 && info_idx < (int)info.size()) {
+                    printf("  %s", info[info_idx].c_str());
+                }
+            }
+
+            putchar('\n');
+        }
+
+        fflush(stdout);
+
+        // Check for keypress to exit
+        if (raw_mode) {
+            struct pollfd pfd = { STDIN_FILENO, POLLIN, 0 };
+            if (poll(&pfd, 1, 0) > 0) {
+                // Consume the key and break to final frame
+                char discard;
+                while (read(STDIN_FILENO, &discard, 1) > 0) {
+                }
+                break;
+            }
+        }
+
+        // Advance rolling deadline by one frame interval
+        next_deadline.tv_nsec += FRAME_NS;
+        if (next_deadline.tv_nsec >= 1000000000L) {
+            next_deadline.tv_sec++;
+            next_deadline.tv_nsec -= 1000000000L;
+        }
+        // Sleep until the target time (portable: works on macOS and Linux)
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long sleep_ns = (next_deadline.tv_sec - now.tv_sec) * 1000000000L
+            + (next_deadline.tv_nsec - now.tv_nsec);
+        if (sleep_ns > 0) {
+            struct timespec rem, req;
+            req.tv_sec = sleep_ns / 1000000000L;
+            req.tv_nsec = sleep_ns % 1000000000L;
+            while (nanosleep(&req, &rem) != 0) {
+                req = rem;
+            }
+        }
+    }
+
+    // Restore terminal mode
+    if (raw_mode) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
+    }
+
+    // Final frame: render the face-on pre-rendered frame (frame 0)
+    printf("\033[%dA", total_lines);
+    for (int line = 0; line < total_lines; ++line) {
+        if (line < ART_LINES) {
+            bool in_color = false;
+            for (int x = 0; x < ART_WIDTH; ++x) {
+                char ch = anim_frames[0][line][x];
+                if (ch != ' ') {
+                    if (!in_color && use_color) {
+                        fputs(qc, stdout);
+                        in_color = true;
+                    }
+                    putchar(ch);
+                } else {
+                    if (in_color) {
+                        fputs(reset, stdout);
+                        in_color = false;
+                    }
+                    putchar(' ');
+                }
+            }
+            if (in_color) {
+                fputs(reset, stdout);
+            }
+        } else {
+            printf("%-*s", ART_WIDTH, "");
+        }
+        putchar('\n');
+    }
+
+    // Show cursor
+    fputs("\033[?25h", stdout);
+    fflush(stdout);
 
     exit(0);
 }
@@ -663,6 +1047,7 @@ static struct opt_struct_s {
    { '\0', "no-repl",              ARG_NONE, do_no_repl },
    { 'r', "warnings-are-errors",   ARG_NONE, warn_to_err },
    { 's', "show-charsets",         ARG_NONE, show_charsets },
+   { '\0', "strict-warnings",      ARG_NONE, do_strict_warnings },
    { 'w', "enable-warning",        ARG_MAND, enable_warning },
    { 'x', "exec-class",            ARG_OPT,  do_exec_class },
    { '\0', "lockdown",             ARG_NONE, do_lockdown },
@@ -670,16 +1055,17 @@ static struct opt_struct_s {
    { '\0', "allow-bare-refs",      ARG_NONE, allow_bare_refs },
    { '\0', "allow-reparse",        ARG_NONE, do_allow_reparse },
    { '\0', "assume-local",         ARG_NONE, assume_local },
+   { 'M', "modern",                ARG_NONE, do_modern },
    { 'n', "new-style",             ARG_NONE, new_style },
    { '\0', "no-class-defs",        ARG_NONE, do_no_class_defs },
-   { '\0', "enable-debug",         ARG_NONE, do_enable_debug },
+   { 'G', "enable-debug",          ARG_NONE, do_enable_debug },
    { '\0', "no-database",          ARG_NONE, do_no_database },
    { 'D', "define",                ARG_MAND, set_define },
    { 'E', "no-external-process",   ARG_NONE, do_no_external_process },
    { '\0', "no-external-access",   ARG_NONE, do_no_external_access },
    { '\0', "no-external-info",     ARG_NONE, do_no_external_info },
    { 'F', "no-filesystem",         ARG_NONE, do_no_filesystem },
-   { 'G', "no-global-vars",        ARG_NONE, do_no_global_vars },
+   { '\0', "no-global-vars",       ARG_NONE, do_no_global_vars },
    { 'H', "parse-option-help",     ARG_NONE, show_parse_option_help },
    { 'I', "no-child-restrictions", ARG_NONE, do_no_child_po_restrictions },
    { 'K', "lock-options",          ARG_NONE, do_lock_options },
@@ -694,6 +1080,7 @@ static struct opt_struct_s {
    { 'S', "no-subroutine-defs",    ARG_NONE, do_no_subroutine_defs },
    { 'T', "no-threads",            ARG_NONE, do_no_threads },
    { 'V', "version",               ARG_NONE, do_version },
+   { '\0', "version-animation",    ARG_NONE, do_version_animation },
    { 'W', "enable-all-warnings",   ARG_NONE, enable_warnings },
    { '\0', "no-thread-classes",    ARG_NONE, do_no_thread_classes },
    { '\0', "no-thread-info",       ARG_NONE, do_no_thread_info },

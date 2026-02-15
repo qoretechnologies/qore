@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,11 +33,15 @@
 
 #define _QORE_QOREBACKGROUNDOPERATORNODE_H
 
+#include "qore/intern/qore_string_private.h"
+class RuntimeConfig;
+
 class QoreBackgroundOperatorNode : public QoreSingleExpressionOperatorNode<> {
 protected:
     static QoreString name;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -60,7 +64,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-        str.concat(&name);
+        qore_string_private::get(str)->concat(&name);
         return 0;
     }
 

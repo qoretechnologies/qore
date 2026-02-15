@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! Structured line iterator for fixed-length line files allowing efficient "pipelined" processing.

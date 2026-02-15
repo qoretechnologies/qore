@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,6 +32,9 @@
 #ifndef _QORE_QOREQUESTIONMARKOPERATORNODE_H
 #define _QORE_QOREQUESTIONMARKOPERATORNODE_H
 
+#include "qore/intern/qore_string_private.h"
+class RuntimeConfig;
+
 class QoreQuestionMarkOperatorNode : public QoreNOperatorNodeBase<3> {
 protected:
     static QoreString question_mark_str;
@@ -41,6 +44,7 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL QoreQuestionMarkOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1, QoreValue e2)
@@ -53,7 +57,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        str.concat(&question_mark_str);
+        qore_string_private::get(str)->concat(&question_mark_str);
         return 0;
     }
 

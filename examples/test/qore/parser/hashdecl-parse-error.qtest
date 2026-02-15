@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class HashDeclParseErrorTest
+
+class HashDeclParseErrorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Hashdecl parse error test", "1.0") {
+        addTestCase("Missing semicolon", \testMissingSemicolon());
+        addTestCase("Missing brace", \testMissingBrace());
+        set_return_value(main());
+    }
+
+    testMissingSemicolon() {
+        Program p(PO_MODERN);
+        assertThrows("PARSE-EXCEPTION", \p.parse(),
+            ("hashdecl H { int a }", ""));
+    }
+
+    testMissingBrace() {
+        Program p(PO_MODERN);
+        assertThrows("PARSE-EXCEPTION", \p.parse(),
+            ("hashdecl H { int a;", ""));
+    }
+}

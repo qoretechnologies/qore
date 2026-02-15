@@ -2,9 +2,9 @@
 /*
   AstTreePrinter.h
 
-  Qore AST Parser
+  Qore AST Parser — tree-sitter backend
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -30,32 +30,12 @@
 
 #include <ostream>
 
-#include "ast/ASTModifiers.h"
-#include "ast/ASTName.h"
-#include "ast/ASTOperator.h"
-#include "ast/ASTParseLocation.h"
-
-class ASTDeclaration;
-class ASTExpression;
-class ASTNode;
-class ASTParseOption;
-class ASTStatement;
-class ASTTree;
+class AstParseResult;
 
 class AstTreePrinter {
 public:
-    static void printDeclaration(std::ostream& os, ASTDeclaration* decl, int indent);
-    static void printExpression(std::ostream& os, ASTExpression* expr, int indent);
-    static void printLocation(std::ostream& os, const ASTParseLocation& loc, int indent, bool newline = true);
-    static void printModifiers(std::ostream& os, ASTModifiers mods, int indent, bool modsOnly = false, bool newline = true);
-    static void printName(std::ostream& os, ASTName& name, int indent, bool location = true, bool newline = true, const char* prefix = "name: ");
-    static void printOperator(std::ostream& os, ASTOperator op, int indent, bool newline);
-    static void printParseOption(std::ostream& os, ASTParseOption* po, int indent);
-    static void printParseOptionString(std::ostream& os, ASTParseOption* po);
-    static void printStatement(std::ostream& os, ASTStatement* stmt, int indent);
-    static void printNode(std::ostream& os, ASTNode* node, int indent);
-
-    static void printTree(std::ostream& os, ASTTree* tree);
+    //! Print the tree-sitter CST as an S-expression.
+    static void printTree(std::ostream& os, AstParseResult* result);
 };
 
 #endif // _QLS_ASTTREEPRINTER_H

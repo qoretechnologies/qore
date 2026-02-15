@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,11 +38,13 @@
 
 #include <qore/Qore.h>
 
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <queue>
 #include <string>
 #include <vector>
-#include <map>
-#include <queue>
-#include <memory>
 
 // Forward declarations
 struct qore_socket_private;
@@ -80,8 +82,8 @@ struct Http2StreamInfo {
     std::string connect_protocol;  //!< Value of :protocol pseudo-header (e.g., "websocket")
     bool is_connect = false;       //!< True if this is a CONNECT request
 
-    // Headers
-    std::map<std::string, std::string> headers;
+    // Headers (values stored as vectors to support duplicate header names per RFC 7540 Section 8.1.2.5)
+    std::map<std::string, std::vector<std::string>> headers;
 
     // Body data
     std::vector<char> body;
@@ -122,7 +124,13 @@ struct Http2Settings {
     uint32_t initial_window_size = 65535;
     uint32_t max_frame_size = 16384;
     uint32_t max_header_list_size = UINT32_MAX;
-    uint32_t enable_connect_protocol = 1;  //!< RFC 8441: Enable extended CONNECT for WebSocket
+    //! RFC 8441: Extended CONNECT for WebSocket over HTTP/2.
+    /** Default is 0 per the HTTP/2 spec.  Servers that want to advertise support must
+        call Http2Session::setEnableConnectProtocol(true) before the connection preface
+        is sent; this is handled automatically by SocketHttp2ServerPollOperation::initSession()
+        based on qore_socket_private::h2_enable_connect_protocol.
+    */
+    uint32_t enable_connect_protocol = 0;
 };
 
 //! HTTP/2 Session wrapper using nghttp2
@@ -134,7 +142,7 @@ public:
         @param scheme URL scheme - "https" for h2 (default), "http" for h2c
         @return New Http2Session or nullptr on error
     */
-    DLLLOCAL static Http2Session* createClient(qore_socket_private* sock, ExceptionSink* xsink,
+    DLLLOCAL static std::shared_ptr<Http2Session> createClient(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme = "https");
 
     //! Create a server-side HTTP/2 session
@@ -143,7 +151,7 @@ public:
         @param scheme URL scheme - "https" for h2 (default), "http" for h2c
         @return New Http2Session or nullptr on error
     */
-    DLLLOCAL static Http2Session* createServer(qore_socket_private* sock, ExceptionSink* xsink,
+    DLLLOCAL static std::shared_ptr<Http2Session> createServer(qore_socket_private* sock, ExceptionSink* xsink,
         const char* scheme = "https");
 
     DLLLOCAL ~Http2Session();
@@ -163,10 +171,26 @@ public:
         @param headers Request headers
         @param body Request body (can be nullptr)
         @param body_len Length of request body
+        @param xsink Exception sink for error reporting
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Submit a request with support for duplicate header names (client-side)
+    /** Uses a vector of pairs to allow multiple entries with the same header name,
+        which is required for HTTP/2 cookie headers per RFC 7540 Section 8.1.2.5.
+        @param method HTTP method
+        @param path Request path
+        @param headers Request headers as name/value pairs (may contain duplicate names)
+        @param body Request body (can be nullptr)
+        @param body_len Length of request body
+        @param xsink Exception sink for error reporting
+        @return stream ID on success, -1 on error
+    */
+    DLLLOCAL int32_t submitRequest(const char* method, const char* path,
+        const std::vector<std::pair<std::string, std::string>>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Submit a response (server-side)
@@ -175,16 +199,47 @@ public:
         @param headers Response headers
         @param body Response body (can be nullptr)
         @param body_len Length of response body
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Submit a response with support for duplicate header names (server-side)
+    /** Uses a vector of pairs to allow multiple entries with the same header name,
+        which is needed for headers like Set-Cookie that must not be combined.
+        @param stream_id Stream ID for the response
+        @param status_code HTTP status code
+        @param headers Response headers as name/value pairs (may contain duplicate names)
+        @param body Response body (can be nullptr)
+        @param body_len Length of response body
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
+        const std::vector<std::pair<std::string, std::string>>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Submit a streaming response (server-side, headers only, deferred body)
+    /** Submits response HEADERS without END_STREAM. Body data is sent incrementally
+        via sendStreamData() calls.
+        @param stream_id Stream ID for the response
+        @param status_code HTTP status code
+        @param headers Response headers
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since Qore 2.2
+    */
+    DLLLOCAL int submitResponseStreaming(int32_t stream_id, int status_code,
+        const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
+
     //! Submit a PUSH_PROMISE (server-side)
     /** @param stream_id Stream ID of the associated request
         @param path Path of the pushed resource
         @param headers Headers for the pushed resource
+        @param xsink Exception sink for error reporting
         @return promised stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitPushPromise(int32_t stream_id, const char* path,
@@ -208,6 +263,7 @@ public:
         @param dependency Stream ID this depends on (0 for root)
         @param weight Priority weight (1-256, default 16)
         @param exclusive If true, becomes exclusive dependency
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
 
         @since Qore 2.2
@@ -220,7 +276,8 @@ public:
         @param data Data to send
         @param len Length of data
         @param end_stream If true, sends END_STREAM flag (closes the stream for sending)
-        @return 0 on success, -1 on error
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set), 1 = buffer full (non-fatal, data not appended)
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
@@ -233,42 +290,133 @@ public:
         @param stream_id Stream ID for the CONNECT request
         @param status_code HTTP status code (200 to accept, 4xx to reject)
         @param headers Response headers
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitConnectResponse(int32_t stream_id, int status_code,
         const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
 
-    //! Returns true if RFC 8441 extended CONNECT protocol is enabled
+    //! Returns true if RFC 8441 extended CONNECT protocol is enabled locally
     DLLLOCAL bool isConnectProtocolEnabled() const {
         return local_settings.enable_connect_protocol != 0;
     }
 
+    //! Returns true if the remote peer has advertised ENABLE_CONNECT_PROTOCOL
+    DLLLOCAL bool isRemoteConnectProtocolEnabled() const {
+        return remote_settings_received && remote_settings.enable_connect_protocol != 0;
+    }
+
+    //! Returns true if remote SETTINGS have been received and ENABLE_CONNECT_PROTOCOL was not set
+    /** Used by the client to detect servers that don't support extended CONNECT (RFC 8441)
+        before sending a CONNECT request with :protocol.  On some nghttp2 versions, the
+        server silently drops :protocol when ENABLE_CONNECT_PROTOCOL is not advertised.
+    */
+    DLLLOCAL bool isExtendedConnectRejected() const {
+        return remote_settings_received && !remote_settings.enable_connect_protocol;
+    }
+
+    //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in SETTINGS
+    /** Must be called before sendConnectionPreface() to take effect.
+    */
+    DLLLOCAL void setEnableConnectProtocol(bool enable) {
+        local_settings.enable_connect_protocol = enable ? 1 : 0;
+    }
+
     //! Send all pending data (async, non-blocking)
     /** @param timeout_ms Timeout in milliseconds (ignored, always non-blocking)
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 if need to poll for POLLOUT
     */
     DLLLOCAL int sendPendingData(int timeout_ms, ExceptionSink* xsink);
 
     //! Send all pending data (blocking with timeout to ensure flush)
     /** @param timeout_ms Timeout in milliseconds
+        @param xsink Exception sink for error reporting
         @return 0 on success, -1 if still have data to send
     */
     DLLLOCAL int sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink);
 
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
+        @param xsink Exception sink for error reporting
         @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
     DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
 
+    //! Returns true if there is pending request/response body data for stream_id
+    DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
+
+    //! Returns true if there is already-buffered data in the socket read buffer or SSL layer
+    /** This is a lightweight check (no I/O, no SSL operations) that checks internal counters.
+        Used by isHttp2DataAvailable() to detect buffered data without holding the socket lock.
+        @return true if there is buffered data available for reading
+        @since Qore 2.1
+    */
+    DLLLOCAL bool hasSocketBufferedData() const;
+
     //! Get a stream by ID
     DLLLOCAL Http2StreamInfo* getStream(int32_t stream_id);
+
+    //! Take available stream data without blocking
+    /** @param stream_id stream ID
+        @param max_bytes maximum bytes to return; 0 means all available
+        @param xsink Exception sink for error reporting
+    */
+    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();
 
     //! Returns true if there are completed streams waiting
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
+
+    //! Callback type for stream completion notification (HTTP/2 client multiplexing)
+    /** @param stream_id the completed stream ID
+        @param stream the stream info (may be nullptr if stream was reset before completion)
+        @param xsink exception sink for error reporting
+    */
+    using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
+        ExceptionSink* xsink)>;
+
+    //! Sets the stream completion callback for HTTP/2 client multiplexing
+    /** When set, this callback is invoked each time a stream completes (response received,
+        stream reset, or error). This enables multiplexed response routing in client scenarios.
+
+        @param callback the callback to invoke on stream completion
+    */
+    DLLLOCAL void setStreamCompleteCallback(StreamCompleteCallback callback) {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        stream_complete_callback = std::move(callback);
+    }
+
+    //! Clears the stream completion callback
+    DLLLOCAL void clearStreamCompleteCallback() {
+        printd(5, "clearStreamCompleteCallback() session=%p about to lock\n", this);
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p isServer=%d tid=%d about to lock\n",
+                this, is_server ? 1 : 0, q_gettid());
+            fflush(stderr);
+        }
+        std::lock_guard<std::recursive_mutex> lg(m);
+        printd(5, "clearStreamCompleteCallback() locked, clearing callback\n");
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d locked, clearing callback\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
+        stream_complete_callback = nullptr;
+        printd(5, "clearStreamCompleteCallback() done\n");
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d done\n", this, q_gettid());
+            fflush(stderr);
+        }
+    }
+
+    //! Returns true if a stream completion callback is set
+    DLLLOCAL bool hasStreamCompleteCallback() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return static_cast<bool>(stream_complete_callback);
+    }
 
     //! Returns the number of active streams
     DLLLOCAL size_t getActiveStreamCount() const { return streams.size(); }
@@ -291,6 +439,20 @@ public:
     */
     DLLLOCAL bool hasPendingData() const { return !send_buffer.empty(); }
 
+    //! Returns the remote flow control window size for a given stream
+    /** Returns the number of bytes the server can send on this stream before
+        a WINDOW_UPDATE is needed from the client.
+        @param stream_id the stream ID to check (0 for connection-level window)
+        @return the remote window size in bytes, or -1 on error
+    */
+    DLLLOCAL int32_t getStreamRemoteWindowSize(int32_t stream_id) const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        if (stream_id == 0) {
+            return nghttp2_session_get_remote_window_size(session);
+        }
+        return nghttp2_session_get_stream_remote_window_size(session, stream_id);
+    }
+
     //! Get current settings
     DLLLOCAL Http2Settings getSettings() const { return local_settings; }
 
@@ -301,6 +463,9 @@ public:
     DLLLOCAL nghttp2_session* getSession() const { return session; }
 
 private:
+    // NOTE: recursive mutex is required because nghttp2 callbacks can re-enter
+    // Http2Session methods that also lock the session state.
+    mutable std::recursive_mutex m;
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);
 
@@ -342,6 +507,9 @@ private:
     std::map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
 
+    // Stream completion callback for client multiplexing
+    StreamCompleteCallback stream_complete_callback;
+
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
@@ -349,6 +517,7 @@ private:
     // Settings
     Http2Settings local_settings;
     Http2Settings remote_settings;
+    bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
 
     // GOAWAY state
     bool goaway_received = false;
@@ -359,13 +528,45 @@ private:
     struct BodyData {
         std::vector<uint8_t> data;
         size_t offset = 0;
+        bool end_stream = false;  //!< if true, signal EOF after this data is consumed
 
         BodyData() = default;
-        BodyData(const void* src, size_t len)
+        BodyData(const void* src, size_t len, bool end_stream = false)
             : data(reinterpret_cast<const uint8_t*>(src),
-                   reinterpret_cast<const uint8_t*>(src) + len) {}
+                   reinterpret_cast<const uint8_t*>(src) + len),
+              end_stream(end_stream) {}
     };
     std::map<int32_t, BodyData> pending_body_data;
+
+    struct DataProviderContext {
+        nghttp2_data_provider provider{};
+        Http2Session* h2 = nullptr;
+        bool defer_on_empty = false;
+        bool no_end_stream = false;
+        bool remove_on_empty = true;
+    };
+    std::map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
+
+    DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data);
 };
+
+//! Shared pointer type for Http2Session with thread-safe atomic reference counting
+using Http2SessionPtr = std::shared_ptr<Http2Session>;
+
+//! Converts HTTP/2 stream headers to a Qore hash
+/** Handles duplicate header names per RFC 7540 Section 8.1.2.5:
+    - cookie: concatenated with "; " into a single string
+    - Single-value headers: stored as QoreStringNode
+    - Multi-value headers: stored as QoreListNode (matches HTTP/1.1 behavior)
+
+    @param h2_headers HTTP/2 headers map (name -> vector of values)
+    @param lowercase if true, convert header names to lowercase
+    @return new QoreHashNode with the converted headers
+*/
+DLLLOCAL QoreHashNode* h2HeadersToQoreHash(
+    const std::map<std::string, std::vector<std::string>>& h2_headers,
+    bool lowercase = false);
 
 #endif // _QORE_HTTP2_SESSION_H

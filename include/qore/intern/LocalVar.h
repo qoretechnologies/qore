@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -98,6 +98,8 @@ protected:
 public:
     QoreLValueGeneric val;
     const char* id;
+    // declaration order for proper cleanup ordering (issue #5168)
+    uint64_t decl_order = 0;
     bool finalized : 1;
     bool frame_boundary : 1;
 
@@ -108,6 +110,14 @@ public:
     }
 
     DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false) {
+    }
+
+    DLLLOCAL void setDeclOrder(uint64_t order) {
+        decl_order = order;
+    }
+
+    DLLLOCAL uint64_t getDeclOrder() const {
+        return decl_order;
     }
 
     DLLLOCAL void setFrameBoundary() {
@@ -382,15 +392,9 @@ public:
     }
 
     DLLLOCAL void instantiate(int64 parse_options) {
-        if (parse_options & PO_STRICT_TYPES) {
-            //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s\n", this, name.c_str(),
-            //    QoreTypeInfo::getName(typeInfo));
-            instantiateIntern(QoreTypeInfo::getDefaultQoreValue(typeInfo), true);
-        } else {
-            //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
-            //    QoreTypeInfo::getName(typeInfo));
-            instantiateIntern(QoreValue(), false);
-        }
+        //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
+        //    QoreTypeInfo::getName(typeInfo));
+        instantiateIntern(QoreValue(), false);
     }
 
     DLLLOCAL void instantiate(QoreValue nval) {
@@ -482,7 +486,8 @@ public:
         //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (!closure_use) {
-            return get_var()->getLValue(lvh, for_remove, typeInfo, refTypeInfo);
+            // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
+            return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
         return thread_find_closure_var(name.c_str())->getLValue(lvh, for_remove);
@@ -559,6 +564,12 @@ public:
     DLLLOCAL void setNoNarrowing() {
         no_narrowing = true;
     }
+
+    //! Returns the typeInfo for use in LValueHelper, with NoNarrow marker if applicable
+    /** When no_narrowing is true, returns the NoNarrow version of the type so that
+        LValueHelper::assign() can properly strip the type at runtime.
+    */
+    DLLLOCAL const QoreTypeInfo* getTypeInfoForLValue() const;
 
     //! Sets the narrowed type for the variable (called during assignment parsing)
     /** Only sets if this is an auto-typed variable and the new type is more specific

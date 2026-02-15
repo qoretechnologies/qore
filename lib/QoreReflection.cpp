@@ -352,8 +352,9 @@ unsigned QoreExternalFunction::numVariants() const {
 
 QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
         QoreProgram* pgm, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
     return reinterpret_cast<const QoreFunction*>(this)->evalFunction(
-        reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, xsink
+        reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink
     );
 }
 

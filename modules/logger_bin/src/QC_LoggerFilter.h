@@ -32,7 +32,7 @@
 
 #define _QORE_MODULE_LOGGER_QC_LOGGERFILTER_H
 
-//#include "QoreLoggerFilter.h"
+#include "QoreLoggerFilter.h"
 
 //! The event will be processed
 constexpr int ACCEPT = 1;

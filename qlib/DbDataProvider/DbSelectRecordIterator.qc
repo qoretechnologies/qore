@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbSelectRecordIterator class definition
 
-/** DbSelectRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbSelectRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,7 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
     #! Creates the iterator
     /** @param ds the datasource to use
         @param where_cond cannot be provided or a \c DBSELECT-ERROR will be thrown
-        @param search_options search options; assumed to have already been processed for validity before this call;
+        @param select_options search options; assumed to have already been processed for validity before this call;
         contains:
         - \c sql (required): the SQL query
         - \c args (optional): a list of bind arguments to \a sql

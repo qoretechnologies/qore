@@ -138,16 +138,16 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink) {
 
 int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink) {
     // Check for sandbox interrupt support
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
+    QoreSandboxManagerHelper smh;
 
     // If no sandbox manager, use regular wait
-    if (!sm) {
+    if (!smh) {
         int rc = (timeout_ms < 0) ? wait(m) : wait2(m, timeout_ms);
         return rc ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
     }
 
     // Check for interrupt before waiting
-    if (sm->isInterruptRequested()) {
+    if (smh->isInterruptRequested()) {
         if (xsink) {
             xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
         }
@@ -184,7 +184,7 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
         }
 
         // Timeout occurred - check for interrupt
-        if (sm->isInterruptRequested()) {
+        if (smh->isInterruptRequested()) {
             if (xsink) {
                 xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
             }

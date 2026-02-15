@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file qfmt canonical code formatter for Qore
+
+/*  qfmt Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QoreCodeFormat
+%requires Diff
+%requires Util
+
+%exec-class QfmtApp
+
+#! Main qfmt application class
+class QfmtApp {
+    private {
+        #! Command-line options
+        const Opts = {
+            "in_place": "i,in-place",
+            "diff":     "d,diff",
+            "check":    "c,check",
+            "stdin":    "stdin",
+            "help":     "h,help",
+        };
+
+        #! Exit code for check mode
+        int exitCode = 0;
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        hash<auto> opts = getopt.parse3(\ARGV);
+
+        if (opts.help) {
+            usage();
+            exit(0);
+        }
+
+        QoreCodeFormat::CodeFormatter fmt();
+
+        if (opts.stdin || ARGV.empty()) {
+            # When no files given and --stdin not explicit, check if stdin is a TTY
+            if (!opts.stdin && ARGV.empty() && stdin.isTty()) {
+                stderr.print("qfmt: no input files (use --stdin to read from terminal)\n");
+                usage();
+                exit(2);
+            }
+            # Read from stdin
+            *string source = stdin.read(-1);
+            if (!exists source) {
+                return;
+            }
+            processSource(fmt, source, "<stdin>", opts);
+        } else {
+            # Process files/directories
+            for (int i = 0; i < ARGV.size(); ++i) {
+                string path = ARGV[i];
+                if (is_dir(path)) {
+                    processDirectory(fmt, path, opts);
+                } else {
+                    processFile(fmt, path, opts);
+                }
+            }
+        }
+
+        exit(exitCode);
+    }
+
+    private processDirectory(QoreCodeFormat::CodeFormatter fmt, string dirpath, hash<auto> opts) {
+        # Process all Qore source files in the directory (separated module pattern)
+        list<string> extensions = (".qc", ".qm", ".qore", ".qr", ".qsd", ".qfd", ".qrd", ".qtest");
+
+        # Normalize directory path (remove trailing separator)
+        string normDir = regex_subst(dirpath, "[/\\\\]+$", "");
+
+        Dir d();
+        if (!d.chdir(dirpath)) {
+            stderr.printf("qfmt: %s: cannot open directory\n", dirpath);
+            exitCode = 2;
+            return;
+        }
+
+        *list<string> entries = d.listFiles();
+        if (!exists entries) {
+            return;
+        }
+
+        sort(entries);
+        foreach string entry in (entries) {
+            bool match = False;
+            foreach string ext in (extensions) {
+                if (entry.endsWith(ext)) {
+                    match = True;
+                    break;
+                }
+            }
+            if (match) {
+                processFile(fmt, normDir + "/" + entry, opts);
+            }
+        }
+    }
+
+    private processFile(QoreCodeFormat::CodeFormatter fmt, string path, hash<auto> opts) {
+        if (!is_file(path)) {
+            stderr.printf("qfmt: %s: no such file\n", path);
+            exitCode = 2;
+            return;
+        }
+
+        string source = ReadOnlyFile::readTextFile(path);
+
+        try {
+            string formatted = fmt.format(source);
+
+            if (opts.check) {
+                if (formatted != source) {
+                    stdout.printf("%s\n", path);
+                    exitCode = 1;
+                }
+            } else if (opts.diff) {
+                if (formatted != source) {
+                    showDiff(path, source, formatted);
+                }
+            } else if (opts.in_place) {
+                if (formatted != source) {
+                    File f();
+                    f.open2(path, O_WRONLY | O_TRUNC);
+                    f.write(formatted);
+                }
+            } else {
+                stdout.print(formatted);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qfmt: %s: %s: %s\n", path, ex.err, ex.desc);
+            exitCode = 2;
+        }
+    }
+
+    private processSource(QoreCodeFormat::CodeFormatter fmt, string source, string name, hash<auto> opts) {
+        try {
+            string formatted = fmt.format(source);
+
+            if (opts.check) {
+                if (formatted != source) {
+                    stdout.printf("%s\n", name);
+                    exitCode = 1;
+                }
+            } else if (opts.diff) {
+                if (formatted != source) {
+                    showDiff(name, source, formatted);
+                }
+            } else {
+                stdout.print(formatted);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qfmt: %s: %s: %s\n", name, ex.err, ex.desc);
+            exitCode = 2;
+        }
+    }
+
+    private showDiff(string path, string original, string formatted) {
+        stdout.print(Diff::diff_unified(original, formatted, path, path + " (formatted)"));
+    }
+
+    static usage() {
+        stdout.print("Usage: qfmt [options] [file...]
+
+Canonical code formatter for the Qore programming language.
+
+Options:
+  -i, --in-place    Format file(s) in-place
+  -d, --diff        Show diff instead of formatted output
+  -c, --check       Exit non-zero if file(s) would change (for CI)
+  --stdin            Read from stdin, write to stdout (default with no files)
+  -h, --help        Show this help message
+
+With no flags and a file argument, prints formatted output to stdout.
+With -i, overwrites file(s) in-place.
+With -c, exits 0 if already formatted, 1 if changes needed (for CI).
+With -d, shows a unified diff of changes.
+Supports multiple files (e.g., qfmt -i qlib/MyModule/*.qc).
+");
+    }
+}

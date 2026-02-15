@@ -35,13 +35,11 @@
 %requires(reexport) OracleSqlUtilBase
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module JdbcOracleSqlUtil {
     version = "1.0";
@@ -71,11 +69,11 @@ module JdbcOracleSqlUtil {
     @note This module requires the <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary module and the
     PostgreSQL JDBC driver for communication with PostgreSQL databases
 
-    @see @ref pgsqlsqlutilbaseintro for implementation information about this module
+    @see \c pgsqlsqlutilbaseintro for implementation information about this module
 
-    @section ora_relnotes Release Notes
+    @section jdbcoraclesqlutil_relnotes Release Notes
 
-    @subsection oracle15 JdbcOracleSqlUtil v1.0
+    @subsection jdbcoraclesqlutil_v1_0 JdbcOracleSqlUtil v1.0
     - initial release
 */
 

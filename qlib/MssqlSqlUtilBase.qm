@@ -32,13 +32,11 @@
 %requires Util >= 1.0
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module MssqlSqlUtilBase {
     version = "1.0";
@@ -112,7 +110,7 @@ module MssqlSqlUtilBase {
     |@ref SqlUtil::VARCHAR|\c varchar
 
     To use other types, use the \c "native_type"
-    @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Mssql type name
+    \c SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Mssql type name
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
@@ -1478,7 +1476,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
     #! returns a closure for performing upserts
     /** if the underlying dataserver supports an optimized \c MERGE statement (Microsoft SQL Server 2008+), the
         \a upsert_strategy argument is ignored and a closure using a merge statement is returned, otherwise the
-        standard upsert closure is returned according to @ref SqlUtil::AbstractTable::getUpsertClosure()
+        standard upsert closure is returned according to \c SqlUtil::AbstractTable::getUpsertClosure()
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         if (!ss_has_merge)

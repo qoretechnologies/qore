@@ -4,7 +4,7 @@
  
   Qore Programming language
  
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
  
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,7 @@ class ParseOptionMap {
       DLLEXPORT static const char *find_name(int code);
 
       //! find a parse option code from its name
-      /** @deprecated: do not use; uses the wrong return type; use find_code64() instead */
+      /** @deprecated do not use; uses the wrong return type; use find_code64() instead */
       DLLEXPORT static int find_code(const char *name);
 
       //! find a parse option code from its name

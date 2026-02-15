@@ -199,12 +199,12 @@ sm.addFilesystemDeniedPath("/data/uploads/secrets");
 
     | Constant | Value | Description |
     |----------|-------|-------------|
-    | @ref QSEC_READ | 1 | Read access to files |
-    | @ref QSEC_WRITE | 2 | Write/modify access to files |
-    | @ref QSEC_EXECUTE | 4 | Execute access to files |
-    | @ref QSEC_DELETE | 8 | Delete files |
-    | @ref QSEC_CREATE | 16 | Create new files |
-    | @ref QSEC_ALL | 31 | All access modes combined |
+    | @ref Qore::QSEC_READ "QSEC_READ" | 1 | Read access to files |
+    | @ref Qore::QSEC_WRITE "QSEC_WRITE" | 2 | Write/modify access to files |
+    | @ref Qore::QSEC_EXECUTE "QSEC_EXECUTE" | 4 | Execute access to files |
+    | @ref Qore::QSEC_DELETE "QSEC_DELETE" | 8 | Delete files |
+    | @ref Qore::QSEC_CREATE "QSEC_CREATE" | 16 | Create new files |
+    | @ref Qore::QSEC_ALL "QSEC_ALL" | 31 | All access modes combined |
 
     @subsection sandbox_fs_policy Default Policy
 
@@ -305,10 +305,10 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     | Constant | Value | Description |
     |----------|-------|-------------|
-    | @ref QSEC_NET_TCP | 1 | TCP protocol |
-    | @ref QSEC_NET_UDP | 2 | UDP protocol |
-    | @ref QSEC_NET_UNIX | 4 | UNIX domain sockets |
-    | @ref QSEC_NET_ALL | 7 | All protocols |
+    | @ref Qore::QSEC_NET_TCP "QSEC_NET_TCP" | 1 | TCP protocol |
+    | @ref Qore::QSEC_NET_UDP "QSEC_NET_UDP" | 2 | UDP protocol |
+    | @ref Qore::QSEC_NET_UNIX "QSEC_NET_UNIX" | 4 | UNIX domain sockets |
+    | @ref Qore::QSEC_NET_ALL "QSEC_NET_ALL" | 7 | All protocols |
 
     @section sandbox_resources Resource Limits
 
@@ -394,6 +394,10 @@ sm.clearInterrupt();
     - **Database operations**: Datasource transaction lock acquisition (polled at I/O poll interval)
 
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
+    For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
+    starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
+    Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
+    Ctrl-C) along with the parent.
 
     @subsection sandbox_interrupt_polling Polling Mechanism
 

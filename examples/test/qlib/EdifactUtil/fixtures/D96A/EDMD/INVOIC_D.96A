@@ -1,0 +1,33 @@
+                              UN/EDIFACT
+
+                UNITED NATIONS STANDARD MESSAGE (UNSM)
+
+                        Invoice message
+
+                                           Message Type : INVOIC
+                                           Version      : D
+                                           Release      : 96A
+                                           Contr. Agency: UN
+
+Function: This message is used to transmit an invoice.
+Note: Fixture note for INVOIC.
+
+4.1    Segment clarification
+
+0010   UNH, Message header
+0020   BGM, Beginning of message
+0030   DTM, Date/time/period
+0040       Segment group 1:  RFF-DTM
+0050           RFF, Reference
+0060           DTM, Date/time/period
+
+4.3.1  Segment table
+
+Pos    Tag Name                                      S   R
+
+0010   UNH Message header                            M   1
+0020   BGM Beginning of message                      M   1
+0030   DTM Date/time/period                          C   5
+0040       Segment group 1                            C   5
+0050           RFF Reference                                 M   1
+0060           DTM Date/time/period                          C   5

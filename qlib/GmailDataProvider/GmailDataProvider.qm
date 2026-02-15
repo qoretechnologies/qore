@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GmailDataProvider module definition
 
-/*  GmailDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  GmailDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,7 @@ module GmailDataProvider {
             "logo": GmailLogo,
             "logo_file_name": "gmail-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email, DataProvider::AppGroup::GoogleWorkspace,),
         });
 
         # register all supported actions
@@ -308,7 +309,7 @@ module GmailDataProvider {
 
     @section gmaildataproviderintro Introduction to the GmailDataProvider Module
 
-    The %GmailDataProvider module provides a @ref dataproviderintro "data provider" API for Google cloud REST API
+    The %GmailDataProvider module provides a \c dataproviderintro "data provider" API for Google cloud REST API
     services.
 
     This data provider provides Google API access to the Gmail API as defined by Google's Discovery
@@ -339,9 +340,7 @@ public const AppName = "Gmail";
 
 #! Discovery API name
 public const GoogleDiscoveryGmailApiName = "gmail";
-}
 
-namespace Priv {
 #! used in accordance with: https://about.google/brand-resource-center/brand-elements/
-const GmailLogo = File::readTextFile(get_script_dir() + "/gmail-logo.svg");
+public const GmailLogo = File::readTextFile(get_script_dir() + "/gmail-logo.svg");
 }

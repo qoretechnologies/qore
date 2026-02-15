@@ -567,6 +567,24 @@ bool RSetHelper::makeChain(int i, omap_t::iterator fi, int tid) {
             mergeRSet(i, fi->second.rset);
         }
     }
+
+    // Count the forward-edge from the last object in the chain to the target object (fi)
+    // This edge wasn't counted because fi was already finalized when first encountered
+    if (!ovec.empty() && ovec.back()->second.rset == fi->second.rset) {
+#ifdef _QORE_CYCLE_CHECK
+        // Set scan_context to the source of the forward-edge (ovec.back()) before recording
+        RSetScanContextHelper rsc(*this, ovec.back()->first);
+#endif
+        printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
+            ovec.back()->first, ovec.back()->first->getName(),
+            fi->first, fi->first->getName(),
+            fi->second.rcount, fi->second.rcount + 1);
+        ++fi->second.rcount;
+#ifdef _QORE_CYCLE_CHECK
+        setObjectScanContext(*fi->first, fi->second.rcount);
+#endif
+    }
+
     return false;
 }
 
@@ -688,6 +706,19 @@ bool RSetHelper::checkIntern(RObject& obj) {
             printd(QRO_LVL, " + %p '%s': reusing RSet: %p\n", &obj, obj.getName(), rset);
 #endif
 
+        // issue #xxxx: save in_cycle state and rset before walk-back to detect forward-edges
+        // that need to be counted when:
+        // 1. An object joins an existing cycle (was not in_cycle, successor was)
+        // 2. Two separate cycles are merged (both were in_cycle but different rsets)
+        std::vector<bool> was_in_cycle;
+        std::vector<RSet*> was_rset;
+        was_in_cycle.reserve(ovec.size());
+        was_rset.reserve(ovec.size());
+        for (auto& it : ovec) {
+            was_in_cycle.push_back(it->second.in_cycle);
+            was_rset.push_back(it->second.rset);
+        }
+
         int i = (int)ovec.size() - 1;
         while (i >= 0) {
 #ifdef _QORE_CYCLE_CHECK
@@ -725,6 +756,47 @@ bool RSetHelper::checkIntern(RObject& obj) {
             }
 
             --i;
+        }
+
+        // issue #xxxx: count forward-edges that were not counted during the walk-back
+        // The edge from ovec[j] to ovec[j+1] needs to be counted in ovec[j+1]'s rcount if:
+        // 1. ovec[j] was not in a cycle before, and ovec[j+1] was already in a cycle
+        //    (the edge wasn't counted because ovec[j+1] was already finalized when first encountered)
+        // 2. Both were in cycles but DIFFERENT rsets before, and are now in the same rset
+        //    (the edge wasn't counted because they were in separate cycles)
+        for (size_t j = 0; j + 1 < ovec.size(); ++j) {
+            omap_t::iterator curr_oi = ovec[j];
+            omap_t::iterator next_oi = ovec[j + 1];
+
+            // Skip if they're not in the same rset now
+            if (!curr_oi->second.rset || next_oi->second.rset != curr_oi->second.rset) {
+                continue;
+            }
+
+            bool should_count = false;
+
+            if (!was_in_cycle[j] && was_in_cycle[j + 1]) {
+                // Case 1: ovec[j] just joined the cycle, ovec[j+1] was already in a cycle
+                should_count = true;
+            } else if (was_in_cycle[j] && was_in_cycle[j + 1] && was_rset[j] != was_rset[j + 1]) {
+                // Case 2: Both were in cycles but different rsets - now merged
+                should_count = true;
+            }
+
+            if (should_count) {
+#ifdef _QORE_CYCLE_CHECK
+                // Set scan_context to the source of the forward-edge before recording
+                RSetScanContextHelper rsc(*this, curr_oi->first);
+#endif
+                printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
+                    curr_oi->first, curr_oi->first->getName(),
+                    next_oi->first, next_oi->first->getName(),
+                    next_oi->second.rcount, next_oi->second.rcount + 1);
+                ++next_oi->second.rcount;
+#ifdef _QORE_CYCLE_CHECK
+                setObjectScanContext(*next_oi->first, next_oi->second.rcount);
+#endif
+            }
         }
 
         return false;

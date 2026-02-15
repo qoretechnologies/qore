@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file edifact-schema-load.qr EDIFACT directory loader example
+
+/*  edifact-schema-load.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+
+%requires EdifactUtil
+
+sub usage() {
+    printf(
+"usage: %s --release REL [options]\n\n"
+"Required:\n"
+"  -r,--release=REL       EDIFACT release (ex: D01B)\n\n"
+"Options:\n"
+"  -d,--dir=DIR           directory containing flat files for the release\n"
+"  --cache-dir=DIR        override cache root (QORE_EDIFACT_DIRCACHE)\n"
+"  --cache-error=MODE     cache error handling: ignore, warn, or error\n"
+"  --skip-cache-read      do not read from on-disk cache\n"
+"  --cache-only           load only from cache (error on miss)\n"
+"  --reload               ignore in-memory registry and reload\n"
+"  --strict               enable strict EDMD validation\n"
+"  -h,--help              show this help\n",
+        get_script_name());
+    exit(1);
+}
+
+const Opts = (
+    "release": "release,r=s",
+    "dir": "dir,d=s",
+    "cache-dir": "cache-dir=s",
+    "cache-error": "cache-error=s",
+    "skip-cache-read": "skip-cache-read",
+    "cache-only": "cache-only",
+    "reload": "reload",
+    "strict": "strict",
+    "help": "help,h",
+);
+
+sub process_command_line() {
+    GetOpt g(Opts);
+    hash o = g.parse3(\ARGV);
+    if (o.help) {
+        usage();
+    }
+    if (!o.release) {
+        usage();
+    }
+    if (!o.dir && !o.cache_only) {
+        usage();
+    }
+
+    if (o."cache-dir") {
+        setenv("QORE_EDIFACT_DIRCACHE", o."cache-dir");
+    }
+
+    list<string> cache_warnings = ();
+    hash<auto> load_opts = {};
+    if (o.dir) {
+        load_opts.dir = o.dir;
+    }
+    if (o.reload) {
+        load_opts.reload = True;
+    }
+    if (o."skip-cache-read") {
+        load_opts.skip_cache_read = True;
+    }
+    if (o."cache-only") {
+        load_opts.cache_only = True;
+    }
+    string cache_error = o."cache-error" ?? "warn";
+    load_opts.cache_error = cache_error;
+    if (cache_error == "warn") {
+        load_opts.cache_warnings = \cache_warnings;
+    }
+    if (o.strict) {
+        load_opts.loader_opts = ("strict": True);
+    }
+
+    EdifactSchema schema = EdifactSchemaRegistry::loadRelease(o.release, load_opts);
+    printf("Loaded release %s\n", schema.release);
+    printf("Elements: %d, Composites: %d, Segments: %d, Messages: %d\n",
+        schema.element_defs.size(), schema.composite_defs.size(),
+        schema.segment_defs.size(), schema.message_defs.size());
+    if (cache_warnings.size()) {
+        printf("Cache warnings:\n");
+        foreach string msg in (cache_warnings) {
+            printf("  - %s\n", msg);
+        }
+    }
+}
+
+process_command_line();

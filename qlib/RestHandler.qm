@@ -26,13 +26,11 @@
 %requires qore >= 1.0
 
 # use new-style
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %requires Util
 %requires HttpServerUtil >= 1.0
@@ -67,7 +65,7 @@ module RestHandler {
     - @ref RestHandler::RestHandler "RestHandler": this class can be used to plug in to the %Qore
       <a href="../../HttpServer/html/index.html">HttpServer</a> to expose REST services
 
-    see example file \c "restserver.q" in the examples directory for an example of using this module to implement REST
+    see example file \c "restserver.qr" in the examples directory for an example of using this module to implement REST
     services.
 
     @section restserialization Data Serialization Support
@@ -102,7 +100,7 @@ module RestHandler {
     will support.
 
     Incoming requests matched by your @ref RestHandler::RestHandler "RestHandler" subclass (when called by the
-    @ref HttpServer::HttpServer "HttpServer" when requests are appropriately matched) will be dispatched to methods in
+    \c HttpServer::HttpServer "HttpServer" when requests are appropriately matched) will be dispatched to methods in
     your @ref RestHandler::AbstractRestClass "AbstractRestClass" specialization (ie your user-defined subclass of this
     class) first according to the following naming convention:
     - <tt>httpmethod</tt>[<i>RequestRestAction</i>]
@@ -239,7 +237,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
 
     If no such sub object exists, then the method should return @ref nothing, which will cause a
     <tt>404 Bad Request</tt> response to be returned by (to change this behavior, reimplement
-    @ref RestHandler::RestHandler::unknownSubClassError() "unknownSubClassError()" in your specialization of
+    \c RestHandler::RestHandler::unknownSubClassError() "unknownSubClassError()" in your specialization of
     @ref RestHandler::RestHandler "RestHandler".  Otherwise, if an exception occurs handling the request, a
     <tt>409 Conflict</tt> response is returned; see @ref restexceptions for more information.
 
@@ -376,7 +374,32 @@ Content-Length: 16
     %Qore exceptions are returned with a 409 \c "Conflict" HTTP return code with the message body as an
     @ref Qore::ExceptionInfo "ExceptionInfo" hash.
 
+    @section resthandler_raw_response Raw Responses
+    Set \c "raw_response" in the response hash to bypass serialization and schema validation and return the body
+    as-is.  The response must include a \c "Content-Type" header.
+
+    Example:
+    @code{.q}
+    class MyRestClass inherits RestHandler::AbstractRestClass {
+        string name() {
+            return "files";
+        }
+
+        hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
+            return {
+                "code": 200,
+                "body": cx.body,
+                "hdr": {"Content-Type": "application/octet-stream"},
+                "raw_response": True,
+            };
+        }
+    }
+    @endcode
+
     @section resthandler_relnotes RestHandler Release Notes
+
+    @subsection rh_1_6_5 RestHandler v1.6.5
+    - added \c raw_response to bypass serialization and schema validation for custom response bodies
 
     @subsection rh_1_6_4 RestHandler v1.6.4
     - fixed handling \c OPTIONS requests with an \c action parameter
@@ -397,8 +420,8 @@ Content-Length: 16
 
     @subsection rh_1_6 RestHandler v1.6
     - added request arguments to the
-      @ref RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
-      and @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
+      \c RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
+      and \c RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
       (<a href="https://github.com/qoretechnologies/qore/issues/4578">issue 4578</a>)
 
     @subsection rh_1_5_2 RestHandler v1.5.2
@@ -424,7 +447,7 @@ Content-Length: 16
     - fixed a bug handling exceptions in REST methods with unserializable exception data
       (<a href="https://github.com/qoretechnologies/qore/issues/3667">issue 3667</a>)
     - renamed \c RestHandler::getPossibleSubClasses() to
-      @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
+      \c RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" in order to
       avoid a collision with a REST method name
       (<a href="https://github.com/qoretechnologies/qore/issues/3614">issue 3614</a>)
     - fixed RestHandler losing internal exception info when response was considered invalid by schema validator
@@ -435,7 +458,7 @@ Content-Length: 16
       (<a href="https://github.com/qoretechnologies/qore/issues/3410">issue 3410</a>)
 
     @subsection rh_1_3 RestHandler v1.3
-    - added the @ref RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
+    - added the \c RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
       allows subclasses to determine how exceptions are handled
       (<a href="https://github.com/qoretechnologies/qore/issues/3235">issue 3235</a>)
     - updated to support alternative URI paths for actions so that an "action=xxx" argument is not needed; instead
@@ -454,7 +477,7 @@ Content-Length: 16
 
     @subsection rh_1_2 RestHandler v1.2
     - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
-    - added @ref RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
+    - added \c RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
     - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - added support for REST schema validation
     - added default support for the HTTP \c "PATCH" method
@@ -518,11 +541,13 @@ public namespace RestHandler {
         #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()
         /**
             @return a @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent
               immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
 
             @note this method is called after the message body has been received
         */
@@ -603,6 +628,20 @@ public namespace RestHandler {
             return timeout_ms;
         }
 
+        #! returns @ref True if the server should apply content encoding to the response body
+        /** Subclasses that manage per-chunk content encoding (e.g. the DataStream protocol) should
+            override this to return @ref False so that the server preserves per-chunk boundaries
+            and does not apply additional compression.
+
+            @return @ref True if the server should apply content encoding, @ref False if the handler
+            manages its own encoding
+
+            @since RestHandler 1.6.6
+        */
+        bool needsContentEncoding() {
+            return True;
+        }
+
         #! registers stream errors in the send operation with the stream handler if no error is already present
         streamError(hash<auto> ex) {
             if (!self.ex)
@@ -612,10 +651,12 @@ public namespace RestHandler {
         #! this method should return the response message description hash
         /**
             @return an @ref HttpServer::HttpHandlerResponseInfo hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
 
             @note this method is called after the message body has been received
         */
@@ -684,10 +725,18 @@ public namespace RestHandler {
             }
         }
 
+        #! delegates to the stream handler's needsContentEncoding() method
+        /** @see AbstractRestStreamRequestHandler::needsContentEncoding()
+            @since RestHandler 1.6.6
+        */
+        bool needsContentEncoding() {
+            return stream.needsContentEncoding();
+        }
+
         # callback method for the response header; this calls @ref RestHandler::AbstractRestStreamRequestHandler::getResponseHeaderMessage() and returns the result
         /**
             @return a @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
@@ -797,6 +846,20 @@ public namespace RestHandler {
                 args = cx.body - "action";
             }
             cx.socketobject = s;
+            # Only set HTTP/2 active stream if the socket has an HTTP/2 session
+            # (may not be the case for forwarded requests to remote services)
+            bool h2_stream_set;
+            if (cx."header-info".http2) {
+                try {
+                    cx.socketobject.setHttp2ActiveStream(cx."header-info".stream_id);
+                    h2_stream_set = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    # Ignore - socket doesn't have HTTP/2 session (forwarded request)
+                }
+            }
+            on_exit if (h2_stream_set) {
+                cx.socketobject.setHttp2ActiveStream(-1);
+            }
             if (cl) {
                 string cname = shift cl;
                 cx += {
@@ -1239,11 +1302,13 @@ public namespace RestHandler {
             @param b message body, if any
 
             @return a hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+            - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
             - \c "body": the message body to return in the response
             - \c "close": (optional) set this key to @ref True if the connection should be unconditionally closed
               when the handler returns
             - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+            - \c "raw_response": (optional) set this key to @ref True to bypass serialization and schema validation;
+              the body is returned as-is and the \c "Content-Type" header must be set
          */
         hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
                 *data b) {
@@ -1408,44 +1473,83 @@ public namespace RestHandler {
             }
 
             if (!rv.reply_sent) {
-                # verify response with the REST schema
-                hash<HttpResponseInfo> res;
+                # InputStream bodies (e.g. CallbackInputStream from AbstractStreamRequest),
+                # chunked_body InputStream responses, and send_callback responses are streaming
+                # responses that must not be serialized; treat them like raw_response
+                # NOTE: rv may be HttpHandlerResponseInfo which lacks chunked_body, so use
+                # hasKeyValue() for that field
+                bool raw_response = (exists rv.raw_response && rv.raw_response)
+                    || rv.body instanceof InputStream
+                    || rv.hasKeyValue("chunked_body")
+                    || rv.send_callback;
+                if (raw_response) {
+                    if (!rv.hdr) {
+                        rv.hdr = {};
+                    }
+                    if (!exists rv.hdr."Content-Type") {
+                        rv.hdr."Content-Type" = "application/octet-stream";
+                    }
+                } else {
+                    # verify response with the REST schema
+                    hash<HttpResponseInfo> res;
 
-                try {
-                    res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
-                        aih."*/*" ? NOTHING : keys aih);
-                } catch (hash<ExceptionInfo> ex) {
-                    logDebug("REST DBG: %s", get_exception_string(ex));
-                    if (ex.err == "ACCEPT-ERROR") {
-                        responseSerializationError(cx, aih, rv);
-                        # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
-                        # present, and if the server cannot send a response which is acceptable according to the
-                        # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
-                        return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                    try {
+                        res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
+                            aih."*/*" ? NOTHING : keys aih);
+                    } catch (hash<ExceptionInfo> ex) {
+                        logDebug("REST DBG: %s", get_exception_string(ex));
+                        if (ex.err == "ACCEPT-ERROR") {
+                            # Allow subclasses to sanitize the response body and retry
+                            auto orig_body = rv.body;
+                            responseSerializationError(cx, aih, \rv);
+                            if (rv.body !== orig_body) {
+                                # Body was sanitized; retry serialization
+                                try {
+                                    res = validator.processResponse(hdr.method, req.path, rv."code", rv.body,
+                                        rv.hdr, aih."*/*" ? NOTHING : keys aih);
+                                } catch (hash<ExceptionInfo> ex2) {
+                                    logDebug("REST DBG retry failed: %s", get_exception_string(ex2));
+                                    # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header
+                                    # field is present, and if the server cannot send a response which is acceptable
+                                    # according to the combined Accept field value, then the server SHOULD send a
+                                    # 406 (not acceptable) response.
+                                    return AbstractHttpRequestHandler::makeResponse(406, ex2.desc);
+                                }
+                            } else {
+                                # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header field is
+                                # present, and if the server cannot send a response which is acceptable according to the
+                                # combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.
+                                return AbstractHttpRequestHandler::makeResponse(406, ex.desc);
+                            }
+                        }
+
+                        # add original resp to the exception (only if it was an error)
+                        if (rv."code" >= 400 && rv."code" < 600) {
+                            ex.desc += sprintf(" ... Original response: code: %d, body: %y, hdr: %y", rv."code",
+                                rv.body, rv.hdr);
+                        }
+
+                        rethrow ex.err, ex.desc;
                     }
 
-                    # add original resp to the exception (only if it was an error)
-                    if (rv."code" >= 400 && rv."code" < 600) {
-                        ex.desc += sprintf(" ... Original response: code: %d, body: %y, hdr: %y", rv."code", rv.body,
-                            rv.hdr);
-                    }
+                    logDebug("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
+                        res.body);
 
-                    rethrow ex.err, ex.desc;
+                    rv += {
+                        "body": res.body,
+                        "hdr": res.hdr,
+                    };
+
+                    logDebug("REST DBG: response serialization: %d %s (%d bytes)", rv."code",
+                        rv.hdr."Content-Type" ?? "n/a", rv.body.size());
                 }
-
-                logDebug("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
-                    res.body);
-
-                rv += {
-                    "body": res.body,
-                    "hdr": res.hdr,
-                };
-
-                logDebug("REST DBG: response serialization: %d %s (%d bytes)", rv."code",
-                    rv.hdr."Content-Type" ?? "n/a", rv.body.size());
             }
 
             #logDebug("REST DBG: rv: %N", rv);
+
+            if (exists rv.raw_response) {
+                delete rv."raw_response";
+            }
 
             return cast<hash<HttpResponseInfo>>(rv);
         }
@@ -1525,8 +1629,15 @@ public namespace RestHandler {
         requestDeserializationError(hash<auto> hdr, hash<auto> cx, string body) {
         }
 
-        #! default implementation is empty
-        responseSerializationError(hash<auto> cx, *hash<auto> aih, hash<auto> rv) {
+        #! Called when response serialization fails
+        /** Subclasses can override this method to sanitize the response body and allow retry.
+            If the body is modified, serialization will be retried with the new body.
+
+            @param cx the call context hash
+            @param aih the accepted content types from the client
+            @param rv reference to the response hash; modify rv.body to sanitize and retry
+        */
+        responseSerializationError(hash<auto> cx, *hash<auto> aih, reference rv) {
         }
 
         #! This method is called with informational log messages

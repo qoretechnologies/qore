@@ -114,6 +114,7 @@ synchronized sub internal_deadlock_b(Test t, *Counter c) {
 class DeadlockTest inherits QUnit::Test {
     constructor() : QUnit::Test("Deadlock test", "1.0") {
         addTestCase("issue 2817", \issue2817());
+        addTestCase("sub-millisecond timeout", \subMillisecondTimeout());
         addTestCase("Test deadlocks", \testDeadlocks());
         set_return_value(main());
     }
@@ -139,6 +140,26 @@ class DeadlockTest inherits QUnit::Test {
         on_exit l.writeUnlock();
         c.broadcast();
         assertTrue(True);
+    }
+
+    subMillisecondTimeout() {
+        Mutex m();
+        Condition cond();
+        m.lock();
+        on_exit m.unlock();
+
+        # sub-millisecond timeout must not block indefinitely
+        # (previously truncated to 0ms, which is the "indefinite wait" sentinel)
+        int rc = cond.wait(m, 500us);
+        assertEq(ETIMEDOUT, rc, "sub-ms timeout (500us)");
+
+        # sanity baseline: 1ms timeout
+        rc = cond.wait(m, 1ms);
+        assertEq(ETIMEDOUT, rc, "1ms timeout baseline");
+
+        # 999us should also not block
+        rc = cond.wait(m, 999us);
+        assertEq(ETIMEDOUT, rc, "sub-ms timeout (999us)");
     }
 
     mutex_gate_deadlock_a(Counter c, Mutex m, Gate g) {
@@ -255,20 +276,28 @@ class DeadlockTest inherits QUnit::Test {
     testDeadlocks() {
         # internal deadlock with synchronized methods
         Counter c(2);
+        Counter done(1);
         D1 d1();
         D2 d2();
-        background d1.m(self, d2, c);
+        background sub () { d1.m(self, d2, c); done.dec(); }();
         d2.m(self, d1, c);
+        done.waitForZero();
+
         # internal deadlock with synchronized static methods
         c.inc();
         c.inc();
-        background D1::sm(self, c);
+        done.inc();
+        background sub () { D1::sm(self, c); done.dec(); }();
         D2::sm(self, c);
+        done.waitForZero();
+
         # internal deadlock with synchronized functions
         c.inc();
         c.inc();
-        background internal_deadlock_a(self, c);
+        done.inc();
+        background sub () { internal_deadlock_a(self, c); done.dec(); }();
         internal_deadlock_b(self, c);
+        done.waitForZero();
 
         # deadlock tests with qore classes and explicit locking
         Mutex m();
@@ -277,8 +306,10 @@ class DeadlockTest inherits QUnit::Test {
         # increment counter for synchronization
         c.inc();
         c.inc();
-        background mutex_gate_deadlock_a(c, m, g);
+        done.inc();
+        background sub () { mutex_gate_deadlock_a(c, m, g); done.dec(); }();
         mutex_gate_deadlock_b(c, m, g);
+        done.waitForZero();
 
         # deadlock tests with other classes
         RWLock rw1();
@@ -287,8 +318,10 @@ class DeadlockTest inherits QUnit::Test {
         # increment counter for synchronization
         c.inc();
         c.inc();
-        background readwrite_deadlock_c(c, rw1, rw2);
+        done.inc();
+        background sub () { readwrite_deadlock_c(c, rw1, rw2); done.dec(); }();
         readwrite_deadlock_d(c, rw1, rw2);
+        done.waitForZero();
 
         # mutex tests
         m.lock();
@@ -313,6 +346,9 @@ class DeadlockTest inherits QUnit::Test {
         rw1.writeUnlock();
         rw1.readLock();
         assertThrows('LOCK-ERROR', "RWLock::writeUnlock", sub () {rw1.writeUnlock();});
+        # read-to-write lock upgrade must be detected as LOCK-ERROR, not THREAD-DEADLOCK
+        assertThrows('LOCK-ERROR', "read lock.*read-to-write lock upgrades are not supported",
+            sub () {rw1.writeLock();});
 
         rw1.readUnlock();
 
@@ -323,48 +359,64 @@ class DeadlockTest inherits QUnit::Test {
         # increment counter for synchronization
         c.inc();
         c.inc();
-        background cond_test(c, cond, m, 1);
-        background cond_test(c, cond, m, 2);
+        done.inc();
+        done.inc();
+        background sub () { cond_test(c, cond, m, 1); done.dec(); }();
+        background sub () { cond_test(c, cond, m, 2); done.dec(); }();
         c.waitForZero();
         # lock and unlock to ensure there are 2 condition variables waiting on this Mutex
         m.lock();
         m.unlock();
         assertEq(2, cond.wait_count(m));
         assertThrows('LOCK-ERROR', "Mutex object deleted", sub () {delete m;});
+        done.waitForZero();
 
         # try it with a RWLock object
         c.inc();
         c.inc();
-        background rwl_cond_test(c, cond, rw1, 1);
-        background rwl_cond_test(c, cond, rw1, 2);
+        done.inc();
+        done.inc();
+        background sub () { rwl_cond_test(c, cond, rw1, 1); done.dec(); }();
+        background sub () { rwl_cond_test(c, cond, rw1, 2); done.dec(); }();
         c.waitForZero();
-        # lock and unlock to ensure until there are 2 condition variables waiting on this Mutex
+        # lock and unlock to ensure there are 2 condition variables waiting on this RWLock
         rw1.writeLock();
         rw1.writeUnlock();
         assertThrows('RWLOCK-ERROR', "RWLock object deleted", sub () {delete rw1;});
+        done.waitForZero();
 
         # make sure threads sleeping on a counter wake up with an exception
         # when the counter is deleted
         Counter c1();
         c1.inc();
-        background counter_test(c1, 1);
-        background counter_test(c1, 2);
-        # sleep until there are 2 counter variables waiting on this Mutex
-        while (c1.getWaiting() != 2)
+        done.inc();
+        done.inc();
+        background sub () { counter_test(c1, 1); done.dec(); }();
+        background sub () { counter_test(c1, 2); done.dec(); }();
+        # sleep until there are 2 counter variables waiting on this Counter
+        while (c1.getWaiting() != 2) {
             usleep(10ms);
+        }
         assertThrows('COUNTER-ERROR', "Counter deleted while", sub () {delete c1;});
+        done.waitForZero();
 
         # make sure threads sleeping on a Queue wake up with an exception
         # when the Queue is deleted
         Queue q();
-        background queue_test(q, 1);
-        background queue_test(q, 2);
+        done.inc();
+        done.inc();
+        background sub () { queue_test(q, 1); done.dec(); }();
+        background sub () { queue_test(q, 2); done.dec(); }();
         # sleep until there are 2 threads waiting on this Queue
-        while (q.getWaiting() != 2)
+        while (q.getWaiting() != 2) {
             usleep(10ms);
+        }
         assertThrows('QUEUE-ERROR', "Queue deleted while", sub () {delete q;});
+        done.waitForZero();
 
         # test thread resource tracking checks
-        background test_thread_resources();
+        done.inc();
+        background sub () { test_thread_resources(); done.dec(); }();
+        done.waitForZero();
     }
 }

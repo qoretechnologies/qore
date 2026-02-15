@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 
 QoreString QoreExtractOperatorNode::extract_str("extract operator expression");
@@ -40,7 +41,7 @@ QoreString *QoreExtractOperatorNode::getAsString(bool &del, int foff, ExceptionS
 }
 
 int QoreExtractOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat(&extract_str);
+    qore_string_private::get(str)->concat(&extract_str);
     return 0;
 }
 
@@ -84,7 +85,6 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         err = -1;
     }
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-        // FIXME: raise an exception wth %strict-types
         parse_context.typeInfo->doNonNumericWarning(loc, "the offset expression (2nd position) with the 'extract' " \
             "operator is ");
     }
@@ -96,7 +96,6 @@ int QoreExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             err = -1;
         }
         if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-            // FIXME: raise an exception wth %strict-types
             parse_context.typeInfo->doNonNumericWarning(loc, "the length expression (3nd position) with the " \
                 "'extract' operator is ");
         }

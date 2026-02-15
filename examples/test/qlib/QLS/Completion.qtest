@@ -1,0 +1,616 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Completion.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreCodeCompletion
+%requires ../../../../qlib/QLS
+
+%exec-class CompletionTest
+
+#! Test-local completion provider that wraps Document methods
+/** Mirrors the CSTCompletionProvider logic but is accessible from the test.
+    The CSTSearcher returns flat hashes with keys: name, kind, location, scope_level,
+    typeName, access, isStatic (no nested "symbol" sub-hash).
+*/
+class TestCSTProvider inherits QoreCodeCompletion::AbstractCompletionProvider {
+    private {
+        QLS::Document doc;
+        hash position;
+    }
+
+    constructor(QLS::Document doc, hash position) {
+        self.doc = doc;
+        self.position = position;
+    }
+
+    int getParseOptions() {
+        return doc.getParseDirectiveOptions();
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getVisibleSymbols(string prefix) {
+        *list symbols = doc.findScopeSymbolsDetailed(position);
+        if (!symbols) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (symbols) {
+            string name = sym.name;
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getClassNames(string prefix) {
+        *list symbols = doc.findScopeSymbolsDetailed(position);
+        if (!symbols) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (symbols) {
+            if (sym.kind == QLS::ASTSymbolKind.Class) {
+                string name = sym.name;
+                if (!seen{name}
+                        && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                    seen{name} = True;
+                    result += <QoreCodeCompletion::CompletionItem>{
+                        "label": name,
+                        "kind": "class",
+                        "isCallable": True,
+                    };
+                }
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
+        *string typeName = doc.getSymbolType({
+            "line": position.line,
+            "character": position.character > 0 ? position.character - 1 : 0,
+        });
+        if (!typeName) {
+            typeName = target;
+        }
+
+        *list members = doc.findTypeMembers(typeName, True);
+        if (!members) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (members) {
+            string name = sym.name;
+            if (name == "constructor" || name == "destructor" || name == "copy") {
+                continue;
+            }
+            if (sym.isStatic) {
+                continue;
+            }
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    list<hash<QoreCodeCompletion::CompletionItem>> getScopeMembers(string target, string prefix) {
+        *list members = doc.findTypeMembers(target, True);
+        if (!members) {
+            return ();
+        }
+
+        list<hash<QoreCodeCompletion::CompletionItem>> result = ();
+        hash<string, bool> seen;
+        foreach hash sym in (members) {
+            string name = sym.name;
+            if (name == "constructor" || name == "destructor") {
+                continue;
+            }
+            if (!seen{name}
+                    && QoreCodeCompletion::CompletionEngine::matchesPrefix(name, prefix)) {
+                seen{name} = True;
+                string kind = symbolKindToString(sym.kind);
+                bool callable = kind == "function" || kind == "method";
+                result += <QoreCodeCompletion::CompletionItem>{
+                    "label": name,
+                    "kind": kind,
+                    "isCallable": callable,
+                };
+            }
+        }
+        return result;
+    }
+
+    private static string symbolKindToString(int kind) {
+        switch (kind) {
+            case QLS::ASTSymbolKind.Function: return "function";
+            case QLS::ASTSymbolKind.Class: return "class";
+            case QLS::ASTSymbolKind.Method: return "method";
+            case QLS::ASTSymbolKind.Property: return "member";
+            case QLS::ASTSymbolKind.Field: return "member";
+            case QLS::ASTSymbolKind.Variable: return "variable";
+            case QLS::ASTSymbolKind.Constant: return "constant";
+            case QLS::ASTSymbolKind.Namespace: return "namespace";
+            case QLS::ASTSymbolKind.Enum: return "enum";
+            case QLS::ASTSymbolKind.Constructor: return "method";
+            case QLS::ASTSymbolKind.Interface: return "hashdecl";
+            case QLS::ASTSymbolKind.Module: return "namespace";
+        }
+        return "variable";
+    }
+}
+
+class CompletionTest inherits QUnit::Test {
+    private {
+        #! Test source with known declarations
+        const TestSource = "%modern
+
+namespace TestNs {
+    class MyClass {
+        public {
+            int myField;
+            string name;
+        }
+
+        constructor() {}
+
+        int getValue() { return 1; }
+        string getName() { return name; }
+        static int staticHelper() { return 0; }
+    }
+
+    class OtherClass inherits MyClass {
+        doWork() {}
+    }
+
+    sub myFunc(int x) { return x + 1; }
+
+    const MY_CONST = 42;
+}
+
+sub topFunc() { return 1; }
+";
+
+        #! Source for testing dot/scope completion (complete expression, no parse errors)
+        const VarCompletionSource = "%modern
+
+class Foo {
+    public {
+        int bar;
+        string baz;
+    }
+
+    constructor() {}
+
+    int getBar() { return bar; }
+    string getBaz() { return baz; }
+    static Foo create() { return new Foo(); }
+}
+
+sub test() {
+    Foo obj = new Foo();
+    int x = obj.getBar();
+}
+";
+    }
+
+    constructor() : Test("QLS Completion", "1.0") {
+        addTestCase("Document.getLine", \testDocumentGetLine());
+        addTestCase("Document.findScopeSymbolsDetailed", \testDocumentFindScopeSymbolsDetailed());
+        addTestCase("Document.getSymbolType", \testDocumentGetSymbolType());
+        addTestCase("Document.findTypeMembers", \testDocumentFindTypeMembers());
+        addTestCase("Provider: getVisibleSymbols", \testGetVisibleSymbols());
+        addTestCase("Provider: getClassNames", \testGetClassNames());
+        addTestCase("Provider: getScopeMembers", \testGetScopeMembers());
+        addTestCase("Provider: getInstanceMembers", \testGetInstanceMembers());
+        addTestCase("Engine: identifier completion", \testEngineIdentifier());
+        addTestCase("Engine: new completion", \testEngineNew());
+        addTestCase("Engine: scope completion", \testEngineScope());
+        addTestCase("Engine: dot context detection", \testEngineDotContext());
+        addTestCase("Empty document: graceful handling", \testEmptyDocument());
+        addTestCase("Parse error document: graceful handling", \testParseErrorDocument());
+
+        # Parse directive option tests
+        addTestCase("Document.getParseDirectiveOptions: modern", \testParseDirectiveModern());
+        addTestCase("Document.getParseDirectiveOptions: multiple directives",
+            \testParseDirectiveMultiple());
+        addTestCase("Document.getParseDirectiveOptions: no directives",
+            \testParseDirectiveNone());
+        addTestCase("Document.getParseDirectiveOptions: caching", \testParseDirectiveCaching());
+        addTestCase("Parse options: no-thread-control filters background keyword",
+            \testParseOptionsNoThreadKeyword());
+
+        set_return_value(main());
+    }
+
+    private QLS::Document makeDoc(string text) {
+        return new QLS::Document("file:///test.q", text, "qore", 1);
+    }
+
+    testDocumentGetLine() {
+        string text = "line0\nline1\nline2\n";
+        QLS::Document doc = makeDoc(text);
+
+        assertEq("line0", doc.getLine(0));
+        assertEq("line1", doc.getLine(1));
+        assertEq("line2", doc.getLine(2));
+        # Out of range
+        assertNothing(doc.getLine(99));
+        assertNothing(doc.getLine(-1));
+    }
+
+    testDocumentFindScopeSymbolsDetailed() {
+        QLS::Document doc = makeDoc(TestSource);
+        assertEq(0, doc.getParseErrorCount(), "test source should parse without errors");
+
+        # Position inside namespace body — should find symbols in scope
+        *list symbols = doc.findScopeSymbolsDetailed({"line": 5, "character": 0});
+        assertTrue(exists symbols, "should find symbols at position");
+        assertTrue(symbols.size() > 0, "should have at least one symbol");
+
+        # Each symbol should have the expected flat structure
+        hash firstSym = symbols[0];
+        assertTrue(exists firstSym.name, "symbol should have 'name' key");
+        assertTrue(exists firstSym.kind, "symbol should have 'kind' key");
+    }
+
+    testDocumentGetSymbolType() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "var source should parse without errors");
+
+        # Try to get type of 'obj' variable — may or may not resolve depending on CSTSearcher
+        # Just verify it doesn't crash — type resolution is best-effort
+        doc.getSymbolType({"line": 17, "character": 4});
+        assertTrue(True, "getSymbolType should not crash");
+    }
+
+    testDocumentFindTypeMembers() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "source should parse without errors");
+
+        # Find members of "Foo" class
+        *list members = doc.findTypeMembers("Foo", True);
+        assertTrue(exists members, "Foo should have members");
+        assertTrue(members.size() > 0, "Foo should have at least one member");
+        hash<string, bool> names;
+        foreach hash sym in (members) {
+            names{sym.name} = True;
+        }
+        # Should find at least getBar and getBaz
+        assertTrue(names{"getBar"} ?? False, "should find getBar method");
+        assertTrue(names{"getBaz"} ?? False, "should find getBaz method");
+
+        # Nonexistent type
+        *list noMembers = doc.findTypeMembers("NonexistentType_xyz", True);
+        assertNothing(noMembers, "nonexistent type should return NOTHING");
+    }
+
+    testGetVisibleSymbols() {
+        QLS::Document doc = makeDoc(TestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getVisibleSymbols("");
+        assertTrue(items.size() > 0, "getVisibleSymbols should return symbols");
+
+        # Check that some known symbols are present
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"MyClass"} ?? False, "should find MyClass");
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getVisibleSymbols("My");
+        assertTrue(filtered.size() > 0, "should find symbols starting with 'My'");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("My"),
+                sprintf("filtered item '%s' should start with 'My'", item.label));
+        }
+
+        # Nonexistent prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> none = provider.getVisibleSymbols("Zzz_nonexistent_xyz");
+        assertEq(0, none.size(), "nonexistent prefix should return empty");
+    }
+
+    testGetClassNames() {
+        QLS::Document doc = makeDoc(TestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getClassNames("");
+        assertTrue(items.size() > 0, "should find class names");
+
+        # All returned items should be classes
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            assertEq("class", item.kind, sprintf("'%s' should be kind 'class'", item.label));
+            assertTrue(item.isCallable, sprintf("class '%s' should be callable", item.label));
+        }
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getClassNames("My");
+        assertTrue(filtered.size() > 0, "should find classes starting with 'My'");
+        hash<string, bool> names = map {$1.label: True}, filtered;
+        assertTrue(names{"MyClass"} ?? False, "should find MyClass with 'My' prefix");
+    }
+
+    testGetScopeMembers() {
+        QLS::Document doc = makeDoc(TestSource);
+
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getScopeMembers("TestNs", "");
+
+        # Check for known members of TestNs
+        if (items.size() > 0) {
+            hash<string, bool> names = map {$1.label: True}, items;
+            bool hasAny = (names{"MyClass"} ?? False) || (names{"myFunc"} ?? False)
+                || (names{"MY_CONST"} ?? False);
+            assertTrue(hasAny, "should find at least one of MyClass, myFunc, MY_CONST in TestNs scope");
+        }
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getScopeMembers("TestNs", "My");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("My"),
+                sprintf("filtered scope item '%s' should start with 'My'", item.label));
+        }
+    }
+
+    testGetInstanceMembers() {
+        QLS::Document doc = makeDoc(VarCompletionSource);
+        assertEq(0, doc.getParseErrorCount(), "var completion source should parse without errors");
+
+        TestCSTProvider provider(doc, {"line": 18, "character": 16});
+
+        # Get instance members for "Foo" (fallback path)
+        list<hash<QoreCodeCompletion::CompletionItem>> items = provider.getInstanceMembers("Foo", "");
+        assertTrue(items.size() > 0, "should find instance members of Foo");
+        hash<string, bool> names = map {$1.label: True}, items;
+        # constructor should be skipped
+        assertFalse(names{"constructor"} ?? False, "constructor should be skipped");
+        # static methods should be skipped for dot access
+        assertFalse(names{"create"} ?? False, "static methods should be skipped for dot access");
+
+        # Filter by prefix
+        list<hash<QoreCodeCompletion::CompletionItem>> filtered = provider.getInstanceMembers("Foo", "get");
+        assertTrue(filtered.size() > 0, "should find members starting with 'get'");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (filtered) {
+            assertTrue(item.label.equalPartial("get"),
+                sprintf("filtered dot item '%s' should start with 'get'", item.label));
+        }
+    }
+
+    testEngineIdentifier() {
+        QLS::Document doc = makeDoc(TestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        # Complete with "my" — should match keyword + symbols
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("my");
+        assertTrue(items.size() > 0, "identifier completion for 'my' should return results");
+
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"my"} ?? False, "should include 'my' keyword");
+
+        # Results should be sorted alphabetically
+        for (int i = 1; i < items.size(); i++) {
+            assertTrue(items[i - 1].label <= items[i].label,
+                sprintf("results should be sorted: '%s' <= '%s'", items[i - 1].label, items[i].label));
+        }
+    }
+
+    testEngineNew() {
+        QLS::Document doc = makeDoc(TestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("new My");
+        assertTrue(items.size() > 0, "new completion for 'My' should return results");
+        # Should only return classes
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            assertEq("class", item.kind, sprintf("new completion '%s' should be class", item.label));
+        }
+
+        # Empty prefix after "new " should return all visible classes
+        list<hash<QoreCodeCompletion::CompletionItem>> all = engine.complete("new ");
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (all) {
+            assertEq("class", item.kind, sprintf("new completion '%s' should be class", item.label));
+        }
+    }
+
+    testEngineScope() {
+        QLS::Document doc = makeDoc(TestSource);
+        TestCSTProvider provider(doc, {"line": 5, "character": 0});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("TestNs::");
+        if (items.size() > 0) {
+            hash<string, bool> names = map {$1.label: True}, items;
+            bool hasExpected = (names{"MyClass"} ?? False) || (names{"myFunc"} ?? False);
+            assertTrue(hasExpected, "scope completion should find TestNs members");
+        }
+    }
+
+    testEngineDotContext() {
+        # Test context detection for dot completion
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.get");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx.kind, "should detect dot context");
+        assertEq("get", ctx.prefix);
+        assertEq("obj", ctx.target);
+
+        # Dot without prefix
+        hash<auto> ctx2 = QoreCodeCompletion::CompletionEngine::extractCompletionContext("obj.");
+        assertEq(QoreCodeCompletion::CC_DOT, ctx2.kind);
+        assertEq("", ctx2.prefix);
+        assertEq("obj", ctx2.target);
+    }
+
+    testEmptyDocument() {
+        QLS::Document doc = makeDoc("");
+        TestCSTProvider provider(doc, {"line": 0, "character": 0});
+
+        # Should return empty lists gracefully
+        list<hash<QoreCodeCompletion::CompletionItem>> vis = provider.getVisibleSymbols("");
+        assertEq(Type::List, vis.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> cls = provider.getClassNames("");
+        assertEq(Type::List, cls.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> dot = provider.getInstanceMembers("x", "");
+        assertEq(Type::List, dot.type());
+
+        list<hash<QoreCodeCompletion::CompletionItem>> scope = provider.getScopeMembers("x", "");
+        assertEq(Type::List, scope.type());
+
+        # Engine should also handle gracefully
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("");
+        assertEq(0, items.size(), "empty input on empty doc should return no items");
+    }
+
+    testParseErrorDocument() {
+        QLS::Document doc = makeDoc("%modern\nclass { broken syntax\n");
+        assertGt(0, doc.getParseErrorCount(), "should have parse errors");
+
+        TestCSTProvider provider(doc, {"line": 0, "character": 0});
+
+        # Should not crash
+        list<hash<QoreCodeCompletion::CompletionItem>> vis = provider.getVisibleSymbols("");
+        assertEq(Type::List, vis.type());
+
+        QoreCodeCompletion::CompletionEngine engine(provider);
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("cl");
+        # At minimum, should get keywords
+        assertTrue(items.size() > 0, "should get at least keyword completions even with parse errors");
+        hash<string, bool> names = map {$1.label: True}, items;
+        assertTrue(names{"class"} ?? False, "should find 'class' keyword");
+    }
+
+    testParseDirectiveModern() {
+        QLS::Document doc = makeDoc("%modern\nsub foo() { return 1; }\n");
+        int po = doc.getParseDirectiveOptions();
+        # %modern implies PO_STRICT_ARGS and PO_REQUIRE_TYPES
+        assertTrue((po & PO_STRICT_ARGS) != 0,
+            "%modern should include PO_STRICT_ARGS");
+        assertTrue((po & PO_REQUIRE_TYPES) != 0,
+            "%modern should include PO_REQUIRE_TYPES");
+    }
+
+    testParseDirectiveMultiple() {
+        QLS::Document doc = makeDoc(
+            "%new-style\n%no-thread-control\n%no-filesystem\nsub bar() {}\n"
+        );
+        int po = doc.getParseDirectiveOptions();
+        assertTrue((po & PO_NEW_STYLE) != 0, "should have PO_NEW_STYLE");
+        assertTrue((po & PO_NO_THREAD_CONTROL) != 0, "should have PO_NO_THREAD_CONTROL");
+        assertTrue((po & PO_NO_FILESYSTEM) != 0, "should have PO_NO_FILESYSTEM");
+    }
+
+    testParseDirectiveNone() {
+        QLS::Document doc = makeDoc("sub foo() { return 1; }\n");
+        int po = doc.getParseDirectiveOptions();
+        assertEq(0, po, "no directives should return 0");
+    }
+
+    testParseDirectiveCaching() {
+        string text1 = "%modern\nsub foo() {}\n";
+        QLS::Document doc = makeDoc(text1);
+        int po1 = doc.getParseDirectiveOptions();
+        # Call again — should return cached result
+        int po2 = doc.getParseDirectiveOptions();
+        assertEq(po1, po2, "cached result should match");
+
+        # After didChange, cache should be invalidated
+        doc.didChange({"text": "%no-thread-control\nsub bar() {}\n"});
+        int po3 = doc.getParseDirectiveOptions();
+        assertTrue((po3 & PO_NO_THREAD_CONTROL) != 0,
+            "after didChange, should reflect new directives");
+        # Old flags should not be present
+        assertEq(0, po3 & PO_STRICT_ARGS,
+            "after didChange, old PO_STRICT_ARGS should be gone");
+    }
+
+    testParseOptionsNoThreadKeyword() {
+        QLS::Document doc = makeDoc(
+            "%modern\n%no-thread-control\n\nsub test() {\n    int x = 1;\n}\n"
+        );
+        assertEq(0, doc.getParseErrorCount(), "should parse without errors");
+
+        # Position inside test() body
+        TestCSTProvider provider(doc, {"line": 4, "character": 4});
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        # "background" keyword should be filtered with %no-thread-control
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("ba");
+        bool has_background = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "background" && item.kind == "keyword") {
+                has_background = True;
+            }
+        }
+        assertFalse(has_background,
+            "'background' keyword should be filtered with %no-thread-control");
+
+        # "thread_exit" keyword should also be filtered
+        items = engine.complete("thread_");
+        bool has_thread_exit = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "thread_exit" && item.kind == "keyword") {
+                has_thread_exit = True;
+            }
+        }
+        assertFalse(has_thread_exit,
+            "'thread_exit' keyword should be filtered with %no-thread-control");
+
+        # Without restrictions, "break" should still appear (different keyword)
+        items = engine.complete("br");
+        bool has_break = False;
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (items) {
+            if (item.label == "break" && item.kind == "keyword") {
+                has_break = True;
+            }
+        }
+        assertTrue(has_break, "'break' keyword should still appear (not restricted)");
+    }
+}

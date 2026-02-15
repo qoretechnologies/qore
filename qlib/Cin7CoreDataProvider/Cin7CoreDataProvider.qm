@@ -1,0 +1,810 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore Cin7CoreDataProvider module definition
+
+/*  Cin7CoreDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) Cin7CoreRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module Cin7CoreDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Cin7Core (DEAR Inventory) services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new Cin7CoreDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": Cin7CoreDataProvider::AppName,
+            "display_name": "Cin7Core",
+            "short_desc": "Cin7Core inventory management platform",
+            "desc": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform "
+                "that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n"
+                "**Features:**\n"
+                "- Manage customers and suppliers\n"
+                "- Create and track sales orders\n"
+                "- Process payments and invoices\n"
+                "- Monitor inventory and stock levels\n"
+                "- Handle stock adjustments\n"
+                "- Track shipments and fulfillment\n\n"
+                "**Authentication:**\n"
+                "Cin7Core uses Account ID and API Key authentication. Both credentials are required and can be "
+                "obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, "
+                "then find the credentials on the Setup tab.",
+            "scheme": "cin7core",
+            "logo": Cin7CoreLogo,
+            "logo_file_name": "cin7core-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp,),
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # Search Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/customers",
+            "action": "search-customers",
+            "groups": "Customers",
+            "display_name": "Search Customers",
+            "short_desc": "List and search customers",
+            "desc": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, "
+                "or modification date.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomerList", new Cin7CoreCustomerDataType(), True);
+            },
+        });
+
+        # Create Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/create-customer",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreCreateCustomerDataProvider::ProviderInfo,
+        });
+
+        # Get Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-customer",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a customer by ID",
+            "desc": "Retrieve detailed information about a specific customer by their unique identifier.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetCustomerDataProvider::ProviderInfo,
+            "options": {
+                "ID": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer ID",
+                    "desc": "The unique identifier (GUID) of the customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Update Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/update-customer",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer's information in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreUpdateCustomerDataProvider::ProviderInfo,
+        });
+
+        # ========== SUPPLIER ACTIONS ==========
+
+        # Search Suppliers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/suppliers",
+            "action": "search-suppliers",
+            "groups": "Suppliers",
+            "display_name": "Search Suppliers",
+            "short_desc": "List and search suppliers",
+            "desc": "Retrieve a list of suppliers from Cin7Core with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreSuppliersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SupplierList", new Cin7CoreSupplierDataType(), True);
+            },
+        });
+
+        # Create Supplier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/create-supplier",
+            "action": "create-supplier",
+            "groups": "Suppliers",
+            "display_name": "Create Supplier",
+            "short_desc": "Create a new supplier",
+            "desc": "Create a new supplier in Cin7Core with contact information and payment terms.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreCreateSupplierDataProvider::ProviderInfo,
+        });
+
+        # Get Supplier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-supplier",
+            "action": "get-supplier",
+            "groups": "Suppliers",
+            "display_name": "Get Supplier",
+            "short_desc": "Get a supplier by ID",
+            "desc": "Retrieve detailed information about a specific supplier.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetSupplierDataProvider::ProviderInfo,
+            "options": {
+                "ID": <ActionOptionInfo>{
+                    "display_name": "Supplier ID",
+                    "short_desc": "The supplier ID",
+                    "desc": "The unique identifier (GUID) of the supplier to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "suppliers",
+                },
+            },
+        });
+
+        # Update Supplier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/update-supplier",
+            "action": "update-supplier",
+            "groups": "Suppliers",
+            "display_name": "Update Supplier",
+            "short_desc": "Update an existing supplier",
+            "desc": "Update an existing supplier's information in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreUpdateSupplierDataProvider::ProviderInfo,
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # Search Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/products",
+            "action": "search-products",
+            "groups": "Products",
+            "display_name": "Search Products",
+            "short_desc": "List and search products",
+            "desc": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, "
+                "category, or brand.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ProductList", new Cin7CoreProductDataType(), True);
+            },
+        });
+
+        # Get Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-product",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a product by ID",
+            "desc": "Retrieve detailed information about a specific product.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetProductDataProvider::ProviderInfo,
+            "options": {
+                "ID": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "desc": "The unique identifier (GUID) of the product to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # Find Product Availability
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/find-product-availability",
+            "action": "find-product-availability",
+            "groups": "Products",
+            "display_name": "Find Product Availability",
+            "short_desc": "Check product stock levels",
+            "desc": "Check product availability and stock levels across warehouse locations.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreFindProductAvailabilityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ProductAvailabilityList", new Cin7CoreProductAvailabilityDataType(), True);
+            },
+        });
+
+        # ========== SALES ACTIONS ==========
+
+        # Search Sales
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/sales",
+            "action": "search-sales",
+            "groups": "Sales",
+            "display_name": "Search Sales",
+            "short_desc": "List and search sales orders",
+            "desc": "Retrieve a list of sales orders from Cin7Core with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreSalesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SaleList", new Cin7CoreSaleDataType(), True);
+            },
+        });
+
+        # Create Sale
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/create-sale",
+            "action": "create-sale",
+            "groups": "Sales",
+            "display_name": "Create Sale",
+            "short_desc": "Create a new sale order",
+            "desc": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreCreateSaleDataProvider::ProviderInfo,
+        });
+
+        # Get Sale
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-sale",
+            "action": "get-sale",
+            "groups": "Sales",
+            "display_name": "Get Sale",
+            "short_desc": "Get a sale order by ID",
+            "desc": "Retrieve detailed information about a specific sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetSaleDataProvider::ProviderInfo,
+            "options": {
+                "ID": <ActionOptionInfo>{
+                    "display_name": "Sale ID",
+                    "short_desc": "The sale ID",
+                    "desc": "The unique identifier (GUID) of the sale to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "sales",
+                },
+            },
+        });
+
+        # Update Sale
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/update-sale",
+            "action": "update-sale",
+            "groups": "Sales",
+            "display_name": "Update Sale",
+            "short_desc": "Update an existing sale order",
+            "desc": "Update an existing sale order in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreUpdateSaleDataProvider::ProviderInfo,
+        });
+
+        # Delete Sale
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/delete-sale",
+            "action": "delete-sale",
+            "groups": "Sales",
+            "display_name": "Delete Sale",
+            "short_desc": "Delete (void) a sale order",
+            "desc": "Delete or void a sale order in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreDeleteSaleDataProvider::ProviderInfo,
+        });
+
+        # ========== SALE PAYMENT ACTIONS ==========
+
+        # Search Sale Payments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/sale-payments",
+            "action": "search-sale-payments",
+            "groups": "Payments",
+            "display_name": "Search Sale Payments",
+            "short_desc": "List and search sale payments",
+            "desc": "Retrieve a list of payments for sales.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreSalePaymentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("PaymentList", new Cin7CoreSalePaymentDataType(), True);
+            },
+        });
+
+        # Add Sale Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/add-sale-payment",
+            "action": "add-sale-payment",
+            "groups": "Payments",
+            "display_name": "Add Sale Payment",
+            "short_desc": "Add a payment to a sale",
+            "desc": "Record a payment against a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreAddSalePaymentDataProvider::ProviderInfo,
+        });
+
+        # Update Sale Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/update-sale-payment",
+            "action": "update-sale-payment",
+            "groups": "Payments",
+            "display_name": "Update Sale Payment",
+            "short_desc": "Update an existing payment",
+            "desc": "Update an existing payment on a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreUpdateSalePaymentDataProvider::ProviderInfo,
+        });
+
+        # Delete Sale Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/delete-sale-payment",
+            "action": "delete-sale-payment",
+            "groups": "Payments",
+            "display_name": "Delete Sale Payment",
+            "short_desc": "Delete a payment from a sale",
+            "desc": "Remove a payment from a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreDeleteSalePaymentDataProvider::ProviderInfo,
+        });
+
+        # ========== SALE ATTACHMENT ACTIONS ==========
+
+        # Add Sale Attachment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/add-sale-attachment",
+            "action": "add-sale-attachment",
+            "groups": "Attachments",
+            "display_name": "Add Sale Attachment",
+            "short_desc": "Add an attachment to a sale",
+            "desc": "Upload a file attachment to a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreAddSaleAttachmentDataProvider::ProviderInfo,
+        });
+
+        # Delete Sale Attachment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/delete-sale-attachment",
+            "action": "delete-sale-attachment",
+            "groups": "Attachments",
+            "display_name": "Delete Sale Attachment",
+            "short_desc": "Delete an attachment from a sale",
+            "desc": "Remove a file attachment from a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreDeleteSaleAttachmentDataProvider::ProviderInfo,
+        });
+
+        # ========== SALE FULFILLMENT ACTIONS ==========
+
+        # Add Sale Pack
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/add-sale-pack",
+            "action": "add-sale-pack",
+            "groups": "Fulfillment",
+            "display_name": "Add Sale Pack",
+            "short_desc": "Add a pack/pick record to a sale",
+            "desc": "Create a pack or pick task for fulfilling a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreAddSalePackDataProvider::ProviderInfo,
+        });
+
+        # Get Sale Pack
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-sale-pack",
+            "action": "get-sale-pack",
+            "groups": "Fulfillment",
+            "display_name": "Get Sale Pack",
+            "short_desc": "Get pack details for a sale",
+            "desc": "Retrieve pack/pick details for a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetSalePackDataProvider::ProviderInfo,
+        });
+
+        # Add Sale Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/add-sale-shipment",
+            "action": "add-sale-shipment",
+            "groups": "Fulfillment",
+            "display_name": "Add Sale Shipment",
+            "short_desc": "Add shipment/tracking to a sale",
+            "desc": "Add shipment details and tracking information to a sale order.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreAddSaleShipmentDataProvider::ProviderInfo,
+        });
+
+        # Find Sale Fulfilment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/find-sale-fulfilment",
+            "action": "find-sale-fulfilment",
+            "groups": "Fulfillment",
+            "display_name": "Find Sale Fulfilment",
+            "short_desc": "Find fulfilment tasks for sales",
+            "desc": "Search for fulfilment, pick, and pack tasks for sales.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreFindSaleFulfilmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("FulfilmentList", new Cin7CoreFulfilmentDataType(), True);
+            },
+        });
+
+        # ========== SALE LOOKUP ACTIONS ==========
+
+        # Find Sale Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/find-sale-invoice",
+            "action": "find-sale-invoice",
+            "groups": "Invoices",
+            "display_name": "Find Sale Invoices",
+            "short_desc": "Find invoices for sales",
+            "desc": "Search for invoices associated with sale orders.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreFindSaleInvoiceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InvoiceList", new Cin7CoreInvoiceDataType(), True);
+            },
+        });
+
+        # Find Sale Credit Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/find-sale-credit-note",
+            "action": "find-sale-credit-note",
+            "groups": "Invoices",
+            "display_name": "Find Sale Credit Notes",
+            "short_desc": "Find credit notes for sales",
+            "desc": "Search for credit notes associated with sale orders.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreFindSaleCreditNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CreditNoteList", new Cin7CoreCreditNoteDataType(), True);
+            },
+        });
+
+        # ========== STOCK ADJUSTMENT ACTIONS ==========
+
+        # Search Stock Adjustments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/stock-adjustments",
+            "action": "search-stock-adjustments",
+            "groups": "Inventory",
+            "display_name": "Search Stock Adjustments",
+            "short_desc": "List and search stock adjustments",
+            "desc": "Retrieve a list of stock adjustments from Cin7Core.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreStockAdjustmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("StockAdjustmentList", new Cin7CoreStockAdjustmentDataType(), True);
+            },
+        });
+
+        # Create Stock Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/create-stock-adjustment",
+            "action": "create-stock-adjustment",
+            "groups": "Inventory",
+            "display_name": "Create Stock Adjustment",
+            "short_desc": "Create a new stock adjustment",
+            "desc": "Create a new stock adjustment to modify inventory levels.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreCreateStockAdjustmentDataProvider::ProviderInfo,
+        });
+
+        # Get Stock Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/get-stock-adjustment",
+            "action": "get-stock-adjustment",
+            "groups": "Inventory",
+            "display_name": "Get Stock Adjustment",
+            "short_desc": "Get a stock adjustment by ID",
+            "desc": "Retrieve detailed information about a specific stock adjustment.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreGetStockAdjustmentDataProvider::ProviderInfo,
+        });
+
+        # Update Stock Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/update-stock-adjustment",
+            "action": "update-stock-adjustment",
+            "groups": "Inventory",
+            "display_name": "Update Stock Adjustment",
+            "short_desc": "Update an existing stock adjustment",
+            "desc": "Update an existing stock adjustment in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreUpdateStockAdjustmentDataProvider::ProviderInfo,
+        });
+
+        # Delete Stock Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/delete-stock-adjustment",
+            "action": "delete-stock-adjustment",
+            "groups": "Inventory",
+            "display_name": "Delete Stock Adjustment",
+            "short_desc": "Delete a stock adjustment",
+            "desc": "Delete or void a stock adjustment in Cin7Core.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreDeleteStockAdjustmentDataProvider::ProviderInfo,
+        });
+
+        # ========== ASSEMBLY ACTIONS ==========
+
+        # Find Assembly
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/find-assembly",
+            "action": "find-assembly",
+            "groups": "Inventory",
+            "display_name": "Find Assemblies",
+            "short_desc": "Find assembly/finished goods tasks",
+            "desc": "Search for assembly and finished goods tasks.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": Cin7CoreFindAssemblyDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("AssemblyList", new Cin7CoreAssemblyDataType(), True);
+            },
+        });
+
+        # ========== UTILITY ACTIONS ==========
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/make-api-call",
+            "action": "make-api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a generic API call",
+            "desc": "Make a generic API call to the Cin7Core API. This allows accessing API endpoints "
+                "not covered by other actions.",
+            "action_code": DPAT_API,
+            "data_provider_info": Cin7CoreMakeApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========
+
+        # New Payment Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_PAYMENT,
+            "action": EVENT_NEW_PAYMENT,
+            "groups": "Triggers",
+            "display_name": "New Payment",
+            "short_desc": "Trigger when a new payment is received",
+            "desc": "Fires when a new payment is detected on a sale via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PAYMENT,
+            "data_provider_info": Cin7CoreNewPaymentWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreSalePaymentDataType(); },
+        });
+
+        # New Sale Credit Note Authorized Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_SALE_CREDIT_NOTE_AUTHORIZED,
+            "action": EVENT_NEW_SALE_CREDIT_NOTE_AUTHORIZED,
+            "groups": "Triggers",
+            "display_name": "New Sale Credit Note Authorized",
+            "short_desc": "Trigger when a credit note is authorized",
+            "desc": "Fires when a new sale credit note is authorized via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SALE_CREDIT_NOTE_AUTHORIZED,
+            "data_provider_info": Cin7CoreNewSaleCreditNoteWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreCreditNoteDataType(); },
+        });
+
+        # New Sale Invoice Authorized Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_SALE_INVOICE_AUTHORIZED,
+            "action": EVENT_NEW_SALE_INVOICE_AUTHORIZED,
+            "groups": "Triggers",
+            "display_name": "New Sale Invoice Authorized",
+            "short_desc": "Trigger when an invoice is authorized",
+            "desc": "Fires when a new sale invoice is authorized via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SALE_INVOICE_AUTHORIZED,
+            "data_provider_info": Cin7CoreNewSaleInvoiceWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreInvoiceDataType(); },
+        });
+
+        # Sale Tracking Changed Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_SALE_TRACKING_CHANGED,
+            "action": EVENT_SALE_TRACKING_CHANGED,
+            "groups": "Triggers",
+            "display_name": "Sale Tracking Changed",
+            "short_desc": "Trigger when tracking information changes",
+            "desc": "Fires when sale tracking or shipment information changes via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SALE_TRACKING_CHANGED,
+            "data_provider_info": Cin7CoreSaleTrackingWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreFulfilmentDataType(); },
+        });
+
+        # Sale Voided Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_SALE_VOIDED,
+            "action": EVENT_SALE_VOIDED,
+            "groups": "Triggers",
+            "display_name": "Sale Voided",
+            "short_desc": "Trigger when a sale is voided",
+            "desc": "Fires when a sale order is voided via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SALE_VOIDED,
+            "data_provider_info": Cin7CoreSaleVoidedWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreSaleDataType(); },
+        });
+
+        # Stock Level Update Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_STOCK_LEVEL_UPDATE,
+            "action": EVENT_STOCK_LEVEL_UPDATE,
+            "groups": "Triggers",
+            "display_name": "Stock Level Update",
+            "short_desc": "Trigger when stock levels change",
+            "desc": "Fires when product stock/inventory levels change via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_STOCK_LEVEL_UPDATE,
+            "data_provider_info": Cin7CoreStockLevelUpdateWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreProductAvailabilityDataType(); },
+        });
+
+        # Customer Updated Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_CUSTOMER_UPDATED,
+            "action": EVENT_CUSTOMER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Customer Updated",
+            "short_desc": "Trigger when a customer is created or updated",
+            "desc": "Fires when a customer is created or modified via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_UPDATED,
+            "data_provider_info": Cin7CoreCustomerUpdatedWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreCustomerDataType(); },
+        });
+
+        # Supplier Updated Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": Cin7CoreDataProvider::AppName,
+            "path": "/events/" + EVENT_SUPPLIER_UPDATED,
+            "action": EVENT_SUPPLIER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Supplier Updated",
+            "short_desc": "Trigger when a supplier is created or updated",
+            "desc": "Fires when a supplier is created or modified via polling.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SUPPLIER_UPDATED,
+            "data_provider_info": Cin7CoreSupplierUpdatedWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new Cin7CoreSupplierDataType(); },
+        });
+    };
+}
+
+/** @mainpage Cin7CoreDataProvider Module
+
+    @tableofcontents
+
+    @section cin7coredataproviderintro Cin7CoreDataProvider Introduction
+
+    The %Cin7CoreDataProvider module provides a data provider API for Cin7Core
+    (formerly DEAR Inventory) services through the Cin7Core REST API.
+
+    To use this module, use \c "%requires Cin7CoreDataProvider" in your code.
+
+    All the public symbols in the module are defined in the Cin7CoreDataProvider namespace.
+
+    The main classes are:
+    - @ref Cin7CoreDataProvider::Cin7CoreDataProvider "Cin7CoreDataProvider":
+      the root data provider for Cin7Core with child providers for customers, suppliers,
+      products, sales, payments, and more
+
+    @par Authentication:
+    Cin7Core uses Account ID and API Key authentication. Both credentials are required
+    and can be obtained from the Cin7Core application:
+    1. Go to https://inventory.dearsystems.com/ExternalApi
+    2. Create a New Application or select an existing one
+    3. Open the **Setup** tab for the Application
+    4. Copy the **Account ID** and **Application Key**
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires Cin7CoreDataProvider
+
+Cin7CoreDataProvider cin7core({
+    "account_id": ENV.CIN7CORE_ACCOUNT_ID,
+    "apikey": ENV.CIN7CORE_API_KEY,
+});
+
+# Search for customers
+list<hash<auto>> customers = cin7core.getChildProvider("customers").searchRecords({}, {
+    "Limit": 10,
+});
+printf("Found %d customers\n", customers.size());
+
+# Create a new customer
+hash<auto> new_customer = cin7core.getChildProvider("create-customer").doRequest({
+    "Name": "Test Customer",
+    "Currency": "USD",
+});
+printf("Created customer: %s\n", new_customer.ID);
+    @endcode
+
+    @section cin7coredataproviderrelnotes Release Notes
+
+    @subsection cin7coredataproviderv1_0 Cin7CoreDataProvider v1.0
+    - the initial version of the %Cin7CoreDataProvider module
+*/
+
+#! Contains all public definitions in the Cin7CoreDataProvider module
+public namespace Cin7CoreDataProvider {
+}

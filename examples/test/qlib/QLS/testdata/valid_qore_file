@@ -1,0 +1,3 @@
+#!/usr/bin/env qore
+
+this file is "valid" qore file by its "magic" line

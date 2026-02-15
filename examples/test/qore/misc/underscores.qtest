@@ -9,13 +9,12 @@
 
 class __ {}
 
-namespace ___ {}
-class ___::____
-{
-    int _____(int x) {
-        return x + 3;
+namespace ___ {
+    class ____ {
+        int _____(int x) {
+            return x + 3;
+        }
     }
-
 }
 
 public class UnderscoresTest inherits QUnit::Test {

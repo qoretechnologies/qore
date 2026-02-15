@@ -30,17 +30,21 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreRWLock.h>
+#include <unordered_set>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/Function.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/CallReferenceNode.h"
 
 #include <algorithm>
 #include <set>
@@ -76,6 +80,10 @@ const QoreObjectOrNothingTypeInfo staticObjectOrNothingTypeInfo;
 
 const QoreDateTypeInfo staticDateTypeInfo;
 const QoreDateOrNothingTypeInfo staticDateOrNothingTypeInfo;
+const QoreAbsoluteDateTypeInfo staticAbsoluteDateTypeInfo;
+const QoreAbsoluteDateOrNothingTypeInfo staticAbsoluteDateOrNothingTypeInfo;
+const QoreRelativeDateTypeInfo staticRelativeDateTypeInfo;
+const QoreRelativeDateOrNothingTypeInfo staticRelativeDateOrNothingTypeInfo;
 
 const QoreHashTypeInfo staticHashTypeInfo;
 const QoreHashOrNothingTypeInfo staticHashOrNothingTypeInfo;
@@ -166,6 +174,8 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *stringTypeInfo = &staticStringTypeInfo,
    *binaryTypeInfo = &staticBinaryTypeInfo,
    *dateTypeInfo = &staticDateTypeInfo,
+   *dateAbsoluteTypeInfo = &staticAbsoluteDateTypeInfo,
+   *dateRelativeTypeInfo = &staticRelativeDateTypeInfo,
    *objectTypeInfo = &staticObjectTypeInfo,
    *hashTypeInfo = &staticHashTypeInfo,
    *emptyHashTypeInfo = &staticEmptyHashTypeInfo,
@@ -208,6 +218,8 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *binaryOrNothingTypeInfo = &staticBinaryOrNothingTypeInfo,
    *objectOrNothingTypeInfo = &staticObjectOrNothingTypeInfo,
    *dateOrNothingTypeInfo = &staticDateOrNothingTypeInfo,
+   *dateAbsoluteOrNothingTypeInfo = &staticAbsoluteDateOrNothingTypeInfo,
+   *dateRelativeOrNothingTypeInfo = &staticRelativeDateOrNothingTypeInfo,
    *hashOrNothingTypeInfo = &staticHashOrNothingTypeInfo,
    *autoHashOrNothingTypeInfo = &staticAutoHashOrNothingTypeInfo,
    *autoNoNarrowHashOrNothingTypeInfo = &staticAutoNoNarrowHashOrNothingTypeInfo,
@@ -699,12 +711,16 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
 }
 
 // Helper function to create a normalized key for union type caching
-// Sorts member types by pointer value to ensure consistent cache lookups
+// Preserve declaration order so union resolution honors the first matching type.
 static type_vec_t normalize_union_key(const type_vec_t& member_types) {
-    type_vec_t key(member_types);
-    std::sort(key.begin(), key.end());
-    // Remove duplicates
-    key.erase(std::unique(key.begin(), key.end()), key.end());
+    type_vec_t key;
+    key.reserve(member_types.size());
+    std::unordered_set<const QoreTypeInfo*> seen;
+    for (const QoreTypeInfo* ti : member_types) {
+        if (seen.insert(ti).second) {
+            key.push_back(ti);
+        }
+    }
     return key;
 }
 
@@ -1238,6 +1254,32 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
             return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
+        case NT_RUNTIME_CLOSURE: {
+            const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(n);
+            if (cb) {
+                const QoreTypeInfo* ti = cb->getCallTypeInfo();
+                if (ti) {
+                    return ti;
+                }
+            }
+            break;
+        }
+        case NT_FUNCREF: {
+            // Call references have getFunction() that returns the underlying function;
+            // if it has a unique signature, return the typed code type
+            const ResolvedCallReferenceNode* cr =
+                dynamic_cast<const ResolvedCallReferenceNode*>(n);
+            if (cr) {
+                QoreFunction* f = cr->getFunction();
+                if (f) {
+                    AbstractFunctionSignature* sig = f->getUniqueSignature();
+                    if (sig) {
+                        return qore_get_complex_code_type_from_signature(sig);
+                    }
+                }
+            }
+            break;
+        }
         default:
             break;
     }
@@ -1285,12 +1327,8 @@ static qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTy
         bool& may_not_match, bool& may_need_filter) {
     //printd(5, "match_type() '%s' <- '%s'\n", QoreTypeInfo::getName(this_type), QoreTypeInfo::getName(that_type));
     qore_type_result_e res = QoreTypeInfo::parseAccepts(this_type, that_type, may_not_match, may_need_filter);
-    // if the type may not match at runtime, then return no match with %strict-types
-    if (may_not_match && (parse_get_parse_options() & PO_STRICT_TYPES)) {
-        return QTI_NOT_EQUAL;
-    }
 
-    // with strict-types, may not match must be interpreted as no match
+    // even if types are 100% compatible, if they are not equal, then we perform type folding
     // however if we interpret "may not match" as "no match" here, then we introduce an incompatibility with
     // non-complex types
     // even if types are 100% compatible, if they are not equal, then we perform type folding
@@ -1345,10 +1383,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 default: {
                     qore_type_t tt = t.getType();
                     if (tt == NT_ALL || tt == NT_OBJECT) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1389,11 +1423,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 }
                 case QTS_TYPE:
                     if (t.getType() == NT_ALL || t.getType() == NT_HASH) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            max_result = QTI_NOT_EQUAL;
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1442,10 +1471,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NEAR;
                     }
                     if (t.getType() == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1501,10 +1526,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NEAR;
                     }
                     if (t.getType() == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1547,10 +1568,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                 }
                 case QTS_TYPE:
                     if (t.getType() == NT_REFERENCE) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1602,6 +1619,10 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         max_result = QTI_IDENT;
                         return QTI_IDENT;
                     }
+                    if (qore_enum_decl_private::get(*u.ed)->parseEqual(*qore_enum_decl_private::get(*t.u.ed))) {
+                        max_result = QTI_IDENT;
+                        return QTI_IDENT;
+                    }
                     // Different enums = no match
                     return QTI_NOT_EQUAL;
                 }
@@ -1614,10 +1635,6 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                         return QTI_NOT_EQUAL;
                     }
                     if (t.u.t == NT_ALL) {
-                        // if the type may not match at runtime, then return no match with %strict-types
-                        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                            return QTI_NOT_EQUAL;
-                        }
                         may_not_match = true;
                         max_result = QTI_IDENT;
                         return QTI_AMBIGUOUS;
@@ -1693,11 +1710,6 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
         return rv;
     }
     if (ot == NT_ALL) {
-        // if the type may not match at runtime, then return no match with %strict-types
-        if (parse_get_parse_options() & PO_STRICT_TYPES) {
-            max_result = QTI_NOT_EQUAL;
-            return QTI_NOT_EQUAL;
-        }
         may_not_match = true;
         max_result = QTI_IDENT;
         return QTI_AMBIGUOUS;
@@ -2504,6 +2516,19 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         }
         return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
     }
+    if (!strcmp(cscope->ostr, "date")) {
+        if (subtypes.size() != 1) {
+            return nullptr;
+        }
+
+        if (!strcmp(subtypes[0]->cscope->ostr, "absolute")) {
+            return or_nothing ? dateAbsoluteOrNothingTypeInfo : dateAbsoluteTypeInfo;
+        }
+        if (!strcmp(subtypes[0]->cscope->ostr, "relative")) {
+            return or_nothing ? dateRelativeOrNothingTypeInfo : dateRelativeTypeInfo;
+        }
+        return nullptr;
+    }
 
     if (!strcmp(cscope->ostr, "object")) {
         if (subtypes.size() != 1) {
@@ -2784,6 +2809,26 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
         return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
     }
+    if (!strcmp(cscope->ostr, "date")) {
+        if (subtypes.size() != 1) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'date' takes a single subtype " \
+                "argument of 'absolute' or 'relative'", getName());
+            err = -1;
+            return or_nothing ? dateOrNothingTypeInfo : dateTypeInfo;
+        }
+
+        if (!strcmp(subtypes[0]->cscope->ostr, "absolute")) {
+            return or_nothing ? dateAbsoluteOrNothingTypeInfo : dateAbsoluteTypeInfo;
+        }
+        if (!strcmp(subtypes[0]->cscope->ostr, "relative")) {
+            return or_nothing ? dateRelativeOrNothingTypeInfo : dateRelativeTypeInfo;
+        }
+
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'date' subtype must be " \
+            "'absolute' or 'relative'", getName());
+        err = -1;
+        return or_nothing ? dateOrNothingTypeInfo : dateTypeInfo;
+    }
     if (!strcmp(cscope->ostr, "object")) {
         if (subtypes.size() != 1) {
             parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; base type 'object' takes a single class " \
@@ -3034,39 +3079,37 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAndDelete(const QoreProgramLocatio
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
         bool or_nothing, int& err) {
-    // check for typedef first (only for simple names without scope qualification)
-    if (cscope.size() == 1) {
-        TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope.ostr);
-        if (td) {
-            // resolve the typedef's underlying type
-            const QoreTypeInfo* rv;
-            if (td->typeInfo) {
-                // already resolved
-                rv = td->typeInfo;
-            } else if (td->parseTypeInfo) {
-                // resolve the parse type info
-                rv = td->parseTypeInfo->resolve(loc, err);
-                // cache the resolved type for future lookups
-                td->typeInfo = rv;
-            } else {
-                // should not happen - typedef without type info
-                parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
-                err = -1;
-                return autoTypeInfo;
-            }
-
-            // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
-            if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {
-                // need to get the or-nothing variant of this type
-                const QoreTypeInfo* orn = qore_get_or_nothing_type(rv);
-                if (orn) {
-                    return orn;
-                }
-                // if we can't get or-nothing variant, just return the base type
-                // the caller should handle the or_nothing semantics
-            }
-            return rv;
+    // check for typedef first (both simple names and scoped names)
+    TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
+    if (td) {
+        // resolve the typedef's underlying type
+        const QoreTypeInfo* rv;
+        if (td->typeInfo) {
+            // already resolved
+            rv = td->typeInfo;
+        } else if (td->parseTypeInfo) {
+            // resolve the parse type info
+            rv = td->parseTypeInfo->resolve(loc, err);
+            // cache the resolved type for future lookups
+            td->typeInfo = rv;
+        } else {
+            // should not happen - typedef without type info
+            parse_error(*loc, "internal error: typedef '%s' has no type information", cscope.ostr);
+            err = -1;
+            return autoTypeInfo;
         }
+
+        // apply or_nothing if needed and the underlying type doesn't already accept NOTHING
+        if (or_nothing && !QoreTypeInfo::parseAcceptsReturns(rv, NT_NOTHING)) {
+            // need to get the or-nothing variant of this type
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(rv);
+            if (orn) {
+                return orn;
+            }
+            // if we can't get or-nothing variant, just return the base type
+            // the caller should handle the or_nothing semantics
+        }
+        return rv;
     }
 
     // resolve class (don't raise error - we'll check for enum as fallback)

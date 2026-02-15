@@ -113,7 +113,7 @@ public class ServerSentEventConnection {
     }
 
     #! Pushes an unencoded message on the connection's message queue
-    /** The message will be encoded with @ref ServerSentEventUtil::ws_encode_message() before sending
+    /** The message will be encoded with \c ServerSentEventUtil::ws_encode_message() before sending
     */
     send(hash<SseMessageInfo> msg) {
         queue.push(handler.encodeMessage(msg));
@@ -134,8 +134,6 @@ public class ServerSentEventConnection {
     }
 
     #! Flush all output data
-    /**
-    */
     flush() {
         if (gettid() != tid) {
             while (!stop_flag && !queue.empty()) {

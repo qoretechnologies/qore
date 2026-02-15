@@ -26,16 +26,14 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 %requires(reexport) WebSocketClient >= 1.0
 %requires Util >= 1.0
 %requires(reexport) ConnectionProvider >= 1.4
 
-%new-style
+%modern
 
 %try-module json >= 1.5
 %define NoJson
@@ -74,9 +72,6 @@ module SewioWebSocketClient {
     <b>Example</b>
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%enable-all-warnings
 
 %requires SewioWebSocketClient
 
@@ -120,13 +115,13 @@ public const WsSchemes = {
 };
 
 #! the main Sewio websocket client class
-/** To use this class, create a @ref SewioWebSocketClient::SewioWebSocketClient "SewioWebSocketClient" object and the call @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()".
+/** To use this class, create a @ref SewioWebSocketClient::SewioWebSocketClient "SewioWebSocketClient" object and the call \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()".
 
-    The @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background thread to receive messages, which are then posted to the callback provided in the @ref SewioWebSocketClient::SewioWebSocketClient::constructor() "SewioWebSocketClient::constructor()" method call.
+    The \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background thread to receive messages, which are then posted to the callback provided in the \c SewioWebSocketClient::SewioWebSocketClient::constructor() "SewioWebSocketClient::constructor()" method call.
 
-    To stop listening for web socket events, call @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
+    To stop listening for web socket events, call \c WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
-    To send data to the Sewio RTLS Studio server, use the @ref SewioWebSocketClient::SewioWebSocketClient::send() "SewioWebSocketClient::send()" method; this method will serialize the data
+    To send data to the Sewio RTLS Studio server, use the \c SewioWebSocketClient::SewioWebSocketClient::send() "SewioWebSocketClient::send()" method; this method will serialize the data
     to JSON and send the JSON string to the server.
 
     When websocket messages are received from the server, they are deserialized and the resulting data is used as the argument to the
@@ -275,7 +270,7 @@ public class SewioWebSocketConnection inherits WebSocketClient::WebSocketConnect
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -310,7 +305,7 @@ public class SewioWebSocketConnection inherits WebSocketClient::WebSocketConnect
     }
 
     #! returns a @ref SewioWebSocketClient object
-    /** @param connect if @ref True "True", then @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" is called
+    /** @param connect if @ref True "True", then \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" is called
         @param rtopts supports the following runtime options in getImpl() for connection logging:
         - \c "log": a closure accepting a single string for logging
         - \c "errlog": a closure accepting a single string for error logging

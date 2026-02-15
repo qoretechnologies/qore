@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore FtpClientDataProvider module definition
 
-/*  FtpClientDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  FtpClientDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,7 @@ module FtpClientDataProvider {
             "logo": FtpWhiteLogo,
             "logo_file_name": "generic-ftp-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::FileTransfer,),
         });
 
         # register all supported actions
@@ -121,7 +122,7 @@ module FtpClientDataProvider {
     @section ftpclientdataproviderintro Introduction to the FtpClientDataProvider Module
 
     The %FtpClientDataProvider module provides a data provider API for FTP servers through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref FtpClientDataProvider::FtpClientCreateFileDataProvider "FtpClientCreateFileDataProvider"
@@ -152,10 +153,7 @@ module FtpClientDataProvider {
 
 #! contains all public definitions in the FtpClientDataProvider module
 public namespace FtpClientDataProvider {
-}
+public const FtpWhiteLogo = File::readTextFile(get_script_dir() + "/ftp-logo-white.svg");
 
-namespace Priv {
-const FtpWhiteLogo = File::readTextFile(get_script_dir() + "/ftp-logo-white.svg");
-
-const FtpBlackLogo = File::readTextFile(get_script_dir() + "/ftp-logo-black.svg");
+public const FtpBlackLogo = File::readTextFile(get_script_dir() + "/ftp-logo-black.svg");
 }

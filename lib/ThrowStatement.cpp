@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,9 +30,21 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ThrowStatement.h"
+#include "qore/intern/qore_list_private.h"
 
 int ThrowStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueEvalOptimizedRefHolder a(args, xsink);
+    if (*xsink)
+        return 0;
+
+    assert(a->getType() == NT_LIST);
+
+    xsink->raiseException(a->get<const QoreListNode>());
+    return 0;
+}
+
+int ThrowStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalRefHolder a(rc, args, xsink);
     if (*xsink)
         return 0;
 
@@ -61,7 +73,7 @@ int ThrowStatement::parseInitImpl(QoreParseContext& parse_context) {
         default: {
             //printd(5, "ThrowStatement::parseInitImpl() v: %p '%s' e: %d\n", args, get_type_name(args),
             //  args->needs_eval());
-            QoreListNode* l = new QoreListNode(args.needsEval());
+            QoreListNode* l = qore_list_private::newList(args.needsEval());
             l->push(args, nullptr);
             args = l;
             break;

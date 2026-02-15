@@ -36,6 +36,8 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
+class RuntimeConfig;
+
 class QoreSquareBracketsRangeOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
 public:
     DLLLOCAL QoreSquareBracketsRangeOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
@@ -76,12 +78,15 @@ protected:
     DLLLOCAL static QoreString op_str;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL static QoreValue doSquareBrackets(QoreValue v0, QoreValue v1, QoreValue v2, ExceptionSink* xsink);
 
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const;
+    DLLLOCAL FunctionalOperatorInterface* getFunctionalIteratorImpl(RuntimeConfig& rc, FunctionalValueType& value_type,
             ExceptionSink* xsink) const;
 
     DLLLOCAL bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,

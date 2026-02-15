@@ -60,6 +60,8 @@ public class DpqlSerializer {
     private {
         #! Expression map for rendering
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
+        #! Cached set of reserved identifiers
+        *hash<string, bool> reserved_identifiers;
 
         #! Map of operators to their precedence
         const OperatorPrecedence = {
@@ -150,6 +152,41 @@ public class DpqlSerializer {
 
             case DP_SEARCH_OP_REGEX:
                 result = serializeRegexOp(exp.args);
+                break;
+
+            case DP_EXPR_VALUE:
+                # Value expression - just serialize the argument (field reference)
+                result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
+                break;
+
+            case DP_FUNC_INDEX:
+                # Render as sugar: base[n] only if index arg is a literal
+                if (isAccessorArgLiteral(exp.args[1])) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "[" + string(exp.args[1]) + "]";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
+                break;
+
+            case DP_FUNC_SLICE:
+                # Render as sugar: base[items...] only if all args are literals/ranges
+                if (areSliceArgsLiteral(exp.args)) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "[" + serializeSliceArgs(exp.args) + "]";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
+                break;
+
+            case DP_FUNC_KEY:
+                # Render as sugar: base{keys...} only if all key args are literals
+                if (areKeyArgsLiteral(exp.args)) {
+                    result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY)
+                        + "{" + serializeKeyArgs(exp.args) + "}";
+                } else {
+                    result = serializeFunctionCall(op, exp.args);
+                }
                 break;
 
             default:
@@ -274,16 +311,12 @@ public class DpqlSerializer {
                 if (arg.hasKey("exp")) {
                     return serializeExpr(arg, context_prec);
                 }
-                # Unknown hash - serialize as JSON-like
-                return serializeLiteral(arg);
+                # Structured hash literal
+                return serializeStructuredLiteral(arg);
 
             case NT_LIST:
-                # List literal
-                list<string> items = ();
-                foreach auto item in (arg) {
-                    items += serializeArg(item, DPQL_PREC_PRIMARY);
-                }
-                return "(" + items.join(", ") + ")";
+                # Structured list literal
+                return serializeStructuredLiteral(arg);
 
             default:
                 return serializeLiteral(arg);
@@ -296,12 +329,85 @@ public class DpqlSerializer {
 
         # Check if field name needs quoting
         if (field =~ /[^a-zA-Z0-9_.]/ || field =~ /^[0-9]/) {
-            # Escape special characters
-            field = replace(replace(field, "\\", "\\\\"), '"', '\\"');
+            # Escape special characters: backslash first, then quote
+            # Note: use '\"' not '\\"' - in single quotes, \\ is two backslashes
+            field = replace(replace(field, "\\", "\\\\"), '"', '\"');
             return '@"' + field + '"';
         }
-
         return "@" + field;
+    }
+
+    #! Returns True if an accessor arg is a literal (not an expression)
+    private bool isAccessorArgLiteral(auto arg) {
+        if (arg.typeCode() == NT_HASH) {
+            # Range specs (start/end keys) are literals; expression hashes have "exp" key
+            return !arg.hasKey("exp");
+        }
+        return True;
+    }
+
+    #! Returns True if all slice args (args[1..]) are literals or range specs
+    private bool areSliceArgsLiteral(list<auto> args) {
+        for (int i = 1; i < args.size(); ++i) {
+            if (!isAccessorArgLiteral(args[i])) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns True if all key args (args[1..]) are literals
+    private bool areKeyArgsLiteral(list<auto> args) {
+        for (int i = 1; i < args.size(); ++i) {
+            if (!isAccessorArgLiteral(args[i])) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Serializes slice arguments from a DP_FUNC_SLICE expression (args[1..])
+    private string serializeSliceArgs(list<auto> args) {
+        list<string> parts = ();
+        for (int i = 1; i < args.size(); ++i) {
+            auto item = args[i];
+            if (item.typeCode() == NT_HASH && (item.hasKey("start") || item.hasKey("end"))) {
+                # Range spec
+                parts += serializeRange(item);
+            } else {
+                # Single index
+                parts += string(item);
+            }
+        }
+        return parts.join(",");
+    }
+
+    #! Serializes key arguments from a DP_FUNC_KEY expression (args[1..])
+    private string serializeKeyArgs(list<auto> args) {
+        list<string> parts = ();
+        for (int i = 1; i < args.size(); ++i) {
+            string skey = string(args[i]);
+            # Check if key needs quoting
+            if (skey =~ /[^a-zA-Z0-9_]/ || skey =~ /^[0-9]/) {
+                parts += serializeString(skey);
+            } else {
+                parts += skey;
+            }
+        }
+        return parts.join(", ");
+    }
+
+    #! Serializes a range: start..end, ..end, start..
+    private string serializeRange(hash<auto> range) {
+        string result = "";
+        if (exists range.start) {
+            result += string(range.start);
+        }
+        result += "..";
+        if (exists range.end) {
+            result += string(range.end);
+        }
+        return result;
     }
 
     #! Serializes a literal value
@@ -323,17 +429,113 @@ public class DpqlSerializer {
                 return value ? "true" : "false";
 
             case NT_DATE:
-                # Serialize dates as ISO strings
-                return serializeString(value.format("YYYY-MM-DDTHH:mm:SS.xxZ"));
+                # Serialize dates as ISO-8601 literal
+                return value.format("IF");
 
             case NT_BINARY:
-                # Serialize binary as base64 string
-                return serializeString(value.toBase64());
+                # Serialize binary as hex literal
+                return "<" + value.toHex() + ">";
+
+            case NT_LIST:
+            case NT_HASH:
+                return serializeStructuredLiteral(value);
 
             default:
                 # For other types, try to convert to string
                 return serializeString(string(value));
         }
+    }
+
+    #! Serializes list/hash literals using parse_to_qore_value-compatible syntax
+    private string serializeStructuredLiteral(auto value) {
+        switch (value.typeCode()) {
+            case NT_LIST:
+                return serializeStructuredList(value);
+            case NT_HASH:
+                return serializeStructuredHash(value);
+            default:
+                return serializeStructuredValue(value);
+        }
+    }
+
+    private string serializeStructuredList(list<auto> value) {
+        list<string> items = ();
+        foreach auto item in (value) {
+            items += serializeStructuredValue(item);
+        }
+        return "(" + items.join(",") + ")";
+    }
+
+    private string serializeStructuredHash(hash<auto> value) {
+        list<string> parts = ();
+        foreach hash<auto> i in (value.pairIterator()) {
+            parts += serializeStructuredKey(i.key) + "=" + serializeStructuredValue(i.value);
+        }
+        return "{" + parts.join(", ") + "}";
+    }
+
+    private string serializeStructuredKey(string key) {
+        if (canEmitBareIdentifier(key)) {
+            return key;
+        }
+        return serializeString(key);
+    }
+
+    private string serializeStructuredValue(auto value) {
+        if (value === NOTHING) {
+            return "null";
+        }
+
+        if (value.typeCode() == NT_STRING) {
+            if (canEmitBareIdentifier(value)) {
+                return value;
+            }
+            return serializeString(value);
+        }
+
+        if (value.typeCode() == NT_LIST || value.typeCode() == NT_HASH) {
+            return serializeStructuredLiteral(value);
+        }
+
+        return serializeLiteral(value);
+    }
+
+    #! Returns True if the string can be emitted without quoting
+    private bool canEmitBareIdentifier(string value) {
+        if (!(value =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+            return False;
+        }
+        return !getReservedIdentifiers(){value.lwr()};
+    }
+
+    private hash<string, bool> getReservedIdentifiers() {
+        if (reserved_identifiers) {
+            return reserved_identifiers;
+        }
+
+        hash<string, bool> reserved = {
+            "true": True,
+            "false": True,
+            "null": True,
+        };
+
+        if (expressions) {
+            foreach string key in (keys expressions) {
+                if (key =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{key.lwr()} = True;
+                }
+                hash<DataProviderExpressionInfo> info = expressions{key};
+                if (info.name && info.name =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{info.name.lwr()} = True;
+                }
+                if (info.symbol && info.symbol =~ /^[a-zA-Z_][a-zA-Z0-9_]*$/) {
+                    reserved{info.symbol.lwr()} = True;
+                }
+            }
+        }
+
+        reserved_identifiers = reserved;
+        return reserved_identifiers;
     }
 
     #! Serializes a string with proper escaping

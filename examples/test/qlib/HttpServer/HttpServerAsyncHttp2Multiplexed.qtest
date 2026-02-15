@@ -1,0 +1,1367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/2 multiplexed streaming test - verifies that WebSocket (RFC 8441),
+    InputStream streaming, and regular HTTP/2 request/response all coexist
+    on a single HTTP/2 server.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class HttpServerAsyncHttp2MultiplexedTest
+
+#! Simple handler for regular HTTP/2 GET requests
+class SimpleGetHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a large response body
+class LargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, strmul("X", size), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a BinaryInputStream body (streaming)
+class StreamHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 8192;
+        *list<*string> m = (hdr.path =~ x/stream\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        return makeResponse(200, new BinaryInputStream(binary(strmul("S", size))), {
+            "Content-Type": "application/octet-stream",
+        });
+    }
+}
+
+#! Handler that delays before responding
+class SlowHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int delay_ms = 200;
+        *list<*string> m = (hdr.path =~ x/slow\/(\d+)/);
+        if (m) {
+            delay_ms = int(m[0]);
+        }
+        usleep(delay_ms * 1000);
+        return makeResponse(200, sprintf("delayed %d ms", delay_ms), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body and method
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string resp_body = sprintf("method=%s", hdr.method);
+        if (body) {
+            if (body.typeCode() == NT_BINARY) {
+                resp_body += sprintf(" body_size=%d body=%s", body.size(), body.toString());
+            } else {
+                resp_body += sprintf(" body_size=%d body=%s", body.length(), body);
+            }
+        }
+        return makeResponse(200, resp_body, {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that always throws an exception
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        throw "TEST-ERROR", "intentional handler error for testing";
+    }
+}
+
+#! WebSocket connection that echoes messages back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+#! WebSocket handler for multiplexed testing
+class MultiplexedWsHandler inherits WebSocketHandler {
+    public {
+        bool debug = False;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        if (debug) {
+            vprintf("WS ERROR: " + fmt + "\n", argv);
+        }
+    }
+
+    logInfo(string fmt) {
+        if (debug) {
+            vprintf("WS INFO: " + fmt + "\n", argv);
+        }
+    }
+
+    logDebug(string fmt) {
+        if (debug) {
+            vprintf("WS DEBUG: " + fmt + "\n", argv);
+        }
+    }
+}
+
+class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mSslPort;
+        string mSslUrl;
+        MultiplexedWsHandler mWsHandler();
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerAsyncHttp2MultiplexedTest", "1.0") {
+        addTestCase("WebSocket + concurrent HTTP/2 requests", \testWsConcurrentHttp2());
+        addTestCase("InputStream streaming + concurrent HTTP/2 requests",
+            \testStreamingConcurrentHttp2());
+        addTestCase("WebSocket + streaming + HTTP/2 mixed", \testMixedMultiplexing());
+        addTestCase("concurrent HTTP/2 requests with slow handler",
+            \testConcurrentWithSlowHandler());
+        addTestCase("sequential streaming on same connection", \testSequentialStreaming());
+        addTestCase("WebSocket message exchange while streaming", \testWsDuringStreaming());
+        addTestCase("graceful server shutdown with active WebSocket",
+            \testGracefulShutdownActiveWs());
+
+        # Corner case tests
+        addTestCase("multiple concurrent WebSocket connections",
+            \testMultipleWsConnections());
+        addTestCase("WebSocket binary message echo", \testWsBinaryMessages());
+        addTestCase("empty streaming body", \testEmptyStreamingBody());
+        addTestCase("POST with request body", \testPostWithBody());
+        addTestCase("multiple handlers on same connection",
+            \testMultipleHandlersSameConnection());
+        addTestCase("high concurrency mixed protocols", \testHighConcurrency());
+
+        # Negative tests
+        addTestCase("request to non-existent path returns error",
+            \testNonExistentPath());
+        addTestCase("handler exception returns 500", \testHandlerException500());
+        addTestCase("handler error does not affect other connections",
+            \testErrorIsolation());
+
+        # Same-connection multiplexing test using nghttp2-ws-client
+        addTestCase("same connection WS + HTTP via nghttp2 client",
+            \testSameConnectionWsAndHttp());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http2-mux-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+            mWsHandler.debug = True;
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        mServer = new HttpServer(opts);
+
+        # Register handlers
+        mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
+        mServer.setHandler("stream", "/stream", NOTHING, new StreamHandler());
+        mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
+        mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+
+        # Add HTTPS listener for HTTP/2
+        mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mSslUrl = "https://localhost:" + mSslPort;
+
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("HTTPS multiplexed test server on port %d\n", mSslPort);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    private RestClient getRestClient(*int timeout_ms) {
+        return new RestClient({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": timeout_ms ?? 30000,
+        });
+    }
+
+    private WebSocketClient getWsClient(code cb, *int timeout_ms) {
+        return new WebSocketClient(cb, {
+            "url": "wss://localhost:" + mSslPort + "/ws",
+            "logger": mLogger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": timeout_ms ?? 30000,
+        });
+    }
+
+    #! Test 1: WebSocket + concurrent regular HTTP/2 requests
+    #! Establishes a WebSocket over HTTP/2 and simultaneously makes regular HTTP/2 requests
+    #! from separate connections; verifies both work correctly.
+    testWsConcurrentHttp2() {
+        # Establish WebSocket connection
+        list<auto> ws_received();
+        Mutex ws_mtx();
+        Counter ws_msg_cnt(1);
+
+        WebSocketClient wsc = getWsClient(sub (*data msg) {
+            if (exists msg) {
+                ws_mtx.lock();
+                on_exit ws_mtx.unlock();
+                ws_received += msg;
+                ws_msg_cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+
+        # Send a WebSocket message
+        wsc.send("hello-mux");
+
+        # While WebSocket is active, make regular HTTP/2 requests from separate connections
+        int num_requests = 5;
+        Counter http_cnt(num_requests);
+        list<hash<auto>> http_results();
+        Mutex http_mtx();
+
+        for (int i = 0; i < num_requests; i++) {
+            int idx = i;
+            background sub () {
+                on_exit http_cnt.dec();
+                try {
+                    RestClient rc = getRestClient();
+                    on_exit delete rc;
+                    hash<auto> resp = rc.get("/simple");
+                    http_mtx.lock();
+                    on_exit http_mtx.unlock();
+                    http_results += {
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    http_mtx.lock();
+                    on_exit http_mtx.unlock();
+                    http_results += {
+                        "idx": idx,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        # Wait for WebSocket echo
+        ws_msg_cnt.waitForZero(10s);
+        ws_mtx.lock();
+        on_exit ws_mtx.unlock();
+        assertEq(1, ws_received.size(), "should receive WebSocket echo");
+        assertEq("ECHO:hello-mux", ws_received[0], "WebSocket echo content");
+
+        # Wait for HTTP requests
+        http_cnt.waitForZero(30s);
+        int http_success = 0;
+        foreach hash<auto> r in (http_results) {
+            if (r.success) {
+                http_success++;
+                assertEq(200, r.status, sprintf("HTTP request %d status", r.idx));
+                assertEq("OK", r.body, sprintf("HTTP request %d body", r.idx));
+            } else if (m_options.verbose) {
+                printf("HTTP request %d FAILED: %s\n", r.idx, r.error);
+            }
+        }
+        assertEq(num_requests, http_success,
+            "all HTTP/2 requests should succeed while WebSocket is active");
+
+        wsc.disconnect();
+    }
+
+    #! Test 2: InputStream streaming + concurrent HTTP/2 requests
+    #! Requests a streaming response while also making regular HTTP/2 requests.
+    testStreamingConcurrentHttp2() {
+        int stream_size = 102400;  # 100KB streaming response
+        int num_http = 3;
+
+        Counter all_cnt(1 + num_http);
+        list<hash<auto>> results();
+        Mutex mtx();
+
+        # Start streaming request in background
+        background sub () {
+            on_exit all_cnt.dec();
+            try {
+                RestClient rc = getRestClient(60000);
+                on_exit delete rc;
+                hash<auto> resp = rc.get(sprintf("/stream/%d", stream_size));
+                int body_size;
+                if (resp.body.typeCode() == NT_BINARY) {
+                    body_size = resp.body.size();
+                } else {
+                    body_size = resp.body.length();
+                }
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "stream",
+                    "status": resp.status_code,
+                    "body_size": body_size,
+                    "expected_size": stream_size,
+                    "success": True,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "stream",
+                    "error": sprintf("%s: %s", ex.err, ex.desc),
+                    "success": False,
+                };
+            }
+        }();
+
+        # Start regular HTTP/2 requests concurrently
+        for (int i = 0; i < num_http; i++) {
+            int idx = i;
+            background sub () {
+                on_exit all_cnt.dec();
+                try {
+                    RestClient rc = getRestClient();
+                    on_exit delete rc;
+                    hash<auto> resp = rc.get("/simple");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "type": "http",
+                        "idx": idx,
+                        "status": resp.status_code,
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "type": "http",
+                        "idx": idx,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        all_cnt.waitForZero(60s);
+
+        int stream_ok = 0;
+        int http_ok = 0;
+        foreach hash<auto> r in (results) {
+            if (r.type == "stream") {
+                if (r.success) {
+                    stream_ok++;
+                    assertEq(200, r.status, "streaming response status");
+                    assertEq(r.expected_size, r.body_size, "streaming response body size");
+                } else if (m_options.verbose) {
+                    printf("Stream FAILED: %s\n", r.error);
+                }
+            } else {
+                if (r.success) {
+                    http_ok++;
+                    assertEq(200, r.status, sprintf("HTTP request %d status", r.idx));
+                } else if (m_options.verbose) {
+                    printf("HTTP request %d FAILED: %s\n", r.idx, r.error);
+                }
+            }
+        }
+        assertEq(1, stream_ok, "streaming response should succeed");
+        assertEq(num_http, http_ok,
+            "all regular HTTP/2 requests should succeed during streaming");
+    }
+
+    #! Test 3: Mixed multiplexing - WebSocket + streaming + regular HTTP/2
+    #! Exercises multiple protocol types simultaneously from separate connections.
+    testMixedMultiplexing() {
+        Counter all_cnt(3);
+        list<hash<auto>> results();
+        Mutex mtx();
+
+        # 1. WebSocket connection in background
+        background sub () {
+            on_exit all_cnt.dec();
+            try {
+                list<auto> ws_msgs();
+                Counter msg_cnt(1);
+                WebSocketClient wsc = getWsClient(sub (*data msg) {
+                    if (exists msg) {
+                        ws_msgs += msg;
+                        msg_cnt.dec();
+                    }
+                });
+                on_exit delete wsc;
+                wsc.connect();
+                wsc.send("mixed-test");
+                msg_cnt.waitForZero(10s);
+                wsc.disconnect();
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "ws",
+                    "success": True,
+                    "msg_count": ws_msgs.size(),
+                    "first_msg": ws_msgs[0],
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "ws",
+                    "success": False,
+                    "error": sprintf("%s: %s", ex.err, ex.desc),
+                };
+            }
+        }();
+
+        # 2. Streaming request in background
+        background sub () {
+            on_exit all_cnt.dec();
+            try {
+                RestClient rc = getRestClient(60000);
+                on_exit delete rc;
+                hash<auto> resp = rc.get("/stream/51200");
+                int body_size;
+                if (resp.body.typeCode() == NT_BINARY) {
+                    body_size = resp.body.size();
+                } else {
+                    body_size = resp.body.length();
+                }
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "stream",
+                    "success": True,
+                    "status": resp.status_code,
+                    "body_size": body_size,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "stream",
+                    "success": False,
+                    "error": sprintf("%s: %s", ex.err, ex.desc),
+                };
+            }
+        }();
+
+        # 3. Regular HTTP/2 request in background
+        background sub () {
+            on_exit all_cnt.dec();
+            try {
+                RestClient rc = getRestClient();
+                on_exit delete rc;
+                hash<auto> resp = rc.get("/large/10000");
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "http",
+                    "success": True,
+                    "status": resp.status_code,
+                    "body_size": resp.body.size(),
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                mtx.lock();
+                on_exit mtx.unlock();
+                results += {
+                    "type": "http",
+                    "success": False,
+                    "error": sprintf("%s: %s", ex.err, ex.desc),
+                };
+            }
+        }();
+
+        all_cnt.waitForZero(60s);
+
+        assertEq(3, results.size(), "all three operations should complete");
+
+        foreach hash<auto> r in (results) {
+            assertTrue(r.success, sprintf("%s request should succeed (error: %s)",
+                r.type, r.error ?? "none"));
+            if (r.type == "ws") {
+                assertEq(1, r.msg_count, "WebSocket should receive echo");
+                assertEq("ECHO:mixed-test", r.first_msg, "WebSocket echo content");
+            } else if (r.type == "stream") {
+                assertEq(200, r.status, "streaming status");
+                assertEq(51200, r.body_size, "streaming body size");
+            } else if (r.type == "http") {
+                assertEq(200, r.status, "HTTP status");
+                assertEq(10000, r.body_size, "HTTP body size");
+            }
+        }
+    }
+
+    #! Test 4: Concurrent HTTP/2 requests with slow handler
+    #! Verifies that a slow handler on one connection doesn't block other connections.
+    testConcurrentWithSlowHandler() {
+        int num_fast = 3;
+        int num_slow = 2;
+        int total = num_fast + num_slow;
+        int timeout_ms = 30000;
+
+        Counter cnt(total);
+        list<hash<auto>> results = ();
+        Mutex mx();
+
+        # Start slow requests first (200ms delay)
+        for (int i = 0; i < num_slow; i++) {
+            int idx = i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    RestClient rc = getRestClient(timeout_ms);
+                    on_exit delete rc;
+                    date start = now_us();
+                    hash<auto> resp = rc.get("/slow/200");
+                    date elapsed = now_us() - start;
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "slow",
+                        "status": resp.status_code,
+                        "elapsed_ms": elapsed.durationMilliseconds(),
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "slow",
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        # Wait a bit then start fast requests
+        sleep(50ms);
+
+        for (int i = 0; i < num_fast; i++) {
+            int idx = num_slow + i;
+            background sub() {
+                on_exit cnt.dec();
+                try {
+                    RestClient rc = getRestClient(timeout_ms);
+                    on_exit delete rc;
+                    date start = now_us();
+                    hash<auto> resp = rc.get("/simple");
+                    date elapsed = now_us() - start;
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "fast",
+                        "status": resp.status_code,
+                        "elapsed_ms": elapsed.durationMilliseconds(),
+                        "body": resp.body,
+                        "success": True,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mx.lock();
+                    on_exit mx.unlock();
+                    results += {
+                        "idx": idx,
+                        "type": "fast",
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    };
+                }
+            }();
+        }
+
+        cnt.waitForZero(60s);
+
+        assertEq(total, results.size(), "all operations should complete");
+
+        int success_count = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                success_count++;
+                assertEq(200, r.status, sprintf("Request %d (%s) should return 200", r.idx, r.type));
+                if (r.type == "slow") {
+                    assertRegex("delayed", r.body, sprintf("Slow request %d body should mention delay", r.idx));
+                } else {
+                    assertEq("OK", r.body, sprintf("Fast request %d body", r.idx));
+                }
+            }
+        }
+
+        assertEq(total, success_count, "All concurrent requests (slow + fast) should succeed");
+    }
+
+    #! Test 5: Sequential streaming on same connection
+    #! Verifies that multiple streaming requests can be made sequentially on a single
+    #! connection without issues.
+    testSequentialStreaming() {
+        RestClient rc = getRestClient(60000);
+        on_exit delete rc;
+
+        list<int> sizes = (8192, 51200, 102400);
+        foreach int size in (sizes) {
+            hash<auto> resp = rc.get(sprintf("/stream/%d", size));
+            assertEq(200, resp.status_code,
+                sprintf("sequential stream %d status", size));
+            int body_size;
+            if (resp.body.typeCode() == NT_BINARY) {
+                body_size = resp.body.size();
+            } else {
+                body_size = resp.body.length();
+            }
+            assertEq(size, body_size,
+                sprintf("sequential stream %d body size", size));
+        }
+
+        # Verify regular requests still work after streaming
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "regular request after streaming");
+        assertEq("OK", resp.body, "regular request body after streaming");
+    }
+
+    #! Test 6: WebSocket message exchange while streaming responses are active
+    #! on separate connections
+    testWsDuringStreaming() {
+        # Start a streaming request in background
+        Counter stream_cnt(1);
+        *hash<auto> stream_result;
+        background sub () {
+            on_exit stream_cnt.dec();
+            try {
+                RestClient rc = getRestClient(60000);
+                on_exit delete rc;
+                hash<auto> resp = rc.get("/stream/204800");  # 200KB
+                stream_result = {
+                    "status": resp.status_code,
+                    "success": True,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                stream_result = {
+                    "error": sprintf("%s: %s", ex.err, ex.desc),
+                    "success": False,
+                };
+            }
+        }();
+
+        # While streaming is active, do WebSocket exchange on a separate connection
+        list<auto> ws_msgs();
+        Counter ws_cnt(3);
+        WebSocketClient wsc = getWsClient(sub (*data msg) {
+            if (exists msg) {
+                ws_msgs += msg;
+                ws_cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+
+        # Send multiple messages
+        wsc.send("msg-1");
+        wsc.send("msg-2");
+        wsc.send("msg-3");
+
+        ws_cnt.waitForZero(10s);
+        assertEq(3, ws_msgs.size(), "should receive 3 WebSocket echoes");
+        assertEq("ECHO:msg-1", ws_msgs[0], "WebSocket echo 1");
+        assertEq("ECHO:msg-2", ws_msgs[1], "WebSocket echo 2");
+        assertEq("ECHO:msg-3", ws_msgs[2], "WebSocket echo 3");
+
+        wsc.disconnect();
+
+        # Wait for streaming to complete
+        stream_cnt.waitForZero(60s);
+        assertTrue(stream_result.success,
+            sprintf("streaming should succeed (error: %s)", stream_result.error ?? "none"));
+        assertEq(200, stream_result.status, "streaming status during WebSocket");
+    }
+
+    #! Test 7: Graceful server shutdown with active WebSocket stream
+    #! Verifies that the server shuts down cleanly when a WebSocket connection is active.
+    testGracefulShutdownActiveWs() {
+        # Create a dedicated server for this test
+        MultiplexedWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug = True;
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer test_server(opts);
+        test_server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);
+        test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+
+        int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        test_server.waitForAsyncIo();
+
+        # Establish WebSocket connection
+        list<auto> ws_msgs();
+        Counter ws_cnt(1);
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                ws_msgs += msg;
+                ws_cnt.dec();
+            }
+        }, {
+            "url": "wss://localhost:" + test_port + "/ws",
+            "logger": mLogger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+        });
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+
+        # Verify WebSocket is working
+        wsc.send("shutdown-test");
+        ws_cnt.waitForZero(10s);
+        assertEq(1, ws_msgs.size(), "should receive WebSocket echo before shutdown");
+        assertEq("ECHO:shutdown-test", ws_msgs[0], "echo content before shutdown");
+
+        # Verify regular HTTP/2 still works with active WebSocket
+        {
+            RestClient rc({
+                "url": "https://localhost:" + test_port,
+                "ssl_verify_cert": False,
+                "timeout": 10000,
+            });
+            on_exit delete rc;
+            hash<auto> resp = rc.get("/simple");
+            assertEq(200, resp.status_code, "HTTP request should work with active WebSocket");
+        }
+
+        # Stop the server - this should complete deterministically
+        Queue stopped();
+        background sub () {
+            test_server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(15s) != NOTHING,
+            "server.stop() should complete deterministically with active WebSocket");
+
+        # Clean up client connection (may already be disconnected)
+        try {
+            wsc.disconnect();
+        } catch () {
+            # ignore - server already stopped
+        }
+        delete wsc;
+    }
+
+    #! Corner case: Multiple concurrent WebSocket connections to the same server
+    testMultipleWsConnections() {
+        int num_ws = 3;
+        Counter all_cnt(num_ws);
+        list<hash<auto>> results();
+        Mutex mtx();
+
+        for (int i = 0; i < num_ws; i++) {
+            int idx = i;
+            background sub () {
+                on_exit all_cnt.dec();
+                try {
+                    list<auto> ws_msgs();
+                    Counter msg_cnt(1);
+                    WebSocketClient wsc = getWsClient(sub (*data msg) {
+                        if (exists msg) {
+                            ws_msgs += msg;
+                            msg_cnt.dec();
+                        }
+                    });
+                    on_exit delete wsc;
+                    wsc.connect();
+                    string test_msg = sprintf("ws-%d-test", idx);
+                    wsc.send(test_msg);
+                    msg_cnt.waitForZero(10s);
+                    wsc.disconnect();
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "success": True,
+                        "is_http2": wsc.isHttp2(),
+                        "msg_count": ws_msgs.size(),
+                        "first_msg": ws_msgs[0],
+                        "expected_echo": "ECHO:" + test_msg,
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {
+                        "idx": idx,
+                        "success": False,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                    };
+                }
+            }();
+        }
+
+        all_cnt.waitForZero(30s);
+        assertEq(num_ws, results.size(), "all WebSocket connections should complete");
+
+        int ws_ok = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                ws_ok++;
+                assertTrue(r.is_http2, sprintf("WebSocket %d should be HTTP/2", r.idx));
+                assertEq(1, r.msg_count, sprintf("WebSocket %d should receive 1 echo", r.idx));
+                assertEq(r.expected_echo, r.first_msg,
+                    sprintf("WebSocket %d echo content", r.idx));
+            } else if (m_options.verbose) {
+                printf("WebSocket %d FAILED: %s\n", r.idx, r.error);
+            }
+        }
+        assertEq(num_ws, ws_ok, "all WebSocket connections should succeed");
+    }
+
+    #! Corner case: WebSocket binary message echo
+    testWsBinaryMessages() {
+        list<auto> ws_received();
+        Counter ws_cnt(2);
+
+        WebSocketClient wsc = getWsClient(sub (*data msg) {
+            if (exists msg) {
+                ws_received += msg;
+                ws_cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+
+        # Send a binary message
+        binary bin_msg = <48656c6c6f>;  # "Hello" in hex
+        wsc.send(bin_msg);
+
+        # Send a string message to verify both types work
+        wsc.send("text-msg");
+
+        ws_cnt.waitForZero(10s);
+
+        assertEq(2, ws_received.size(), "should receive 2 messages");
+        # Binary messages are echoed back as binary
+        assertEq(bin_msg, ws_received[0], "binary message echo");
+        # String messages get the ECHO: prefix
+        assertEq("ECHO:text-msg", ws_received[1], "string message echo after binary");
+
+        wsc.disconnect();
+    }
+
+    #! Corner case: Empty/zero-size streaming body
+    testEmptyStreamingBody() {
+        RestClient rc = getRestClient();
+        on_exit delete rc;
+
+        hash<auto> resp = rc.get("/stream/0");
+        assertEq(200, resp.status_code, "empty stream status");
+        # Empty stream should return empty body or no body
+        int body_size;
+        if (!resp.body) {
+            body_size = 0;
+        } else if (resp.body.typeCode() == NT_BINARY) {
+            body_size = resp.body.size();
+        } else {
+            body_size = resp.body.length();
+        }
+        assertEq(0, body_size, "empty stream body size");
+
+        # Verify connection still works after empty stream
+        resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "request after empty stream");
+        assertEq("OK", resp.body, "body after empty stream");
+    }
+
+    #! Corner case: POST with request body in multiplexed mode
+    testPostWithBody() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+        RestClient rc = getRestClient();
+        on_exit delete rc;
+
+        # POST with string body (RestClient JSON-encodes by default)
+        hash<auto> resp = rc.post("/echo", "test-body");
+        assertEq(200, resp.status_code, "POST response status");
+        assertRegex("method=POST", resp.body, "POST method in echo");
+        assertRegex("test-body", resp.body, "POST body in echo");
+
+        # PUT with string body
+        resp = rc.put("/echo", "put-data");
+        assertEq(200, resp.status_code, "PUT response status");
+        assertRegex("method=PUT", resp.body, "PUT method in echo");
+        assertRegex("put-data", resp.body, "PUT body in echo");
+
+        # GET still works on the same connection
+        resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "GET after POST/PUT status");
+        assertEq("OK", resp.body, "GET after POST/PUT body");
+    }
+
+    #! Corner case: Multiple different handlers on the same connection
+    testMultipleHandlersSameConnection() {
+        RestClient rc = getRestClient(60000);
+        on_exit delete rc;
+
+        # Hit different handlers sequentially on the same connection
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "simple handler status");
+        assertEq("OK", resp.body, "simple handler body");
+
+        resp = rc.get("/large/5000");
+        assertEq(200, resp.status_code, "large handler status");
+        assertEq(5000, resp.body.size(), "large handler body size");
+
+        resp = rc.get("/stream/4096");
+        assertEq(200, resp.status_code, "stream handler status");
+        int body_size;
+        if (resp.body.typeCode() == NT_BINARY) {
+            body_size = resp.body.size();
+        } else {
+            body_size = resp.body.length();
+        }
+        assertEq(4096, body_size, "stream handler body size");
+
+        resp = rc.get("/echo");
+        assertEq(200, resp.status_code, "echo handler status");
+        assertRegex("method=GET", resp.body, "echo handler method");
+
+        # Verify connection still works after hitting all handlers
+        resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "simple handler after all others");
+        assertEq("OK", resp.body, "simple handler body after all others");
+    }
+
+    #! Corner case: High concurrency with mixed protocol types
+    testHighConcurrency() {
+        int num_http = 10;
+        int num_ws = 3;
+        int num_stream = 3;
+
+        Counter all_cnt(num_http + num_ws + num_stream);
+        list<hash<auto>> results();
+        Mutex mtx();
+
+        # Launch HTTP requests
+        for (int i = 0; i < num_http; i++) {
+            int idx = i;
+            background sub () {
+                on_exit all_cnt.dec();
+                try {
+                    RestClient rc = getRestClient();
+                    on_exit delete rc;
+                    hash<auto> resp = rc.get("/simple");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "http", "idx": idx, "success": True,
+                        "status": resp.status_code};
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "http", "idx": idx, "success": False,
+                        "error": sprintf("%s: %s", ex.err, ex.desc)};
+                }
+            }();
+        }
+
+        # Launch WebSocket connections
+        for (int i = 0; i < num_ws; i++) {
+            int idx = i;
+            background sub () {
+                on_exit all_cnt.dec();
+                try {
+                    list<auto> msgs();
+                    Counter msg_cnt(1);
+                    WebSocketClient wsc = getWsClient(sub (*data msg) {
+                        if (exists msg) {
+                            msgs += msg;
+                            msg_cnt.dec();
+                        }
+                    });
+                    on_exit delete wsc;
+                    wsc.connect();
+                    wsc.send(sprintf("high-concurrency-%d", idx));
+                    msg_cnt.waitForZero(10s);
+                    wsc.disconnect();
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "ws", "idx": idx, "success": True,
+                        "msg_count": msgs.size()};
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "ws", "idx": idx, "success": False,
+                        "error": sprintf("%s: %s", ex.err, ex.desc)};
+                }
+            }();
+        }
+
+        # Launch streaming requests
+        for (int i = 0; i < num_stream; i++) {
+            int idx = i;
+            background sub () {
+                on_exit all_cnt.dec();
+                try {
+                    RestClient rc = getRestClient(60000);
+                    on_exit delete rc;
+                    hash<auto> resp = rc.get("/stream/8192");
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "stream", "idx": idx, "success": True,
+                        "status": resp.status_code};
+                } catch (hash<ExceptionInfo> ex) {
+                    mtx.lock();
+                    on_exit mtx.unlock();
+                    results += {"type": "stream", "idx": idx, "success": False,
+                        "error": sprintf("%s: %s", ex.err, ex.desc)};
+                }
+            }();
+        }
+
+        all_cnt.waitForZero(60s);
+
+        int total_expected = num_http + num_ws + num_stream;
+        assertEq(total_expected, results.size(), "all operations should complete");
+
+        int http_ok = 0;
+        int ws_ok = 0;
+        int stream_ok = 0;
+        foreach hash<auto> r in (results) {
+            if (r.success) {
+                switch (r.type) {
+                    case "http": http_ok++; break;
+                    case "ws": ws_ok++; break;
+                    case "stream": stream_ok++; break;
+                }
+            } else if (m_options.verbose) {
+                printf("%s %d FAILED: %s\n", r.type, r.idx, r.error);
+            }
+        }
+
+        assertEq(num_http, http_ok, "all HTTP requests should succeed under high concurrency");
+        assertEq(num_ws, ws_ok, "all WebSocket connections should succeed under high concurrency");
+        assertEq(num_stream, stream_ok,
+            "all streaming requests should succeed under high concurrency");
+    }
+
+    #! Negative: Request to non-existent path should return error
+    testNonExistentPath() {
+        RestClient rc = getRestClient();
+        on_exit delete rc;
+
+        try {
+            hash<auto> resp = rc.get("/nonexistent/path");
+            # RestClient may throw on non-2xx; if it doesn't, verify error status
+            assertTrue(resp.status_code >= 400, "non-existent path should return error status");
+        } catch (hash<ExceptionInfo> ex) {
+            # RestClient throws REST-RESPONSE-ERROR for non-2xx
+            assertEq("REST-RESPONSE-ERROR", ex.err, "non-existent path exception type");
+            assertTrue(ex.arg.status_code >= 400,
+                sprintf("non-existent path should be 4xx/5xx (got %d)", ex.arg.status_code));
+        }
+
+        # Verify connection still works after error response
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "request after non-existent path error");
+        assertEq("OK", resp.body, "body after non-existent path error");
+    }
+
+    #! Negative: Handler that throws an exception should return error response
+    testHandlerException500() {
+        RestClient rc = getRestClient();
+        on_exit delete rc;
+
+        try {
+            hash<auto> resp = rc.get("/error");
+            # If RestClient doesn't throw, status should be 500
+            assertEq(500, resp.status_code, "error handler status");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, "error handler exception type");
+            assertEq(500, ex.arg.status_code, "error handler exception status code");
+        }
+
+        # Verify connection still works after server error
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "request after 500");
+        assertEq("OK", resp.body, "body after 500");
+    }
+
+    #! Negative: Handler error on one connection does not affect other connections
+    testErrorIsolation() {
+        # Start a WebSocket connection
+        list<auto> ws_msgs();
+        Counter ws_cnt(1);
+        WebSocketClient wsc = getWsClient(sub (*data msg) {
+            if (exists msg) {
+                ws_msgs += msg;
+                ws_cnt.dec();
+            }
+        });
+        on_exit delete wsc;
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+
+        # Trigger errors on a separate connection
+        RestClient rc = getRestClient();
+        on_exit delete rc;
+
+        for (int i = 0; i < 3; i++) {
+            try {
+                rc.get("/error");
+            } catch () {
+                # expected
+            }
+        }
+
+        # Verify WebSocket still works after errors on another connection
+        wsc.send("after-errors");
+        ws_cnt.waitForZero(10s);
+        assertEq(1, ws_msgs.size(), "WebSocket should still work after errors on other connection");
+        assertEq("ECHO:after-errors", ws_msgs[0], "WebSocket echo after errors");
+
+        # Verify regular HTTP still works
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "HTTP request after errors");
+        assertEq("OK", resp.body, "HTTP body after errors");
+
+        wsc.disconnect();
+    }
+
+    #! Test: Same-connection WebSocket + HTTP/2 requests using nghttp2-ws-client
+    #! Uses the external nghttp2-based client to verify that WebSocket, regular GET,
+    #! and streaming GET all work on the SAME TCP connection (different HTTP/2 streams).
+    testSameConnectionWsAndHttp() {
+        # Find required tools
+        string gpp_path = ENV.GPP_PATH ?? "g++";
+        string pkg_config = "pkg-config";
+
+        # Check for g++
+        int gpp_check = system("which " + gpp_path + " >/dev/null 2>&1");
+        if (gpp_check != 0) {
+            testSkip("g++ not found - cannot build nghttp2-ws-client");
+        }
+
+        # Check for pkg-config
+        int pkg_check = system("which " + pkg_config + " >/dev/null 2>&1");
+        if (pkg_check != 0) {
+            testSkip("pkg-config not found - cannot build nghttp2-ws-client");
+        }
+
+        # Check for libnghttp2
+        int nghttp2_check = system(pkg_config + " --exists libnghttp2 2>/dev/null");
+        if (nghttp2_check != 0) {
+            testSkip("libnghttp2-dev not found - cannot build nghttp2-ws-client");
+        }
+
+        # Path to source (relative from HttpServer test dir to Http2 test dir)
+        string src_path = get_script_dir() + DirSep + ".." + DirSep + "Http2" + DirSep +
+            "nghttp2-ws-client" + DirSep + "nghttp2-ws-client.cpp";
+        if (!is_file(src_path)) {
+            testSkip("nghttp2-ws-client.cpp source not found at " + src_path);
+        }
+
+        # Temporary file paths
+        string bin_path = tmp_location() + DirSep + "nghttp2-ws-client-mux-" + getpid();
+        string log_path = bin_path + ".log";
+        string pkg_path = bin_path + ".pkg";
+        on_exit {
+            if (is_file(bin_path)) {
+                unlink(bin_path);
+            }
+            if (is_file(log_path)) {
+                unlink(log_path);
+            }
+            if (is_file(pkg_path)) {
+                unlink(pkg_path);
+            }
+        }
+
+        # Get pkg-config flags
+        string pkg_cmd = sprintf("%s --cflags --libs libnghttp2 > %s 2>/dev/null",
+            pkg_config, pkg_path);
+        int pkg_rc = system(pkg_cmd);
+        string pkg_flags = (pkg_rc == 0 && is_file(pkg_path))
+            ? trim(ReadOnlyFile::readTextFile(pkg_path)) : "";
+        if (pkg_rc != 0 || !pkg_flags) {
+            testSkip("libnghttp2 pkg-config not available");
+        }
+
+        # Build the client
+        string build_cmd = sprintf("%s -std=c++17 -O2 -Wall -Wextra -o %s %s %s -lssl -lcrypto > %s 2>&1",
+            gpp_path, bin_path, src_path, pkg_flags, log_path);
+
+        if (m_options.verbose > 1) {
+            printf("Building nghttp2-ws-client: %s\n", build_cmd);
+        }
+
+        int build_rc = system(build_cmd);
+        if (build_rc != 0) {
+            *string err = is_file(log_path) ? ReadOnlyFile::readTextFile(log_path) : "compile failed";
+            if (m_options.verbose) {
+                printf("Build failed: %s\n", err);
+            }
+            testSkip("failed to build nghttp2-ws-client: " + err);
+        }
+
+        # Run the client with -get-path and -stream-path for same-connection test
+        string run_cmd = sprintf("%s -host localhost -port %d -path /ws -get-path /simple "
+            "-stream-path /stream/8192 > %s 2>&1", bin_path, mSslPort, log_path);
+
+        if (m_options.verbose > 1) {
+            printf("Running nghttp2-ws-client: %s\n", run_cmd);
+        }
+
+        int run_rc = system(run_cmd);
+        *string run_output = is_file(log_path) ? ReadOnlyFile::readTextFile(log_path) : NOTHING;
+
+        if (run_rc != 0) {
+            if (m_options.verbose) {
+                printf("nghttp2-ws-client failed (exit %d): %s\n", run_rc, run_output ?? "no output");
+            }
+            fail(sprintf("nghttp2-ws-client failed with exit code %d: %s", run_rc,
+                run_output ?? "no output"));
+        }
+
+        if (m_options.verbose > 1) {
+            printf("nghttp2-ws-client output: %s\n", run_output ?? "");
+        }
+
+        assertTrue(True, "nghttp2-ws-client same-connection multiplexing test passed");
+    }
+}

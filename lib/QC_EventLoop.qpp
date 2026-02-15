@@ -1,0 +1,492 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_EventLoop.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSocketObject.h>
+#include "qore/intern/QoreEventLoop.h"
+#include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_File.h"
+
+#include <unordered_map>
+
+// Forward declarations for EventNotifier class
+extern qore_classid_t CID_EVENTNOTIFIER;
+extern QoreClass* QC_EVENTNOTIFIER;
+
+// Private data for EventLoop
+class EventLoopPriv : public AbstractPrivateData {
+public:
+    QoreEventLoop loop;
+
+    // Map of fd -> QoreObject* for registered sockets/files
+    std::unordered_map<int, QoreObject*> obj_map;
+    // Reverse map of QoreObject* -> fd for removal after socket/file is closed
+    std::unordered_map<QoreObject*, int> reverse_map;
+
+#ifdef DARWIN
+    // Map of EventNotifier* -> QoreObject* for optimized user event tracking
+    std::unordered_map<QoreEventNotifier*, QoreObject*> notifier_map;
+#endif
+
+    DLLLOCAL EventLoopPriv(ExceptionSink* xsink) : loop(xsink) {}
+
+    DLLLOCAL ~EventLoopPriv() {
+        // Note: we don't deref objects here as they should be deref'd when removed
+    }
+
+    DLLLOCAL int add(int fd, int events, QoreObject* obj, ExceptionSink* xsink) {
+        // Keep a reference to the object
+        obj->ref();
+        obj_map[fd] = obj;
+        reverse_map[obj] = fd;
+        int rc = loop.add(fd, events, obj, xsink);
+        if (rc < 0) {
+            obj_map.erase(fd);
+            reverse_map.erase(obj);
+            obj->deref(xsink);
+        }
+        return rc;
+    }
+
+#ifdef DARWIN
+    //! Add EventNotifier using optimized EVFILT_USER (macOS only)
+    DLLLOCAL int addNotifier(QoreEventNotifier* notifier, QoreObject* obj, ExceptionSink* xsink) {
+        // Bind the notifier to our kqueue for EVFILT_USER optimization
+        int rc = notifier->bindToKqueue(loop.getKqueueFd(), xsink);
+        if (rc < 0) {
+            return rc;
+        }
+
+        // Track the user event in the loop
+        rc = loop.addUserEvent(notifier->getUserIdent(), obj, xsink);
+        if (rc < 0) {
+            notifier->unbindFromKqueue();
+            return rc;
+        }
+
+        // Keep a reference to the object
+        obj->ref();
+        notifier_map[notifier] = obj;
+
+        return 0;
+    }
+
+    //! Remove EventNotifier (macOS only)
+    DLLLOCAL int removeNotifier(QoreEventNotifier* notifier, ExceptionSink* xsink) {
+        auto it = notifier_map.find(notifier);
+        if (it == notifier_map.end()) {
+            return 0;  // Not registered
+        }
+
+        QoreObject* obj = it->second;
+        notifier_map.erase(it);
+
+        // Remove from kqueue
+        loop.removeUserEvent(notifier->getUserIdent(), xsink);
+        notifier->unbindFromKqueue();
+
+        obj->deref(xsink);
+        return 0;
+    }
+
+    //! Check if a notifier is registered (macOS only)
+    DLLLOCAL bool hasNotifier(QoreEventNotifier* notifier) const {
+        return notifier_map.find(notifier) != notifier_map.end();
+    }
+#endif
+
+    DLLLOCAL int remove(int fd, ExceptionSink* xsink) {
+        auto it = obj_map.find(fd);
+        if (it != obj_map.end()) {
+            reverse_map.erase(it->second);
+            it->second->deref(xsink);
+            obj_map.erase(it);
+        }
+        return loop.remove(fd, xsink);
+    }
+
+    //! Remove by object pointer (for when socket/file is already closed)
+    DLLLOCAL int removeByObject(QoreObject* obj, ExceptionSink* xsink) {
+        auto it = reverse_map.find(obj);
+        if (it == reverse_map.end()) {
+            // Object not registered, nothing to do
+            return 0;
+        }
+        int fd = it->second;
+        reverse_map.erase(it);
+        obj_map.erase(fd);
+        obj->deref(xsink);
+        return loop.remove(fd, xsink);
+    }
+
+    DLLLOCAL QoreObject* getObject(int fd) const {
+        auto it = obj_map.find(fd);
+        return it != obj_map.end() ? it->second : nullptr;
+    }
+};
+
+//! Persistent event loop for efficient async I/O
+/** The EventLoop class provides a persistent event loop using the most efficient
+    mechanism available on each platform:
+    - kqueue on macOS/BSD
+    - epoll on Linux
+    - poll() as fallback on other platforms
+
+    Events are registered once and persist until explicitly removed, which allows
+    proper detection of pending I/O operations that may have occurred before
+    registration. This is particularly important for listener sockets where
+    connections may arrive before the poll call.
+
+    @note This class is not available with the @ref PO_NO_NETWORK parse option
+
+    @since %Qore 2.1
+*/
+qclass EventLoop [dom=NETWORK; arg=EventLoopPriv* el; ns=Qore];
+
+//! Creates a new EventLoop object
+/** @par Example:
+    @code{.py} EventLoop loop(); @endcode
+
+    @throw EVENT-LOOP-ERROR Failed to create the event loop
+*/
+EventLoop::constructor() {
+    ReferenceHolder<EventLoopPriv> holder(new EventLoopPriv(xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (!holder->loop.isValid()) {
+        xsink->raiseException("EVENT-LOOP-ERROR", "Failed to create event loop");
+        return;
+    }
+    self->setPrivate(CID_EVENTLOOP, holder.release());
+}
+
+//! Destroys the EventLoop object
+/**
+*/
+EventLoop::destructor() {
+    // Remove all registered fds
+    for (auto& [fd, obj] : el->obj_map) {
+        obj->deref(xsink);
+    }
+    el->obj_map.clear();
+
+#ifdef DARWIN
+    // Clean up registered EventNotifiers
+    for (auto& [notifier, obj] : el->notifier_map) {
+        notifier->unbindFromKqueue();
+        obj->deref(xsink);
+    }
+    el->notifier_map.clear();
+#endif
+
+    el->deref(xsink);
+}
+
+//! Creates a copy of the EventLoop object
+/** @note The copy shares no state with the original; a new event loop is created
+*/
+EventLoop::copy() {
+    ReferenceHolder<EventLoopPriv> holder(new EventLoopPriv(xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_EVENTLOOP, holder.release());
+}
+
+//! Adds a socket to the event loop
+/** @par Example:
+    @code{.py} loop.add(socket, SOCK_POLLIN); @endcode
+
+    @param socket The socket to add
+    @param events Events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
+
+    @throw EVENT-LOOP-ERROR Failed to add socket to event loop
+    @throw SOCKET-NOT-OPEN Socket is not open
+*/
+nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
+    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
+    if (!socket->isOpen()) {
+        xsink->raiseException("SOCKET-NOT-OPEN", "Cannot add closed socket to event loop");
+        return QoreValue();
+    }
+    int fd = socket->getSocket();
+    // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
+    int ev = 0;
+    if (events & SOCK_POLLIN) {
+        ev |= QORE_EV_READ;
+    }
+    if (events & SOCK_POLLOUT) {
+        ev |= QORE_EV_WRITE;
+    }
+    el->add(fd, ev, const_cast<QoreObject*>(obj_socket), xsink);
+}
+
+//! Adds a file to the event loop
+/** @par Example:
+    @code{.py} loop.add(file, SOCK_POLLIN); @endcode
+
+    @param file The file to add (typically a pipe or ReadOnlyFile)
+    @param events Events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
+
+    @throw EVENT-LOOP-ERROR Failed to add file to event loop
+    @throw FILE-READ-ERROR File is not open
+*/
+nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
+    ReferenceHolder<File> holder(file, xsink);
+    if (!file->isOpen()) {
+        xsink->raiseException("FILE-READ-ERROR", "Cannot add closed file to event loop");
+        return QoreValue();
+    }
+    int fd = file->getFD();
+    // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
+    int ev = 0;
+    if (events & SOCK_POLLIN) {
+        ev |= QORE_EV_READ;
+    }
+    if (events & SOCK_POLLOUT) {
+        ev |= QORE_EV_WRITE;
+    }
+    el->add(fd, ev, const_cast<QoreObject*>(obj_file), xsink);
+}
+
+//! Modifies events for a registered socket
+/** @par Example:
+    @code{.py} loop.modify(socket, SOCK_POLLIN | SOCK_POLLOUT); @endcode
+
+    @param socket The socket to modify
+    @param events New events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
+
+    @throw EVENT-LOOP-ERROR Failed to modify socket events
+    @throw SOCKET-NOT-OPEN Socket is not open
+*/
+nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) {
+    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
+    if (!socket->isOpen()) {
+        xsink->raiseException("SOCKET-NOT-OPEN", "Cannot modify closed socket in event loop");
+        return QoreValue();
+    }
+    int fd = socket->getSocket();
+    int ev = 0;
+    if (events & SOCK_POLLIN) {
+        ev |= QORE_EV_READ;
+    }
+    if (events & SOCK_POLLOUT) {
+        ev |= QORE_EV_WRITE;
+    }
+    el->loop.modify(fd, ev, xsink);
+}
+
+//! Removes a socket from the event loop
+/** @par Example:
+    @code{.py} loop.del(socket); @endcode
+
+    @param socket The socket to remove
+
+    @note It is safe to call this method for sockets that are not registered or have been closed
+*/
+nothing EventLoop::del(Socket[QoreSocketObject] socket) {
+    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
+    // Use obj_socket (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
+    // This handles the case where the socket has been closed but is still registered
+    el->removeByObject(const_cast<QoreObject*>(obj_socket), xsink);
+}
+
+//! Removes a file from the event loop
+/** @par Example:
+    @code{.py} loop.del(file); @endcode
+
+    @param file The file to remove
+
+    @note It is safe to call this method for files that are not registered or have been closed
+*/
+nothing EventLoop::del(ReadOnlyFile[File] file) {
+    ReferenceHolder<File> holder(file, xsink);
+    // Use obj_file (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
+    // This handles the case where the file has been closed but is still registered
+    el->removeByObject(const_cast<QoreObject*>(obj_file), xsink);
+}
+
+//! Adds an event notifier to the event loop
+/** @par Example:
+    @code{.py} loop.add(notifier, SOCK_POLLIN); @endcode
+
+    @param notifier The event notifier to add
+    @param events Events to monitor (typically SOCK_POLLIN)
+
+    @throw EVENT-LOOP-ERROR Failed to add notifier to event loop
+    @throw EVENT-NOTIFIER-ERROR Notifier is not valid
+
+    @note On macOS, this uses an optimized kqueue EVFILT_USER implementation
+    that avoids the overhead of pipe-based signaling.
+
+    @since %Qore 2.1
+*/
+nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
+    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
+    if (!notifier->isValid()) {
+        xsink->raiseException("EVENT-NOTIFIER-ERROR", "Cannot add invalid notifier to event loop");
+        return QoreValue();
+    }
+
+#ifdef DARWIN
+    // macOS: use optimized EVFILT_USER path (nginx-style)
+    // This avoids pipe overhead and uses direct kqueue user events
+    el->addNotifier(notifier, const_cast<QoreObject*>(obj_notifier), xsink);
+#else
+    // Other platforms: use fd-based registration
+    int fd = notifier->fd();
+    // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
+    int ev = 0;
+    if (events & SOCK_POLLIN) {
+        ev |= QORE_EV_READ;
+    }
+    if (events & SOCK_POLLOUT) {
+        ev |= QORE_EV_WRITE;
+    }
+    el->add(fd, ev, const_cast<QoreObject*>(obj_notifier), xsink);
+#endif
+}
+
+//! Removes an event notifier from the event loop
+/** @par Example:
+    @code{.py} loop.del(notifier); @endcode
+
+    @param notifier The event notifier to remove
+
+    @note It is safe to call this method for notifiers that are not registered
+
+    @since %Qore 2.1
+*/
+nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
+    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
+#ifdef DARWIN
+    // macOS: use optimized removal path
+    el->removeNotifier(notifier, xsink);
+#else
+    // Other platforms: use fd-based removal
+    el->removeByObject(const_cast<QoreObject*>(obj_notifier), xsink);
+#endif
+}
+
+//! Polls for events on registered sockets/files
+/** @par Example:
+    @code{.py}
+*list<hash<EventInfo>> events = loop.poll(5s);
+if (events) {
+    for (hash<EventInfo> ev in events) {
+        if (ev.events & SOCK_POLLIN) {
+            # handle read event
+        }
+    }
+}
+    @endcode
+
+    @param timeout_ms Timeout for the poll operation; a negative value waits indefinitely,
+           0 returns immediately, positive values wait up to that duration
+
+    @return A list of hash<EventInfo> for sockets/files with events, or NOTHING on timeout
+
+    @throw EVENT-LOOP-ERROR Poll operation failed
+
+    Each hash in the returned list has:
+    - \c socket: The Socket or ReadOnlyFile object that has events
+    - \c events: Bitmask of events that occurred (SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLERR)
+*/
+*list<hash<SocketPollInfo>> EventLoop::poll(timeout timeout_ms = -1) {
+    if (el->loop.empty()) {
+        return QoreValue();
+    }
+
+    std::vector<QoreEventInfo> events;
+    int count = el->loop.poll(events, timeout_ms, xsink);
+    if (*xsink || count <= 0) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclSocketPollInfo->getTypeInfo()), xsink);
+    for (int i = 0; i < count; ++i) {
+        QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
+        if (!obj) {
+            continue;
+        }
+
+        // Convert internal event flags back to SOCK_POLLIN/SOCK_POLLOUT
+        int ev = 0;
+        if (events[i].events & QORE_EV_READ) {
+            ev |= SOCK_POLLIN;
+        }
+        if (events[i].events & QORE_EV_WRITE) {
+            ev |= SOCK_POLLOUT;
+        }
+        if (events[i].events & QORE_EV_ERROR) {
+            ev |= SOCK_POLLERR;
+        }
+
+        ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        entry->setKeyValue("events", ev, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        entry->setKeyValue("socket", obj->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        rv->push(entry.release(), xsink);
+    }
+
+    return rv.release();
+}
+
+//! Returns the number of registered sockets/files
+/** @par Example:
+    @code{.py} int count = loop.size(); @endcode
+
+    @return The number of registered sockets/files
+*/
+int EventLoop::size() {
+    return el->loop.size();
+}
+
+//! Returns True if no sockets/files are registered
+/** @par Example:
+    @code{.py} bool empty = loop.empty(); @endcode
+
+    @return True if no sockets/files are registered
+*/
+bool EventLoop::empty() {
+    return el->loop.empty();
+}

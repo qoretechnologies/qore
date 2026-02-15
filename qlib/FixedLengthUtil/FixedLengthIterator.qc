@@ -22,10 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%require-types
-%enable-all-warnings
-%new-style
-
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! The FixedLengthIterator class allows fixed-length data sources to be iterated on a record basis.  The source of the input data is an @ref Qore::AbstractLineIterator "AbstractLineIterator" object or an @ref Qore::InputStream "InputStream"
@@ -70,7 +66,6 @@ while (i.next()) {
         @endcode
 
         @param input The @ref Qore::InputStream "InputStream" providing input data to process
-        @param encoding the encoding of the input stream
         @param spec Fixed-length line specification; see @ref fixedlengthspec for more information
         @param opts Global options; see @ref fixedlengthglobals for valid values
     */

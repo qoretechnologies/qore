@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+class RuntimeConfig;
+
 class WhileStatement : public AbstractStatement {
 public:
     DLLLOCAL WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd);
@@ -52,6 +54,7 @@ protected:
     LVList* lvars = nullptr;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

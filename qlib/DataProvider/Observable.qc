@@ -200,15 +200,6 @@ public class Observable {
             !$1.event_map || $1.event_map{event_id} || ($1.filter && $1.filter.filter(event_id, data_));
     }
 
-    #! Reimplement this method to implement logging
-    /** @param level the Logger level
-        @param fmt the format string
-        @param ... any arguments for any format placeholders in \a fmt
-    */
-    log(int level, string fmt, ...) {
-        # this method intentionally left blank
-    }
-
     #! Is this object still generating events
     /** Override this method in base classes to signal when events are no longer being generated
     */

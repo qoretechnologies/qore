@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -343,7 +343,7 @@ public:
     //! evaluates the given method with the given class context and arguments passed and returns the return value
     /** The caller owns the AbstractQoreNode (reference) returned
 
-        @param method the method to evaluate
+        @param name the method to evaluate
         @param class_ctx the class context for the method evaluation for evaluating private:internal methods
         @param args the arguments for the method (may be 0)
         @param xsink if an error occurs, the Qore-language exception information will be added here
@@ -607,14 +607,16 @@ public:
         @param method a constant reference to the QoreMethod object
         @param meth the name of the method to evalute
         @param args the arguments for the method
+        @param rc runtime configuration for the call
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, ExceptionSink* xsink);
+            const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
+            ExceptionSink* xsink);
 
     //! called on the old object (this) to acquire private data, copy method called with pointer to "self" (new copy)
     DLLLOCAL void evalCopyMethodWithPrivateData(const QoreClass &thisclass, const BuiltinCopyVariantBase* meth,
-            QoreObject* self, ExceptionSink* xsink);
+            QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink);
 
     //! concatenates info about private data to a string
     /**

@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class QppComplexCodeTypesTest
+
+#! Test complex code<> types as supported by QPP
+/** This test verifies that QPP correctly handles complex code<> types
+    in method signatures, including:
+    - code with simple signatures: code<int(int)>
+    - code with multiple parameters: code<int(string, int)>
+    - code with hash parameters: code<int(hash<string, int>)>
+    - code with list parameters: code<int(list<int>)>
+    - code with nested types: code<list<hash<string, int>>(int)>
+    - multiple code parameters with complex types
+    - or-nothing code types: *code<int(hash<string, int>)>
+
+    @since %Qore 2.1
+*/
+class QppComplexCodeTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("QppComplexCodeTypesTest", "1.0") {
+        addTestCase("Simple code type", \simpleCodeTypeTest());
+        addTestCase("Code with multiple params", \multipleParamsTest());
+        addTestCase("Code with hash param", \hashParamTest());
+        addTestCase("Code with list param", \listParamTest());
+        addTestCase("Code with nested types", \nestedTypesTest());
+        addTestCase("Multiple code params", \multipleCodeParamsTest());
+        addTestCase("Or-nothing code", \orNothingCodeTest());
+        addTestCase("Mixed params", \mixedParamsTest());
+        addTestCase("Softlist param", \softlistParamTest());
+        addTestCase("Nested hash param", \nestedHashParamTest());
+        addTestCase("Complex code param splitting", \complexCodeParamSplittingTest());
+        set_return_value(main());
+    }
+
+    simpleCodeTypeTest() {
+        # Test code<int(int)>
+        code<int(int)> doubler = int sub(int x) { return x * 2; };
+        assertEq(10, applySimple(doubler, 5));
+
+        # Test with lambda
+        assertEq(25, applySimple(int sub(int x) { return x * x; }, 5));
+    }
+
+    multipleParamsTest() {
+        # Test code<int(string, int)>
+        code<int(string, int)> concat_len = int sub(string s, int add) {
+            return s.length() + add;
+        };
+        assertEq(8, applyMultipleParams(concat_len, "hello", 3));
+    }
+
+    hashParamTest() {
+        # Test code<int(hash<string, int>)>
+        code<int(hash<string, int>)> sum_values = int sub(hash<string, int> h) {
+            int sum = 0;
+            foreach int v in (h.values()) {
+                sum += v;
+            }
+            return sum;
+        };
+        assertEq(6, applyHashParam(sum_values, {"a": 1, "b": 2, "c": 3}));
+    }
+
+    listParamTest() {
+        # Test code<int(list<int>)>
+        code<int(list<int>)> list_sum = int sub(list<int> l) {
+            int sum = 0;
+            foreach int x in (l) {
+                sum += x;
+            }
+            return sum;
+        };
+        assertEq(15, applyListParam(list_sum, (1, 2, 3, 4, 5)));
+    }
+
+    nestedTypesTest() {
+        # Test code<list<hash<string, int>>(int)>
+        code<list<hash<string, int>>(int)> generator = list<hash<string, int>> sub(int n) {
+            list<hash<string, int>> result = ();
+            for (int i = 0; i < n; ++i) {
+                result += {"index": i, "value": i * 10};
+            }
+            return result;
+        };
+        list<hash<string, int>> result = applyNestedTypes(generator, 3);
+        assertEq(3, result.size());
+        assertEq({"index": 0, "value": 0}, result[0]);
+        assertEq({"index": 2, "value": 20}, result[2]);
+    }
+
+    multipleCodeParamsTest() {
+        # Test code<int(hash<string, int>)>, code<bool(list<int>)>
+        code<int(hash<string, int>)> transformer = int sub(hash<string, int> h) {
+            return h.size();
+        };
+        code<bool(list<int>)> validator = bool sub(list<int> l) {
+            return l[0] > 0;
+        };
+        assertTrue(applyMultipleCode(transformer, validator, {"a": 1, "b": 2}));
+    }
+
+    orNothingCodeTest() {
+        # Test *code<int(hash<string, int>)>
+        code<int(hash<string, int>)> processor = int sub(hash<string, int> h) {
+            return h.value ?? 0;
+        };
+        assertEq(42, applyOrNothing(processor, {"value": 42}));
+        assertEq(-1, applyOrNothing(NOTHING, {"value": 42}));
+    }
+
+    mixedParamsTest() {
+        # Test string, code<hash<string, int>(string)>, int
+        code<hash<string, int>(string)> creator = hash<string, int> sub(string name) {
+            return {name: name.length()};
+        };
+        string result = applyMixed("test", creator, 2);
+        assertTrue(result.size() > 0);
+    }
+
+    softlistParamTest() {
+        # Test code<int(softlist<string>)>
+        code<int(softlist<string>)> counter = int sub(softlist<string> items) {
+            return items.size();
+        };
+        assertEq(3, applySoftlist(counter, ("a", "b", "c")));
+        assertEq(1, applySoftlist(counter, "single"));
+    }
+
+    nestedHashParamTest() {
+        # Test code<int(hash<string, hash<string, int>>)>
+        code<int(hash<string, hash<string, int>>)> deep_sum = int sub(hash<string, hash<string, int>> h) {
+            int sum = 0;
+            foreach hash<string, int> inner in (h.values()) {
+                foreach int v in (inner.values()) {
+                    sum += v;
+                }
+            }
+            return sum;
+        };
+        assertEq(10, applyNestedHash(deep_sum, {"outer": {"a": 1, "b": 2}, "other": {"c": 3, "d": 4}}));
+    }
+
+    complexCodeParamSplittingTest() {
+        # Test that complex code<> params with commas inside are correctly parsed
+        # This specifically tests the qpp fix for comma-separated params with complex types
+
+        # Two code params with hash<string, int> (commas inside angle brackets)
+        code<int(hash<string, int>)> first = int sub(hash<string, int> h) { return h.size(); };
+        code<string(hash<string, string>)> second = string sub(hash<string, string> h) { return h.keys()[0]; };
+
+        auto result = applyTwoComplexCode(first, second, {"a": 1, "b": 2}, {"key": "value"});
+        assertEq(2, result[0]);
+        assertEq("key", result[1]);
+    }
+
+    # Helper methods that use the complex code<> types
+
+    private int applySimple(code<int(int)> func, int x) {
+        return func(x);
+    }
+
+    private int applyMultipleParams(code<int(string, int)> func, string s, int i) {
+        return func(s, i);
+    }
+
+    private int applyHashParam(code<int(hash<string, int>)> func, hash<string, int> h) {
+        return func(h);
+    }
+
+    private int applyListParam(code<int(list<int>)> func, list<int> l) {
+        return func(l);
+    }
+
+    private list<hash<string, int>> applyNestedTypes(code<list<hash<string, int>>(int)> func, int n) {
+        return func(n);
+    }
+
+    private bool applyMultipleCode(code<int(hash<string, int>)> transformer, code<bool(list<int>)> validator, hash<string, int> h) {
+        int result = transformer(h);
+        return validator((result,));
+    }
+
+    private int applyOrNothing(*code<int(hash<string, int>)> func, hash<string, int> h) {
+        if (!func) {
+            return -1;
+        }
+        return func(h);
+    }
+
+    private string applyMixed(string name, code<hash<string, int>(string)> creator, int count) {
+        string result = "";
+        for (int i = 0; i < count; ++i) {
+            hash<string, int> h = creator(name);
+            result += sprintf("%s:%d ", name, h.size());
+        }
+        return result;
+    }
+
+    private int applySoftlist(code<int(softlist<string>)> func, softlist<string> items) {
+        return func(items);
+    }
+
+    private int applyNestedHash(code<int(hash<string, hash<string, int>>)> func, hash<string, hash<string, int>> h) {
+        return func(h);
+    }
+
+    private list<auto> applyTwoComplexCode(code<int(hash<string, int>)> first, code<string(hash<string, string>)> second, hash<string, int> h1, hash<string, string> h2) {
+        return (first(h1), second(h2));
+    }
+}

@@ -35,17 +35,65 @@
 
 #include <memory>
 
-QoreObject* get_type_object(const QoreTypeInfo* t) {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(t));
+void QoreType::setContainer(QoreObject* obj) {
+    container = obj;
+    if (source_pgm) {
+        // Determine reference type based on whether this is same-program or cross-program storage
+        // Same-program: use weak ref to avoid cycles (Type will be destroyed with program anyway)
+        // Cross-program: use strong ref to keep source_pgm's type data alive
+        if (obj->getProgram() == source_pgm) {
+            // Same program - use weak ref to avoid cycle
+            source_pgm->depRef();
+            strong_ref = false;
+        } else {
+            // Different program - use strong ref to keep data alive
+            source_pgm->ref();
+            strong_ref = true;
+        }
+        ref_held = true;
+    }
 }
 
-static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, ExceptionSink* xsink) {
+void QoreType::releaseSourceRef() {
+    if (ref_held && source_pgm) {
+        ref_held = false;
+        if (strong_ref) {
+            ExceptionSink xsink;
+            source_pgm->deref(&xsink);
+        } else {
+            source_pgm->depDeref();
+        }
+    }
+}
+
+QoreType::~QoreType() {
+    if (ref_held && source_pgm) {
+        if (strong_ref) {
+            ExceptionSink xsink;
+            source_pgm->deref(&xsink);
+        } else {
+            source_pgm->depDeref();
+        }
+    }
+}
+
+QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm) {
+    QoreType* qt = new QoreType(t, source_pgm);
+    QoreObject* obj = new QoreObject(QC_TYPE, getProgram(), qt);
+    qt->setContainer(obj);
+    return obj;
+}
+
+static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("type", new QoreStringNode(qore_type_get_name(t.typeInfo)), xsink);
     return rv.release();
 }
 
-static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context, ExceptionSink* xsink) {
+static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("type");
         if (val.getType() != NT_STRING) {
@@ -57,7 +105,11 @@ static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreD
             return;
         }
         assert(type);
-        self.setPrivate(CID_TYPE, new QoreType(type));
+        // Deserialized types don't have a source program reference since they come from
+        // serialized data. The type info is rebuilt from the string representation.
+        QoreType* qt = new QoreType(type);
+        self.setPrivate(CID_TYPE, qt);
+        qt->setContainer(&self);
         return;
     }
 
@@ -249,42 +301,42 @@ const SoftIntType = qore(get_type_object(softBigIntTypeInfo));
 */
 const SoftIntOrNothingType = qore(get_type_object(softBigIntOrNothingTypeInfo));
 
-//! @ref hexbinary_type "hexbinary type"
+//! hexbinary type
 /**
 */
 const HexBinaryType = qore(get_type_object(hexBinaryTypeInfo));
 
-//! @ref hexbinary_or_nothing_type "*hexbinary type"
+//! *hexbinary type
 /**
 */
 const HexBinaryOrNothingType = qore(get_type_object(hexBinaryOrNothingTypeInfo));
 
-//! @ref base64binary_type "base64binary type"
+//! base64binary type
 /**
 */
 const Base64BinaryType = qore(get_type_object(base64BinaryTypeInfo));
 
-//! @ref base64binary_or_nothing_type "*base64binary type"
+//! *base64binary type
 /**
 */
 const Base64BinaryOrNothingType = qore(get_type_object(base64BinaryOrNothingTypeInfo));
 
-//! @ref base64urlbinary_type "base64urlbinary type"
+//! base64urlbinary type
 /**
 */
 const Base64UrlBinaryType = qore(get_type_object(base64UrlBinaryTypeInfo));
 
-//! @ref base64urlbinary_or_nothing_type "*base64urlbinary type"
+//! *base64urlbinary type
 /**
 */
 const Base64UrlBinaryOrNothingType = qore(get_type_object(base64UrlBinaryOrNothingTypeInfo));
 
-//! @ref softbinary_type "softbinary type"
+//! softbinary type
 /**
 */
 const SoftBinaryType = qore(get_type_object(softBinaryTypeInfo));
 
-//! @ref softbinary_or_nothing_type "*softbinary type"
+//! *softbinary type
 /**
 */
 const SoftBinaryOrNothingType = qore(get_type_object(softBinaryOrNothingTypeInfo));
@@ -408,7 +460,7 @@ const QTI_IDENT = QTI_IDENT;
 qclass Type [ns=Qore::Reflection; arg=QoreType* t; dom=REFLECTION; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(Type_serializer); deserializer=Type_deserializer];
 
 //! Creates the type from the given string
-/** @param string the type string
+/** @param typestr the type string
 
     @throw UNKNOWN-TYPE cannot find the given type
  */
@@ -419,7 +471,11 @@ Type::constructor(string typestr) {
         return;
     }
     assert(type);
-    self->setPrivate(CID_TYPE, new QoreType(type));
+    // keep the current program alive while the Type object exists,
+    // as the type may reference user-defined types from this program (issue #4816)
+    QoreType* qt = new QoreType(type, getProgram());
+    self->setPrivate(CID_TYPE, qt);
+    qt->setContainer(self);
 }
 
 //! returns the type's name
@@ -684,7 +740,8 @@ Type Type::getBaseType() [flags=CONSTANT] {
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(type));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(type, t->source_pgm);
 }
 
 //! Returns the "or nothing" type for the current type; if the type is already an "or nothing" type (i.e. it already accepts @ref nothing), then the same type is returned
@@ -700,7 +757,8 @@ auto v = t.getOrNothingType();
     - getBaseType()
 */
 Type Type::getOrNothingType() [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_or_nothing_type(t->typeInfo)));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(qore_get_or_nothing_type(t->typeInfo), t->source_pgm);
 }
 
 //! Returns the mandatory (i.e. not "or nothing") type for the current type
@@ -718,7 +776,8 @@ auto v = t.getMandatoryType();
     - getBaseType()
 */
 Type Type::getMandatoryType() [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(qore_get_value_type(t->typeInfo)));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(qore_get_value_type(t->typeInfo), t->source_pgm);
 }
 
 //! Returns the element type for complex list and hash types, if any, otherwise returns @ref nothing
@@ -736,7 +795,8 @@ Type Type::getMandatoryType() [flags=CONSTANT] {
     if (!element_type) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(element_type));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(element_type, t->source_pgm);
 }
 
 //! Returns the TypedHash for the type, if the type specifies a typed hash
@@ -800,7 +860,8 @@ bool Type::isTypedCode() [flags=CONSTANT] {
     if (!rt) {
         return QoreValue();
     }
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(rt));
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    return get_type_object(rt, t->source_pgm);
 }
 
 //! Returns a list of parameter types for typed code types, or @ref nothing if not a typed code type
@@ -819,8 +880,9 @@ bool Type::isTypedCode() [flags=CONSTANT] {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
     for (const QoreTypeInfo* ti : *params) {
-        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+        rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();
 }
@@ -869,8 +931,9 @@ bool Type::isUnion() [flags=CONSTANT] {
         return QoreValue();
     }
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
     for (const QoreTypeInfo* ti : *members) {
-        rv->push(new QoreObject(QC_TYPE, getProgram(), new QoreType(ti)), xsink);
+        rv->push(get_type_object(ti, t->source_pgm), xsink);
     }
     return rv.release();
 }
@@ -900,7 +963,7 @@ Type t = Type::getType(v);
     @return the type object for the value
 */
 static Type Type::getType(auto v) [flags=CONSTANT] {
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(v.getFullTypeInfo()));
+    return get_type_object(v.getFullTypeInfo());
 }
 
 //! Returns the "or nothing" type object for the value
@@ -912,6 +975,5 @@ Type t = Type::getOrNothingType(v);
     @return the "or nothing" type object for the value
 */
 static Type Type::getOrNothingType(auto v) [flags=CONSTANT] {
-    // the class ptr must be valid
-    return new QoreObject(QC_TYPE, getProgram(), new QoreType(get_or_nothing_type_check(v.getFullTypeInfo())));
+    return get_type_object(get_or_nothing_type_check(v.getFullTypeInfo()));
 }

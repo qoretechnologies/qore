@@ -60,6 +60,7 @@ class ScopedObjectCallNode;
 class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
+class RuntimeConfig;
 
 union qore_gvar_ref_u {
     bool b;
@@ -206,13 +207,7 @@ public:
                 finalized = true;
             printd(5, "Var::clearLocal() clearing '%s' %p\n", name.c_str(), this);
             {
-                QoreProgram* pgm = getProgram();
-                // when Qore is terminating, this may be nullptr
-                if (pgm && (pgm->getParseOptions64() & PO_STRICT_TYPES)) {
-                    h = val.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo));
-                } else {
-                    h = val.removeValue(true);
-                }
+                h = val.removeValue(true);
             }
         }
 #ifdef DEBUG
@@ -281,10 +276,6 @@ public:
 
         // Set is_auto_type flag based on the resolved typeInfo
         is_auto_type = isAutoTypeInfo(typeInfo);
-
-        if ((getProgram()->getParseOptions64() & PO_STRICT_TYPES) && !val.hasValue()) {
-            discard(val.assignInitial(QoreTypeInfo::getDefaultQoreValue(typeInfo)), nullptr);
-        }
 
         return err;
     }
@@ -399,9 +390,12 @@ protected:
     }
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
+    DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
+    DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL int makeIntQv(const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
@@ -439,6 +433,8 @@ public:
 
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
+    DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink);
 
@@ -462,6 +458,8 @@ public:
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
+    DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
+    DLLLOCAL int doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL void setAndLock(QoreVarRWLock& rwl);
     DLLLOCAL void set(QoreVarRWLock& rwl);
@@ -723,13 +721,7 @@ public:
     }
 
     DLLLOCAL void doRemove(QoreLValueGeneric& qv, const QoreTypeInfo* ti) {
-        QoreProgram* pgm = getProgram();
-        // when Qore is terminating, this may be nullptr
-        if (pgm && (pgm->getParseOptions64() & PO_STRICT_TYPES)) {
-            rv.assignSetTakeInitial(qv, QoreTypeInfo::getDefaultQoreValue(ti));
-        } else {
-            rv.assignSetTakeInitial(qv);
-        }
+        rv.assignSetTakeInitial(qv);
     }
 
     DLLLOCAL QoreValue removeValue();

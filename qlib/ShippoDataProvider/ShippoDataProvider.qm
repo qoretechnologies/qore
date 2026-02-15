@@ -1,0 +1,461 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ShippoDataProvider module definition
+
+/*  ShippoDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ShippoRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module ShippoDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Shippo shipping services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ShippoDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ShippoDataProvider::AppName,
+            "display_name": "Shippo",
+            "short_desc": "Shippo shipping platform",
+            "desc": "Shippo is a multi-carrier shipping API and web application that simplifies the shipping process "
+                "for e-commerce businesses. This integration enables creating shipments, generating shipping labels, "
+                "managing orders, and tracking packages.\n\n"
+                "**Features:**\n"
+                "- Create shipments and get shipping rates from multiple carriers\n"
+                "- Generate shipping labels for USPS, UPS, FedEx, DHL, and more\n"
+                "- Track packages with real-time tracking updates\n"
+                "- Manage orders and their fulfillment\n"
+                "- Polling triggers for new parcels, shipments, and labels",
+            "scheme": "shippo",
+            "logo": ShippoLogo,
+            "logo_file_name": "shippo-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Shipping,),
+        });
+
+        # ========== SHIPMENT ACTIONS ==========
+
+        # Create Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/create-shipment",
+            "action": "create-shipment",
+            "groups": "Shipments",
+            "display_name": "Create Shipment",
+            "short_desc": "Create a new shipment to get rates",
+            "desc": "Create a new shipment in Shippo with origin, destination, and parcel details to receive "
+                "shipping rates from multiple carriers.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoCreateShipmentDataProvider::ProviderInfo,
+        });
+
+        # Get Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/get-shipment",
+            "action": "get-shipment",
+            "groups": "Shipments",
+            "display_name": "Get Shipment",
+            "short_desc": "Get a shipment by ID",
+            "desc": "Retrieve detailed information about a specific shipment including addresses, "
+                "parcels, and available rates.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoGetShipmentDataProvider::ProviderInfo,
+            "options": {
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment ID",
+                    "short_desc": "The shipment object ID",
+                    "desc": "The unique identifier of the shipment to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "shipments",
+                },
+            },
+        });
+
+        # Search Shipments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/shipments",
+            "action": "search-shipments",
+            "groups": "Shipments",
+            "display_name": "Search Shipments",
+            "short_desc": "List and search shipments",
+            "desc": "Retrieve a list of shipments from Shippo with optional filtering by creation date.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShippoShipmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ShipmentList", new ShippoShipmentDataType(), True);
+            },
+        });
+
+        # ========== LABEL/TRANSACTION ACTIONS ==========
+
+        # Create Label by Rate
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/create-label-by-rate",
+            "action": "create-label-by-rate",
+            "groups": "Labels",
+            "display_name": "Create Label by Rate",
+            "short_desc": "Create a shipping label from a rate",
+            "desc": "Create a shipping label (transaction) using a rate object ID obtained from a shipment. "
+                "This generates a printable label and tracking number.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoCreateLabelByRateDataProvider::ProviderInfo,
+        });
+
+        # Get Transaction (Shipping Label)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/get-transaction",
+            "action": "get-shipping-label",
+            "groups": "Labels",
+            "display_name": "Get Shipping Label",
+            "short_desc": "Get a shipping label by ID",
+            "desc": "Retrieve detailed information about a specific shipping label (transaction) including "
+                "tracking number, label URL, and status.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoGetTransactionDataProvider::ProviderInfo,
+            "options": {
+                "transaction_id": <ActionOptionInfo>{
+                    "display_name": "Transaction ID",
+                    "short_desc": "The transaction object ID",
+                    "desc": "The unique identifier of the transaction (shipping label) to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "transactions",
+                },
+            },
+        });
+
+        # Search Transactions (Shipping Labels)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/transactions",
+            "action": "search-shipping-labels",
+            "groups": "Labels",
+            "display_name": "Search Shipping Labels",
+            "short_desc": "List and search shipping labels",
+            "desc": "Retrieve a list of shipping labels (transactions) from Shippo with optional filtering "
+                "by creation date, status, or tracking status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShippoTransactionsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TransactionList", new ShippoTransactionDataType(), True);
+            },
+            "options": {
+                "object_status": <ActionOptionInfo>{
+                    "display_name": "Label Status",
+                    "short_desc": "Filter by label status",
+                    "desc": "Filter transactions by their creation status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "QUEUED", "desc": "Label creation pending"},
+                        <AllowedValueInfo>{"value": "SUCCESS", "desc": "Label created successfully"},
+                        <AllowedValueInfo>{"value": "ERROR", "desc": "Label creation failed"},
+                        <AllowedValueInfo>{"value": "REFUNDED", "desc": "Label has been refunded"},
+                    ),
+                },
+                "tracking_status": <ActionOptionInfo>{
+                    "display_name": "Tracking Status",
+                    "short_desc": "Filter by tracking status",
+                    "desc": "Filter transactions by their tracking status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown tracking status"},
+                        <AllowedValueInfo>{"value": "PRE_TRANSIT", "desc": "Pre-transit"},
+                        <AllowedValueInfo>{"value": "TRANSIT", "desc": "In transit"},
+                        <AllowedValueInfo>{"value": "DELIVERED", "desc": "Delivered"},
+                        <AllowedValueInfo>{"value": "RETURNED", "desc": "Returned"},
+                        <AllowedValueInfo>{"value": "FAILURE", "desc": "Delivery failed"},
+                    ),
+                },
+            },
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        # Create Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/create-order",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in Shippo with shipping and billing addresses, and line items. "
+                "Orders can be used to manage fulfillment workflows.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoCreateOrderDataProvider::ProviderInfo,
+        });
+
+        # Get Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/get-order",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get Order",
+            "short_desc": "Get an order by ID",
+            "desc": "Retrieve detailed information about a specific order including addresses, line items, "
+                "and fulfillment status.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoGetOrderDataProvider::ProviderInfo,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order object ID",
+                    "desc": "The unique identifier of the order to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "orders",
+                },
+            },
+        });
+
+        # List Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List and search orders",
+            "desc": "Retrieve a list of orders from Shippo with optional filtering by creation date, "
+                "shop app, or order status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShippoOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderList", new ShippoOrderDataType(), True);
+            },
+            "options": {
+                "order_status": <ActionOptionInfo>{
+                    "display_name": "Order Status",
+                    "short_desc": "Filter by order status",
+                    "desc": "Filter orders by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "UNKNOWN", "desc": "Unknown status"},
+                        <AllowedValueInfo>{"value": "AWAITPAY", "desc": "Awaiting payment"},
+                        <AllowedValueInfo>{"value": "PAID", "desc": "Paid"},
+                        <AllowedValueInfo>{"value": "REFUNDED", "desc": "Refunded"},
+                        <AllowedValueInfo>{"value": "CANCELLED", "desc": "Cancelled"},
+                        <AllowedValueInfo>{"value": "PARTIALLY_FULFILLED", "desc": "Partially fulfilled"},
+                        <AllowedValueInfo>{"value": "SHIPPED", "desc": "Shipped"},
+                    ),
+                },
+            },
+        });
+
+        # ========== ADDRESS ACTIONS ==========
+
+        # Validate Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/validate-address",
+            "action": "validate-address",
+            "groups": "Addresses",
+            "display_name": "Validate Address",
+            "short_desc": "Validate a shipping address",
+            "desc": "Validates a shipping address using Shippo's address validation service. Returns the "
+                "validated address with any corrections and validation status.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoValidateAddressDataProvider::ProviderInfo,
+        });
+
+        # ========== UTILITY ACTIONS ==========
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/make-api-call",
+            "action": "make-api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a generic API call",
+            "desc": "Make a generic API call to the Shippo API. This allows accessing API endpoints "
+                "not covered by other actions.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShippoMakeApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGER ACTIONS (POLLING EVENTS) ==========
+
+        # New Parcel Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/events/new-parcel",
+            "action": EVENT_NEW_PARCEL,
+            "groups": "Triggers",
+            "display_name": "New Parcel",
+            "short_desc": "Trigger when a new parcel is created",
+            "desc": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details "
+                "including dimensions and weight.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PARCEL,
+            "data_provider_info": ShippoNewParcelWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShippoParcelDataType(); },
+        });
+
+        # New Shipment Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/events/new-shipment",
+            "action": EVENT_NEW_SHIPMENT,
+            "groups": "Triggers",
+            "display_name": "New Shipment",
+            "short_desc": "Trigger when a new shipment is created",
+            "desc": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details "
+                "including addresses, parcels, and available rates.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SHIPMENT,
+            "data_provider_info": ShippoNewShipmentWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShippoShipmentDataType(); },
+        });
+
+        # New Label Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/events/new-label",
+            "action": EVENT_NEW_LABEL,
+            "groups": "Triggers",
+            "display_name": "New Shipping Label",
+            "short_desc": "Trigger when a new shipping label is created",
+            "desc": "Fires when a new shipping label (transaction) is detected in Shippo via polling. "
+                "Provides label details including tracking number and label URL.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_LABEL,
+            "data_provider_info": ShippoNewLabelWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShippoTransactionDataType(); },
+        });
+
+        # New Order Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShippoDataProvider::AppName,
+            "path": "/events/new-order",
+            "action": EVENT_NEW_ORDER,
+            "groups": "Triggers",
+            "display_name": "New Order",
+            "short_desc": "Trigger when a new order is created",
+            "desc": "Fires when a new order is detected in Shippo via polling. Provides order details "
+                "including shipping address, line items, and order status.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ORDER,
+            "data_provider_info": ShippoNewOrderWatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShippoOrderDataType(); },
+        });
+    };
+}
+
+/** @mainpage ShippoDataProvider Module
+
+    @tableofcontents
+
+    @section shippodataproviderintro ShippoDataProvider Introduction
+
+    The %ShippoDataProvider module provides a data provider API for Shippo shipping
+    services through the Shippo REST API.
+
+    To use this module, use \c "%requires ShippoDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ShippoDataProvider namespace.
+
+    The main classes are:
+    - @ref ShippoDataProvider::ShippoDataProvider "ShippoDataProvider":
+      the root data provider for Shippo with child providers for shipments, labels, orders, and more
+
+    @par Authentication:
+    Shippo supports two authentication methods:
+    - **API Token**: Use a Shippo API token obtained from your Shippo account settings
+    - **OAuth2**: Use OAuth2 for user-authorized access
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ShippoDataProvider
+
+ShippoDataProvider shippo({"apikey": ENV.SHIPPO_API_TOKEN});
+
+# Create a shipment to get rates
+hash<auto> shipment = shippo.getChildProvider("create-shipment").doRequest({
+    "address_from": {
+        "name": "John Sender",
+        "street1": "123 Main St",
+        "city": "San Francisco",
+        "state": "CA",
+        "zip": "94103",
+        "country": "US",
+    },
+    "address_to": {
+        "name": "Jane Recipient",
+        "street1": "456 Oak Ave",
+        "city": "New York",
+        "state": "NY",
+        "zip": "10001",
+        "country": "US",
+    },
+    "parcels": ({
+        "length": "10",
+        "width": "8",
+        "height": "6",
+        "distance_unit": "in",
+        "weight": "2",
+        "mass_unit": "lb",
+    },),
+});
+printf("Created shipment: %s with %d rates\n", shipment.object_id, shipment.rates.size());
+
+# Create a label from the cheapest rate
+if (shipment.rates) {
+    hash<auto> label = shippo.getChildProvider("create-label-by-rate").doRequest({
+        "rate": shipment.rates[0].object_id,
+    });
+    printf("Created label with tracking: %s\n", label.tracking_number);
+}
+    @endcode
+
+    @section shippodataproviderrelnotes Release Notes
+
+    @subsection shippodataproviderv1_0 ShippoDataProvider v1.0
+    - the initial version of the %ShippoDataProvider module
+*/
+
+#! Contains all public definitions in the ShippoDataProvider module
+public namespace ShippoDataProvider {
+}

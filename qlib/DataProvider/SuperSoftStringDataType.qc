@@ -134,7 +134,8 @@ public class SuperSoftStringDataType inherits AbstractDataProviderType {
 %ifndef NoYaml
             case NT_HASH:
             case NT_LIST:
-                return trim(make_yaml(value));
+                # strip YAML header (e.g., "%YAML 1.2\n--- " or "%YAML 1.2\n---\n") for inline values
+                return regex_subst(trim(make_yaml(value)), "^%YAML [0-9.]+\\n---\\s*", "");
 %endif
 
             default:

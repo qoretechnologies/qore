@@ -1,0 +1,974 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ShipStationDataProvider module definition
+
+/*  ShipStationDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ShipStationRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module ShipStationDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for ShipStation shipping and logistics services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ShipStationDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ShipStationDataProvider::AppName,
+            "display_name": "ShipStation",
+            "short_desc": "ShipStation shipping and logistics platform",
+            "desc": "ShipStation is a leading shipping software that helps eCommerce retailers import, organize, "
+                "process, and ship orders quickly and easily from any web browser. This integration enables "
+                "managing orders, shipments, carriers, warehouses, and receiving real-time notifications via webhooks.\n\n"
+                "**Features:**\n"
+                "- Order management (create, update, delete, tag, assign)\n"
+                "- Shipment tracking and label management\n"
+                "- Carrier integration (UPS, FedEx, USPS, DHL, and more)\n"
+                "- Warehouse management\n"
+                "- Store and marketplace connections\n"
+                "- Real-time webhooks for orders and shipments",
+            "scheme": "shipstation",
+            "logo": ShipStationLogo,
+            "logo_file_name": "shipstation-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Shipping,),
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        # List Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List and search orders",
+            "desc": "Retrieve a list of orders from ShipStation with optional filtering by status, dates, "
+                "customer name, and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderList", new ShipStationOrderDataType(), True);
+            },
+            "options": {
+                "orderStatus": <ActionOptionInfo>{
+                    "display_name": "Order Status",
+                    "short_desc": "Filter by order status",
+                    "desc": "Filter orders by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "awaiting_payment", "desc": "Awaiting payment"},
+                        <AllowedValueInfo>{"value": "awaiting_shipment", "desc": "Awaiting shipment"},
+                        <AllowedValueInfo>{"value": "shipped", "desc": "Shipped"},
+                        <AllowedValueInfo>{"value": "on_hold", "desc": "On hold"},
+                        <AllowedValueInfo>{"value": "cancelled", "desc": "Cancelled"},
+                    ),
+                },
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "Filter by store",
+                    "desc": "Filter orders by the store they originated from",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Get Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-order",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get Order",
+            "short_desc": "Get a single order by ID",
+            "desc": "Retrieve detailed information about a specific ShipStation order.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetOrderDataProvider::ProviderInfo,
+        });
+
+        # Create Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/create-order",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in ShipStation. The order can be associated with a store and include "
+                "line items, shipping address, and custom fields.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationCreateOrderDataProvider::ProviderInfo,
+        });
+
+        # Update Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/update-order",
+            "action": "update-order",
+            "groups": "Orders",
+            "display_name": "Update Order",
+            "short_desc": "Update an existing order",
+            "desc": "Update an existing order in ShipStation. You can modify shipping address, line items, "
+                "status, and other order details.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationUpdateOrderDataProvider::ProviderInfo,
+        });
+
+        # Delete Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/delete-order",
+            "action": "delete-order",
+            "groups": "Orders",
+            "display_name": "Delete Order",
+            "short_desc": "Delete an order",
+            "desc": "Delete an order from ShipStation. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationDeleteOrderDataProvider::ProviderInfo,
+        });
+
+        # Mark Order as Shipped
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/mark-order-as-shipped",
+            "action": "mark-order-as-shipped",
+            "groups": "Orders",
+            "display_name": "Mark Order as Shipped",
+            "short_desc": "Mark an order as shipped",
+            "desc": "Mark an order as shipped in ShipStation with tracking information. This will update the "
+                "order status and optionally send notification emails.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationMarkAsShippedDataProvider::ProviderInfo,
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "The shipping carrier",
+                    "desc": "Select the carrier used for shipment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # Add Tag to Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/add-tag-to-order",
+            "action": "add-tag-to-order",
+            "groups": "Orders",
+            "display_name": "Add Tag to Order",
+            "short_desc": "Add a tag to an order",
+            "desc": "Add a tag to an order for organization and filtering purposes.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationAddTagToOrderDataProvider::ProviderInfo,
+            "options": {
+                "tagId": <ActionOptionInfo>{
+                    "display_name": "Tag",
+                    "short_desc": "The tag to add",
+                    "desc": "Select the tag to add to the order",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # Remove Tag from Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/remove-tag-from-order",
+            "action": "remove-tag-from-order",
+            "groups": "Orders",
+            "display_name": "Remove Tag from Order",
+            "short_desc": "Remove a tag from an order",
+            "desc": "Remove a tag from an order.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationRemoveTagFromOrderDataProvider::ProviderInfo,
+            "options": {
+                "tagId": <ActionOptionInfo>{
+                    "display_name": "Tag",
+                    "short_desc": "The tag to remove",
+                    "desc": "Select the tag to remove from the order",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # Assign User to Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/assign-user-to-order",
+            "action": "assign-user-to-order",
+            "groups": "Orders",
+            "display_name": "Assign User to Order",
+            "short_desc": "Assign a user to an order",
+            "desc": "Assign a ShipStation user to an order for task management.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationAssignUserToOrderDataProvider::ProviderInfo,
+            "options": {
+                "userId": <ActionOptionInfo>{
+                    "display_name": "User",
+                    "short_desc": "The user to assign",
+                    "desc": "Select the user to assign to the order",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Unassign User from Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/unassign-user-from-order",
+            "action": "unassign-user-from-order",
+            "groups": "Orders",
+            "display_name": "Unassign User from Order",
+            "short_desc": "Unassign the user from an order",
+            "desc": "Remove the assigned user from an order.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationUnassignUserFromOrderDataProvider::ProviderInfo,
+        });
+
+        # ========== CARRIER ACTIONS ==========
+
+        # List Carriers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/carriers",
+            "action": "list-carriers",
+            "groups": "Carriers",
+            "display_name": "List Carriers",
+            "short_desc": "List connected carriers",
+            "desc": "Retrieve a list of all carriers connected to your ShipStation account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationCarriersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CarrierList", new ShipStationCarrierDataType(), True);
+            },
+        });
+
+        # Get Carrier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-carrier",
+            "action": "get-carrier",
+            "groups": "Carriers",
+            "display_name": "Get Carrier",
+            "short_desc": "Get carrier details",
+            "desc": "Retrieve detailed information about a specific carrier by its code.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetCarrierDataProvider::ProviderInfo,
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "The carrier to get",
+                    "desc": "Select the carrier to retrieve details for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # List Carrier Services
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/list-services",
+            "action": "list-services",
+            "groups": "Carriers",
+            "display_name": "List Services",
+            "short_desc": "List carrier services",
+            "desc": "Retrieve a list of services offered by a specific carrier (e.g., Ground, 2-Day, Overnight).",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationListServicesDataProvider::ProviderInfo,
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "The carrier to list services for",
+                    "desc": "Select the carrier to list available services",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # List Carrier Packages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/list-packages",
+            "action": "list-packages",
+            "groups": "Carriers",
+            "display_name": "List Packages",
+            "short_desc": "List carrier package types",
+            "desc": "Retrieve a list of package types offered by a specific carrier.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationListPackagesDataProvider::ProviderInfo,
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "The carrier to list packages for",
+                    "desc": "Select the carrier to list available package types",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # Add Funds to Carrier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/add-funds",
+            "action": "add-funds",
+            "groups": "Carriers",
+            "display_name": "Add Funds",
+            "short_desc": "Add funds to carrier account",
+            "desc": "Add funds to a carrier account for postage. Requires a payment method on file.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationAddFundsDataProvider::ProviderInfo,
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "The carrier to add funds to",
+                    "desc": "Select the carrier to add funds to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # List Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/customers",
+            "action": "list-customers",
+            "groups": "Customers",
+            "display_name": "List Customers",
+            "short_desc": "List and search customers",
+            "desc": "Retrieve a list of customers from ShipStation with optional filtering.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomerList", new ShipStationCustomerDataType(), True);
+            },
+        });
+
+        # Get Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-customer",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a customer by ID",
+            "desc": "Retrieve detailed information about a specific customer.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetCustomerDataProvider::ProviderInfo,
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # List Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List and search products",
+            "desc": "Retrieve a list of products from ShipStation with optional filtering by SKU, name, or category.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ProductList", new ShipStationProductDataType(), True);
+            },
+        });
+
+        # Get Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-product",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a product by ID",
+            "desc": "Retrieve detailed information about a specific product.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetProductDataProvider::ProviderInfo,
+        });
+
+        # Update Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/update-product",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update a product",
+            "desc": "Update an existing product in ShipStation. You can modify name, SKU, price, weight, "
+                "dimensions, and other product details.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationUpdateProductDataProvider::ProviderInfo,
+        });
+
+        # ========== SHIPMENT ACTIONS ==========
+
+        # List Shipments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/shipments",
+            "action": "list-shipments",
+            "groups": "Shipments",
+            "display_name": "List Shipments",
+            "short_desc": "List and search shipments",
+            "desc": "Retrieve a list of shipments from ShipStation with optional filtering by date, carrier, "
+                "tracking number, and more.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationShipmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ShipmentList", new ShipStationShipmentDataType(), True);
+            },
+            "options": {
+                "carrierCode": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "Filter by carrier",
+                    "desc": "Filter shipments by carrier",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "carriers",
+                },
+            },
+        });
+
+        # List Fulfillments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/fulfillments",
+            "action": "list-fulfillments",
+            "groups": "Shipments",
+            "display_name": "List Fulfillments",
+            "short_desc": "List fulfillments",
+            "desc": "Retrieve a list of fulfillments (completed shipments) from ShipStation.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationFulfillmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("FulfillmentList", new ShipStationFulfillmentDataType(), True);
+            },
+        });
+
+        # Void Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/void-label",
+            "action": "void-label",
+            "groups": "Shipments",
+            "display_name": "Void Label",
+            "short_desc": "Void a shipping label",
+            "desc": "Void (cancel) a shipping label. This refunds the shipping cost back to your carrier account.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationVoidLabelDataProvider::ProviderInfo,
+        });
+
+        # ========== STORE ACTIONS ==========
+
+        # List Stores
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/stores",
+            "action": "list-stores",
+            "groups": "Stores",
+            "display_name": "List Stores",
+            "short_desc": "List connected stores",
+            "desc": "Retrieve a list of all stores (selling channels) connected to your ShipStation account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationStoresDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("StoreList", new ShipStationStoreDataType(), True);
+            },
+        });
+
+        # Get Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-store",
+            "action": "get-store",
+            "groups": "Stores",
+            "display_name": "Get Store",
+            "short_desc": "Get store details",
+            "desc": "Retrieve detailed information about a specific store.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetStoreDataProvider::ProviderInfo,
+            "options": {
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "The store to get",
+                    "desc": "Select the store to retrieve details for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Update Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/update-store",
+            "action": "update-store",
+            "groups": "Stores",
+            "display_name": "Update Store",
+            "short_desc": "Update store settings",
+            "desc": "Update settings for a connected store.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationUpdateStoreDataProvider::ProviderInfo,
+            "options": {
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "The store to update",
+                    "desc": "Select the store to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Deactivate Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/deactivate-store",
+            "action": "deactivate-store",
+            "groups": "Stores",
+            "display_name": "Deactivate Store",
+            "short_desc": "Deactivate a store",
+            "desc": "Deactivate a store to stop importing orders from it.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationDeactivateStoreDataProvider::ProviderInfo,
+            "options": {
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "The store to deactivate",
+                    "desc": "Select the store to deactivate",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Reactivate Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/reactivate-store",
+            "action": "reactivate-store",
+            "groups": "Stores",
+            "display_name": "Reactivate Store",
+            "short_desc": "Reactivate a store",
+            "desc": "Reactivate a previously deactivated store to resume importing orders.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationReactivateStoreDataProvider::ProviderInfo,
+            "options": {
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "The store to reactivate",
+                    "desc": "Select the store to reactivate",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Refresh Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/refresh-store",
+            "action": "refresh-store",
+            "groups": "Stores",
+            "display_name": "Refresh Store",
+            "short_desc": "Refresh store orders",
+            "desc": "Trigger an order refresh for a store to import new orders immediately.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationRefreshStoreDataProvider::ProviderInfo,
+            "options": {
+                "storeId": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "The store to refresh",
+                    "desc": "Select the store to refresh orders for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # List Marketplaces
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/marketplaces",
+            "action": "list-marketplaces",
+            "groups": "Stores",
+            "display_name": "List Marketplaces",
+            "short_desc": "List available marketplaces",
+            "desc": "Retrieve a list of all marketplaces that can be connected to ShipStation.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationMarketplacesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("MarketplaceList", new ShipStationMarketplaceDataType(), True);
+            },
+        });
+
+        # ========== WAREHOUSE ACTIONS ==========
+
+        # List Warehouses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/warehouses",
+            "action": "list-warehouses",
+            "groups": "Warehouses",
+            "display_name": "List Warehouses",
+            "short_desc": "List warehouses",
+            "desc": "Retrieve a list of all warehouses (ship-from locations) in your ShipStation account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationWarehousesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("WarehouseList", new ShipStationWarehouseDataType(), True);
+            },
+        });
+
+        # Get Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/get-warehouse",
+            "action": "get-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Get Warehouse",
+            "short_desc": "Get warehouse details",
+            "desc": "Retrieve detailed information about a specific warehouse.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationGetWarehouseDataProvider::ProviderInfo,
+            "options": {
+                "warehouseId": <ActionOptionInfo>{
+                    "display_name": "Warehouse",
+                    "short_desc": "The warehouse to get",
+                    "desc": "Select the warehouse to retrieve details for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "warehouses",
+                },
+            },
+        });
+
+        # Create Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/create-warehouse",
+            "action": "create-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Create Warehouse",
+            "short_desc": "Create a new warehouse",
+            "desc": "Create a new warehouse (ship-from location) in ShipStation.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationCreateWarehouseDataProvider::ProviderInfo,
+        });
+
+        # Update Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/update-warehouse",
+            "action": "update-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Update Warehouse",
+            "short_desc": "Update a warehouse",
+            "desc": "Update an existing warehouse in ShipStation.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationUpdateWarehouseDataProvider::ProviderInfo,
+            "options": {
+                "warehouseId": <ActionOptionInfo>{
+                    "display_name": "Warehouse",
+                    "short_desc": "The warehouse to update",
+                    "desc": "Select the warehouse to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "warehouses",
+                },
+            },
+        });
+
+        # ========== OTHER ACTIONS ==========
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List available tags",
+            "desc": "Retrieve a list of all tags available for orders.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationTagsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TagList", new ShipStationTagDataType(), True);
+            },
+        });
+
+        # List Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/users",
+            "action": "list-users",
+            "groups": "Users",
+            "display_name": "List Users",
+            "short_desc": "List account users",
+            "desc": "Retrieve a list of all users in your ShipStation account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ShipStationUsersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("UserList", new ShipStationUserDataType(), True);
+            },
+        });
+
+        # Make API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/make-api-call",
+            "action": "make-api-call",
+            "groups": "Utility",
+            "display_name": "Make API Call",
+            "short_desc": "Make a generic API call",
+            "desc": "Make a generic API call to the ShipStation API. This allows accessing API endpoints "
+                "not covered by other actions.",
+            "action_code": DPAT_API,
+            "data_provider_info": ShipStationMakeApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # Order Notify Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/events/order-notify",
+            "action": EVENT_ORDER_NOTIFY,
+            "groups": "Triggers",
+            "display_name": "Order Created/Updated",
+            "short_desc": "Trigger when an order is created or updated",
+            "desc": "Fires when a new order is created or an existing order is updated in ShipStation. "
+                "Provides order details without line item information.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_NOTIFY,
+            "data_provider_info": ShipStationOrderNotifyEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShipStationOrderNotifyEventDataType(); },
+            "options": {
+                "store_id": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "Filter by store",
+                    "desc": "Optionally filter events to a specific store",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Item Order Notify Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/events/item-order-notify",
+            "action": EVENT_ITEM_ORDER_NOTIFY,
+            "groups": "Triggers",
+            "display_name": "Order Created/Updated (with Items)",
+            "short_desc": "Trigger when an order is created or updated (includes items)",
+            "desc": "Fires when a new order is created or an existing order is updated in ShipStation. "
+                "Provides full order details including all line items.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ITEM_ORDER_NOTIFY,
+            "data_provider_info": ShipStationItemOrderNotifyEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShipStationItemOrderNotifyEventDataType(); },
+            "options": {
+                "store_id": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "Filter by store",
+                    "desc": "Optionally filter events to a specific store",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Ship Notify Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/events/ship-notify",
+            "action": EVENT_SHIP_NOTIFY,
+            "groups": "Triggers",
+            "display_name": "Label Created",
+            "short_desc": "Trigger when a shipping label is created",
+            "desc": "Fires when a shipping label is generated for an order. Provides shipment details "
+                "including tracking number, carrier, and shipping address.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SHIP_NOTIFY,
+            "data_provider_info": ShipStationShipNotifyEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShipStationShipNotifyEventDataType(); },
+            "options": {
+                "store_id": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "Filter by store",
+                    "desc": "Optionally filter events to a specific store",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stores",
+                },
+            },
+        });
+
+        # Item Ship Notify Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ShipStationDataProvider::AppName,
+            "path": "/events/item-ship-notify",
+            "action": EVENT_ITEM_SHIP_NOTIFY,
+            "groups": "Triggers",
+            "display_name": "Label Created (with Items)",
+            "short_desc": "Trigger when a shipping label is created (includes items)",
+            "desc": "Fires when a shipping label is generated for an order. Provides full shipment details "
+                "including tracking number, carrier, shipping address, and all items in the shipment.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ITEM_SHIP_NOTIFY,
+            "data_provider_info": ShipStationItemShipNotifyEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ShipStationItemShipNotifyEventDataType(); },
+            "options": {
+                "store_id": <ActionOptionInfo>{
+                    "display_name": "Store",
+                    "short_desc": "Filter by store",
+                    "desc": "Optionally filter events to a specific store",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stores",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage ShipStationDataProvider Module
+
+    @tableofcontents
+
+    @section shipstationdataproviderintro ShipStationDataProvider Introduction
+
+    The %ShipStationDataProvider module provides a data provider API for ShipStation shipping
+    and logistics services through the ShipStation REST API.
+
+    To use this module, use \c "%requires ShipStationDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ShipStationDataProvider namespace.
+
+    The main classes are:
+    - @ref ShipStationDataProvider::ShipStationDataProvider "ShipStationDataProvider":
+      the root data provider for ShipStation with child providers for orders, shipments, carriers, and more
+
+    @par Authentication:
+    ShipStation uses HTTP Basic Authentication. You need an API Key (used as username) and API Secret
+    (used as password) which can be obtained from the ShipStation Settings > Account > API Settings page.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ShipStationDataProvider
+
+ShipStationDataProvider shipstation({"api_key": ENV.SHIPSTATION_API_KEY, "api_secret": ENV.SHIPSTATION_API_SECRET});
+
+# List orders
+map printf("Order: %s (Status: %s)\n", $1.orderNumber, $1.orderStatus),
+    shipstation.getChildProvider("orders").searchRecords({"orderStatus": "awaiting_shipment"});
+
+# Create an order
+hash<auto> result = shipstation.getChildProvider("create-order").doRequest({
+    "orderNumber": "TEST-001",
+    "orderDate": "2026-01-15",
+    "orderStatus": "awaiting_shipment",
+    "billTo": {
+        "name": "John Doe",
+        "street1": "123 Main St",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701",
+        "country": "US",
+    },
+    "shipTo": {
+        "name": "John Doe",
+        "street1": "123 Main St",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701",
+        "country": "US",
+    },
+});
+printf("Created order: %d\n", result.orderId);
+    @endcode
+
+    @section shipstationdataproviderrelnotes Release Notes
+
+    @subsection shipstationdataproviderv1_0 ShipStationDataProvider v1.0
+    - the initial version of the %ShipStationDataProvider module
+*/
+
+#! Contains all public definitions in the ShipStationDataProvider module
+public namespace ShipStationDataProvider {
+}

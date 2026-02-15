@@ -33,6 +33,8 @@
 
 #define _QORE_QORELIBINTERN_H
 
+class RuntimeConfig;
+
 //#define _QORE_CYCLE_CHECK 1
 #ifdef _QORE_CYCLE_CHECK
 #define QORE_DEBUG_OBJ_REFS 0
@@ -691,6 +693,7 @@ DLLLOCAL void init_lib_intern(char* env[]);
 DLLLOCAL QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg);
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
+DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);
 
 DLLLOCAL void init_qore_types();
 DLLLOCAL void delete_qore_types();

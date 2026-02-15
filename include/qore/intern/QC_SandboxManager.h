@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,5 +38,12 @@
 // We only need to declare the init function here
 
 DLLLOCAL QoreClass* initSandboxManagerClass(QoreNamespace& ns);
+
+// Hashdecl init functions
+DLLLOCAL TypedHashDecl* init_hashdecl_PortRangeInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_FilesystemPathInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_FilesystemSecurityConfigInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_NetworkSecurityConfigInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SandboxConfigInfo(QoreNamespace& ns);
 
 #endif // _QORE_CLASS_QC_SANDBOXMANAGER_H

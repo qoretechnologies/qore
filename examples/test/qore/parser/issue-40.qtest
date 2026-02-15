@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Issue40Test
+
+namespace Issue40Constructor {
+    class A {
+        public {
+            int a;
+        }
+
+        constructor() {
+            a = 5;
+        }
+    }
+
+    our A a;
+}
+
+namespace Issue40MemberShadow {
+    our int g;
+
+    class A {
+        public {
+            int g;
+        }
+
+        constructor() {
+            g = 5;
+        }
+    }
+}
+
+namespace Issue40ParamShadow {
+    our int v;
+
+    class B {
+        int f(int v) {
+            return v + 1;
+        }
+    }
+}
+
+namespace Issue40GlobalAssignment {
+    our int g;
+
+    sub set() {
+        g = 9;
+    }
+}
+
+public class Issue40Test inherits QUnit::Test {
+    constructor() : QUnit::Test("Issue40 test", "1.0") {
+        addTestCase("ConstructorMember", \constructorMember());
+        addTestCase("MemberBeatsGlobal", \memberBeatsGlobal());
+        addTestCase("ParamShadowsGlobal", \paramShadowsGlobal());
+        addTestCase("GlobalBarewordAssignment", \globalBarewordAssignment());
+        set_return_value(main());
+    }
+
+    private constructorMember() {
+        Issue40Constructor::a = new Issue40Constructor::A();
+        assertEq(5, Issue40Constructor::a.a);
+    }
+
+    private memberBeatsGlobal() {
+        Issue40MemberShadow::g = 1;
+        Issue40MemberShadow::A obj();
+        assertEq(1, Issue40MemberShadow::g);
+        assertEq(5, obj.g);
+    }
+
+    private paramShadowsGlobal() {
+        Issue40ParamShadow::v = 3;
+        Issue40ParamShadow::B obj();
+        assertEq(5, obj.f(4));
+        assertEq(3, Issue40ParamShadow::v);
+    }
+
+    private globalBarewordAssignment() {
+        Issue40GlobalAssignment::g = 0;
+        Issue40GlobalAssignment::set();
+        assertEq(9, Issue40GlobalAssignment::g);
+    }
+}

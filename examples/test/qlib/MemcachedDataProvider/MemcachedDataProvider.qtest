@@ -239,10 +239,15 @@ public class MemcachedDataProviderTest inherits QUnit::Test {
         }
 
         # Test connection creation
-        MemcachedDataProvider::MemcachedConnection conn({
-            "name": "test-memcached",
-            "url": url,
-        });
+        MemcachedDataProvider::MemcachedConnection conn;
+        try {
+            conn = new MemcachedDataProvider::MemcachedConnection({
+                "name": "test-memcached",
+                "url": url,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("cannot create memcached connection: %s: %s", ex.err, ex.desc));
+        }
 
         assertEq("memcached", conn.getType(), "connection type should be memcached");
         assertTrue(conn.hasDataProvider(), "connection should have data provider");
@@ -462,6 +467,8 @@ public class MemcachedDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 stderr.printf("connection error: %s: %s\n", ex.err, ex.desc);
             }
+            # Reset client so tests will skip
+            delete client;
         }
     }
 }

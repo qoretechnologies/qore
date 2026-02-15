@@ -4,9 +4,8 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/TextWrap.qm
 
-%new-style
-%require-types
-%enable-all-warnings
+%allow-bare-refs
+
 
 #! Parent class with utility methods for TextWrap tests.
 class BaseTest inherits QUnit::Test {
@@ -22,8 +21,8 @@ class BaseTest inherits QUnit::Test {
     }
 
     string show (list text) {
-        list result = ();
-        for (int i=0; i < text.size(); i++)
+        my list result = ();
+        for (my int i = 0; i < text.size(); i++)
             result += sprintf ("  %d: %n", i, text[i]);
         return result ? result.join("\n") : "  no lines";
     }
@@ -39,12 +38,12 @@ class BaseTest inherits QUnit::Test {
     }
 
     check_wrap (string text, int width, list expect, *hash kwargs) {
-        list result = TextWrap::wrap (text, width, kwargs);
+        my list result = TextWrap::wrap (text, width, kwargs);
         self.check (result, expect);
     }
 
     check_split (string text, list expect) {
-        list result = self.wrapper._split(text);
+        my list result = self.wrapper._split(text);
         assertEq (expect, result,
                 # sprintf ("expected: %n\nbut got:  %n", expect, result)
                 );

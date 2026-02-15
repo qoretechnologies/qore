@@ -50,7 +50,8 @@ static void create_timezone_from_region(const QoreString& region, QoreObject& se
 }
 
 static QoreHashNode* TimeZone_serializer(const QoreObject& self, const TimeZoneData& z,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
 
     if (dynamic_cast<const QoreOffsetZoneInfo*>(*z)) {
@@ -64,7 +65,8 @@ static QoreHashNode* TimeZone_serializer(const QoreObject& self, const TimeZoneD
 }
 
 static void TimeZone_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
-        ExceptionSink* xsink) {
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("region");
         if (val) {

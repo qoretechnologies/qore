@@ -35,6 +35,8 @@
 
 #include <qore/AbstractQoreNode.h>
 
+class RuntimeConfig;
+
 //! parse type: reference to a lvalue expression
 /** This type could be passed to a builtin function.  To get and set the value of the reference,
     use the TypeSafeReferenceHelper class.  To create a reference argument to pass to a user or builtin
@@ -53,9 +55,11 @@ private:
 protected:
     //! returns the value of the reference
     DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! returns the value of the reference
     DLLEXPORT QoreValue doEval(ExceptionSink* xsink) const;
+    DLLEXPORT QoreValue doEval(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     //! frees all memory and destroys the object
     DLLEXPORT virtual ~ReferenceNode();

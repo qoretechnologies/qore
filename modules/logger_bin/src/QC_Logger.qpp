@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,8 @@
 #include "QC_Logger.h"
 
 static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger& l,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("additivity", l.additivity, xsink);
     ValueHolder val(const_cast<QoreObject&>(self).getReferencedMemberNoMethod("currentLevel", xsink), xsink);
@@ -51,7 +52,8 @@ static QoreHashNode* Logger_serializer(const QoreObject& self, const QoreLogger&
 }
 
 static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
-        QoreDeserializationContext& context, ExceptionSink* xsink) {
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("additivity");
         if (val.getType() != NT_BOOLEAN) {
@@ -595,6 +597,7 @@ Logger::assertLog(bool assertion, string message, ...) {
     @param value the value of the variable
 */
 Logger::traceVar(string var_name, auto value) {
+    value = value;
     QoreStringNodeHolder msg(new QoreStringNodeMaker("%s: %%y", var_name->c_str()));
     l->log(xsink, QoreLoggerLevel::LoggerLevelTrace, *msg, args, 1);
 }
@@ -607,6 +610,7 @@ Logger::traceVar(string var_name, auto value) {
     @param value the value of the variable
 */
 Logger::debugVar(string var_name, auto value) {
+    value = value;
     QoreStringNodeHolder msg(new QoreStringNodeMaker("%s: %%y", var_name->c_str()));
     l->log(xsink, QoreLoggerLevel::LoggerLevelDebug, *msg, args, 1);
 }

@@ -11,7 +11,10 @@
 
     After this, any variable, function, namespace, constant, or object declared in the above file can be used by the %Qore program.
 
-    If such a program code (i.e. SomeClass.qc or SomeFuntion.ql) is a part of separated module (see @ref qore_modules) it will be included automatically.
+    If such a program code (i.e. SomeClass.qc or SomeFuntion.ql) is a part of a separate module (see @ref qore_modules) it will be included automatically.
+
+    @note The @ref include "%include" directive is deprecated for Qore user modules in this repository. Use module
+    layouts and dependencies instead.
 
     The \c QORE_INCLUDE_DIR environment variable determines the search path for include files (see @ref environment_variables).
 */

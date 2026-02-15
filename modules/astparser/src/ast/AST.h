@@ -32,6 +32,7 @@
 #ifndef _QLS_AST_AST_H
 #define _QLS_AST_AST_H
 
+#include "ast/ASTComment.h"
 #include "ast/ASTDeclaration.h"
 #include "ast/ASTDeclarationKind.h"
 #include "ast/ASTExpression.h"
@@ -55,6 +56,7 @@
 #include "ast/declarations/ASTConstantDeclaration.h"
 #include "ast/declarations/ASTEnumDeclaration.h"
 #include "ast/declarations/ASTEnumMemberDeclaration.h"
+#include "ast/declarations/ASTModuleDeclaration.h"
 #include "ast/declarations/ASTFunctionDeclaration.h"
 #include "ast/declarations/ASTHashDeclaration.h"
 #include "ast/declarations/ASTHashMemberDeclaration.h"

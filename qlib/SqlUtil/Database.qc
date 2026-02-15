@@ -56,7 +56,7 @@ Database db(ds);
         @endcode
 
         @param ds the AbstractDatasource object used to provide the DB connection
-        @param opts a hash of options for the function creation string; see @ref AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the function creation string; see \c AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
 
         @throw DATABASE-DRIVER-ERROR no database-specific module can be loaded
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -72,7 +72,7 @@ AbstractDatabase db("pgsql:user/pass@db%host");
         @endcode
 
         @param ds a datasource description string in the format that can be parsed by parse_datasource()
-        @param opts a hash of options for the function creation string; see @ref AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the function creation string; see \c AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
     */
@@ -95,7 +95,7 @@ AbstractDatabase db("pgsql:user/pass@db%host");
         - \c host: (@ref string_or_nothing_type "*string") The host name for the new connection
         - \c port: (@ref softint_type "softint") The port number for the new connection
         - \c options: (@ref hash_or_nothing_type "*hash") Any options for the new connection
-        @param opts a hash of options for the table creation string; see @ref AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
+        @param opts a hash of options for the table creation string; see \c AbstractDatabase::DatabaseOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
     */

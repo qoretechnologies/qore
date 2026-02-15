@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,8 +45,9 @@ void HashDeclList::remove(hm_qth_t::iterator i) {
 }
 
 void HashDeclList::deleteAll() {
-    for (hm_qth_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i)
+    for (hm_qth_t::iterator i = hm.begin(), e = hm.end(); i != e; ++i) {
         typed_hash_decl_private::get(*i->second)->deref();
+    }
 
     hm.clear();
 }
@@ -86,7 +87,6 @@ const TypedHashDecl* HashDeclList::find(const char* name) const {
 }
 
 HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* ns) {
-    //printd(5, "HashDeclList::HashDeclList() this: %p ns: '%s' size: %d\n", this, ns->name.c_str(), (int)old.hm.size());
     for (auto& i : old.hm) {
         //printd(5, "HashDeclList::HashDeclList() this: %p hd: %p '%s' po & PO_NO_INHERIT_USER_HASHDECLS: %s sys: %s pub: %s\n", this, i.second, i.second->getName(), po & PO_NO_INHERIT_USER_HASHDECLS ? "true": "false", i.second->isSystem() ? "true": "false", typed_hash_decl_private::get(*i.second)->isPublic() ? "true": "false");
         if (!i.second->isSystem()) {
@@ -101,6 +101,9 @@ HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* n
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents will be resolved later by resolveExternalParentHashDecls()
+    updateLocalParentPointers();
 }
 
 void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns) {
@@ -116,6 +119,9 @@ void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns)
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
         addInternal(hd);
     }
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents will be resolved later by resolveExternalParentHashDecls()
+    updateLocalParentPointers();
 }
 
 int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_private* ns, ExceptionSink* xsink) {
@@ -137,6 +143,9 @@ int HashDeclList::importSystemHashDecls(const HashDeclList& source, qore_ns_priv
             ++cnt;
         }
     }
+    // Update local parent pointers to point to hashdecls in this list (not the source list)
+    // Cross-namespace parents are resolved by the caller using resolveExternalParentHashDecls()
+    updateLocalParentPointers();
     return cnt;
 }
 
@@ -208,5 +217,73 @@ void HashDeclList::parseRemove(const char* name) {
     hm_qth_t::iterator i = hm.find(name);
     if (i != hm.end()) {
         remove(i);
+    }
+}
+
+void HashDeclList::updateLocalParentPointers() {
+    for (auto& i : hm) {
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
+        // parent_path contains the full namespace path (e.g., "DataProvider::DisplayDescInfo")
+        const char* parent_path = hdp->getParentHashDeclName();
+        if (parent_path) {
+            // Extract the simple name from the full path for local lookup
+            // The hashDeclList uses simple names as keys
+            const char* simple_name = strrchr(parent_path, ':');
+            simple_name = simple_name ? simple_name + 1 : parent_path;
+
+            // Look up the parent by simple name in this list
+            TypedHashDecl* new_parent = find(simple_name);
+            if (new_parent) {
+                // Verify the full path matches to avoid name collisions
+                // Only update if this is actually the same hashdecl (same namespace path)
+                if (!strcmp(parent_path, typed_hash_decl_private::get(*new_parent)->getPath())) {
+                    hdp->setParentHashDecl(new_parent);
+                }
+            }
+            // If parent not found locally or path doesn't match, keep the original pointer.
+            // Cross-namespace parents will be resolved by resolveExternalParentHashDecls()
+            // after the entire namespace tree is constructed.
+        }
+    }
+}
+
+void HashDeclList::resolveExternalParentHashDecls(qore_root_ns_private* root) {
+    assert(root);
+    for (auto& i : hm) {
+        typed_hash_decl_private* hdp = typed_hash_decl_private::get(*i.second);
+        const char* parent_path = hdp->getParentHashDeclName();
+        if (parent_path) {
+            // Check if the current parent pointer needs to be resolved
+            const TypedHashDecl* current_parent = hdp->getParentHashDecl();
+            bool needs_resolution = false;
+
+            if (!current_parent) {
+                // Parent pointer is null but parent name is set - needs resolution
+                needs_resolution = true;
+            } else {
+                // Check if the current parent is in our namespace tree
+                const qore_ns_private* parent_ns = typed_hash_decl_private::get(*current_parent)->getNamespace();
+                if (parent_ns) {
+                    const qore_root_ns_private* parent_root = parent_ns->getRoot();
+                    if (parent_root != root) {
+                        // Parent is in a different namespace tree - needs resolution
+                        needs_resolution = true;
+                    }
+                }
+            }
+
+            if (needs_resolution) {
+                // Look up the parent by full path in our namespace tree
+                const qore_ns_private* found_ns = nullptr;
+                const TypedHashDecl* new_parent = qore_root_ns_private::runtimeFindHashDecl(
+                    *root->rns, parent_path, found_ns);
+                if (new_parent) {
+                    hdp->setParentHashDecl(new_parent);
+                }
+                // If not found in our tree, keep the original pointer (if any).
+                // This can happen for cross-program references where the parent
+                // is in a different Program (e.g., a module's namespace).
+            }
+        }
     }
 }

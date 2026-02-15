@@ -227,9 +227,11 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "hashdecl '%s' has already been defined in " \
                 "namespace '%s'", i.first, ns.name.c_str());
             qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
-        } else if (ns.classList.find(i.first)) {
-            parse_error(*qore_class_private::get(*i.second.cls)->loc, "class '%s' has already been defined in " \
-                "namespace '%s'", i.first, ns.name.c_str());
+        } else if (QoreClass* existing = ns.classList.find(i.first)) {
+            if (!qore_class_private::injected(*existing)) {
+                parse_error(*qore_class_private::get(*i.second.cls)->loc,
+                    "class '%s' has already been defined in namespace '%s'", i.first, ns.name.c_str());
+            }
             qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
         } else if (find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "class '%s' is already pending in namespace " \

@@ -25,9 +25,9 @@
 %modern
 %exec-class AstProcessorTests
 
-%requires Qdx
+%requires ../../../../qlib/Qdx.qm
 %requires astparser
-%requires QUnit
+%requires ../../../../qlib/QUnit.qm
 
 public class AstProcessorTests inherits QUnit::Test {
     constructor() : Test("AstProcessorTests", "1.0") {
@@ -39,18 +39,25 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Constant processing", \testConstantBasic());
         addTestCase("Doc comment conversion", \testDocCommentConversion());
         addTestCase("Block comment handling", \testBlockComments());
+        addTestCase("Soft type formatting", \testSoftTypeFormatting());
         addTestCase("Nested namespaces", \testNestedNamespaces());
         addTestCase("Access modifiers", \testAccessModifiers());
         addTestCase("Class with members", \testClassWithMembers());
         addTestCase("Hashdecl with doc comment", \testHashdeclDocComment());
         addTestCase("Namespace with doc comment", \testNamespaceDocComment());
+        addTestCase("Mainpage doc association", \testMainpageAssociation());
+        addTestCase("Doc association with same-line loc", \testDocAssociationWithSameLineLoc());
+        addTestCase("Endcond association with comments", \testDocEndcondWithComment());
         addTestCase("Conditional parsing ifdef/endif", \testConditionalIfdef());
         addTestCase("Conditional parsing if/elif/else/endif", \testConditionalIfElif());
         addTestCase("Nested conditionals", \testNestedConditionals());
+        addTestCase("Format parse diagnostics", \testFormatParseDiagnostics());
         set_return_value(main());
     }
 
     private list<auto> parseCode(string code) {
+        # Strip conditional directives so all branches are visible to tree-sitter
+        code = Qdx::stripConditionalDirectives(code);
         AstParser parser();
         auto tree = parser.parseString(code);
         if (!tree) {
@@ -59,21 +66,25 @@ public class AstProcessorTests inherits QUnit::Test {
         return tree.getNodesInfo();
     }
 
+    private string processCode(string code) {
+        # Strip conditional directives so all branches are visible to tree-sitter
+        string stripped = Qdx::stripConditionalDirectives(code);
+        list<auto> nodes = parseCode(stripped);
+        AstProcessor proc(nodes, {"source": stripped});
+        return proc.process();
+    }
+
     testNamespaceBasic() {
         string code = "namespace Test { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /namespace Test \{/, "namespace declaration");
-        assertTrue(output =~ /\};/, "namespace closing brace");
+        assertTrue(output =~ /\}\s*;?/, "namespace closing brace");
     }
 
     testClassBasic() {
         string code = "class MyClass { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class MyClass \{/, "class declaration");
         assertTrue(output =~ /public:/, "public access specifier");
@@ -82,18 +93,14 @@ public class AstProcessorTests inherits QUnit::Test {
 
     testClassInheritance() {
         string code = "class Child inherits Parent { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class Child : public Parent \{/, "class with public inheritance");
     }
 
     testHashdeclBasic() {
         string code = "hashdecl MyStruct { int x; }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /struct MyStruct \{/, "hashdecl becomes struct");
         assertTrue(output =~ /int x;/, "member preserved");
@@ -102,20 +109,16 @@ public class AstProcessorTests inherits QUnit::Test {
 
     testFunctionBasic() {
         string code = "sub myFunc() { }";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /myFunc\(\);/, "function declaration");
     }
 
     testConstantBasic() {
         string code = "const MyConst = 42;";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
-        assertTrue(output =~ /const MyConst = \.\.\.;/, "constant with simplified value");
+        assertTrue(output =~ /const auto MyConst = \.\.\.;/, "constant with simplified value");
     }
 
     testDocCommentConversion() {
@@ -123,9 +126,7 @@ public class AstProcessorTests inherits QUnit::Test {
 #! This is a doc comment
 class MyClass { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a doc comment/, "doc comment converted from #! to //!");
     }
@@ -137,12 +138,40 @@ class MyClass { }
 */
 class MyClass { }
 ';
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\*\* This is a block doc comment/, "block comment preserved");
         assertTrue(output =~ /@param x the parameter/, "param tag preserved");
+    }
+
+    testDocAssociationWithSameLineLoc() {
+        string code = '
+class Demo {
+    #! doc for output
+    /** @param data output payload */
+    abstract private nothing writeOutput(string data);
+
+    #! doc for header
+    /** @param info header info */
+    writeInterchangeHeader(hash info) {}
+}
+';
+        string output = processCode(code);
+
+        assertTrue(output =~ /doc for output/, "writeOutput doc preserved");
+        assertTrue(output =~ /@param data output payload/, "writeOutput param preserved");
+        assertTrue(output =~ /doc for header/, "writeInterchangeHeader doc preserved");
+        assertTrue(output =~ /@param info header info/, "writeInterchangeHeader param preserved");
+    }
+
+    testSoftTypeFormatting() {
+        string code = "sub softParam(*string name, *hash<auto> opts) { }";
+        string output = processCode(code);
+
+        # Doxygen output uses __7_ placeholder for * (nullable) prefix
+        # and escapes angle brackets with backslashes
+        assertTrue(output =~ /__7_ string name/, "nullable string param in doxygen format");
+        assertTrue(output =~ /__7_ hash\\<auto\\> opts/, "nullable hash param in doxygen format");
     }
 
     testNestedNamespaces() {
@@ -153,9 +182,7 @@ namespace Outer {
     }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /namespace Outer \{/, "outer namespace");
         assertTrue(output =~ /namespace Inner \{/, "inner namespace");
@@ -169,9 +196,7 @@ class MyClass {
     private { int y; }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # The class should have members processed
         assertTrue(output =~ /class MyClass/, "class declaration");
@@ -186,9 +211,7 @@ class MyClass {
     constructor() { }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /class MyClass/, "class declaration");
         assertTrue(output =~ /int count;/, "member variable");
@@ -202,9 +225,7 @@ hashdecl MyStruct {
     int x;
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a hashdecl doc comment/, "hashdecl doc comment converted");
         assertTrue(output =~ /struct MyStruct \{/, "hashdecl becomes struct");
@@ -217,13 +238,49 @@ namespace MyNamespace {
     class MyClass { }
 }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         assertTrue(output =~ /\/\/! This is a namespace doc comment/, "namespace doc comment converted");
         assertTrue(output =~ /namespace MyNamespace \{/, "namespace declaration");
         assertTrue(output =~ /class MyClass/, "class inside namespace");
+    }
+
+    testMainpageAssociation() {
+        string code = '
+%modern
+module TestModule {
+    version = "1.0";
+}
+/** @mainpage Test Module
+
+    @section test_intro Introduction
+*/
+#! Public namespace docs
+public namespace TestModule {
+    class MyClass { }
+}
+';
+        string output = processCode(code);
+
+        assertTrue(output =~ /@mainpage Test Module/, "mainpage preserved");
+        assertTrue(output =~ /namespace TestModule \{/, "namespace declared");
+        assertTrue(output =~ /class MyClass/, "class declared");
+    }
+
+    testDocEndcondWithComment() {
+        string code = "
+#! @cond nodoc
+sub hidden() { }
+#! @endcond
+# regular comment
+sub visible() { }
+";
+        string output = processCode(code);
+
+        assertFalse(output =~ /@cond/, "cond marker removed");
+        assertFalse(output =~ /@endcond/, "endcond marker removed");
+        assertTrue(output =~ /hidden\(\);/, "hidden function emitted");
+        assertTrue(output =~ /visible\(\);/, "visible function emitted");
     }
 
     testConditionalIfdef() {
@@ -236,9 +293,7 @@ class UndefinedClass { }
 %endif
 class AlwaysClass { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output - astparser includes all branches
         assertTrue(output =~ /class DefinedClass/, "class from ifdef branch");
@@ -257,9 +312,7 @@ class OptionB { }
 class DefaultOption { }
 %endif
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output
         assertTrue(output =~ /class OptionA/, "class from if branch");
@@ -278,13 +331,28 @@ class InnerClass { }
 %endif
 class AfterNested { }
 ";
-        list<auto> nodes = parseCode(code);
-        AstProcessor proc(nodes);
-        string output = proc.process();
+        string output = processCode(code);
 
         # All classes should be in the output
         assertTrue(output =~ /class OuterClass/, "class from outer ifdef");
         assertTrue(output =~ /class InnerClass/, "class from inner ifdef");
         assertTrue(output =~ /class AfterNested/, "class after nested endif");
+    }
+
+    testFormatParseDiagnostics() {
+        string code = "%modern\nmodule Test {\n    version = \"1.0\";\n    desc = \"missing semicolon\"\n}\n";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        # tree-sitter always returns a tree via error recovery, even with parse errors
+        assertTrue(exists(tree), "tree returned with error recovery");
+        assertTrue(parser.getErrorCount() > 0, "parse errors reported");
+
+        *list<auto> diagnostics = parser.getDiagnostics();
+        assertTrue(exists(diagnostics), "diagnostics available");
+
+        string output = Qdx::formatParseDiagnostics("test.qm", code, diagnostics);
+        assertTrue(output =~ /test\.qm:/, "path included");
+        assertTrue(output =~ /Missing/, "error message included");
+        assertTrue(output =~ /missing semicolon/, "line text included");
     }
 }

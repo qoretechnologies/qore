@@ -107,13 +107,13 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
         assertEq("a:\n  - b: 2\n  - c: 3", sprintf("%Y", ("a": (("b": 2),("c":3)))));
 
         # Multi-key hash in list still uses newlines
-        assertEq("-\n  x: 1\n  y: 2", sprintf("%Y", (("x": 1, "y": 2),)));
+        assertEq("- x: 1\n  y: 2", sprintf("%Y", (("x": 1, "y": 2),)));
 
         # Nested list
         assertEq("-\n  - 1\n  - 2\n-\n  - 3\n  - 4", sprintf("%Y", ((1, 2), (3, 4))));
 
         # Empty containers
-        assertEq("empty_hash:\n  {}\nempty_list:\n  []", sprintf("%Y", ("empty_hash": {}, "empty_list": ())));
+        assertEq("empty_hash: {}\nempty_list: []", sprintf("%Y", ("empty_hash": {}, "empty_list": ())));
 
         # NOTHING/null
         assertEq("value: null", sprintf("%Y", ("value": NOTHING)));
@@ -142,7 +142,7 @@ auto sub test1(string fmt) { softlist<auto> args = fmt; if (argv) args += argv; 
                 "timeout": 30,
             ),
         );
-        string expected = "users:\n  -\n    name: \"Alice\"\n    age: 30\n  -\n    name: \"Bob\"\n    age: 25\nconfig:\n  debug: True\n  timeout: 30";
+        string expected = "users:\n  - name: \"Alice\"\n    age: 30\n  - name: \"Bob\"\n    age: 25\nconfig:\n  debug: True\n  timeout: 30";
         assertEq(expected, sprintf("%Y", complex));
     }
 }

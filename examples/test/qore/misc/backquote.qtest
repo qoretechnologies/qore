@@ -4,18 +4,25 @@
 %modern
 
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
 
 %exec-class BackquoteTest
 
 class BackquoteTest inherits QUnit::Test {
     constructor() : QUnit::Test("Backquote test", "1.0") {
         addTestCase("Backquote test", \testBackquote());
+        addTestCase("Backquote empty output", \testEmptyOutput());
+        addTestCase("Backquote command not found", \testCommandNotFound());
+        addTestCase("Backquote SIGINT handling", \testSignalHandling());
+        addTestCase("Backquote interrupt kills process group", \testInterruptKillsProcessGroup());
+        addTestCase("Backquote restricted access", \testRestrictedAccess());
         set_return_value(main());
     }
 
     testBackquote() {
-        if (PlatformOS == "Windows")
+        if (PlatformOS == "Windows") {
             testSkip("skipping because the test is being run on Windows");
+        }
 
         assertEq("1", chomp(`/bin/echo 1`), "backquotes 1");
         assertEq("Qore is great!", chomp(`/bin/echo "Qore is great!"`), "backquotes 2");
@@ -28,5 +35,147 @@ class BackquoteTest inherits QUnit::Test {
         backquote("cat /abcDefGHm54sdvdsCE54dfhbgzgGH45J5g4bbg4dfwrtEFG5 2>nul", \rc);
 %endif
         assertEq(1, rc);
+    }
+
+    testEmptyOutput() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        int rc;
+        string out = backquote(":", \rc);
+        assertEq("", out, "backquote should return empty output");
+        assertEq(0, rc, "backquote should return zero exit code");
+    }
+
+    testCommandNotFound() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        int rc = 0;
+        string out = backquote("command_should_not_exist_12345 2>/dev/null", \rc);
+        assertEq("", out, "backquote should return empty output on command not found");
+        assertEq(127, rc, "backquote should return 127 for command not found");
+    }
+
+    testSignalHandling() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        int rc;
+        backquote("trap 'exit 42' INT; kill -s INT $$; exit 0", \rc);
+        assertEq(42, rc, "backquote child should handle SIGINT");
+    }
+
+    testInterruptKillsProcessGroup() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        string pid_file = tmp_location() + "/backquote_pid_" + string(getpid());
+        on_exit {
+            if (is_file(pid_file)) {
+                unlink(pid_file);
+            }
+        }
+
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+int sub run_backquote_rc(string cmd) {
+    int lrc = 0;
+    backquote(cmd, \\lrc);
+    return lrc;
+}
+        ", "backquote_interrupt_test");
+
+        Counter done(1);
+        bool caught = False;
+        string ex_err;
+        int rc = -999;
+
+        string cmd = "echo $$ > " + pid_file + "; sleep 30 & wait";
+        background sub() {
+            try {
+                rc = p.callFunction("run_backquote_rc", cmd);
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                ex_err = ex.err;
+                rc = -1;
+            }
+            done.dec();
+        }();
+
+        int wait_attempts = 200;
+        while (!is_file(pid_file) && wait_attempts-- > 0) {
+            usleep(10000);
+        }
+        assertTrue(is_file(pid_file), "pid file created");
+
+        string pid_str = chomp(ReadOnlyFile::readTextFile(pid_file));
+        int pgid = pid_str.toInt();
+        assertTrue(pgid > 0, "process group id captured");
+
+        sm.requestInterrupt();
+        done.waitForZero(5s);
+
+        assertEq(-1, rc, "backquote() should return -1 on interrupt");
+        assertEq(True, caught, "backquote() call interrupted");
+        assertEq("PROGRAM-INTERRUPTED", ex_err, "backquote() raised PROGRAM-INTERRUPTED");
+
+        int krc = 0;
+        int kill_attempts = 50;
+        while (kill_attempts-- > 0) {
+            krc = kill(-pgid, 0);
+            if (krc == -1) {
+                break;
+            }
+            usleep(10000);
+        }
+        assertEq(-1, krc, "process group should be gone");
+    }
+
+    testRestrictedAccess() {
+        if (PlatformOS == "Windows") {
+            testSkip("skipping because the test is being run on Windows");
+        }
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_EXTERNAL_PROCESS);
+        bool parse_caught = False;
+        try {
+            p.parse("
+%modern
+
+string sub run_backquote() {
+    return backquote(\":\");
+}
+            ", "backquote_restricted");
+        } catch (hash<ExceptionInfo> ex) {
+            parse_caught = True;
+            assertEq("PARSE-EXCEPTION", ex.err, "backquote() blocked by PO_NO_EXTERNAL_PROCESS");
+        }
+        assertTrue(parse_caught, "backquote() should be blocked by PO_NO_EXTERNAL_PROCESS");
+
+        Program p2(PO_NEW_STYLE | PO_NO_EXTERNAL_PROCESS);
+        bool parse_op_caught = False;
+        try {
+            p2.parse("
+%modern
+
+string sub run_backquote_op() {
+    return `/bin/echo 1`;
+}
+            ", "backquote_op_restricted");
+        } catch (hash<ExceptionInfo> ex) {
+            parse_op_caught = True;
+            assertEq("PARSE-EXCEPTION", ex.err, "backquote operator blocked at parse time");
+        }
+        assertTrue(parse_op_caught, "backquote operator should be blocked by PO_NO_EXTERNAL_PROCESS");
     }
 }

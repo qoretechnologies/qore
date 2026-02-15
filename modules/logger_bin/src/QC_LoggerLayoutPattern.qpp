@@ -56,7 +56,7 @@
     |\c %%r|Used to output the number of milliseconds elapsed from the construction of the layout until the creation of the logging event, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%t|Used to output the thread id that generated the logging event, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%u|Used to output logging event unique id, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
-    |\c %%x|Used to output exception string using @ref Util::get_exception_string()
+    |\c %%x|Used to output exception string using \c Util::get_exception_string()
     |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
 
     For example, the \c LoggerLayoutPattern with the conversion pattern \c "%r [%t] %-5p %c - %m%n" will output

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpServerAsyncIo.qm Qore user module providing async I/O support for HttpServer
 
-/*  HttpServerAsyncIo.qm Copyright 2024 Qore Technologies, s.r.o.
+/*  HttpServerAsyncIo.qm Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,7 +28,7 @@
 %requires Logger
 
 module HttpServerAsyncIo {
-    version = "1.0";
+    version = "1.2";
     desc = "Async I/O support for HttpServer";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -42,7 +42,7 @@ module HttpServerAsyncIo {
 
     @tableofcontents
 
-    @section httpserverasyncio_intro Introduction
+    @section httpserverasynciointro Introduction
 
     The %HttpServerAsyncIo module provides async I/O poll operations for the HttpServer module,
     enabling high-performance non-blocking I/O for HTTP, SSE, and WebSocket connections.
@@ -55,6 +55,7 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpAcceptPollOperation "HttpAcceptPollOperation" - Composite operation for accept + SSL + ALPN negotiation
     - @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" - HTTP/2 server connection handling
     - @ref HttpServerAsyncIo::HttpIdlePollOperation "HttpIdlePollOperation" - Monitors idle keep-alive connections
+    - @ref HttpServerAsyncIo::HttpKeepAlivePollOperation "HttpKeepAlivePollOperation" - Combined idle + header read for HTTP/1.x keep-alive
     - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
@@ -73,9 +74,14 @@ module HttpServerAsyncIo {
     @section httpserverasyncio_relnotes Release Notes
 
     @subsection httpserverasyncio_v1_0 Version 1.0
-    - Initial release with HTTP/1.x, HTTP/2, SSE, and WebSocket support
-    - Protocol-agnostic abstractions for SSE and WebSocket
-    - Infrastructure for WebSocket over HTTP/2 (RFC 8441) and SSE over HTTP/2
+    - Initial release of HttpServer async I/O and HTTP/2 support
+    - Provides callback-based I/O controller delegating all polling to
+      @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController"
+    - Native HTTP/1.x and HTTP/2 response sending from the controller
+    - Type-safe enums: @ref HttpServerAsyncIo::HttpConnectionState "HttpConnectionState",
+      @ref HttpServerAsyncIo::HttpPollType "HttpPollType",
+      @ref HttpServerAsyncIo::HttpVersionMode "HttpVersionMode"
+    - Protocol-agnostic SSE and WebSocket abstractions
 */
 
 #! Main namespace for HttpServerAsyncIo module
@@ -117,8 +123,50 @@ public namespace HttpServerAsyncIo {
         #! HTTP response code (for HTTP/2 streaming responses like WebSocket CONNECT)
         *int code;
 
-        #! Response headers (for HTTP/2 streaming responses)
+        #! Response headers (for HTTP/2 responses sent through h2op)
         *hash<auto> hdr;
+
+        #! Response body (for HTTP/2 responses sent through h2op)
+        *data body;
+
+        #! Streaming response body (for HTTP/2 responses with InputStream)
+        *InputStream input_stream;
+
+        #! HTTP status message text (e.g., "OK", "Not Found")
+        /** Used by the controller for HTTP/1.x response sending.
+            If not set, the controller looks up the status text from
+            the HttpServer::HttpCodes constant using the \c code field.
+
+        */
+        *string status_message;
+
+        #! Whether the response body uses chunked transfer encoding
+        /** Only relevant for HTTP/1.x responses; HTTP/2 uses DATA frames.
+        */
+        bool chunked = False;
+
+        #! Connection is managed by a dedicated handler (WebSocket/SSE)
+        /** When True, the controller should remove the connection from tracking
+            without closing the socket. The dedicated handler manages the socket lifecycle.
+        */
+        bool dedicated = False;
+
+        #! callback for sending chunked response data where each callback return is one HTTP chunk
+        /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
+            "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
+
+            @since HttpServerAsyncIo 1.0
+
+            @see send_timeout
+        */
+        *code send_callback;
+
+        #! timeout for send_callback responses
+        /** @since HttpServerAsyncIo 1.0
+
+            @see send_callback
+        */
+        *timeout send_timeout;
     }
 
     #! Connection info passed to callbacks
@@ -156,7 +204,6 @@ hash<HttpResponseInfo> handleRequest(hash<HttpConnectionInfo> conn_info) {
 }
         @endcode
 
-        @since HttpServerAsyncIo 1.1
     */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection

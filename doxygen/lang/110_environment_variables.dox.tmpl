@@ -6,7 +6,7 @@
     |!Environment Variable|!Description
     |\c QORE_AUTO_MODULE_DIR|This environment variable should contain a colon-separated list of directories which will be searched for %Qore modules when %Qore starts. If any modules are found in any of these directories, they are loaded automatically before any parsing starts.
     |\c QORE_MODULE_DIR|This environment variable should contain a colon-separated list of directories which will be searched when modules are loaded with the @ref requires "%requires" parse directive
-    |\c QORE_INCLUDE_DIR|This variable should be a colon-separated list of directories where the %Qore binary should look for include files requested with the @ref include "%include" parse directive
+    |\c QORE_INCLUDE_DIR|This variable should be a colon-separated list of directories where the %Qore binary should look for include files requested with the @ref include "%include" parse directive (deprecated for user modules in this repository)
     |\c QORE_CHARSET|If this variable is set, then the default character encoding name for the process will be the value of this variable. This variable takes precedence over the \c LANG variable, but can be overridden by the command line using option \c --charset (see @ref character_encoding for more information on this option)
     |\c LANG|If this variable is set and includes a character encoding specification, then, if the \c QORE_CHARSET variable is not set (and no character encoding was specified on the command line), this character encoding will be the default for the process.
     |\c TZ|On UNIX systems, this environment variables points to the zoneinfo file that contains the definition of the current time zone; for more information, see @ref unix_time_zones

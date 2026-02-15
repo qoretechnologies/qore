@@ -26,13 +26,11 @@
 %requires qore >= 2.0
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not require "$" signs for vars, assume local variable scope
-%new-style
+%modern
 
 %requires(reexport) WebSocketUtil >= 1.0
 %requires Util >= 1.0
@@ -77,6 +75,7 @@ module WebSocketClient {
             "logo": WebSocketsLogoLight,
             "logo_file_name": "generic-websockets-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Messaging,),
         });
 
         # register all supported actions
@@ -145,16 +144,13 @@ module WebSocketClient {
     All the public symbols in the module are defined in the WebSocketClient namespace.
 
     Currently the module provides the following classes:
-    - @ref WebSocketClient::WebSocketClient "WebSocketClient": the web socket client class
-    - @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject": the web socket connection class
+    - \c WebSocketClient::WebSocketClient "WebSocketClient": the web socket client class
+    - \c WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject": the web socket connection class
       (based on the @ref connectionproviderintro "ConnectionProvider" module)
 
     <b>Example</b>
     @code{.py}
 #!/usr/bin/env qore
-
-%new-style
-%enable-all-warnings
 
 %requires WebSocketClient
 
@@ -215,11 +211,17 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_6 v2.6
+    - added async polling API support for WebSocket connections
+      - added \c WebSocketConnectionObject::supportsPollingApi() "WebSocketConnectionObject::supportsPollingApi()"
+        returning @ref True
+      - added \c WebSocketConnectionObject::startPollConnect()
+        "WebSocketConnectionObject::startPollConnect()" for non-blocking connection ping operations
+      - added \c WebSocketPingPollOperation class for async WebSocket handshake verification
     - added support for WebSocket over HTTP/2 (RFC 8441)
       - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
-      - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
+      - added \c WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
         HTTP/2 WebSocket is being used
-      - added \c http2 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
+      - added \c http2 key to \c WebSocketClient::WebSocketClient::getConnectionInfo()
         "WebSocketClient::getConnectionInfo()"
       - data provider's \c ws-connected-event now includes \c http2 field indicating HTTP/2 usage
     - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
@@ -232,19 +234,19 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       - added \c extensions constructor option for providing extension instances
       - added extension negotiation during WebSocket handshake
       - added automatic compression/decompression for messages when extensions are active
-      - added @ref WebSocketClient::WebSocketClient::hasPerMessageDeflate() "WebSocketClient::hasPerMessageDeflate()"
+      - added \c WebSocketClient::WebSocketClient::hasPerMessageDeflate() "WebSocketClient::hasPerMessageDeflate()"
         method
-      - added @ref WebSocketClient::WebSocketClient::getActiveExtensions() "WebSocketClient::getActiveExtensions()"
+      - added \c WebSocketClient::WebSocketClient::getActiveExtensions() "WebSocketClient::getActiveExtensions()"
         method
 
     @subsection wsc_v2_4 v2.4
-    - added optional AsyncAPI validation support via @ref WebSocketClient::WebSocketClient::setAsyncApiValidator()
+    - added optional AsyncAPI validation support via \c WebSocketClient::WebSocketClient::setAsyncApiValidator()
       "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
 
     @subsection wsc_v2_3 v2.3
-    - added the @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
-      support in the @ref WebSocketClient::WebSocketClient "WebSocketClient" class for tokens and a logger instead of
+    - added the \c WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
+      support in the \c WebSocketClient::WebSocketClient "WebSocketClient" class for tokens and a logger instead of
       log closures / callbacks
     - added support for the data provider action catalog API
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
@@ -302,18 +304,18 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
     @subsection wsc_v1_6_1 v1.6.1
-    - added @ref WebSocketClient::WebSocketClient::pong() "WebSocketClient::pong()" to allow an unsolicited \c PONG
+    - added \c WebSocketClient::WebSocketClient::pong() "WebSocketClient::pong()" to allow an unsolicited \c PONG
       message to be sent as a unidirectional keep-alive message from the client to the server
       (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
     @subsection wsc_v1_6 v1.6
-    - added the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
+    - added the \c WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
       <a href="../../ConnectionProvider/html/index.html">ConnectionProvider</a> module
     - updated for complex types
     - fixed a bug where the event loop thread would immediately terminate after a reconnection
       (<a href="https://github.com/qoretechnologies/qore/issues/2061">issue 2061</a>)
     - improved client logging
-    - fixed a bug where the @ref WebSocketClient::WebSocketClient class did not validate the \c Sec-WebSocket-Accept
+    - fixed a bug where the \c WebSocketClient::WebSocketClient class did not validate the \c Sec-WebSocket-Accept
       response header according to RFC6455
       (<a href="https://github.com/qoretechnologies/qore/issues/2062">issue 2062</a>)
     - added support for the \c yield option in the constructor
@@ -438,20 +440,20 @@ public const MESSAGE_WS_PING = "ping";
 public const MESSAGE_WS_PONG = "pong";
 
 #! the main websocket client class
-/** To use this class, create a @ref WebSocketClient::WebSocketClient "WebSocketClient" object and the call
-    @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()".
+/** To use this class, create a \c WebSocketClient::WebSocketClient "WebSocketClient" object and the call
+    \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()".
 
-    The @ref WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background
+    The \c WebSocketClient::WebSocketClient::connect() "WebSocketClient::connect()" method starts a background
     thread to receive messages, which are then posted to the callback provided in the
-    @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()".
+    \c WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()".
 
     To stop listening for web socket events, call
-    @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
+    \c WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
-    The @ref WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
+    The \c WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
     - \c PO_NO_PROCESS_CONTROL: in this case the \c "yield" option is required in
-      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()"
+      \c WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()"
 */
 public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper {
     public {
@@ -559,6 +561,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! HTTP/2 stream ID for WebSocket data (RFC 8441)
         int h2_stream_id = 0;
+
+        #! Buffer for HTTP/2 WebSocket frames spanning multiple DATA frames
+        *binary h2_frame_buf;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -590,15 +595,15 @@ WebSocketClient ws(\event(), {
           \a validator is provided
         - \c extensions: a list of @ref AbstractWebSocketExtension "AbstractWebSocketExtension" instances
           to offer to the server (e.g., @ref PerMessageDeflateExtension for compression)
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
-          argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
+          argument and must return one of the following values: \c WSClientRawCallbackReturnCodes
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object for message validation;
           overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: \c Qore::Threads::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
@@ -750,7 +755,7 @@ ws.connect();
         In this case the event thread also terminates and the WebSocketClient object will be in a disconnected state.
 
         To stop listening for web socket events, call
-        @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
+        \c WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
         If this method is called while a connection is already in progress, then the existing connection is first
         implicitly disconnected with close code @ref WebSocketUtil::WSCC_GoingAway "WSCC_GoingAway".
@@ -819,7 +824,7 @@ ws.connect();
         return True;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnect with the given \c closecodes "close code"
     disconnect(int cmd = WSCC_GoingAway) {
         # do not reconnect if an explicit disconnect is called
         if (reconnect) {
@@ -912,7 +917,7 @@ ws.connect();
         return h;
     }
 
-    #! Disconnect with the given @ref closecodes "close code"
+    #! Disconnect with the given \c closecodes "close code"
     private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy) {
         AutoLock al(m);
 
@@ -1155,6 +1160,9 @@ ws.setEventQueue();
             }
             ws_ver = remove opts.version;
         }
+        if (!ws_ver) {
+            ws_ver = 13;
+        }
 
         # += to keep "http_opts" "hash<auto>"
         http_opts += opts;
@@ -1220,6 +1228,10 @@ ws.setEventQueue();
             timeout_ms = http_opts."timeout";
         } else {
             http_opts."timeout" = timeout_ms;
+        }
+        # Default to HTTP/1.1 if http_version not specified
+        if (!http_opts.http_version) {
+            http_opts.http_version = "1.1";
         }
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
@@ -1403,7 +1415,9 @@ ws.setEventQueue();
                 # For HTTP/2, use the HTTP/2-aware data availability check
                 bool data_available;
                 if (http2_websocket && h2_stream_id > 0) {
-                    data_available = hc.isHttp2DataAvailable(h2_stream_id, 50ms);
+                    data_available = h2_frame_buf && h2_frame_buf.size()
+                        ? True
+                        : hc.isHttp2DataAvailable(h2_stream_id, 50ms);
                 } else {
                     data_available = hc.isDataAvailable(50ms);
                 }
@@ -1454,6 +1468,11 @@ ws.setEventQueue();
             }
         }
 
+        if (hc.isOpen()) {
+            hc.shutdown();
+            hc.close();
+        }
+
         # call the callback with NOTHING to signal that the connection has been closed
         try {
             # issue #3225 catch and log any exeptions in the closing callback
@@ -1467,10 +1486,6 @@ ws.setEventQueue();
                 }
                 rethrow;
             }
-        }
-        if (hc.isOpen()) {
-            hc.shutdown();
-            hc.close();
         }
 
         if (!self) {
@@ -1751,16 +1766,39 @@ ws.setEventQueue();
             # HTTP/2: Read data from HTTP/2 stream and parse WebSocket frame
             # Large WebSocket frames may be split across multiple HTTP/2 DATA frames,
             # so we need to accumulate data until we have a complete WebSocket frame
-            binary buf;
+            binary buf = h2_frame_buf ?? binary();
             date start = now_us();
             date deadline = start + timeout_ms;
             while (True) {
+                *int needed = ws_get_frame_size(buf);
+                if (exists needed && buf.size() >= needed) {
+                    binary frame = buf.substr(0, needed);
+                    if (buf.size() > needed) {
+                        h2_frame_buf = buf.substr(needed);
+                    } else {
+                        remove h2_frame_buf;
+                    }
+                    hash<WsMsgInfo> h = ws_parse_frame(frame);
+                    @debug {
+                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
+                            log(LoggerLevel::INFO,
+                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                        }
+                    }
+                    return h;
+                }
+
                 # Calculate remaining time for this read
                 date remaining = deadline - now_us();
                 if (remaining <= 0s) {
-                    *int needed = ws_get_frame_size(buf);
+                    *int needed_timeout = ws_get_frame_size(buf);
                     throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from HTTP/2 stream "
-                        "(have %d bytes, need %s)", buf.size(), exists needed ? needed.toString() : "unknown");
+                        "(have %d bytes, need %s)", buf.size(),
+                        exists needed_timeout ? needed_timeout.toString() : "unknown");
                 }
 
                 # Use remaining time but cap at 100ms to allow checking for complete frames
@@ -1771,13 +1809,27 @@ ws.setEventQueue();
                 }
 
                 # Check if we have enough data for a complete frame
-                *int needed = ws_get_frame_size(buf);
-                if (exists needed) {
-                    if (buf.size() >= needed) {
-                        # We have a complete frame
-                        return ws_parse_frame(buf);
+                *int needed2 = ws_get_frame_size(buf);
+                if (exists needed2 && buf.size() >= needed2) {
+                    # We have a complete frame; preserve any remaining bytes
+                    binary frame = buf.substr(0, needed2);
+                    if (buf.size() > needed2) {
+                        h2_frame_buf = buf.substr(needed2);
+                    } else {
+                        remove h2_frame_buf;
                     }
-                    # Need more data - continue reading
+                    hash<WsMsgInfo> h = ws_parse_frame(frame);
+                    @debug {
+                        if (getenv("QORE_HTTP2_WS_DEBUG_FRAMES")) {
+                            *hash<auto> info = h.info;
+                            int b0 = info."b0" ?? -1;
+                            int b1 = info."b1" ?? -1;
+                            log(LoggerLevel::INFO,
+                                "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
+                                b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
+                        }
+                    }
+                    return h;
                 } else if (!data && buf.empty()) {
                     throw "WEBSOCKET-ERROR", "no data available from HTTP/2 stream";
                 }
@@ -1812,6 +1864,15 @@ ws.setEventQueue();
             if (ex.err == "SOCKET-NOT-OPEN") {
                 return;
             }
+            if (ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-CLOSED") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                return;
+            }
+            # ignore HTTP2-ERROR when closing (HTTP/2 session already inactive)
+            if (ex.err == "HTTP2-ERROR") {
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                return;
+            }
             rethrow;
         }
     }
@@ -1837,7 +1898,18 @@ ws.setEventQueue();
         # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
         bool h2_active = hc.isHttp2Active();
         if (h2_active) {
-            return connectHttp2WebSocket(hdr, \info, reconnect);
+            try {
+                return connectHttp2WebSocket(hdr, \info, reconnect);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-CONNECT-ERROR" && http_opts.http_version == "auto") {
+                    logInfo("HTTP/2 WebSocket not supported by server; retrying with HTTP/1.1");
+                    http_opts.http_version = "1.1";
+                    hc = new HTTPClient(http_opts);
+                    hc.connect();
+                    return connectHttp1WebSocket(hdr, \info, reconnect);
+                }
+                rethrow;
+            }
         }
 
         # HTTP/1.1 WebSocket handshake
@@ -1855,8 +1927,8 @@ ws.setEventQueue();
             # https://tools.ietf.org/html/rfc6455#section-4.1 specifies a 16-byte length for this random nonce
             "Sec-WebSocket-Key": key,
         };
-        if (ws_ver == 13) {
-            hdr."Sec-SebSocket-Version" = 13;
+        if (ws_ver) {
+            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
         }
 
         # Add extension offers if configured
@@ -1904,11 +1976,13 @@ ws.setEventQueue();
     }
 
     #! RFC 8441: HTTP/2 WebSocket handshake using extended CONNECT
-    /** @since WebSocketClient 2.6
+    /** Uses \c Sec-WebSocket-Key in the CONNECT request and validates the \c Sec-WebSocket-Accept response header.
+        @since WebSocketClient 2.6
     */
     private hash<auto> connectHttp2WebSocket(hash<auto> hdr, *reference<hash<auto>> info, *bool reconnect) {
         http2_websocket = True;
         h2_stream_id = 0;
+        remove h2_frame_buf;
         logDebug("Using HTTP/2 WebSocket handshake (RFC 8441)");
 
         # Merge HTTPClient's default headers (includes Authorization from token option)
@@ -1917,6 +1991,11 @@ ws.setEventQueue();
 
         # Remove :protocol from headers - it's handled by sendHttp2Connect
         remove hdr.":protocol";
+
+        # Add Sec-WebSocket-Key for RFC 8441 handshake
+        string key = get_random_string(16).toBase64();
+        hdr."Sec-WebSocket-Key" = key;
+        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
 
         # Add extension offers if configured (extensions work the same in HTTP/2)
         if (offered_extensions) {
@@ -1956,10 +2035,21 @@ ws.setEventQueue();
                 "expecting '200 OK' (RFC 8441)", hc.getURL(), rh.status_code, rh.status_message);
         }
 
-        # Note: HTTP/2 WebSocket does NOT use Sec-WebSocket-Accept header
-        # The CONNECT response is simpler - just 200 OK means success
+        hash<auto> rhdr = rh.headers ?? rh;
+        if (!rhdr."sec-websocket-accept") {
+            raiseError("HTTP/2 server at URL %y did not return the Sec-WebSocket-Accept response header (headers "
+                "returned: %y)", hc.getURL(), rhdr);
+        }
 
-        processExtensions(rh);
+        {
+            string expected_key = ws_get_response_key(key);
+            if (rhdr."sec-websocket-accept" != expected_key) {
+                raiseError("HTTP/2 server at URL %y returned an invalid value in the Sec-WebSocket-Accept response "
+                    "header: %y; expecting %y", hc.getURL(), rhdr."sec-websocket-accept", expected_key);
+            }
+        }
+
+        processExtensions(rhdr);
         finishConnect();
 
         return rh;
@@ -2056,14 +2146,14 @@ class MyObserver inherits Observer {
 
         @param opts an option hash for the @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient constructor"
         plus the following keys:
-        - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c logger: an optional \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c raise_ping_events: if @ref True then events will be raised when pings are received
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
-          argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
+          argument and must return one of the following values: \c WSClientRawCallbackReturnCodes
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
-            current thread's execution to another thread (default value: @ref Qore::Threads::thread_yield());
+            current thread's execution to another thread (default value: \c Qore::Threads::thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
@@ -2258,12 +2348,152 @@ class MyObserver inherits Observer {
     }
 }
 
+#! Poll operation for WebSocket connection ping
+/** Performs a WebSocket handshake to verify the connection is working.
+
+    @since WebSocketClient 2.6
+*/
+public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        #! The underlying poll operation
+        *AbstractPollOperation poller;
+
+        #! Logger for this operation
+        *Logger::LoggerInterface logger;
+
+        #! WebSocket key for handshake validation
+        string ws_key;
+
+        #! Whether the goal has been reached
+        bool goal_reached = False;
+
+        #! Output from the operation
+        auto output;
+
+        #! Current state
+        string state = "ws-handshake";
+    }
+
+    #! Creates the poll operation
+    /** @param base_url the WebSocket URL (ws:// or wss://)
+        @param http_opts HTTP client options
+        @param headers additional headers for the request
+        @param logger optional logger
+
+        @since WebSocketClient 2.6
+    */
+    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers,
+            *Logger::LoggerInterface logger) {
+        self.logger = logger;
+
+        # Convert ws:// to http:// and wss:// to https://
+        string http_url = base_url;
+        if (http_url =~ /^wss:/) {
+            http_url = regex_subst(http_url, "^wss:", "https:");
+        } else if (http_url =~ /^ws:/) {
+            http_url = regex_subst(http_url, "^ws:", "http:");
+        }
+
+        # Generate WebSocket key
+        ws_key = get_random_string(16).toBase64();
+
+        # Build WebSocket upgrade headers
+        hash<auto> ws_headers = {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": ws_key,
+            "Sec-WebSocket-Version": "13",
+        };
+        ws_headers += headers;
+
+        HTTPClient hc((http_opts ?? {}) + {"url": http_url});
+        log("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+        poller = hc.startPollSendRecv("GET", "", NOTHING, ws_headers);
+    }
+
+    #! Returns the goal of the operation
+    string getGoal() {
+        return "ws-ping";
+    }
+
+    #! Returns the current state
+    string getState() {
+        return state + (poller ? ("-" + poller.getState()) : "");
+    }
+
+    #! Returns True if the goal has been reached
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    #! Continues the poll operation
+    *hash<SocketPollInfo> continuePoll() {
+        if (!poller) {
+            return;
+        }
+        *hash<SocketPollInfo> info = poller.continuePoll();
+        if (info) {
+            return info;
+        }
+
+        # Operation complete - validate the response
+        # Response format from startPollSendRecv:
+        # - code: HTTP response code
+        # - info.response-headers: hash of headers with lowercase keys
+        hash<auto> resp = poller.getOutput();
+        if (resp.code != 101) {
+            *string status_message = resp.info."response-headers".status_message;
+            log("ERROR", "WebSocketConnection async ping failed: expected 101, got code=%y", resp.code);
+            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: expected 101 Switching Protocols, "
+                "got %d %s", resp.code, status_message ?? "");
+        }
+
+        # Validate Sec-WebSocket-Accept from response-headers
+        *hash<auto> response_headers = resp.info."response-headers";
+        *string accept_key = response_headers."sec-websocket-accept";
+        if (!accept_key) {
+            log("ERROR", "WebSocketConnection async ping failed: missing Sec-WebSocket-Accept header");
+            throw "WEBSOCKET-PING-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept header";
+        }
+        string expected_key = ws_get_response_key(ws_key);
+        if (accept_key != expected_key) {
+            log("ERROR", "WebSocketConnection async ping failed: invalid Sec-WebSocket-Accept: got %y, expected %y",
+                accept_key, expected_key);
+            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: invalid Sec-WebSocket-Accept "
+                "header: got %y, expected %y", accept_key, expected_key);
+        }
+
+        output = resp;
+        log("INFO", "WebSocketConnection async ping complete: code=%d", resp.code);
+        goal_reached = True;
+    }
+
+    #! Returns the output of the operation
+    auto getOutput() {
+        return output;
+    }
+
+    #! Aborts the operation
+    abort() {
+        if (poller) {
+            poller.abort();
+        }
+    }
+
+    #! Internal logging helper
+    private log(string level, string msg, ...) {
+        if (logger) {
+            logger.logArgs(level, msg, argv);
+        }
+    }
+}
+
 #! class for websocket connections
 /** Returns an object of class @ref WebSocketClient for receiving websocket events from a websocket server; supports
     all @ref ConnectionProvider::HttpConnection "HttpConnection" options.
 
     Also supports the following runtime options in getImpl():
-    - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+    - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
     - \c "start_thread": a closure to start a new thread (signature:
       @verbatim int sub start_thread(code callable) {}@endverbatim)
     - \c "yield": a closure to yield current thread execution
@@ -2362,7 +2592,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -2398,22 +2628,55 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
     #! returns runtime options
     /** @return a hash with the following keys reflecting support for the corresponding runtime options in getImpl():
-        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {}@endverbatim)
         - \c "yield": a closure to yield current thread execution
+        - \c "connect_timeout": connection timeout in milliseconds
     */
     *hash<auto> getRuntimeOptions() {
         return {
             "logger": True,
             "start_thread": True,
             "yield": True,
+            "connect_timeout": True,
         };
+    }
+
+    #! returns @ref True, since this connection type supports the %Qore @ref Qore::Socket "Socket-based" polling API
+    /** @return @ref True
+
+        @since WebSocketClient 2.6
+    */
+    bool supportsPollingApi() {
+        return True;
+    }
+
+    #! Called to start the connection if the connection supports the polling API
+    /** @param logger optional logger for the operation
+
+        @return a socket poll operation object that will allow the connection goal to be reached with polling
+
+        @see supportsPollingApi()
+
+        @since WebSocketClient 2.6
+    */
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        hash<auto> http_opts = opts{keys HttpConnection::ConnectionScheme.options};
+        http_opts.url = url;
+        hash<auto> headers;
+        headers += opts.headers;
+        # add token-based auth if present (mirrors WebSocketClient constructor logic)
+        if (opts.token && !headers.Authorization) {
+            headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        }
+        return new WebSocketPingPollOperation(url, http_opts, headers, logger ?? self.logger);
     }
 
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
-        object o = get();
+        # Use a 30-second connect timeout for ping operations to prevent hanging on unresponsive endpoints
+        object o = get(True, {"connect_timeout": 30000});
         on_exit o.disconnect();
         return rv += {
             "ok": True,
@@ -2425,11 +2688,12 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
     #! returns a @ref WebSocketClientWithSerialization object
     /** @param connect if @ref True "True", then @ref WebSocketClient::connect() is called
         @param rtopts supports the following runtime options in getImpl():
-        - \c "logger": a @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
+        - \c "logger": a \c Logger::LoggerInterface "LoggerInterface" object for internal logging
         - \c "reconnect": try to reconnect when the connection is closed or lost (default @ref False)
         - \c "start_thread": a closure to start a new thread (signature:
           @verbatim int sub start_thread(code callable) {}@endverbatim)
         - \c "yield": a closure to yield current thread execution
+        - \c "connect_timeout": connection timeout in milliseconds
 
         @return a @ref WebSocketClient object
     */
@@ -2438,7 +2702,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         if (rtopts) {
             rtopts = {} + rtopts;
         }
-        hash<auto> opts = {"url": url} + rtopts{"logger", "reconnect", "yield", "start_thread"} + self.opts;
+        hash<auto> opts = {"url": url} + rtopts{"logger", "reconnect", "yield", "start_thread", "connect_timeout"} + self.opts;
         if (!opts.logger && logger) {
             opts.logger = logger;
         }
@@ -2463,10 +2727,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
      } + opts{"token", "token_type", "username", "password"});
     }
 
-    #! returns @ref True, as the connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True, as the connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -2485,8 +2749,6 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 }
 
 #! Event- and message-based data provider for WebSocket client-side events
-/**
-*/
 public class WebSocketClientDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
@@ -2560,13 +2822,16 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
+                # NOTE: Default changed from "auto" to "1.1" due to unresolved issues with
+                # HTTP/2 WebSocket (RFC 8441) session management. HTTP/2 WebSocket is also
+                # temporarily disabled on the server side (HttpServer.qm).
+                "desc": "The HTTP version to use: `1.1` (default), `auto` (HTTP/2 if available), `1.0`, "
                     "or `2.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN",
-                "default_value": "auto",
+                "default_value": "1.1",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -2574,7 +2839,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                     },
                     <AllowedValueInfo>{
                         "value": "1.1",
-                        "desc": "HTTP/1.1 only",
+                        "desc": "HTTP/1.1 only (default)",
                     },
                     <AllowedValueInfo>{
                         "value": "2.0",
@@ -2806,7 +3071,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
     }
 
     #! Returns connection info
-    /** @return the connection hash; see @ref WebSocketClient::getConnectionInfo() for information about the \c info
+    /** @return the connection hash; see \c WebSocketClient::getConnectionInfo() for information about the \c info
         key
 
         @since DataProvider 3.0
@@ -2917,6 +3182,15 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         date start_time = now_us();
         *string error_msg;
         try {
+            if (!client.isOpen()) {
+                error_msg = "SOCKET-NOT-OPEN: socket is closed";
+                @debug {
+                    if (logger) {
+                        logger.debug("skipping WebSocket send: %s", error_msg);
+                    }
+                }
+                return;
+            }
             switch (message_id) {
                 case MESSAGE_WS_DATA:
                     client.sendData(msg);
@@ -3264,7 +3538,7 @@ public class WebSocketClientDataProviderFactory inherits AbstractDataProviderFac
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

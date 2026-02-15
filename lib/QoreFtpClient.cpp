@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -348,7 +348,7 @@ struct qore_ftp_private {
                     int pos = p - resp->c_str();
                     // cannot maintain start across buffer reallocations
                     size_t offset = p - start;
-                    resp->concat(*r);
+                    qore_string_private::get(*resp)->concat(r);
                     p = resp->c_str() + pos;
                     start = p + offset;
                 }
@@ -957,7 +957,7 @@ QoreStringNode* QoreFtpClient::list(const char* path, bool long_list, ExceptionS
             break;
         }
         //printd(5, "read 0: rc=%d: resp=%s l=%s\n", rc, resp.c_str(), l->c_str());
-        l->concat(resp.getStr());
+        qore_string_private::get(*l)->concat(resp.getStr());
     }
     priv->data.close();
     resp.assign(priv->getResponse(code, xsink));
@@ -1309,7 +1309,7 @@ QoreStringNode* QoreFtpClient::getAsString(ExceptionSink* xsink, const char* rem
     }
     // update string encoding
     if (encoding != QCS_DEFAULT) {
-        qore_string_private* str = qore_string_private::get(**rv);
+        qore_string_private* str = qore_string_private::get(*rv);
         str->encoding = encoding;
     }
     return rv.release();

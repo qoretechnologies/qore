@@ -1,0 +1,110 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ForeignRegistry.qm - simulates a foreign module that stores data from other modules
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires reflection
+
+module ForeignRegistry {
+    version = "1.0";
+    desc = "Test foreign registry module for issue #4816";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+#! Simulates a registry like DataProvider that stores data from other modules
+public namespace ForeignRegistry {
+    #! Stored type information
+    public hashdecl StoredTypeInfo {
+        #! The type name
+        string name;
+        #! The type info reference (this is the dangerous part - it references the failing module's types)
+        *Reflection::Type type_info;
+    }
+
+    public class Registry {
+        private {
+            #! Storage for registered types - stores hashdecl references from other modules
+            static hash<string, hash<StoredTypeInfo>> type_cache;
+            #! Storage for registered closures - these could reference deleted program data
+            static hash<string, code> factory_cache;
+        }
+
+        #! Register a type in the cache
+        /** This is similar to DataProviderTypeCache::registerType()
+            When a module fails to load after calling this, the type_info reference becomes invalid
+        */
+        static registerType(string path, Reflection::Type type_info) {
+            if (type_cache{path}) {
+                throw "REGISTRY-ERROR", sprintf("type %y already registered", path);
+            }
+            type_cache{path} = <StoredTypeInfo>{
+                "name": path,
+                "type_info": type_info,
+            };
+        }
+
+        #! Register a factory closure in the cache
+        /** This simulates DataProvider::registerFactory()
+            The closure may reference code in the failing module
+        */
+        static registerFactory(string name, code factory) {
+            if (factory_cache{name}) {
+                throw "REGISTRY-ERROR", sprintf("factory %y already registered", name);
+            }
+            factory_cache{name} = factory;
+        }
+
+        #! Get a registered type - accessing this after the source module is deleted causes crash
+        static *hash<StoredTypeInfo> getType(string path) {
+            return type_cache{path};
+        }
+
+        #! Get a registered factory
+        static *code getFactory(string name) {
+            return factory_cache{name};
+        }
+
+        #! List all registered types
+        static list<string> getRegisteredTypes() {
+            return keys type_cache;
+        }
+
+        #! List all registered factories
+        static list<string> getRegisteredFactories() {
+            return keys factory_cache;
+        }
+
+        #! Try to use a registered type - this will crash if the type was deleted
+        static string describeType(string path) {
+            *hash<StoredTypeInfo> info = type_cache{path};
+            if (!info) {
+                return sprintf("type %y not found", path);
+            }
+            # This access is where the crash occurs - accessing deleted type info
+            return sprintf("type %y: %s", path, info.type_info.getName());
+        }
+
+        #! Deregister a type (for cleanup/rollback)
+        static deregisterType(string path) {
+            delete type_cache{path};
+        }
+
+        #! Deregister a factory (for cleanup/rollback)
+        static deregisterFactory(string name) {
+            delete factory_cache{name};
+        }
+
+        #! Clear all registrations
+        static clear() {
+            type_cache = {};
+            factory_cache = {};
+        }
+    }
+}

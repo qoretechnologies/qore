@@ -36,6 +36,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/BreakStatement.h"
 #include "qore/intern/ContinueStatement.h"
 #include "qore/intern/ReturnStatement.h"
@@ -346,13 +347,12 @@ public:
         if (m) {
             for (auto& member : m->members) {
                 if (member->has_value) {
-                    // Take the value from the member and pass to parseAddMember
-                    // parseAddMember will ref the value internally, so we discard our reference after
+                    // Transfer ownership of the value to parseAddMember
                     QoreValue val = member->value;
-                    member->value = QoreValue();  // Clear without discarding - we're transferring our reference
+                    member->value = QoreValue();  // Clear without discarding - we're transferring ownership
                     member->has_value = false;    // Mark as no longer having value
                     priv->parseAddMember(member->name, val);
-                    val.discard(nullptr);  // Discard our reference; parseAddMember has added its own
+                    // Don't discard - ownership was transferred to parseAddMember
                 } else {
                     // Auto-value not yet supported - need to compute next value based on base type
                     parse_error(*loc, "enum member '%s' must have an explicit value", member->name);
@@ -1811,13 +1811,11 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 
 // remove this and use the following line when bison is updated on all build environments enough to support api.pure
 %pure-parser
-//%define api.pure full
 %lex-param {yyscan_t yyscanner}
 %parse-param {yyscan_t yyscanner}
 %locations
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
-//%define parse.error verbose
 
 %union {
     QoreSimpleValue qv;
@@ -2147,6 +2145,12 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
+
+%code top {
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+}
 %%
 top_level_commands:
     top_level_command
@@ -2866,18 +2870,12 @@ try_statement:
         }
         if ($5 && missing_type_decl) {
             int64 po = parse_get_parse_options();
-            if (po & (PO_STRICT_TYPES|PO_REQUIRE_TYPES)) {
+            if (po & PO_REQUIRE_TYPES) {
                 SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("the catch block is missing a " \
                     "type declaration; the exception argument should be declared as 'hash<ExceptionInfo>' or " \
                     "with a compatible type"));
-                // issue #2943: raise an error for mixing string and non-scalar values with %strict-types
-                if (po & PO_STRICT_TYPES) {
-                    desc->concat("; this is an error when %strict-types is in effect");
-                    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc.release());
-                } else {
-                    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_CATCH,
-                        "INVALID-CATCH", desc.release());
-                }
+                qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_CATCH,
+                    "INVALID-CATCH", desc.release());
             }
         }
         v5.discard(nullptr);
@@ -4649,7 +4647,7 @@ string:
     }
     | QUOTED_WORD string {
         $$ = $1;
-        $$->concat($2);
+        qore_string_private::get($$)->concat($2);
         $2->deref();
     }
     ;

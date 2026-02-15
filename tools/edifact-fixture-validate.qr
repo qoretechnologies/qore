@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file edifact-fixture-validate.qr Validate EDIFACT fixtures with strict loader
+
+/*  edifact-fixture-validate.qr Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires EdifactUtil
+%requires FsUtil
+%requires Util
+
+# README:
+# - This script validates EDIFACT fixture releases using strict EDMD parsing.
+# - It skips intentionally invalid releases by default (stored under fixtures/invalid).
+# - Use --include-invalid to include those and verify strict-mode errors.
+
+sub usage() {
+    printf(
+"usage: %s [options]\n\n"
+"Options:\n"
+"  -d,--dir=DIR           fixtures root (default: ./examples/test/qlib/EdifactUtil/fixtures)\n"
+"  -r,--release=REL       validate only this release (ex: D01B)\n"
+"  --releases=LIST        validate a comma-separated list of releases\n"
+"  --include-invalid      include intentionally invalid fixtures\n"
+"  --quiet                suppress non-error output\n"
+"  -h,--help              show this help\n",
+        get_script_name());
+    exit(1);
+}
+
+const Opts = (
+    "dir": "dir,d=s",
+    "release": "release,r=s",
+    "releases": "releases=s",
+    "include-invalid": "include-invalid",
+    "quiet": "quiet",
+    "help": "help,h",
+);
+
+bool sub has_release(list<string> release_list, string name) {
+    foreach string rel in (release_list) {
+        if (rel == name) {
+            return True;
+        }
+    }
+    return False;
+}
+
+sub process() {
+    GetOpt g(Opts);
+    hash o = g.parse3(\ARGV);
+    if (o.help) {
+        usage();
+    }
+
+    string fixtures_root = o.dir ?? normalize_dir(dirname(get_script_path()) + DirSep + ".."
+        + DirSep + "examples/test/qlib/EdifactUtil/fixtures");
+    *string release_filter = o.release;
+    bool include_invalid = o."include-invalid" ?? False;
+    bool quiet = o.quiet ?? False;
+    *string release_list_raw = o.releases;
+    list<string> release_list = ();
+    if (release_list_raw) {
+        foreach string entry in (release_list_raw.split(",")) {
+            string val = trim(entry);
+            if (val.size()) {
+                release_list += val;
+            }
+        }
+    }
+
+    string base_cache_dir = FsUtil::make_tmp_dir("edifactcache");
+    string cache_dir = base_cache_dir + DirSep + "cache";
+    mkdir(cache_dir, 0700, True);
+    setenv("QORE_EDIFACT_DIRCACHE", cache_dir);
+    on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
+    on_exit FsUtil::remove_tree(base_cache_dir);
+
+    if (!FsUtil::path_exists(fixtures_root)) {
+        stderr.printf("EDIFACT fixture directory not found: %s\n", fixtures_root);
+        stderr.printf("Use --dir to specify a valid fixtures root.\n");
+        exit(1);
+    }
+
+    Dir d();
+    d.chdir(fixtures_root);
+    list<string> entries = d.listDirs();
+
+    list<string> releases = ();
+    foreach string entry in (entries) {
+        string name = basename(entry);
+        if (name =~ /^D\d{2}[A-Z]$/) {
+            if (release_filter && name != release_filter) {
+                continue;
+            }
+            if (release_list.size() && !has_release(release_list, name)) {
+                continue;
+            }
+            releases += name;
+        }
+    }
+    if (include_invalid) {
+        string invalid_root = fixtures_root + DirSep + "invalid";
+        if (FsUtil::path_exists(invalid_root)) {
+            d.chdir(invalid_root);
+            foreach string entry in (d.listDirs()) {
+                string name = basename(entry);
+                if (name =~ /^D\d{2}[A-Z]$/) {
+                    if (release_filter && name != release_filter) {
+                        continue;
+                    }
+                    if (release_list.size() && !has_release(release_list, name)) {
+                        continue;
+                    }
+                    releases += name;
+                }
+            }
+        }
+        d.chdir(fixtures_root);
+    }
+    releases = sort(releases);
+
+    if (!releases.size()) {
+        if (!quiet) {
+            printf("No releases found in %s\n", fixtures_root);
+        }
+        return;
+    }
+
+    int ok = 0;
+    int fail = 0;
+    foreach string release in (releases) {
+        string base_path = normalize_dir(fixtures_root) + DirSep + release + DirSep;
+        if (include_invalid && !FsUtil::path_exists(base_path)) {
+            base_path = normalize_dir(fixtures_root) + DirSep + "invalid" + DirSep + release + DirSep;
+        }
+        try {
+            EdifactSchemaRegistry::loadRelease(release, (
+                "dir": base_path,
+                "skip_cache_read": True,
+                "reload": True,
+                "loader_opts": ("strict": True),
+            ));
+            ++ok;
+            if (!quiet) {
+                printf("OK  %s\n", release);
+            }
+        } catch (hash<ExceptionInfo> e) {
+            ++fail;
+            stderr.printf("ERR %s: %s\n", release, e.desc);
+        }
+    }
+
+    if (!quiet) {
+        printf("Validated %d release(s): %d OK, %d error(s)\n", releases.size(), ok, fail);
+    }
+    if (fail) {
+        exit(2);
+    }
+}
+
+process();

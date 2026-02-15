@@ -1,0 +1,363 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class HashDataTypeRequiredGroupsTest
+
+#! Test class for HashDataType required groups feature
+public class HashDataTypeRequiredGroupsTest inherits QUnit::Test {
+    constructor() : Test("HashDataTypeRequiredGroupsTest", "1.0") {
+        addTestCase("Basic required groups tests", \basicRequiredGroupsTest());
+        addTestCase("Multiple required groups tests", \multipleRequiredGroupsTest());
+        addTestCase("Required groups with defaults tests", \requiredGroupsWithDefaultsTest());
+        addTestCase("Required groups error handling tests", \requiredGroupsErrorHandlingTest());
+        addTestCase("Required groups metadata tests", \requiredGroupsMetadataTest());
+        addTestCase("Required groups with soft types tests", \requiredGroupsSoftTypeTest());
+        addTestCase("Required groups edge cases tests", \requiredGroupsEdgeCasesTest());
+        addTestCase("Required groups validation order tests", \requiredGroupsValidationOrderTest());
+
+        set_return_value(main());
+    }
+
+    # ==================== Basic Required Groups Tests ====================
+
+    basicRequiredGroupsTest() {
+        # Test basic "one of two fields required" constraint
+        HashDataType type("TestType");
+        type.addField(new QoreDataField("input_path", "Input file path", StringOrNothingType));
+        type.addField(new QoreDataField("data", "Binary data", BinaryOrNothingType));
+        type.addField(new QoreDataField("output_path", "Output path", StringType));
+        type.setRequiredGroups((("input_path", "data"),));
+
+        # Test with input_path provided
+        hash<auto> result1 = type.acceptsValue({
+            "input_path": "/path/to/file.zip",
+            "output_path": "/output",
+        });
+        assertEq("/path/to/file.zip", result1.input_path, "input_path accepted");
+        assertEq("/output", result1.output_path, "output_path accepted");
+
+        # Test with data provided
+        hash<auto> result2 = type.acceptsValue({
+            "data": binary("abc123"),
+            "output_path": "/output",
+        });
+        assertEq(binary("abc123"), result2.data, "data accepted");
+
+        # Test with both provided (should work)
+        hash<auto> result3 = type.acceptsValue({
+            "input_path": "/path/to/file.zip",
+            "data": binary("abc123"),
+            "output_path": "/output",
+        });
+        assertEq("/path/to/file.zip", result3.input_path, "both fields - input_path accepted");
+        assertEq(binary("abc123"), result3.data, "both fields - data accepted");
+
+        # Test with neither provided (should fail)
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "output_path": "/output",
+        }), "missing required group throws error");
+
+        # Verify error message format
+        try {
+            type.acceptsValue({"output_path": "/output"});
+            fail("Should have thrown REQUIRED-FIELD-GROUP-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REQUIRED-FIELD-GROUP-ERROR", ex.err, "correct error type");
+            assertTrue(ex.desc.find("input_path") >= 0, "error mentions input_path");
+            assertTrue(ex.desc.find("data") >= 0, "error mentions data");
+            assertTrue(ex.desc.find("at least one") >= 0, "error explains constraint");
+        }
+    }
+
+    # ==================== Multiple Required Groups Tests ====================
+
+    multipleRequiredGroupsTest() {
+        # Test multiple independent required groups
+        HashDataType type("MultiGroupType");
+        type.addField(new QoreDataField("source_path", "Source path", StringOrNothingType));
+        type.addField(new QoreDataField("source_data", "Source data", BinaryOrNothingType));
+        type.addField(new QoreDataField("dest_path", "Destination path", StringOrNothingType));
+        type.addField(new QoreDataField("dest_stream", "Destination stream", StringOrNothingType));
+        type.setRequiredGroups((
+            ("source_path", "source_data"),  # Need source
+            ("dest_path", "dest_stream"),    # Need destination
+        ));
+
+        # Test with both groups satisfied
+        hash<auto> result1 = type.acceptsValue({
+            "source_path": "/input.zip",
+            "dest_path": "/output/",
+        });
+        assertEq("/input.zip", result1.source_path, "source satisfied");
+        assertEq("/output/", result1.dest_path, "dest satisfied");
+
+        # Test with alternative fields
+        hash<auto> result2 = type.acceptsValue({
+            "source_data": binary("abc"),
+            "dest_stream": "stdout",
+        });
+        assertEq(binary("abc"), result2.source_data, "source_data accepted");
+        assertEq("stdout", result2.dest_stream, "dest_stream accepted");
+
+        # Test with mixed fields
+        hash<auto> result3 = type.acceptsValue({
+            "source_path": "/input.zip",
+            "dest_stream": "stdout",
+        });
+        assertEq("/input.zip", result3.source_path, "mixed - source_path");
+        assertEq("stdout", result3.dest_stream, "mixed - dest_stream");
+
+        # Test with first group missing
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "dest_path": "/output/",
+        }), "first group missing throws error");
+
+        # Test with second group missing
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "source_path": "/input.zip",
+        }), "second group missing throws error");
+
+        # Test with both groups missing
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({}),
+            "both groups missing throws error");
+    }
+
+    # ==================== Required Groups with Defaults Tests ====================
+
+    requiredGroupsWithDefaultsTest() {
+        # Test that default values do NOT satisfy required groups
+        # (only explicitly provided values count)
+        HashDataType type("DefaultsType");
+        type.addField(new QoreDataField("path", "File path", StringOrNothingType));
+        type.addField(new QoreDataField("data", "Binary data", BinaryOrNothingType));
+        type.setRequiredGroups((("path", "data"),));
+
+        # Even with no explicit value, required group should fail if nothing provided
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({}),
+            "empty input fails required group");
+
+        # Test that empty string doesn't satisfy the requirement (val() returns False)
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "path": "",
+        }), "empty string does not satisfy required group");
+
+        # Test that empty binary doesn't satisfy the requirement
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "data": binary(),
+        }), "empty binary does not satisfy required group");
+
+        # Test that NOTHING doesn't satisfy the requirement
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type.acceptsValue(), ({
+            "path": NOTHING,
+        }), "NOTHING does not satisfy required group");
+    }
+
+    # ==================== Required Groups Error Handling Tests ====================
+
+    requiredGroupsErrorHandlingTest() {
+        # Test setRequiredGroups validation
+
+        # Test with non-existent field name
+        HashDataType type1("ErrorType1");
+        type1.addField(new QoreDataField("field1", "desc", StringType));
+
+        # Verify error message mentions the invalid field
+        try {
+            list<list<string>> bad_groups = (("field1", "nonexistent"),);
+            type1.setRequiredGroups(bad_groups);
+            fail("Should have thrown REQUIRED-GROUP-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REQUIRED-GROUP-ERROR", ex.err, "correct error type for non-existent field");
+            assertTrue(ex.desc.find("nonexistent") >= 0, "error mentions invalid field");
+            assertTrue(ex.desc.find("does not exist") >= 0, "error explains problem");
+        }
+
+        # Test with empty group
+        HashDataType type2("ErrorType2");
+        type2.addField(new QoreDataField("field1", "desc", StringType));
+        try {
+            list<list<string>> empty_groups = ((),);
+            type2.setRequiredGroups(empty_groups);
+            fail("Should have thrown REQUIRED-GROUP-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REQUIRED-GROUP-ERROR", ex.err, "correct error type for empty group");
+            assertTrue(ex.desc.find("empty") >= 0, "error mentions empty group");
+        }
+
+        # Test with all fields non-existent
+        HashDataType type3("ErrorType3");
+        type3.addField(new QoreDataField("field1", "desc", StringType));
+        try {
+            list<list<string>> all_bad = (("bad1", "bad2"),);
+            type3.setRequiredGroups(all_bad);
+            fail("Should have thrown REQUIRED-GROUP-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REQUIRED-GROUP-ERROR", ex.err, "correct error type for all non-existent");
+            assertTrue(ex.desc.find("bad1") >= 0, "error mentions first invalid field");
+        }
+    }
+
+    # ==================== Required Groups Metadata Tests ====================
+
+    requiredGroupsMetadataTest() {
+        # Test that required groups are included in type metadata
+        HashDataType type("MetadataType");
+        type.addField(new QoreDataField("input_path", "Input path", StringOrNothingType));
+        type.addField(new QoreDataField("data", "Binary data", BinaryOrNothingType));
+        type.addField(new QoreDataField("password", "Password", StringOrNothingType));
+        type.setRequiredGroups((("input_path", "data"),));
+
+        # Test hasRequiredGroups
+        assertTrue(type.hasRequiredGroups(), "hasRequiredGroups returns True");
+
+        # Test getRequiredGroups
+        list<list<string>> groups = type.getRequiredGroups();
+        assertEq(1, groups.size(), "one required group");
+        assertEq(2, groups[0].size(), "group has two fields");
+        assertTrue(inlist("input_path", groups[0]), "group contains input_path");
+        assertTrue(inlist("data", groups[0]), "group contains data");
+
+        # Test getInfo includes required_groups
+        hash<DataTypeInfo> info = type.getInfo();
+        assertTrue(exists info.required_groups, "info has required_groups");
+        assertEq(1, info.required_groups.size(), "info has one required group");
+        assertEq(groups, info.required_groups, "info required_groups matches");
+
+        # Test type without required groups
+        HashDataType type2("NoGroupsType");
+        type2.addField(new QoreDataField("field1", "desc", StringType));
+        assertFalse(type2.hasRequiredGroups(), "hasRequiredGroups returns False when not set");
+        assertNothing(type2.getRequiredGroups(), "getRequiredGroups returns NOTHING when not set");
+        hash<DataTypeInfo> info2 = type2.getInfo();
+        assertNothing(info2.required_groups, "info has no required_groups when not set");
+    }
+
+    # ==================== Required Groups Soft Type Tests ====================
+
+    requiredGroupsSoftTypeTest() {
+        # Test that required groups are preserved when creating soft types
+        HashDataType type("SoftTypeTest");
+        type.addField(new QoreDataField("input_path", "Input path", StringOrNothingType));
+        type.addField(new QoreDataField("data", "Binary data", BinaryOrNothingType));
+        type.setRequiredGroups((("input_path", "data"),));
+
+        # Get soft type
+        AbstractDataProviderType softType = type.getSoftType();
+
+        # Verify it's a HashDataType and has required groups
+        assertTrue(softType instanceof HashDataType, "soft type is HashDataType");
+        HashDataType softHashType = cast<HashDataType>(softType);
+        assertTrue(softHashType.hasRequiredGroups(), "soft type has required groups");
+        assertEq(type.getRequiredGroups(), softHashType.getRequiredGroups(),
+            "soft type has same required groups");
+
+        # Verify validation still works on soft type
+        hash<auto> result = softHashType.acceptsValue({
+            "input_path": "/path/to/file",
+        });
+        assertEq("/path/to/file", result.input_path, "soft type validation works");
+
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \softHashType.acceptsValue(), ({}),
+            "soft type validation enforces required groups");
+    }
+
+    # ==================== Required Groups Edge Cases Tests ====================
+
+    requiredGroupsEdgeCasesTest() {
+        # Test single field in group (essentially makes it required)
+        HashDataType type1("SingleFieldGroup");
+        type1.addField(new QoreDataField("required_field", "Required", StringOrNothingType));
+        type1.addField(new QoreDataField("optional_field", "Optional", StringOrNothingType));
+        type1.setRequiredGroups((("required_field",),));
+
+        hash<auto> result1 = type1.acceptsValue({
+            "required_field": "value",
+        });
+        assertEq("value", result1.required_field, "single field group accepts value");
+
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type1.acceptsValue(), ({
+            "optional_field": "value",
+        }), "single field group enforces requirement");
+
+        # Test group with 3+ fields
+        HashDataType type2("ThreeFieldGroup");
+        type2.addField(new QoreDataField("option_a", "Option A", StringOrNothingType));
+        type2.addField(new QoreDataField("option_b", "Option B", StringOrNothingType));
+        type2.addField(new QoreDataField("option_c", "Option C", StringOrNothingType));
+        type2.setRequiredGroups((("option_a", "option_b", "option_c"),));
+
+        # Any one of three should work
+        hash<auto> result2a = type2.acceptsValue({"option_a": "a"});
+        assertEq("a", result2a.option_a, "first of three accepted");
+
+        hash<auto> result2b = type2.acceptsValue({"option_b": "b"});
+        assertEq("b", result2b.option_b, "second of three accepted");
+
+        hash<auto> result2c = type2.acceptsValue({"option_c": "c"});
+        assertEq("c", result2c.option_c, "third of three accepted");
+
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type2.acceptsValue(), ({}),
+            "three field group enforces requirement");
+
+        # Test that 0 is a valid value (val() returns True for 0)
+        HashDataType type3("ZeroValueTest");
+        type3.addField(new QoreDataField("count", "Count", IntOrNothingType));
+        type3.addField(new QoreDataField("name", "Name", StringOrNothingType));
+        type3.setRequiredGroups((("count", "name"),));
+
+        # Note: 0.val() returns False in Qore, so this should fail
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type3.acceptsValue(), ({
+            "count": 0,
+        }), "zero value does not satisfy required group (val() is False)");
+
+        # But non-zero should work
+        hash<auto> result3 = type3.acceptsValue({"count": 1});
+        assertEq(1, result3.count, "non-zero value satisfies required group");
+
+        # Test with False boolean (val() returns False)
+        HashDataType type4("BoolValueTest");
+        type4.addField(new QoreDataField("flag", "Flag", BoolOrNothingType));
+        type4.addField(new QoreDataField("name", "Name", StringOrNothingType));
+        type4.setRequiredGroups((("flag", "name"),));
+
+        assertThrows("REQUIRED-FIELD-GROUP-ERROR", \type4.acceptsValue(), ({
+            "flag": False,
+        }), "False boolean does not satisfy required group");
+
+        hash<auto> result4 = type4.acceptsValue({"flag": True});
+        assertEq(True, result4.flag, "True boolean satisfies required group");
+    }
+
+    # ==================== Required Groups Validation Order Tests ====================
+
+    requiredGroupsValidationOrderTest() {
+        # Test that field type validation happens before required groups validation
+        HashDataType type("ValidationOrderType");
+        type.addField(new QoreDataField("path", "Path", StringOrNothingType));
+        type.addField(new QoreDataField("data", "Data", BinaryOrNothingType));
+        type.setRequiredGroups((("path", "data"),));
+
+        # If we pass an invalid type for path, we should get a type error, not a required group error
+        assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({
+            "path": 12345,  # Invalid: expecting string
+        }), "type validation before required groups");
+
+        # Test that mandatory fields are validated before required groups
+        HashDataType type2("MandatoryFirstType");
+        type2.addField(new QoreDataField("required_field", "Required", StringType));  # Mandatory
+        type2.addField(new QoreDataField("option_a", "Option A", StringOrNothingType));
+        type2.addField(new QoreDataField("option_b", "Option B", StringOrNothingType));
+        type2.setRequiredGroups((("option_a", "option_b"),));
+
+        # Missing mandatory field should be caught first
+        assertThrows("MISSING-VALUE-ERROR", \type2.acceptsValue(), ({
+            "option_a": "value",
+        }), "mandatory field validation before required groups");
+    }
+}

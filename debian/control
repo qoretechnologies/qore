@@ -1,0 +1,98 @@
+Source: qore
+Section: devel
+Priority: optional
+Maintainer: David Nichols <david@qore.org>
+Build-Depends: debhelper (>= 13),
+               cmake (>= 3.5),
+               g++,
+               flex (>= 2.5.31),
+               bison,
+               libpcre2-dev,
+               libgmp-dev,
+               pkg-config,
+               libssl-dev,
+               zlib1g-dev,
+               libmpfr-dev,
+               libbz2-dev,
+               libnghttp2-dev,
+               libbrotli-dev,
+               libzstd-dev,
+               liblz4-dev,
+               cargo,
+               doxygen
+Standards-Version: 4.6.2
+Homepage: https://qore.org
+
+Package: qore
+Architecture: any
+Depends: libqore20 (= ${binary:Version}),
+         qore-stdlib (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Description: Multithreaded Programming Language
+ Qore is a scripting language supporting threading and embedded logic, designed
+ for applying a flexible scripting-based approach to enterprise interface
+ development but is also useful as a general purpose language.
+
+Package: libqore20
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: Libraries for the qore runtime and qore clients
+ Qore is a scripting language supporting threading and embedded logic, designed
+ for applying a flexible scripting-based approach to enterprise interface
+ development but is also useful as a general purpose language.
+ .
+ This package provides the qore library required for all clients using qore
+ functionality.
+
+Package: qore-stdlib
+Architecture: any
+Depends: libqore20 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: qore (= ${binary:Version})
+Description: Standard library modules for Qore
+ Qore is a scripting language supporting threading and embedded logic, designed
+ for applying a flexible scripting-based approach to enterprise interface
+ development but is also useful as a general purpose language.
+ .
+ This package provides the Qore language standard library user and binary
+ modules.
+
+Package: qore-doc
+Section: doc
+Architecture: all
+Recommends: qore (= ${source:Version})
+Depends: ${misc:Depends}
+Description: API documentation, programming language reference, and examples
+ Qore is a scripting language supporting threading and embedded logic, designed
+ for applying a flexible scripting-based approach to enterprise interface
+ development but is also useful as a general purpose language.
+ .
+ This package provides the HTML documentation for the Qore programming language
+ and also for user modules delivered with Qore and also example programs.
+
+Package: libqore-dev
+Section: libdevel
+Architecture: any
+Depends: libqore20 (= ${binary:Version}),
+         ${misc:Depends}
+Recommends: qore (= ${binary:Version})
+Description: Header files for developing with the qore library
+ Qore is a scripting language supporting threading and embedded logic, designed
+ for applying a flexible scripting-based approach to enterprise interface
+ development but is also useful as a general purpose language.
+ .
+ This package provides header files needed to compile client programs using the
+ Qore library.
+
+Package: qore-misc-tools
+Architecture: all
+Depends: qore (= ${source:Version}),
+         ${misc:Depends}
+Description: Miscellaneous user tools written in Qore
+ This package contains tools for working with:
+  - REST APIs
+  - SQL Databases

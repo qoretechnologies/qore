@@ -989,6 +989,18 @@ fi
 AC_SUBST([MONGODB_CPPFLAGS])
 AC_SUBST([MONGODB_LIBS])
 
+# Check for Eigen3 - required for the ml module
+AC_MSG_CHECKING([for Eigen3 header files])
+if pkg-config --exists eigen3 2>/dev/null; then
+    EIGEN3_CPPFLAGS="`pkg-config --cflags eigen3`"
+    have_eigen3=yes
+    AC_MSG_RESULT([yes (pkg-config)])
+else
+    have_eigen3=no
+    AC_MSG_RESULT([no])
+fi
+AC_SUBST([EIGEN3_CPPFLAGS])
+
 # Check for Brotli compression library - required since Qore 2.3
 AC_MSG_CHECKING([for Brotli libraries and header files])
 if pkg-config --exists libbrotlienc libbrotlidec 2>/dev/null; then
@@ -1036,6 +1048,21 @@ else
 fi
 AC_SUBST([LZ4_CPPFLAGS])
 AC_SUBST([LZ4_LIBS])
+
+# Check for nghttp2 library - required since Qore 2.3
+AC_MSG_CHECKING([for nghttp2 library and header files])
+if pkg-config --exists libnghttp2 2>/dev/null; then
+    NGHTTP2_CPPFLAGS="`pkg-config --cflags libnghttp2`"
+    NGHTTP2_LIBS="`pkg-config --libs libnghttp2`"
+    have_nghttp2=yes
+    QORE_LIB_LDFLAGS="$QORE_LIB_LDFLAGS $NGHTTP2_LIBS"
+    QORE_LIB_CPPFLAGS="$QORE_LIB_CPPFLAGS $NGHTTP2_CPPFLAGS"
+    AC_MSG_RESULT([yes (pkg-config)])
+else
+    AC_MSG_ERROR([nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev (Debian/Ubuntu) or libnghttp2-devel (Fedora/RHEL)])
+fi
+AC_SUBST([NGHTTP2_CPPFLAGS])
+AC_SUBST([NGHTTP2_LIBS])
 
 set_openssl_cppflags() {
     if test "$1" != "/usr/include"; then
@@ -2084,6 +2111,7 @@ AM_CONDITIONAL([COND_NEED_GETOPT_LONG],        [test "$ac_cv_header_getopt_h" !=
 AM_CONDITIONAL([COND_HAVE_MPFR],               [test "$have_mpfr_h" = yes])
 AM_CONDITIONAL([COND_MINGWCC],                 [test "$mingw" = yes])
 AM_CONDITIONAL([COND_MONGODB],                 [test "$have_mongodb" = yes])
+AM_CONDITIONAL([COND_EIGEN3],                  [test "$have_eigen3" = yes])
 AM_CONDITIONAL([COND_BROTLI],                  [test "$have_brotli" = yes])
 AM_CONDITIONAL([COND_ZSTD],                    [test "$have_zstd" = yes])
 AM_CONDITIONAL([COND_LZ4],                     [test "$have_lz4" = yes])
@@ -2207,8 +2235,10 @@ AC_DEFINE_UNQUOTED([QORE_BUILD_HOST],   "$QORE_BUILD_HOST", [Qore build host inf
 AC_CONFIG_FILES([Makefile lib/Makefile])
 AC_CONFIG_FILES([modules/astparser/Makefile modules/astparser/src/Makefile])
 AC_CONFIG_FILES([modules/reflection/Makefile modules/reflection/src/Makefile])
+AC_CONFIG_FILES([modules/linenoise/Makefile modules/linenoise/src/Makefile])
 AC_CONFIG_FILES([modules/logger_bin/Makefile modules/logger_bin/src/Makefile])
 AC_CONFIG_FILES([modules/mongodb/Makefile modules/mongodb/src/Makefile])
+AC_CONFIG_FILES([modules/ml/Makefile])
 AC_CONFIG_FILES([qore.pc])
 AC_CONFIG_FILES([cmake/QoreConfig.cmake cmake/QoreConfigVersion.cmake])
 AC_OUTPUT
@@ -2244,10 +2274,12 @@ show_library_feature profiling $enable_profile
 show_library_feature debug $enable_debug
 echo "*** OPTIONAL BUILTIN MODULES ***"
 show_library_feature "mongodb module" $have_mongodb
-echo "*** REQUIRED COMPRESSION SUPPORT (since Qore 2.3) ***"
+show_library_feature "ml module (Eigen3)" $have_eigen3
+echo "*** REQUIRED LIBRARIES (since Qore 2.3) ***"
 show_library_feature "brotli compression" $have_brotli
 show_library_feature "zstd compression" $have_zstd
 show_library_feature "lz4 compression" $have_lz4
+show_library_feature "nghttp2 (HTTP/2)" $have_nghttp2
 
 echo
 echo "*** MODULES DELIVERED SEPARATELY - SEE 'README-MODULES' FOR MORE INFO ***"

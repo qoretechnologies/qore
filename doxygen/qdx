@@ -12,6 +12,7 @@
 
 const Opts = {
     "dox":        "d,dox",
+    "define":     "D,define=s@",
     "extra_pfx":  "X,extra-prefix=s",
     "extra":      "E,extra-files=s@",
     "help":       "h,help",
@@ -81,6 +82,7 @@ class qdx {
     static usage() {
       printf("usage: %s [options] <infile> <outfile>
   -d,--dox            process doxygen files
+  -D,--define=ARG     define symbol for conditional parsing (repeatable)
   -M,--module-dx=ARG  prepare doxyfile module template; ARG=<src>:<trg>
   -N,--no-mainpage    change @mainpage to @page
   -p,--post           post process files
@@ -88,6 +90,7 @@ class qdx {
   -t,--tag=ARG        tag argument for doxyfile
   -T,--top-srcdir=ARG the top source directory
   -h,--help           this help text
+  Env: QORE_DOC_DEFINES=NAME[,NAME...] for conditional parsing symbols
 ", get_script_name());
       exit(1);
     }
@@ -101,6 +104,27 @@ class qdx {
             stderr.printf("OUTPUT-ERROR: input and output files are the same: %y", fn);
             exit(1);
         }
+    }
+
+    private list<string> parseDefines(*string defs) {
+        if (!exists defs) {
+            return ();
+        }
+        list<string> result = ();
+        foreach string part in (defs.split(",")) {
+            string trimmed = trim(part);
+            if (!trimmed.length()) {
+                continue;
+            }
+            int eq_pos = trimmed.find("=");
+            if (eq_pos >= 0) {
+                trimmed = trim(trimmed.substr(0, eq_pos));
+            }
+            if (trimmed.length()) {
+                result += trimmed;
+            }
+        }
+        return result;
     }
 
     doModDx(string fn, string ofn) {
@@ -260,10 +284,29 @@ class qdx {
 
         # Parse with astparser
         AstParser parser();
+        parser.setConditionalParsing(True);
+        list<string> defines = ();
+        *string env_defines = getenv("QORE_DOC_DEFINES");
+        if (exists env_defines) {
+            defines += parseDefines(env_defines);
+        }
+        if (exists o.define) {
+            foreach string d in (o.define) {
+                defines += parseDefines(d);
+            }
+        }
+        if (!defines.empty()) {
+            parser.setDefines(defines);
+        }
         *AstTree tree = parser.parseString(code);
 
         if (parser.getErrorCount() > 0) {
-            printf("WARNING: %d parse errors in %y\n", parser.getErrorCount(), fn);
+            printf("ERROR: %d parse errors in %y\n", parser.getErrorCount(), fn);
+            *list diagnostics = parser.getDiagnostics();
+            if (exists(diagnostics)) {
+                printf("%s", Qdx::formatParseDiagnostics(fn, code, diagnostics));
+            }
+            throw "PARSE-ERROR", sprintf("Failed to parse %y", fn);
         }
 
         if (!tree) {
@@ -272,7 +315,7 @@ class qdx {
 
         # Get AST nodes and process with AstProcessor
         list<auto> nodes = tree.getNodesInfo();
-        AstProcessor proc(nodes, {"no_mainpage": o.nmp});
+        AstProcessor proc(nodes, {"no_mainpage": o.nmp, "source": code});
         string output = proc.process();
 
         # Write output

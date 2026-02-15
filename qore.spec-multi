@@ -43,6 +43,7 @@ URL: http://qore.org
 Source0: https://github.com/qorelanguage/qore/releases/download/release-%{version}/%{name}-%{version}.tar.bz2
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 Requires: /usr/bin/env
+BuildRequires: cmake >= 3.5
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
 BuildRequires: openssl-devel
@@ -52,6 +53,13 @@ BuildRequires: gmp-devel
 BuildRequires: mpfr-devel
 BuildRequires: doxygen
 BuildRequires: gcc-c++
+BuildRequires: pkgconfig(libnghttp2)
+BuildRequires: pkgconfig(libbrotlienc)
+BuildRequires: pkgconfig(libbrotlidec)
+BuildRequires: pkgconfig(libzstd)
+BuildRequires: pkgconfig(liblz4)
+BuildRequires: rust
+BuildRequires: cargo
 %if 0%{?suse_version}
 BuildRequires: pkg-config
 BuildRequires: fdupes
@@ -93,7 +101,7 @@ development but is also useful as a general purpose language.
 %package -n %{libname}
 Summary: The libraries for the qore runtime and qore clients
 Group: System Environment/Libraries
-Provides: qore-module(abi)%{?_isa} = 1.5
+Provides: qore-module(abi)%{?_isa} = 2.0
 %if "%{libname}" == "libqore"
 Provides: libqore20 = %{version}
 Obsoletes: libqore20 < %{version}
@@ -227,6 +235,7 @@ This package contains tool for working with:
 %{_bindir}/saprest
 %{_bindir}/sqlutil
 %{_bindir}/schema-reverse
+%{_bindir}/qfmt
 
 %prep
 %setup -q
@@ -235,12 +244,11 @@ find examples -type f -exec chmod -x {} \;
 
 %build
 export CXXFLAGS="%{?optflags}"
-%configure --disable-debug --disable-dependency-tracking
+cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DSINGLE_COMPILATION_UNIT=1 .
 %{__make} %{?_smp_mflags}
 
 %install
-make install prefix=%{_prefix} DESTDIR=$RPM_BUILD_ROOT
-rm $RPM_BUILD_ROOT/%{_libdir}/libqore.la
+%make_install
 mkdir -p $RPM_BUILD_ROOT/%{module_dir}
 %if 0%{?suse_version}
 %fdupes -s docs/library/html
@@ -283,6 +291,11 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %changelog
+* Fri Feb 6 2026 David Nichols <david@qore.org> 2.3.0
+- updated module-abi to 2.0 (Binary Module API 2.0)
+- added required build dependencies: nghttp2, brotli, zstd, lz4
+- switched build system from autotools to cmake
+
 * Wed Dec 31 2025 David Nichols <david@qore.org> 2.3.0
 - updated version to 2.3.0
 - updated libqore version to 20.0.0

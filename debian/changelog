@@ -1,0 +1,7 @@
+qore (2.3.0-1) unstable; urgency=medium
+
+  * Binary Module API 2.0: modules use QoreModuleInfo-based registration
+  * Added required build dependencies: nghttp2, brotli, zstd, lz4
+  * Updated module ABI to 2.0
+
+ -- David Nichols <david@qore.org>  Fri, 06 Feb 2026 00:00:00 +0000

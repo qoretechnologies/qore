@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -759,6 +759,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
 
     IconvHelper c(nccs, from, xsink);
     if (xsink && *xsink)
+        return -1;
+    // Also check if iconv handle is valid when xsink is null
+    if (!c.isValid())
         return -1;
 
     // now convert value
@@ -1682,9 +1685,6 @@ QoreString::QoreString(char* nbuf, size_t nlen, size_t nallocated, const QoreEnc
 
 // FIXME: remove this function
 // private constructor
-QoreString::QoreString(struct qore_string_private *p) : priv(p) {
-}
-
 QoreString::~QoreString() {
     delete priv;
 }
@@ -2583,10 +2583,6 @@ void QoreString::concat(const char* str, size_t size) {
     priv->buf[priv->len] = '\0';
 }
 
-void QoreString::concat(const QoreString* str) {
-    if (str)
-        priv->concat(str->priv);
-}
 
 /*
 void QoreString::concat(const QoreString* str, size_t size) {
@@ -2632,24 +2628,28 @@ void QoreString::concat(const QoreString* str, size_t size, ExceptionSink* xsink
 
 int QoreString::concat(const QoreString& str, qore_offset_t pos, ExceptionSink* xsink) {
     assert(xsink);
-    if (str.empty())
+    if (str.empty()) {
         return 0;
+    }
 
     TempEncodingHelper cstr(str, priv->getEncoding(), xsink);
-    if (*xsink)
+    if (*xsink) {
         return -1;
+    }
 
     return priv->concat(*(cstr->priv), pos, xsink);
 }
 
 int QoreString::concat(const QoreString& str, qore_offset_t pos, qore_offset_t len, ExceptionSink* xsink) {
     assert(xsink);
-    if (str.empty() || !len)
+    if (str.empty() || !len) {
         return 0;
+    }
 
     TempEncodingHelper cstr(str, priv->getEncoding(), xsink);
-    if (*xsink)
+    if (*xsink) {
         return -1;
+    }
 
     return priv->concat(*(cstr->priv), pos, len, xsink);
 }
@@ -2658,18 +2658,6 @@ void QoreString::concat(char c) {
     priv->concat(c);
 }
 
-int QoreString::vsnprintf(size_t size, const char* fmt, va_list args) {
-    // ensure minimum space is free
-    if ((priv->allocated - priv->len) < (unsigned)size) {
-        priv->allocated += (size + STR_CLASS_EXTRA);
-        // resize priv->buffer
-        priv->buf = (char*)realloc(priv->buf, priv->allocated * sizeof(char));
-    }
-    // copy formatted string to priv->buffer
-    int i = ::vsnprintf(priv->buf + priv->len, size, fmt, args);
-    priv->len += i;
-    return i;
-}
 
 // returns 0 for success
 int QoreString::sprintf(const char* fmt, ...) {
@@ -2682,14 +2670,6 @@ int QoreString::sprintf(const char* fmt, ...) {
             break;
     }
     return 0;
-}
-
-int QoreString::snprintf(size_t size, const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    int i = vsnprintf(size, fmt, args);
-    va_end(args);
-    return i;
 }
 
 // NULL values sorted at end
@@ -2998,7 +2978,7 @@ unsigned int QoreString::getUnicodePointFromBytePos(size_t offset, unsigned& len
 
 QoreString* QoreString::reverse() const {
     QoreString* str = new QoreString(priv->getEncoding());
-    concat_reverse(str);
+    priv->concat_reverse(*str->priv);
     return str;
 }
 
@@ -3103,39 +3083,6 @@ void QoreString::trim(const char* chars) {
     trim_leading(chars);
 }
 
-// writes a new QoreString with the characters reversed of the "this" QoreString
-// assumes the encoding is the same and the length is 0
-void QoreString::concat_reverse(QoreString* str) const {
-    assert(str->priv->getEncoding() == priv->getEncoding());
-    assert(!str->priv->len);
-
-    str->priv->check_char(priv->len);
-    if (priv->getEncoding()->isMultiByte()) {
-        char* p = priv->buf;
-        char* targ_end = str->priv->buf + priv->len;
-        char* end = priv->buf + priv->len;
-        while (p < end) {
-            bool invalid;
-            int bl = priv->getEncoding()->getByteLen(p, end, 1, invalid);
-            if (invalid) // if we hit an invalid encoding, then we just copy bytes
-                bl = 1;
-            targ_end -= bl;
-            // in case of corrupt data, make sure we don't go off the beginning of the string
-            if (targ_end < str->priv->buf) {
-                break;
-            }
-            strncpy(targ_end, p, bl);
-            p += bl;
-        }
-    } else {
-        for (size_t i = 0; i < priv->len; ++i) {
-            str->priv->buf[i] = priv->buf[priv->len - i - 1];
-        }
-    }
-
-    str->priv->buf[priv->len] = '\0';
-    str->priv->len = priv->len;
-}
 
 QoreString& QoreString::operator=(const QoreString& other) {
    set(other);
@@ -3328,7 +3275,7 @@ void TempEncodingHelper::removeBom() {
         str = new QoreString(*str);
         temp = true;
     }
-    qore_string_private* pstr = qore_string_private::get(*str);
+    qore_string_private* pstr = qore_string_private::get(str);
     assert(pstr->encoding);
     q_remove_bom_utf16(str, pstr->encoding);
 }

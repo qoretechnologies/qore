@@ -130,11 +130,11 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
 ("additional_methods": ("PROPFIND": True, "MKCOL": True ));
             @endcode
         - \c apikey: (required) the <a href="https://sap.com">SAP S/4Hana</a> api key for the target server
-        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
+        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
           \c "send_encoding" option is not set) and the requested response encoding (note that the
           @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
-        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
+        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "json"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
           connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
@@ -149,7 +149,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if @ref True "True" then redirect responses will be passed to the caller instead of
           processed
-        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means to
+        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to
           use automatic encoding; if not present defaults to \c "gzip" content encoding on sent message bodies (note
           that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
@@ -192,7 +192,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
         throw "SAP4HANARESTCLIENT-ERROR", vsprintf(fmt, argv);
     }
 
-    #! returns options for the @ref Sap4HanaRestClient::Sap4HanaRestClient::constructor() "Sap4HanaRestClient::constructor()"
+    #! returns options for the \c Sap4HanaRestClient::Sap4HanaRestClient::constructor() "Sap4HanaRestClient::constructor()"
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> hdr;
         if (!opts.client_id || !opts.client_secret) {
@@ -216,7 +216,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
 }
 
 #! class for <a href="https://sap.com">SAP S/4Hana</a> REST connections; returns @ref Sap4HanaRestClient::Sap4HanaRestClient objects
-/** In addition to all options supported by @ref RestClient::RestClientConnection "RestClientConnection", this
+/** In addition to all options supported by \c RestClient::RestConnection "RestClientConnection", this
     connection class supports the following options:
     - \c "apikey": (required if \c "client_id" and \c "client_secret" are not supplied) the
         <a href="https://sap.com">SAP S/4Hana</a> api key
@@ -225,7 +225,7 @@ Sap4HanaRestClient rest({"url": "https://sandbox.api.sap.com/s4hanacloud/sap/opu
     - \c "client_secret": (required if \c "apikey" is not supplied) the <a href="https://sap.com">SAP S/4Hana</a>
       OAuth2 client secret
 
-    @see @ref Sap4HanaRestClient::Sap4HanaRestClient::constructor() "Sap4HanaRestClient::constructor()" for more information on the above options
+    @see \c Sap4HanaRestClient::Sap4HanaRestClient::constructor() "Sap4HanaRestClient::constructor()" for more information on the above options
 */
 public class Sap4HanaRestConnection inherits RestClient::RestConnection {
     public {
@@ -298,7 +298,7 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

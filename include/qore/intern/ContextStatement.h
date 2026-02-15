@@ -37,6 +37,8 @@
 
 #include <qore/safe_dslist>
 
+class RuntimeConfig;
+
 // forward references
 class StatementBlock;
 class LVList;
@@ -85,6 +87,7 @@ public:
 
 protected:
     DLLLOCAL virtual int execImpl(QoreValue& return_value, class ExceptionSink *xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

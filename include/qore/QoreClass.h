@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -74,6 +74,8 @@ DLLEXPORT extern qore_classid_t CID_SOCKETPOLLOPERATIONBASE;
 DLLEXPORT extern qore_classid_t CID_SOCKETPOLLOPERATION;
 DLLEXPORT extern qore_classid_t CID_FILEPOLLOPERATIONBASE;
 DLLEXPORT extern qore_classid_t CID_FILEPOLLOPERATION;
+DLLEXPORT extern qore_classid_t CID_EVENTLOOP;
+DLLEXPORT extern qore_classid_t CID_EVENTNOTIFIER;
 DLLEXPORT extern qore_classid_t CID_SANDBOXMANAGER;
 
 DLLEXPORT extern QoreClass* QC_ABSTRACTPOLLABLEIOOBJECT;
@@ -83,6 +85,7 @@ DLLEXPORT extern QoreClass* QC_CONDITION;
 DLLEXPORT extern QoreClass* QC_COUNTER;
 DLLEXPORT extern QoreClass* QC_FILEPOLLOPERATIONBASE;
 DLLEXPORT extern QoreClass* QC_FILEPOLLOPERATION;
+DLLEXPORT extern QoreClass* QC_EVENTLOOP;
 DLLEXPORT extern QoreClass* QC_HTTPCLIENT;
 DLLEXPORT extern QoreClass* QC_MUTEX;
 DLLEXPORT extern QoreClass* QC_QUEUE;
@@ -328,6 +331,8 @@ public:
     //! creates the QoreClass object and assigns the name and the functional domain
     /** @note class names and subnamespaces names must be unique in a namespace; i.e. no class may have the same name as a subnamespace within a namespace and vice-versa
         @param n_name the name of the class
+        @param ns_path the full pathname of the class with namespaces, including the root "::" namespace as the
+        leading element
         @param n_domain the functional domain of the class to be used to enforce functional restrictions within a Program object
 
         @see QoreProgram
@@ -339,6 +344,8 @@ public:
     //! creates the QoreClass object and assigns the name and the functional domain
     /** @note class names and subnamespaces names must be unique in a namespace; i.e. no class may have the same name as a subnamespace within a namespace and vice-versa
         @param n_name the name of the class
+        @param ns_path the full pathname of the class with namespaces, including the root "::" namespace as the
+        leading element
         @param n_domain the functional domain of the class to be used to enforce functional restrictions within a Program object
 
         @see QoreProgram
@@ -389,10 +396,11 @@ public:
     /** @par Example:
         @code
         // the actual function can be declared with the class to be expected as the private data as follows:
-        static QoreValue AL_lock(QoreObject* self, QoreAutoLock* m, const QoreListNode* args, q_rt_flags_t rtflag, ExceptionSink* xsink);
+        static QoreValue AL_lock(QoreObject* self, QoreAutoLock* m, const QoreListNode* args, RuntimeConfig& rc,
+            ExceptionSink* xsink);
         ...
         // and then casted to (q_method_t) in the addMethod call:
-        QC_AutoLock->addMethod("lock", (q_method_n_t)AL_lock, Public, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
+        QC_AutoLock->addMethod("lock", (q_method_t)AL_lock, Public, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
         @endcode
 
         in debuggging mode, the call will abort if the name of the method is
@@ -415,13 +423,14 @@ public:
         @see QoreClass::setDestructor()
         @see QoreClass::setCopy()
     */
-    DLLEXPORT void addMethod(const char* n_name, q_method_n_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
+    DLLEXPORT void addMethod(const char* n_name, q_method_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
     //! adds a builtin method variant to a class with the calling convention for external modules
     /** @par Example:
         @code
         // the actual function can be declared with the class to be expected as the private data as follows:
-        static QoreValue AL_lock(const QoreMethod& method, const void* ptr, QoreObject* self, QoreAutoLock* m, const QoreListNode* args, q_rt_flags_t flags, ExceptionSink* xsink)
+        static QoreValue AL_lock(const QoreMethod& method, const void* ptr, QoreObject* self, QoreAutoLock* m,
+            const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink)
         ...
         // and then casted to (q_method_t) in the addMethod call:
         QC_AutoLock->addMethod(nullptr, "lock", (q_external_method_t)AL_lock, Public, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
@@ -455,7 +464,7 @@ public:
     DLLEXPORT void addMethod(const void* ptr, const char* n_name, q_external_method_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, const type_vec_t& n_typeList = type_vec_t(), const arg_vec_t& defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t());
 
     //! adds a builtin static method with extended information; additional functional domain info, return and parameter type info
-    DLLEXPORT void addStaticMethod(const char* n_name, q_func_n_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
+    DLLEXPORT void addStaticMethod(const char* n_name, q_func_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
     //! adds a builtin static method with extended information; additional functional domain info, return and parameter type info
     /** @since %Qore 0.9
@@ -474,7 +483,7 @@ public:
         @param m the destructor method to run
         @code
         // the actual function can be declared with the class to be expected as the private data as follows:
-        static void AL_destructor(QoreObject* self, QoreAutoLock* al, ExceptionSink* xsink);
+        static void AL_destructor(QoreObject* self, QoreAutoLock* al, RuntimeConfig& rc, ExceptionSink* xsink);
         ...
         // and then casted to (q_destructor_t) in the setDestructor call:
         QC_AutoLock->setDestructor((q_destructor_t)AL_destructor);
@@ -498,7 +507,7 @@ public:
     DLLEXPORT void setDestructor(const void* ptr, q_external_destructor_t m);
 
     //! adds a constructor method variant with the access specifier, additional functional domain info, and parameter type info
-    DLLEXPORT void addConstructor(q_constructor_n_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, unsigned num_params = 0, ...);
+    DLLEXPORT void addConstructor(q_constructor_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, unsigned num_params = 0, ...);
 
     //! adds a constructor method variant with the external calling convention and includes the access specifier, additional functional domain info, and parameter type info
     /** @since %Qore 0.9
@@ -517,7 +526,7 @@ public:
         @param m the copy method to set
         @code
         // the actual function can be declared with the class to be expected as the private data as follows:
-        static void AL_copy(QoreObject* self, QoreObject* old, QoreAutoLock *m, ExceptionSink* xsink)
+        static void AL_copy(QoreObject* self, QoreObject* old, QoreAutoLock *m, RuntimeConfig& rc, ExceptionSink* xsink)
         ...
         // and then casted to (q_copy_t) in the addMethod call:
         QC_AutoLock->setCopy((q_copy_t)AL_copy);
@@ -1100,7 +1109,7 @@ public:
 
     //! Sets a key value in the class's key-value store unconditionally
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return any value previously stored in that key; must be dereferenced by the caller
 
@@ -1112,7 +1121,7 @@ public:
 
     //! Sets a key value in the class's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the value to store; must be already referenced for storage
+        @param val the value to store; must be already referenced for storage
 
         @return returns \a value if another value already exists for that key, otherwise returns no value
 
@@ -1126,9 +1135,9 @@ public:
 
     //! Sets a key value in the class's key-value store only if no value exists for the given key
     /** @param key the key to store
-        @param value the string to store; will be converted to a QoreStringNode if stored
+        @param str the string to store; will be converted to a QoreStringNode if stored
 
-        @param returns true if the value was set, false if not (a value is already in place)
+        @return true if the value was set, false if not (a value is already in place)
 
         @note All class key-value operations are atomic
 

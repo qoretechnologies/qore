@@ -477,6 +477,35 @@ public:
     DLLEXPORT QoreHashNode* send(const char* meth, const char* path, const QoreHashNode* headers,
             const QoreStringNode& body, bool getbody, QoreHashNode* info, ExceptionSink* xsink);
 
+    //! Send HTTP request and return headers only, leaving body on socket for streaming
+    /** @param meth the HTTP method (e.g. "GET", "POST")
+        @param path the path for the request
+        @param headers any headers to add to the request
+        @param data the message body to send (can be nullptr)
+        @param size the size of the message body
+        @param info a hash reference to receive request/response info
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return response headers without body; caller owns the QoreHashNode reference returned (nullptr on error)
+        @note The response body is NOT read; use readHTTPChunk() or readServerSentEvent() to read it
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* sendAndStream(const char* meth, const char* path, const QoreHashNode* headers,
+            const void* data, unsigned size, QoreHashNode* info, ExceptionSink* xsink);
+
+    //! Send HTTP request and return headers only, leaving body on socket for streaming
+    /** @param meth the HTTP method (e.g. "GET", "POST")
+        @param path the path for the request
+        @param headers any headers to add to the request
+        @param body the message body to send
+        @param info a hash reference to receive request/response info
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @return response headers without body; caller owns the QoreHashNode reference returned (nullptr on error)
+        @note The response body is NOT read; use readHTTPChunk() or readServerSentEvent() to read it
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* sendAndStream(const char* meth, const char* path, const QoreHashNode* headers,
+            const QoreStringNode& body, QoreHashNode* info, ExceptionSink* xsink);
+
     DLLEXPORT QoreHashNode* sendWithSendCallback(const char* meth, const char* mpath, const QoreHashNode* headers,
             const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info, int timeout_ms,
             ExceptionSink* xsink);

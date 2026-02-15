@@ -98,6 +98,15 @@ const ADK_VarList = ADK_VarList;
 
 //! Typedef declaration kind.
 const ADK_Typedef = ADK_Typedef;
+
+//! Module declaration kind.
+const ADK_Module = ADK_Module;
+
+//! Enum declaration kind.
+const ADK_Enum = ADK_Enum;
+
+//! Enum member declaration kind.
+const ADK_EnumMember = ADK_EnumMember;
 ///@}
 
 /** @defgroup astparser_expression_kind_constants AST Expression Kind Constants
@@ -497,9 +506,12 @@ const ASUK_TryStmtCatchVar = ASUK_TryStmtCatchVar;
 //! Symbol usage kind for conditions in \c while statements.
 const ASUK_WhileStmtCond = ASUK_WhileStmtCond;
 
-//! Symbol usage kind for expressions in \c @assert statements.
+//! Symbol usage kind for expressions in \c @@assert statements.
 const ASUK_AssertStmtExpr = ASUK_AssertStmtExpr;
 
-//! Symbol usage kind for expressions in \c @debug statements.
+//! Symbol usage kind for expressions in \c @@debug statements.
 const ASUK_DebugStmtExpr = ASUK_DebugStmtExpr;
+
+//! Symbol usage kind for module names in module declarations.
+const ASUK_ModuleDeclName = ASUK_ModuleDeclName;
 ///@}

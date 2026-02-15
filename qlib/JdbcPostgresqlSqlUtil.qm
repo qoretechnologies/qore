@@ -29,13 +29,11 @@
 %requires SqlUtil >= 1.9
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # the implementation is in PgsqlSqlUtilBase
 %requires PgsqlSqlUtilBase
@@ -67,7 +65,7 @@ module JdbcPostgresqlSqlUtil {
     @note This module requires the <a href="https://github.com/qoretechnologies/module-jni">jni</a> binary module and the
     PostgreSQL JDBC driver for communication with PostgreSQL databases
 
-    @see @ref pgsqlsqlutilbaseintro for implementation information about this module
+    @see \c pgsqlsqlutilbaseintro for implementation information about this module
 
     @section jdbcpostgresqlsqlutil_relnotes Release Notes
 

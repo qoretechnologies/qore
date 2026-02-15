@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -41,7 +42,7 @@ QoreString *QoreUnaryMinusOperatorNode::getAsString(bool& del, int foff, Excepti
 }
 
 int QoreUnaryMinusOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&unaryminus_str);
+    qore_string_private::get(str)->concat(&unaryminus_str);
     return 0;
 }
 
@@ -125,7 +126,6 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_FLOAT)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_INT)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_DATE)) {
-                    // FIXME: raise exceptions with %strict-types
                     QoreStringNode* edesc = new QoreStringNode("the expression with the unary minus '-' operator " \
                         "is ");
                     QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);

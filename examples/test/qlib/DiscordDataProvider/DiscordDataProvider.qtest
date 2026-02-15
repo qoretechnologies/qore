@@ -60,12 +60,20 @@ public class Main inherits QUnit::Test {
     discordSanityTests() {
         checkModule();
 
-        DiscordDataProvider prov({
-            "oauth2_client_id": "x",
-            "oauth2_client_secret": "x",
-            "token": "x",
-        });
-        assertEq("discord", prov.getName());
+        try {
+            DiscordDataProvider prov({
+                "oauth2_client_id": "x",
+                "oauth2_client_secret": "x",
+                "token": "x",
+            });
+            assertEq("discord", prov.getName());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Discord API: %s", ex.desc));
+            }
+            rethrow;
+        }
     }
 
     discordTests() {

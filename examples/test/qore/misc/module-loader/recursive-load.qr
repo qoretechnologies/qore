@@ -1,0 +1,6 @@
+#!/usr/bin/env qore
+
+
+%requires ./R1.qm
+
+our int i;

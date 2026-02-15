@@ -38,7 +38,6 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)
         && parse_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
-        // FIXME: raise an error here with strict-types
         parse_context.typeInfo->doNonBooleanWarning(loc, "the initial expression with the '?:' operator is ");
     }
 
@@ -78,13 +77,18 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 }
 
 QoreValue QoreQuestionMarkOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder b(e[0], xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalRefHolder b(rc, e[0], xsink);
     if (*xsink)
         return QoreValue();
 
     QoreValue exp = b->getAsBool() ? e[1] : e[2];
 
-    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    ValueEvalRefHolder rv(rc, exp, xsink);
     if (*xsink)
         return QoreValue();
 

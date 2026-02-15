@@ -47,6 +47,20 @@ int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return RC_RETURN;
 }
 
+int ReturnStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ValueEvalRefHolder val(rc, exp, xsink);
+    if (!*xsink) {
+        return_value = val.takeReferencedValue();
+
+        const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(returnTypeInfo, "<return statement>", return_value, xsink);
+    } else {
+        return_value.clear();
+    }
+
+    return RC_RETURN;
+}
+
 int ReturnStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);

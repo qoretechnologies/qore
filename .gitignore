@@ -118,6 +118,9 @@ docs
 doxygen/lang/*.dox
 doxygen/qlib/*.qm
 Doxyfile
+!modules/*/docs/
+!modules/*/docs/mainpage.dox.tmpl
+modules/*/docs/mainpage.dox
 Doxyfile.???*
 *.tag
 
@@ -139,6 +142,10 @@ Doxyfile.???*
 
 # VS Code
 .vscode
+
+# Node (tools)
+tools/render-version-art/node_modules/
+tools/render-version-art/package-lock.json
 
 # ignore cmake build directories
 build*/

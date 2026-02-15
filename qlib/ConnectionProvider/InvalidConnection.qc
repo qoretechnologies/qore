@@ -49,8 +49,9 @@ public class InvalidConnection inherits AbstractConnection {
         @param url connection URL (potentially with password info)
         @param attributes various attributes. See below
         @param options connection options
+        @param logger optional logger interface for the connection
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @par Additional Attributes
 

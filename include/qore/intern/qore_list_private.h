@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -60,6 +60,15 @@ struct qore_list_private {
         }
     }
 
+    DLLLOCAL static QoreListNode* newList(bool needs_eval) {
+        QoreListNode* l = new QoreListNode;
+        if (needs_eval) {
+            l->value = false;
+            l->needs_eval_flag = true;
+        }
+        return l;
+    }
+
     DLLLOCAL const QoreTypeInfo* getValueTypeInfo() const {
         return complexTypeInfo ? QoreTypeInfo::getComplexListValueType(complexTypeInfo) : nullptr;
     }
@@ -92,7 +101,7 @@ struct qore_list_private {
     }
 
     DLLLOCAL QoreListNode* getEmptyCopy(bool is_value) const {
-        QoreListNode* l = new QoreListNode(!is_value);
+        QoreListNode* l = newList(!is_value);
         if (complexTypeInfo) {
             l->priv->complexTypeInfo = complexTypeInfo;
         }
@@ -615,6 +624,30 @@ struct qore_list_private {
 
     DLLLOCAL static qore_list_private* get(QoreListNode& l) {
         return l.priv;
+    }
+
+    DLLLOCAL static const qore_list_private* get(const QoreListNode* l) {
+        return l ? l->priv : nullptr;
+    }
+
+    DLLLOCAL static qore_list_private* get(QoreListNode* l) {
+        return l ? l->priv : nullptr;
+    }
+
+    DLLLOCAL bool isFinalized() const {
+        return finalized;
+    }
+
+    DLLLOCAL void setFinalized() {
+        finalized = true;
+    }
+
+    DLLLOCAL bool isVariableList() const {
+        return vlist;
+    }
+
+    DLLLOCAL void setVariableList() {
+        vlist = true;
     }
 
     DLLLOCAL static unsigned getScanCount(const QoreListNode& l) {

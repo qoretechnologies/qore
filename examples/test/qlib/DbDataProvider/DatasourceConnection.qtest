@@ -1,0 +1,551 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%requires DbDataProvider
+%requires ConnectionProvider
+%requires DataProvider
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class DatasourceConnectionTest
+
+public class DatasourceConnectionTest inherits QUnit::Test {
+    constructor() : Test("DatasourceConnection test", "1.0") {
+        addTestCase("URL parsing", \testUrlParsing());
+        addTestCase("safe URL", \testSafeUrl());
+        addTestCase("sqlite3 paths", \testSqlite3Paths());
+        addTestCase("option validation", \testOptionValidation());
+        addTestCase("driver options", \testDriverOptions());
+        addTestCase("scheme registration", \testSchemeRegistration());
+        addTestCase("driver logos", \testDriverLogos());
+        addTestCase("connection info", \testConnectionInfo());
+        addTestCase("round trip", \testRoundTrip());
+        addTestCase("error cases", \testErrorCases());
+        addTestCase("invalid URL format", \testInvalidUrlFormat());
+%ifdef NoPgsql
+        addTestCase("data provider (no pgsql)", \testNoDataProvider());
+%else
+        addTestCase("data provider", \testDataProvider());
+%endif
+        addTestCase("minimal URL", \testMinimalUrl());
+        addTestCase("vendor app registration", \testVendorApps());
+        addTestCase("vendor app connection options", \testVendorAppConnectionOptions());
+        addTestCase("new vendor apps", \testNewVendorApps());
+        addTestCase("jdbc jar info", \testJdbcJarInfo());
+
+        set_return_value(main());
+    }
+
+    testUrlParsing() {
+        DatasourceConnection conn("test", "test connection",
+            "db://pgsql:user/pass@dbname(utf8)%dbhost:5432");
+        hash<auto> urlh = conn.urlh;
+        assertEq("db", urlh.protocol);
+        assertEq("pgsql", urlh.type);
+        assertEq("user", urlh.user);
+        assertEq("pass", urlh.pass);
+        assertEq("dbname", urlh.db);
+        assertEq("utf8", urlh.charset);
+        assertEq("dbhost", urlh.host);
+        assertEq(5432, urlh.port);
+    }
+
+    testSafeUrl() {
+        {
+            DatasourceConnection conn("test", "test safe url",
+                "db://pgsql:user/pass@dbname%dbhost:5432");
+            string safe = conn.safe_url;
+            # safe URL must start with "db://"
+            assertTrue(safe =~ /^db:\/\//);
+            # safe URL must not contain password
+            assertFalse(safe =~ /pass/);
+            # safe URL must contain the driver, user, db, host
+            assertTrue(safe =~ /pgsql/);
+            assertTrue(safe =~ /user/);
+            assertTrue(safe =~ /dbname/);
+            assertTrue(safe =~ /dbhost/);
+        }
+        # no password case
+        {
+            DatasourceConnection conn("test", "test safe url no pass",
+                "db://pgsql:user@dbname");
+            string safe = conn.safe_url;
+            assertTrue(safe =~ /^db:\/\//);
+            assertTrue(safe =~ /user/);
+            assertTrue(safe =~ /dbname/);
+        }
+    }
+
+    testSqlite3Paths() {
+        # sqlite3 file path
+        {
+            DatasourceConnection conn("test", "sqlite3 file",
+                "db://sqlite3:@/tmp/test.db");
+            hash<auto> urlh = conn.urlh;
+            assertEq("db", urlh.protocol);
+            assertEq("sqlite3", urlh.type);
+            assertEq("/tmp/test.db", urlh.db);
+        }
+        # sqlite3 in-memory
+        {
+            DatasourceConnection conn("test", "sqlite3 memory",
+                "db://sqlite3:@:memory:");
+            hash<auto> urlh = conn.urlh;
+            assertEq("db", urlh.protocol);
+            assertEq("sqlite3", urlh.type);
+            assertEq(":memory:", urlh.db);
+        }
+    }
+
+    testOptionValidation() {
+        # both min and max present: OK
+        {
+            DatasourceConnection conn("test", "min/max ok",
+                "db://pgsql:user@dbname", {}, {"min": 2, "max": 5});
+            assertEq(2, conn.opts.min);
+            assertEq(5, conn.opts.max);
+        }
+
+        # only min provided: silently stripped
+        {
+            DatasourceConnection conn("test", "min only", "db://pgsql:user@dbname", {}, {"min": 2});
+            assertFalse(exists conn.opts.min, "min stripped when max missing");
+            assertFalse(exists conn.opts.max, "max stripped when max missing");
+        }
+
+        # only max provided: silently stripped
+        {
+            DatasourceConnection conn("test", "max only", "db://pgsql:user@dbname", {}, {"max": 5});
+            assertFalse(exists conn.opts.min, "min stripped when min missing");
+            assertFalse(exists conn.opts.max, "max stripped when min missing");
+        }
+
+        # min from URL without max: silently stripped
+        {
+            DatasourceConnection conn("test", "url min only",
+                "db://pgsql:user@dbname{min=a}");
+            assertFalse(exists conn.opts.min, "invalid min from URL stripped");
+            assertFalse(exists conn.opts.max, "max absent from URL stripped");
+        }
+
+        # min < 0: error
+        assertThrows("DATASOURCE-CONNECTION-ERROR", "min", sub() {
+            new DatasourceConnection("test", "neg min", "db://pgsql:user@dbname", {}, {"min": -1, "max": 5});
+        });
+
+        # max < 1: error
+        assertThrows("DATASOURCE-CONNECTION-ERROR", "max", sub() {
+            new DatasourceConnection("test", "zero max", "db://pgsql:user@dbname", {}, {"min": 0, "max": 0});
+        });
+
+        # max < min: error
+        assertThrows("DATASOURCE-CONNECTION-ERROR", "max", sub() {
+            new DatasourceConnection("test", "max<min", "db://pgsql:user@dbname", {}, {"min": 5, "max": 2});
+        });
+
+        # min=0, max=1: OK (boundary case)
+        {
+            DatasourceConnection conn("test", "boundary",
+                "db://pgsql:user@dbname", {}, {"min": 0, "max": 1});
+            assertEq(0, conn.opts.min);
+            assertEq(1, conn.opts.max);
+        }
+    }
+
+    testDriverOptions() {
+        # driver hash should be unpacked into opts
+        {
+            DatasourceConnection conn("test", "driver opts",
+                "db://pgsql:user@dbname", {}, {"driver": {"ssl": True, "timeout": 30}});
+            assertTrue(conn.opts.ssl);
+            assertEq(30, conn.opts.timeout);
+            assertFalse(exists conn.opts.driver);
+        }
+    }
+
+    testSchemeRegistration() {
+        # verify "db" is registered in SchemeMap
+        assertEq("DbDataProvider", ConnectionSchemeCache::SchemeMap.db);
+
+        # verify we can look up the scheme
+        *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("db");
+        assertTrue(exists info);
+        assertEq("Database Connection", info.display_name);
+        assertTrue(info.schemes.db);
+    }
+
+    testDriverLogos() {
+        # known driver returns specific logo
+        {
+            hash<auto> logo = getDriverLogo("pgsql");
+            assertEq("pgsql-logo.svg", logo.logo_file_name);
+            assertEq(MimeTypeSvg, logo.logo_mime_type);
+            assertTrue(logo.logo.val());
+        }
+        # mysql
+        {
+            hash<auto> logo = getDriverLogo("mysql");
+            assertEq("mysql-logo.svg", logo.logo_file_name);
+        }
+        # oracle
+        {
+            hash<auto> logo = getDriverLogo("oracle");
+            assertEq("oracle-logo.svg", logo.logo_file_name);
+        }
+        # freetds
+        {
+            hash<auto> logo = getDriverLogo("freetds");
+            assertEq("freetds-logo.svg", logo.logo_file_name);
+        }
+        # sqlite3
+        {
+            hash<auto> logo = getDriverLogo("sqlite3");
+            assertEq("sqlite3-logo.svg", logo.logo_file_name);
+        }
+        # odbc
+        {
+            hash<auto> logo = getDriverLogo("odbc");
+            assertEq("odbc-logo.svg", logo.logo_file_name);
+        }
+        # unknown driver returns default logo
+        {
+            hash<auto> logo = getDriverLogo("unknown_driver");
+            assertEq("db-logo.svg", logo.logo_file_name);
+            assertEq(MimeTypeSvg, logo.logo_mime_type);
+        }
+        # NOTHING driver returns default logo
+        {
+            hash<auto> logo = getDriverLogo();
+            assertEq("db-logo.svg", logo.logo_file_name);
+        }
+    }
+
+    testConnectionInfo() {
+        DatasourceConnection conn("test-db", "test database connection",
+            "db://pgsql:user/pass@dbname%dbhost:5432");
+        hash<ConnectionInfo> info = conn.getInfo();
+        assertEq("db", info.type);
+        assertEq("Db", info.app);
+        assertTrue(info.has_provider);
+        assertTrue(info.children_can_support_transactions);
+        assertTrue(info.children_can_support_records);
+        assertEq("test-db", info.name);
+
+        # URL in info should be safe (no password)
+        assertFalse(info.url =~ /pass/);
+    }
+
+    testRoundTrip() {
+        # URL -> connection -> getInfo -> verify fields
+        {
+            string url = "db://pgsql:user/pass@dbname(utf8)%dbhost:5432";
+            DatasourceConnection conn("roundtrip", "round trip test", url);
+            hash<ConnectionInfo> info = conn.getInfo({"with_passwords": True});
+            assertEq("db", info.type);
+            assertEq("pgsql", info.url_hash.type);
+            assertEq("user", info.url_hash.user);
+            assertEq("pass", info.url_hash.pass);
+            assertEq("dbname", info.url_hash.db);
+            assertEq("utf8", info.url_hash.charset);
+            assertEq("dbhost", info.url_hash.host);
+            assertEq(5432, info.url_hash.port);
+        }
+        # without password
+        {
+            string url = "db://pgsql:user/pass@dbname";
+            DatasourceConnection conn("roundtrip2", "round trip no pass", url);
+            hash<ConnectionInfo> info = conn.getInfo();
+            # password should be absent from url_hash in safe info
+            assertFalse(exists info.url_hash.pass);
+        }
+    }
+
+    testErrorCases() {
+        # empty datasource string after db:// prefix
+        assertThrows("DATASOURCE-PARSE-ERROR", sub() {
+            new DatasourceConnection("test", "empty ds", "db://");
+        });
+    }
+
+    testInvalidUrlFormat() {
+        # missing '@' delimiter — parse_datasource() rejects it
+        assertThrows("DATASOURCE-PARSE-ERROR", sub() {
+            new DatasourceConnection("test", "bad format", "db://badformat");
+        });
+        # missing driver type — parse_datasource returns an incomplete hash,
+        # causing make_datasource_string() to fail in getSafeUrl()
+        assertThrows("MAKE-DATASOURCE-STRING-ERROR", sub() {
+            new DatasourceConnection("test", "bad format", "db://:::@");
+        });
+    }
+
+%ifdef NoPgsql
+    testNoDataProvider() {
+        testSkip("pgsql module not available");
+    }
+%else
+    testDataProvider() {
+        DatasourceConnection conn("test", "data provider test",
+            "db://pgsql:user@dbname");
+        assertTrue(conn.hasDataProvider());
+        # getDataProvider() calls get() which opens a connection, so we can't test
+        # the full path without a real DB; verify the type info instead
+        assertEq("db", conn.getType());
+        assertEq("Db", conn.getAppName());
+    }
+%endif
+
+    testVendorApps() {
+        # verify all vendor apps are registered
+        list<string> vendor_names = ("PostgreSQL", "MySQL", "Oracle", "SQL-Server", "SQLite",
+            "CockroachDB", "Amazon-Redshift", "MariaDB", "Snowflake", "ClickHouse", "H2");
+        for (int i = 0; i < vendor_names.size(); ++i) {
+            string name = vendor_names[i];
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(name);
+            assertTrue(exists app, sprintf("vendor app %y registered", name));
+            assertEq(name, app.display_name);
+            assertEq("db", app.scheme);
+            assertTrue(app.auto_url);
+            assertTrue(exists app.connection_options);
+            assertTrue(app.logo.val(), sprintf("vendor app %y has logo", name));
+        }
+    }
+
+    testVendorAppConnectionOptions() {
+        # verify PostgreSQL connection options
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("PostgreSQL");
+            @assert(app);
+            hash<auto> opts = app.connection_options;
+
+            # standard fields must be present
+            assertTrue(exists opts.driver);
+            assertTrue(exists opts.host);
+            assertTrue(exists opts.port);
+            assertTrue(exists opts.db);
+            assertTrue(exists opts.user);
+            assertTrue(exists opts.pass);
+            assertTrue(exists opts.charset);
+            assertTrue(exists opts.min);
+            assertTrue(exists opts.max);
+
+            # driver must be required and preselected
+            assertTrue(opts.driver.required);
+            assertTrue(opts.driver.preselected);
+            assertEq("string", opts.driver.type);
+
+            # driver allowed_values: pgsql, jdbc, odbc (PostgreSQL supports all three)
+            list<auto> av = opts.driver.allowed_values;
+            assertTrue(av.size() >= 1);
+            *hash<auto> pgsql_av = (select av, $1.value == "pgsql")[0];
+            assertTrue(exists pgsql_av, "pgsql driver in allowed_values");
+
+            # default_value is always the first (native) driver
+            assertEq("pgsql", opts.driver.default_value);
+
+            # default_driver in app info for backend URL construction
+            assertEq("pgsql", app.info.default_driver);
+
+            # multiple drivers -> has_dependents and on_change
+            if (av.size() > 1) {
+                assertTrue(opts.driver.has_dependents);
+                assertTrue(exists opts.driver.on_change);
+            }
+
+            # db must be required
+            assertTrue(opts.db.required);
+
+            # pass must be sensitive
+            assertTrue(opts.pass.sensitive);
+
+            # port default should be 5432
+            assertEq(5432, opts.port.default_value);
+
+            # JDBC classpath depends on driver=jdbc
+            assertTrue(exists opts.classpath, "PostgreSQL has classpath option");
+            assertEq(("driver=jdbc",), opts.classpath.depends_on);
+        }
+
+        # verify SQLite has no driver option (single driver), no JDBC/ODBC options, no classpath
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQLite");
+            @assert(app);
+            hash<auto> opts = app.connection_options;
+
+            # single driver -> driver option omitted from form
+            assertFalse(exists opts.driver, "single-driver: driver option omitted");
+
+            # default_driver stored in app info for backend URL construction
+            assertEq("sqlite3", app.info.default_driver);
+
+            # no classpath for SQLite (no JDBC/ODBC support)
+            assertFalse(exists opts.classpath);
+        }
+
+        # verify SQL-Server default port
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQL-Server");
+            @assert(app);
+            assertEq(1433, app.connection_options.port.default_value);
+        }
+
+        # verify MySQL default port
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MySQL");
+            @assert(app);
+            assertEq(3306, app.connection_options.port.default_value);
+        }
+
+        # verify Oracle default port
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Oracle");
+            @assert(app);
+            assertEq(1521, app.connection_options.port.default_value);
+        }
+    }
+
+    testNewVendorApps() {
+        # CockroachDB: native pgsql driver, port 26257
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("CockroachDB");
+            @assert(app);
+            assertEq("pgsql", app.info.default_driver);
+            assertEq(26257, app.connection_options.port.default_value);
+            assertTrue(exists app.connection_options.driver, "CockroachDB has driver option");
+            # should support native pgsql, jdbc, odbc
+            list<auto> av = app.connection_options.driver.allowed_values;
+            assertTrue(av.size() >= 3, "CockroachDB has 3+ driver options");
+            assertEq("pgsql", av[0].value, "CockroachDB default is pgsql");
+        }
+
+        # Amazon-Redshift: native pgsql driver, port 5439
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Amazon-Redshift");
+            @assert(app);
+            assertEq("pgsql", app.info.default_driver);
+            assertEq(5439, app.connection_options.port.default_value);
+        }
+
+        # MariaDB: native mysql driver, port 3306
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MariaDB");
+            @assert(app);
+            assertEq("mysql", app.info.default_driver);
+            assertEq(3306, app.connection_options.port.default_value);
+        }
+
+        # Snowflake: no native driver, JDBC only (no ODBC), port 443
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Snowflake");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertEq(443, app.connection_options.port.default_value);
+            # single driver (jdbc) -> driver option omitted
+            assertFalse(exists app.connection_options.driver, "Snowflake: single driver, no driver option");
+            # classpath is present because JDBC is supported
+            assertTrue(exists app.connection_options.classpath, "Snowflake: classpath available for JDBC");
+        }
+
+        # ClickHouse: no native driver, JDBC only, port 8123
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("ClickHouse");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertEq(8123, app.connection_options.port.default_value);
+            assertFalse(exists app.connection_options.driver, "ClickHouse: single driver, no driver option");
+        }
+
+        # H2: no native driver, JDBC only, no default port
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("H2");
+            @assert(app);
+            assertEq("jdbc", app.info.default_driver);
+            assertFalse(exists app.connection_options.port.default_value, "H2: no default port");
+            assertFalse(exists app.connection_options.driver, "H2: single driver, no driver option");
+        }
+    }
+
+    testJdbcJarInfo() {
+        # vendors with jdbc_jar set
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Oracle");
+            @assert(app);
+            assertEq("ojdbc11.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQL-Server");
+            @assert(app);
+            assertEq("mssql-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Snowflake");
+            @assert(app);
+            assertEq("snowflake-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("ClickHouse");
+            @assert(app);
+            assertEq("clickhouse-jdbc.jar", app.info.jdbc_jar);
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("H2");
+            @assert(app);
+            assertEq("h2.jar", app.info.jdbc_jar);
+        }
+
+        # vendors without jdbc_jar (use native driver by default)
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("PostgreSQL");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "PostgreSQL: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MySQL");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "MySQL: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("SQLite");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "SQLite: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("CockroachDB");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "CockroachDB: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Amazon-Redshift");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "Amazon-Redshift: no jdbc_jar");
+        }
+        {
+            *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MariaDB");
+            @assert(app);
+            assertFalse(exists app.info.jdbc_jar, "MariaDB: no jdbc_jar");
+        }
+    }
+
+    testMinimalUrl() {
+        # minimal URL: driver + user + db
+        {
+            DatasourceConnection conn("test", "minimal",
+                "db://pgsql:user@dbname");
+            assertEq("pgsql", conn.urlh.type);
+            assertEq("user", conn.urlh.user);
+            assertEq("dbname", conn.urlh.db);
+        }
+        # URL options get moved to opts
+        {
+            DatasourceConnection conn("test", "with url opts",
+                "db://pgsql:user@dbname{timeout=30}");
+            assertTrue(exists conn.opts.timeout);
+        }
+    }
+}

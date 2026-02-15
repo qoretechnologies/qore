@@ -4,6 +4,8 @@
 %modern
 
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/SmtpClient.qm
@@ -20,12 +22,21 @@ public class SmtpClientTest inherits QUnit::Test {
         } + Opts;
 
         const OptionColumn = 22;
+
+        # Environment variables for live testing
+        *string smtpHost = ENV.SMTP_TEST_HOST;
+        *string smtpPort = ENV.SMTP_TEST_PORT;
+        *string testUser = ENV.SMTP_TEST_USER;
+        *string testPass = ENV.SMTP_TEST_PASS;
     }
 
     constructor() : Test("SmtpClientTest", "1.0", \ARGV, MyOpts) {
         addTestCase("real connection test", \realConnectionTest());
         addTestCase("SmtpClient test", \smtpClientTest());
         addTestCase("connection test", \connectionTest());
+        addTestCase("polling API tests", \pollingApiTests());
+        addTestCase("live async ping tests", \liveAsyncPingTests());
+        addTestCase("data provider attachment tests", \dataProviderAttachmentTests());
         set_return_value(main());
     }
 
@@ -82,6 +93,157 @@ public class SmtpClientTest inherits QUnit::Test {
         conn = new SmtpConnection("test", "test", url, {"monitor": False});
         client = conn.get(False);
         assertEq("localhost:8099", client.getTarget());
+    }
+
+    pollingApiTests() {
+        # Test that SmtpConnection supports the polling API
+        string url = "smtps://user:pass@localhost:8099";
+        SmtpConnection conn("test", "test", url);
+
+        # Test supportsPollingApi()
+        assertTrue(conn.supportsPollingApi(), "SmtpConnection supports polling API");
+
+        # Test that startPollConnect() returns a valid poll operation
+        Qore::AbstractPollOperation poller = conn.startPollConnect();
+        assertEq("SmtpPingPollOperation", poller.className(), "startPollConnect returns SmtpPingPollOperation");
+        assertEq("ping", poller.getGoal(), "poll operation goal is 'ping'");
+        assertEq("connect", poller.getState(), "initial state is 'connect'");
+        assertFalse(poller.goalReached(), "goal not reached initially");
+
+        # Test that we can abort the operation
+        poller.abort();
+        assertTrue(True, "abort() callable");
+
+        # Test SmtpPingState enum values
+        assertEq("connect", SmtpPingState::Connect, "SmtpPingState::Connect");
+        assertEq("read-hello", SmtpPingState::ReadHello, "SmtpPingState::ReadHello");
+        assertEq("send-hello", SmtpPingState::SendHello, "SmtpPingState::SendHello");
+        assertEq("read-hello-reply", SmtpPingState::ReadHelloReply, "SmtpPingState::ReadHelloReply");
+        assertEq("starttls", SmtpPingState::StartTls, "SmtpPingState::StartTls");
+        assertEq("read-starttls-reply", SmtpPingState::ReadStartTlsReply, "SmtpPingState::ReadStartTlsReply");
+        assertEq("upgrade-tls", SmtpPingState::UpgradeToTls, "SmtpPingState::UpgradeToTls");
+        assertEq("login", SmtpPingState::Login, "SmtpPingState::Login");
+        assertEq("read-login-reply", SmtpPingState::ReadLoginReply, "SmtpPingState::ReadLoginReply");
+        assertEq("complete", SmtpPingState::Complete, "SmtpPingState::Complete");
+    }
+
+    dataProviderAttachmentTests() {
+        # Test SmtpSendEmailAttachmentDataType has content-id field
+        {
+            SmtpSendEmailAttachmentDataType attType();
+            hash<auto> fields = attType.getFields();
+
+            assertTrue(fields.hasKey("name"), "attachment type has 'name' field");
+            assertTrue(fields.hasKey("mime-type"), "attachment type has 'mime-type' field");
+            assertTrue(fields.hasKey("data"), "attachment type has 'data' field");
+            assertTrue(fields.hasKey("encoding"), "attachment type has 'encoding' field");
+            assertTrue(fields.hasKey("hdr"), "attachment type has 'hdr' field");
+            assertTrue(fields.hasKey("content-id"), "attachment type has 'content-id' field");
+        }
+
+        # Test that SmtpSendEmailRequestDataType accepts attachments with content-id
+        {
+            SmtpSendEmailRequestDataType reqType();
+            hash<auto> fields = reqType.getFields();
+
+            assertTrue(fields.hasKey("attachments"), "request type has 'attachments' field");
+            assertTrue(fields.hasKey("body"), "request type has 'body' field");
+            assertTrue(fields.hasKey("sender"), "request type has 'sender' field");
+        }
+
+        # Test data provider factory exists
+        {
+            SmtpClientDataProviderFactory factory();
+            assertEq("smtpclient", factory.getName(), "factory name is 'smtpclient'");
+        }
+
+        # Test SmtpClientDataProvider has send-email child
+        {
+            string url = "smtp://user:pass@localhost:25";
+            SmtpClient client(url);
+            SmtpClientDataProvider provider(client);
+
+            *list<string> children = provider.getChildProviderNames();
+            assertTrue(children.contains("send-email"), "provider has 'send-email' child");
+        }
+
+        # Test SmtpClientSendEmailDataProvider request type includes content-id
+        {
+            string url = "smtp://user:pass@localhost:25";
+            SmtpClient client(url);
+            SmtpClientDataProvider provider(client);
+            AbstractDataProvider sendProvider = provider.getChildProvider("send-email");
+
+            assertEq("SmtpClientSendEmailDataProvider", sendProvider.className());
+
+            # Check that the request type is defined
+            *AbstractDataProviderType reqType = sendProvider.getRequestType();
+            assertTrue(reqType.val(), "send-email has request type");
+        }
+    }
+
+    liveAsyncPingTests() {
+        # Skip if no test server is configured
+        if (!smtpHost || !testUser || !testPass) {
+            testSkip("Live async ping tests skipped: set SMTP_TEST_HOST, SMTP_TEST_USER, SMTP_TEST_PASS environment variables");
+        }
+
+        string port = smtpPort ?? "25";
+
+        # Test SmtpConnection async ping
+        {
+            string url = sprintf("smtp://%s:%s@%s:%s", testUser, testPass, smtpHost, port);
+            SmtpConnection conn("test", "async ping test", url);
+
+            assertTrue(conn.supportsPollingApi(), "SmtpConnection supports polling API");
+
+            # Test the full async ping cycle with actual socket polling
+            Qore::AbstractPollOperation poller = conn.startPollConnect();
+
+            assertEq("SmtpPingPollOperation", poller.className(), "startPollConnect returns correct class");
+            assertFalse(poller.goalReached(), "goal not reached initially");
+
+            # Run the poll loop
+            int iterations = 0;
+            int maxIterations = 100;
+            list<string> states = (poller.getState(),);
+
+            while (!poller.goalReached()) {
+                iterations++;
+
+                *hash<SocketPollInfo> pollInfo = poller.continuePoll();
+                string currentState = poller.getState();
+
+                # Track state transitions
+                if (states.last() != currentState) {
+                    states += currentState;
+                }
+
+                if (pollInfo) {
+                    Socket::poll((pollInfo,), 5s);
+                }
+
+                if (iterations > maxIterations) {
+                    fail(sprintf("Async ping exceeded %d iterations", maxIterations));
+                    break;
+                }
+            }
+
+            assertTrue(poller.goalReached(), "async ping completed successfully");
+            assertEq("complete", poller.getState(), "final state is complete");
+            assertTrue(iterations > 0, "async ping required iterations");
+            assertTrue(states.size() >= 2, "async ping had state transitions");
+        }
+
+        # Test blocking ping for comparison
+        {
+            string url = sprintf("smtp://%s:%s@%s:%s", testUser, testPass, smtpHost, port);
+            SmtpConnection conn("test", "blocking ping test", url);
+
+            hash<PingInfo> pingResult = conn.ping();
+            assertTrue(pingResult.ok, "blocking ping succeeded");
+            assertTrue(pingResult.time.val(), "blocking ping measured time");
+        }
     }
 }
 

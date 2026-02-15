@@ -67,4 +67,17 @@ DLLLOCAL QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncod
  */
 DLLLOCAL QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read);
 
+//! helper function for reading a single block of string data with character semantics
+/** @param xsink for Qore-language exceptions
+    @param size the number of characters to read, negative values = read a single block of available data
+    @param enc the encoding of the input data and the output string (must be ASCII compatible)
+    @param my_read a function object taking the arguments above, the return value means:
+    - \c < 0: an error occurred (xsink has the exception info), 0 = end of data, > 0 the number of bytes read
+
+    @return the string returned; if no data could be read (or a Qore-language exception occurs), nullptr is returned;
+    otherwise the caller owns the QoreStringNode reference returned
+ */
+DLLLOCAL QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const QoreEncoding* enc,
+    f_read_t my_read);
+
 #endif

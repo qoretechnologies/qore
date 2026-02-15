@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -722,14 +722,13 @@ public:
 
     //! Splits a string into a list of components based on a separator string
     /**
-        @param xsink invalid multi-byte encodings can cause an exception to be thrown
         @param sep the separator string; if the separator string is not found in the string to split, then a list with
         only one element containing the entire string argument is returned'
         @param with_separator include the separator string in every element
 
         @return a list of each component of a string separated by a separator string, with the separator removed; the
         separator pattern will not be included in the elements of the list returned unless the
-        \a with_separator argument is @ref True
+        \a with_separator argument is True
 
         @since %Qore 2.0
     */
@@ -744,8 +743,7 @@ public:
         @param trim_unquoted remove leading and trailing whitespace from unquoted fields
 
         @return a list of each component of a string separated by a separator string, with the separator removed; the
-        separator pattern will not be included in the elements of the list returned unless the
-        \a with_separator argument is @ref True
+        separator pattern will not be included in the elements of the list returned
 
         @since %Qore 2.0
     */
@@ -1089,22 +1087,9 @@ public:
     */
     DLLEXPORT size_t removeBytes(size_t len);
 
-    // concatenates a qorestring without converting encodings - internal only
-    DLLLOCAL void concat(const QoreString* str);
-
-    // private constructor
-    DLLLOCAL QoreString(struct qore_string_private* p);
-
 protected:
     //! the private implementation of QoreString
     struct qore_string_private* priv = nullptr;
-
-    // writes a new QoreString with the characters reversed of the "this" QoreString
-    // assumes the encoding is the same and the length is 0
-    DLLLOCAL void concat_reverse(QoreString* targ) const;
-
-    DLLLOCAL int snprintf(size_t size, const char* fmt, ...);
-    DLLLOCAL int vsnprintf(size_t size, const char* fmt, va_list args);
 };
 
 DLLEXPORT QoreString* checkEncoding(const QoreString* str, const QoreEncoding* enc, ExceptionSink* xsink);

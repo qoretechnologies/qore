@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RedisDataProvider module definition
 
-/** RedisConnection.qc Copyright 2025 Qore Technologies, s.r.o.
+/** RedisConnection.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,14 +30,14 @@ public namespace RedisDataProvider {
 
     @par URL Format
     The URL format for Redis connections is:
-    - \c redis://[username:password@]host[:port][/db]
-    - \c rediss://[username:password@]host[:port][/db] (for TLS connections)
+    - \c redis://[username:password\@]host[:port][/db]
+    - \c rediss://[username:password\@]host[:port][/db] (for TLS connections)
 
     @par Examples
     - \c redis://localhost - connect to localhost on default port 6379
     - \c redis://localhost:6380 - connect to localhost on port 6380
-    - \c redis://secret@localhost/1 - authenticate with password, select db 1
-    - \c redis://user:secret@localhost/0 - ACL auth with username (Redis 6.0+)
+    - \c redis://secret\@localhost/1 - authenticate with password, select db 1
+    - \c redis://user:secret\@localhost/0 - ACL auth with username (Redis 6.0+)
     - \c rediss://localhost - TLS connection to localhost
 */
 public class RedisConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
@@ -101,8 +101,9 @@ public class RedisConnection inherits ConnectionProvider::AbstractConnectionWith
         @param url connection URL (potentially with password info)
         @param attributes various attributes. See below
         @param options connection options
+        @param logger optional logger interface for the connection
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -158,10 +159,10 @@ public class RedisConnection inherits ConnectionProvider::AbstractConnectionWith
         return new RedisDataProvider({"redis": get()} + constructor_options);
     }
 
-    #! returns @ref True, as the connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True, as the connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;

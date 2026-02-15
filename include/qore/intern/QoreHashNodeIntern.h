@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -136,6 +136,30 @@ public:
     // hashes should always be empty by the time they are deleted
     // because object destructors need to be run...
     DLLLOCAL ~qore_hash_private();
+
+    DLLLOCAL static QoreHashNode* newHash(bool needs_eval) {
+        QoreHashNode* h = new QoreHashNode;
+        if (needs_eval) {
+            h->value = false;
+            h->needs_eval_flag = true;
+        }
+        return h;
+    }
+
+    DLLLOCAL static void clearNeedsEval(QoreHashNode& h) {
+        h.value = true;
+        h.needs_eval_flag = false;
+    }
+
+    DLLLOCAL static void setNeedsEval(QoreHashNode& h) {
+        h.value = false;
+        h.needs_eval_flag = true;
+    }
+
+    DLLLOCAL static void clear(QoreHashNode& h, ExceptionSink* xsink, bool reverse = false) {
+        assert(h.is_unique());
+        h.priv->clear(xsink, reverse);
+    }
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
@@ -334,6 +358,8 @@ public:
     // issue #3877: returns a typed list
     DLLLOCAL QoreListNode* getValues() const;
 
+    DLLLOCAL QoreHashNode* getSlice(const QoreListNode* value_list, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreHashNode* getCopy() const {
         QoreHashNode* h = new QoreHashNode;
         if (hashdecl) {
@@ -345,7 +371,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* getEmptyCopy(bool is_value) const {
-        QoreHashNode* h = new QoreHashNode(!is_value);
+        QoreHashNode* h = newHash(!is_value);
         if (hashdecl) {
             h->priv->setHashDecl(hashdecl);
         } else if (complexTypeInfo) {
@@ -577,8 +603,16 @@ public:
         return h.priv;
     }
 
+    DLLLOCAL static qore_hash_private* get(QoreHashNode* h) {
+        return h ? h->priv : nullptr;
+    }
+
     DLLLOCAL static const qore_hash_private* get(const QoreHashNode& h) {
         return h.priv;
+    }
+
+    DLLLOCAL static const qore_hash_private* get(const QoreHashNode* h) {
+        return h ? h->priv : nullptr;
     }
 
     // returns -1 if no checks are needed or if an error is raised, 0 if OK to check

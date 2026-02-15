@@ -16,6 +16,8 @@
     |@ref bool_type "bool"|@ref boolean|@ref boolean|Restricts values to @ref boolean values
     |@ref string_type "string"|@ref string|@ref string|Restricts values to @ref string values
     |@ref date_type "date"|@ref date|@ref date|Restricts values to @ref date values; values may be either @ref absolute_dates "absolute" or @ref relative_dates "relative"
+    |@ref date_type "date<absolute>"|@ref date|@ref date|Restricts values to @ref absolute_dates "absolute" date/time values only
+    |@ref date_type "date<relative>"|@ref date|@ref date|Restricts values to @ref relative_dates "relative" date/time values only
     |@ref binary_type "binary"|@ref binary|@ref binary|Restricts values to @ref binary values
     |@ref hash_type "hash"|@ref hash|@ref hash|Restricts values to @ref hash values without any key type information
     |@ref hash_hashdecl_type "hash<...>"|@ref hash|@ref hash|Restricts values to values of the referenced @ref hashdecl "type-safe hash"
@@ -52,6 +54,8 @@
     |@ref bool_or_nothing_type "*bool"|@ref boolean, @ref null, or @ref nothing|@ref boolean or @ref nothing|Restricts values to %Qore's @ref boolean or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref string_or_nothing_type "*string"|@ref string, @ref null, or @ref nothing|@ref string or @ref nothing|Restricts values to %Qore's @ref string or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref date_or_nothing_type "*date"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to %Qore's @ref date or @ref nothing type; values may be either absolute or relative date/time values; if @ref null is passed then @ref nothing is returned
+    |@ref date_or_nothing_type "*date<absolute>"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to absolute date/time values or @ref nothing; if @ref null is passed then @ref nothing is returned
+    |@ref date_or_nothing_type "*date<relative>"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to relative date/time values or @ref nothing; if @ref null is passed then @ref nothing is returned
     |@ref binary_or_nothing_type "*binary"|@ref binary, @ref null, or @ref nothing|@ref binary or @ref nothing|Restricts values to %Qore's @ref binary or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref hash_or_nothing_type "*hash"|@ref hash, @ref null, or @ref nothing|@ref hash or @ref nothing|Restricts values to %Qore's @ref hash or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref hash_hashdecl_or_nothing_type "*hash<...>"|@ref hash, @ref null, or @ref nothing|@ref hash or @ref nothing|Restricts values to values of the referenced @ref hashdecl "type-safe hash" or @ref nothing types; if @ref null is passed then @ref nothing is returned
@@ -157,12 +161,20 @@ string sub foo(string str = "bar") {
     <b>date Type Restriction</b>
     |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
     |\c date|@ref date|@ref date|Restricts values to %Qore's @ref date type; date/time values can be either @ref absolute_dates "absolute" or @ref relative_dates "relative"
+    |\c date&lt;absolute&gt;|@ref date|@ref date|Restricts values to @ref absolute_dates "absolute" date/time values only
+    |\c date&lt;relative&gt;|@ref date|@ref date|Restricts values to @ref relative_dates "relative" date/time values only
 
     @par Example
     @code{.py}
 date sub foo(date d = now_us()) {
     return d;
 }
+    @endcode
+
+    @par Example (strict absolute vs relative)
+    @code{.py}
+date<absolute> abs = 2017-07-10;
+date<relative> rel = 2h + 30m;
     @endcode
 
     <hr>
@@ -1484,6 +1496,10 @@ union<int, string> sub getValue(bool useInt) {
     return "hello";
 }
     @endcode
+
+    @par Member Order
+    Union member order is preserved. When a value matches multiple member types, the first matching
+    member in the source declaration is chosen.
 
     @par Or-Nothing Unions
     The or-nothing modifier allows the union to also accept NOTHING:

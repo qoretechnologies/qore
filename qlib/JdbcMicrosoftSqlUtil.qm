@@ -35,13 +35,11 @@
 %requires MssqlSqlUtilBase
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module JdbcMicrosoftSqlUtil {
     version = "1.0";
@@ -55,7 +53,7 @@ module JdbcMicrosoftSqlUtil {
 
     @tableofcontents
 
-    @section JdbcMicrosoftSqlUtilintro JdbcMicrosoftSqlUtil Module Introduction
+    @section jdbcmicrosoftsqlutilintro JdbcMicrosoftSqlUtil Module Introduction
 
     The %JdbcMicrosoftSqlUtil module provides a high level API for working with MS SQL Server database objects using
     the \c jdbc driver.
@@ -70,9 +68,9 @@ module JdbcMicrosoftSqlUtil {
 
     @see @ref mssqlsqlutilbaseintro for implementation information about this module
 
-    @section ora_relnotes Release Notes
+    @section jdbcmssql_relnotes Release Notes
 
-    @subsection Microsoft15 JdbcMicrosoftSqlUtil v1.0
+    @subsection jdbcmssql_v1_0 JdbcMicrosoftSqlUtil v1.0
     - initial release
 */
 

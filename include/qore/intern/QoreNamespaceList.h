@@ -152,7 +152,6 @@ public:
 
     DLLLOCAL qore_ns_private* runtimeAdd(QoreNamespace* ot, qore_ns_private* parent);
 
-    DLLLOCAL void resolveCopy();
     DLLLOCAL int parseInitConstants();
 
     DLLLOCAL int parseInitGlobalVars();
@@ -189,6 +188,12 @@ public:
     }
 
     DLLLOCAL void getGlobalVars(QoreHashNode& h) const;
+
+    //! Recursively resolves cross-namespace parent hashdecl pointers in all namespaces
+    /** This must be called after the entire namespace tree is constructed.
+        @param root the root namespace to use for lookups
+    */
+    DLLLOCAL void resolveExternalParentHashDeclsRecursive(qore_root_ns_private* root);
 };
 
 #endif

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -144,7 +144,8 @@ static void create_datasource_from_conf(const QoreString& conf, QoreObject& self
 }
 
 static QoreHashNode* Datasource_serializer(const QoreObject& self, const ManagedDatasource& ds,
-        QoreSerializationContext& context, ExceptionSink* xsink) {
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
     SimpleRefHolder<QoreStringNode> str(const_cast<ManagedDatasource&>(ds).getConfigString(xsink));
     if (*xsink) {
         return nullptr;
@@ -156,7 +157,8 @@ static QoreHashNode* Datasource_serializer(const QoreObject& self, const Managed
 }
 
 static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
-        ExceptionSink* xsink) {
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
     if (sdata) {
         QoreValue val = sdata->getKeyValue("conf");
         if (val) {
@@ -1475,4 +1477,49 @@ AbstractSQLStatement Datasource::getSQLStatement() {
     }
 
     return new QoreObject(QC_SQLSTATEMENT, getProgram(), new QoreSQLStatement(ds));
+}
+
+//! Returns a datasource connection string from a @ref datasource_hash "datasource hash"
+/** @par Example:
+    @code{.py}
+string str = Datasource::makeConfigString({
+    "type": "pgsql",
+    "user": "user",
+    "pass": "pass",
+    "db": "dbname",
+    "charset": "utf8",
+    "host": "hostname",
+    "port": 5432,
+    "options": {"min": "4", "max": "10"},
+});
+    @endcode
+
+    This is the inverse of @ref Qore::SQL::parse_datasource() "parse_datasource()".
+
+    @param config a @ref datasource_hash "datasource hash" with the following keys:
+    - \c type: (required) the driver name
+    - \c user: the username for the connection
+    - \c pass: the password for the connection
+    - \c db: the database name for the connection
+    - \c charset: the character encoding to use for the connection
+    - \c host: the hostname for the connection
+    - \c port: the port number for the connection
+    - \c options: a hash of options for the connection
+
+    @return a string in the format:
+    <tt><em>driver</em>:[<em>user</em>][/<em>pass</em>]\@[<em>db</em>][(</em>charset</em>)][%<em>host</em>][:<em>port</em>][{<em>opt</em>=<em>val</em>[,...]}]</tt>
+
+    @throw MAKE-DATASOURCE-STRING-ERROR the \c type key is missing or empty
+
+    @note to get a safe connection string without the password, remove the \c "pass" key from the hash before
+    calling this method
+
+    @see
+    - @ref Qore::SQL::parse_datasource() "parse_datasource()"
+    - @ref Qore::SQL::make_datasource_string() "make_datasource_string()"
+
+    @since %Qore 2.3
+*/
+static string Datasource::makeConfigString(hash<auto> config) [flags=RET_VALUE_ONLY] {
+    return makeConfigString(config, xsink);
 }

@@ -1,0 +1,253 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class PollAcceptTest
+
+#! Test for poll() detection of pending accept on listener sockets
+/** This test verifies that poll() correctly detects pending connections
+    on listener sockets. On some platforms (notably macOS), poll() may not
+    reliably report POLLIN on listener sockets even when connections are
+    pending in the accept queue.
+
+    The test creates listener sockets, connects clients, and verifies that
+    poll() detects the pending connections promptly.
+*/
+class PollAcceptTest inherits QUnit::Test {
+    public {
+        # Number of iterations for stress testing
+        const Iterations = 100;
+
+        # Number of listeners for multi-listener test
+        const NumListeners = 6;
+
+        # Maximum time (ms) poll() should take to detect a pending connection
+        const MaxPollTime = 100;
+    }
+
+    constructor() : Test("PollAcceptTest", "1.0") {
+        addTestCase("basic poll accept detection", \testBasicPollAccept());
+        addTestCase("multiple listeners poll accept", \testMultiListenerPollAccept());
+        addTestCase("stress test poll accept", \testStressPollAccept());
+        addTestCase("non-blocking accept without poll", \testNonBlockingAcceptWithoutPoll());
+        set_return_value(main());
+    }
+
+    #! Test basic poll() detection of a pending accept
+    testBasicPollAccept() {
+        # Create listener
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        hash<auto> info = listener.getSocketInfo();
+        int port = info.port;
+
+        # Connect client - this creates a pending connection
+        Socket client();
+        client.setNoDelay(True);
+        client.connect("localhost:" + port);
+
+        # Small delay to ensure connection is in accept queue
+        usleep(10000);  # 10ms
+
+        # Poll should detect the pending connection
+        list<hash<SocketPollInfo>> poll_list = (
+            cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listener}),
+        );
+
+        date start = now_us();
+        list<auto> ready = Socket::poll(poll_list, MaxPollTime);
+        date elapsed = now_us() - start;
+
+        if (!ready) {
+            # poll() returned empty - check if accept would succeed anyway
+            bool accept_would_work = False;
+            try {
+                # Try non-blocking accept
+                *Socket accepted = listener.accept(0);
+                if (accepted) {
+                    accept_would_work = True;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # No connection or timeout - expected
+            }
+            if (accept_would_work) {
+                # BUG: poll() failed to detect the pending connection!
+                fail("poll() failed to detect pending accept - accept() succeeded after poll() timeout "
+                    + sprintf("(poll returned empty after %y)", elapsed));
+                return;
+            }
+        }
+
+        assertEq(1, ready.size(), "poll() should detect pending accept");
+        assertTrue(elapsed < 50ms, sprintf("poll() should return quickly (took %y)", elapsed));
+
+        # Clean up - accept the connection
+        Socket accepted = listener.accept(0);
+        assertTrue(accepted.isOpen(), "accepted socket should be open");
+    }
+
+    #! Test poll() with multiple listeners (mimics Qorus HTTP server scenario)
+    testMultiListenerPollAccept() {
+        list<Socket> listeners = ();
+        list<int> ports = ();
+
+        # Create multiple listeners
+        for (int i = 0; i < NumListeners; ++i) {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            push listeners, listener;
+            push ports, listener.getSocketInfo().port;
+        }
+
+        # Connect to a random listener
+        int target_idx = rand() % NumListeners;
+        Socket client();
+        client.setNoDelay(True);
+        client.connect("localhost:" + ports[target_idx]);
+
+        # Small delay
+        usleep(10000);
+
+        # Poll all listeners
+        list<hash<SocketPollInfo>> poll_list = ();
+        foreach Socket l in (listeners) {
+            push poll_list, cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": l});
+        }
+
+        date start = now_us();
+        list<auto> ready = Socket::poll(poll_list, MaxPollTime);
+        date elapsed = now_us() - start;
+
+        if (!ready) {
+            # Check if accept would succeed on target listener
+            bool accept_would_work = False;
+            try {
+                *Socket accepted = listeners[target_idx].accept(0);
+                if (accepted) {
+                    accept_would_work = True;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Expected if no connection
+            }
+            if (accept_would_work) {
+                fail(sprintf("poll() on %d listeners returned empty after %y but accept() "
+                    "succeeded on listener %d", NumListeners, elapsed, target_idx));
+                return;
+            }
+        }
+
+        assertEq(1, ready.size(), "poll() should detect exactly one pending accept");
+        assertTrue(elapsed < 50ms, sprintf("poll() should return quickly (took %y)", elapsed));
+
+        # Verify it's the correct listener
+        string ready_hash = ready[0].socket.uniqueHash();
+        string target_hash = listeners[target_idx].uniqueHash();
+        assertEq(target_hash, ready_hash, "poll() should report the correct listener as ready");
+
+        # Clean up
+        Socket accepted = listeners[target_idx].accept(0);
+        assertTrue(accepted.isOpen());
+    }
+
+    #! Stress test - run multiple iterations to catch intermittent failures
+    testStressPollAccept() {
+        int failures = 0;
+        int false_negatives = 0;  # poll() missed but accept() worked
+
+        for (int iter = 0; iter < Iterations; ++iter) {
+            Socket listener();
+            listener.bind("localhost:0");
+            listener.listen();
+            int port = listener.getSocketInfo().port;
+
+            Socket client();
+            client.setNoDelay(True);
+            client.connect("localhost:" + port);
+
+            usleep(5000);  # 5ms
+
+            list<hash<SocketPollInfo>> poll_list = (
+                cast<hash<SocketPollInfo>>({"events": SOCK_POLLIN, "socket": listener}),
+            );
+
+            list<auto> ready = Socket::poll(poll_list, MaxPollTime);
+
+            if (!ready) {
+                ++failures;
+                # Check if it's a false negative
+                try {
+                    *Socket accepted = listener.accept(0);
+                    if (accepted) {
+                        ++false_negatives;
+                    }
+                } catch () {
+                    # Expected
+                }
+            } else {
+                # Clean up
+                Socket accepted = listener.accept(0);
+            }
+        }
+
+        if (false_negatives > 0) {
+            fail(sprintf("poll() missed %d/%d pending accepts (accept() succeeded after poll() timeout)",
+                false_negatives, Iterations));
+            return;
+        }
+
+        assertEq(0, failures, sprintf("poll() should detect all pending accepts (%d iterations)", Iterations));
+    }
+
+    #! Test that verifies non-blocking accept works without relying on poll()
+    /** This test demonstrates the expected behavior after the fix:
+        non-blocking accept() should work regardless of poll() result
+    */
+    testNonBlockingAcceptWithoutPoll() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        # Try accept before any connection with timeout=0
+        # Should return NOTHING or timeout, not block
+        bool got_nothing = False;
+        try {
+            *Socket early = listener.accept(0);
+            if (!early) {
+                got_nothing = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Timeout or error is expected
+            got_nothing = True;
+        }
+        assertTrue(got_nothing, "accept(0) with no connection should return NOTHING or timeout");
+
+        # Now connect a client
+        Socket client();
+        client.setNoDelay(True);
+        client.connect("localhost:" + port);
+
+        usleep(10000);  # 10ms
+
+        # Accept should succeed now (without using poll)
+        *Socket accepted;
+        try {
+            accepted = listener.accept(0);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("accept(0) failed after client connected: %s: %s", ex.err, ex.desc));
+            return;
+        }
+
+        assertTrue(exists accepted, "accept(0) should return a socket after client connects");
+        assertTrue(accepted.isOpen(), "accepted socket should be open");
+    }
+}

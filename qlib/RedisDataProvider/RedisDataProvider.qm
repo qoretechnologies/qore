@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RedisDataProvider module definition
 
-/*  RedisDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  RedisDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,6 +57,7 @@ module RedisDataProvider {
             "logo": RedisLogo,
             "logo_file_name": "redis-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register actions for strings
@@ -141,7 +142,7 @@ module RedisDataProvider {
 
     @section redisdataproviderintro Introduction to the RedisDataProvider Module
 
-    The %RedisDataProvider module provides a @ref dataproviderintro "data provider" API for Redis
+    The %RedisDataProvider module provides a \c dataproviderintro "data provider" API for Redis
     servers. It provides connection management and a comprehensive API for all Redis data types
     and operations.
 
@@ -155,15 +156,15 @@ module RedisDataProvider {
     Redis connections can be created using the \c redis:// or \c rediss:// (TLS) URL schemes:
 
     @par Connection URL Format
-    @verbatim redis://[username:password@]host[:port][/db]
-    rediss://[username:password@]host[:port][/db]
+    @verbatim redis://[username:password\@]host[:port][/db]
+    rediss://[username:password\@]host[:port][/db]
     @endverbatim
 
     @par Examples
     - \c redis://localhost - connect to localhost on default port 6379
     - \c redis://localhost:6380 - connect to localhost on port 6380
-    - \c redis://secret@localhost/1 - authenticate with password, select db 1
-    - \c redis://user:secret@localhost/0 - ACL auth with username (Redis 6.0+)
+    - \c redis://secret\@localhost/1 - authenticate with password, select db 1
+    - \c redis://user:secret\@localhost/0 - ACL auth with username (Redis 6.0+)
     - \c rediss://localhost - TLS connection to localhost
 
     @section redis_dataprovider_factory Redis Data Provider Factory
@@ -211,8 +212,6 @@ module RedisDataProvider {
 public namespace RedisDataProvider {
 #! Redis app name
 public const AppName = "Redis";
-}
 
-namespace Priv {
-const RedisLogo = File::readTextFile(get_script_dir() + "/redis-logo.svg");
+public const RedisLogo = File::readTextFile(get_script_dir() + "/redis-logo.svg");
 }

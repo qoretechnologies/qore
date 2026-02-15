@@ -2,7 +2,7 @@
 # spec file for package qore
 #
 # Copyright (c) 2017 SUSE LINUX GmbH, Nuernberg, Germany.
-# Copyright (c) 2014 - 2023 David Nichols <david@qore.org>
+# Copyright (c) 2014 - 2026 David Nichols <david@qore.org>
 # Copyright (c) 2014 Petr Vanek <petr@yarpen.cz>
 #
 # All modifications and additions to the file contributed by third parties
@@ -26,22 +26,26 @@ License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Languages/Other
 Url:            http://qore.org
 Source:         https://github.com/qorelanguage/qore/releases/download/release-%{version}/qore-%{version}.tar.bz2
-Patch:          qore-libtool-2.4.6.patch
-BuildRequires:  automake
 BuildRequires:  bison
-BuildRequires:  bzip2
+BuildRequires:  cmake >= 3.5
 BuildRequires:  doxygen
 BuildRequires:  fdupes
 BuildRequires:  flex >= 2.5.31
 BuildRequires:  gcc-c++
 BuildRequires:  gmp-devel
 BuildRequires:  libbz2-devel
-BuildRequires:  libtool
+BuildRequires:  libnghttp2-devel
 BuildRequires:  mpfr-devel
 BuildRequires:  openssl-devel
 BuildRequires:  pcre2-devel
 BuildRequires:  pkg-config
 BuildRequires:  zlib-devel
+BuildRequires:  pkgconfig(libbrotlienc)
+BuildRequires:  pkgconfig(libbrotlidec)
+BuildRequires:  pkgconfig(libzstd)
+BuildRequires:  pkgconfig(liblz4)
+BuildRequires:  rust
+BuildRequires:  cargo
 Requires:       %{_bindir}/env
 Requires(post):    shared-mime-info
 Requires(postun):  shared-mime-info
@@ -56,7 +60,7 @@ development but is also useful as a general purpose language.
 Summary:        The libraries for the qore runtime and qore clients
 License:        LGPL-2.1-or-later OR GPL-2.0-or-later OR MIT
 Group:          Development/Languages/Other
-Provides:       qore-module(abi)%{?_isa} = 1.5
+Provides:       qore-module(abi)%{?_isa} = 2.0
 
 %description -n libqore20
 Qore is a scripting language supporting threading and embedded logic, designed
@@ -155,6 +159,7 @@ This package contains tool for working with:
 %{_bindir}/saprest
 %{_bindir}/sqlutil
 %{_bindir}/schema-reverse
+%{_bindir}/qfmt
 
 %prep
 %autosetup -p1
@@ -162,22 +167,13 @@ This package contains tool for working with:
 find examples -type f|xargs chmod 644
 
 %build
-aclocal
-autoreconf -fi
-%if "%_lib" == "lib64"
-c64=--enable-64bit
-%endif
-%configure --disable-debug --disable-static $c64
-make %{?_smp_mflags}
-sed -i '1s,#!/usr/bin/env qore,#!/usr/bin/qore,' bin/* doxygen/qdx doxygen/qjar
-
+export CXXFLAGS="%{?optflags}"
+cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DSINGLE_COMPILATION_UNIT=1 .
+%make_build
 
 %install
-mkdir -p %{buildroot}%{_prefix}/bin
-mkdir -p %{buildroot}/%{module_dir}/%{version}
-mkdir -p %{buildroot}%{_prefix}/man/man1
-make install prefix=%{_prefix} DESTDIR=%{buildroot}
-rm %{buildroot}/%{_libdir}/libqore.la
+%make_install
+mkdir -p %{buildroot}/%{module_dir}
 %fdupes -s docs
 # mime info
 cp addon/freedesktop/qore.xml %{buildroot}/%{_datadir}/mime/packages

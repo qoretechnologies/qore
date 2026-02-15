@@ -38,6 +38,7 @@ extern QoreListNode* ARGV, * QORE_ARGV;
 extern QoreHashNode* ENV;
 
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_AutoReadLock.h"
 #include "qore/intern/QC_AutoWriteLock.h"
@@ -55,6 +56,7 @@ extern QoreHashNode* ENV;
 // Forward declaration to avoid circular includes
 class QoreSandboxManager;
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdarg>
 #include <map>
@@ -125,6 +127,9 @@ public:
     // number of top-level local variables instantiated (for REPL mode)
     unsigned inst_count = 0;
 
+    // declaration order counter for proper destruction order (issue #5168)
+    uint64_t var_order_counter = 0;
+
     DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), inst_count(0) {
         printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
     }
@@ -135,9 +140,36 @@ public:
         assert(cvstack.empty());
     }
 
+    //! Returns the next declaration order value
+    DLLLOCAL uint64_t getNextVarOrder() {
+        return ++var_order_counter;
+    }
+
+    //! Finalizes variables in reverse declaration order (issue #5168)
+    /** Collects values from both lvstack and cvstack, sorts by declaration order,
+        and finalizes in reverse order to ensure proper destruction semantics.
+    */
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
-        lvstack.finalize(sdh);
-        cvstack.finalize(sdh);
+        // Collect all values with their declaration order
+        typedef std::pair<uint64_t, QoreValue> OrderedValue;
+        std::vector<OrderedValue> ordered_values;
+
+        // Collect from lvstack
+        lvstack.collectForFinalize(ordered_values);
+
+        // Collect from cvstack
+        cvstack.collectForFinalize(ordered_values);
+
+        // Sort by declaration order in descending order (reverse declaration order)
+        std::sort(ordered_values.begin(), ordered_values.end(),
+            [](const OrderedValue& a, const OrderedValue& b) {
+                return a.first > b.first;  // descending order = reverse declaration order
+            });
+
+        // Finalize in sorted order
+        for (auto& ov : ordered_values) {
+            sdh.deref(ov.second);
+        }
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
@@ -429,6 +461,9 @@ public:
     // time zone setting for the program
     const AbstractQoreZoneInfo* TZ;
 
+    // lock protecting the sandbox_manager pointer
+    QoreThreadLock sm_lock;
+
     // sandbox manager for security restrictions
     QoreSandboxManager* sandbox_manager = nullptr;
 
@@ -673,6 +708,12 @@ public:
             i.first->delProgram(pgm);
         }
     }
+
+    //! Returns a ref'd sandbox manager pointer, or nullptr if none/already deleted
+    /** The caller must call deref() on the returned pointer when done.
+        Thread-safe: acquires sm_lock and calls optRef() to avoid use-after-free.
+    */
+    DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
@@ -1351,7 +1392,7 @@ public:
         size_t len = strlen(filename);
         if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
             pwo.parse_options |= PO_MODERN;
-            pgm->setWarningMask(-1);
+            pgm->setWarningMask(QP_WARN_ALL);
         }
 
         setScriptPath(filename);
@@ -1402,8 +1443,9 @@ public:
     DLLLOCAL QoreHashNode* clearThreadData(ExceptionSink* xsink) {
         QoreHashNode* h = thread_local_storage->get();
         printd(5, "QoreProgram::clearThreadData() this: %p h: %p (size: %d)\n", this, h, h ? h->size() : 0);
-        if (h)
-            h->clear(xsink);
+        if (h) {
+            qore_hash_private::clear(*h, xsink);
+        }
         return h;
     }
 
@@ -2659,6 +2701,9 @@ public:
         }
         return l.release();
     }
+
+    // Release any remaining program instances at shutdown.
+    DLLLOCAL static void cleanupAllPrograms(ExceptionSink* xsink);
 
 private:
     mutable QoreCounter debug_program_counter;  // number of thread calls to debug program instance.

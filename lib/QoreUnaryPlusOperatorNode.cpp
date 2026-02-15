@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -41,7 +42,7 @@ QoreString *QoreUnaryPlusOperatorNode::getAsString(bool &del, int foff, Exceptio
 }
 
 int QoreUnaryPlusOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat(&unaryplus_str);
+    qore_string_private::get(str)->concat(&unaryplus_str);
     return 0;
 }
 
@@ -112,7 +113,6 @@ int QoreUnaryPlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         if (tcnt > 0) {
             returnTypeInfo = nullptr;
         } else if (!tcnt) {
-            // FIXME: raise exceptions with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the expression with the unary plus '+' operator is ");
             QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
             edesc->concat(" and so this expression will always return 0; the unary plus '+' operator only returns " \

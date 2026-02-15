@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_TimeZone.h"
@@ -214,6 +215,41 @@ const DOM_DEBUGGER = QDOM_DEBUGGER;
 const DOM_REFLECTION = QDOM_REFLECTION;
 ///@}
 
+/** @defgroup code_flag_constants Code Flag Constants
+    These are the possible code flags that can be returned by @ref Reflection::AbstractVariant::getCodeFlags()
+    "AbstractVariant::getCodeFlags()" to describe variant attributes.
+
+    @since %Qore 2.3
+*/
+///@{
+//! indicates no code flags are set
+const CF_NO_FLAGS = QCF_NO_FLAGS;
+
+//! indicates that this variant is a noop, returning a constant value with the given argument types
+/** Noop variants are not available at parse time when @ref Qore::PO_STRICT_ARGS "PO_STRICT_ARGS" is set.
+*/
+const CF_NOOP = QCF_NOOP;
+
+//! indicates that the code accesses arguments beyond the declared parameter list
+const CF_USES_EXTRA_ARGS = QCF_USES_EXTRA_ARGS;
+
+//! indicates that the function or method is deprecated and will be removed in a later release
+const CF_DEPRECATED = QCF_DEPRECATED;
+
+//! indicates that the code only returns a value and has no other side effects
+const CF_RET_VALUE_ONLY = QCF_RET_VALUE_ONLY;
+
+//! indicates that this variant is a noop that is additionally not available at runtime with @ref Qore::PO_REQUIRE_TYPES "PO_REQUIRE_TYPES"
+/** Runtime noop variants are not available to programs executing with
+    @ref Qore::PO_REQUIRE_TYPES "PO_REQUIRE_TYPES" or
+    @ref Qore::PO_STRICT_ARGS "PO_STRICT_ARGS".
+*/
+const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
+
+//! indicates that the code is safe to use in a constant expression (i.e. has no side effects and is deterministic)
+const CF_CONSTANT = QCF_CONSTANT;
+///@}
+
 /** @defgroup parse_options Parse Option Constants
     These are the possible values that can be or'ed together to set @ref Qore::Program "Program" parse options
 */
@@ -312,6 +348,15 @@ const PO_LOCKDOWN = PO_LOCKDOWN;
     @see @ref new-style "%new-style"
  */
 const PO_NEW_STYLE = PO_NEW_STYLE;
+
+//! Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", and @ref strong-encapsulation "%strong-encapsulation"; also enables all non-strict warnings
+/** made up of @ref PO_NEW_STYLE | @ref PO_REQUIRE_TYPES | @ref PO_STRICT_ARGS | @ref PO_STRONG_ENCAPSULATION
+
+    @see @ref modern "%modern"
+
+    @since %Qore 2.3
+*/
+const PO_MODERN = PO_MODERN;
 
 //! Disallows loading @ref qore_modules "modules" with the @ref requires "%requires" directive or at runtime with load_module()
 /**
@@ -667,6 +712,12 @@ const PO_BROKEN_LOOP_STATEMENT = PO_BROKEN_LOOP_STATEMENT;
 */
 const PO_BROKEN_RANGE = PO_BROKEN_RANGE;
 
+//! Enables legacy namespace resolution behavior
+/**
+    @see @ref broken-namespace-resolution "%broken-namespace-resolution"
+*/
+const PO_BROKEN_NAMESPACE_RESOLUTION = PO_BROKEN_NAMESPACE_RESOLUTION;
+
 //! allows for old pre-%Qore 0.8.13 handling of @ref reference_type "reference" and @ref reference_or_nothing_type "*reference"
 /** @see @ref broken-references "%broken-references"
 
@@ -725,9 +776,9 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 
     @note Parsing is only allowed when no threads are active in the Program.
 
-    @see @ref parsePending() "Program::parsePending()"
-    @see @ref parseCommit() "Program::parseCommit()"
-    @see @ref parseRollback() "Program::parseRollback()"
+    @see @ref Qore::Program::parsePending() "Program::parsePending()"
+    @see @ref Qore::Program::parseCommit() "Program::parseCommit()"
+    @see @ref Qore::Program::parseRollback() "Program::parseRollback()"
 
     @since %Qore 2.3
  */
@@ -772,8 +823,16 @@ const PO_BROKEN_CAST = PO_BROKEN_CAST;
 */
 const PO_ALLOW_RETURNS = PO_ALLOW_RETURNS;
 
-//! Sets strict type checking and automatically sets default values for lvalues with type restrictions for types with default values
-/** @see @ref strict-types "%strict-types"
+//! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
+/** The @ref strict-types "%strict-types" functionality was intended to prepare for JIT compilation by
+    enforcing stricter typing and automatically initializing typed variables with default values.
+    However, the NaN-boxing optimization for @ref QoreValue addressed JIT requirements more effectively
+    without requiring behavioral changes.
+
+    Code using \c %strict-types will parse without error but the directive has no effect.
+    Code checking \c PO_STRICT_TYPES will always evaluate to false (0).
+
+    @see @ref strict-types "%strict-types"
 
     @since %Qore 0.9.4
 */
@@ -794,11 +853,11 @@ const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
 //! enables \@assert and \@debug statements (otherwise ignored at parse time)
 /** @see @ref enable-debug "%enable-debug"
 
-    @since %Qore 2.1
+    @since %Qore 2.3
 */
 const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
 
-//! Disables the @ref typedef keyword
+//! Disables the @ref typedef_keyword "typedef" keyword
 /** @see @ref no-typedef "%no-typedef"
 
     @since %Qore 2.3
@@ -816,6 +875,8 @@ const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 
 //! Do not allow enum declarations
 /**
+    @see @ref no-enum "%no-enum"
+
     @since %Qore 2.3
 */
 const PO_NO_ENUM = PO_NO_ENUM;
@@ -825,8 +886,18 @@ const PO_NO_ENUM = PO_NO_ENUM;
     These are the possible values that can be or'ed together to set the @ref Qore::Program "Program" warning mask
 */
 ///@{
-//! Enables all warnings
+//! Enables all non-strict warnings
+/** This warning mask excludes @ref WARN_AMBIGUOUS_CALL_RESOLUTION and @ref WARN_AMBIGUOUS_OVERLOAD; use
+    @ref WARN_STRICT to enable strict warnings.
+*/
 const WARN_ALL = QP_WARN_ALL;
+
+//! Enables strict warnings
+/** This warning mask enables:
+    - @ref WARN_AMBIGUOUS_CALL_RESOLUTION
+    - @ref WARN_AMBIGUOUS_OVERLOAD
+*/
+const WARN_STRICT = QP_WARN_STRICT;
 
 //! Enables warnings when the parser determines that the argument types of a function or method call are such that the operation is guaranteed to produce a constant value
 /** @see @ref call-with-type-errors
@@ -913,6 +984,16 @@ const WARN_NONEXISTENT_METHOD_CALL = QP_WARN_NONEXISTENT_METHOD_CALL;
  */
 const WARN_RETURN_VALUE_IGNORED = QP_WARN_RETURN_VALUE_IGNORED;
 
+//! Enables a warning when a call is ambiguous across multiple namespaces
+/** @see ambiguous-call-resolution warning
+ */
+const WARN_AMBIGUOUS_CALL_RESOLUTION = QP_WARN_AMBIGUOUS_CALL_RESOLUTION;
+
+//! Enables a warning when ambiguous overloads are defined or inherited
+/** @see ambiguous-overload warning
+ */
+const WARN_AMBIGUOUS_OVERLOAD = QP_WARN_AMBIGUOUS_OVERLOAD;
+
 //! Indicates that the embedded code referenced an undeclared variable that will be assumed to be a global variable
 /** @see @ref undeclared-var
  */
@@ -947,8 +1028,6 @@ const WARN_BROKEN_LOGIC_PRECEDENCE = QP_WARN_BROKEN_LOGIC_PRECEDENCE;
 
 //! This warns when the catch variable has no type definition and types are required
 /** @see @ref invalid-catch
-
-    @note This is an error when @ref strict-types "%strict-types" is in effect
 
     @since %Qore 1.0
 */
@@ -1929,7 +2008,8 @@ pgm.setSandboxManager(sm);
     @since Qore 2.1
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sm) {
-   sm->ref();  // ref for the program
+   // setSandboxManager() takes its own strong reference; use ReferenceHolder for the arg ref
+   ReferenceHolder<QoreSandboxManager> holder(sm, xsink);
    p->setSandboxManager(sm);
 }
 
@@ -1947,11 +2027,11 @@ if (sm) {
     @since Qore 2.1
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
-   QoreSandboxManager* sm = p->getSandboxManager();
+   QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();
    if (!sm) {
        return QoreValue();
    }
-   sm->ref();  // ref for the returned object
+   // getSandboxManagerRef() already acquired a ref for us; pass it to the new object
    return new QoreObject(QC_SANDBOXMANAGER, 0, sm);
 }
 

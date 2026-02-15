@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore AbstractConnection class definition
 
-/*  AbstractConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  AbstractConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -207,7 +207,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         calling @ref getSafeUrl()
         @param enabled enabled/disabled flag
 
-        @note use constructor(hash<auto> config, *hash<auto> attr instead
+        @note use constructor(\c hash&lt;auto&gt; config, \c *hash&lt;auto&gt; attr) instead
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
@@ -255,7 +255,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
         @throw CONNECTION-URL-ERROR URL is invalid, because it contains control characters
 
-        @note use constructor(hash<auto> config, *hash<auto> attr instead
+        @note use constructor(\c hash&lt;auto&gt; config, \c *hash&lt;auto&gt; attr) instead
     */
     deprecated constructor(string name, string description, string url, hash<auto> attributes = {},
             hash<auto> options = {}, *LoggerInterface logger) : LoggerWrapper(logger) {
@@ -375,7 +375,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! returns a hash with the results of the ping operation
-    /** @param ping_flags see @ref PingFlags for more information
+    /** @param ping_flags see \c PingFlags for more information
 
         @return a @ref PingInfo hash
 
@@ -415,7 +415,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Starts customization for the object
-    /** @bool restart Restart any customization in progress
+    /** @param restart restart any customization in progress
 
         @throw CUSTOMIZATION-UNSUPPORTED this exception is thrown if the connection does not support customization
         @throw CUSTOMIZATION-IN-PROGRESS this exception is thrown if customization is already in progress and
@@ -449,7 +449,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         @return a @ref ConnectionInfo hash of information about the connection
 
-        @deprecated use getInfo(*hash<auto> opts) instead
+        @deprecated use getInfo(\c *hash&lt;auto&gt; opts) instead
     */
     hash<ConnectionInfo> getInfo(bool with_password = False) {
         return getInfo({
@@ -527,7 +527,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Returns connection info plus any extended information returned by the connection
-    /** The default implementation in the base class returns the same value as getInfo(*hash<auto>)
+    /** The default implementation in the base class returns the same value as getInfo(\c *hash&lt;auto&gt;)
 
         @param opts connection information options; options are connection-specific; the only universal option is
         \c with_passwords: if @ref True, then passwords are returned in the info hash
@@ -546,7 +546,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     }
 
     #! Returns connection info plus any extended information returned by the connection
-    /** The default implementation in the base class returns the same value as getInfoAsData(*hash<auto>)
+    /** The default implementation in the base class returns the same value as getInfoAsData(\c *hash&lt;auto&gt;)
 
         @param opts connection information options; options are connection-specific; the only universal option is
         \c with_passwords: if @ref True, then passwords are returned in the info hash
@@ -684,13 +684,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         return rv;
     }
 
-    #! returns @ref True if the connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True if the connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True if the connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True if the connection returns a data provider with the \c getDataProvider() method
 
         This base class method returns @ref False; to support the data provider API, override this method in child
         classes
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
 
         @since ConnectionProvider 1.3
     */
@@ -767,7 +767,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         classes
 
         @see
-        - @ref startConnectPoll()
+        - \c startPollConnect()
 
         @since ConnectionProvider 1.7
     */
@@ -778,7 +778,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
     #! Called to start the connection polling operation
     /** Only called if the connection supports the polling API
 
-        @param an optional logger interface for any object used for polling
+        @param logger an optional logger interface for any object used for polling
 
         @return a socket poll operation object that will allow the connection goal to be reached with polling
 
@@ -819,18 +819,35 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
     #! Returns a ConnectionOptionInfo hash from a DataProviderOptionInfo hash
     static hash<ConnectionOptionInfo> getConnectionOptionInfo(hash<DataProviderOptionInfo> dinfo) {
-        hash<ConnectionOptionInfo> rv = cast<hash<ConnectionOptionInfo>>(dinfo{CommonConnectionKeys});
-        rv.type = dinfo.type[0].getBaseTypeName();
-        rv.type =~ s/<.*>//;
-        return rv;
+        string type_str = dinfo.type[0].getBaseTypeName();
+        type_str =~ s/<.*>//;
+        return <ConnectionOptionInfo>{
+            "display_name": dinfo.display_name,
+            "short_desc": dinfo.short_desc,
+            "desc": dinfo.desc,
+            "sensitive": dinfo.sensitive,
+            "allowed_values": dinfo.allowed_values,
+            "allowed_values_creatable": dinfo.allowed_values_creatable,
+            "default_value": dinfo.default_value,
+            "example_value": dinfo.example_value,
+            "required": dinfo.required,
+            "readonly": dinfo.readonly,
+            "disabled": dinfo.disabled,
+            "preselected": dinfo.preselected,
+            "has_dependents": dinfo.has_dependents,
+            "depends_on": dinfo.depends_on,
+            "on_change": dinfo.on_change,
+            "type": type_str,
+        };
     }
 
     #! Returns a hash of ConnectionOptionInfo hashes from a hash of DataProviderOptionInfo hashes
     static hash<string, hash<ConnectionOptionInfo>> getConnectionOptionInfo(
                 hash<string, hash<DataProviderOptionInfo>> dinfo) {
-        return cast<hash<string, hash<ConnectionOptionInfo>>>(map {
-            $1.key: AbstractConnection::getConnectionOptionInfo($1.value)
-        }, dinfo.pairIterator());
+        hash<string, hash<ConnectionOptionInfo>> rv;
+        map rv{$1.key} = AbstractConnection::getConnectionOptionInfo($1.value),
+            dinfo.pairIterator();
+        return rv;
     }
 
     #! Returns the real URL for a connection URL
@@ -903,6 +920,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
     #! Returns options for each data provider subtype
     /**
+        @param subtype_options subtype option descriptions
         @param constructor_options any additional constructor options required by the data provider
     */
     private *hash<auto> getSubtypeOptions(*hash<string, hash<DataProviderOptionInfo>> subtype_options,
@@ -1054,7 +1072,7 @@ scheme://user:pass@hostname:port/path
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */

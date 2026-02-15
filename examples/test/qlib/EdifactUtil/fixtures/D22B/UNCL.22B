@@ -1,0 +1,11 @@
+CHAPTER 6 Code list
+
+     1001  Document name code                                      [C]
+
+     Desc: Code specifying the document name.
+
+     Repr: an..3
+
+     36     "Container discharge/loading report"
+     1     "Control message"
+     27     "Application error and acknowledgement"

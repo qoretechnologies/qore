@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -41,7 +42,7 @@ QoreString *QoreInstanceOfOperatorNode::getAsString(bool& del, int foff, Excepti
 }
 
 int QoreInstanceOfOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&InstanceOf_str);
+    qore_string_private::get(str)->concat(&InstanceOf_str);
     return 0;
 }
 
@@ -92,7 +93,6 @@ int QoreInstanceOfOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     // issue #4112: ensure that objects will be subject to runtime checks
     if (!QoreTypeInfo::parseAccepts(ti, lti)
         && (!QoreTypeInfo::parseAccepts(ti, objectTypeInfo) || !QoreTypeInfo::parseAccepts(lti, objectTypeInfo))) {
-        // FIXME this must be an error with %strict-types
         QoreStringNode* edesc = new QoreStringNodeMaker("'%s instanceof %s' always returns False",
             QoreTypeInfo::getName(lti), QoreTypeInfo::getName(ti));
         qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",

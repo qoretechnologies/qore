@@ -35,6 +35,8 @@
 
 #include "qore/intern/AbstractStatement.h"
 
+class RuntimeConfig;
+
 class TryStatement : public AbstractStatement {
 public:
     DLLLOCAL TryStatement(const QoreProgramLocation* loc, class StatementBlock* t, class StatementBlock* c, char* p,
@@ -57,6 +59,7 @@ private:
     const QoreProgramLocation* loc;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
+    DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 };
 

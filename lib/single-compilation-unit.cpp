@@ -26,7 +26,14 @@
     information.
 */
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
 #include "parser.cpp"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include "scanner.cpp"
 #undef ECHO
 #include "BarewordNode.cpp"
@@ -125,6 +132,7 @@
 #include "ConstantList.cpp"
 #include "QoreClassList.cpp"
 #include "HashDeclList.cpp"
+#include "RuntimeConfig.cpp"
 #include "thread.cpp"
 #include "AbstractThreadResource.cpp"
 #include "ThreadResourceList.cpp"
@@ -344,6 +352,8 @@
 #include "QC_TreeMap.cpp"
 #include "QC_AbstractThreadResource.cpp"
 #include "QC_StreamBase.cpp"
+#include "InputStream.cpp"
+#include "OutputStream.cpp"
 #include "QC_InputStream.cpp"
 #include "QC_BinaryInputStream.cpp"
 #include "QC_StringInputStream.cpp"
@@ -389,3 +399,5 @@
 #ifdef DEBUG
 #include "ql_debug.cpp"
 #endif
+// Non-blocking stream I/O support (used by HTTP/2 streaming)
+#include "Http2Session.cpp"

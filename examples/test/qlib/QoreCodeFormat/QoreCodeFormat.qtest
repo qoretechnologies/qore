@@ -1,0 +1,1059 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/QoreCodeFormat
+
+%exec-class QoreCodeFormatTest
+
+class QoreCodeFormatTest inherits QUnit::Test {
+    constructor() : Test("QoreCodeFormatTest", "1.0") {
+        addTestCase("basic formatting", \testBasicFormatting());
+        addTestCase("parse directives", \testParseDirectives());
+        addTestCase("class formatting", \testClassFormatting());
+        addTestCase("function formatting", \testFunctionFormatting());
+        addTestCase("if-else chains", \testIfElseChains());
+        addTestCase("loops", \testLoops());
+        addTestCase("switch statement", \testSwitchStatement());
+        addTestCase("try-catch", \testTryCatch());
+        addTestCase("expressions", \testExpressions());
+        addTestCase("comments", \testComments());
+        addTestCase("literals", \testLiterals());
+        addTestCase("closures", \testClosures());
+        addTestCase("hashdecl", \testHashdecl());
+        addTestCase("enum", \testEnum());
+        addTestCase("namespace", \testNamespace());
+        addTestCase("idempotency", \testIdempotency());
+        addTestCase("error handling", \testErrorHandling());
+        addTestCase("on_exit", \testOnBlockExit());
+        addTestCase("throw", \testThrow());
+        addTestCase("empty input", \testEmptyInput());
+        addTestCase("only directives", \testOnlyDirectives());
+        addTestCase("complex class", \testComplexClass());
+        addTestCase("namespace left-justified", \testNamespaceLeftJustified());
+        addTestCase("multi-line function wrapping", \testMultiLineFunctionWrapping());
+        addTestCase("multi-line class wrapping", \testMultiLineClassWrapping());
+        addTestCase("multi-line method wrapping", \testMultiLineMethodWrapping());
+        addTestCase("default param formatting", \testDefaultParamFormatting());
+        addTestCase("hashdecl hash expression", \testHashdeclHashExpression());
+        addTestCase("hash access brackets", \testHashAccessBrackets());
+        addTestCase("literal zero", \testLiteralZero());
+        addTestCase("boolean literals", \testBooleanLiterals());
+        addTestCase("nothing null literals", \testNothingNullLiterals());
+        addTestCase("regex with flags", \testRegexFlags());
+        addTestCase("operator precedence parens", \testOperatorPrecedenceParens());
+        addTestCase("access expr parens", \testAccessExprParens());
+        addTestCase("hash delimiter preservation", \testHashDelimiterPreservation());
+        addTestCase("multi-line expression idempotency", \testMultiLineExprIdempotency());
+        addTestCase("nested hash indentation", \testNestedHashIndentation());
+        addTestCase("regex escaped slashes", \testRegexEscapedSlashes());
+
+        set_return_value(main());
+    }
+
+    testBasicFormatting() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("sub keyword present", "int sub add", result);
+        assertRegex("params correct", "\\(int a, int b\\)", result);
+        assertRegex("return statement", "return a \\+ b;", result);
+        assertRegex("opening brace", "\\{$", result);
+    }
+
+    testParseDirectives() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+%enable-all-warnings
+
+int sub test() {
+    return 1;
+}
+";
+        string result = fmt.format(src);
+        # Directives must be at column 0
+        assertRegex("modern at col 0", "^%modern", result);
+        assertRegex("warnings at col 0", "^%enable-all-warnings", result);
+    }
+
+    testClassFormatting() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+class Foo {
+    private {
+        int x;
+    }
+
+    constructor(int val) {
+        x = val;
+    }
+
+    int getX() {
+        return x;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("class keyword", "class Foo \\{", result);
+        assertRegex("private block", "private \\{", result);
+        assertRegex("constructor no sub", "constructor\\(int val\\)", result);
+        # Methods should NOT have sub keyword
+        assertTrue(result !~ /sub getX/, "method should not have sub keyword");
+        assertTrue(result !~ /sub constructor/, "constructor should not have sub keyword");
+    }
+
+    testFunctionFormatting() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+int sub add(int a, int b, int c) {
+    return a + b + c;
+}
+
+sub noReturn() {
+    return;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("sub keyword for function", "int sub add\\(int a, int b, int c\\)", result);
+        assertRegex("three args flat", "int a, int b, int c", result);
+        assertRegex("plus operators", "a \\+ b \\+ c", result);
+        assertRegex("void function", "sub noReturn\\(\\)", result);
+    }
+
+    testIfElseChains() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(int x) {
+    if (x > 0) {
+        x = 1;
+    } else if (x < 0) {
+        x = -1;
+    } else {
+        x = 0;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("else if chain", "\\} else if \\(x < 0\\) \\{", result);
+        assertRegex("else block", "\\} else \\{", result);
+        # Should NOT produce nested else { if }
+        assertTrue(result !~ /else \{\s*\n\s*if/, "should not nest else-if");
+    }
+
+    testLoops() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # while
+        string src1 = "%modern
+sub test() {
+    int x = 0;
+    while (x < 10) {
+        ++x;
+    }
+}
+";
+        string r1 = fmt.format(src1);
+        assertRegex("while loop", "while \\(x < 10\\) \\{", r1);
+        assertRegex("pre-increment", "\\+\\+x;", r1);
+
+        # for
+        string src2 = "%modern
+sub test() {
+    for (int i = 0; i < 10; ++i) {
+        int x = i;
+    }
+}
+";
+        string r2 = fmt.format(src2);
+        assertRegex("for loop", "for \\(", r2);
+
+        # foreach
+        string src3 = "%modern
+sub test() {
+    list<int> l = (1, 2, 3);
+    foreach int v in (l) {
+        int x = v;
+    }
+}
+";
+        string r3 = fmt.format(src3);
+        assertRegex("foreach", "foreach int v in \\(l\\) \\{", r3);
+
+        # do-while
+        string src4 = "%modern
+sub test() {
+    int x = 0;
+    do {
+        ++x;
+    } while (x < 5);
+}
+";
+        string r4 = fmt.format(src4);
+        assertRegex("do-while", "do \\{", r4);
+        assertRegex("while condition", "\\} while \\(x < 5\\);", r4);
+    }
+
+    testSwitchStatement() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(int x) {
+    switch (x) {
+        case 1:
+            break;
+        case 2:
+            break;
+        default:
+            break;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("switch", "switch \\(x\\) \\{", result);
+        assertRegex("case 1", "case 1:", result);
+        assertRegex("case 2", "case 2:", result);
+        assertRegex("default", "default:", result);
+    }
+
+    testTryCatch() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    try {
+        int x = 1;
+    } catch (hash<auto> ex) {
+        int y = 2;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("try block", "try \\{", result);
+        assertRegex("catch block", "\\} catch \\(", result);
+    }
+
+    testExpressions() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Binary operators
+        string src1 = "%modern
+sub test() {
+    int x = 1 + 2;
+    int y = 3 * 4;
+    bool z = x == y;
+    bool w = x != y;
+    bool a = x > y && x < 100;
+    auto v = x ?? y;
+}
+";
+        string r1 = fmt.format(src1);
+        assertRegex("plus", "1 \\+ 2", r1);
+        assertRegex("multiply", "3 \\* 4", r1);
+        assertRegex("equals", "x == y", r1);
+        assertRegex("not equals", "x != y", r1);
+        assertRegex("logical and", "&&", r1);
+        assertRegex("null coalesce", "\\?\\?", r1);
+
+        # Ternary
+        string src2 = "%modern
+sub test() {
+    int x = 1 > 0 ? 1 : -1;
+}
+";
+        string r2 = fmt.format(src2);
+        assertRegex("ternary", "\\? 1 : -1", r2);
+
+        # Unary
+        string src3 = "%modern
+sub test() {
+    int x = 0;
+    ++x;
+    x++;
+    --x;
+    bool b = !True;
+}
+";
+        string r3 = fmt.format(src3);
+        assertRegex("pre-increment", "\\+\\+x;", r3);
+        assertRegex("post-increment", "x\\+\\+;", r3);
+        assertRegex("pre-decrement", "--x;", r3);
+        assertRegex("logical not", "!True", r3);
+
+        # Index
+        string src4 = "%modern
+sub test() {
+    list<int> l = (1, 2);
+    int x = l[0];
+}
+";
+        string r4 = fmt.format(src4);
+        assertRegex("index", "l\\[0\\]", r4);
+        assertTrue(r4 !~ /l\[\[/, "should not double-bracket index");
+
+        # Assignment operators
+        string src5 = "%modern
+sub test() {
+    int x = 0;
+    x += 1;
+    x -= 2;
+    x *= 3;
+}
+";
+        string r5 = fmt.format(src5);
+        assertRegex("plus-equals", "x \\+= 1", r5);
+        assertRegex("minus-equals", "x -= 2", r5);
+        assertRegex("multiply-equals", "x \\*= 3", r5);
+    }
+
+    testComments() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+# Top-level comment
+sub test() {
+    int x = 0;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("comment preserved", "# Top-level comment", result);
+    }
+
+    testLiterals() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    int x = 42;
+    float f = 3.14;
+    string s = \"hello\";
+    bool b = True;
+    bool c = False;
+    *int n = NOTHING;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("integer", "42", result);
+        assertRegex("float", "3\\.14", result);
+        assertRegex("string", "\"hello\"", result);
+        assertRegex("True", "True", result);
+        assertRegex("False", "False", result);
+    }
+
+    testClosures() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    code c = int sub(int x) { return x * 2; };
+}
+";
+        string result = fmt.format(src);
+        assertRegex("closure sub", "int sub\\(int x\\)", result);
+        assertRegex("closure body braces", "\\{ return x \\* 2; \\}", result);
+    }
+
+    testHashdecl() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+public hashdecl MyInfo {
+    string name;
+    int age;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("hashdecl keyword", "hashdecl MyInfo \\{", result);
+        assertRegex("public modifier", "public hashdecl", result);
+        assertRegex("member name", "string name;", result);
+        assertRegex("member age", "int age;", result);
+    }
+
+    testEnum() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+public enum Color {
+    Red = 0,
+    Green = 1,
+    Blue = 2,
+}
+";
+        string result = fmt.format(src);
+        assertRegex("enum keyword", "enum Color \\{", result);
+        assertRegex("Red", "Red = 0,", result);
+        assertRegex("Green", "Green = 1,", result);
+        assertRegex("Blue", "Blue = 2,", result);
+    }
+
+    testNamespace() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+public namespace MyNS {
+    const X = 1;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("namespace keyword", "public namespace MyNS \\{", result);
+        # Namespace body should be left-justified (at column 0)
+        assertRegex("constant at col 0", "^const X = 1;", result);
+    }
+
+    testIdempotency() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Test that formatting already-formatted code produces the same result
+        list<string> sources = (
+            "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+",
+            "%modern
+public class Foo {
+    private {
+        int x;
+    }
+
+    constructor() {
+        x = 0;
+    }
+}
+",
+            "%modern
+sub test() {
+    if (True) {
+        int x = 1;
+    } else {
+        int x = 2;
+    }
+}
+",
+            "%modern
+public hashdecl Info {
+    string name;
+}
+",
+        );
+
+        for (int i = 0; i < sources.size(); ++i) {
+            string pass1 = fmt.format(sources[i]);
+            string pass2 = fmt.format(pass1);
+            assertEq(pass1, pass2, sprintf("idempotency test %d", i));
+        }
+    }
+
+    testErrorHandling() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Invalid syntax should throw
+        assertThrows("FORMAT-ERROR", \fmt.format(), "invalid syntax {{{{");
+    }
+
+    testOnBlockExit() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    on_exit {
+        int x = 1;
+    }
+    int y = 2;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("on_exit", "on_exit \\{", result);
+    }
+
+    testThrow() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    throw \"ERR\", \"message\";
+}
+";
+        string result = fmt.format(src);
+        assertRegex("throw without parens", "throw \"ERR\", \"message\";", result);
+        assertTrue(result !~ /throw \(/, "throw should not wrap in parens");
+    }
+
+    testEmptyInput() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+";
+        string result = fmt.format(src);
+        assertRegex("just directive", "^%modern\\n$", result);
+    }
+
+    testOnlyDirectives() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+%enable-all-warnings
+";
+        string result = fmt.format(src);
+        assertRegex("modern", "%modern", result);
+        assertRegex("warnings", "%enable-all-warnings", result);
+    }
+
+    testComplexClass() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+public class Calculator inherits Base {
+    private {
+        int result;
+        string name;
+    }
+
+    constructor(int r, string n) {
+        result = r;
+        name = n;
+    }
+
+    int getResult() {
+        return result;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    static int add(int a, int b) {
+        return a + b;
+    }
+
+    reset() {
+        result = 0;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("class with inherits", "class Calculator inherits Base \\{", result);
+        assertRegex("private block", "private \\{", result);
+        assertRegex("constructor", "constructor\\(int r, string n\\) \\{", result);
+        assertRegex("static method", "static int add\\(int a, int b\\) \\{", result);
+        # Verify no sub keyword in methods
+        assertTrue(result !~ /sub getResult/, "method should not have sub");
+        assertTrue(result !~ /sub reset/, "method should not have sub");
+    }
+
+    testNamespaceLeftJustified() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+public namespace MyNS {
+    const X = 1;
+
+    int sub test() {
+        return 1;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("namespace keyword", "public namespace MyNS \\{", result);
+        # Declarations inside namespace should be left-justified (not indented)
+        assertRegex("constant at col 0", "^const X = 1;", result);
+        assertRegex("function at col 0", "^int sub test\\(\\)", result);
+        # Body of function inside namespace should still be indented
+        assertRegex("function body indented", "^    return 1;", result);
+    }
+
+    testMultiLineFunctionWrapping() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Function with params long enough to exceed 120 chars
+        string src = "%modern
+int sub processUserRequestWithValidation(hash<auto> requestData, string authorizationToken, int maxRetryAttempts, bool enableDetailedLogging) {
+    return 1;
+}
+";
+        string result = fmt.format(src);
+        # Should wrap: prefix + opening paren on first line
+        assertRegex("opening paren on first line", "processUserRequestWithValidation\\($", result);
+        # Continuation lines at 8-space double-indent
+        assertRegex("first param at 8 spaces", "^        hash<auto> requestData,", result);
+        assertRegex("second param at 8 spaces", "^        string authorizationToken,", result);
+        assertRegex("last param at 8 spaces", "^        bool enableDetailedLogging", result);
+        # Closing paren at base indent (column 0 for top-level function)
+        assertRegex("closing paren at base indent", "^\\) \\{$", result);
+        # Body at standard 4-space indent
+        assertRegex("body at 4 spaces", "^    return 1;", result);
+    }
+
+    testMultiLineClassWrapping() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Class with inherits list long enough to exceed 120 chars
+        string src = "%modern
+public class MyServiceManagerImplementation inherits AbstractServiceBase, DetailedLoggingMixin, ConfigurationHandler, EventProcessor {
+    private {
+        int x;
+    }
+}
+";
+        string result = fmt.format(src);
+        # Class name on first line, inherits on continuation
+        assertRegex("class name on first line", "^public class MyServiceManagerImplementation$", result);
+        assertRegex("inherits on continuation line", "^        inherits ", result);
+        # Body indented normally
+        assertRegex("private block indented", "^    private \\{", result);
+    }
+
+    testMultiLineMethodWrapping() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Method inside class with long params
+        string src = "%modern
+class Processor {
+    hash<auto> processComplexDataStructure(hash<auto> inputData, string operationMode, int maxIterations, bool enableValidation) {
+        return {};
+    }
+}
+";
+        string result = fmt.format(src);
+        # Method params should wrap with 8-space continuation relative to body indent
+        # At indent level 1 (inside class), continuation is 4 + 8 = 12 spaces
+        assertRegex("method opening paren", "processComplexDataStructure\\($", result);
+        assertRegex("method param at 12 spaces", "^            hash<auto> inputData,", result);
+        # Closing paren at method indent level (4 spaces)
+        assertRegex("closing paren at method indent", "^    \\) \\{$", result);
+        # Body at 8 spaces (method indent 4 + body indent 4)
+        assertRegex("method body at 8 spaces", "^        return \\{\\};", result);
+    }
+
+    testDefaultParamFormatting() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Single default value
+        string src1 = "%modern
+sub f(int a = 1, int b) {
+    return a + b;
+}
+";
+        string r1 = fmt.format(src1);
+        assertRegex("single default params", "\\(int a = 1, int b\\)", r1);
+
+        # Multiple defaults
+        string src2 = "%modern
+sub f(string a = \"hello\", int b = 42, bool c) {
+    return;
+}
+";
+        string r2 = fmt.format(src2);
+        assertRegex("multi default param a", "string a = \"hello\"", r2);
+        assertRegex("multi default param b", "int b = 42", r2);
+        assertRegex("multi default param c", "bool c\\)", r2);
+    }
+
+    testHashdeclHashExpression() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+hashdecl MyInfo {
+    string name;
+    int age;
+}
+
+sub test() {
+    hash<MyInfo> h = <MyInfo>{\"name\": \"test\", \"age\": 1};
+}
+";
+        string result = fmt.format(src);
+        assertRegex("hashdecl hash init", "<MyInfo>\\{", result);
+    }
+
+    testHashAccessBrackets() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    hash<auto> h = {\"key\": 1};
+    int val = h{\"key\"};
+}
+";
+        string result = fmt.format(src);
+        assertRegex("hash access uses curly brackets", "h\\{\"key\"\\}", result);
+        # Ensure no square brackets for hash access
+        assertTrue(result !~ /h\["key"\]/, "hash access should not use square brackets");
+    }
+
+    testLiteralZero() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(int x) {
+    if (x > 0) {
+        return 1;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("literal 0 preserved", "x > 0", result);
+    }
+
+    testBooleanLiterals() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    bool a = True;
+    bool b = False;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("True preserved", "= True;", result);
+        assertRegex("False preserved", "= False;", result);
+    }
+
+    testNothingNullLiterals() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    auto a = NOTHING;
+    auto b = NULL;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("NOTHING preserved", "= NOTHING;", result);
+        assertRegex("NULL preserved", "= NULL;", result);
+    }
+
+    testRegexFlags() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(string s) {
+    if (s =~ /pattern/i) {
+        return 1;
+    }
+}
+";
+        string result = fmt.format(src);
+        assertRegex("regex with flag preserved", "/pattern/i", result);
+    }
+
+    testOperatorPrecedenceParens() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    int x = (1 + 2) * 3;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("precedence parens preserved", "\\(1 \\+ 2\\) \\* 3", result);
+    }
+
+    testAccessExprParens() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(string a, string b) {
+    int x = (a + b).size();
+}
+";
+        string result = fmt.format(src);
+        assertRegex("parens around binary before access", "\\(a \\+ b\\)\\.size\\(\\)", result);
+    }
+
+    testHashDelimiterPreservation() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Test curly brace hash is preserved
+        string curlyHash = "%modern
+auto sub getCurly() {
+    return {\"a\": 1, \"b\": 2};
+}
+";
+        string curlyResult = fmt.format(curlyHash);
+        assertRegex("curly hash uses curly braces", "\\{\"a\": 1, \"b\": 2\\}", curlyResult);
+
+        # Test parenthesized hash is preserved
+        string parenHash = "%modern
+auto sub getParen() {
+    return (\"a\": 1, \"b\": 2);
+}
+";
+        string parenResult = fmt.format(parenHash);
+        assertRegex("paren hash uses parentheses", "\\(\"a\": 1, \"b\": 2\\)", parenResult);
+
+        # Test empty curly hash is preserved
+        string emptyHash = "%modern
+auto sub getEmpty() {
+    return {};
+}
+";
+        string emptyResult = fmt.format(emptyHash);
+        assertRegex("empty hash uses curly braces", "\\{\\}", emptyResult);
+
+        # Test map with paren hash produces list of hashes (preserves parens)
+        string mapParen = "%modern
+sub test(list<int> l) {
+    auto x = map (\"key\": $1), l;
+}
+";
+        string mapParenResult = fmt.format(mapParen);
+        assertRegex("map paren hash preserves parens", "\\(\"key\": \\$1\\)", mapParenResult);
+
+        # Test map with curly hash produces single hash (preserves curlies)
+        string mapCurly = "%modern
+sub test(list<int> l) {
+    auto x = map {\"key\": $1}, l;
+}
+";
+        string mapCurlyResult = fmt.format(mapCurly);
+        assertRegex("map curly hash preserves curlies", "\\{\"key\": \\$1\\}", mapCurlyResult);
+    }
+
+    testMultiLineExprIdempotency() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        # Test 1: Short binary expression stays on one line (< 120 chars)
+        string shortBinary = "%modern
+sub test() {
+    int x = a
+        + b
+        + c;
+}
+";
+        string shortBinResult = fmt.format(shortBinary);
+        assertRegex("short binary on one line", "int x = a \\+ b \\+ c;", shortBinResult);
+        string shortBinPass2 = fmt.format(shortBinResult);
+        assertEq(shortBinResult, shortBinPass2, "short binary idempotency");
+
+        # Test 2: Long binary expression wraps with operator-leading continuation
+        # Build a line that exceeds 120 chars when combined with indent
+        string longBinary = "%modern
+sub test() {
+    bool result = someVeryLongVariableName && anotherVeryLongVariableName && yetAnotherLongVariableName && finalLongVariable;
+}
+";
+        string longBinPass1 = fmt.format(longBinary);
+        # Should wrap: first operand on first line, continuation with operator
+        assertRegex("long binary first operand", "bool result = someVeryLongVariableName$", longBinPass1);
+        assertRegex("long binary continuation", "^        && anotherVeryLongVariableName$", longBinPass1);
+        string longBinPass2 = fmt.format(longBinPass1);
+        assertEq(longBinPass1, longBinPass2, "long binary idempotency");
+
+        # Test 3: Short ternary stays on one line
+        string shortTernary = "%modern
+sub test() {
+    int x = condition
+        ? valueA
+        : valueB;
+}
+";
+        string shortTernResult = fmt.format(shortTernary);
+        assertRegex("short ternary on one line", "int x = condition \\? valueA : valueB;", shortTernResult);
+        string shortTernPass2 = fmt.format(shortTernResult);
+        assertEq(shortTernResult, shortTernPass2, "short ternary idempotency");
+
+        # Test 4: Long ternary wraps
+        string longTernary = "%modern
+sub test() {
+    string result = someVeryLongConditionVariable ? someVeryLongTrueValueExpressionThatIsReallyLong : someVeryLongFalseValueExpression;
+}
+";
+        string longTernPass1 = fmt.format(longTernary);
+        assertRegex("long ternary condition on first line", "string result = someVeryLongConditionVariable$", longTernPass1);
+        assertRegex("long ternary ? on continuation", "^        \\? someVeryLongTrueValueExpression", longTernPass1);
+        assertRegex("long ternary : on continuation", "^        : someVeryLongFalseValueExpression;", longTernPass1);
+        string longTernPass2 = fmt.format(longTernPass1);
+        assertEq(longTernPass1, longTernPass2, "long ternary idempotency");
+
+        # Test 5: Implicit string concatenation
+        string stringConcat = "%modern
+sub test() {
+    string s = \"hello \" \"world\" \"!\";
+}
+";
+        string concatResult = fmt.format(stringConcat);
+        assertRegex("string concat on one line", "\"hello \" \"world\" \"!\"", concatResult);
+        string concatPass2 = fmt.format(concatResult);
+        assertEq(concatResult, concatPass2, "string concat idempotency");
+
+        # Test 6: Short constant binary stays on one line
+        string shortConst = "%modern
+const MyConst = a
+    + b
+    + c;
+";
+        string constResult = fmt.format(shortConst);
+        assertRegex("short const on one line", "const MyConst = a \\+ b \\+ c;", constResult);
+        string constPass2 = fmt.format(constResult);
+        assertEq(constResult, constPass2, "short const idempotency");
+
+        # Test 7: Hash member with short initializer stays on one line
+        string shortHashMember = "%modern
+public hashdecl MyData {
+    string name = \"default\"
+        + \"_suffix\";
+}
+";
+        string hashResult = fmt.format(shortHashMember);
+        # Short expression should be on one line
+        string hashPass2 = fmt.format(hashResult);
+        assertEq(hashResult, hashPass2, "hashdecl member idempotency");
+
+        # Test 8: Compound assignment
+        string compoundAssign = "%modern
+sub test() {
+    x += a
+        + b;
+}
+";
+        string compResult = fmt.format(compoundAssign);
+        # Short compound should be on one line
+        assertRegex("compound on one line", "x \\+= a \\+ b;", compResult);
+        string compPass2 = fmt.format(compResult);
+        assertEq(compResult, compPass2, "compound assignment idempotency");
+
+        # Test 9: Multi-line if condition (short) collapses to one line
+        string shortIf = "%modern
+sub test() {
+    if (a
+            && b
+            && c) {
+        int x = 1;
+    }
+}
+";
+        string ifResult = fmt.format(shortIf);
+        assertRegex("short if on one line", "if \\(a && b && c\\) \\{", ifResult);
+        string ifPass2 = fmt.format(ifResult);
+        assertEq(ifResult, ifPass2, "short if condition idempotency");
+
+        # Test 10: Multi-line while condition (short) collapses to one line
+        string shortWhile = "%modern
+sub test() {
+    while (a
+            && b) {
+        int x = 1;
+    }
+}
+";
+        string whileResult = fmt.format(shortWhile);
+        assertRegex("short while on one line", "while \\(a && b\\) \\{", whileResult);
+        string whilePass2 = fmt.format(whileResult);
+        assertEq(whileResult, whilePass2, "short while condition idempotency");
+
+        # Test 11: Long if condition wraps (must exceed 120 chars with indent)
+        string longIf = "%modern
+sub test() {
+    if (someVeryLongConditionAlpha && someVeryLongConditionBeta && someVeryLongConditionGamma && someVeryLongConditionDelta) {
+        int x = 1;
+    }
+}
+";
+        string longIfPass1 = fmt.format(longIf);
+        assertRegex("long if first operand", "if \\(someVeryLongConditionAlpha$", longIfPass1);
+        assertRegex("long if continuation", "^        && someVeryLongConditionBeta$", longIfPass1);
+        string longIfPass2 = fmt.format(longIfPass1);
+        assertEq(longIfPass1, longIfPass2, "long if condition idempotency");
+
+        # Test 12: Return with long binary wraps (must exceed 120 chars with indent)
+        string longReturn = "%modern
+sub test() {
+    return someVeryLongExpressionPartAlpha + someVeryLongExpressionPartBeta + someVeryLongExpressionPartGamma + partDelta;
+}
+";
+        string longRetPass1 = fmt.format(longReturn);
+        assertRegex("long return wraps", "return someVeryLongExpressionPartAlpha$", longRetPass1);
+        string longRetPass2 = fmt.format(longRetPass1);
+        assertEq(longRetPass1, longRetPass2, "long return idempotency");
+    }
+
+    testNestedHashIndentation() {
+        # Test nested hash with closure values — must be idempotent
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+hash h = (
+    'command_name_one': (
+        'description_text': 'some long value that makes this hash element quite wide indeed',
+        'another_key': (
+            'deep_nested_key': 'deep_nested_value_text',
+        ),
+    ),
+    'command_name_two': 'simple_value',
+);
+";
+        string pass1 = fmt.format(src);
+        # Verify multi-line hash has indented inner elements
+        assertRegex("nested hash has inner indent", "    'command_name_one':", pass1);
+
+        QoreCodeFormat::CodeFormatter fmt2();
+        string pass2 = fmt2.format(pass1);
+        assertEq(pass1, pass2, "nested hash idempotency");
+
+        # Test hash with closure value
+        string srcClosure = "%modern
+hash h = (
+    'action_handler': sub(int x) {
+        return x + 1;
+    },
+    'description_text': 'this is a test value that is long enough to force multi-line formatting of the hash',
+);
+";
+        QoreCodeFormat::CodeFormatter fmt3();
+        string closurePass1 = fmt3.format(srcClosure);
+        QoreCodeFormat::CodeFormatter fmt4();
+        string closurePass2 = fmt4.format(closurePass1);
+        assertEq(closurePass1, closurePass2, "hash with closure idempotency");
+
+        # Test small hash stays on one line
+        string srcSmall = "%modern
+hash h = ('a': 1, 'b': 2);
+";
+        QoreCodeFormat::CodeFormatter fmt5();
+        string smallResult = fmt5.format(srcSmall);
+        assertRegex("small hash one line", "\\('a': 1, 'b': 2\\)", smallResult);
+    }
+
+    testRegexEscapedSlashes() {
+        # Test regex substitution with escaped forward slashes
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = '%modern
+string path = "/a/b";
+path =~ s/\//x/g;
+';
+        string result = fmt.format(src);
+        assertRegex("regex subst preserved", "s/\\\\//x/g;", result);
+
+        # Test round-trip idempotency
+        QoreCodeFormat::CodeFormatter fmt2();
+        string pass2 = fmt2.format(result);
+        assertEq(result, pass2, "regex escaped slash idempotency");
+
+        # Test regex with escaped backslash before slash separator
+        string src2 = '%modern
+string path = "test";
+path =~ s/\\\\/x/g;
+';
+        QoreCodeFormat::CodeFormatter fmt3();
+        string result2 = fmt3.format(src2);
+        QoreCodeFormat::CodeFormatter fmt4();
+        string pass2b = fmt4.format(result2);
+        assertEq(result2, pass2b, "regex escaped backslash idempotency");
+    }
+
+    private assertRegex(string label, string pattern, string text) {
+        assertTrue(regex(text, pattern, RE_MultiLine), label + ": expected /" + pattern + "/ in output");
+    }
+}

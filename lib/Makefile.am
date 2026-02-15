@@ -112,6 +112,7 @@ CLEANFILES = $(QORE_ALL_SRC)
 parser.hpp: dummy
 	if [ -f parser.h -a \( ! -f parser.hpp -o \( parser.h -nt parser.hpp \) \) ]; then cp parser.h parser.hpp; fi
 parser.cpp: parser.ypp
+	BISON_REAL="$(YACC)" $(top_srcdir)/tools/bison-wrapper.sh --defines=parser.h --output=$@ $<
 scanner.cpp: scanner.lpp
 
 if COND_SINGLE_COMPILATION_UNIT
@@ -198,6 +199,9 @@ libqore_la_SOURCES = \
 	QoreFile.cpp \
 	QoreDir.cpp \
 	QoreSocket.cpp \
+	InputStream.cpp \
+	OutputStream.cpp \
+	Http2Session.cpp \
 	DateTime.cpp \
 	QoreLib.cpp \
 	QoreTimeZoneManager.cpp \

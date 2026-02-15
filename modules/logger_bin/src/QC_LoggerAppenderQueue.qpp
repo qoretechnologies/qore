@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,32 +33,91 @@
 #include "QC_LoggerAppenderQueue.h"
 #include "QC_LoggerAppender.h"
 
-//! Abstract class that defines the interface for logger appenders
-/** Event data (@ref LoggerEvent) are formatted before the record is passed to the target
+//! Class that provides a queue for logger appender events with optional memory-based backpressure
+/** Event data (@ref LoggerEvent) are formatted before the record is passed to the target.
+
+    This class supports memory-based backpressure to prevent unbounded memory growth when log
+    producers outpace consumers. When a maximum byte limit is set, the push() method will block
+    or drop events based on the timeout parameter when the queue exceeds the limit.
+
+    @since %Qore 2.3 added memory-based backpressure support
 */
 qclass LoggerAppenderQueue [ns=Qore::Logger; arg=QoreLoggerAppenderQueue* q; internal_members=Queue q];
 
-//! Creates the object
-/**
+//! Creates the object with the default memory limit (10 MiB)
+/** This constructor enforces memory-based backpressure by default to prevent unbounded
+    memory growth.
+
+    @note Prior to %Qore 2.3, this constructor created an unlimited queue. Starting with
+    %Qore 2.3, the default is 10 MiB to ensure safe memory management. Use
+    @ref constructor(softint) "constructor(-1)" explicitly if unlimited behavior is required.
+
+    @since %Qore 2.3 changed default from unlimited to 10 MiB for safe memory management
 */
 LoggerAppenderQueue::constructor() {
     Queue* queue = new Queue(-1);
     ReferenceHolder<QoreObject> q(new QoreObject(QC_QUEUE, getProgram(), queue), xsink);
-    self->setPrivate(CID_LOGGERAPPENDERQUEUE, new QoreLoggerAppenderQueue(self, *q, *queue));
+    self->setPrivate(CID_LOGGERAPPENDERQUEUE,
+        new QoreLoggerAppenderQueue(self, *q, *queue, LOGGER_QUEUE_DEFAULT_MAX_BYTES));
     self->setValue("q", q.release(), xsink);
 }
 
-//! Adds appender event
-/**
-    @param appender a logger appender object
+//! Creates the object with a memory limit for backpressure
+/** @param max_bytes maximum bytes allowed in the queue:
+    - -1 = unlimited (no backpressure)
+    - 0 = use default limit (10 MiB)
+    - >0 = maximum bytes before backpressure is applied
+
+    @par Example:
+    @code{.py}
+# Create a queue with 50MB limit
+LoggerAppenderQueue laq(50 * 1024 * 1024);
+
+# Create a queue with default 10MB limit
+LoggerAppenderQueue laq(0);
+
+# Create a queue with no limit (not recommended for production)
+LoggerAppenderQueue laq(-1);
+    @endcode
+
+    @since %Qore 2.3
+*/
+LoggerAppenderQueue::constructor(softint max_bytes) {
+    int64 effective_max = max_bytes;
+    if (max_bytes == 0) {
+        effective_max = LOGGER_QUEUE_DEFAULT_MAX_BYTES;
+    } else if (max_bytes < -1) {
+        xsink->raiseException("LOGGERAPPENDERQUEUE-ERROR", "invalid max_bytes value: " QLLD "; must be -1, 0, or positive", max_bytes);
+        return;
+    }
+    Queue* queue = new Queue(-1);
+    ReferenceHolder<QoreObject> q(new QoreObject(QC_QUEUE, getProgram(), queue), xsink);
+    self->setPrivate(CID_LOGGERAPPENDERQUEUE, new QoreLoggerAppenderQueue(self, *q, *queue, effective_max));
+    self->setValue("q", q.release(), xsink);
+}
+
+//! Adds appender event with optional timeout for backpressure
+/** @param appender a logger appender object
     @param type see \c EVENT_xxx constants
     @param params data prepared by @ref LoggerAppender::serializeImpl()
-    @return True if the event was succesfully added to queue
+    @param timeout_ms timeout in milliseconds for backpressure handling:
+    - 0 = block indefinitely when at memory limit (default)
+    - >0 = wait up to this many milliseconds, throw \c QUEUE-TIMEOUT if exceeded
+    - <0 = drop immediately if at memory limit (return @ref False)
+
+    @return @ref True if the event was successfully added to queue, @ref False if dropped due to
+    backpressure (only when timeout_ms < 0)
+
+    @throw QUEUE-TIMEOUT thrown when timeout_ms > 0 and the timeout is exceeded waiting for queue space
+
+    @note When the queue has no memory limit (-1), the event is always added immediately
+
+    @since %Qore 2.3 added timeout_ms parameter for backpressure support
 */
-bool LoggerAppenderQueue::push(LoggerAppender[QoreLoggerAppender] appender, int type, auto params) {
+bool LoggerAppenderQueue::push(LoggerAppender[QoreLoggerAppender] appender, int type, auto params,
+        timeout timeout_ms = 0) {
     ReferenceHolder<AbstractPrivateData> holder(appender, xsink);
-    q->push(xsink, obj_appender, type, params);
-    return true;
+    return q->push(xsink, obj_appender, type, params, timeout_ms);
 }
 
 //! Processes queued events
@@ -98,4 +157,35 @@ int LoggerAppenderQueue::size() {
 */
 private *hash<auto> LoggerAppenderQueue::getEvent(timeout ms) {
     return q->getEvent(ms, xsink);
+}
+
+//! Returns the maximum bytes limit for the queue
+/** @return the maximum bytes limit:
+    - -1 = unlimited (no backpressure)
+    - >0 = maximum bytes before backpressure is applied
+
+    @since %Qore 2.3
+*/
+int LoggerAppenderQueue::maxBytes() [flags=CONSTANT] {
+    return q->getMaxBytes();
+}
+
+//! Returns the current number of bytes in the queue
+/** @return the current queued bytes (approximate, based on param sizes)
+
+    @since %Qore 2.3
+*/
+int LoggerAppenderQueue::currentBytes() [flags=CONSTANT] {
+    return q->getCurrentBytes();
+}
+
+//! Returns @ref True if the queue is at or above the memory limit
+/** @return @ref True if the queue is full (currentBytes >= maxBytes), @ref False otherwise
+
+    @note Always returns @ref False if the queue has no memory limit (-1)
+
+    @since %Qore 2.3
+*/
+bool LoggerAppenderQueue::isFull() [flags=CONSTANT] {
+    return q->isFull();
 }

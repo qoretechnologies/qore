@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,7 +61,10 @@
 #define QP_WARN_MODULE_ONLY              (1 << 15)  //!< when qualifiers that are only valid in modules are given when not parsing a module
 #define QP_WARN_BROKEN_LOGIC_PRECEDENCE  (1 << 16)  //!< warning about expressions that are affected by broken-logic-precedence
 #define QP_WARN_INVALID_CATCH            (1 << 17)  //!< when a catch block is missing a type declaration when %require-types is in effect
-#define QP_WARN_ALL                      -1         //!< for all possible warnings
+#define QP_WARN_AMBIGUOUS_CALL_RESOLUTION (1 << 18) //!< ambiguous call resolution at parse time
+#define QP_WARN_AMBIGUOUS_OVERLOAD       (1 << 19)  //!< ambiguous overload definition or inheritance at parse time
+#define QP_WARN_STRICT (QP_WARN_AMBIGUOUS_CALL_RESOLUTION|QP_WARN_AMBIGUOUS_OVERLOAD) //!< strict warnings excluded from QP_WARN_ALL
+#define QP_WARN_ALL (QP_WARN_WARNING_MASK_UNCHANGED|QP_WARN_DUPLICATE_LOCAL_VARS|QP_WARN_UNKNOWN_WARNING|QP_WARN_UNDECLARED_VAR|QP_WARN_DUPLICATE_GLOBAL_VARS|QP_WARN_UNREACHABLE_CODE|QP_WARN_NONEXISTENT_METHOD_CALL|QP_WARN_INVALID_OPERATION|QP_WARN_CALL_WITH_TYPE_ERRORS|QP_WARN_RETURN_VALUE_IGNORED|QP_WARN_DEPRECATED|QP_WARN_EXCESS_ARGS|QP_WARN_DUPLICATE_HASH_KEY|QP_WARN_UNREFERENCED_VARIABLE|QP_WARN_DUPLICATE_BLOCK_VARS|QP_WARN_MODULE_ONLY|QP_WARN_BROKEN_LOGIC_PRECEDENCE|QP_WARN_INVALID_CATCH) //!< all non-strict warnings
 
 #define QP_WARN_MODULES (QP_WARN_UNREACHABLE_CODE|QP_WARN_NONEXISTENT_METHOD_CALL|QP_WARN_INVALID_OPERATION|QP_WARN_CALL_WITH_TYPE_ERRORS|QP_WARN_RETURN_VALUE_IGNORED|QP_WARN_DUPLICATE_HASH_KEY|QP_WARN_DUPLICATE_BLOCK_VARS|QP_WARN_BROKEN_LOGIC_PRECEDENCE|QP_WARN_INVALID_CATCH)
 
@@ -118,6 +121,30 @@ struct QoreBreakpointList_t : public bkp_list_t {
     // dereferences all breakpoints and clears the list
     DLLEXPORT ~QoreBreakpointList_t();
 };
+
+//! Callback type for program cleanup (called before namespace data is cleared)
+/** Used by the reflection module to break reference cycles for Type objects (issue #4816)
+    @param pgm the program being destroyed
+
+    @since %Qore 2.3
+*/
+typedef void (*qore_program_cleanup_callback_t)(QoreProgram* pgm);
+
+//! Registers a callback to be called before program namespace data is cleared
+/** @param callback the callback function to register
+
+    @since %Qore 2.3
+*/
+DLLEXPORT void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback);
+
+//! Calls the registered program cleanup callback for the given program
+/** This should be called before dereferencing a program to break potential reference cycles.
+
+    @param pgm the program to clean up
+
+    @since %Qore 2.3
+*/
+DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
 
 //! supports parsing and executing Qore-language code, reference counted, dynamically-allocated only
 /** This class implements a transaction and thread-safe container for qore-language code
@@ -412,12 +439,12 @@ public:
     //! returns true if the given function exists as a user function, false if not
     DLLEXPORT bool existsFunction(const char* name);
 
+    using AbstractPrivateData::deref;
     //! dereferences the object and deletes it if the reference count reaches zero
     /** do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @see QoreProgram::waitForTerminationAndDeref()
     */
-    using AbstractPrivateData::deref;
     DLLEXPORT virtual void deref(ExceptionSink* xsink);
 
     //! references "this" and returns a non-const pointer to itself
@@ -906,18 +933,13 @@ public:
     DLLEXPORT bool checkAllowDebugging(ExceptionSink* xsink);
 
     //! sets the sandbox manager for this program
-    /** @param sm the sandbox manager to set; the program takes ownership of the reference
+    /** @param sm the sandbox manager to set; the program takes a strong reference
+        (calls ref()), and releases it when the program is destroyed or a new
+        sandbox manager is set
 
         @since %Qore 2.1
     */
     DLLEXPORT void setSandboxManager(QoreSandboxManager* sm);
-
-    //! gets the sandbox manager for this program
-    /** @return the sandbox manager or nullptr if not set
-
-        @since %Qore 2.1
-    */
-    DLLEXPORT QoreSandboxManager* getSandboxManager() const;
 
 protected:
     //! the destructor is private in order to prohibit the object from being allocated on the stack

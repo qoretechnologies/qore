@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreObjectIntern.h"
 
@@ -41,7 +42,7 @@ QoreString *QoreKeysOperatorNode::getAsString(bool &del, int foff, ExceptionSink
 }
 
 int QoreKeysOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    str.concat(&keys_str);
+    qore_string_private::get(str)->concat(&keys_str);
     return 0;
 }
 
@@ -60,7 +61,6 @@ int QoreKeysOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = qore_get_complex_list_type(stringTypeInfo);
         } else if (!QoreTypeInfo::parseAccepts(hashTypeInfo, expTypeInfo)
             && !QoreTypeInfo::parseAccepts(objectTypeInfo, expTypeInfo)) {
-            // FIXME raise an error with %strict-types
             QoreStringNode* edesc = new QoreStringNode("the expression with the 'keys' operator is ");
             QoreTypeInfo::getThisType(expTypeInfo, *edesc);
             edesc->concat(" and so this expression will always return NOTHING; the 'keys' operator can only return " \

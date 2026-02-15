@@ -1,0 +1,12 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <title>ClickHouse</title>
+  <!-- ClickHouse logo - vertical bars pattern -->
+  <rect x="2" y="2" width="28" height="28" rx="4" fill="#FFCC00"/>
+  <g fill="#1A1A1A">
+    <rect x="6" y="7" width="3" height="18" rx="0.5"/>
+    <rect x="10.5" y="7" width="3" height="18" rx="0.5"/>
+    <rect x="15" y="7" width="3" height="18" rx="0.5"/>
+    <rect x="19.5" y="7" width="3" height="18" rx="0.5"/>
+  </g>
+  <rect x="24" y="12" width="3" height="8" rx="0.5" fill="#FF0000"/>
+</svg>

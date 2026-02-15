@@ -1,0 +1,1231 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LinearDataProvider.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/LinearRestClient.qm
+%requires ../../../../qlib/LinearDataProvider
+
+%exec-class LinearDataProviderTest
+
+public class LinearDataProviderTest inherits QUnit::Test {
+    private {
+        #! Linear REST client for integration tests
+        *LinearRestClient::LinearRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("LinearDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require LINEAR_TOKEN environment variable or -t option)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests (require LINEAR_TOKEN and webhook infrastructure)
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Creates a LinearDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *LinearDataProvider::LinearDataProvider tryCreateProvider() {
+        try {
+            return new LinearDataProvider::LinearDataProvider({"token": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Linear API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Sets up the Linear client for integration tests
+    private setupConnection() {
+        *string token = m_options.token ?? ENV.LINEAR_TOKEN;
+        if (!token) {
+            if (m_options.verbose) {
+                printf("No token provided (use -t option or LINEAR_TOKEN env var)\n");
+            }
+            return;
+        }
+        client = new LinearRestClient::LinearRestClient({"token": token});
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        *LinearDataProvider::LinearDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("linear", prov.getName());
+        assertEq("Linear data provider for issue tracking and project management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("linear");
+        assertEq("linear", factory.getInfo().name);
+        assertEq("Linear data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("token"));
+        assertTrue(factoryOpts.hasKey("linearrestclient"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_id"));
+        assertTrue(factoryOpts.hasKey("oauth2_client_secret"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *LinearDataProvider::LinearDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("LinearDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("token"));
+        assertTrue(info.constructor_options.hasKey("linearrestclient"));
+        assertTrue(info.constructor_options.hasKey("oauth2_client_id"));
+        assertTrue(info.constructor_options.hasKey("oauth2_client_secret"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *LinearDataProvider::LinearDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("issues"));
+        assertTrue(children.contains("teams"));
+        assertTrue(children.contains("projects"));
+        assertTrue(children.contains("cycles"));
+        assertTrue(children.contains("labels"));
+
+        # Check issues child provider
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        assertEq("issues", issues.getName());
+        hash<DataProviderInfo> issuesInfo = issues.getInfo();
+        assertTrue(issuesInfo.supports_read);
+        assertTrue(issuesInfo.supports_create);
+        assertTrue(issuesInfo.supports_native_search);
+        assertTrue(issuesInfo.has_record);
+
+        # Check teams child provider
+        AbstractDataProvider teams = prov.getChildProvider("teams");
+        assertEq("teams", teams.getName());
+        hash<DataProviderInfo> teamsInfo = teams.getInfo();
+        assertTrue(teamsInfo.supports_read);
+        assertFalse(teamsInfo.supports_create ?? False);  # Teams are read-only
+
+        # Check projects child provider
+        AbstractDataProvider projects = prov.getChildProvider("projects");
+        assertEq("projects", projects.getName());
+
+        # Check cycles child provider
+        AbstractDataProvider cycles = prov.getChildProvider("cycles");
+        assertEq("cycles", cycles.getName());
+
+        # Check labels child provider
+        AbstractDataProvider labels = prov.getChildProvider("labels");
+        assertEq("labels", labels.getName());
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test issue data type
+        LinearDataProvider::LinearIssueDataType issueType();
+        hash<string, AbstractDataField> issueFields = issueType.getFields();
+        assertTrue(issueFields.hasKey("id"));
+        assertTrue(issueFields.hasKey("title"));
+        assertTrue(issueFields.hasKey("description"));
+        assertTrue(issueFields.hasKey("priority"));
+        assertTrue(issueFields.hasKey("state"));
+        assertTrue(issueFields.hasKey("assignee"));
+        assertTrue(issueFields.hasKey("team"));
+        assertTrue(issueFields.hasKey("project"));
+        assertTrue(issueFields.hasKey("cycle"));
+        assertTrue(issueFields.hasKey("labels"));
+
+        # Verify example_value is set for key fields
+        assertEq("a1b2c3d4-e5f6-7890-abcd-ef1234567890", issueFields.id.getExampleValue());
+        assertEq("ENG-123", issueFields.identifier.getExampleValue());
+        assertEq("Fix login button not responding", issueFields.title.getExampleValue());
+
+        # Test team data type
+        LinearDataProvider::LinearTeamDataType teamType();
+        hash<string, AbstractDataField> teamFields = teamType.getFields();
+        assertTrue(teamFields.hasKey("id"));
+        assertTrue(teamFields.hasKey("name"));
+        assertTrue(teamFields.hasKey("key"));
+        assertTrue(teamFields.hasKey("description"));
+
+        # Verify example_value for team fields
+        assertEq("Engineering", teamFields.name.getExampleValue());
+        assertEq("ENG", teamFields.key.getExampleValue());
+
+        # Test project data type
+        LinearDataProvider::LinearProjectDataType projectType();
+        hash<string, AbstractDataField> projectFields = projectType.getFields();
+        assertTrue(projectFields.hasKey("id"));
+        assertTrue(projectFields.hasKey("name"));
+        assertTrue(projectFields.hasKey("state"));
+        assertTrue(projectFields.hasKey("startDate"));
+        assertTrue(projectFields.hasKey("targetDate"));
+
+        # Test cycle data type
+        LinearDataProvider::LinearCycleDataType cycleType();
+        hash<string, AbstractDataField> cycleFields = cycleType.getFields();
+        assertTrue(cycleFields.hasKey("id"));
+        assertTrue(cycleFields.hasKey("name"));
+        assertTrue(cycleFields.hasKey("number"));
+        assertTrue(cycleFields.hasKey("startsAt"));
+        assertTrue(cycleFields.hasKey("endsAt"));
+
+        # Verify example_value for cycle fields
+        assertEq("Sprint 23", cycleFields.name.getExampleValue());
+        assertEq(23, cycleFields.number.getExampleValue());
+
+        # Test label data type
+        LinearDataProvider::LinearLabelDataType labelType();
+        hash<string, AbstractDataField> labelFields = labelType.getFields();
+        assertTrue(labelFields.hasKey("id"));
+        assertTrue(labelFields.hasKey("name"));
+        assertTrue(labelFields.hasKey("color"));
+
+        # Verify example_value for label fields
+        assertEq("bug", labelFields.name.getExampleValue());
+        assertEq("#FF5733", labelFields.color.getExampleValue());
+
+        # Test comment data type
+        LinearDataProvider::LinearCommentDataType commentType();
+        hash<string, AbstractDataField> commentFields = commentType.getFields();
+        assertTrue(commentFields.hasKey("id"));
+        assertTrue(commentFields.hasKey("body"));
+        assertTrue(commentFields.hasKey("user"));
+
+        # Verify example_value for comment fields
+        assertEq("This looks good, but we should add more tests.", commentFields.body.getExampleValue());
+
+        # Test issue create data type
+        LinearDataProvider::LinearIssueCreateDataType issueCreateType();
+        hash<string, AbstractDataField> issueCreateFields = issueCreateType.getFields();
+        assertTrue(issueCreateFields.hasKey("teamId"));
+        assertTrue(issueCreateFields.hasKey("title"));
+        assertTrue(issueCreateFields.hasKey("description"));
+        assertTrue(issueCreateFields.hasKey("priority"));
+
+        # Test issue update data type
+        LinearDataProvider::LinearIssueUpdateDataType issueUpdateType();
+        hash<string, AbstractDataField> issueUpdateFields = issueUpdateType.getFields();
+        assertTrue(issueUpdateFields.hasKey("title"));
+        assertTrue(issueUpdateFields.hasKey("description"));
+        assertTrue(issueUpdateFields.hasKey("priority"));
+        assertFalse(issueUpdateFields.hasKey("teamId"));  # teamId not in update type
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        *LinearDataProvider::LinearDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test getting issues provider and trying to get non-existent child
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            issues.getChildProvider("nonexistent-id").getChildProviderEx("invalid-child");
+        });
+
+        # Test factory - providers can be created without options (lazy connection)
+        # The error occurs when trying to make API calls, not during construction
+        # Note: factory.create() may still connect, so we wrap it
+        AbstractDataProviderFactory factory = DataProvider::getFactory("linear");
+        try {
+            AbstractDataProvider emptyProv = factory.create({});
+            assertEq("linear", emptyProv.getName());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                # Skip this assertion if connection fails
+            } else {
+                rethrow;
+            }
+        }
+
+        # Test that data types handle field validation
+        LinearDataProvider::LinearIssueDataType issueType();
+        hash<string, AbstractDataField> fields = issueType.getFields();
+
+        # Verify field types are correct
+        assertEq("string", fields.id.getType().getName());
+        assertEq("*string", fields.description.getType().getName());
+        assertEq("*int", fields.priority.getType().getName());
+    }
+
+    #! Corner case tests - test edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        *LinearDataProvider::LinearDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test empty child provider list iteration
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.size() > 0);
+
+        # Test multiple getChildProvider calls return consistent results
+        AbstractDataProvider issues1 = prov.getChildProvider("issues");
+        AbstractDataProvider issues2 = prov.getChildProvider("issues");
+        assertEq(issues1.getName(), issues2.getName());
+        assertEq(issues1.getInfo().type, issues2.getInfo().type);
+
+        # Test provider info consistency
+        hash<DataProviderInfo> info1 = prov.getInfo();
+        hash<DataProviderInfo> info2 = prov.getInfo();
+        assertEq(info1.name, info2.name);
+        assertEq(info1.type, info2.type);
+
+        # Test data type field count consistency
+        LinearDataProvider::LinearIssueDataType issueType1();
+        LinearDataProvider::LinearIssueDataType issueType2();
+        assertEq(issueType1.getFields().size(), issueType2.getFields().size());
+
+        # Test all child providers have valid info
+        foreach string childName in (children) {
+            AbstractDataProvider child = prov.getChildProvider(childName);
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.name.val());
+            assertTrue(childInfo.type.val());
+        }
+
+        # Test issue provider hierarchy - issues -> issue -> comments
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        # Getting a specific issue provider with a fake ID should work (it's just metadata)
+        AbstractDataProvider issueProvider = issues.getChildProvider("fake-issue-id");
+        assertEq("fake-issue-id", issueProvider.getName());
+
+        # The issue provider should have a comments child
+        list<string> issueChildren = issueProvider.getChildProviderNames();
+        assertTrue(issueChildren.contains("comments"));
+
+        # Test teams are read-only (no create support)
+        AbstractDataProvider teams = prov.getChildProvider("teams");
+        hash<DataProviderInfo> teamsInfo = teams.getInfo();
+        assertFalse(teamsInfo.supports_create ?? False);
+
+        # Test project state allowed_values
+        LinearDataProvider::LinearProjectDataType projectType();
+        hash<string, AbstractDataField> projectFields = projectType.getFields();
+        # Note: allowed_values is only available if the field was defined with it
+        assertEq("started", projectFields.state.getExampleValue());
+    }
+
+    #! Connection tests - test connection provider functionality
+    connectionTests() {
+        checkJson();
+        # Test connection scheme is registered
+        hash<auto> schemeInfo = ConnectionSchemeCache::getScheme("linear");
+        assertTrue(schemeInfo.hasKey("cls"));
+        assertEq("LinearRestConnection", schemeInfo.cls.getName());
+
+        # Test connection creation
+        LinearRestClient::LinearRestConnection conn("test-conn", "Test Connection",
+            "linear://api.linear.app/graphql", {}, {"token": "test-token"});
+        assertEq("linear", conn.getType());
+        assertTrue(conn.hasDataProvider());
+        assertEq("Linear", conn.getAppName());
+
+        # Test connection scheme info
+        hash<ConnectionSchemeInfo> connScheme = conn.getConnectionSchemeInfo();
+        assertEq("Linear REST Connection", connScheme.display_name);
+        assertTrue(connScheme.schemes.hasKey("linear"));
+
+        # Test connection URL handling
+        string url = conn.getUrl();
+        assertTrue(url.val());
+    }
+
+    #! Action catalog tests - verify action registrations have proper options
+    actionCatalogTests() {
+        checkJson();
+        # Verify Linear app is registered
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Linear");
+        assertTrue(exists app, "Linear app should be registered");
+        assertEq("Linear", app.name);
+        assertEq("Linear", app.display_name);
+
+        # Get all actions for the Linear app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Linear");
+        assertTrue(actions.size() > 0, "Linear app should have actions");
+
+        # Verify create-issue action has proper options with ref_data
+        *hash<DataProviderActionInfo> createIssue = DataProviderActionCatalog::getAppAction("Linear", "create-issue");
+        assertTrue(exists createIssue, "create-issue action should exist");
+        assertEq("create-issue", createIssue.action);
+        assertEq(DPAT_API, createIssue.action_code);
+        assertTrue(createIssue.options.hasKey("teamId"), "create-issue should have teamId option");
+        assertTrue(createIssue.options.hasKey("title"), "create-issue should have title option");
+        assertTrue(createIssue.options.hasKey("assigneeId"), "create-issue should have assigneeId option");
+        assertTrue(createIssue.options.hasKey("priority"), "create-issue should have priority option");
+        assertTrue(createIssue.options.hasKey("labelIds"), "create-issue should have labelIds option");
+
+        # Verify ref_data is set for dynamic dropdown fields
+        assertEq("teams", createIssue.options.teamId.ref_data, "teamId should have ref_data=teams");
+        assertEq("users", createIssue.options.assigneeId.ref_data, "assigneeId should have ref_data=users");
+        assertEq("projects", createIssue.options.projectId.ref_data, "projectId should have ref_data=projects");
+        assertEq("cycles", createIssue.options.cycleId.ref_data, "cycleId should have ref_data=cycles");
+        assertEq("states", createIssue.options.stateId.ref_data, "stateId should have ref_data=states");
+        assertEq("labels", createIssue.options.labelIds.element_ref_data, "labelIds should have element_ref_data=labels");
+
+        # Verify priority has static allowed_values
+        assertTrue(createIssue.options.priority.allowed_values.size() > 0, "priority should have allowed_values");
+
+        # Verify get-issue action has id option with ref_data (uses "id" not "issueId")
+        *hash<DataProviderActionInfo> getIssue = DataProviderActionCatalog::getAppAction("Linear", "get-issue");
+        assertTrue(exists getIssue, "get-issue action should exist");
+        assertEq(DPAT_FIND_SINGLE, getIssue.action_code);
+        assertTrue(getIssue.options.hasKey("id"), "get-issue should have id option");
+        assertEq("issues", getIssue.options.id.ref_data, "get-issue id should have ref_data=issues");
+        assertTrue(getIssue.options.id.required, "get-issue id should be required");
+
+        # Verify update-issue action has id and update options
+        *hash<DataProviderActionInfo> updateIssue = DataProviderActionCatalog::getAppAction("Linear", "update-issue");
+        assertTrue(exists updateIssue, "update-issue action should exist");
+        assertEq(DPAT_API, updateIssue.action_code);
+        assertTrue(updateIssue.options.hasKey("id"), "update-issue should have id option");
+        assertEq("issues", updateIssue.options.id.ref_data, "update-issue id should have ref_data=issues");
+        assertTrue(updateIssue.options.id.required, "update-issue id should be required");
+        assertTrue(updateIssue.options.hasKey("title"), "update-issue should have title option");
+        assertTrue(updateIssue.options.hasKey("assigneeId"), "update-issue should have assigneeId option");
+        assertEq("users", updateIssue.options.assigneeId.ref_data, "update-issue assigneeId should have ref_data=users");
+        assertTrue(updateIssue.options.hasKey("stateId"), "update-issue should have stateId option");
+        assertEq("states", updateIssue.options.stateId.ref_data, "update-issue stateId should have ref_data=states");
+        assertTrue(updateIssue.options.hasKey("priority"), "update-issue should have priority option");
+        assertTrue(updateIssue.options.priority.allowed_values.size() > 0, "update-issue priority should have allowed_values");
+        assertTrue(updateIssue.options.priority.allowed_values_creatable, "update-issue priority should have allowed_values_creatable");
+
+        # Verify archive-issue action
+        *hash<DataProviderActionInfo> archiveIssue = DataProviderActionCatalog::getAppAction("Linear", "archive-issue");
+        assertTrue(exists archiveIssue, "archive-issue action should exist");
+        assertEq(DPAT_API, archiveIssue.action_code);
+        assertTrue(archiveIssue.options.hasKey("id"), "archive-issue should have id option");
+        assertEq("issues", archiveIssue.options.id.ref_data, "archive-issue id should have ref_data=issues");
+        assertTrue(archiveIssue.options.id.required, "archive-issue id should be required");
+
+        # Verify search-issues action (FIND type)
+        *hash<DataProviderActionInfo> searchIssues = DataProviderActionCatalog::getAppAction("Linear", "search-issues");
+        assertTrue(exists searchIssues, "search-issues action should exist");
+        assertEq(DPAT_FIND, searchIssues.action_code);
+        assertTrue(searchIssues.options.hasKey("teamId"), "search-issues should have teamId option");
+        assertEq("teams", searchIssues.options.teamId.ref_data, "search-issues teamId should have ref_data=teams");
+
+        # Verify create-comment action has issueId option
+        *hash<DataProviderActionInfo> createComment = DataProviderActionCatalog::getAppAction("Linear", "create-comment");
+        assertTrue(exists createComment, "create-comment action should exist");
+        assertEq(DPAT_API, createComment.action_code);
+        assertTrue(createComment.options.hasKey("issueId"), "create-comment should have issueId option");
+        assertEq("issues", createComment.options.issueId.ref_data, "create-comment issueId should have ref_data=issues");
+        assertTrue(createComment.options.hasKey("body"), "create-comment should have body option");
+
+        # Verify get-team action has id option (uses "id" not "teamId")
+        *hash<DataProviderActionInfo> getTeam = DataProviderActionCatalog::getAppAction("Linear", "get-team");
+        assertTrue(exists getTeam, "get-team action should exist");
+        assertEq(DPAT_FIND_SINGLE, getTeam.action_code);
+        assertTrue(getTeam.options.hasKey("id"), "get-team should have id option");
+        assertEq("teams", getTeam.options.id.ref_data, "get-team id should have ref_data=teams");
+
+        # Verify search-teams action exists
+        *hash<DataProviderActionInfo> searchTeams = DataProviderActionCatalog::getAppAction("Linear", "search-teams");
+        assertTrue(exists searchTeams, "search-teams action should exist");
+        assertEq(DPAT_FIND, searchTeams.action_code);
+
+        # Verify project actions
+        *hash<DataProviderActionInfo> createProject = DataProviderActionCatalog::getAppAction("Linear", "create-project");
+        assertTrue(exists createProject, "create-project action should exist");
+        assertEq(DPAT_API, createProject.action_code);
+        assertTrue(createProject.options.hasKey("name"), "create-project should have name option");
+        assertTrue(createProject.options.hasKey("teamIds"), "create-project should have teamIds option");
+        assertEq("teams", createProject.options.teamIds.element_ref_data, "create-project teamIds should have element_ref_data=teams");
+
+        # Verify cycle actions
+        *hash<DataProviderActionInfo> createCycle = DataProviderActionCatalog::getAppAction("Linear", "create-cycle");
+        assertTrue(exists createCycle, "create-cycle action should exist");
+        assertEq(DPAT_API, createCycle.action_code);
+        assertTrue(createCycle.options.hasKey("teamId"), "create-cycle should have teamId option");
+        assertEq("teams", createCycle.options.teamId.ref_data, "create-cycle teamId should have ref_data=teams");
+        assertTrue(createCycle.options.hasKey("startsAt"), "create-cycle should have startsAt option");
+        assertTrue(createCycle.options.hasKey("endsAt"), "create-cycle should have endsAt option");
+
+        # Verify search-cycles action
+        *hash<DataProviderActionInfo> searchCycles = DataProviderActionCatalog::getAppAction("Linear", "search-cycles");
+        assertTrue(exists searchCycles, "search-cycles action should exist");
+        assertEq(DPAT_FIND, searchCycles.action_code);
+        assertTrue(searchCycles.options.hasKey("teamId"), "search-cycles should have teamId option");
+        assertEq("teams", searchCycles.options.teamId.ref_data, "search-cycles teamId should have ref_data=teams");
+
+        # Verify label actions
+        *hash<DataProviderActionInfo> createLabel = DataProviderActionCatalog::getAppAction("Linear", "create-label");
+        assertTrue(exists createLabel, "create-label action should exist");
+        assertEq(DPAT_API, createLabel.action_code);
+        assertTrue(createLabel.options.hasKey("name"), "create-label should have name option");
+        assertTrue(createLabel.options.hasKey("color"), "create-label should have color option");
+        assertTrue(createLabel.options.hasKey("teamId"), "create-label should have teamId option");
+        assertEq("teams", createLabel.options.teamId.ref_data, "create-label teamId should have ref_data=teams");
+
+        # Verify search-labels action
+        *hash<DataProviderActionInfo> searchLabels = DataProviderActionCatalog::getAppAction("Linear", "search-labels");
+        assertTrue(exists searchLabels, "search-labels action should exist");
+        assertEq(DPAT_FIND, searchLabels.action_code);
+        assertTrue(searchLabels.options.hasKey("teamId"), "search-labels should have teamId option");
+        assertEq("teams", searchLabels.options.teamId.ref_data, "search-labels teamId should have ref_data=teams");
+
+        # Verify search-projects action
+        *hash<DataProviderActionInfo> searchProjects = DataProviderActionCatalog::getAppAction("Linear", "search-projects");
+        assertTrue(exists searchProjects, "search-projects action should exist");
+        assertEq(DPAT_FIND, searchProjects.action_code);
+        assertTrue(searchProjects.options.state.allowed_values.size() > 0, "search-projects state should have allowed_values");
+
+        if (m_options.verbose) {
+            printf("Action catalog tests passed - all actions have proper options with ref_data\n");
+            printf("Found %d actions for Linear app\n", actions.size());
+        }
+    }
+
+    #! Integration tests - require actual Linear credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No connection to Linear (set LINEAR_TOKEN env var or use -t option)");
+        }
+
+        # Test basic API connectivity with viewer query
+        hash<auto> response = client.graphql("query { viewer { id name email } }");
+        assertTrue(response.body.data.viewer.hasKey("id"));
+        assertTrue(response.body.data.viewer.hasKey("name"));
+        if (m_options.verbose) {
+            printf("Connected as: %s <%s>\n", response.body.data.viewer.name,
+                response.body.data.viewer.email ?? "no email");
+        }
+
+        # Test data provider with real connection
+        LinearDataProvider::LinearDataProvider prov(client);
+
+        # Test listing teams
+        AbstractDataProvider teams = prov.getChildProvider("teams");
+        AbstractDataProviderRecordIterator teamsIter = teams.searchRecords();
+        int teamCount = 0;
+        while (teamsIter.next()) {
+            teamCount++;
+            hash<auto> team = teamsIter.getValue();
+            assertTrue(team.hasKey("id"));
+            assertTrue(team.hasKey("name"));
+            if (m_options.verbose) {
+                printf("Team: %s (%s)\n", team.name, team.key);
+            }
+        }
+        assertGe(teamCount, 1);
+        if (m_options.verbose) {
+            printf("Found %d team(s)\n", teamCount);
+        }
+
+        # Test listing projects
+        AbstractDataProvider projects = prov.getChildProvider("projects");
+        AbstractDataProviderRecordIterator projectsIter = projects.searchRecords();
+        int projectCount = 0;
+        while (projectsIter.next()) {
+            projectCount++;
+            hash<auto> project = projectsIter.getValue();
+            assertTrue(project.hasKey("id"));
+            assertTrue(project.hasKey("name"));
+            if (m_options.verbose) {
+                printf("Project: %s\n", project.name);
+            }
+        }
+        if (m_options.verbose) {
+            printf("Found %d project(s)\n", projectCount);
+        }
+
+        # Test listing issues (with limit)
+        AbstractDataProvider issues = prov.getChildProvider("issues");
+        AbstractDataProviderRecordIterator issuesIter = issues.searchRecords(NOTHING, {"limit": 5});
+        int issueCount = 0;
+        while (issuesIter.next()) {
+            issueCount++;
+            hash<auto> issue = issuesIter.getValue();
+            assertTrue(issue.hasKey("id"));
+            assertTrue(issue.hasKey("title"));
+            assertTrue(issue.hasKey("identifier"));
+            if (m_options.verbose) {
+                printf("Issue: %s - %s\n", issue.identifier, issue.title);
+            }
+        }
+        if (m_options.verbose) {
+            printf("Found %d issue(s) (limited to 5)\n", issueCount);
+        }
+
+        # Get team ID for create operations
+        teamsIter = teams.searchRecords();
+        teamsIter.next();
+        string teamId = teamsIter.getValue().id;
+
+        # ============================================
+        # Test Create/Update/Archive Issue
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Issue CRUD ---\n");
+        }
+
+        # Create a test issue
+        string testIssueTitle = "Test Issue from QUnit " + now_us().toString();
+        hash<auto> newIssue = issues.createRecord({
+            "teamId": teamId,
+            "title": testIssueTitle,
+            "description": "This is a test issue created by LinearDataProvider QUnit tests. It should be automatically archived.",
+            "priority": 3,
+        });
+        assertTrue(newIssue.hasKey("id"));
+        assertTrue(newIssue.hasKey("identifier"));
+        assertEq(testIssueTitle, newIssue.title);
+        if (m_options.verbose) {
+            printf("Created issue: %s - %s\n", newIssue.identifier, newIssue.title);
+        }
+
+        # Get the issue by ID using searchRecords on the single entity provider
+        AbstractDataProvider issueProvider = issues.getChildProvider(newIssue.id);
+        AbstractDataProviderRecordIterator issueIter = issueProvider.searchRecords();
+        assertTrue(issueIter.next());
+        hash<auto> fetchedIssue = issueIter.getValue();
+        assertEq(newIssue.id, fetchedIssue.id);
+        assertEq(testIssueTitle, fetchedIssue.title);
+        if (m_options.verbose) {
+            printf("Fetched issue: %s - %s\n", fetchedIssue.identifier, fetchedIssue.title);
+        }
+
+        # Update the issue using updateSingleRecord
+        string updatedTitle = "Updated Test Issue " + now_us().toString();
+        assertTrue(issueProvider.updateSingleRecord({
+            "title": updatedTitle,
+            "priority": 2,
+        }, {}));
+        # Verify the update
+        issueIter = issueProvider.searchRecords();
+        assertTrue(issueIter.next());
+        hash<auto> updatedIssue = issueIter.getValue();
+        assertEq(updatedTitle, updatedIssue.title);
+        if (m_options.verbose) {
+            printf("Updated issue: %s - %s (priority: %d)\n", updatedIssue.identifier,
+                updatedIssue.title, updatedIssue.priority);
+        }
+
+        # Archive (delete) the issue - cleanup using deleteRecords
+        int deleted = issueProvider.deleteRecords();
+        assertEq(1, deleted);
+        if (m_options.verbose) {
+            printf("Archived issue: %s\n", newIssue.identifier);
+        }
+
+        # ============================================
+        # Test Create/Archive Label
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Label CRUD ---\n");
+        }
+
+        AbstractDataProvider labels = prov.getChildProvider("labels");
+        string testLabelName = "test-label-" + now_us().format("YYYYMMDDHHmmssuu");
+        hash<auto> newLabel = labels.createRecord({
+            "teamId": teamId,
+            "name": testLabelName,
+            "color": "#FF5733",
+            "description": "Test label from QUnit tests",
+        });
+        assertTrue(newLabel.hasKey("id"));
+        assertEq(testLabelName, newLabel.name);
+        if (m_options.verbose) {
+            printf("Created label: %s (color: %s)\n", newLabel.name, newLabel.color);
+        }
+
+        # Archive the label - cleanup
+        AbstractDataProvider labelProvider = labels.getChildProvider(newLabel.id);
+        int labelDeleted = labelProvider.deleteRecords();
+        assertEq(1, labelDeleted);
+        if (m_options.verbose) {
+            printf("Archived label: %s\n", newLabel.name);
+        }
+
+        # ============================================
+        # Test Create Comment on Issue (then archive issue)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Comment CRUD ---\n");
+        }
+
+        # Create another issue for comment testing
+        hash<auto> commentTestIssue = issues.createRecord({
+            "teamId": teamId,
+            "title": "Comment Test Issue " + now_us().toString(),
+            "description": "Issue for testing comments",
+        });
+        if (m_options.verbose) {
+            printf("Created issue for comment test: %s\n", commentTestIssue.identifier);
+        }
+
+        # Get comments provider for this issue
+        AbstractDataProvider commentIssueProvider = issues.getChildProvider(commentTestIssue.id);
+        AbstractDataProvider comments = commentIssueProvider.getChildProvider("comments");
+
+        # Create a comment
+        hash<auto> newComment = comments.createRecord({
+            "body": "This is a test comment from QUnit tests at " + now_us().toString(),
+        });
+        assertTrue(newComment.hasKey("id"));
+        assertTrue(newComment.hasKey("body"));
+        if (m_options.verbose) {
+            printf("Created comment: %s\n", newComment.body);
+        }
+
+        # List comments
+        AbstractDataProviderRecordIterator commentsIter = comments.searchRecords();
+        int commentCount = 0;
+        while (commentsIter.next()) {
+            commentCount++;
+        }
+        assertGe(commentCount, 1);
+        if (m_options.verbose) {
+            printf("Found %d comment(s) on issue\n", commentCount);
+        }
+
+        # Archive the test issue (cleanup) - this also removes the comment
+        int commentIssueDeleted = commentIssueProvider.deleteRecords();
+        assertEq(1, commentIssueDeleted);
+        if (m_options.verbose) {
+            printf("Archived comment test issue: %s\n", commentTestIssue.identifier);
+        }
+
+        # ============================================
+        # Test search with filters (integration negative test)
+        # ============================================
+        if (m_options.verbose) {
+            printf("\n--- Testing Search with Filters ---\n");
+        }
+
+        # Search for issues with a filter that should return no results
+        # Use a non-existent project ID to ensure no results
+        AbstractDataProviderRecordIterator emptyIter = issues.searchRecords(
+            NOTHING,
+            {"projectId": "00000000-0000-0000-0000-000000000000", "limit": 10}
+        );
+        int emptyCount = 0;
+        while (emptyIter.next()) {
+            emptyCount++;
+        }
+        assertEq(0, emptyCount);
+        if (m_options.verbose) {
+            printf("Verified empty search results work correctly\n");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- All CRUD tests completed successfully ---\n");
+        }
+    }
+
+    #! Webhook trigger tests - test registration and deregistration with Linear API
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No connection to Linear (set LINEAR_TOKEN env var or use -t option)");
+        }
+
+        # Register mock webhook APIs for testing
+        # We track webhooks created/deleted to verify the lifecycle
+        list<hash<auto>> created_webhooks = ();
+        list<string> deleted_webhook_ids = ();
+        int webhook_counter = 0;
+
+        code mockCreate = hash<auto> sub (hash<auto> config) {
+            webhook_counter++;
+            string url = sprintf("https://test-webhook-%d.example.com/webhook", webhook_counter);
+            hash<auto> ctx = {
+                "id": webhook_counter,
+                "config": config,
+            };
+            created_webhooks += {"url": url, "ctx": ctx};
+            return {"url": url, "ctx": ctx};
+        };
+
+        code mockDelete = sub (hash<auto> info) {
+            deleted_webhook_ids += info.ctx.id.toString();
+        };
+
+        # Only register if not already registered (avoid conflicts with Qorus environment)
+        bool registered_mock = False;
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            DataProvider::DataProviderWebhook::registerWebhookApis(mockCreate, mockDelete);
+            registered_mock = True;
+        }
+
+        on_exit {
+            # Note: We can't unregister the mock APIs, but tests that follow won't use them
+            # unless they also need webhook support
+        }
+
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            testSkip("Webhook infrastructure not available and could not register mock");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger Registration/Deregistration ---\n");
+        }
+
+        # ============================================
+        # Test Issue Created Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearIssueEventDataProvider (issue-created)...\n");
+        }
+
+        # Create issue event provider
+        LinearDataProvider::LinearIssueEventDataProvider issueCreatedProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+        });
+
+        # Verify provider metadata
+        assertEq(LinearDataProvider::EVENT_ISSUE_CREATED, issueCreatedProvider.getName());
+        assertTrue(issueCreatedProvider.getInfo().supports_observable);
+
+        # Get event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = issueCreatedProvider.getEventTypes();
+        assertTrue(eventTypes.hasKey(LinearDataProvider::EVENT_ISSUE_CREATED));
+        assertTrue(eventTypes{LinearDataProvider::EVENT_ISSUE_CREATED}.desc.val());
+
+        # Get example event data and verify structure matches Linear webhook format
+        auto exampleData = issueCreatedProvider.getExampleEventData(LinearDataProvider::EVENT_ISSUE_CREATED);
+        assertTrue(exampleData.hasKey("action"));
+        assertTrue(exampleData.hasKey("type"));
+        assertTrue(exampleData.hasKey("data"));
+        assertTrue(exampleData.hasKey("actor"));
+        assertTrue(exampleData.hasKey("organizationId"));
+        assertTrue(exampleData.hasKey("webhookTimestamp"));
+        assertTrue(exampleData.hasKey("webhookId"));
+        assertTrue(exampleData.hasKey("createdAt"));
+        assertTrue(exampleData.hasKey("url"));
+        assertEq(LinearDataProvider::LinearActionCreate, exampleData.action);
+        assertEq(LinearDataProvider::LinearEventTypeIssue, exampleData.type);
+
+        # Verify actor structure
+        assertTrue(exampleData.actor.hasKey("id"));
+        assertTrue(exampleData.actor.hasKey("name"));
+        assertTrue(exampleData.actor.hasKey("type"));
+        assertTrue(exampleData.actor.hasKey("email"));
+        assertTrue(exampleData.actor.hasKey("url"));
+
+        # Verify data contains issue fields
+        assertTrue(exampleData.data.hasKey("id"));
+        assertTrue(exampleData.data.hasKey("title"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+            printf("  Actor keys: %y\n", keys exampleData.actor);
+        }
+
+        # Create a test observer
+        TestObserver issueObserver();
+        issueCreatedProvider.registerObserver(issueObserver);
+
+        # Get Linear webhooks before registration
+        hash<auto> beforeWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountBefore = beforeWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks before registration: %d\n", webhookCountBefore);
+        }
+
+        # Trigger observer ready - this should register the webhook with Linear
+        issueCreatedProvider.observersReady();
+
+        # Get Linear webhooks after registration
+        hash<auto> afterWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountAfter = afterWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks after registration: %d\n", webhookCountAfter);
+        }
+
+        # Verify webhook was created in Linear
+        assertEq(webhookCountBefore + 1, webhookCountAfter);
+
+        # Find the webhook we created (it should be the newest one, or we can match by label)
+        *hash<auto> ourWebhook;
+        foreach hash<auto> wh in (afterWebhooks.body.data.webhooks.nodes) {
+            if (wh.label =~ /Qorus.*issue-created/) {
+                ourWebhook = wh;
+                break;
+            }
+        }
+        assertTrue(exists ourWebhook, "Should find our issue-created webhook in Linear");
+        assertTrue(ourWebhook.enabled);
+
+        if (m_options.verbose) {
+            printf("  Created webhook ID: %s, URL: %s\n", ourWebhook.id, ourWebhook.url);
+        }
+
+        # Stop events - this should delete the webhook from Linear
+        issueCreatedProvider.stopEvents();
+
+        # Verify webhook was deleted from Linear
+        hash<auto> afterStopWebhooks = client.graphql("query { webhooks { nodes { id url label enabled } } }");
+        int webhookCountAfterStop = afterStopWebhooks.body.data.webhooks.nodes.size();
+
+        if (m_options.verbose) {
+            printf("  Webhooks after stopEvents: %d\n", webhookCountAfterStop);
+        }
+
+        assertEq(webhookCountBefore, webhookCountAfterStop);
+
+        # Verify the specific webhook is gone
+        bool webhookStillExists = False;
+        foreach hash<auto> wh in (afterStopWebhooks.body.data.webhooks.nodes) {
+            if (wh.id == ourWebhook.id) {
+                webhookStillExists = True;
+                break;
+            }
+        }
+        assertFalse(webhookStillExists, "Webhook should be deleted after stopEvents");
+
+        if (m_options.verbose) {
+            printf("  Issue-created webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Issue Updated Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearIssueEventDataProvider (issue-updated)...\n");
+        }
+
+        LinearDataProvider::LinearIssueEventDataProvider issueUpdatedProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_UPDATED,
+        });
+
+        assertEq(LinearDataProvider::EVENT_ISSUE_UPDATED, issueUpdatedProvider.getName());
+
+        # Get example data for update event - should include updatedFrom
+        auto updateExampleData = issueUpdatedProvider.getExampleEventData(LinearDataProvider::EVENT_ISSUE_UPDATED);
+        assertEq(LinearDataProvider::LinearActionUpdate, updateExampleData.action);
+        assertTrue(updateExampleData.hasKey("updatedFrom"), "Update event should have updatedFrom field");
+        assertTrue(updateExampleData.updatedFrom.hasKey("stateId") || updateExampleData.updatedFrom.hasKey("assigneeId"),
+            "updatedFrom should contain previous values");
+
+        if (m_options.verbose) {
+            printf("  Update event updatedFrom keys: %y\n", keys updateExampleData.updatedFrom);
+        }
+
+        TestObserver updateObserver();
+        issueUpdatedProvider.registerObserver(updateObserver);
+
+        # Get count before
+        hash<auto> beforeUpdate = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeUpdate = beforeUpdate.body.data.webhooks.nodes.size();
+
+        # Register
+        issueUpdatedProvider.observersReady();
+
+        # Verify created
+        hash<auto> afterUpdate = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeUpdate + 1, afterUpdate.body.data.webhooks.nodes.size());
+
+        # Stop and verify deleted
+        issueUpdatedProvider.stopEvents();
+        hash<auto> afterUpdateStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeUpdate, afterUpdateStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Issue-updated webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Comment Event Providers
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting LinearCommentEventDataProvider (comment-created)...\n");
+        }
+
+        LinearDataProvider::LinearCommentEventDataProvider commentCreatedProvider(client);
+
+        assertEq(LinearDataProvider::EVENT_COMMENT_CREATED, commentCreatedProvider.getName());
+
+        # Verify event types
+        hash<string, hash<DataProviderMessageInfo>> commentEventTypes = commentCreatedProvider.getEventTypes();
+        assertTrue(commentEventTypes.hasKey(LinearDataProvider::EVENT_COMMENT_CREATED));
+
+        # Get example data
+        auto commentExampleData = commentCreatedProvider.getExampleEventData(LinearDataProvider::EVENT_COMMENT_CREATED);
+        assertEq(LinearDataProvider::LinearActionCreate, commentExampleData.action);
+        assertEq(LinearDataProvider::LinearEventTypeComment, commentExampleData.type);
+
+        TestObserver commentObserver();
+        commentCreatedProvider.registerObserver(commentObserver);
+
+        # Get count before
+        hash<auto> beforeComment = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeComment = beforeComment.body.data.webhooks.nodes.size();
+
+        # Register
+        commentCreatedProvider.observersReady();
+
+        # Verify created
+        hash<auto> afterComment = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeComment + 1, afterComment.body.data.webhooks.nodes.size());
+
+        # Find our webhook
+        *hash<auto> ourCommentWebhook;
+        foreach hash<auto> wh in (afterComment.body.data.webhooks.nodes) {
+            if (wh.label =~ /Qorus.*comment-created/) {
+                ourCommentWebhook = wh;
+                break;
+            }
+        }
+        assertTrue(exists ourCommentWebhook, "Should find our comment-created webhook in Linear");
+
+        # Stop and verify deleted
+        commentCreatedProvider.stopEvents();
+        hash<auto> afterCommentStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeComment, afterCommentStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Comment-created webhook lifecycle test passed\n");
+        }
+
+        # ============================================
+        # Test Team Filter Option
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting team filter option...\n");
+        }
+
+        # Get a team ID for testing
+        hash<auto> teamsResult = client.graphql("query { teams { nodes { id name } } }");
+        string testTeamId = teamsResult.body.data.teams.nodes[0].id;
+
+        LinearDataProvider::LinearIssueEventDataProvider teamFilteredProvider(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+            "teamId": testTeamId,
+        });
+
+        TestObserver teamObserver();
+        teamFilteredProvider.registerObserver(teamObserver);
+
+        hash<auto> beforeTeamFilter = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeTeamFilter = beforeTeamFilter.body.data.webhooks.nodes.size();
+
+        teamFilteredProvider.observersReady();
+
+        hash<auto> afterTeamFilter = client.graphql("query { webhooks { nodes { id label } } }");
+        assertEq(countBeforeTeamFilter + 1, afterTeamFilter.body.data.webhooks.nodes.size());
+
+        teamFilteredProvider.stopEvents();
+
+        hash<auto> afterTeamFilterStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeTeamFilter, afterTeamFilterStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Team filter option test passed (team: %s)\n", testTeamId);
+        }
+
+        # ============================================
+        # Test Multiple Webhooks Simultaneously
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting multiple webhooks simultaneously...\n");
+        }
+
+        LinearDataProvider::LinearIssueEventDataProvider multi1(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+        });
+        LinearDataProvider::LinearIssueEventDataProvider multi2(client, {
+            "event_type": LinearDataProvider::EVENT_ISSUE_UPDATED,
+        });
+        LinearDataProvider::LinearCommentEventDataProvider multi3(client);
+
+        TestObserver multiObserver1();
+        TestObserver multiObserver2();
+        TestObserver multiObserver3();
+
+        multi1.registerObserver(multiObserver1);
+        multi2.registerObserver(multiObserver2);
+        multi3.registerObserver(multiObserver3);
+
+        hash<auto> beforeMulti = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeMulti = beforeMulti.body.data.webhooks.nodes.size();
+
+        # Register all three
+        multi1.observersReady();
+        multi2.observersReady();
+        multi3.observersReady();
+
+        hash<auto> afterMulti = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeMulti + 3, afterMulti.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Created 3 webhooks simultaneously\n");
+        }
+
+        # Stop all three
+        multi1.stopEvents();
+        multi2.stopEvents();
+        multi3.stopEvents();
+
+        hash<auto> afterMultiStop = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeMulti, afterMultiStop.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Deleted all 3 webhooks successfully\n");
+        }
+
+        # ============================================
+        # Test Destructor Cleanup
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting destructor cleanup...\n");
+        }
+
+        hash<auto> beforeDestructor = client.graphql("query { webhooks { nodes { id } } }");
+        int countBeforeDestructor = beforeDestructor.body.data.webhooks.nodes.size();
+
+        {
+            LinearDataProvider::LinearIssueEventDataProvider destructorTest(client, {
+                "event_type": LinearDataProvider::EVENT_ISSUE_CREATED,
+            });
+            TestObserver destructorObserver();
+            destructorTest.registerObserver(destructorObserver);
+            destructorTest.observersReady();
+
+            # Verify webhook was created
+            hash<auto> duringDestructor = client.graphql("query { webhooks { nodes { id } } }");
+            assertEq(countBeforeDestructor + 1, duringDestructor.body.data.webhooks.nodes.size());
+        }
+        # destructorTest goes out of scope, destructor should clean up
+
+        # Small delay to allow cleanup to complete
+        sleep(1);
+
+        hash<auto> afterDestructor = client.graphql("query { webhooks { nodes { id } } }");
+        assertEq(countBeforeDestructor, afterDestructor.body.data.webhooks.nodes.size());
+
+        if (m_options.verbose) {
+            printf("  Destructor cleanup test passed\n");
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- All Webhook Trigger Tests Completed Successfully ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += {"event_id": event_id, "data": data_};
+    }
+}

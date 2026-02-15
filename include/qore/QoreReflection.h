@@ -426,7 +426,8 @@ DLLEXPORT qore_type_t qore_type_get_base_type(const QoreTypeInfo* t);
 DLLEXPORT QoreHashNode* qore_type_get_accept_types(const QoreTypeInfo* t);
 
 //! returns a hash of base types accepted by the type
-/** @param simple if true then only simple types are returned by this call
+/** @param t the type info to query
+    @param simple if true then only simple types are returned by this call
 
     @since %Qore 2.0
 */
@@ -440,7 +441,8 @@ DLLEXPORT QoreHashNode* qore_type_get_accept_types(const QoreTypeInfo* t, bool s
 DLLEXPORT QoreHashNode* qore_type_get_return_types(const QoreTypeInfo* t);
 
 //! returns a hash of base types returned by the type
-/** @param simple if true then only simple types are returned by this call
+/** @param t the type info to query
+    @param simple if true then only simple types are returned by this call
 
     @since %Qore 2.0
 */

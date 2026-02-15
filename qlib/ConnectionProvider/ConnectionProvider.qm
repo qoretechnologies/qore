@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ConnectionProvider.qm Qore user module providing an API for providing connections to %Qore
 
-/*  ConnectionProvider.qm Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  ConnectionProvider.qm Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,11 +30,12 @@
 %requires(reexport) Util
 %requires Logger
 %requires(reexport) DataProvider
+%requires AsyncSocketIo
 %requires reflection
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "2.1";
+    version = "2.3";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -112,6 +113,18 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_2_3 ConnectionProvider 2.3
+    - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to delegate I/O to
+      an \c AsyncSocketIoController; the internal \c Socket::poll() event loop and pipe-based signaling have been
+      removed in favor of a lightweight timer thread
+    - added a new @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" constructor
+      accepting an explicit \c AsyncSocketIoController; the original constructor signature is preserved and uses
+      the global async I/O controller singleton
+    - added \c AsyncSocketIo module dependency
+
+    @subsection connectionprovider_2_2 ConnectionProvider 2.2
+    - added async HTTP ping polling support for HTTP and HTTP-based connections
 
     @subsection connectionprovider_2_1 ConnectionProvider 2.1
     - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
@@ -205,7 +218,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
     @subsection connectionprovider_1_5 ConnectionProvider 1.5
     - updated the @ref ConnectionProvider::AbstractConnection::getInfo() "AbstractConnection::getInfo()" method
-    - added the @ref ConnectionProvider::AbstractConnection::getExtendedInfo() "AbstractConnection::getExtendedInfo()"
+    - added the \c ConnectionProvider::AbstractConnection::getExtendedInfo() "AbstractConnection::getExtendedInfo()"
       method
 
     @subsection connectionprovider_1_4_1 ConnectionProvider 1.4.1
@@ -228,7 +241,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       (<a href="https://github.com/qoretechnologies/qore/issues/3486">issue 3486</a>)
 
     @subsection connectionprovider_1_2 ConnectionProvider 1.2
-    - the @ref ConnectionProvider::AbstractConnection::constructor() "AbstractConnection::constructor()" refactoring
+    - the \c ConnectionProvider::AbstractConnection::constructor() "AbstractConnection::constructor()" refactoring
     - all connection clases have unified constructor
     - old constructors and static make() constructors are deprecated
     - ConnectionProvider::AbstractConnection::parseUrl() is introduced
@@ -237,7 +250,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       to parse strange and unexpected URLs like eg. pure json strings, or Datasource connection strings.
 
     @subsection connectionprovider_1_1 ConnectionProvider 1.1
-    - the @ref ConnectionProvider::AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
+    - the \c ConnectionProvider::AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
       method (and supporting declarations) was added to allow connections to be created dynamically,
       potentially in another process from a network call
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
@@ -407,7 +420,7 @@ public hashdecl ConnectionInfo {
 }
 
 #! Connection information hash containing only serializable data
-/** As returned by @ref ConnectionProvider::AbstractConnection::getDataInfo() "AbstractConnection::getDataInfo()"
+/** As returned by \c ConnectionProvider::AbstractConnection::getDataInfo() "AbstractConnection::getDataInfo()"
 
     @since ConnectionProvider 2.0
 */

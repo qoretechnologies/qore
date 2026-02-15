@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file SmtpClient.qm SmtpClient module definition
 
-/*  SmtpClient.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  SmtpClient.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Original Authors: Wolfgang Ritzinger, Marian Bonda, Pavol Potoncok
 
@@ -37,10 +37,10 @@
 %requires(reexport) DataProvider
 
 # assume local var scope, do not use "$" for vars, members, and method calls
-%new-style
+%modern
 
 module SmtpClient {
-    version = "2.0";
+    version = "2.2";
     desc = "SMTP client support module";
     author = "Wolfgang Ritzinger <aargon@rat.at>, Marian Bonda <marian_bonda@users.sourceforge.net>, "
         "Pavol Potoncok <ppotancok@gmail.com>";
@@ -67,6 +67,7 @@ module SmtpClient {
             "logo": SmtpWhiteLogo,
             "logo_file_name": "generic-smtp-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email,),
         });
 
         # register all supported actions
@@ -100,7 +101,7 @@ module SmtpClient {
     The %SmtpClient module provides a set of classes that can be used for easy communication with SMTP servers for
     sending emails, with or without TLS/SSL encryption.
 
-    To use this module, use \c "%requires SmtpClient" in your code.  See examples/email.q for an example program using
+    To use this module, use \c "%requires SmtpClient" in your code.  See examples/email.qr for an example program using
     this module
 
     All the public symbols in the module are defined in the SmtpClient namespace
@@ -126,11 +127,11 @@ module SmtpClient {
     communication with ESMTP servers that require secure connections.
 
     For the above reasons it's normally not required to use the \c "smtptls" or \c "esmtptls" protocols in the
-    @ref SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
+    \c SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
     RL argument.
 
     @anchor smtpclient_protocols
-    @ref SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
+    \c SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "SmtpClient::constructor(string, *code, *code)"
     takes a URL argument, the protocol (scheme) component is handled as in the following table.
 
     <b>SmtpcClient Protocol Handling</b>
@@ -174,6 +175,12 @@ smtp.sendMessage(msg);@endcode
     - http://tools.ietf.org/html/rfc2822: message structure, headers, body, etc
 
     @section smtpclient_relnotes SmtpClient Release Notes
+
+    @subsection smtpclient_v2_2 SmtpClient 2.2
+    - Added support for inline attachments with Content-ID in the data provider API
+      - Added \c "content-id" field to the send email attachment type
+      - Inline attachments are used for embedding images in HTML emails (referenced as \c "cid:content-id")
+    - Fixed \c SmtpPingPollOperation to set \c goal_reached on successful completion
 
     @subsection smtpclient_v2_1 SmtpClient 2.1
     - added support for the data provider action catalog API
@@ -417,7 +424,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         @endcode
 
         @param url the URL of the SMTP server (use \c "[hostname]" or \c "[address]" for ipv6 connections); if no
-        protocol (scheme) and no port is given for non-UNIX sockets, then @ref SmtpPort is used as the default port
+        protocol (scheme) and no port is given for non-UNIX sockets, then \c SmtpPort is used as the default port
         number.  This argument is parsed with parse_url(); see @ref smtpclient_protocols for a description of the
         handling of the protocol (scheme) component of the URL including default ports per protocol (scheme). If an
         unknown protocol (scheme) is given then a \c SMTP-UNKNOWN-PROTOCOL exception is raised
@@ -574,7 +581,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         return nosend;
     }
 
-    #! Connect to the server with the connection parameters set in the @ref constructor()
+    #! Connect to the server with the connection parameters set in the \c constructor()
     /** @note
         - For possible exceptions, see %Qore's @ref Qore::Socket::connect() "Socket::connect()" method
         - This method is subject to thread serialization
@@ -940,8 +947,6 @@ smtp.setEventQueue();
         sendDataIntern(str + "\r\n");
 
         # read data
-        string rep;
-
         softint code;
         string desc;
 
@@ -1043,40 +1048,32 @@ smtp.setEventQueue();
     #! @endcond
 }
 
+#! SMTP ping poll operation states
+public enum SmtpPingState : string {
+    #! Connect state
+    Connect = "connect",
+    #! Read hello state
+    ReadHello = "read-hello",
+    #! Send hello state
+    SendHello = "send-hello",
+    #! Read hello reply state
+    ReadHelloReply = "read-hello-reply",
+    #! Send STARTTLS state
+    StartTls = "starttls",
+    #! Read STARTTLS reply
+    ReadStartTlsReply = "read-starttls-reply",
+    #! Upgrade socket connection to TLS
+    UpgradeToTls = "upgrade-tls",
+    #! Login state
+    Login = "login",
+    #! Read login reply
+    ReadLoginReply = "read-login-reply",
+    #! Complete state
+    Complete = "complete",
+}
+
 #! Class for SMTP non-blocking / polling pings
 public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
-    public {
-        #! Connect state
-        const SPS_CONNECT = "connect";
-
-        #! Read hello state
-        const SPS_READ_HELLO = "read-hello";
-
-        #! Send hello state
-        const SPS_SEND_HELLO = "send-hello";
-
-        #! Read hello reply state
-        const SPS_READ_HELLO_REPLY = "read-hello-reply";
-
-        #! Send STARTTLS state
-        const SPS_STARTTLS = "starttls";
-
-        #! Read STARTTLS reply
-        const SPS_READ_STARTTLS_REPLY = "read-starttls-reply";
-
-        #! Upgrade socket connection to TLS
-        const SPS_UPGRADE_TO_TLS = "upgrade-tls";
-
-        #! Login state
-        const SPS_LOGIN = "login";
-
-        #! Read login reply
-        const SPS_READ_LOGIN_REPLY = "read-login-reply";
-
-        #! Complete state
-        const SPS_COMPLETE = "complete";
-    }
-
     private {
         #! Info about the SMTP client
         hash<auto> info;
@@ -1091,7 +1088,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
         Mutex m();
 
         #! Current state
-        string state;
+        SmtpPingState state;
 
         #! Goal reached flag
         bool goal_reached = False;
@@ -1122,7 +1119,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
     constructor(SmtpClient smtp) {
         info = smtp.getInfo();
 
-        state = SPS_CONNECT;
+        state = SmtpPingState::Connect;
         poller = info.ssl
             ? sock.startPollConnectSsl(info.target)
             : sock.startPollConnect(info.target);
@@ -1150,7 +1147,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
     /** @return @ref True when the goal as been reached
     */
     bool goalReached() {
-        return state == SPS_COMPLETE;
+        return state == SmtpPingState::Complete;
     }
 
     #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
@@ -1165,27 +1162,27 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 return pinfo;
             }
 
-            if (state == SPS_CONNECT) {
-                state = SPS_READ_HELLO;
+            if (state == SmtpPingState::Connect) {
+                state = SmtpPingState::ReadHello;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_HELLO) {
-                state = SPS_SEND_HELLO;
+            if (state == SmtpPingState::ReadHello) {
+                state = SmtpPingState::SendHello;
                 string rep = trim(poller.getOutput());
                 esmtp = (rep =~ /ESMTP/);
                 poller = sock.startPollSend(sprintf("%s %s\r\n", esmtp ? "EHLO" : "HELO", gethostname()));
                 continue;
             }
 
-            if (state == SPS_SEND_HELLO) {
-                state = SPS_READ_HELLO_REPLY;
+            if (state == SmtpPingState::SendHello) {
+                state = SmtpPingState::ReadHelloReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_HELLO_REPLY) {
+            if (state == SmtpPingState::ReadHelloReply) {
                 if (!getReply(\hello_reply_code, \hello_reply)) {
                     # continue reading
                     continue;
@@ -1196,7 +1193,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 }
 
                 if (info.tls) {
-                    state = SPS_STARTTLS;
+                    state = SmtpPingState::StartTls;
                     poller = sock.startPollSend("STARTTLS\r\n");
                     continue;
                 }
@@ -1207,45 +1204,47 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 }
 
                 delete poller;
-                state = SPS_COMPLETE;
+                goal_reached = True;
+                state = SmtpPingState::Complete;
                 break;
             }
 
-            if (state == SPS_STARTTLS) {
-                state = SPS_READ_STARTTLS_REPLY;
+            if (state == SmtpPingState::StartTls) {
+                state = SmtpPingState::ReadStartTlsReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_STARTTLS_REPLY) {
+            if (state == SmtpPingState::ReadStartTlsReply) {
                 if (!getReply(\starttls_code, \starttls_reply)) {
                     # continue reading
                     continue;
                 }
 
-                state = SPS_UPGRADE_TO_TLS;
+                state = SmtpPingState::UpgradeToTls;
                 poller = sock.startPollUpgradeClientToSSL();
                 continue;
             }
 
-            if (state == SPS_UPGRADE_TO_TLS) {
+            if (state == SmtpPingState::UpgradeToTls) {
                 if (info.user && info.pass) {
                     startLogin();
                     continue;
                 }
 
                 delete poller;
-                state = SPS_COMPLETE;
+                goal_reached = True;
+                state = SmtpPingState::Complete;
                 break;
             }
 
-            if (state == SPS_LOGIN) {
-                state = SPS_READ_LOGIN_REPLY;
+            if (state == SmtpPingState::Login) {
+                state = SmtpPingState::ReadLoginReply;
                 poller = sock.startPollRecvUntilBytesString("\n");
                 continue;
             }
 
-            if (state == SPS_READ_LOGIN_REPLY) {
+            if (state == SmtpPingState::ReadLoginReply) {
                 if (!getReply(\login_code, \login_reply)) {
                     # continue reading
                     continue;
@@ -1256,7 +1255,8 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
                 }
 
                 delete poller;
-                state = SPS_COMPLETE;
+                goal_reached = True;
+                state = SmtpPingState::Complete;
                 break;
             }
         }
@@ -1270,7 +1270,7 @@ public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
 
     #! Starts the polling login state
     private startLogin() {
-        state = SPS_LOGIN;
+        state = SmtpPingState::Login;
         poller = sock.startPollSend(sprintf("AUTH PLAIN %s\r\n", make_base64_string(binary(info.user) + <00> +
             binary(info.user) + <00> + binary(info.pass))));
     }
@@ -1380,7 +1380,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         @param attributes various attributes. See below
         @param options connection options
 
-        See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -1437,10 +1437,10 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         return new SmtpClientDataProvider(get());
     }
 
-    #! returns @ref True, as the connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True, as the connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -1473,7 +1473,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
     }
 
     #! returns an @ref SmtpClient object
-    /** @param connect if @ref True "True", then @ref SmtpClient::SmtpClient::connect() "SmtpClient::connect()" is called
+    /** @param connect if @ref True "True", then \c SmtpClient::SmtpClient::connect() "SmtpClient::connect()" is called
         @param rtopts supports the following runtime options in getImpl() for connection logging:
         - \c "log": a closure accepting a single string for logging
         - \c "dbglog": a closure taking a single string for detailed technical connection logging
@@ -1686,7 +1686,15 @@ public class SmtpClientSendEmailDataProvider inherits AbstractDataProvider {
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
-        map msg.attach($1.name, $1."mime-type", $1."data", $1.encoding, $1.hdr), req.attachments;
+        foreach hash<auto> att in (req.attachments) {
+            if (att."content-id".val()) {
+                # Inline attachment with Content-ID
+                msg.attachInline(att.name, att."mime-type", att."data", att."content-id", att.encoding, att.hdr);
+            } else {
+                # Regular attachment
+                msg.attach(att.name, att."mime-type", att."data", att.encoding, att.hdr);
+            }
+        }
         return smtp.sendMessage(msg);
     }
 
@@ -1725,12 +1733,23 @@ public class SmtpSendEmailAttachmentDataType inherits HashDataType {
                 "display_name": "Attachment Encoding",
                 "type": StringType,
                 "short_desc": "The encoding to use for the attachment",
-                "desc": "The encoding to use for the attachment:\n"
-                    "- `default`: `quoted-printable` for string data, `base64` for binary data\n"
-                    "- `none`: no content encoding (not recommended)\n"
-                    "- `quoted-printable`: quoted printable encoding \n"
-                    "- `base64`: base64 encoding",
+                "desc": "The encoding to use for the attachment",
                 "default_value": "default",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "default",
+                        "desc": "`quoted-printable` for string data, `base64` for binary data",
+                    }, <AllowedValueInfo>{
+                        "value": "none",
+                        "desc": "No content encoding (not recommended)",
+                    }, <AllowedValueInfo>{
+                        "value": "quoted-printable",
+                        "desc": "Quoted printable encoding",
+                    }, <AllowedValueInfo>{
+                        "value": "base64",
+                        "desc": "Base64 encoding",
+                    },
+                ),
             },
             "hdr": {
                 "display_name": "Headers",
@@ -1749,6 +1768,14 @@ public class SmtpSendEmailAttachmentDataType inherits HashDataType {
                 "type": StringType,
                 "short_desc": "The name or filename of the attachment",
                 "desc": "The name or filename of the attachment",
+            },
+            "content-id": {
+                "display_name": "Content-ID",
+                "type": StringOrNothingType,
+                "short_desc": "Content-ID for inline attachments",
+                "desc": "Content-ID for inline attachments (without angle brackets). Use this for images "
+                    "embedded in HTML emails that are referenced as `cid:content-id` in the HTML body. "
+                    "When set, the attachment will be marked as inline rather than a regular attachment.",
             },
         };
     }
@@ -1788,13 +1815,24 @@ public class SmtpSendEmailRequestDataType inherits HashDataType {
             "body-encoding": {
                 "display_name": "Body Encoding",
                 "type": StringType,
-                "short_desc": "The encoding to use for the attachment",
-                "desc": "The encoding to use for the attachment:\n"
-                    "- `default`: `quoted-printable` for string data, `base64` for binary data\n"
-                    "- `none`: no content encoding (not recommended)\n"
-                    "- `quoted-printable`: quoted printable encoding \n"
-                    "- `base64`: base64 encoding",
+                "short_desc": "The encoding to use for the body",
+                "desc": "The encoding to use for the message body",
                 "default_value": "default",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "default",
+                        "desc": "`quoted-printable` for string data, `base64` for binary data",
+                    }, <AllowedValueInfo>{
+                        "value": "none",
+                        "desc": "No content encoding (not recommended)",
+                    }, <AllowedValueInfo>{
+                        "value": "quoted-printable",
+                        "desc": "Quoted printable encoding",
+                    }, <AllowedValueInfo>{
+                        "value": "base64",
+                        "desc": "Base64 encoding",
+                    },
+                ),
             },
             "body-mime-type": {
                 "display_name": "Body Mime Type",
@@ -1887,7 +1925,7 @@ public class SmtpClientDataProviderFactory inherits AbstractDataProviderFactory 
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by \c getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

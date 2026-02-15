@@ -281,7 +281,7 @@ CdsRestClient rest({
           - \c dynamics-business-central (set client options for the MS Dynamics 365 Business Central API)
         - \c instance_type: (required for Business Central) the BC instance type (sandbox, production, or GUID)
         - \c tenant: the Azure AD tenant ID
-        - \c data: see @ref RestClient::RestClient::DataSerializationOptions "DataSerializationOptions" for possible
+        - \c data: see \c RestClient::RestClient::DataSerializationOptions "DataSerializationOptions" for possible
         values; the default is \c "json"
         - \c scope: the OAuth2 scope for the login; the default depends on the \c "api_profile" option
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
@@ -373,7 +373,7 @@ CdsRestClient rest({
         throw "CDSRESTCLIENT-ERROR", vsprintf(fmt, argv);
     }
 
-    #! returns options for the @ref CdsRestClient::CdsRestClient::constructor()
+    #! returns options for the \c CdsRestClient::CdsRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts0) {
         # create an untyped hash to avoid type constraints from the input hash
         hash<auto> opts += opts0;
@@ -451,11 +451,11 @@ CdsRestClient rest({
       - \c dynamics (set client options for the MS Dynamics 365 API)
     - \c "oauth2_client_id": (required) the Microsoft Common Data Service OAuth2 client ID
     - \c "oauth2_client_secret": (required) the Microsoft Common Data Service OAuth2 client secret
-    - \c "data": see @ref RestClient::RestClient::DataSerializationOptions "DataSerializationOptions" for possible
+    - \c "data": see \c RestClient::RestClient::DataSerializationOptions "DataSerializationOptions" for possible
       values; the default is \c "json"
     - \c "scope": the OAuth2 scope for the login; the default depends on the \c "api_profile" option
 
-    @see @ref CdsRestClient::CdsRestClient::constructor() for more information on the above options
+    @see \c CdsRestClient::CdsRestClient::constructor() for more information on the above options
 */
 public class CdsRestConnection inherits RestClient::RestConnection {
     public {
@@ -604,10 +604,10 @@ public class CdsRestConnection inherits RestClient::RestConnection {
         return "cdsrests";
     }
 
-    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -879,7 +879,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
     - \c "oauth2_client_id": (required) the Business Central OAuth2 client ID
     - \c "oauth2_client_secret": (required) the Business Central OAuth2 client secret
 
-    @see @ref CdsRestClient::constructor() for more information on the above options
+    @see \c CdsRestClient::constructor() for more information on the above options
 */
 public class BusinessCentralRestConnection inherits CdsRestConnection {
     public {

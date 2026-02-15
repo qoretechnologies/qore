@@ -30,6 +30,8 @@
 
 #include <qore/Qore.h>
 
+#include "qore/intern/RuntimeConfig.h"
+
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
@@ -53,10 +55,16 @@ const char* SelfVarrefNode::getTypeName() const {
 }
 
 QoreValue SelfVarrefNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    assert(runtime_get_stack_object());
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    assert(obj);
     assert(needs_deref);
     // issue 3523: evaluate in case the value is a reference
-    ValueHolder val(runtime_get_stack_object()->getReferencedMemberNoMethod(str, xsink), xsink);
+    ValueHolder val(obj->getReferencedMemberNoMethod(str, xsink), xsink);
     // the value here must always require a dereference
     return val->needsEval() ? val->eval(xsink) : val.release();
 }

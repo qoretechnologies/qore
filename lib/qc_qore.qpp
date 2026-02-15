@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreHttpClientObject.h>
 #include "qore/intern/QC_File.h"
 
 DLLEXPORT extern QoreClass* QC_FILEINPUTSTREAM;
@@ -445,6 +446,24 @@ const HTTP2_MODE_H2C_DIRECT = HTTP2_MODE_H2C_DIRECT;
 */
 const HTTP2_MODE_H2C_UPGRADE = HTTP2_MODE_H2C_UPGRADE;
 ///@}
+
+//! HTTP/2 mode enum for type-safe use with HTTPClient::setHttp2Mode()
+/** The enum values match the HTTP2_MODE_* constants.
+
+    @since %Qore 2.3
+*/
+enum HTTP2Mode : int {
+    //! HTTP/2 disabled mode - only use HTTP/1.x, never attempt HTTP/2
+    Disabled = 0,
+    //! HTTP/2 auto mode - use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)
+    Auto = 1,
+    //! HTTP/2 required mode - require HTTP/2, fail if the server doesn't support it
+    Required = 2,
+    //! h2c (HTTP/2 cleartext) direct mode - starts HTTP/2 directly on non-TLS connections using prior knowledge
+    H2cDirect = 3,
+    //! h2c via HTTP/1.1 Upgrade header (not yet implemented)
+    H2cUpgrade = 4,
+};
 
 /** @defgroup io_constants I/O Constants
     These constants are all instantiations of the @ref File "File class"

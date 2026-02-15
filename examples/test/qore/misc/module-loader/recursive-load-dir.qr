@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+
+
+%append-module-path .
+
+%requires RD1
+
+our int i;

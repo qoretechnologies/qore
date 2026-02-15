@@ -4,7 +4,7 @@
 
     Qore mongodb module
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,32 +35,34 @@
 #include "QC_MongoCollection.h"
 #include "QC_MongoCursor.h"
 
-QoreStringNode* mongodb_module_init();
-void mongodb_module_ns_init(QoreNamespace* rns, QoreNamespace* qns);
-void mongodb_module_delete();
+static void mongodb_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void mongodb_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
+static void mongodb_module_delete();
 
-// Qore module symbols
-DLLEXPORT char qore_module_name[] = "mongodb";
-DLLEXPORT char qore_module_version[] = PACKAGE_VERSION;
-DLLEXPORT char qore_module_description[] = "MongoDB client module for Qore";
-DLLEXPORT char qore_module_author[] = "Qore Technologies, s.r.o.";
-DLLEXPORT char qore_module_url[] = "http://qore.org";
-DLLEXPORT int qore_module_api_major = QORE_MODULE_API_MAJOR;
-DLLEXPORT int qore_module_api_minor = QORE_MODULE_API_MINOR;
-DLLEXPORT qore_module_init_t qore_module_init = mongodb_module_init;
-DLLEXPORT qore_module_ns_init_t qore_module_ns_init = mongodb_module_ns_init;
-DLLEXPORT qore_module_delete_t qore_module_delete = mongodb_module_delete;
-DLLEXPORT qore_license_t qore_module_license = QL_MIT;
-DLLEXPORT char qore_module_license_str[] = "MIT";
+extern "C" DLLEXPORT void mongodb_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = "mongodb";
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "MongoDB client module for Qore";
+    mod_info.author = "Qore Technologies, s.r.o.";
+    mod_info.url = "http://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = mongodb_module_init;
+    mod_info.ns_init = mongodb_module_ns_init;
+    mod_info.del = mongodb_module_delete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+}
 
 QoreNamespace MongoDBNS("Qore::mongodb");
 
 static bool mongoc_initialized = false;
 
-QoreStringNode* mongodb_module_init() {
+static void mongodb_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Initialize libmongoc
     mongoc_init();
     mongoc_initialized = true;
+    qore_mongo_set_log_handler();
 
     // Pre-initialize all classes first (creates class objects without methods)
     // This is needed because classes reference each other's type info
@@ -76,15 +78,13 @@ QoreStringNode* mongodb_module_init() {
     MongoDBNS.addSystemClass(initMongoDatabaseClass(MongoDBNS));
     MongoDBNS.addSystemClass(initMongoCollectionClass(MongoDBNS));
     MongoDBNS.addSystemClass(initMongoCursorClass(MongoDBNS));
-
-    return nullptr;
 }
 
-void mongodb_module_ns_init(QoreNamespace* rns, QoreNamespace* qns) {
+static void mongodb_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     qns->addNamespace(MongoDBNS.copy());
 }
 
-void mongodb_module_delete() {
+static void mongodb_module_delete() {
     MongoDBNS.clear(nullptr);
     if (mongoc_initialized) {
         mongoc_cleanup();

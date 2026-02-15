@@ -51,7 +51,7 @@ public hashdecl DpqlParseResult {
     - Collection operators: in (val1, val2, ...)
     - Regex matching: =~ /pattern/flags
     - Function calls: func(arg1, arg2, ...)
-    - Field references: @field, @"field with spaces"
+    - Field references: \c \@field, <tt>\@\"field with spaces\"</tt>
     - Literals: strings, numbers, booleans, null
 
     @par Example:
@@ -131,12 +131,22 @@ public class DpqlParser {
         try {
             skipWhitespace();
             if (!atEnd()) {
-                exp = parseOrExpr();
+                auto parsed = parseOrExpr();
                 skipWhitespace();
                 if (!atEnd()) {
                     hash<DpqlTokenInfo> tok = peek();
                     addError(sprintf("Unexpected token '%s' after expression", tok.value),
                         "DPQL-E001", tok);
+                }
+                # Wrap non-expression results (field references, bare values) in a value expression
+                # This only happens at the top level, not for nested expressions or function args
+                if (parsed instanceof hash<DataProviderExpression>) {
+                    exp = parsed;
+                } else {
+                    exp = <DataProviderExpression>{
+                        "exp": DP_EXPR_VALUE,
+                        "args": (parsed,),
+                    };
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -457,11 +467,21 @@ public class DpqlParser {
                 if (kw == "in") {
                     nextToken();  # consume 'in'
                     skipWhitespace();
-                    expect(DPQL_TOK_LPAREN, "'('");
-                    skipWhitespace();
-                    list<auto> values = parseValueList();
-                    skipWhitespace();
-                    expect(DPQL_TOK_RPAREN, "')'");
+                    list<auto> values = ();
+                    if (!atEnd() && peek().type == DPQL_TOK_LIST) {
+                        auto parsed = parseStructuredLiteral();
+                        if (parsed.typeCode() != NT_LIST) {
+                            addError("Expected list literal after 'in'", "DPQL-E013", line, column, line, column);
+                            throw "DPQL-PARSE-ERROR", "Expected list literal";
+                        }
+                        values = parsed;
+                    } else {
+                        expect(DPQL_TOK_LPAREN, "'('");
+                        skipWhitespace();
+                        values = parseValueList();
+                        skipWhitespace();
+                        expect(DPQL_TOK_RPAREN, "')'");
+                    }
                     return <DataProviderExpression>{
                         "exp": DP_SEARCH_OP_IN,
                         "args": (left,) + values,
@@ -563,6 +583,16 @@ public class DpqlParser {
             case DPQL_TOK_NUMBER:
                 return parseNumberLiteral();
 
+            case DPQL_TOK_DATE:
+                return parseDateLiteral();
+
+            case DPQL_TOK_BINARY:
+                return parseBinaryLiteral();
+
+            case DPQL_TOK_LIST:
+            case DPQL_TOK_HASH:
+                return parseStructuredLiteral();
+
             case DPQL_TOK_BOOLEAN:
                 nextToken();
                 return tok.value.lwr() == "true";
@@ -598,10 +628,8 @@ public class DpqlParser {
                 if (lwr == "null") {
                     return NOTHING;
                 }
-                # Unknown identifier as value
-                addError(sprintf("Unexpected identifier '%s' in value position", id_tok.value),
-                    "DPQL-E001", id_tok);
-                throw "DPQL-PARSE-ERROR", "Unexpected identifier";
+                # Treat unquoted identifiers as strings
+                return id_tok.value;
             }
 
             case DPQL_TOK_ERROR:
@@ -616,8 +644,11 @@ public class DpqlParser {
         }
     }
 
-    #! Parses a field reference
-    private hash<DataProviderFieldReference> parseFieldRef() {
+    #! Parses a field reference with optional accessor chain as expression nodes
+    /** Returns a plain DataProviderFieldReference if no accessors follow, or a nested
+        expression tree using DP_FUNC_INDEX/DP_FUNC_SLICE/DP_FUNC_KEY operators.
+    */
+    private auto parseFieldRef() {
         hash<DpqlTokenInfo> tok = nextToken();
         string value = tok.value;
 
@@ -627,9 +658,9 @@ public class DpqlParser {
             if (value[1] == '"') {
                 # Quoted field: @"field name"
                 # Remove @" prefix and " suffix
-                field_name = substr(value, 2, value.size() - 3);
-                # Process escape sequences
-                field_name = replace(replace(field_name, "\\\"", "\""), "\\\\", "\\");
+                string content = substr(value, 2, value.size() - 3);
+                # Process escape sequences (same handling as parseStringLiteral)
+                field_name = unescapeString(content);
             } else {
                 # Unquoted field: @field
                 field_name = substr(value, 1);
@@ -639,9 +670,289 @@ public class DpqlParser {
             throw "DPQL-PARSE-ERROR", "Invalid field reference";
         }
 
-        return <DataProviderFieldReference>{
+        auto result = <DataProviderFieldReference>{
             "field": field_name,
         };
+
+        # Parse optional accessor chain, wrapping in expression nodes
+        return parseAccessorChain(result);
+    }
+
+    #! Parses accessor chain and wraps the base expression in nested operator nodes
+    /** @param base the base value (field reference or expression) to wrap
+        @return the base if no accessors, or a nested expression tree
+    */
+    private auto parseAccessorChain(auto base) {
+        auto result = base;
+
+        while (!atEnd()) {
+            skipWhitespace();
+            if (atEnd()) {
+                break;
+            }
+
+            hash<DpqlTokenInfo> tok = peek();
+
+            if (tok.type == DPQL_TOK_LBRACKET) {
+                # Index or slice accessor: [...]
+                result = parseIndexAccessor(result);
+            } else if (tok.type == DPQL_TOK_LBRACE) {
+                # Key accessor: {...}
+                result = parseKeyAccessor(result);
+            } else if (tok.type == DPQL_TOK_DOT) {
+                # Member access after accessor: .identifier
+                nextToken();  # consume .
+                skipWhitespace();
+                if (atEnd()) {
+                    addError("Expected identifier after '.'", "DPQL-E020", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+                }
+                hash<DpqlTokenInfo> id_tok = peek();
+                if (id_tok.type != DPQL_TOK_IDENTIFIER && id_tok.type != DPQL_TOK_FIELD) {
+                    addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+                    throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
+                }
+                string member_name;
+                if (id_tok.type == DPQL_TOK_FIELD) {
+                    # Handle @field after dot - strip the @
+                    member_name = substr(id_tok.value, 1);
+                } else {
+                    member_name = id_tok.value;
+                }
+                nextToken();  # consume identifier
+                # Member access is a single-key expression node
+                result = <DataProviderExpression>{
+                    "exp": DP_FUNC_KEY,
+                    "args": (result, member_name),
+                };
+            } else {
+                # No more accessors
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    #! Parses index accessor: [n], [n..m], [n,m,p], [n..m,p], [2..], [..5]
+    /** @param base the base expression to index into
+        @return a DP_FUNC_INDEX or DP_FUNC_SLICE expression node
+    */
+    private hash<DataProviderExpression> parseIndexAccessor(auto base) {
+        hash<DpqlTokenInfo> lbracket = nextToken();  # consume [
+        skipWhitespace();
+
+        list<auto> items = ();
+        bool first = True;
+        bool closed = False;
+
+        while (True) {
+            skipWhitespace();
+            hash<DpqlTokenInfo> tok = peek();
+
+            # Check for EOF - unclosed accessor
+            if (tok.type == DPQL_TOK_EOF) {
+                break;
+            }
+
+            if (tok.type == DPQL_TOK_RBRACKET) {
+                nextToken();  # consume ]
+                closed = True;
+                break;
+            }
+
+            if (!first) {
+                if (tok.type != DPQL_TOK_COMMA) {
+                    addError("Expected ',' or ']' in index accessor", "DPQL-E022", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected ',' or ']'";
+                }
+                nextToken();  # consume ,
+                skipWhitespace();
+                tok = peek();
+                # Check for EOF after comma
+                if (tok.type == DPQL_TOK_EOF) {
+                    break;
+                }
+            }
+            first = False;
+
+            # Parse index item: int or range
+            items += parseIndexItem();
+        }
+
+        if (!closed) {
+            addError("Unclosed index accessor, expected ']'", "DPQL-E022", lbracket);
+            throw "DPQL-PARSE-ERROR", "Unclosed index accessor";
+        }
+
+        if (!items) {
+            addError("Empty index accessor is not allowed", "DPQL-E022", lbracket);
+            throw "DPQL-PARSE-ERROR", "Empty index accessor";
+        }
+
+        # Determine expression type: INDEX (single int) or SLICE (multiple or range)
+        if (items.size() == 1 && items[0].typeCode() == NT_INT) {
+            return <DataProviderExpression>{
+                "exp": DP_FUNC_INDEX,
+                "args": (base, items[0]),
+            };
+        }
+
+        return <DataProviderExpression>{
+            "exp": DP_FUNC_SLICE,
+            "args": (base,) + items,
+        };
+    }
+
+    #! Parses a single index item: integer or range
+    private auto parseIndexItem() {
+        skipWhitespace();
+        hash<DpqlTokenInfo> tok = peek();
+
+        # Check for open-start range: ..n
+        if (tok.type == DPQL_TOK_RANGE) {
+            nextToken();  # consume ..
+            skipWhitespace();
+            tok = peek();
+            if (tok.type == DPQL_TOK_RBRACKET || tok.type == DPQL_TOK_COMMA) {
+                # [..] alone is not allowed
+                addError("Range must have at least one bound; '[..]' is not supported", "DPQL-E021", tok);
+                throw "DPQL-PARSE-ERROR", "Range must have at least one bound";
+            }
+            int end_idx = parseInteger();
+            return <DataProviderRangeSpec>{
+                "end": end_idx,
+            };
+        }
+
+        # Parse first integer
+        int start_idx = parseInteger();
+
+        # Check for range continuation: n..m or n..
+        skipWhitespace();
+        tok = peek();
+        if (tok.type == DPQL_TOK_RANGE) {
+            nextToken();  # consume ..
+            skipWhitespace();
+            tok = peek();
+            # Check for open-end range: n..
+            if (tok.type == DPQL_TOK_RBRACKET || tok.type == DPQL_TOK_COMMA) {
+                return <DataProviderRangeSpec>{
+                    "start": start_idx,
+                };
+            }
+            # Full range: n..m
+            int end_idx = parseInteger();
+            return <DataProviderRangeSpec>{
+                "start": start_idx,
+                "end": end_idx,
+            };
+        }
+
+        # Single integer
+        return start_idx;
+    }
+
+    #! Parses an integer, errors if float
+    private int parseInteger() {
+        hash<DpqlTokenInfo> tok = peek();
+        if (tok.type != DPQL_TOK_NUMBER) {
+            addError("Expected integer in index", "DPQL-E022", tok);
+            throw "DPQL-PARSE-ERROR", "Expected integer in index";
+        }
+        nextToken();  # consume number
+
+        string value = tok.value;
+        # Check for float
+        if (index(value, ".") >= 0) {
+            addError("Index must be integer, not float", "DPQL-E023", tok);
+            throw "DPQL-PARSE-ERROR", "Index must be integer, not float";
+        }
+        return value.toInt();
+    }
+
+    #! Parses key accessor: {key}, {"key"}, {key1, key2}
+    /** @param base the base expression to apply key access to
+        @return a DP_FUNC_KEY expression node
+    */
+    private hash<DataProviderExpression> parseKeyAccessor(auto base) {
+        hash<DpqlTokenInfo> lbrace = nextToken();  # consume {
+        skipWhitespace();
+
+        list<string> key_list = ();
+        bool first = True;
+        bool closed = False;
+
+        while (True) {
+            skipWhitespace();
+            hash<DpqlTokenInfo> tok = peek();
+
+            # Check for EOF - unclosed accessor
+            if (tok.type == DPQL_TOK_EOF) {
+                break;
+            }
+
+            if (tok.type == DPQL_TOK_RBRACE) {
+                nextToken();  # consume }
+                closed = True;
+                break;
+            }
+
+            if (!first) {
+                if (tok.type != DPQL_TOK_COMMA) {
+                    addError("Expected ',' or '}' in key accessor", "DPQL-E024", tok);
+                    throw "DPQL-PARSE-ERROR", "Expected ',' or '}'";
+                }
+                nextToken();  # consume ,
+                skipWhitespace();
+                tok = peek();
+                # Check for EOF after comma
+                if (tok.type == DPQL_TOK_EOF) {
+                    break;
+                }
+            }
+            first = False;
+
+            key_list += parseKeyName();
+        }
+
+        if (!closed) {
+            addError("Unclosed key accessor, expected '}'", "DPQL-E024", lbrace);
+            throw "DPQL-PARSE-ERROR", "Unclosed key accessor";
+        }
+
+        if (!key_list) {
+            addError("Empty key accessor is not allowed", "DPQL-E024", lbrace);
+            throw "DPQL-PARSE-ERROR", "Empty key accessor";
+        }
+
+        return <DataProviderExpression>{
+            "exp": DP_FUNC_KEY,
+            "args": (base,) + key_list,
+        };
+    }
+
+    #! Parses a key name: identifier or string literal
+    private string parseKeyName() {
+        hash<DpqlTokenInfo> tok = peek();
+
+        if (tok.type == DPQL_TOK_STRING) {
+            return parseStringLiteral();
+        }
+
+        if (tok.type == DPQL_TOK_IDENTIFIER) {
+            nextToken();
+            return tok.value;
+        }
+
+        if (tok.type == DPQL_TOK_NUMBER) {
+            # Allow numeric keys
+            nextToken();
+            return tok.value;
+        }
+
+        addError("Expected key name in key accessor", "DPQL-E024", tok);
+        throw "DPQL-PARSE-ERROR", "Expected key name";
     }
 
     #! Parses a string literal
@@ -650,10 +961,14 @@ public class DpqlParser {
         string value = tok.value;
 
         # Remove quotes and process escapes
-        string quote = value[0];
         string content = substr(value, 1, value.size() - 2);
+        return unescapeString(content);
+    }
 
-        # Process escape sequences
+    #! Unescapes a string by processing escape sequences
+    /** Handles \\n, \\r, \\t, \\\\, \\', \\" and passes through other backslash sequences
+    */
+    private string unescapeString(string content) {
         string result = "";
         int i = 0;
         while (i < content.size()) {
@@ -692,7 +1007,6 @@ public class DpqlParser {
                 ++i;
             }
         }
-
         return result;
     }
 
@@ -706,6 +1020,34 @@ public class DpqlParser {
             return value.toFloat();
         }
         return value.toInt();
+    }
+
+    #! Parses a date literal
+    private date parseDateLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        return date(tok.value);
+    }
+
+    #! Parses a binary literal
+    private binary parseBinaryLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        string value = tok.value;
+        if (value.size() < 3 || value[0] != "<" || value[value.size() - 1] != ">") {
+            throw "DPQL-PARSE-ERROR", "Invalid binary literal";
+        }
+        string hex = substr(value, 1, value.size() - 2);
+        return parse_hex_string(hex);
+    }
+
+    #! Parses a list or hash literal
+    private auto parseStructuredLiteral() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        try {
+            return parse_to_qore_value(tok.value);
+        } catch (hash<ExceptionInfo> ex) {
+            addError(ex.desc ?? "Invalid list/hash literal", "DPQL-E013", tok);
+            throw "DPQL-PARSE-ERROR", "Invalid list/hash literal";
+        }
     }
 
     #! Parses a function call

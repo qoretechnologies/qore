@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MemcachedDataProvider module definition
 
-/*  MemcachedDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  MemcachedDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,6 +57,7 @@ module MemcachedDataProvider {
             "logo": MemcachedLogo,
             "logo_file_name": "memcached-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register storage actions
@@ -220,7 +221,7 @@ module MemcachedDataProvider {
     </div>
     @endhtmlonly
 
-    The %MemcachedDataProvider module provides a @ref dataproviderintro "data provider" API for
+    The %MemcachedDataProvider module provides a \c dataproviderintro "data provider" API for
     Memcached servers. It implements the memcached binary protocol for efficient communication
     and provides a complete set of operations for cache management.
 
@@ -279,8 +280,5 @@ module MemcachedDataProvider {
 */
 
 public namespace MemcachedDataProvider {
-}
-
-namespace Priv {
-    const MemcachedLogo = File::readTextFile(get_script_dir() + "/memcached-logo.svg");
+public const MemcachedLogo = File::readTextFile(get_script_dir() + "/memcached-logo.svg");
 }

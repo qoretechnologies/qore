@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
@@ -42,7 +43,7 @@ QoreString* QoreChompOperatorNode::getAsString(bool& del, int foff, ExceptionSin
 }
 
 int QoreChompOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    str.concat(&chomp_str);
+    qore_string_private::get(str)->concat(&chomp_str);
     return 0;
 }
 
@@ -113,7 +114,6 @@ int QoreChompOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_STRING)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_LIST)
         && !QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_HASH)) {
-        // FIXME: raise an error with %strict-types
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the chomp operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *desc);
         desc->sprintf(", therefore this operation will have no effect on the lvalue and will always return " \

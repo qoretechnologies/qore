@@ -57,8 +57,10 @@ aωb\r
 
     constructor() : Test("MimeTest", "1.0") {
         addTestCase("text tests", \textTests());
+        addTestCase("json tests", \jsonTests());
         addTestCase("issue 2936", \issue2936());
         addTestCase("mime type from ext", \mimeTypeTest());
+        addTestCase("new file extensions", \newFileExtensionsTest());
         addTestCase("Printable test", \printableTest());
         addTestCase("Base64 test", \base64Test());
         addTestCase("Header word q test", \wordQTest());
@@ -66,6 +68,15 @@ aωb\r
         addTestCase("urlencoding", \urlEncodingTest());
         addTestCase("form data", \formDataTest());
         addTestCase("mime_parse_form_urlencoded_string", \parseFormUrlencodedTest());
+        addTestCase("transfer encoding", \transferEncodingTest());
+        addTestCase("MultiPartMixedMessage", \multiPartMixedTest());
+        addTestCase("MultiPartAlternativeMessage", \multiPartAlternativeTest());
+        addTestCase("MultiPartRelatedMessage", \multiPartRelatedTest());
+        addTestCase("MultiPartDigestMessage", \multiPartDigestTest());
+        addTestCase("MultiPartByteRangesMessage", \multiPartByteRangesTest());
+        addTestCase("MultiPartSignedMessage", \multiPartSignedTest());
+        addTestCase("MultiPartEncryptedMessage", \multiPartEncryptedTest());
+        addTestCase("MultiPartMessageMessage", \multiPartMessageTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -176,7 +187,7 @@ aωb\r
     }
 
     parseFormUrlencodedTest() {
-        hash test_data = {
+        hash<auto> test_data = {
             "foo=bar&baz=1" : { "foo" : "bar", "baz" : "1", },
             "foo=bar&baz=" : { "foo" : "bar", "baz" : NOTHING, },
             "0=1&1=0" : { "0" : "1", "1" : "0", },
@@ -185,8 +196,343 @@ aωb\r
 
         HashIterator it(test_data);
         while (it.next()) {
-            hash res = mime_parse_form_urlencoded_string(it.getKey());
+            hash<auto> res = mime_parse_form_urlencoded_string(it.getKey());
             assertEq(it.getValue(), res, "mime_parse_form_urlencoded_string " + it.getKey());
         }
+    }
+
+    jsonTests() {
+        # Test is_mime_json() function
+        assertTrue(is_mime_json(MimeTypeJson));
+        assertTrue(is_mime_json("application/json"));
+        assertTrue(is_mime_json("application/vnd.api+json"));
+        assertTrue(is_mime_json("application/ld+json"));
+        assertTrue(is_mime_json("application/hal+json"));
+        assertTrue(is_mime_json("application/problem+json"));
+        assertTrue(is_mime_json("application/merge-patch+json"));
+        assertTrue(is_mime_json("application/json-patch+json"));
+        assertTrue(is_mime_json("application/geo+json"));
+        assertTrue(is_mime_json("application/manifest+json"));
+
+        # Test with charset modifier (should be stripped)
+        assertTrue(is_mime_json("application/json; charset=utf-8"));
+        assertTrue(is_mime_json("application/json;charset=UTF-8"));
+
+        # Test non-JSON types
+        assertFalse(is_mime_json(MimeTypeXml));
+        assertFalse(is_mime_json(MimeTypeText));
+        assertFalse(is_mime_json(MimeTypeHtml));
+        assertFalse(is_mime_json("text/plain"));
+    }
+
+    newFileExtensionsTest() {
+        # Test new file extensions added in v1.7
+        assertEq("application/graphql", get_mime_type_from_ext("test.gql"));
+        assertEq("application/graphql", get_mime_type_from_ext("test.graphql"));
+        assertEq("image/heic", get_mime_type_from_ext("photo.heic"));
+        assertEq("image/heif", get_mime_type_from_ext("photo.heif"));
+        assertEq("text/jsx", get_mime_type_from_ext("component.jsx"));
+        assertEq("text/markdown", get_mime_type_from_ext("README.md"));
+        assertEq("text/markdown", get_mime_type_from_ext("docs.markdown"));
+        assertEq("text/x-rst", get_mime_type_from_ext("docs.rst"));
+        assertEq("application/sql", get_mime_type_from_ext("query.sql"));
+        assertEq("application/toml", get_mime_type_from_ext("config.toml"));
+        assertEq("text/typescript", get_mime_type_from_ext("app.ts"));
+        assertEq("text/typescript-jsx", get_mime_type_from_ext("component.tsx"));
+        assertEq("application/wasm", get_mime_type_from_ext("module.wasm"));
+
+        # Test corrected MIME types
+        assertEq("audio/webm", get_mime_type_from_ext("audio.weba"));
+        assertEq("video/webm", get_mime_type_from_ext("video.webm"));
+    }
+
+    transferEncodingTest() {
+        string testStr = "Hello, World! This is a test with special chars: äöü";
+
+        # Test base64 encoding/decoding
+        string encoded = mime_encode_transfer_data(testStr, ContentTransEncBase64);
+        assertEq("string", encoded.type());
+        # base64 decoding always returns binary (could be binary content)
+        data decoded = mime_decode_transfer_data(encoded, ContentTransEncBase64);
+        assertEq("binary", decoded.type());
+        assertEq(testStr, decoded.toString());
+
+        # Test base64 with text content-type (still returns binary - caller must convert)
+        decoded = mime_decode_transfer_data(encoded, ContentTransEncBase64, "text/plain; charset=UTF-8");
+        assertEq("binary", decoded.type());
+        assertEq(testStr, decoded.toString());
+
+        # Test quoted-printable encoding/decoding
+        encoded = mime_encode_transfer_data(testStr, ContentTransEncQuotedPrintable);
+        assertEq("string", encoded.type());
+        decoded = mime_decode_transfer_data(encoded, ContentTransEncQuotedPrintable);
+        assertEq("string", decoded.type());
+        assertEq(testStr, decoded);
+
+        # Test 7bit/8bit/binary (no encoding)
+        assertEq(testStr, mime_encode_transfer_data(testStr, ContentTransEnc7Bit));
+        assertEq(testStr, mime_encode_transfer_data(testStr, ContentTransEnc8Bit));
+        assertEq(testStr, mime_encode_transfer_data(testStr, ContentTransEncBinary));
+
+        # Test with charset in content-type for quoted-printable
+        decoded = mime_decode_transfer_data(encoded, ContentTransEncQuotedPrintable, "text/plain; charset=UTF-8");
+        assertEq("string", decoded.type());
+        assertEq(testStr, decoded);
+
+        # Test unknown encoding throws exception
+        assertThrows("MIME-TRANSFER-ENCODING-ERROR", \mime_encode_transfer_data(), (testStr, "unknown-encoding"));
+        assertThrows("MIME-TRANSFER-ENCODING-ERROR", \mime_decode_transfer_data(), (testStr, "unknown-encoding"));
+    }
+
+    multiPartMixedTest() {
+        MultiPartMixedMessage msg();
+
+        # Add text part
+        msg.addPart("This is the text body.", MimeTypeText, "inline");
+
+        # Add attachment
+        binary attachmentData = <48656C6C6F>;  # "Hello" in binary
+        msg.addEncodePart(attachmentData, ContentTransEncBase64, MimeTypeOctetStream,
+            "attachment; filename=\"test.bin\"");
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/mixed/);
+        assertTrue(mh.hdr."MIME-Version".val());
+        assertTrue(mh.body.val());
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+    }
+
+    multiPartAlternativeTest() {
+        MultiPartAlternativeMessage msg();
+
+        # Add plain text alternative
+        string plainText = "Hello, this is plain text.";
+        msg.addPart(plainText, MimeTypeText, "inline");
+
+        # Add HTML alternative
+        string htmlText = "<html><body><p>Hello, this is <b>HTML</b>.</p></body></html>";
+        msg.addPart(htmlText, MimeTypeHtml, "inline");
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/alternative/);
+
+        # Test with encoding
+        MultiPartAlternativeMessage msg2();
+        msg2.addEncodePart(plainText, ContentTransEncQuotedPrintable, MimeTypeText);
+        msg2.addEncodePart(htmlText, ContentTransEncBase64, MimeTypeHtml);
+        assertEq(2, msg2.size());
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+    }
+
+    multiPartRelatedTest() {
+        MultiPartRelatedMessage msg();
+
+        # Add main HTML content
+        string htmlContent = "<html><body><img src=\"cid:image1\"/></body></html>";
+        msg.addPart(htmlContent, "mainContent", MimeTypeHtml);
+
+        # Add related image
+        binary imageData = <89504E470D0A1A0A>;  # PNG header
+        msg.addPart(imageData, "image1", MimeTypePng);
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/related/);
+        assertTrue(mh.hdr."Content-Type" =~ /start=/);
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Test error case - empty ID
+        MultiPartRelatedMessage msg2();
+        assertThrows("MULTIPART-RELATED-ERROR", \msg2.addPart(), (htmlContent, "", MimeTypeHtml));
+    }
+
+    multiPartDigestTest() {
+        MultiPartDigestMessage msg();
+
+        # Add email messages to digest
+        string msg1 = "From: user1@example.com\r\nTo: list@example.com\r\nSubject: First message\r\n\r\nHello!";
+        string msg2 = "From: user2@example.com\r\nTo: list@example.com\r\nSubject: Second message\r\n\r\nWorld!";
+
+        msg.addPart(msg1);
+        msg.addPart(msg2);
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/digest/);
+        assertTrue(mh.hdr."MIME-Version".val());
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Verify default content type
+        assertTrue(parsed.part[0].hdr."content-type" =~ /message\/rfc822/);
+    }
+
+    multiPartByteRangesTest() {
+        MultiPartByteRangesMessage msg();
+
+        # Simulate serving byte ranges of a file
+        binary data1 = <48656C6C6F>;  # "Hello"
+        binary data2 = <576F726C64>;  # "World"
+
+        msg.addPart(data1, MimeTypeOctetStream, 0, 4, 10);
+        msg.addPart(data2, MimeTypeOctetStream, 5, 9, 10);
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/byteranges/);
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Verify Content-Range headers
+        assertTrue(parsed.part[0].hdr."content-range" =~ /bytes 0-4\/10/);
+        assertTrue(parsed.part[1].hdr."content-range" =~ /bytes 5-9\/10/);
+
+        # Test with unknown total size
+        MultiPartByteRangesMessage msg2();
+        msg2.addPart(data1, MimeTypeOctetStream, 0, 4, "*");
+        hash<MessageInfo> parsed2 = MultiPartMessage::parseBody(msg2.getBoundary(), msg2.serializeBody(), True);
+        assertTrue(parsed2.part[0].hdr."content-range" =~ /bytes 0-4\/\*/);
+    }
+
+    multiPartSignedTest() {
+        # Test with PGP signature
+        MultiPartSignedMessage msg("application/pgp-signature", "sha256");
+
+        string content = "This is the message content to be signed.";
+        string signature = "-----BEGIN PGP SIGNATURE-----\nfakesignaturedata\n-----END PGP SIGNATURE-----";
+
+        msg.setContent(content, MimeTypeText);
+        msg.setSignature(signature);
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/signed/);
+        assertTrue(mh.hdr."Content-Type" =~ /protocol="application\/pgp-signature"/);
+        assertTrue(mh.hdr."Content-Type" =~ /micalg=sha256/);
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Test error cases
+        MultiPartSignedMessage msg2("application/pgp-signature", "sha256");
+        assertThrows("MULTIPART-SIGNED-ERROR", \msg2.setSignature(), (signature,));  # No content yet
+
+        MultiPartSignedMessage msg3("application/pgp-signature", "sha256");
+        msg3.setContent(content, MimeTypeText);
+        msg3.setSignature(signature);
+        assertThrows("MULTIPART-SIGNED-ERROR", \msg3.setSignature(), (signature,));  # Already set
+
+        # Test incomplete message
+        MultiPartSignedMessage msg4("application/pgp-signature", "sha256");
+        msg4.setContent(content, MimeTypeText);
+        assertThrows("MULTIPART-SIGNED-ERROR", \msg4.getMsgAndHeaders());  # Missing signature
+    }
+
+    multiPartEncryptedTest() {
+        # Test with PGP encryption
+        MultiPartEncryptedMessage msg("application/pgp-encrypted");
+
+        string controlInfo = "Version: 1";
+        binary encryptedData = <0102030405060708>;  # Fake encrypted data
+
+        msg.setControlInfo(controlInfo);
+        msg.setEncryptedData(encryptedData);
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/encrypted/);
+        assertTrue(mh.hdr."Content-Type" =~ /protocol="application\/pgp-encrypted"/);
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Test error cases
+        MultiPartEncryptedMessage msg2("application/pgp-encrypted");
+        assertThrows("MULTIPART-ENCRYPTED-ERROR", \msg2.setEncryptedData(), (encryptedData,));  # No control info
+
+        MultiPartEncryptedMessage msg3("application/pgp-encrypted");
+        msg3.setControlInfo(controlInfo);
+        msg3.setEncryptedData(encryptedData);
+        assertThrows("MULTIPART-ENCRYPTED-ERROR", \msg3.setEncryptedData(), (encryptedData,));  # Already set
+        assertThrows("MULTIPART-ENCRYPTED-ERROR", \msg3.setControlInfo(), (controlInfo,));  # Already set
+
+        # Test incomplete message
+        MultiPartEncryptedMessage msg4("application/pgp-encrypted");
+        msg4.setControlInfo(controlInfo);
+        assertThrows("MULTIPART-ENCRYPTED-ERROR", \msg4.getMsgAndHeaders());  # Missing encrypted data
+    }
+
+    multiPartMessageTest() {
+        MultiPartMessageMessage msg();
+
+        # Add forwarded email messages
+        string email1 = "From: sender@example.com\r\nTo: recipient@example.com\r\n"
+            "Subject: Original message\r\n\r\nThis is the original message.";
+        string email2 = "From: another@example.com\r\nTo: recipient@example.com\r\n"
+            "Subject: Another message\r\n\r\nThis is another message.";
+
+        msg.addPart(email1);
+        msg.addPart(email2, MimeTypeMessage, "attachment; filename=\"forwarded.eml\"");
+
+        assertEq(2, msg.size());
+
+        # Test serialization
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertTrue(mh.hdr."Content-Type".val());
+        assertTrue(mh.hdr."Content-Type" =~ /multipart\/message/);
+
+        # Test parsing back
+        string boundary = msg.getBoundary();
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody(boundary, msg.serializeBody(), True);
+        assertEq(2, parsed.part.size());
+
+        # Verify content types
+        assertTrue(parsed.part[0].hdr."content-type" =~ /message\/rfc822/);
+        assertTrue(parsed.part[1].hdr."content-type" =~ /message\/rfc822/);
     }
 }

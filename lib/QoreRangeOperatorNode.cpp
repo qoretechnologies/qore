@@ -73,8 +73,13 @@ int QoreRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 }
 
 QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue QoreRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     FunctionalValueType value_type;
-    std::unique_ptr<FunctionalOperatorInterface> fit(getFunctionalIterator(value_type, xsink));
+    std::unique_ptr<FunctionalOperatorInterface> fit(getFunctionalIteratorImpl(rc, value_type, xsink));
     if (*xsink || value_type != list)
         return QoreValue();
 
@@ -96,18 +101,25 @@ QoreValue QoreRangeOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
 FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return getFunctionalIteratorImpl(rc, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(RuntimeConfig& rc,
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
+    ValueEvalRefHolder lh(rc, left, xsink);
     if (*xsink)
         return nullptr;
     int64 start = lh->getAsBigInt();
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    ValueEvalRefHolder rh(rc, right, xsink);
     if (*xsink)
         return nullptr;
     int64 stop = rh->getAsBigInt();
 
     value_type = list;
-    if (!(runtime_get_parse_options() & PO_BROKEN_RANGE)) {
+    int64 po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+    if (!(po & PO_BROKEN_RANGE)) {
         if (start <= stop) {
             ++stop;
         } else {

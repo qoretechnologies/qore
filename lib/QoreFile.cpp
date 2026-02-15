@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
 
+#include <memory>
 #include <string>
 
 class FileReadPollState : public AbstractPollState {
@@ -169,14 +170,24 @@ QoreHashNode* FileReadPollOperationBase::continuePoll(ExceptionSink* xsink) {
     if (!rc) {
         // get output data
         SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+        bool ok = true;
         if (to_string) {
             size_t len = d->size();
-            data = new QoreStringNode(reinterpret_cast<char*>(d->giveBuffer()), len, len + 1,
-                file->getEncoding());
+            char* buf = reinterpret_cast<char*>(d->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                xsink->outOfMemory();
+                ok = false;
+            } else {
+                nbuf[len] = '\0';
+                data = new QoreStringNode(nbuf, len, len + 1, file->getEncoding());
+            }
         } else {
             data = d.release();
         }
-        state = FPS_READ_DONE;
+        if (ok) {
+            state = FPS_READ_DONE;
+        }
     }
     if (*xsink || !rc) {
         // release the AbstractPollState value
@@ -308,14 +319,14 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
     }
 
     // Check for sandbox interrupt support
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         // Use polling with interrupt checks
         const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
 
         while (true) {
             // Check for interrupt
-            if (sm->checkIOInterrupt(xsink, "file lock")) {
+            if (smh->checkIOInterrupt(xsink, "file lock")) {
                 return -1;
             }
 
@@ -586,8 +597,8 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
     }
 
     // Check sandbox security restrictions
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         // Determine access mode based on flags
         int access_mode = 0;
         if ((flags & O_ACCMODE) == O_RDONLY) {
@@ -601,7 +612,7 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
             access_mode |= QSEC_CREATE;
         }
 
-        if (!sm->checkFilesystemAccess(fn, access_mode, xsink)) {
+        if (!smh->checkFilesystemAccess(fn, access_mode, xsink)) {
             return -1;
         }
     }
@@ -894,6 +905,38 @@ BinaryNode* QoreFile::readBinary(qore_offset_t size, int timeout_ms, ExceptionSi
         return nullptr;
 
     return new BinaryNode(buf, size);
+}
+
+BinaryNode* QoreFile::readShortBinary(qore_offset_t size, int timeout_ms, ExceptionSink* xsink) {
+    if (!size) {
+        return nullptr;
+    }
+
+    qore_offset_t limit = size < 0 ? DEFAULT_FILE_BUFSIZE : size;
+    if (limit < 0) {
+        limit = DEFAULT_FILE_BUFSIZE;
+    }
+
+    std::unique_ptr<char, decltype(&free)> buf_guard((char*)malloc(limit), free);
+    if (!buf_guard) {
+        return nullptr;
+    }
+
+    qore_offset_t rc = -1;
+    {
+        AutoLocker al(priv->m);
+        if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
+            return nullptr;
+        }
+
+        rc = priv->readData(buf_guard.get(), limit, timeout_ms, "readShortBinary", xsink);
+    }
+
+    if (rc <= 0) {
+        return nullptr;
+    }
+
+    return new BinaryNode(buf_guard.release(), rc);
 }
 
 size_t QoreFile::read(void* ptr, size_t limit, int timeout_ms, ExceptionSink* xsink) {

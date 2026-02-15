@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore Pop3ClientMessageDataProvider class definition
 
-/** Pop3ClientMessageDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** Pop3ClientMessageDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,6 +41,7 @@ public class Pop3ClientMessageDataProvider inherits Pop3ClientDataProviderBase {
 
         const ChildMap = {
             "get": Class::forName("Pop3ClientDataProvider::Pop3ClientMessageGetDataProvider"),
+            "headers": Class::forName("Pop3ClientDataProvider::Pop3ClientMessageHeadersDataProvider"),
             #"peek": Class::forName("Pop3ClientDataProvider::Pop3ClientMessagePeekDataProvider"),
         };
     }

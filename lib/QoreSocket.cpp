@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,8 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#include <cctype>
+#include <map>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -42,6 +44,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
 
@@ -543,6 +546,10 @@ bool SSLSocketHelper::isHttp2() const {
     return getAlpnProtocol() == "h2";
 }
 
+int SSLSocketHelper::pending() const {
+    return ssl ? SSL_pending(ssl) : 0;
+}
+
 // returns 0 for success
 int SSLSocketHelper::connect(const char* mname, int timeout_ms, ExceptionSink* xsink) {
     SSLSocketReferenceHelper ssrh(this, true);
@@ -685,7 +692,7 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
                 return sysCallError(xsink, rc, "startAccept", "SSL_accept");
             }
             default:
-                printd(0, "SSLSocketHelper::startAccept() err: %d\n", err);
+                printd(3, "SSLSocketHelper::startAccept() err: %d\n", err);
                 break;
         }
         if (sslError(xsink, "startAccept", "SSL_accept", true)) {
@@ -1131,11 +1138,11 @@ int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
 
     // Check sandbox network security restrictions
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
         int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
                     (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-        if (!sm->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+        if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
             return -1;
         }
     }
@@ -1168,9 +1175,9 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
     // Check sandbox network security restrictions for UNIX sockets
-    QoreSandboxManager* sm = runtime_get_sandbox_manager();
-    if (sm) {
-        if (!sm->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        if (!smh->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
                 QSEC_NET_UNIX, xsink)) {
             return;
         }
@@ -1317,6 +1324,13 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
     if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey)) {
         sshh.error();
+        return;
+    }
+
+    // Set ALPN protocols if configured (for HTTP/2 support)
+    // This must match the synchronous path in upgradeClientToSSLIntern()
+    if (!sock->alpn_protocols.empty()) {
+        sock->ssl->setAlpnProtocols(sock->alpn_protocols);
     }
 }
 
@@ -1359,10 +1373,13 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
                 assert(!real_io);
                 return -1;
             }
-            if (!rc && real_io) {
+            if (real_io) {
                 sent += real_io;
                 if (sent == size) {
                     break;
+                }
+                if (rc) {
+                    return rc;
                 }
                 // do not allow more than max_nonblock_ops loops at a time
                 if (++loop >= max_nonblock_ops) {
@@ -1794,6 +1811,23 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 assert(!sock->bufoffset);
                 sock->buflen = real_io;
             }
+            if (rc == SOCK_POLLIN && !real_io) {
+                if (++loop >= max_nonblock_ops) {
+                    return SOCK_POLLIN;
+                }
+                struct pollfd pfd;
+                pfd.fd = sock->sock;
+                pfd.events = POLLIN | POLLERR | POLLHUP;
+                pfd.revents = 0;
+                int prc = ::poll(&pfd, 1, 0);
+                if (prc <= 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) {
+                    return SOCK_POLLIN;
+                }
+                if (pfd.revents & (POLLERR | POLLHUP)) {
+                    return 0;
+                }
+                continue;
+            }
             assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
             return rc;
         } else {
@@ -1974,7 +2008,7 @@ void qore_socket_private::captureRemoteCert(X509_STORE_CTX* x509_ctx) {
 }
 
 QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeout_ms, ExceptionSink* xsink) {
-#ifndef HAVE_POLL
+#if !defined(HAVE_POLL) && !defined(DARWIN)
     xsink->raiseException("MISSING-FEATURE-ERROR", "no support for async I/O polling on this platform");
     return nullptr;
 #else
@@ -1986,7 +2020,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
 
-    std::vector<pollfd> fds;
+    // Structure to track fd -> poll_list index mapping and requested events
+    struct FdInfo {
+        int fd;
+        int64 events;  // SOCK_POLLIN, SOCK_POLLOUT
+        size_t index;  // index in poll_list
+    };
+    std::vector<FdInfo> fd_info;
 
     ConstListIterator li(poll_list);
     while (li.next()) {
@@ -2030,25 +2070,147 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 "pollable object that is not open", li.index() + 1, poll_list->size());
             return nullptr;
         }
-        //printd(5, "qore_socket_private::poll() %s fd: %d\n", obj->getClassName(), fd);
 
-        short arg = 0;
-        if (events & SOCK_POLLIN) {
-            arg |= POLLIN;
-        }
-        if (events & SOCK_POLLOUT) {
-            arg |= POLLOUT;
-        }
-
-        if (!arg) {
+        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT))) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
+        fd_info.push_back({fd, events, li.index()});
+    }
+
+#ifdef DARWIN
+    // Use kqueue on macOS - it properly handles listener sockets unlike poll()
+    int kq = kqueue();
+    if (kq == -1) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kqueue() failed");
+        return nullptr;
+    }
+
+    // RAII cleanup for kqueue fd
+    struct KqueueGuard {
+        int kq;
+        KqueueGuard(int k) : kq(k) {}
+        ~KqueueGuard() { if (kq != -1) ::close(kq); }
+    } guard(kq);
+
+    // Build kevent change list - need up to 2 events per fd (read + write)
+    std::vector<struct kevent> changes;
+    changes.reserve(fd_info.size() * 2);
+
+    for (const auto& info : fd_info) {
+        if (info.events & SOCK_POLLIN) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+        if (info.events & SOCK_POLLOUT) {
+            struct kevent ev;
+            EV_SET(&ev, info.fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0,
+                reinterpret_cast<void*>(info.index));
+            changes.push_back(ev);
+        }
+    }
+
+    // Convert timeout to timespec (like nginx: NULL for infinite timeout)
+    struct timespec ts;
+    struct timespec* pts = nullptr;
+    if (timeout_ms >= 0) {
+        ts.tv_sec = timeout_ms / 1000;
+        ts.tv_nsec = (timeout_ms % 1000) * 1000000;
+        pts = &ts;
+    }
+
+    // Allocate space for returned events
+    std::vector<struct kevent> events(changes.size());
+
+    int rc;
+    // First do a zero-timeout kevent to register events and check for already-ready fds
+    // This handles the case where events occurred before we registered the filters
+    struct timespec ts_zero = {0, 0};
+
+    while (true) {
+        rc = kevent(kq, changes.data(), changes.size(), events.data(), events.size(), &ts_zero);
+        if (rc >= 0 || errno != EINTR) {
+            break;
+        }
+    }
+
+    if (rc < 0) {
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+    } else if (rc == 0 && (timeout_ms < 0 || timeout_ms > 0)) {
+        // No events ready yet, wait with actual timeout (events already registered)
+        while (true) {
+            rc = kevent(kq, nullptr, 0, events.data(), events.size(), pts);
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (rc < 0) {
+            qore_socket_error(xsink, "SOCKET-POLL-ERROR", "kevent() returned an error");
+        }
+    }
+
+    // Process events if we have any
+    if (rc > 0) {
+        // Track which poll_list indices have events and what events they have
+        // Use std::map to preserve order (sorted by index) for consistent output order
+        std::map<size_t, int> result_events;
+
+        for (int i = 0; i < rc; ++i) {
+            size_t idx = reinterpret_cast<size_t>(events[i].udata);
+            if (events[i].flags & EV_ERROR) {
+                result_events[idx] = SOCK_POLLERR;
+                continue;
+            }
+
+            int evt = result_events[idx];
+            if (events[i].filter == EVFILT_READ) {
+                if (events[i].flags & EV_EOF) {
+                    // EOF on read - connection closed by peer
+                    evt |= SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLIN;
+                }
+            } else if (events[i].filter == EVFILT_WRITE) {
+                if (events[i].flags & EV_EOF) {
+                    // EOF on write - error condition
+                    evt |= SOCK_POLLERR;
+                } else {
+                    evt |= SOCK_POLLOUT;
+                }
+            }
+            result_events[idx] = evt;
+        }
+
+        // Build result list
+        for (const auto& [idx, evt] : result_events) {
+            if (evt) {
+                const QoreHashNode* orig = poll_list->retrieveEntry(idx).get<const QoreHashNode>();
+                ReferenceHolder<QoreHashNode> entry(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+                assert(!*xsink);
+                entry->setKeyValue("events", evt, xsink);
+                entry->setKeyValue("socket", orig->getKeyValue("socket").refSelf(), xsink);
+                rv->push(entry.release(), xsink);
+                assert(!*xsink);
+            }
+        }
+    }
+
+#else  // HAVE_POLL
+    std::vector<pollfd> fds;
+    for (const auto& info : fd_info) {
         pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = arg;
+        pfd.fd = info.fd;
+        pfd.events = 0;
+        if (info.events & SOCK_POLLIN) {
+            pfd.events |= POLLIN;
+        }
+        if (info.events & SOCK_POLLOUT) {
+            pfd.events |= POLLOUT;
+        }
         pfd.revents = 0;
         fds.push_back(pfd);
     }
@@ -2098,9 +2260,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             break;
         }
     }
+#endif  // DARWIN
 
     return rv.release();
-#endif
+#endif  // !HAVE_POLL && !DARWIN
 }
 
 static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
@@ -2405,6 +2568,29 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         }
 
         if (rc > 0) {
+#ifdef DEBUG
+            // Test-only hook to simulate SSL partial writes that require repeated polling.
+            static int force_count = 0;
+            static int force_max = 0;
+            const char* env = getenv("QORE_TEST_SSL_PARTIAL_WRITE");
+            if (!env || !*env || *env == '0') {
+                force_count = 0;
+                force_max = 0;
+            } else if (action == WRITE && real_io) {
+                if (!force_max) {
+                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    force_max = lim ? atoi(lim) : 4;
+                    if (force_max < 1) {
+                        force_max = 1;
+                    }
+                }
+                if (force_count < force_max) {
+                    ++force_count;
+                    rc = SOCK_POLLOUT;
+                    break;
+                }
+            }
+#endif
             // SSL accepted the data, but check if it still has pending encrypted data to write
             // This happens when SSL_write encrypts data but the socket would block
             if (action == WRITE && SSL_want_write(ssl)) {
@@ -2747,7 +2933,7 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         // issue #3818: consume any ssl_err_str remaining
         if (qs.ssl_err_str) {
             errstr->concat(": ");
-            errstr->concat(qs.ssl_err_str);
+            qore_string_private::get(*errstr)->concat(qs.ssl_err_str);
             qs.ssl_err_str->deref();
             qs.ssl_err_str = nullptr;
         }
@@ -2930,6 +3116,10 @@ int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* x
     return 0;
 }
 
+void QoreSocket::clearAlpnProtocols() {
+    priv->alpn_protocols.clear();
+}
+
 QoreStringNode* QoreSocket::getAlpnProtocol() const {
     if (!priv->ssl) {
         return nullptr;
@@ -2971,16 +3161,162 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     return priv->h2_session->submitPushPromise(stream_id, path, h2_headers, xsink);
 }
 
+int QoreSocket::submitHttp2Response(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
+}
+
+int QoreSocket::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map
+    std::map<std::string, std::string> h2_headers;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
+}
+
+int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* body,
+        size_t body_len, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
+    }
+
+    // Convert Qore headers hash to std::map and extract :method, :path
+    std::map<std::string, std::string> h2_headers;
+    std::string method;
+    std::string path;
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        if (val.getType() != NT_STRING) {
+            continue;
+        }
+        const char* sval = val.get<const QoreStringNode>()->c_str();
+        std::string skey(key);
+
+        if (skey == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (skey == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        h2_headers[skey] = sval ? sval : "";
+    }
+
+    if (method.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
+        return -1;
+    }
+
+    if (path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
+        return -1;
+    }
+
+    return priv->h2_session->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink);
+}
+
+void QoreSocket::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return;
+    }
+    priv->h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+}
+
+void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
+    priv->h2_enable_connect_protocol = enable;
+}
+
+int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    (void)timeout_ms;
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+
+    int rv = priv->h2_session->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL",
+            "stream %d buffer full: data dropped", stream_id);
+        return -1;
+    }
+    // Data queued; nghttp2_session_resume_data() already called by sendStreamData().
+    // I/O thread flushes via continuePoll() -> sendPendingData().
+    // WebSocket caller wakes I/O thread via wsc.getAsyncCtrl().wake().
+    return 0;
+}
+
+BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return nullptr;
+    }
+
+    return priv->h2_session->takeStreamData(stream_id, max_bytes, xsink);
+}
+
 void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return;
     }
-    priv->h2_active_stream_id = stream_id;
+    priv->setH2ActiveStreamId(stream_id);
 }
 
 int32_t QoreSocket::getHttp2ActiveStream() const {
-    return priv->h2_active_stream_id;
+    return priv->getH2ActiveStreamId();
 }
 
 long QoreSocket::verifyPeerCertificate() const {
@@ -4094,6 +4430,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, Qo
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", -1, cert, pkey)) {
         assert(*xsink);
         delete s;
@@ -4134,6 +4474,10 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
     }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
+    }
 
     return s;
 }
@@ -4148,6 +4492,10 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLC
     s->priv->acceptAllCertificates(priv->ssl_accept_all_certs);
     if (priv->ssl_capture_remote_cert) {
         s->priv->ssl_capture_remote_cert = true;
+    }
+    // Copy ALPN protocols to the new socket for HTTP/2 support
+    if (!priv->alpn_protocols.empty()) {
+        s->priv->alpn_protocols = priv->alpn_protocols;
     }
     if (s->priv->upgradeServerToSSLIntern(xsink, "acceptSSL", timeout_ms, cert, pkey)) {
         assert(*xsink);
@@ -4554,7 +4902,7 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketAcceptPollSocketOperationBase(sock) {
+        : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink) {
     sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
 
     AutoLocker al(sock->priv->m);
@@ -4567,16 +4915,16 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
     if (preVerify(xsink)) {
         return;
     }
-    if (!sock->priv->setNonBlock(xsink)) {
-        set_non_block = true;
+    if (!sock->priv->setNonBlockAccept(xsink)) {
+        set_non_block_accept = true;
         poll_state.reset(sock->priv->socket->startAccept(xsink));
         if (!*xsink) {
             assert(poll_state);
             state = SPS_ACCEPTING;
         }
         if (*xsink) {
-            sock->priv->clearNonBlock();
-            set_non_block = false;
+            sock->priv->clearNonBlockAccept();
+            set_non_block_accept = false;
         }
     }
 }
@@ -4650,7 +4998,8 @@ QoreHashNode* SocketAcceptPollOperation::continuePoll(ExceptionSink* xsink) {
         } else {
             accepted();
         }
-        sock->priv->clearNonBlock();
+        sock->priv->clearNonBlockAccept();
+        set_non_block_accept = false;
     } else {
         assert(!*xsink);
     }
@@ -4711,6 +5060,12 @@ int SocketAcceptPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 
 QoreValue SocketAcceptPollOperation::getOutput() const {
     AutoLocker al(sock->priv->m);
+    // If we have a cached QoreObject wrapper (from SSL handshake polling), return that
+    if (accepted_socket_obj) {
+        // Release the cached object and clear accepted_socket to avoid double-free
+        accepted_socket.discard();
+        return accepted_socket_obj.release();
+    }
     if (accepted_socket) {
         return new QoreObject(QC_SOCKET, getProgram(), accepted_socket.release());
     }
@@ -4924,14 +5279,24 @@ QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
     if (!rc) {
         // get output data
         SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+        bool ok = true;
         if (to_string) {
             size_t len = d->size();
-            data = new QoreStringNode(reinterpret_cast<char*>(d->giveBuffer()), len, len + 1,
-                sock->getEncoding());
+            char* buf = reinterpret_cast<char*>(d->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                xsink->outOfMemory();
+                ok = false;
+            } else {
+                nbuf[len] = '\0';
+                data = new QoreStringNode(nbuf, len, len + 1, sock->getEncoding());
+            }
         } else {
             data = d.release();
         }
-        received = true;
+        if (ok) {
+            received = true;
+        }
     }
     if (*xsink || !rc) {
         // release the AbstractPollState value
@@ -5078,10 +5443,172 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
     return true;
 }
 
+// SocketSendAndReadHeaderPollOperation implementation
+
+SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink,
+        BinaryNode* response_data, QoreSocketObject* sock, int64 idle_timeout_ms)
+        : SocketPollSocketOperationBase(sock), send_data(response_data),
+          buf(reinterpret_cast<const char*>(response_data->getPtr())),
+          size(response_data->size()),
+          idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
+        if (!poll_state) {
+            sock->priv->clearNonBlock();
+        } else {
+            set_non_block = true;
+        }
+    }
+}
+
+const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
+    switch (phase) {
+        case Phase::Sending: return "sending";
+        case Phase::Idle: return "idle";
+        case Phase::ReadingHeader: return "reading-header";
+        case Phase::Complete: return "header-complete";
+        case Phase::Timeout: return "timeout";
+        case Phase::Error: return "error";
+        default: return "unknown";
+    }
+}
+
+QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        phase = Phase::Error;
+        return nullptr;
+    }
+
+    switch (phase) {
+        case Phase::Sending: {
+            if (!poll_state) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+            // Drive the send poll state
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                poll_state.reset();
+                return nullptr;
+            }
+            if (rc) {
+                // Need more I/O for sending
+                return getSocketPollInfoHash(xsink, rc);
+            }
+            // Send complete — free send data and poll state, transition to idle
+            poll_state.reset();
+            send_data.discard();
+            phase = Phase::Idle;
+            // Return POLLIN to wait for incoming data
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+
+        case Phase::Idle: {
+            // Check idle timeout
+            int us;
+            int64 now_s = q_epoch_us(us);
+            int64 now_ms = now_s * 1000 + us / 1000;
+            if (idle_timeout_ms > 0 && now_ms > idle_timeout_ms) {
+                phase = Phase::Timeout;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            // Data is available (we were woken by POLLIN) — transition to header reading
+            poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            if (*xsink || !poll_state) {
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            phase = Phase::ReadingHeader;
+        }
+        // fall through to drive header read immediately
+
+        case Phase::ReadingHeader: {
+            if (!poll_state) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                poll_state.reset();
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            if (rc) {
+                // Need more I/O for header reading
+                return getSocketPollInfoHash(xsink, rc);
+            }
+            // Header read complete — parse it
+            SimpleRefHolder<BinaryNode> raw(poll_state->takeOutput().get<BinaryNode>());
+            poll_state.reset();
+
+            // Convert binary to string for HTTP header parsing
+            size_t len = raw->size();
+            char* buf = reinterpret_cast<char*>(raw->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                free(buf);
+                xsink->outOfMemory();
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            nbuf[len] = '\0';
+            SimpleRefHolder<QoreStringNode> hdrstr(new QoreStringNode(nbuf, len, len + 1, sock->getEncoding()));
+
+            // Parse HTTP headers
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr,
+                *info, QORE_SOURCE_SOCKET), xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+
+            // Store result for getOutput()
+            header_output = new QoreHashNode(autoTypeInfo);
+            header_output->setKeyValue("hdr", hdr.release(), xsink);
+            header_output->setKeyValue("info", info.release(), xsink);
+
+            // Clear non-block mode now that we're done
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+
+            phase = Phase::Complete;
+            return nullptr;
+        }
+
+        default:
+            return nullptr;
+    }
+}
+
+QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
+    AutoLocker al(sock->priv->m);
+    return header_output.release();
+}
+
 #include "qore/intern/Http2Session.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), out(xsink) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // Check if socket is open and valid
@@ -5098,12 +5625,11 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
     bool reused_session = false;
     if (sock->priv->socket->priv->h2_session) {
-        // Reuse existing session
-        h2_session.reset(sock->priv->socket->priv->h2_session);
-        sock->priv->socket->priv->h2_session = nullptr;
+        // Reuse existing session (socket owns it)
+        h2_session = sock->priv->socket->priv->h2_session;
         reused_session = true;
     } else {
-        // Initialize new HTTP/2 session
+        // Initialize new HTTP/2 session and store it on the socket
         if (initSession(xsink)) {
             sock->priv->clearNonBlock();
             set_non_block = false;
@@ -5126,10 +5652,14 @@ SocketHttp2ServerPollOperation::~SocketHttp2ServerPollOperation() {
 
 int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     // Create server-side HTTP/2 session using the underlying QoreSocket's priv
-    h2_session.reset(Http2Session::createServer(sock->priv->socket->priv, xsink));
+    h2_session = Http2Session::createServer(sock->priv->socket->priv, xsink);
     if (!h2_session) {
         return -1;
     }
+    // Apply socket-level HTTP/2 settings before the connection preface is sent
+    h2_session->setEnableConnectProtocol(sock->priv->socket->priv->h2_enable_connect_protocol);
+    // Store session on socket for shared access
+    sock->priv->socket->priv->h2_session = h2_session;
     return 0;
 }
 
@@ -5154,20 +5684,60 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
             case H2S_RECV_PREFACE:
             case H2S_READING: {
+                // If another thread already completed a stream, return it immediately
+                if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output (RST_STREAM, SETTINGS_ACK, etc.) before returning
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry before completing the operation
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
+                    h2_state = H2S_REQUEST_READY;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
                 // Try to receive data
                 int rv = h2_session->receiveData(0, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
                 if (rv == -1) {
-                    // Would block - need to poll for read
-                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    // Would block on recv - also try to send pending response data
+                    // (responses may have been queued by handler threads via submitResponse)
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN | srv);
+                    }
+                    // Always read; add write if there are pending sends
+                    int events = SOCK_POLLIN;
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
                 }
                 if (rv == 1) {
                     // Connection closed by peer - check if we have a completed request first
                     if (!h2_session->hasCompletedStreams()) {
-                        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection closed by peer before "
-                            "request was complete");
+                        peer_closed = true;
+                        // Do NOT set H2S_REQUEST_READY: there are no completed streams to
+                        // return, so goalReached() should return false.  The caller will see
+                        // continuePoll() -> nullptr with goalReached() == false and handle
+                        // the connection closure.
+                        if (set_non_block) {
+                            set_non_block = false;
+                            sock->priv->clearNonBlock();
+                        }
                         return nullptr;
                     }
                     // Fall through to handle the completed request
@@ -5175,6 +5745,17 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
                 // Check if we have a completed request
                 if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output (RST_STREAM, SETTINGS_ACK, etc.) before returning
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry before completing the operation
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
+                    // Dequeue the completed stream now so getOutput() is idempotent
+                    cached_stream = h2_session->takeCompletedStream();
                     h2_state = H2S_REQUEST_READY;
                     // Goal reached - clear non-block flag so subsequent operations can proceed
                     if (set_non_block) {
@@ -5203,20 +5784,38 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     h2_state = H2S_READING;
                 }
 
-                // Poll based on what the session wants (check buffer + nghttp2 state)
-                if (h2_session->hasPendingData() || h2_session->wantWrite()) {
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                // Always include POLLIN to continue reading new requests.
+                // Add POLLOUT when there are pending response sends.
+                {
+                    int events = SOCK_POLLIN;
+                    if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
                 }
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
 
             case H2S_REQUEST_READY:
-                // Goal reached - clear non-block flag so subsequent operations can proceed
-                if (set_non_block) {
-                    set_non_block = false;
-                    sock->priv->clearNonBlock();
+                // If there are more completed streams, dequeue the next one
+                if (h2_session->hasCompletedStreams()) {
+                    cached_stream = h2_session->takeCompletedStream();
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
                 }
-                return nullptr;
+                // All completed streams consumed - transition back to reading
+                // so the same operation can be reused for multiplexing
+                cached_stream.reset();
+                h2_state = H2S_READING;
+                if (!set_non_block) {
+                    if (sock->priv->setNonBlock(xsink)) {
+                        return nullptr;
+                    }
+                    set_non_block = true;
+                }
+                continue;
 
             default:
                 xsink->raiseException("HTTP2-ERROR", "unexpected state: %d", h2_state);
@@ -5226,74 +5825,69 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 }
 
 QoreValue SocketHttp2ServerPollOperation::getOutput() const {
-    if (h2_state != H2S_REQUEST_READY || !h2_session) {
+    if (h2_state != H2S_REQUEST_READY) {
+        return QoreValue();
+    }
+    if (peer_closed) {
+        return QoreValue();
+    }
+    // cached_stream is dequeued in continuePoll() when transitioning to H2S_REQUEST_READY
+    if (!cached_stream) {
+        return QoreValue();
+    }
+    // Skip streams reset at protocol level (e.g., CONNECT without ENABLE_CONNECT_PROTOCOL)
+    // The RST_STREAM was already sent by nghttp2 via sendPendingData()
+    if (cached_stream->reset) {
         return QoreValue();
     }
 
-    // Get the completed stream
-    auto stream_info = h2_session->takeCompletedStream();
-    if (!stream_info) {
-        return QoreValue();
-    }
+    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = cached_stream->stream_id;
 
-    const_cast<SocketHttp2ServerPollOperation*>(this)->stream_id = stream_info->stream_id;
+    // Build output hash from cached stream info (idempotent - safe to call multiple times)
+    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+    result->setKeyValue("method", new QoreStringNode(cached_stream->method), nullptr);
+    result->setKeyValue("path", new QoreStringNode(cached_stream->path), nullptr);
+    result->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
-    // Store session in socket for use by subsequent send operations
-    // The session is transferred to the socket and will be cleaned up on socket close
-    SocketHttp2ServerPollOperation* mthis = const_cast<SocketHttp2ServerPollOperation*>(this);
-    if (sock->priv->socket->priv->h2_session) {
-        delete sock->priv->socket->priv->h2_session;
-    }
-    sock->priv->socket->priv->h2_session = mthis->h2_session.release();
+    // Build headers hash (lowercase names, handle duplicate headers per RFC 7540)
+    QoreHashNode* headers = h2HeadersToQoreHash(cached_stream->headers, true);
+    result->setKeyValue("headers", headers, nullptr);
 
-    // Build output hash
-    out = new QoreHashNode(autoTypeInfo);
-    out->setKeyValue("method", new QoreStringNode(stream_info->method), nullptr);
-    out->setKeyValue("path", new QoreStringNode(stream_info->path), nullptr);
-    out->setKeyValue("stream_id", stream_info->stream_id, nullptr);
-
-    // Build headers hash
-    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
-    for (const auto& h : stream_info->headers) {
-        headers->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), nullptr);
-    }
-    out->setKeyValue("headers", headers, nullptr);
-
-    // Body as binary - must copy the data since stream_info->body will be destroyed
-    if (!stream_info->body.empty()) {
+    // Body as binary
+    if (!cached_stream->body.empty()) {
         BinaryNode* body = new BinaryNode();
-        body->append(stream_info->body.data(), stream_info->body.size());
-        out->setKeyValue("body", body, nullptr);
+        body->append(cached_stream->body.data(), cached_stream->body.size());
+        result->setKeyValue("body", body, nullptr);
     }
 
     // Add pseudo-headers if present
-    if (!stream_info->authority.empty()) {
-        out->setKeyValue("authority", new QoreStringNode(stream_info->authority), nullptr);
+    if (!cached_stream->authority.empty()) {
+        result->setKeyValue("authority", new QoreStringNode(cached_stream->authority), nullptr);
     }
-    if (!stream_info->scheme.empty()) {
-        out->setKeyValue("scheme", new QoreStringNode(stream_info->scheme), nullptr);
+    if (!cached_stream->scheme.empty()) {
+        result->setKeyValue("scheme", new QoreStringNode(cached_stream->scheme), nullptr);
     }
     // RFC 8441: Add :protocol pseudo-header for extended CONNECT
-    if (!stream_info->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol", new QoreStringNode(stream_info->connect_protocol), nullptr);
+    if (!cached_stream->connect_protocol.empty()) {
+        headers->setKeyValue(":protocol", new QoreStringNode(cached_stream->connect_protocol), nullptr);
     }
 
-    return out.release();
+    return result;
 }
 
-Http2Session* SocketHttp2ServerPollOperation::takeSession() {
-    return h2_session.release();
+Http2SessionPtr SocketHttp2ServerPollOperation::takeSession() {
+    return nullptr;
 }
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock, Http2Session* /*unused_h2_session*/, int32_t stream_id, int status_code,
+        QoreSocketObject* sock, const Http2SessionPtr& h2_session_param, int32_t stream_id, int status_code,
         const QoreHashNode* headers, const BinaryNode* body, bool is_connect)
-        : SocketPollSocketOperationBase(sock), stream_id(stream_id) {
+        : SocketPollSocketOperationBase(sock), h2_session(h2_session_param), stream_id(stream_id) {
 
     AutoLocker al(sock->priv->m);
 
     // Get HTTP/2 session from socket (stored by previous read operation)
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; startPollSendHttp2Response() must be "
             "called after startPollReadHttp2Request() completes on an active HTTP/2 connection");
@@ -5311,15 +5905,24 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     }
     set_non_block = true;
 
-    // Build headers map
-    std::map<std::string, std::string> hdr_map;
+    // Build headers as vector of pairs to support duplicate header names (e.g., set-cookie)
+    std::vector<std::pair<std::string, std::string>> hdr_pairs;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                hdr_pairs.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+            } else if (val.getType() == NT_LIST) {
+                // Emit separate header entries for each list value
+                const QoreListNode* l = val.get<const QoreListNode>();
+                for (size_t i = 0; i < l->size(); ++i) {
+                    QoreValue lv = l->retrieveEntry(i);
+                    if (lv.getType() == NT_STRING) {
+                        hdr_pairs.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                    }
+                }
             }
         }
     }
@@ -5327,6 +5930,16 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     int rv;
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
+        // submitConnectResponse still uses map (CONNECT doesn't need duplicate headers)
+        std::map<std::string, std::string> hdr_map;
+        for (const auto& p : hdr_pairs) {
+            hdr_map[p.first] = p.second;
+        }
+        if (getenv("QORE_HTTP2_DEBUG")) {
+            fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
+                stream_id, status_code);
+            fflush(stderr);
+        }
         rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
     } else {
         // Regular HTTP/2 response with body and END_STREAM
@@ -5334,7 +5947,7 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         size_t body_len = body ? body->size() : 0;
         printd(5, "SocketHttp2SendResponsePollOperation() submitting response stream_id=%d status=%d body_len=%zu\n",
             stream_id, status_code, body_len);
-        rv = session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
+        rv = session->submitResponse(stream_id, status_code, hdr_pairs, body_ptr, body_len, xsink);
     }
     if (rv != 0 || *xsink) {
         sock->priv->clearNonBlock();
@@ -5354,7 +5967,7 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
     AutoLocker al(sock->priv->m);
 
     // Get session from socket
-    Http2Session* session = sock->priv->socket->priv->h2_session;
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
         return nullptr;
@@ -5451,7 +6064,580 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
     }
 }
 
-Http2Session* SocketHttp2SendResponsePollOperation::takeSession() {
+Http2SessionPtr SocketHttp2SendResponsePollOperation::takeSession() {
     // Session is now managed by socket, not this operation
     return nullptr;
+}
+
+SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponsePollOperation(
+        ExceptionSink* xsink, QoreSocketObject* sock, int32_t stream_id, int status_code,
+        const QoreHashNode* headers, InputStream* input_stream, int64 chunk_size)
+        : SocketPollSocketOperationBase(sock), stream_id(stream_id),
+          input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+          is_pollable(input_stream->supportsNonBlockingIo()) {
+
+    AutoLocker al(sock->priv->m);
+
+    // Get HTTP/2 session from socket
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; "
+            "startPollSendHttp2StreamingResponse() must be called after "
+            "startPollReadHttp2Request() completes on an active HTTP/2 connection");
+        return;
+    }
+
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+
+    // Build headers map
+    std::map<std::string, std::string> hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    // Submit streaming response (headers only, deferred data provider)
+    int rv = session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+    if (rv != 0 || *xsink) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return;
+    }
+
+    // Cache the pollable file descriptor for non-blocking reads
+    if (is_pollable) {
+        stream_fd = input_stream->getPollableDescriptor();
+        if (stream_fd < 0) {
+            is_pollable = false;
+        }
+    }
+
+    // Thread affinity ownership chain for the InputStream:
+    //   1. Handler thread creates the InputStream (owns thread affinity)
+    //   2. QPP method startPollSendHttp2StreamingResponse() constructs this operation,
+    //      then calls body->unassignThread() to release affinity from the handler thread
+    //   3. On first continuePoll() call (from the I/O worker thread), need_reassign triggers
+    //      input_stream->reassignThread() to claim affinity on the worker thread
+    //   4. All subsequent reads happen on that worker thread until completion
+
+    printd(5, "SocketHttp2SendStreamingResponsePollOperation() headers submitted stream_id=%d\n", stream_id);
+}
+
+SocketHttp2SendStreamingResponsePollOperation::~SocketHttp2SendStreamingResponsePollOperation() {
+}
+
+QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {
+    // Reassign the input stream to the current (worker) thread on first call
+    if (need_reassign) {
+        need_reassign = false;
+        if (input_stream) {
+            input_stream->reassignThread(xsink);
+            if (*xsink) return nullptr;
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
+        return nullptr;
+    }
+
+    while (true) {
+        switch (ss_state) {
+            case SS_READ_CHUNK: {
+                if (eof) {
+                    // Send END_STREAM
+                    int rv = session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+                    if (*xsink) return nullptr;
+                    if (rv != 0) {
+                        xsink->raiseException("HTTP2-ERROR", "failed to send END_STREAM");
+                        return nullptr;
+                    }
+                    ss_state = SS_FLUSH;
+                    continue;
+                }
+
+                if (is_pollable) {
+                    // Non-blocking read for pollable streams.
+                    // Use inline poll(0) to check if data is available without blocking,
+                    // then readNonBlock() to get the data. This distinguishes:
+                    // - poll ready + readNonBlock returns 0 → true EOF
+                    // - poll not ready → would block, yield to event loop for socket I/O
+                    assert(stream_fd >= 0);
+                    struct pollfd pfd;
+                    pfd.fd = stream_fd;
+                    pfd.events = POLLIN;
+                    pfd.revents = 0;
+                    int poll_rv = poll(&pfd, 1, 0);
+                    if (poll_rv < 0) {
+                        xsink->raiseException("HTTP2-ERROR", "poll() on stream fd failed: %s",
+                            strerror(errno));
+                        return nullptr;
+                    }
+                    if (poll_rv == 0) {
+                        // Stream not ready — yield to event loop for socket I/O
+                        // and retry reading on next continuePoll() call
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    }
+
+                    // Stream FD is readable — do non-blocking read
+                    SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                    chunk->preallocate(chunk_size);
+                    int64 count = input_stream->readNonBlock(
+                        const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                    if (*xsink) return nullptr;
+                    if (count == 0) {
+                        // poll said readable but read returned 0 → EOF
+                        eof = true;
+                        continue;
+                    }
+                    chunk->setSize(count);
+                    current_chunk = chunk.release();
+                } else {
+                    // Non-pollable (memory) streams - read() never blocks
+                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    if (*xsink) return nullptr;
+                    if (!current_chunk) {
+                        eof = true;
+                        continue;
+                    }
+                }
+
+                printd(5, "SocketHttp2SendStreamingResponsePollOperation::continuePoll() "
+                    "read chunk size=%zu\n", current_chunk->size());
+                ss_state = SS_SEND_CHUNK;
+                continue;
+            }
+
+            case SS_SEND_CHUNK: {
+                // Send the chunk as HTTP/2 DATA frames (not end_stream)
+                int rv = session->sendStreamData(stream_id, current_chunk->getPtr(),
+                    current_chunk->size(), false, xsink);
+                if (*xsink) return nullptr;
+                if (rv != 0) {
+                    xsink->raiseException("HTTP2-ERROR", "failed to send stream data");
+                    return nullptr;
+                }
+                current_chunk = nullptr;
+                ss_state = SS_FLUSH;
+                continue;
+            }
+
+            case SS_FLUSH: {
+                // Flush pending data to socket
+                int rv = session->sendPendingData(0, xsink);
+                if (*xsink) return nullptr;
+
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
+                }
+
+                if (session->hasPendingData()) {
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                }
+
+                if (session->wantWrite()) {
+                    continue;
+                }
+
+                // Check if the flow control window is exhausted.  If so, we
+                // need to receive a WINDOW_UPDATE from the client before we can
+                // send more data or declare completion.
+                //
+                // getStreamRemoteWindowSize() returns -1 when the stream no
+                // longer exists (already closed after END_STREAM was sent and
+                // acknowledged).  A negative value does NOT mean the window is
+                // exhausted — it means the stream is gone, so we must NOT
+                // enter SS_RECV_WINDOW (which would loop forever waiting for a
+                // WINDOW_UPDATE that will never arrive).
+                {
+                    int32_t stream_window = session->getStreamRemoteWindowSize(stream_id);
+                    int32_t conn_window = session->getStreamRemoteWindowSize(0);
+                    if ((stream_window >= 0 && stream_window == 0) || conn_window == 0) {
+                        ss_state = SS_RECV_WINDOW;
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    }
+                }
+
+                if (eof) {
+                    // All done
+                    ss_state = SS_DONE;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+
+                // More data to read
+                ss_state = SS_READ_CHUNK;
+                continue;
+            }
+
+            case SS_RECV_WINDOW: {
+                // Read incoming data from client (WINDOW_UPDATE, PING, etc.)
+                // to update flow control windows so we can continue sending.
+                int rv = session->receiveData(0, xsink);
+                if (*xsink) return nullptr;
+                if (rv == -1) {
+                    // Would block - poll for read
+                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                }
+                if (rv == 1) {
+                    // Peer closed connection during streaming response
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    ss_state = SS_DONE;
+                    return nullptr;
+                }
+                // Data received - WINDOW_UPDATE may have been processed.
+                // Try to flush buffered data now that the window may be open.
+                ss_state = SS_FLUSH;
+                continue;
+            }
+
+            case SS_DONE:
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
+                return nullptr;
+
+            default:
+                xsink->raiseException("HTTP2-ERROR", "unexpected streaming state: %d", ss_state);
+                return nullptr;
+        }
+    }
+}
+
+// HTTP/2 Client Multiplex Poll Operation implementation
+
+SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    // Check if socket is open and valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    // Set non-blocking mode
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+
+    // Check if there's already an HTTP/2 session stored in the socket (from a previous request)
+    bool reused_session = false;
+    if (sock->priv->socket->priv->h2_session) {
+        // Reuse existing session (socket owns it)
+        h2_session = sock->priv->socket->priv->h2_session;
+        reused_session = true;
+    } else {
+        // Initialize new HTTP/2 client session and store it on the socket
+        if (initSession(xsink)) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return;
+        }
+    }
+
+    // Set up stream completion callback to queue responses
+    // Capture callback_guard by value (shared_ptr copy) to ensure it outlives this object.
+    // The mutex in the guard ensures no TOCTOU race between checking the destroyed flag
+    // and using 'this' - both happen while holding the mutex.
+    auto guard = callback_guard;
+    h2_session->setStreamCompleteCallback(
+        [this, guard](int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink) {
+            // Lock mutex and check if poll operation is being destroyed
+            // The lock ensures we don't race with the destructor
+            std::lock_guard<std::mutex> lg(guard->mutex);
+            if (guard->destroyed) {
+                printd(5, "onStreamComplete: poll operation destroyed, ignoring callback\n");
+                return;
+            }
+            this->onStreamComplete(stream_id, stream, xsink);
+        });
+
+    // Set initial state based on whether we reused a session
+    if (reused_session) {
+        // Session already established - go directly to reading frames
+        h2_state = H2C_READING;
+    } else {
+        // New session - need to exchange connection preface
+        h2_state = H2C_SEND_PREFACE;
+    }
+}
+
+SocketHttp2ClientMultiplexPollOperation::~SocketHttp2ClientMultiplexPollOperation() {
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() starting\n");
+
+    // Set destroyed flag while holding the mutex.
+    // This ensures any in-flight callback completes before we proceed, and any
+    // callback that starts after this will see destroyed=true and return early.
+    // The mutex eliminates the TOCTOU race between flag check and 'this' usage.
+    {
+        std::lock_guard<std::mutex> lg(callback_guard->mutex);
+        callback_guard->destroyed = true;
+    }
+
+    // Clear stream completion callback - session is guaranteed valid via shared_ptr
+    if (h2_session) {
+        printd(5, "~SocketHttp2ClientMultiplexPollOperation() clearing callback\n");
+        h2_session->clearStreamCompleteCallback();
+        printd(5, "~SocketHttp2ClientMultiplexPollOperation() callback cleared\n");
+    }
+
+    // Deref any queued responses
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
+    if (getenv("QORE_HTTP2_DEBUG")) {
+        fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
+        fflush(stderr);
+    }
+    AutoLocker al(response_lock);
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n", completed_responses.size());
+    if (getenv("QORE_HTTP2_DEBUG")) {
+        fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n",
+            completed_responses.size());
+        fflush(stderr);
+    }
+    for (QoreHashNode* h : completed_responses) {
+        h->deref(nullptr);
+    }
+    completed_responses.clear();
+    printd(5, "~SocketHttp2ClientMultiplexPollOperation() done\n");
+}
+
+int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
+    // Determine scheme from socket state (secure = https, otherwise http)
+    const char* scheme = sock->priv->socket->priv->ssl ? "https" : "http";
+
+    // Create client-side HTTP/2 session using the underlying QoreSocket's priv
+    h2_session = Http2Session::createClient(sock->priv->socket->priv, xsink, scheme);
+    if (!h2_session) {
+        return -1;
+    }
+    // Store session on socket for shared access
+    sock->priv->socket->priv->h2_session = h2_session;
+    return 0;
+}
+
+void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id, Http2StreamInfo* stream,
+        ExceptionSink* xsink) {
+    // Build response hash from stream info
+    ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
+
+    response->setKeyValue("stream_id", stream_id, xsink);
+    response->setKeyValue("status_code", stream->status_code, xsink);
+
+    // Convert headers map to Qore hash (handle duplicate headers per RFC 7540)
+    if (!stream->headers.empty()) {
+        response->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
+    }
+
+    // Convert body vector to Qore binary or string based on content-type
+    if (!stream->body.empty()) {
+        // Check if content-type indicates text-based content
+        bool is_text = false;
+        auto ct_it = stream->headers.find("content-type");
+        if (ct_it != stream->headers.end() && !ct_it->second.empty()) {
+            // Extract media type (before any parameters like charset)
+            std::string ct = ct_it->second.back();
+            size_t semicolon = ct.find(';');
+            if (semicolon != std::string::npos) {
+                ct = ct.substr(0, semicolon);
+            }
+            // Trim whitespace
+            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.back()))) {
+                ct.pop_back();
+            }
+            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.front()))) {
+                ct.erase(0, 1);
+            }
+            // Convert to lowercase for comparison
+            std::transform(ct.begin(), ct.end(), ct.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+
+            // Check for text types
+            is_text = (ct.size() >= 5 && ct.compare(0, 5, "text/") == 0) ||  // text/*
+                      ct == "application/json" ||
+                      ct == "application/xml" ||
+                      ct == "application/javascript" ||
+                      ct == "application/x-www-form-urlencoded" ||
+                      (ct.size() > 5 && ct.compare(ct.size() - 5, 5, "+json") == 0) ||  // *+json
+                      (ct.size() > 4 && ct.compare(ct.size() - 4, 4, "+xml") == 0);    // *+xml
+        }
+
+        if (is_text) {
+            response->setKeyValue("body", new QoreStringNode(
+                reinterpret_cast<const char*>(stream->body.data()),
+                stream->body.size()), xsink);
+        } else {
+            SimpleRefHolder<BinaryNode> body(new BinaryNode);
+            body->append(stream->body.data(), stream->body.size());
+            response->setKeyValue("body", body.release(), xsink);
+        }
+    }
+
+    // Queue the response
+    {
+        AutoLocker al(response_lock);
+        completed_responses.push_back(response.release());
+    }
+}
+
+void SocketHttp2ClientMultiplexPollOperation::cancelStream(int32_t stream_id, ExceptionSink* xsink) {
+    if (!h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+        return;
+    }
+    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+}
+
+int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* method, const char* path,
+        const std::map<std::string, std::string>& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink) {
+    if (!h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+        return -1;
+    }
+    if (h2_state == H2C_CLOSED) {
+        xsink->raiseException("HTTP2-ERROR", "connection is closed");
+        return -1;
+    }
+    return h2_session->submitRequest(method, path, headers, body, body_len, xsink);
+}
+
+QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    while (true) {
+        switch (h2_state) {
+            case H2C_SEND_PREFACE: {
+                // Send client connection preface (SETTINGS frame)
+                int rv = h2_session->sendConnectionPreface(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == -1) {
+                    // Would block - need to poll for write
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                }
+                h2_state = H2C_RECV_PREFACE;
+                // Fall through to receive preface
+            }
+
+            case H2C_RECV_PREFACE:
+            case H2C_READING: {
+                // Check if there are completed streams - dispatch via callback
+                if (h2_session->hasCompletedStreams()) {
+                    // Flush any pending output before dispatching
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+                        // Socket buffer full; poll and retry
+                        return getSocketPollInfoHash(xsink, srv);
+                    }
+                    // Callbacks are invoked by the session via StreamCompleteCallback
+                    // Continue reading for more responses
+                }
+
+                // First try to send any pending data (requests submitted from other threads)
+                if (h2_session->wantWrite()) {
+                    int srv = h2_session->sendPendingData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == SOCK_POLLOUT) {
+                        // Need to poll for write
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                    }
+                }
+
+                // Receive and process HTTP/2 frames
+                int rv = h2_session->receiveData(0, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == 1) {
+                    // Connection closed by peer
+                    peer_closed = true;
+                    h2_state = H2C_CLOSED;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+                if (rv == -1) {
+                    // Would block - poll for read (and write if we have pending data)
+                    int events = SOCK_POLLIN;
+                    if (h2_session->wantWrite() || h2_session->hasPendingData()) {
+                        events |= SOCK_POLLOUT;
+                    }
+                    return getSocketPollInfoHash(xsink, events);
+                }
+
+                // Data received - check for completed streams
+                if (h2_session->hasCompletedStreams()) {
+                    // Responses are dispatched via callback mechanism
+                    // Continue the loop to process more frames
+                    continue;
+                }
+
+                // No completed streams yet - check if we're past the preface stage
+                if (h2_state == H2C_RECV_PREFACE) {
+                    h2_state = H2C_READING;
+                }
+
+                // Check for GOAWAY
+                if (h2_session->isGoawayReceived()) {
+                    h2_state = H2C_CLOSED;
+                    if (set_non_block) {
+                        set_non_block = false;
+                        sock->priv->clearNonBlock();
+                    }
+                    return nullptr;
+                }
+
+                // Poll for more data (and write if we have pending data)
+                int events = SOCK_POLLIN;
+                if (h2_session->wantWrite() || h2_session->hasPendingData()) {
+                    events |= SOCK_POLLOUT;
+                }
+                return getSocketPollInfoHash(xsink, events);
+            }
+
+            case H2C_CLOSED:
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
+                return nullptr;
+
+            default:
+                xsink->raiseException("HTTP2-ERROR", "unexpected client multiplex state: %d", h2_state);
+                return nullptr;
+        }
+    }
 }

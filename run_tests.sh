@@ -63,7 +63,8 @@ done
 
 # If no test dirs were specified, run all the tests
 if [ -z "$TEST_DIRS" ]; then
-    TEST_DIRS=$BASE_TEST_PATH
+    #TEST_DIRS="$BASE_TEST_PATH ./modules"
+    TEST_DIRS="$BASE_TEST_PATH"
 fi
 
 QORE=""
@@ -71,8 +72,27 @@ QR=""
 LIBQORE=""
 QORE_LIB_PATH="./lib/.libs:./qlib:$LD_LIBRARY_PATH"
 
+# Allow callers to override binaries (ex: debug build output).
+if [ -n "$QORE_BINARY" ]; then
+    QORE="$QORE_BINARY"
+    QORE_DIR=`dirname "$QORE"`
+    if [ -f "$QORE_DIR/libqore.so" ]; then
+        LIBQORE="$QORE_DIR/libqore.so"
+    elif [ -f "$QORE_DIR/libqore.dylib" ]; then
+        LIBQORE="$QORE_DIR/libqore.dylib"
+    fi
+    if [ -f "$QORE_DIR/qr" ]; then
+        QR="$QORE_DIR/qr"
+    fi
+fi
+
+# Allow explicit override for libqore if needed.
+if [ -n "$LIBQORE_BINARY" ]; then
+    LIBQORE="$LIBQORE_BINARY"
+fi
+
 # Test that qore is built.
-if [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
+if [ -z "$QORE" ] && [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
     if [ -f "./lib/.libs/libqore.so" ]; then
         LIBQORE="./lib/.libs/libqore.so"
     elif [ -f "./lib/.libs/libqore.dylib" ]; then
@@ -81,19 +101,21 @@ if [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o 
     QORE="./.libs/qore"
     QR="./.libs/qr"
 else
-    for D in `ls -d */`; do
-        d=`echo ${D%%/}`
-        if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
-            if [ -f "$d/libqore.so" ]; then
-                LIBQORE="$d/libqore.so"
-            elif [ -f "$d/libqore.dylib" ]; then
-                LIBQORE="$d/libqore.dylib"
+    if [ -z "$QORE" ]; then
+        for D in `ls -d */`; do
+            d=`echo ${D%%/}`
+            if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
+                if [ -f "$d/libqore.so" ]; then
+                    LIBQORE="$d/libqore.so"
+                elif [ -f "$d/libqore.dylib" ]; then
+                    LIBQORE="$d/libqore.dylib"
+                fi
+                QORE="$d/qore"
+                QR="$d/qr"
+                break
             fi
-            QORE="$d/qore"
-            QR="$d/qr"
-            break
-        fi
-    done
+        done
+    fi
 fi
 
 if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
@@ -101,8 +123,26 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+QORE_DIR=`dirname "$QORE"`
+BUILD_MODULE_DIRS=""
+if [ -d "$QORE_DIR/modules" ]; then
+    for moddir in "$QORE_DIR/modules"/*; do
+        if [ -d "$moddir" ]; then
+            if [ -z "$BUILD_MODULE_DIRS" ]; then
+                BUILD_MODULE_DIRS="$moddir"
+            else
+                BUILD_MODULE_DIRS="$BUILD_MODULE_DIRS:$moddir"
+            fi
+        fi
+    done
+fi
+
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
-export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+if [ -n "$BUILD_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$BUILD_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
+else
+    export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+fi
 
 if [ $MEASURE_TIME -eq 1 ]; then
     # Test time commands.

@@ -172,7 +172,7 @@ public class DataProviderTypeEntry inherits Qore::Serializable {
     }
 
     #! Returns free-form information related to the type, if any
-    /** @note Not to be confused with @ref getInfo()
+    /** @note Not to be confused with getInfo()
 
         @since DataProvider 3.2.1
     */

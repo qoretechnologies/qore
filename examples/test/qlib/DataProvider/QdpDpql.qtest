@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class QdpDpqlTest
+
+public class QdpDpqlTest inherits QUnit::Test {
+    private {
+        TmpDir csv_dir;
+        string csv_path;
+    }
+
+    constructor() : Test("QdpDpqlTest", "1.0") {
+        csv_dir = new TmpDir("qdp-dpql-");
+        csv_path = csv_dir.path + "/data.csv";
+        writeCsvFile();
+
+%ifdef NoYaml
+        addTestCase("DPQL tests skipped without yaml module", \skipNoYaml());
+%else
+        addTestCase("DPQL search returns matching record", \dpqlSearchMatch());
+        addTestCase("DPQL search supports logical expressions", \dpqlSearchLogical());
+        addTestCase("DPQL auto-detect without flags", \dpqlSearchAutoDetect());
+        addTestCase("DPQL unquoted string literal", \dpqlSearchUnquotedString());
+        addTestCase("DPQL search returns empty list when no match", \dpqlSearchEmpty());
+        addTestCase("DPQL search rejects invalid syntax", \dpqlInvalidSyntax());
+        addTestCase("DPQL search rejects unknown field", \dpqlUnknownField());
+        addTestCase("DPQL search rejects expressions without fields", \dpqlNoFieldRefs());
+        addTestCase("DPQL empty expression with hash", \dpqlEmptyHash());
+        addTestCase("DPQL empty expression with dash", \dpqlEmptyDash());
+        addTestCase("DPQL empty expression with empty string", \dpqlEmptyString());
+        addTestCase("DPQL legacy fallback for qdp", \dpqlLegacyFallback());
+        addTestCase("DPQL conflicts with legacy expressions", \dpqlLegacyConflict());
+        addTestCase("DPQL error output is not duplicated", \dpqlErrorDedup());
+        addTestCase("DPQL help output", \dpqlHelp());
+%endif
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    private string shellQuote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    private writeCsvFile() {
+        File f = new File();
+        f.open(csv_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write("name,age\nJohn,30\nJane,25\n");
+        f.close();
+    }
+
+    private string getProviderSpec() {
+        string path = replace(csv_path, "\"", "\\\"");
+        return sprintf("csvread{path=\"%s\",header_names=true,header_lines=1}", path);
+    }
+
+    private string getQdpPath() {
+        return get_script_dir() + "/../../../.."+ "/bin/qdp";
+    }
+
+    private hash<auto> runQdp(string args) {
+        TmpDir tmp_dir("qdp-dpql-");
+        string out_path = tmp_dir.path + "/out.json";
+        string err_path = tmp_dir.path + "/err.txt";
+        string cmd = sprintf("qore --enable-debug %s %s > %s 2> %s",
+            shellQuote(getQdpPath()),
+            args,
+            shellQuote(out_path),
+            shellQuote(err_path));
+        int rc = system(cmd);
+        string out = ReadOnlyFile::readTextFile(out_path);
+        string err = ReadOnlyFile::readTextFile(err_path);
+        return {
+            "rc": rc,
+            "out": out,
+            "err": err,
+        };
+    }
+
+    private list<auto> parseYaml(string data) {
+%ifdef NoYaml
+        throw "MODULE-ERROR", "yaml module not available";
+        return ();
+%else
+        return cast<list<auto>>(parse_yaml(data));
+%endif
+    }
+
+    private list<auto> parseYamlOutput(hash<auto> result) {
+        assertEq(0, result.rc);
+        return parseYaml(result.out);
+    }
+
+    private dpqlSearchMatch() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote('@name == "John"'));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("John", data[0].name);
+    }
+
+    private dpqlSearchLogical() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote('@age >= 25 && @name == "Jane"'));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("Jane", data[0].name);
+    }
+
+    private dpqlSearchAutoDetect() {
+        string args = sprintf("-m CsvUtil -Y %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote('@name == "John"'));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("John", data[0].name);
+    }
+
+    private dpqlSearchUnquotedString() {
+        string args = sprintf("-m CsvUtil -Y %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@name == John"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("John", data[0].name);
+    }
+
+    private dpqlSearchEmpty() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@age > 40"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(0, data.size());
+    }
+
+    private dpqlInvalidSyntax() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@name =="));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        assertTrue(result.err =~ /DPQL parse error/);
+    }
+
+    private dpqlUnknownField() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@missing == 1"));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        assertTrue(result.err =~ /Unknown field/);
+    }
+
+    private dpqlNoFieldRefs() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("input_2 == \"number 1\""));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        assertTrue(result.err =~ /does not reference any server fields/);
+    }
+
+    private dpqlEmptyHash() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("{}"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
+    }
+
+    private dpqlEmptyDash() {
+        string args = sprintf("-m CsvUtil -Y -q %s search -",
+            shellQuote(getProviderSpec()));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
+    }
+
+    private dpqlEmptyString() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote(""));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(2, data.size());
+    }
+
+    private dpqlLegacyFallback() {
+        string args = sprintf("-m CsvUtil -Y %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("name=John"));
+        list<auto> data = parseYamlOutput(runQdp(args));
+        assertEq(1, data.size());
+        assertEq("John", data[0].name);
+    }
+
+    private dpqlLegacyConflict() {
+        hash<auto> result = runQdp("-q -x");
+        assertTrue(result.rc != 0);
+        assertTrue(result.err =~ /mutually exclusive/);
+    }
+
+    private dpqlErrorDedup() {
+        string args = sprintf("-m CsvUtil -Y -q %s search %s",
+            shellQuote(getProviderSpec()),
+            shellQuote("@name = \"John\""));
+        hash<auto> result = runQdp(args);
+        assertTrue(result.rc != 0);
+        int count = result.err.split("\n  - Invalid operator").size() - 1;
+        assertEq(1, count);
+    }
+
+    private dpqlHelp() {
+        hash<auto> result = runQdp("--dpql-help");
+        assertEq(0, result.rc);
+        assertTrue(result.out =~ /DPQL/);
+        assertTrue(result.out =~ /EXAMPLES/);
+    }
+
+    private skipNoYaml() {
+        testSkip("yaml module not available");
+    }
+}

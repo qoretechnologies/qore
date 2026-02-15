@@ -508,7 +508,7 @@ list nlist = remove l[2,5..7,8];
     - If @ref hash_type "hash" is given as the target type, the runtime type must be a valid hash or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped hash is returned
     - If @ref list_type "list" is given as the target type, the runtime type must be a valid list or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped list is returned
 
-    @par Data Conversions with <tt>cast<>(...)</tt>
+    @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: removes any type-safe information from the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>: removes any type-safe information from the output evaluated list expression
@@ -1053,7 +1053,7 @@ foreach string key in (keys hash)
     @code{.py} hash = ( "key1" : 1, "key2" : 2) + ( "key3" : "three", "key4": "four");@endcode
     @code{.py} bin = bin1 + bin2;@endcode
 
-    <b>Arguments Processed by + (in order of precedence)</b>
+    @par Arguments Processed by + (in order of precedence)
     |!Argument|!Processing
     |@ref list_type list|Gives the result of concatenating its arguments, i.e. <tt>(1, 2) + (3, 4) = (1, 2, 3, 4)</tt>
     |@ref string_type "string"|Gives the result of concatenating its arguments

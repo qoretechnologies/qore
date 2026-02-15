@@ -1,0 +1,653 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ZohoBooksRestClient.qm Qore user module for calling Zoho Books REST API services
+
+/*  ZohoBooksRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module ZohoBooksRestClient {
+    version = "1.0";
+    desc = "User module for calling Zoho Books REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("zohobooks", ZohoBooksRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ZohoBooksRestClient Module
+
+    @tableofcontents
+
+    @section zohobooksrestclientintro ZohoBooksRestClient Introduction
+
+    The %ZohoBooksRestClient module provides an API for calling Zoho Books REST API services.
+
+    To use this module, use \c "%requires ZohoBooksRestClient" in your code.
+
+    All the public symbols in the module are defined in the ZohoBooksRestClient namespace.
+
+    The main classes are:
+    - @ref ZohoBooksRestClient::ZohoBooksRestClient "ZohoBooksRestClient":
+      this class provides the REST client API for communication with the Zoho Books API;
+      it handles OAuth2 authentication and regional URL routing
+    - @ref ZohoBooksRestClient::ZohoBooksRestConnection "ZohoBooksRestConnection":
+      provides a connection object to Zoho Books services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ZohoBooksRestClient
+
+ZohoBooksRestClient zoho({
+    "oauth2_client_id": ENV.ZOHOBOOKS_CLIENT_ID,
+    "oauth2_client_secret": ENV.ZOHOBOOKS_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.ZOHOBOOKS_REFRESH_TOKEN,
+    "organization_id": ENV.ZOHOBOOKS_ORGANIZATION_ID,
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+hash<auto> result = zoho.get("/invoices");
+printf("Invoices: %y\n", result.body.invoices);
+    @endcode
+
+    @section zohobooksrestclientrelnotes Release Notes
+
+    @subsection zohobooksrestclientv1_0 ZohoBooksRestClient v1.0
+    - the initial version of the %ZohoBooksRestClient module
+*/
+
+#! the ZohoBooksRestClient namespace contains all the objects in the ZohoBooksRestClient module
+public namespace ZohoBooksRestClient {
+
+#! This class provides the REST client API for communication with Zoho Books servers
+/** Zoho Books uses a REST API with OAuth2 authentication.
+
+    @par URL Construction:
+    The API URL is constructed from the domain option:
+    - API: https://www.zohoapis{domain}/books/v3
+
+    The OAuth2 URLs are constructed from the subdomain and domain options:
+    - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
+    - Token: https://accounts.{subdomain}{domain}/oauth/v2/token
+
+    @par Subdomains:
+    - zoho: Standard Zoho accounts
+    - zohocloud: Zoho Cloud accounts
+
+    @par Domains:
+    - .com: US/Global
+    - .eu: Europe
+    - .in: India
+    - .com.au: Australia
+    - .ca: Canada
+    - .sa: Saudi Arabia
+    - .jp: Japan
+
+    @par Important:
+    All API calls require an organization_id parameter. This client automatically appends
+    the organization_id to all requests.
+*/
+public class ZohoBooksRestClient inherits RestClient::RestClient {
+    public {
+        #! Default subdomain
+        const DefaultSubdomain = "zoho";
+
+        #! Default domain
+        const DefaultDomain = ".com";
+
+        #! Allowed subdomains
+        const AllowedSubdomains = ("zoho", "zohocloud");
+
+        #! Allowed domains
+        const AllowedDomains = (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp");
+
+        #! Default OAuth2 scopes for Zoho Books
+        const DefaultScopes = (
+            "ZohoBooks.invoices.ALL",
+            "ZohoBooks.bills.ALL",
+            "ZohoBooks.customerpayments.ALL",
+            "ZohoBooks.contacts.ALL",
+            "ZohoBooks.expenses.ALL",
+            "ZohoBooks.salesorders.ALL",
+            "ZohoBooks.estimates.ALL",
+            "ZohoBooks.purchaseorders.ALL",
+            "ZohoBooks.settings.ALL",
+        );
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (organizations endpoint doesn't require org_id)
+        #! Note: no leading slash so it appends to the base URL path /books/v3
+        const DefaultPingPath = "organizations";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default OAuth2 auth args to request offline access (refresh tokens)
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    private {
+        #! The organization ID - required for all API calls except /organizations
+        string organization_id;
+
+        #! Subdomain for Zoho URLs (zoho or zohocloud)
+        string subdomain;
+
+        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+        string domain;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ZohoBooksRestClient zoho({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+    "organization_id": "your-org-id",
+    "subdomain": "zoho",
+    "domain": ".com",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c organization_id: the Zoho Books organization ID (required for most operations)
+        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw ZOHOBOOKS-ERROR invalid subdomain or domain specified
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ZohoBooksRestClient::getOptions(opts), do_not_connect) {
+        # Store organization_id for all future requests
+        if (opts.organization_id) {
+            organization_id = opts.organization_id;
+        }
+        subdomain = opts.subdomain ?? DefaultSubdomain;
+        domain = opts.domain ?? DefaultDomain;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Returns the organization ID
+    string getOrganizationId() {
+        return organization_id;
+    }
+
+    #! Sets the organization ID
+    setOrganizationId(string org_id) {
+        organization_id = org_id;
+    }
+
+    #! Returns the subdomain
+    string getSubdomain() {
+        return subdomain;
+    }
+
+    #! Returns the domain
+    string getDomain() {
+        return domain;
+    }
+
+    #! Overrides doRequest to automatically add organization_id parameter
+    /** The organization_id is automatically appended to all API paths except for
+        /organizations which is used to retrieve the list of available organizations,
+        and paths that already contain organization_id.
+    */
+    hash<auto> doRequest(string method, string path, auto body,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        # Append organization_id to all requests except /organizations (with or without leading slash)
+        # Also skip if organization_id is already in the path (to avoid duplicates)
+        if (organization_id && path !~ /^\/?organizations($|\?)/ && path !~ /organization_id=/) {
+            if (path !~ /\?/) {
+                path += "?organization_id=" + organization_id;
+            } else {
+                path += "&organization_id=" + organization_id;
+            }
+        }
+        return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+    }
+
+    #! returns options for @ref ZohoBooksRestClient::ZohoBooksRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate subdomain
+        string subdomain = opts.subdomain ?? DefaultSubdomain;
+        if (subdomain !~ /^(zoho|zohocloud)$/) {
+            throw "ZOHOBOOKS-ERROR", sprintf("invalid subdomain %y; allowed values: %y", subdomain,
+                AllowedSubdomains);
+        }
+
+        # Validate domain
+        string domain = opts.domain ?? DefaultDomain;
+        if (domain !~ /^\.(com|eu|in|com\.au|ca|sa|jp)$/) {
+            throw "ZOHOBOOKS-ERROR", sprintf("invalid domain %y; allowed values: %y", domain, AllowedDomains);
+        }
+
+        # Build API URL from domain
+        rv.url = sprintf("https://www.zohoapis%s/books/v3", domain);
+
+        # Check if token-only mode (token provided without OAuth2 credentials)
+        bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
+            && !opts.oauth2_refresh_token;
+
+        if (!token_only) {
+            # Build OAuth2 URLs from subdomain and domain
+            rv.oauth2_auth_url = opts.oauth2_auth_url ?? sprintf("https://accounts.%s%s/oauth/v2/auth",
+                subdomain, domain);
+            rv.oauth2_token_url = opts.oauth2_token_url ?? sprintf("https://accounts.%s%s/oauth/v2/token",
+                subdomain, domain);
+
+            # Set default scopes if not provided
+            if (!rv.oauth2_scopes) {
+                rv.oauth2_scopes = DefaultScopes;
+            }
+
+            # Set default grant type
+            if (!rv.oauth2_grant_type) {
+                rv.oauth2_grant_type = DefaultGrantType;
+            }
+        }
+
+        # Remove custom options that RestClient doesn't understand
+        remove rv.organization_id;
+        remove rv.subdomain;
+        remove rv.domain;
+
+        return rv;
+    }
+}
+
+#! Class for Zoho Books REST connections; returns @ref ZohoBooksRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c organization_id: the Zoho Books organization ID
+    - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+    - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+
+    @see @ref ZohoBooksRestClient::ZohoBooksRestClient::constructor() for more information on the above options
+*/
+public class ZohoBooksRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default connection URL
+        const DefaultConnectionUrl = "zohobooks://www.zohoapis.com/books/v3";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Zoho Books REST Connection",
+            "short_desc": "A connection to the Zoho Books REST API",
+            "desc": "A connection to the Zoho Books REST API for accounting and invoicing",
+            "cls": Class::forName("ZohoBooksRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "zohobooks": True,
+            },
+            "base_scheme_map": {
+                "https": "zohobooks",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultData,
+                },
+                "subdomain": <ConnectionOptionInfo>{
+                    "display_name": "Sub Domain",
+                    "short_desc": "Zoho subdomain",
+                    "type": "string",
+                    "desc": "Select the Zoho subdomain for your account.",
+                    "default_value": ZohoBooksRestClient::DefaultSubdomain,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "zoho",
+                            "display_name": "zoho",
+                            "short_desc": "Standard Zoho",
+                            "desc": "Standard Zoho subdomain (accounts.zoho.{domain})",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "zohocloud",
+                            "display_name": "zohocloud",
+                            "short_desc": "Zoho Cloud",
+                            "desc": "Zoho Cloud subdomain (accounts.zohocloud.{domain})",
+                        },
+                    ),
+                },
+                "domain": <ConnectionOptionInfo>{
+                    "display_name": "Domain",
+                    "short_desc": "Zoho domain",
+                    "type": "string",
+                    "desc": "Select the Zoho domain for your account based on your data center region.",
+                    "default_value": ZohoBooksRestClient::DefaultDomain,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": ".com",
+                            "display_name": ".com",
+                            "short_desc": "US/Global",
+                            "desc": "United States / Global data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".eu",
+                            "display_name": ".eu",
+                            "short_desc": "Europe",
+                            "desc": "European Union data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".in",
+                            "display_name": ".in",
+                            "short_desc": "India",
+                            "desc": "India data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".com.au",
+                            "display_name": ".com.au",
+                            "short_desc": "Australia",
+                            "desc": "Australia data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".ca",
+                            "display_name": ".ca",
+                            "short_desc": "Canada",
+                            "desc": "Canada data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".sa",
+                            "display_name": ".sa",
+                            "short_desc": "Saudi Arabia",
+                            "desc": "Saudi Arabia data center",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".jp",
+                            "display_name": ".jp",
+                            "short_desc": "Japan",
+                            "desc": "Japan data center",
+                        },
+                    ),
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultPingPath,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": sprintf("https://accounts.%s%s/oauth/v2/auth",
+                        ZohoBooksRestClient::DefaultSubdomain, ZohoBooksRestClient::DefaultDomain),
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": sprintf("https://accounts.%s%s/oauth/v2/token",
+                        ZohoBooksRestClient::DefaultSubdomain, ZohoBooksRestClient::DefaultDomain),
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultScopes,
+                },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": ZohoBooksRestClient::DefaultAuthArgs,
+                },
+            },
+            "required_options": "subdomain,domain,token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+                "oauth2_client_id,oauth2_client_secret",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "Select Your Zoho Region",
+                    "intent": "info",
+                    "content": "Select the subdomain and domain that match your Zoho account:\n"
+                        "- **Sub Domain**: 'zoho' (standard) or 'zohocloud' (cloud accounts)\n"
+                        "- **Domain**: Based on your data center region (.com for US/Global, .eu for Europe, "
+                        ".in for India, .com.au for Australia, .ca for Canada, .sa for Saudi Arabia, .jp for Japan)",
+                },
+            ),
+        };
+    }
+
+    #! creates the ZohoBooksRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the ZohoBooksRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(ZohoBooksRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref ZohoBooksRestConnection::constructor()
+    /** Constructs the connection URL from the domain option
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        # Get domain from options, default to .com
+        string domain = config.opts.domain ?? ZohoBooksRestClient::DefaultDomain;
+
+        # Build URL from domain - include /books/v3 API path
+        string url = sprintf("zohobooks://www.zohoapis%s/books/v3", domain);
+        return config + {
+            "url": url,
+        };
+    }
+
+    #! returns \c "zohobooks"
+    string getType() {
+        return "zohobooks";
+    }
+
+    #! Returns connection options with dynamically built OAuth2 URLs
+    /** The OAuth2 URLs are built based on the subdomain and domain options
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Build OAuth2 URLs from subdomain and domain - always rebuild to ensure they match the domain
+        string subdomain = rv.subdomain ?? ZohoBooksRestClient::DefaultSubdomain;
+        string domain = rv.domain ?? ZohoBooksRestClient::DefaultDomain;
+        # Always set OAuth2 URLs based on domain to ensure they're correct when domain changes
+        rv.oauth2_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+        rv.oauth2_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
+        if (!rv.oauth2_grant_type) {
+            rv.oauth2_grant_type = ZohoBooksRestClient::DefaultGrantType;
+        }
+        if (!rv.oauth2_scopes) {
+            rv.oauth2_scopes = ZohoBooksRestClient::DefaultScopes;
+        }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = ZohoBooksRestClient::DefaultAuthArgs;
+        }
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "ZohoBooks";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the ZohoBooksDataProvider and creates the data provider
+        # object dynamically
+        load_module("ZohoBooksDataProvider");
+        return create_object("ZohoBooksDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt>update_options(hash<auto> options)</tt>
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        # update the URL and OAuth2 URLs immediately if necessary
+        if (update_options) {
+            # Build correct URLs from subdomain and domain options instead of hardcoded defaults
+            string subdomain = opts.subdomain ?? ZohoBooksRestClient::DefaultSubdomain;
+            string domain = opts.domain ?? ZohoBooksRestClient::DefaultDomain;
+            string correct_url = sprintf("zohobooks://www.zohoapis%s/books/v3", domain);
+            string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
+            string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+            # will believe that no changes are necessary
+            hash<auto> updates;
+            if (url != correct_url) {
+                updates.url = correct_url;
+            }
+            if (opts.oauth2_auth_url != correct_auth_url) {
+                updates.oauth2_auth_url = correct_auth_url;
+            }
+            if (opts.oauth2_token_url != correct_token_url) {
+                updates.oauth2_token_url = correct_token_url;
+            }
+            # Fix ping_path if it has a leading slash (absolute path would bypass /books/v3)
+            if (opts.ping_path =~ /^\//) {
+                updates.ping_path = opts.ping_path[1..];
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
+            }
+        }
+    }
+
+    #! returns a @ref ZohoBooksRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref ZohoBooksRestClient object
+    */
+    private ZohoBooksRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ZohoBooksRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

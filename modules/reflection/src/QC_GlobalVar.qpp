@@ -239,7 +239,11 @@ Type GlobalVar::getType() [flags=RET_VALUE_ONLY] {
     }
 
     // the global variable ptr must be valid
-    return new QoreObject(QC_TYPE, v->pgm, new QoreType(v->var->getTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(v->var->getTypeInfo(), v->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, v->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the namespace for the global variable

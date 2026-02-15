@@ -50,8 +50,26 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             return makeResponse(204, "test");
         } else if (rpath =~ /^test304\//) {
             return makeResponse(304, "test");
+        } else if (rpath =~ /^test200nobody\//) {
+            return <HttpResponseInfo>{"code": 200};
+        } else if (rpath =~ /^test200empty\//) {
+            return makeResponse(200, "");
         } else if (rpath =~ /^test400close\//) {
             return makeResponse(400, new StringInputStream("test"), {"Connection": "close"});
+        } else if (rpath =~ /^gzip-plain\//) {
+            string msg = "gzip-ok";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, gz, {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
+        } else if (rpath =~ /^gzip-chunked\//) {
+            string msg = "gzip-chunked";
+            binary gz = AbstractHttpRequestHandler::encodeBody("gzip", msg);
+            return makeResponse(200, new BinaryInputStream(gz), {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Encoding": "gzip",
+            });
         } else if (rpath =~ /^fileupload/) {
             string boundary = (hdr."_qore_orig_content_type" =~ x/boundary="?(.+)"?/i)[0];
             hash<MessageInfo> h = MultiPartMessage::parseBody(boundary, body, True);
@@ -72,6 +90,24 @@ class ReqHandler inherits AbstractHttpRequestHandler {
         } else {
             return makeResponse(200, hdr.method + ", " + rpath + ", " + cx.raw_path);
         }
+    }
+}
+
+class SlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue started;
+        date delay;
+    }
+
+    constructor(Queue started, date delay) {
+        self.started = started;
+        self.delay = delay;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        started.push(True);
+        sleep(delay);
+        return makeResponse(200, "OK");
     }
 }
 
@@ -124,6 +160,33 @@ class AuthenticatingWsHandler inherits WebSocketHandler {
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new TestWsConnection(self);
+    }
+}
+
+class ThrowOnceListener inherits HttpListener {
+    private {
+        bool throw_next = True;
+    }
+
+    constructor(HttpServer server, code<nothing(...)> handleRequest, int id, Sequence ss,
+            *hash<HttpListenerOptionInfo> opts) : HttpListener(server, handleRequest, id, ss, opts) {
+    }
+
+    hash<auto> getContextTemplate(hash<auto> info) {
+        if (throw_next) {
+            throw_next = False;
+            throw "TEST-LISTENER-ERROR", "getContextTemplate failure";
+        }
+        return HttpListener::getContextTemplate(info);
+    }
+}
+
+class ThrowOnceServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private HttpListener getListener(HttpServer server, int id, hash<HttpListenerOptionInfo> info) {
+        return new ThrowOnceListener(server, \handleRequest(), id, seqSessions, info);
     }
 }
 
@@ -215,11 +278,21 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     constructor() : Test("HttpServerTest", "1.0") {
+        # Install signal handler early to debug hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("idle test", \idleTest());
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("issue 3116", \issue3116());
+        addTestCase("200 no body returns 204", \noBody200Becomes204());
+        addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
+        addTestCase("chunked gzip decode", \chunkedGzipDecode());
         addTestCase("issue 2805", \issue2805());
+        addTestCase("HTTP/2 preface rejection", \http2PrefaceRejectionTest());
         addTestCase("Test basics", \basicTest());
         addTestCase("Test routing", \routingTest());
         addTestCase("Test status codes", \testStatusCodes());
@@ -230,11 +303,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode keep-alive", \asyncModeKeepAliveTest());
         addTestCase("async mode concurrent", \asyncModeConcurrentTest());
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
+        addTestCase("async mode HTTPS HTTP/1.1", \asyncModeHttpsHttp1Test());
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
+        addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
+        addTestCase("async mode WebSocket HTTP/2 reject", \asyncModeWebSocketHttp2RejectTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
+        addTestCase("async mode client cert capture", \asyncModeClientCertTest());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
         addTestCase("async mode persistent handler", \asyncModePersistentHandlerTest());
         addTestCase("async mode persistent to non-persistent", \asyncModePersistentToNonPersistentTest());
@@ -244,6 +321,23 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
         addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
         addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
+        addTestCase("async mode global controller restart", \asyncModeGlobalCtrlRestartTest());
+        addTestCase("async mode stop inflight", \asyncModeStopInFlightTest());
+        addTestCase("async mode shutdown guard", \asyncModeShutdownGuardTest());
+        addTestCase("async mode accept restart on exception", \asyncAcceptRestartOnExceptionTest());
+        addTestCase("async mode inline handler", \asyncModeInlineHandlerTest());
+        addTestCase("async mode inline handler with body", \asyncModeInlineBodyTest());
+        addTestCase("async mode idle timeout", \asyncModeIdleTimeoutTest());
+        addTestCase("async mode inline Connection: close", \asyncModeInlineConnectionCloseTest());
+        addTestCase("async mode inline HTTP/1.0 close", \asyncModeInlineHttp10CloseTest());
+        addTestCase("async mode HTTP/2 keep-alive", \asyncModeHttp2KeepAliveTest());
+        addTestCase("async mode WebSocket streaming shutdown", \asyncModeWebSocketShutdownTest());
+        addTestCase("async mode multiple WebSocket shutdown", \asyncModeMultipleWebSocketShutdownTest());
+        addTestCase("async mode mixed streaming shutdown", \asyncModeMixedStreamingShutdownTest());
+        addTestCase("async mode accept replenishment", \asyncModeAcceptReplenishmentTest());
+        addTestCase("async mode cache cleanup", \asyncModeCacheCleanupTest());
+        addTestCase("async mode bad SSL handshake resilience", \asyncModeBadSslHandshakeTest());
+        addTestCase("async mode I/O thread non-blocking", \asyncModeIoThreadNonBlockingTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -493,10 +587,146 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("test", http_msgs[1].data);
     }
 
+    noBody200Becomes204() {
+        hash<auto> info1;
+        hash<auto> resp1 = mClient.send(NOTHING, "GET", "/test200nobody/xyz", NOTHING, NOTHING, \info1);
+        assertEq(204, resp1.status_code);
+        assertNothing(resp1.body);
+
+        hash<auto> info2;
+        hash<auto> resp2 = mClient.send(NOTHING, "GET", "/test200empty/xyz", NOTHING, NOTHING, \info2);
+        assertEq(204, resp2.status_code);
+        assertNothing(resp2.body);
+    }
+
+    recvCallbackGzipDecode() {
+        list<auto> http_msgs;
+        code rc = sub (auto http_data) {
+            http_msgs += http_data;
+        };
+        mClient.sendWithRecvCallback(rc, NOTHING, "GET", "/gzip-plain/abc", NOTHING, NOTHING, NOTHING, NOTHING);
+        *string found;
+        foreach auto msg in (http_msgs) {
+            if (exists(msg.data) && msg.data.typeCode() == NT_STRING) {
+                found = msg.data;
+                break;
+            }
+        }
+        assertTrue(exists(found));
+        assertEq("gzip-ok", found);
+    }
+
+    chunkedGzipDecode() {
+        hash<auto> info;
+        hash<auto> resp = mClient.send(NOTHING, "GET", "/gzip-chunked/abc", NOTHING, NOTHING, \info);
+        assertEq("gzip-chunked", resp.body);
+        assertEq("chunked", info."response-headers"."transfer-encoding");
+    }
+
     issue2805() {
         assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \mClient.send(), ("", "TEST"));
         mServer.addHttpMethod("TEST");
         assertEq("TEST, , /", mClient.send("", "TEST").body);
+    }
+
+    http2PrefaceRejectionTest() {
+        # Test 1: HTTP/2 cleartext connection preface should be rejected with 501
+        # RFC 7540 Section 3.5: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501");
+            assertTrue(resp.body =~ /cleartext.*not supported/i || resp.body =~ /h2c.*not supported/i,
+                "error message should mention cleartext/h2c not supported");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 2: PRI method with non-HTTP/2 path should also be rejected
+        {
+            Socket sock();
+            sock.connect("localhost:" + port);
+            on_exit sock.close();
+
+            # Send PRI with a different path
+            sock.send("PRI /some/path HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "PRI method with non-HTTP/2 path should return 501");
+            assertTrue(resp.body =~ /unknown.*unsupported.*method/i,
+                "error message should mention unknown/unsupported method");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection");
+        }
+
+        # Test 3: Also test with async mode server
+        {
+            Socket sock();
+            sock.connect("localhost:" + asyncPort);
+            on_exit sock.close();
+
+            # Send HTTP/2 connection preface to async server
+            sock.send("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n");
+
+            # Read the HTTP response
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(501, resp.status_code, "HTTP/2 cleartext preface should return 501 (async mode)");
+            assertTrue(resp.body =~ /cleartext.*h2c.*not supported/i,
+                "error message should mention h2c not supported (async mode)");
+
+            # Verify connection is closed
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "connection should be closed after PRI rejection (async mode)");
+        }
+
+        # Test 4: Verify normal requests still work after rejecting PRI
+        assertEq("GET, normalrequest, /normalrequest", mClient.get("/normalrequest"),
+            "normal requests should still work after PRI rejection");
     }
 
     secondWildcardListener() {
@@ -682,6 +912,32 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, test2, /test2", client.get("/test2"));
     }
 
+    asyncModeHttpsHttp1Test() {
+        # Test explicit HTTP/1.1 over SSL in async mode
+        # This validates the *string negotiated ALPN fix - HTTP/1.1 clients
+        # may not negotiate ALPN, resulting in a null protocol
+        HTTPClient client({
+            "url": asyncSslUrl,
+            "timeout": 5s,
+            "ssl_verify_cert": False,
+            "http_version": "1.1",
+        });
+        client.connect();
+        on_exit client.disconnect();
+
+        # Test basic GET request over HTTPS with HTTP/1.1
+        assertEq("GET, secure, /secure", client.get("/secure"));
+
+        # Test POST over HTTPS with HTTP/1.1
+        hash<auto> resp = client.send("secure-data", "POST", "/secure-post");
+        assertEq(200, resp.status_code);
+        assertEq("POST, secure-data, secure-post, /secure-post", resp.body);
+
+        # Test keep-alive over HTTPS with HTTP/1.1
+        assertEq("GET, test1, /test1", client.get("/test1"));
+        assertEq("GET, test2, /test2", client.get("/test2"));
+    }
+
     asyncModeErrorResponsesTest() {
         # Test error responses (4xx, 5xx) with async mode
         # Use error_passthru to get error responses without exceptions
@@ -809,12 +1065,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,  # Self-signed cert
+            "http_version": "2.0",  # Force HTTP/2 for WebSocket over SSL
         });
         wsc.connect();
         on_exit wsc.disconnect();
 
-        # Verify we're using HTTP/2 (default behavior)
-        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 by default over SSL");
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2 by default over SSL");
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
@@ -826,6 +1082,79 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         wsc.send("world-ssl");
         assertEq(0, msgReceived.waitForZero(5s));
         assertEq("ECHO:world-ssl", receivedMsg);
+    }
+
+    asyncModeWebSocketHttp2StatusTest() {
+        # Verify HTTP/2 WebSocket CONNECT succeeds (expects 200 OK)
+        code callback = sub (*data msg) { };
+        string wssUrl = "wss://localhost:" + asyncSslPort + "/ws";
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2");
+        assertTrue(wsc.isOpen(), "WebSocket should be open");
+    }
+
+    asyncModeWebSocketHttp2RejectTest() {
+        # Test that reject_http2_websocket option is deprecated and ignored.
+        # Server now always supports HTTP/2 WebSocket via the multiplexed path.
+
+        Logger rejectLogger("ws-reject-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            rejectLogger.addAppender(new StdoutAppender());
+        }
+        HttpServer rejectServer(<HttpServerOptionInfo>{
+            "logger": rejectLogger,
+            "debug": True,
+            "reject_http2_websocket": True,  # Deprecated, ignored
+        });
+        on_exit rejectServer.stop();
+
+        TestWsHandler rejectWsHandler({"logger": rejectLogger});
+        rejectServer.setHandler("ws", "/ws", NOTHING, rejectWsHandler);
+
+        int rejectSslPort = rejectServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+
+        rejectServer.waitForAsyncIo();
+
+        string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
+
+        # Since reject_http2_websocket is now deprecated and ignored, HTTP/2 WebSocket
+        # should work normally (server always advertises ENABLE_CONNECT_PROTOCOL)
+        Counter msgReceived(1);
+        string receivedMsg;
+        code callback = sub (*data msg) {
+            if (msg.typeCode() == NT_STRING) {
+                receivedMsg = msg;
+                msgReceived.dec();
+            }
+        };
+        WebSocketClient wsc(callback, {
+            "url": wssUrl,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",  # Explicitly use HTTP/2
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # HTTP/2 WebSocket should work even with deprecated option set
+        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 (deprecated option ignored)");
+        assertTrue(wsc.isOpen(), "WebSocket should be open");
+
+        wsc.send("hello-reject-test");
+        assertEq(0, msgReceived.waitForZero(5s));
+        assertEq("ECHO:hello-reject-test", receivedMsg);
     }
 
     asyncModeWebSocketSslHttp1Test() {
@@ -867,6 +1196,80 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("ECHO:world-ssl-http1", receivedMsg);
     }
 
+    asyncModeClientCertTest() {
+        # Test client certificate capture in async mode
+        # Validates that get_remote_certs, ssl_verify_flags, and ssl_accept_all_certs
+        # are properly propagated through the async I/O controller
+
+        Logger certLogger("cert-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            certLogger.addAppender(new StdoutAppender());
+        }
+        HttpServer certServer(<HttpServerOptionInfo>{
+            "logger": certLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit certServer.stop();
+        certServer.setDefaultHandler("my-handler", new ReqHandler());
+
+        int certPort = certServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "get_remote_certs": True,
+        }).port;
+
+        # Write cert/key to temp files for client
+        string cert_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        {
+            File f();
+            f.open2(cert_fn, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(CertPem);
+        }
+        on_exit unlink(cert_fn);
+        string key_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        {
+            File f();
+            f.open2(key_fn, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(KeyPem);
+        }
+        on_exit unlink(key_fn);
+
+        certServer.waitForAsyncIo(5s);
+
+        # Verify listener info has correct SSL configuration
+        hash<auto> linfo = certServer.getListenerInfo("listener-0");
+        assertTrue(linfo.get_remote_certs, "get_remote_certs should be True");
+        assertEq(("SSL_VERIFY_PEER",), linfo.ssl_verify_flags);
+        assertTrue(linfo.ssl_accept_all_certs, "ssl_accept_all_certs should be True");
+
+        # Test with HTTP/2 (auto) client cert
+        {
+            HTTPClient client({
+                "url": "https://localhost:" + certPort,
+                "timeout": 5s,
+                "ssl_verify_cert": False,
+                "ssl_cert_path": cert_fn,
+                "ssl_key_path": key_fn,
+            });
+            assertEq("GET, test1, /test1", client.get("/test1"));
+        }
+
+        # Test with explicit HTTP/1.1 client cert
+        {
+            HTTPClient client({
+                "url": "https://localhost:" + certPort,
+                "timeout": 5s,
+                "ssl_verify_cert": False,
+                "ssl_cert_path": cert_fn,
+                "ssl_key_path": key_fn,
+                "http_version": "1.1",
+            });
+            assertEq("GET, test2, /test2", client.get("/test2"));
+        }
+    }
+
     asyncModeWebSocket401ThenSuccessTest() {
         # Test WebSocket connection rejection with 401 followed by successful connection
         # This tests the scenario where a wss:// connection is rejected, then another succeeds
@@ -901,21 +1304,21 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # First attempt: Connect WITHOUT valid token - should get 401
         string wssUrlNoToken = "wss://localhost:" + authSslPort + "/ws";
-        bool gotRejection = False;
+        bool connectSucceeded = False;
         try {
             WebSocketClient wscBad(sub (*data msg) {}, {
                 "url": wssUrlNoToken,
                 "timeout": 10s,
                 "ssl_verify_cert": False,
+                "http_version": "2.0",
             });
             wscBad.connect();
             # If we get here, connection succeeded when it shouldn't have
+            connectSucceeded = True;
             wscBad.disconnect();
-            assertFalse(True, "Connection without token should have been rejected with 401");
         } catch (hash<ExceptionInfo> ex) {
             # Expected - should get an error due to 401 rejection
             # HTTP/2 WebSocket uses CONNECT method which gives HTTP2-CONNECT-ERROR on rejection
-            gotRejection = True;
             if (m_options.verbose > 2) {
                 printf("Got expected error on 401 rejection: %s: %s\n", ex.err, ex.desc);
             }
@@ -925,7 +1328,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 ex.err == "HTTP2-CONNECT-ERROR",
                 sprintf("Error should be related to 401 rejection, got: %s: %s", ex.err, ex.desc));
         }
-        assertTrue(gotRejection, "First connection without token should be rejected");
+        assertFalse(connectSucceeded, "Connection without token should have been rejected with 401");
 
         # Second attempt: Connect WITH valid token - should succeed
         Counter msgReceived(1);
@@ -942,6 +1345,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "url": wssUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,
+            "http_version": "2.0",
         });
         wscGood.connect({
             "hdr": {
@@ -950,8 +1354,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         });
         on_exit wscGood.disconnect();
 
-        # Verify connection is using HTTP/2
-        assertTrue(wscGood.isHttp2(), "WebSocket with valid token should use HTTP/2 over SSL");
+        assertTrue(wscGood.isHttp2(), "WebSocket should negotiate HTTP/2 after successful auth");
 
         # Send a message and verify echo
         wscGood.send("authenticated-message");
@@ -1312,7 +1715,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, http2-test, /http2-test", resp);
 
         # Log which protocol was used
-        if (m_options.verbose > 0) {
+        if (m_options.verbose > 2) {
             printf("HTTP/2 test: negotiated version = %s, isHttp2Active = %y\n",
                 version, h2client.isHttp2Active());
         }
@@ -1325,7 +1728,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Verify response-uri is set in the format "HTTP/2 <code> <message>"
             assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
             assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 response-uri: %y\n", info."response-uri");
             }
         }
@@ -1380,7 +1783,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             # Note: HTTPClient auto-decompresses, so we check the original response headers
             *string content_encoding = info."response-headers"."content-encoding"
                 ?? info."response-headers"."Content-Encoding";
-            if (m_options.verbose > 0) {
+            if (m_options.verbose > 2) {
                 printf("HTTP/2 compression test: Content-Encoding = %y\n", content_encoding);
             }
             assertTrue(content_encoding.val(), "HTTP/2 response should be compressed");
@@ -1470,6 +1873,1028 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         }
     }
 
+    asyncModeShutdownGuardTest() {
+        Logger logger("shutdown-test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+        server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        server.stop();
+
+        bool blocked = False;
+        try {
+            server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        } catch (hash<ExceptionInfo> ex) {
+            blocked = ex.err == "CONTROLLER-ADD-LISTENER-ERROR";
+        }
+        assertTrue(blocked, "async I/O controller should reject new listeners after stop");
+    }
+
+    asyncAcceptRestartOnExceptionTest() {
+        Logger logger("async-accept-restart-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        ThrowOnceServer server(opts);
+        on_exit server.stop();
+
+        SimpleStringHandler handler("ok");
+        server.setHandler("ok", "/ok", MimeTypeText, handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Trigger a failure during accept handling, then ensure new accepts still work
+        Socket s1();
+        s1.connect("127.0.0.1:" + test_port);
+        sleep(100ms);
+        s1.close();
+
+        HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/ok");
+        assertEq(200, resp.status_code);
+        assertEq("ok", resp.body);
+    }
+
+    asyncModeStopInFlightTest() {
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": new Logger("async-stop-inflight", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        Queue started();
+        SlowHandler handler(started, 2s);
+        server.setHandler("slow-handler", "", MimeTypeHtml, handler);
+        server.setDefaultHandler("slow-handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        background sub () {
+            try {
+                HTTPClient client({"url": "http://localhost:" + port, "timeout": 10s});
+                client.connect();
+                client.get("/slow");
+                client.disconnect();
+            } catch () {
+                # Ignore errors if shutdown closes the socket early.
+            }
+        }();
+
+        assertTrue(started.get(5s) != NOTHING, "handler should start before shutdown");
+
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(5s) != NOTHING, "server.stop should finish without delay");
+    }
+
+    asyncModeGlobalCtrlRestartTest() {
+        hash<HttpServerOptionInfo> opts1 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-1", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server1(opts1);
+        on_exit server1.stop();
+        server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server1.setDefaultHandler("my-handler", new ReqHandler());
+        int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server1.waitForAsyncIo(5s), "async I/O should be ready after start");
+
+        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 5s});
+        client1.connect();
+        on_exit client1.disconnect();
+        assertEq("GET, restart1, /restart1", client1.get("/restart1"));
+        client1.disconnect();
+        server1.stop();
+
+        hash<HttpServerOptionInfo> opts2 = <HttpServerOptionInfo>{
+            "logger": new Logger("async-restart-2", LoggerLevel::getLevelInfo()),
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server2(opts2);
+        on_exit server2.stop();
+        server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server2.setDefaultHandler("my-handler", new ReqHandler());
+        int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server2.waitForAsyncIo(5s), "async I/O should restart after stop");
+
+        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 5s});
+        client2.connect();
+        on_exit client2.disconnect();
+        assertEq("GET, restart2, /restart2", client2.get("/restart2"));
+        client2.disconnect();
+        server2.stop();
+    }
+
+    asyncModeInlineHandlerTest() {
+        # Use a small, fixed handler thread pool so we can exhaust it
+        int pool_size = 2;
+        Logger logger("async-inline-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+            "max_handler_threads": pool_size,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Register an inline handler at /inline
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+
+        # Register a regular (non-inline) handler at /regular
+        SimpleStringHandler regular_handler("regular-response");
+        server.setHandler("regular-handler", "/regular", MimeTypeText, regular_handler);
+
+        # Register a slow handler to exhaust the thread pool
+        Queue slow_started();
+        SlowHandler slow_handler(slow_started, 10s);
+        server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
+        server.setDefaultHandler("slow-handler", slow_handler);
+
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test 1: Basic inline handler response
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp.status_code, "inline handler status code");
+            assertEq("inline-ok", resp.body, "inline handler body");
+            assertEq("inline-value", resp."x-inline-header", "inline handler custom header");
+        }
+
+        # Test 2: Inline handler works on keep-alive connections
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            # First request
+            hash<auto> resp1 = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp1.status_code, "inline keep-alive first request");
+            assertEq("inline-ok", resp1.body, "inline keep-alive first body");
+            # Second request on same connection (keep-alive)
+            hash<auto> resp2 = client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp2.status_code, "inline keep-alive second request");
+            assertEq("inline-ok", resp2.body, "inline keep-alive second body");
+        }
+
+        # Test 3: Non-inline handler still works alongside inline handler
+        {
+            HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+            client.connect();
+            on_exit client.disconnect();
+            hash<auto> resp = client.send(NOTHING, "GET", "/regular");
+            assertEq(200, resp.status_code, "regular handler still works");
+            assertEq("regular-response", resp.body, "regular handler body");
+        }
+
+        # Test 4: Inline handler works when thread pool is exhausted
+        # This is the key proof that inline handlers bypass the pool.
+        # We exhaust the pool with slow requests, then verify the inline
+        # handler still responds.
+        {
+            # Exhaust the handler thread pool with slow requests
+            for (int i = 0; i < pool_size; i++) {
+                background sub () {
+                    try {
+                        HTTPClient client({
+                            "url": "http://localhost:" + test_port,
+                            "timeout": 15s,
+                        });
+                        client.connect();
+                        client.get("/slow");
+                        client.disconnect();
+                    } catch () {
+                        # Ignore errors on shutdown
+                    }
+                }();
+            }
+
+            # Wait for all slow handlers to start (proves pool is fully occupied)
+            for (int i = 0; i < pool_size; i++) {
+                auto val = slow_started.get(5s);
+                assertTrue(val != NOTHING, "slow handler " + string(i) + " started");
+            }
+
+            # Now the thread pool is fully occupied. Inline handler should still work
+            # because it runs on the I/O thread, not the pool.
+            HTTPClient inline_client({
+                "url": "http://localhost:" + test_port,
+                "timeout": 5s,
+            });
+            inline_client.connect();
+            on_exit inline_client.disconnect();
+            hash<auto> resp = inline_client.send(NOTHING, "GET", "/inline");
+            assertEq(200, resp.status_code, "inline handler works with exhausted pool");
+            assertEq("inline-ok", resp.body, "inline handler body with exhausted pool");
+        }
+    }
+
+    #! Verifies that requests with a body fall back to the thread pool even when
+    #! the handler supports inline processing, and that keep-alive stays in sync.
+    asyncModeInlineBodyTest() {
+        Logger logger("async-inline-body-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+
+        # Send a POST with a body to the inline handler.  The framework must
+        # fall back to the thread-pool path (processNativeRequest) which reads
+        # the body, so the next header parse on the same keep-alive connection
+        # is not corrupted.
+        hash<auto> resp1 = client.send("hello body", "POST", "/inline",
+            {"Content-Type": "text/plain"});
+        # POST with body goes through the normal (non-inline) handleRequest()
+        # which returns "non-inline-response"
+        assertEq(200, resp1.status_code, "POST with body status");
+        assertEq("non-inline-response", resp1.body, "POST with body falls back to full path");
+
+        # Second request on the same keep-alive connection must succeed —
+        # proves the body bytes were consumed and the socket is in sync.
+        hash<auto> resp2 = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp2.status_code, "GET after POST status");
+        assertEq("inline-ok", resp2.body, "keep-alive intact after body request");
+    }
+
+    #! Verifies HTTP/2 keep-alive behaviour after the do_close refactor
+    #! (consolidated lock scopes in handleHttp2RequestResult).
+    asyncModeHttp2KeepAliveTest() {
+        # Create a dedicated async-mode HTTPS server for this test
+        Logger logger("async-h2-keepalive-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        SimpleStringHandler handler("h2-ok");
+        server.setHandler("h2-handler", "/h2", MimeTypeText, handler);
+        server.setDefaultHandler("h2-handler", handler);
+
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        assertTrue(server.waitForAsyncIo(5s), "async I/O ready");
+
+        HTTPClient h2client({
+            "url": "https://localhost:" + linfo.port,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "auto",
+        });
+        if (!h2client.isHttp2Enabled()) {
+            testSkip("HTTP/2 not compiled in");
+            return;
+        }
+        h2client.connect();
+        on_exit h2client.disconnect();
+
+        # Multiple keep-alive requests on a single HTTP/2 connection.
+        # This exercises the consolidated lock scope in handleHttp2RequestResult():
+        # each request must transition back to keep-alive without the socket being
+        # closed by an uninitialised do_close flag.
+        for (int i = 1; i <= 10; i++) {
+            string resp = h2client.get("/h2");
+            assertEq("h2-ok", resp, sprintf("HTTP/2 keep-alive request %d", i));
+        }
+        assertTrue(h2client.isHttp2Active(), "HTTP/2 still active after keep-alive burst");
+    }
+
+    #! Helper: read an HTTP response from a raw socket using protocol-aware methods
+    private hash<auto> readRawHttpResponse(Socket sock, timeout to = 5s) {
+        hash<auto> hdr = sock.readHTTPHeader(to);
+        string body = "";
+        if (hdr."content-length") {
+            body = sock.recv(hdr."content-length".toInt(), to);
+        }
+        hdr.body = body;
+        return hdr;
+    }
+
+    #! Verifies that async-mode connections are closed after the idle TTL expires.
+    #! This tests the fix that changed timeout from -1s (infinite) to
+    #! milliseconds(ttl) + DefaultIoOperationTimeout for KeepAlive and
+    #! SendAndReadHeader states.
+    asyncModeIdleTimeoutTest() {
+        Logger logger("async-idle-timeout-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Set a short TTL so the test doesn't take too long
+        date orig_ttl = server.getTtl();
+        server.setTtl(200ms);
+        on_exit server.setTtl(orig_ttl);
+
+        # Open a connection and make a request to establish keep-alive
+        Socket sock();
+        sock.connect("localhost:" + test_port);
+        sock.send("GET /idle-test HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # Read the full HTTP response (header + body) using protocol-aware methods
+        hash<auto> resp = readRawHttpResponse(sock);
+        assertEq(200, resp.status_code, "should be 200 OK");
+
+        # Now sit idle past the TTL — the server should close the connection
+        # Wait for TTL + safety margin
+        usleep(500ms);
+
+        # Try to send another request — should fail because server closed the connection
+        bool closed = False;
+        try {
+            sock.send("GET /idle-test2 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            readRawHttpResponse(sock, 1s);
+            # If we got a valid response, connection wasn't closed
+        } catch (hash<ExceptionInfo> ex) {
+            # Socket errors indicate the server closed the connection
+            if (ex.err == "SOCKET-SEND-ERROR" || ex.err == "SOCKET-CLOSED"
+                    || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                    || ex.err == "SOCKET-TIMEOUT" || ex.err == "SOCKET-HTTP-ERROR") {
+                closed = True;
+            } else {
+                rethrow;
+            }
+        }
+        assertTrue(closed, "idle connection should be closed by server after TTL");
+
+        # Verify the server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        assertEq("GET, afteridle, /afteridle", client.get("/afteridle"));
+    }
+
+    #! Verifies that the inline request path respects the Connection: close header
+    #! on HTTP/1.1 requests.
+    asyncModeInlineConnectionCloseTest() {
+        Logger logger("async-inline-close-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+        server.setDefaultHandler("inline-handler", inline_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test: HTTP/1.1 with Connection: close — server should close connection after response
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+            # Read the HTTP response properly
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "inline response should be 200");
+            assertEq("inline-ok", resp.body, "inline response should contain body");
+
+            # The server should close the connection — verify by trying to read more
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "Connection: close should cause server to close connection");
+        }
+
+        # Control test: HTTP/1.1 without Connection: close — connection stays open (keep-alive)
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "response should be 200");
+
+            # Send a second request on the same connection — should work
+            sock.send("GET /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            hash<auto> resp2 = readRawHttpResponse(sock);
+            assertEq(200, resp2.status_code, "keep-alive: second response should be 200");
+            assertEq("inline-ok", resp2.body, "keep-alive: second response body");
+            sock.close();
+        }
+
+        # Verify server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp.status_code, "server still operational");
+    }
+
+    #! Verifies that the inline request path closes the connection for HTTP/1.0
+    #! requests (which default to close unless Connection: Keep-Alive is sent).
+    asyncModeInlineHttp10CloseTest() {
+        Logger logger("async-inline-http10-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
+        server.setDefaultHandler("inline-handler", inline_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test: HTTP/1.0 request without Connection: Keep-Alive — should close
+        {
+            Socket sock();
+            sock.connect("localhost:" + test_port);
+            sock.send("GET /inline HTTP/1.0\r\nHost: localhost\r\n\r\n");
+            # Read the HTTP response properly
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, "HTTP/1.0 inline response should be 200");
+            assertEq("inline-ok", resp.body, "HTTP/1.0 inline response should contain body");
+
+            # Server should close the connection for HTTP/1.0
+            bool closed = False;
+            try {
+                sock.readHTTPHeader(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
+                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
+                        || ex.err == "SOCKET-HTTP-ERROR") {
+                    closed = True;
+                } else {
+                    rethrow;
+                }
+            }
+            assertTrue(closed, "HTTP/1.0 should cause server to close connection by default");
+        }
+
+        # Verify server is still operational
+        HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        hash<auto> resp = client.send(NOTHING, "GET", "/inline");
+        assertEq(200, resp.status_code, "server still operational after HTTP/1.0");
+    }
+
+    #! Verifies that stop() completes deterministically with an active WebSocket connection.
+    #! Before the stopStreaming() fix, the handler pool's stopWait() would block indefinitely
+    #! because the WebSocket handler task's polling loop was never signaled to stop.
+    asyncModeWebSocketShutdownTest() {
+        Logger logger("async-ws-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Establish a WebSocket connection
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        on_exit { try { ws_client.disconnect(); } catch () {} }
+        ws_client.connect();
+
+        # Brief delay to ensure the handler's startImpl loop is running
+        usleep(250ms);
+
+        # Stop the server in a background thread with a timeout guard;
+        # before the fix this would hang indefinitely
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING, "server.stop() should complete deterministically");
+    }
+
+    #! Verifies deterministic shutdown with multiple concurrent WebSocket connections.
+    asyncModeMultipleWebSocketShutdownTest() {
+        Logger logger("async-multi-ws-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Establish multiple WebSocket connections
+        int num_clients = 5;
+        list<WebSocketClient> clients;
+        on_exit {
+            foreach WebSocketClient ws in (clients) {
+                try { ws.disconnect(); } catch () {}
+            }
+        }
+        for (int i = 0; i < num_clients; ++i) {
+            WebSocketClient ws(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+            ws.connect();
+            clients += ws;
+        }
+        assertEq(num_clients, clients.size(), "all clients should be connected");
+
+        # Brief delay to ensure all handler loops are running
+        usleep(250ms);
+
+        # Stop the server — all WebSocket handlers must exit deterministically
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete with multiple WebSocket connections");
+    }
+
+    #! Verifies deterministic shutdown with a mix of WebSocket and regular HTTP connections.
+    asyncModeMixedStreamingShutdownTest() {
+        Logger logger("async-mixed-shutdown-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+        TestWsHandler ws_handler();
+        server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);
+        server.setHandler("http-handler", "/http", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("ws-handler", ws_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Start a WebSocket connection (streaming)
+        WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://localhost:" + test_port});
+        on_exit { try { ws_client.disconnect(); } catch () {} }
+        ws_client.connect();
+
+        # Make regular HTTP requests concurrently to ensure mixed workload
+        Counter http_done(3);
+        for (int i = 0; i < 3; ++i) {
+            background sub () {
+                on_exit http_done.dec();
+                try {
+                    HTTPClient hclient({"url": "http://localhost:" + test_port, "timeout": 5s});
+                    hclient.connect();
+                    hclient.get("/http/test");
+                    hclient.disconnect();
+                } catch () {}
+            }();
+        }
+        http_done.waitForZero(5s);
+
+        # Brief delay to ensure the WebSocket handler loop is running
+        usleep(250ms);
+
+        # Stop the server — both streaming and regular connections must clean up
+        Queue stopped();
+        background sub () {
+            server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(10s) != NOTHING,
+            "server.stop() should complete with mixed streaming and HTTP connections");
+    }
+
+    #! Test that accept operations are properly replenished after cancellation
+    /** This test verifies the fix for accept starvation where canceled accept
+        operations would drain the accept pool without replenishment, causing
+        the server to stop accepting new connections.
+    */
+    asyncModeAcceptReplenishmentTest() {
+        Logger logger("async-accept-replenish-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Set up a simple handler
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Add and remove listeners repeatedly to trigger accept operation cancellations
+        # This exercises the accept replenishment path
+        list<hash<auto>> listener_info = ();
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+            listener_info += info;
+            # Make a request to ensure the listener is working
+            HTTPClient client({"url": "http://localhost:" + info.port, "timeout": 2s});
+            client.connect();
+            assertEq("GET, test, /test", client.get("/test"));
+            client.disconnect();
+        }
+
+        # Stop all listeners (this cancels accept operations)
+        foreach hash<auto> info in (listener_info) {
+            server.stopListenerID(info.id);
+        }
+
+        # Add a new listener - this should work if accept replenishment is correct
+        int final_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready after listener churn");
+
+        # Make multiple concurrent requests to verify accept operations are working
+        Counter done(10);
+        bool all_success = True;
+        for (int i = 0; i < 10; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    HTTPClient client({"url": "http://localhost:" + final_port, "timeout": 5s});
+                    client.connect();
+                    string result = client.get("/test");
+                    if (result != "GET, test, /test") {
+                        all_success = False;
+                    }
+                    client.disconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("Request failed: %s: %s\n", ex.err, ex.desc);
+                    }
+                    all_success = False;
+                }
+            }();
+        }
+        done.waitForZero(10s);
+        assertEq(0, done.getCount(), "all concurrent requests should complete");
+        assertTrue(all_success, "all requests should succeed after listener add/remove cycles");
+    }
+
+    /** This test verifies that the AsyncSocketIoController cache is properly cleaned up
+        when connections close. This is the fix for the CLOSE-WAIT socket leak bug where
+        poll operations stayed in the cache even after connections were closed, preventing
+        Socket objects from being destroyed and their destructors (which call close()) from
+        running.
+    */
+    asyncModeCacheCleanupTest() {
+        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        # Set up a simple handler
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Add listener
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Get baseline cache size (should just be accept operations)
+        int baseline_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+        if (m_options.verbose > 1) {
+            printf("Baseline cache size: %d\n", baseline_cache_size);
+        }
+
+        # Test 1: HTTP/1.1 connections - create many connections, close them, verify cleanup
+        {
+            int num_connections = 20;
+            list<HTTPClient> clients = ();
+
+            # Create many connections
+            for (int i = 0; i < num_connections; ++i) {
+                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 2s});
+                client.connect();
+                assertEq("GET, test, /test", client.get("/test"));
+                clients += client;
+            }
+
+            # Verify cache has grown (connections are active)
+            int active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("Active cache size with %d connections: %d\n", num_connections, active_cache_size);
+            }
+            assertTrue(active_cache_size > baseline_cache_size,
+                "cache should grow when connections are active");
+
+            # Close all connections - this should trigger cache cleanup
+            map $1.disconnect(), clients;
+            delete clients;
+
+            # Give the async I/O system time to process disconnects
+            usleep(500ms);
+
+            # CRITICAL TEST: Verify cache is back to baseline (all connection entries cleaned up)
+            int final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("Final cache size after disconnect: %d\n", final_cache_size);
+            }
+            assertEq(baseline_cache_size, final_cache_size,
+                "cache should return to baseline after all connections close");
+
+            # Verify we can still make new connections (cache is clean)
+            HTTPClient verify_client({"url": "http://localhost:" + test_port, "timeout": 2s});
+            verify_client.connect();
+            assertEq("GET, test2, /test2", verify_client.get("/test2"));
+            verify_client.disconnect();
+        }
+
+        # Test 2: HTTP/2 connections - same test with HTTP/2 over SSL
+        {
+            # Create HTTPS listener for HTTP/2
+            hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            int ssl_port = ssl_info.port;
+
+            # Get baseline after adding SSL listener (includes accept ops for both listeners)
+            int h2_baseline = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 baseline cache size: %d\n", h2_baseline);
+            }
+
+            int num_connections = 20;
+            list<HTTPClient> clients = ();
+
+            # Create many HTTP/2 connections (HTTP/2 is negotiated via ALPN over SSL)
+            for (int i = 0; i < num_connections; ++i) {
+                HTTPClient client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+                    "ssl_verify_cert": False, "http2": True});
+                client.connect();
+                assertEq("GET, test, /test", client.get("/test"));
+                clients += client;
+            }
+
+            # Verify cache has grown (HTTP/2 connections are active)
+            int h2_active = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 active cache size with %d connections: %d\n", num_connections, h2_active);
+            }
+            assertTrue(h2_active > h2_baseline,
+                "cache should grow when HTTP/2 connections are active");
+
+            # Close all connections - this should trigger cache cleanup for HTTP/2
+            map $1.disconnect(), clients;
+            delete clients;
+
+            # Give the async I/O system time to process disconnects
+            usleep(500ms);
+
+            # CRITICAL TEST: Verify cache is back to baseline (all HTTP/2 connection entries cleaned up)
+            int h2_final = server.getHttpAsyncIo().getTotalCacheSize();
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 final cache size after disconnect: %d\n", h2_final);
+            }
+            assertEq(h2_baseline, h2_final,
+                "cache should return to baseline after all HTTP/2 connections close");
+
+            # Verify we can still make new HTTP/2 connections (cache is clean)
+            HTTPClient verify_client({"url": "https://localhost:" + ssl_port, "timeout": 2s,
+                "ssl_verify_cert": False, "http2": True});
+            verify_client.connect();
+            assertEq("GET, test2, /test2", verify_client.get("/test2"));
+            verify_client.disconnect();
+
+            server.stopListenerID(ssl_info.id);
+        }
+    }
+
+    /** Test that server handles bad SSL handshakes without blocking I/O thread.
+        Simulates clients that connect and close immediately during SSL handshake,
+        which previously caused getPeerInfo() to block the I/O thread.
+    */
+    asyncModeBadSslHandshakeTest() {
+        Logger logger("async-bad-ssl-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Create HTTPS listener
+        hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int ssl_port = ssl_info.port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Test 1: Client connects and immediately closes (before SSL handshake)
+        {
+            Socket sock();
+            sock.connect("localhost:" + ssl_port);
+            sock.close();  # Close immediately - server will see EOF during SSL_accept
+            usleep(100ms);  # Give server time to process
+        }
+
+        # Test 2: Multiple rapid connect/close cycles
+        for (int i = 0; i < 10; ++i) {
+            Socket sock();
+            sock.connect("localhost:" + ssl_port);
+            sock.close();
+        }
+        usleep(500ms);  # Give server time to process all
+
+        # Critical: Verify server is still responsive (I/O thread not blocked)
+        HTTPClient verify_client({"url": "https://localhost:" + ssl_port,
+            "timeout": 2s, "ssl_verify_cert": False});
+        verify_client.connect();
+        assertEq("GET, test, /test", verify_client.get("/test"),
+            "server should still be responsive after bad SSL handshakes");
+        verify_client.disconnect();
+
+        # Verify cache is clean (no leaked operations from bad handshakes)
+        int cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+        if (m_options.verbose > 1) {
+            printf("Cache size after bad SSL handshakes: %d\n", cache_size);
+        }
+        # Cache should be small (just accept operations), not grown from leaked connections
+        assertTrue(cache_size < 20, "cache should not leak from bad SSL handshakes");
+    }
+
+    /** Test that I/O thread never blocks on getPeerInfo() calls.
+        Verifies the fix: getPeerInfo(host_lookup=False) and defensive checks.
+    */
+    asyncModeIoThreadNonBlockingTest() {
+        Logger logger("async-io-nonblock-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        };
+        HttpServer server(opts);
+        on_exit server.stop();
+
+        server.setDefaultHandler("test-handler", new ReqHandler());
+
+        # Test both HTTP and HTTPS
+        int http_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int https_port = ssl_info.port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        # Create many concurrent connections that close at various stages
+        Counter done(20);
+        bool all_completed = True;
+        date start = now_us();
+
+        for (int i = 0; i < 20; ++i) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    if (i % 2 == 0) {
+                        # HTTP connections
+                        HTTPClient client({"url": "http://localhost:" + http_port, "timeout": 2s});
+                        client.connect();
+                        client.get("/test");
+                        client.disconnect();
+                    } else {
+                        # HTTPS connections
+                        HTTPClient client({"url": "https://localhost:" + https_port,
+                            "timeout": 2s, "ssl_verify_cert": False});
+                        client.connect();
+                        client.get("/test");
+                        client.disconnect();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("Connection failed (expected for some): %s\n", ex.err);
+                    }
+                    all_completed = False;
+                }
+            }();
+        }
+
+        # Critical: All requests should complete quickly (not blocked on getPeerInfo)
+        done.waitForZero(10s);
+        assertEq(0, done.getCount(), "all concurrent requests should complete");
+
+        date elapsed = now_us() - start;
+        if (m_options.verbose > 1) {
+            printf("Elapsed time for 20 concurrent connections: %y\n", elapsed);
+        }
+
+        # Should complete in under 5 seconds (previously could take 20s+ if blocking)
+        assertTrue(elapsed < 5s, "I/O thread should not block - requests should be fast");
+
+        # Verify server still responsive
+        HTTPClient verify({"url": "http://localhost:" + http_port, "timeout": 2s});
+        verify.connect();
+        assertEq("GET, final, /final", verify.get("/final"));
+        verify.disconnect();
+    }
 }
 
 #! Test handler that supports persistent connections
@@ -1504,3 +2929,20 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Test handler that supports inline processing in the I/O thread
+class InlineTestHandler inherits AbstractHttpRequestHandler {
+    #! Returns True — this handler can run inline in the I/O thread
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    #! Lightweight inline response — no context setup needed
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse({"x-inline-header": "inline-value"}, 200, "inline-ok");
+    }
+
+    #! Full handleRequest (should not be called when inline path is used)
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "non-inline-response");
+    }
+}

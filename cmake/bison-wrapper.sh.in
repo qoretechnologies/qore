@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+
+BISON_REAL="@BISON_REAL_EXECUTABLE@"
+export BISON_REAL
+
+exec "@BISON_WRAPPER_EXECUTABLE@" "$@"

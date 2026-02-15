@@ -34,6 +34,8 @@
 #ifndef _QORE_QORE_THREAD_INTERN_H
 #define _QORE_QORE_THREAD_INTERN_H
 
+class RuntimeConfig;
+
 #include <vector>
 #include <set>
 #include <map>
@@ -217,6 +219,7 @@ protected:
 };
 
 DLLLOCAL QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink);
+DLLLOCAL QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink);
 
 // updates the active exception count
 DLLLOCAL void inc_active_exceptions(int diff);
@@ -650,8 +653,11 @@ private:
     QoreObject* old_obj;
     const qore_class_private* old_class;
     QoreProgram* old_call_program_context;
+    QoreObject* old_rc_obj;
+    const qore_class_private* old_rc_class;
     bool do_ref,
-        do_program_context;
+        do_program_context,
+        do_rc_update;
 
     ExceptionSink* xsink;
 
@@ -665,6 +671,9 @@ class ObjectSubstitutionHelper {
 private:
    QoreObject* old_obj;
    const qore_class_private* old_class;
+   QoreObject* old_rc_obj;
+   const qore_class_private* old_rc_class;
+   bool do_rc_update;
 
 public:
    DLLLOCAL ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c);
@@ -679,6 +688,8 @@ public:
 private:
     QoreObject* old_obj;
     const qore_class_private* old_class;
+    QoreObject* old_rc_obj;
+    const qore_class_private* old_rc_class;
     bool subst;
 };
 
@@ -689,6 +700,8 @@ public:
 
 private:
     const qore_class_private* old_class;
+    const qore_class_private* old_rc_class;
+    bool do_rc_update;
 };
 
 class OptionalClassOnlySubstitutionHelper {
@@ -698,12 +711,13 @@ public:
 
 private:
     const qore_class_private* old_class;
+    const qore_class_private* old_rc_class;
     bool subst;
 };
 
 class OptionalObjectOnlySubstitutionHelper {
 public:
-    DLLLOCAL OptionalObjectOnlySubstitutionHelper() : subst(false) {
+    DLLLOCAL OptionalObjectOnlySubstitutionHelper() : subst(false), do_rc_update(false) {
 #ifdef DEBUG
         old_obj = nullptr;
 #endif
@@ -722,6 +736,8 @@ public:
 private:
     bool subst;
     QoreObject* old_obj;
+    QoreObject* old_rc_obj;
+    bool do_rc_update;
 };
 
 class ThreadSafeLocalVarRuntimeEnvironmentHelper {

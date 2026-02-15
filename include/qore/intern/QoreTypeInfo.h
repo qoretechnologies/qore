@@ -34,6 +34,7 @@
 #define _QORE_QORETYPEINFO_H
 
 #include <map>
+#include "qore/intern/qore_string_private.h"
 #include <vector>
 #include <utility>
 #include <functional>
@@ -71,6 +72,23 @@ class QoreTypeInfo;
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
 static q_type_map_t null_to_nothing = [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); };
+
+static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, bool require_relative,
+        const char* type_name) {
+    if (!xsink) {
+        return;
+    }
+
+    if (n.getType() != NT_DATE) {
+        return;
+    }
+
+    bool is_relative = n.get<const DateTimeNode>()->isRelative();
+    if (is_relative != require_relative) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "expected %s date/time value for type '%s'",
+            require_relative ? "relative" : "absolute", type_name);
+    }
+}
 
 // returns type info for base types
 DLLLOCAL const QoreTypeInfo* getTypeInfoForType(qore_type_t t);
@@ -528,11 +546,6 @@ public:
                         break;
                     }
                 }
-            }
-            // if the type may not match at runtime, then return no match with %strict-types
-            if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                max_result = QTI_NOT_EQUAL;
-                return QTI_NOT_EQUAL;
             }
             max_result = QTI_IDENT;
             may_not_match = true;
@@ -1326,11 +1339,6 @@ protected:
             bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment = false) const {
         //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
         if (typeInfo->return_vec.size() > accept_vec.size()) {
-            // if the type may not match at runtime, then return no match with %strict-types
-            if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                max_result = QTI_NOT_EQUAL;
-                return QTI_NOT_EQUAL;
-            }
             may_not_match = true;
         }
 
@@ -1355,11 +1363,6 @@ protected:
             }
             if (t_no_match) {
                 if (!may_not_match) {
-                    // if the type may not match at runtime, then return no match with %strict-types
-                    if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                        max_result = QTI_NOT_EQUAL;
-                        return QTI_NOT_EQUAL;
-                    }
                     may_not_match = true;
                     if (ok) {
                         return QTI_AMBIGUOUS;
@@ -1787,7 +1790,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1844,7 +1847,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1912,7 +1915,7 @@ protected:
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -1978,7 +1981,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2079,7 +2082,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2188,7 +2191,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2214,7 +2217,7 @@ public:
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2241,7 +2244,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2276,7 +2279,7 @@ protected:
     QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2328,7 +2331,7 @@ protected:
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -2770,6 +2773,94 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+};
+
+class QoreAbsoluteDateTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreAbsoluteDateTypeInfo() : QoreTypeInfo("date<absolute>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, false, "date<absolute>"); }, true},
+        }, q_return_vec_t {{NT_DATE, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return ZeroDate->refSelf();
+    }
+};
+
+class QoreAbsoluteDateOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreAbsoluteDateOrNothingTypeInfo() : QoreTypeInfo("*date<absolute>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, false, "date<absolute>"); }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_DATE}, {NT_NOTHING}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+};
+
+class QoreRelativeDateTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreRelativeDateTypeInfo() : QoreTypeInfo("date<relative>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, true, "date<relative>"); }, true},
+        }, q_return_vec_t {{NT_DATE, true}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return new DateTimeNode(true);
+    }
+};
+
+class QoreRelativeDateOrNothingTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreRelativeDateOrNothingTypeInfo() : QoreTypeInfo("*date<relative>", q_accept_vec_t {
+            {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) { validate_date_variant(n, xsink, true, "date<relative>"); }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_DATE}, {NT_NOTHING}}) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
@@ -4099,12 +4190,20 @@ protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
-        // union types generally cannot be converted to scalars unless all members can
+        // a union can convert to scalar if any of its members can; at runtime, the operation
+        // succeeds when the actual value is a scalar-convertible type (e.g. string in a
+        // union<string, binary, InputStream>)
+        for (const auto& rt : return_vec) {
+            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
+            if (ti && ti != nothingTypeInfo && QoreTypeInfo::canConvertToScalar(ti)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -4192,7 +4291,7 @@ protected:
     QoreString pname;                //!< path name for type
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
-        str.concat(&tname);
+        qore_string_private::get(str)->concat(&tname);
     }
 
     DLLLOCAL virtual bool canConvertToScalarImpl() const {

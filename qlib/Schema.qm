@@ -113,7 +113,7 @@ module Schema {
       - Schema::C_NULL
       - Schema::C_NOT_NULL
     - bug fixes:
-      - fixed @ref Schema::AbstractSchema::combineOptions() "AbstractSchema::combineOptions()" to accept NOTHING as
+      - fixed \c Schema::AbstractSchema::combineOptions() "AbstractSchema::combineOptions()" to accept NOTHING as
         well as a valid option hash
       - fixed a bug with <i>"insert-only reference data"</i> with the verbose option; the upsert strategy was changed
         to \c UpsertSelectFirst which means that insert-only reference data could also be updated
@@ -639,8 +639,6 @@ public namespace Schema {
 
         #! creates the object from the arguments
         /** @param ds the datasource for the schema
-            @param dts an optional data tablespace name for the schema
-            @param its an optional index tablespace name for the schema
             @param opts options for @ref SqlUtil::Database::constructor()
         */
         constructor(Qore::SQL::AbstractDatasource ds, *hash<SchemaOptionInfo> opts) {

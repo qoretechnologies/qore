@@ -740,6 +740,99 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send an HTTP response and then read the next HTTP header in non-blocking mode
+/** This is a fused operation that combines three phases:
+    1. Send the HTTP response (non-blocking write)
+    2. Wait for the next request (idle wait with timeout)
+    3. Read and parse the next HTTP request header
+
+    This eliminates the overhead of separate send, idle connection registration, and header
+    read operations in the HTTP keep-alive path.
+
+    @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
+    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers to include in the response
+    @param body optional message body to send with the response
+    @param idle_timeout idle timeout for waiting for the next request; when the timeout expires, the
+    operation completes with state "timeout"
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached:
+    - If \c getState() returns \c "header-complete": \c getOutput() returns a hash with \c "hdr" (parsed
+      headers) and \c "info" (header info) keys
+    - If \c getState() returns \c "timeout": the idle timeout expired; connection should be closed
+
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_desc,
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) {
+    // Validate status code (must be between 100 and 599)
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    // Build the HTTP response in a buffer
+    QoreString hdr(s->getEncoding());
+
+    // Write HTTP response status line
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.concat("\r\n");
+
+    // Get body data and size
+    const void* body_ptr = nullptr;
+    size_t body_size = 0;
+    if (body) {
+        if (body->getType() == NT_BINARY) {
+            const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+            body_ptr = b->getPtr();
+            body_size = b->size();
+        } else if (body->getType() == NT_STRING) {
+            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            body_ptr = str->c_str();
+            body_size = str->size();
+        } else {
+            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
+                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
+            return QoreValue();
+        }
+    }
+
+    // Add headers
+    qore_socket_private::do_headers(hdr, headers, body_size);
+
+    // Create binary result with header + body
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr.c_str(), hdr.size());
+    if (body_size) {
+        result->append(body_ptr, body_size);
+    }
+
+    // Compute idle deadline in milliseconds from epoch
+    // Note: the 'timeout' parameter type provides values in milliseconds
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    int64 deadline_ms = now_ms + idle_timeout;
+
+    // Create the fused poll operation
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendAndReadHeaderPollOperation(xsink, result.release(), s, deadline_ms), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
 /** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
     connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
@@ -4161,6 +4254,58 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     return rv.release();
 }
 
+//! Starts a poll operation to send an HTTP/2 response with a streaming body from an InputStream
+/** This method reads from the InputStream in chunks and sends HTTP/2 DATA frames
+    without buffering the entire body in memory. This is suitable for large responses.
+
+    The InputStream must have unassignThread() called before passing to this method
+    if it was created in a different thread. The poll operation will call reassignThread()
+    on the event loop thread.
+
+    @param stream_id the HTTP/2 stream ID
+    @param status_code the HTTP status code
+    @param headers response headers (optional)
+    @param body the InputStream to read the response body from
+    @param chunk_size the size of chunks to read from the stream (default: 16384)
+
+    @return an @ref AbstractPollOperation object for the streaming send
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR if no HTTP/2 session is available
+
+    @since %Qore 2.2
+*/
+AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+    // body ref is owned by us from QPP; poll operation takes ownership
+    s->ref();
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2SendStreamingResponsePollOperation(xsink, s, stream_id, status_code,
+            headers, body, chunk_size ? chunk_size : 16384),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign the stream from the current thread so that the worker thread
+    // calling continuePoll() can reassign it to itself
+    body->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-streaming-response"), xsink);
+    }
+    return rv.release();
+}
+
 //! Submits an HTTP/2 PUSH_PROMISE frame for server push
 /** HTTP/2 Server Push allows a server to preemptively send resources to the client
     before the client requests them. This is useful for pushing CSS, JavaScript, or
@@ -4196,6 +4341,76 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
 */
 int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
+}
+
+//! Submits an HTTP/2 response without creating a poll operation
+/** Queues the response in the nghttp2 session. The actual socket write is handled by
+    the active read poll operation's sendPendingData() calls. This is designed for
+    HTTP/2 multiplexing where the read operation stays on the I/O thread and responses
+    are submitted from handler threads.
+
+    @param stream_id the HTTP/2 stream ID from the request
+    @param status_code the HTTP status code to send
+    @param headers hash of response headers
+    @param body the response body (optional)
+
+    @throw HTTP2-ERROR no HTTP/2 session active or submission failed
+
+    @since %Qore 2.2
+*/
+nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    SimpleRefHolder<BinaryNode> body_holder;
+
+    if (body) {
+        qore_type_t body_type = body->getType();
+        if (body_type == NT_BINARY) {
+            const BinaryNode* bin = reinterpret_cast<const BinaryNode*>(body);
+            body_ptr = bin->getPtr();
+            body_len = bin->size();
+        } else if (body_type == NT_STRING) {
+            const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+            body_ptr = str->c_str();
+            body_len = str->size();
+        }
+    }
+
+    s->submitHttp2Response(stream_id, status_code, headers, body_ptr, body_len, xsink);
+}
+
+//! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+/** Must be called before the HTTP/2 session is created (before the socket starts
+    processing HTTP/2 traffic). When \c enable is @ref False, the server will not
+    advertise RFC 8441 extended CONNECT protocol support, so clients will not attempt
+    WebSocket over HTTP/2 CONNECT.
+
+    @param enable @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+
+    @since %Qore 2.3
+*/
+nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
+    s->setHttp2ConnectProtocolEnabled(enable);
+}
+
+//! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
+/** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
+    the stream open for bidirectional data transfer (WebSocket over HTTP/2). The actual
+    socket write is handled by the active read poll operation's sendPendingData() calls.
+
+    This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
+    thread and CONNECT responses are submitted from handler threads.
+
+    @param stream_id the HTTP/2 stream ID from the CONNECT request
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param headers hash of response headers
+
+    @throw HTTP2-ERROR no HTTP/2 session active or submission failed
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+    s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
 }
 
 //! Returns a poll operation for sending an HTTP/2 CONNECT response (RFC 8441)
@@ -4287,4 +4502,139 @@ nothing Socket::setHttp2ActiveStream(int stream_id) {
 */
 int Socket::getHttp2ActiveStream() {
     return s->getHttp2ActiveStream();
+}
+
+//! Sends HTTP/2 stream data without blocking
+/** @param stream_id the HTTP/2 stream ID to send on
+    @param data the binary data to send
+    @param end_stream set to @ref True "True" to end the stream after sending
+    @param timeout_ms ignored (non-blocking)
+
+    @since %Qore 2.3
+*/
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
+        timeout timeout_ms = 0) {
+    s->sendHttp2StreamData((int32_t)stream_id, data, (bool)end_stream, timeout_ms, xsink);
+    return QoreValue();
+}
+
+//! Reads available HTTP/2 stream data without blocking
+/** @param stream_id the HTTP/2 stream ID to read from
+    @param max_bytes maximum bytes to return; 0 means all available
+
+    @return binary data if available, or NOTHING if no data is buffered
+
+    @since %Qore 2.3
+*/
+*binary Socket::readHttp2StreamData(int stream_id, int max_bytes = 0) {
+    return s->readHttp2StreamData((int32_t)stream_id, (size_t)max_bytes, xsink);
+}
+
+//! Returns a poll operation for HTTP/2 client multiplexed connection handling
+/** This poll operation manages an HTTP/2 client connection with support for multiple
+    concurrent streams (true HTTP/2 multiplexing). Unlike simple request-response patterns,
+    this operation:
+    - Continuously reads HTTP/2 frames from the server
+    - Dispatches completed responses via the session's stream completion callback
+    - Supports submitting new requests while responses are being received
+    - Handles flow control, PING, and GOAWAY frames automatically
+
+    @par Example:
+    @code{.py}
+    # After establishing an HTTP/2 connection
+    AbstractPollOperation op = sock.startPollHttp2ClientMultiplex();
+
+    # The operation continuously reads responses - use callbacks for dispatch
+    while (op.getState() != "closed") {
+        *hash<SocketPollInfo> info = op.continuePoll();
+        if (!info) {
+            break;
+        }
+        Socket::poll((info,), 1s);
+    }
+    @endcode
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for the multiplexed connection
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+    @throw HTTP2-ERROR if HTTP/2 session initialization failed
+
+    @note This operation is designed for use with @ref Http2ClientConnectionManager which handles
+    stream callback registration and request submission.
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ClientMultiplexPollOperation(xsink, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-client-multiplex"), xsink);
+    }
+    return rv.release();
+}
+
+//! Submits an HTTP/2 request on an active multiplexed client connection
+/** @par Example:
+    @code{.py}
+    int stream_id = sock.submitHttp2Request(headers, body);
+    @endcode
+
+    @param headers HTTP/2 pseudo-headers and regular headers (must include :method, :path, :scheme, :authority)
+    @param body optional request body
+
+    @return the stream ID assigned to this request
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
+
+    @note This method requires an active HTTP/2 client session, typically established via
+    @ref startPollHttp2ClientMultiplex()
+
+    @since %Qore 2.3
+*/
+int Socket::submitHttp2Request(hash<auto> headers, *data body) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = reinterpret_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR", "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    return s->submitHttp2Request(headers, body_ptr, body_len, xsink);
+}
+
+//! Cancels a pending HTTP/2 stream
+/** @par Example:
+    @code{.py}
+    sock.cancelHttp2Stream(stream_id);
+    @endcode
+
+    @param stream_id the stream ID to cancel
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
+
+    @since %Qore 2.3
+*/
+nothing Socket::cancelHttp2Stream(int stream_id) {
+    s->cancelHttp2Stream(stream_id, xsink);
 }

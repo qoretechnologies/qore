@@ -146,6 +146,7 @@ protected:
 
     using AbstractQoreNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         str.sprintf("new object for class '%s'", qc->getName());
@@ -288,6 +289,7 @@ protected:
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* a, qore_type_t n_type)
             : AbstractFunctionCallNode(loc, n_type, a), c_str(name), finalized(false) {
@@ -504,6 +506,7 @@ public:
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
@@ -528,6 +531,7 @@ public:
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     using AbstractFunctionCallNode::deref;
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -550,6 +554,7 @@ protected:
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 

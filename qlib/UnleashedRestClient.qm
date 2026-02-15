@@ -1,0 +1,459 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file UnleashedRestClient.qm Qore user module for calling Unleashed REST API services
+
+/*  UnleashedRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module UnleashedRestClient {
+    version = "1.0";
+    desc = "User module for calling Unleashed Software REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("unleashed", UnleashedRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage UnleashedRestClient Module
+
+    @tableofcontents
+
+    @section unleashedrestclientintro UnleashedRestClient Introduction
+
+    The %UnleashedRestClient module provides an API for calling Unleashed Software's REST API services.
+
+    To use this module, use \c "%requires UnleashedRestClient" in your code.
+
+    All the public symbols in the module are defined in the UnleashedRestClient namespace.
+
+    The main classes are:
+    - @ref UnleashedRestClient::UnleashedRestClient "UnleashedRestClient":
+      this class provides the REST client API for communication with the Unleashed API;
+      it handles authentication via HMAC-SHA256 signatures
+    - @ref UnleashedRestClient::UnleashedRestConnection "UnleashedRestConnection":
+      provides a connection object to Unleashed services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires UnleashedRestClient
+
+UnleashedRestClient unleashed({
+    "api_id": ENV.UNLEASHED_API_ID,
+    "apikey": ENV.UNLEASHED_API_KEY,
+});
+hash<auto> result = unleashed.get("/Customers?pageSize=10");
+printf("Customers: %N\n", result.body);
+    @endcode
+
+    @section unleashedrestclientrelnotes Release Notes
+
+    @subsection unleashedrestclientv1_0 UnleashedRestClient v1.0
+    - the initial version of the %UnleashedRestClient module
+*/
+
+#! the UnleashedRestClient namespace contains all the objects in the UnleashedRestClient module
+public namespace UnleashedRestClient {
+
+#! This class provides the REST client API for communication with Unleashed servers
+/** Unleashed uses a REST API with HMAC-SHA256 signature authentication:
+    - api-auth-id: Your API ID
+    - api-auth-signature: HMAC-SHA256 signature of the query string (base64 encoded)
+
+    @par API Information:
+    - Base URL: https://api.unleashedsoftware.com
+    - JSON format supported
+    - Pagination: pageSize query parameter
+
+    @par Authentication:
+    Both API ID and API Key are required for all API requests.
+    The signature is computed as:
+    1. Take the query string (without the leading ? and without the endpoint path)
+    2. Compute HMAC-SHA256 using the API Key as the secret
+    3. Base64 encode the result
+
+    These credentials can be obtained from the Unleashed application:
+    1. Log in to Unleashed as the Account Owner
+    2. Go to Settings > Integration > API Access
+    3. Copy your API ID and API Key
+*/
+public class UnleashedRestClient inherits RestClient::RestClient {
+    public {
+        #! Unleashed API base URL
+        const DefaultApiUrl = "https://api.unleashedsoftware.com";
+
+        #! API ID header name
+        const ApiIdHeader = "api-auth-id";
+
+        #! Signature header name
+        const SignatureHeader = "api-auth-signature";
+
+        #! Client type header name
+        const ClientTypeHeader = "client-type";
+
+        #! Default client type value
+        const DefaultClientType = "qorus/unleashed";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default Unleashed ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default Unleashed ping path (Customers endpoint with pageSize=1 - lightweight)
+        const DefaultPingPath = "Customers";
+
+        #! Default Unleashed ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultApiUrl,
+        };
+    }
+
+    private {
+        #! API ID for authentication
+        string api_id;
+
+        #! API Key for HMAC signature computation
+        string apikey;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+UnleashedRestClient unleashed({
+    "api_id": "your_api_id",
+    "apikey": "your_api_key",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c api_id: (required) the Unleashed API ID
+        - \c apikey: (required) the Unleashed API Key for HMAC signature computation
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw UNLEASHED-AUTH-ERROR missing required authentication credentials
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(UnleashedRestClient::getOptions(opts), do_not_connect) {
+        # Store credentials for signature computation
+        api_id = opts.api_id;
+        apikey = opts.apikey;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref UnleashedRestClient::UnleashedRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate required credentials
+        if (!opts.api_id) {
+            throw "UNLEASHED-AUTH-ERROR", "missing required 'api_id' option";
+        }
+        if (!opts.apikey) {
+            throw "UNLEASHED-AUTH-ERROR", "missing required 'apikey' option";
+        }
+
+        # Remove credentials from options (they're stored separately for signature computation)
+        remove rv.api_id;
+        remove rv.apikey;
+
+        return rv;
+    }
+
+    #! Computes the HMAC-SHA256 signature for the given query string
+    /** @param query_string the query string to sign (without the leading ?)
+        @return the base64-encoded HMAC-SHA256 signature
+    */
+    private string computeSignature(string query_string) {
+        binary key = apikey.toBinary();
+        binary data = query_string.toBinary();
+        binary hmac = Qore::hmac("sha256", data, key);
+        return hmac.toBase64();
+    }
+
+    #! Extracts the query string from a path
+    /** @param path the full path including optional query string
+        @return the query string without the leading ?, or empty string if no query string
+    */
+    private string extractQueryString(string path) {
+        int qmark = index(path, "?");
+        if (qmark >= 0) {
+            return substr(path, qmark + 1);
+        }
+        return "";
+    }
+
+    #! Signs requests with HMAC-SHA256 authentication
+    /** This override ensures all requests (including ping) are authenticated with HMAC signatures.
+        The signRequest method is called by prepareToSend() which is used by both normal requests
+        and the RestConnectionPingHelper for ping operations.
+
+        @param method the HTTP method
+        @param path the URI path (may include query string)
+        @param body the request body (not used for signing in Unleashed API)
+        @param hdr reference to headers hash - auth headers will be added
+    */
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        string query_string = extractQueryString(path ?? "");
+        string signature = computeSignature(query_string);
+
+        hdr += {
+            ApiIdHeader: api_id,
+            SignatureHeader: signature,
+            ClientTypeHeader: DefaultClientType,
+        };
+    }
+}
+
+#! Class for Unleashed REST connections; returns @ref UnleashedRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c api_id: (required) the Unleashed API ID
+    - \c apikey: (required) the Unleashed API Key for HMAC signature computation
+
+    @see @ref UnleashedRestClient::UnleashedRestClient::constructor() for more information on the above options
+*/
+public class UnleashedRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Unleashed API URL
+        const DefaultConnectionUrl = "unleashed://api.unleashedsoftware.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Unleashed REST Connection",
+            "short_desc": "A connection to the Unleashed Software API",
+            "desc": "A connection to the Unleashed Software REST API for inventory management.\n\n"
+                "Unleashed is a powerful cloud-based inventory management platform that enables you to manage "
+                "products, sales orders, purchase orders, customers, suppliers, and stock levels.\n\n"
+                "**Features:**\n"
+                "- Manage customers and customer contacts\n"
+                "- Create and track sales orders\n"
+                "- Process credit notes\n"
+                "- Manage products and inventory\n"
+                "- Track stock levels across warehouses\n\n"
+                "**Authentication:**\n"
+                "Unleashed uses HMAC-SHA256 signature authentication. Both API ID and API Key are required.",
+            "cls": Class::forName("UnleashedRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "unleashed": True,
+            },
+            "base_scheme_map": {
+                "https": "unleashed",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnleashedRestClient::DefaultData,
+                },
+                "api_id": <ConnectionOptionInfo>{
+                    "display_name": "API ID",
+                    "short_desc": "Unleashed API ID for authentication",
+                    "type": "string",
+                    "desc": "Your Unleashed API ID used for API authentication.\n\n"
+                        "**To obtain your API ID:**\n"
+                        "1. Log in to Unleashed as the Account Owner\n"
+                        "2. Go to Settings > Integration > API Access\n"
+                        "3. Copy your **API ID**\n\n"
+                        "**Note:** Only the account owner can access API credentials.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Unleashed API Key for HMAC signature",
+                    "type": "string",
+                    "desc": "Your Unleashed API Key used for computing HMAC-SHA256 signatures.\n\n"
+                        "**To obtain your API Key:**\n"
+                        "1. Log in to Unleashed as the Account Owner\n"
+                        "2. Go to Settings > Integration > API Access\n"
+                        "3. Copy your **API Key**\n\n"
+                        "**Note:** Only the account owner can access API credentials.\n"
+                        "Keep your API Key secure - it provides full API access to your account.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnleashedRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnleashedRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnleashedRestClient::DefaultPingPath,
+                },
+            },
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Get Your API Credentials",
+                    "intent": "info",
+                    "content": "To connect to Unleashed Software, you need your API ID and API Key:\n\n"
+                        "1. Log in to Unleashed as the **Account Owner**\n"
+                        "2. Go to **Settings > Integration > API Access**\n"
+                        "3. Copy your **API ID** and **API Key**\n\n"
+                        "**Important:**\n"
+                        "- Only the account owner can access API credentials\n"
+                        "- Keep your credentials secure - they provide full API access\n"
+                        "- Never share your API Key publicly",
+                },
+            ),
+            "required_options": "api_id,apikey",
+        };
+    }
+
+    #! creates the UnleashedRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the UnleashedRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(UnleashedRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref UnleashedRestConnection::constructor()
+    /** Constructs the connection URL (Unleashed has only one API endpoint)
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": DefaultConnectionUrl,
+        };
+    }
+
+    #! returns \c "unleashed"
+    string getType() {
+        return "unleashed";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "UnleashedSoftware";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the UnleashedDataProvider and creates the data provider
+        # object dynamically
+        load_module("UnleashedDataProvider");
+        return create_object("UnleashedDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref UnleashedRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref UnleashedRestClient object
+    */
+    private UnleashedRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnleashedRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

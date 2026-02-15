@@ -87,15 +87,21 @@ class QJar {
 %ifndef NO_JNI
     private processModule() {
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-        on_error printf("%N\n", get_module_hash().DataProvider);
-        p.loadModule(opts."module");
+        on_error stderr.printf("%Y\n", get_module_hash().DataProvider);
         p.loadModule("jni");
         p.loadModule("reflection");
+        string module_name = opts."module";
+        string module_load = module_name;
+        if (module_name =~ /(\.|\/|\\)/) {
+            module_name = basename(module_name);
+            module_name =~ s/\.qm$//;
+        }
+        p.loadModule(module_load);
         p.parse("binary sub byte_code(Class cls) { return get_byte_code('::' + cls.getPathName()); }", "api");
 
-        if (opts."module" =~ /(\.|\/|\\)/) {
-            opts."module" = basename(opts."module");
-            opts."module" =~ s/\.qm$//;
+        opts."module" = module_name;
+        if (module_name =~ /^QorusFakeApi/) {
+            p.issueModuleCmd("jni", "mark-module-injected " + module_name);
         }
 
         # scan for classes from the module
@@ -112,6 +118,15 @@ class QJar {
 
             # do not try to generate bytecode for Java classes
             if (cls.getPathName() =~ /^Jni::/) {
+                continue;
+            }
+
+            # skip static-only classes (no constructor) — JNI byte code
+            # requires an instantiable class
+            if (!cls.hasConstructorMethod()) {
+                if (opts.verbose) {
+                    stderr.printf("skipping static-only class %y (no constructor)\n", cls.getPathName());
+                }
                 continue;
             }
 

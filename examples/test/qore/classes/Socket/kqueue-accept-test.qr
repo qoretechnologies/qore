@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Test to reproduce kqueue issue with listener socket accept on macOS
+#
+
+
+const LISTEN_PORT = 19876;
+const NUM_ITERATIONS = 10;
+
+sub main() {
+    # Create a listener socket
+    Socket listener();
+    listener.bind(sprintf("localhost:%d", LISTEN_PORT));
+    listener.listen();
+    printf("Listener bound to port %d\n", LISTEN_PORT);
+
+    int success_count = 0;
+    int slow_count = 0;
+
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        printf("\n=== Iteration %d ===\n", i + 1);
+
+        # Start a client connection in a background thread
+        Counter client_started(1);
+        Counter client_done(1);
+        background sub() {
+            client_started.dec();
+            try {
+                Socket client();
+                # Small delay to ensure listener poll is waiting
+                usleep(10000);  # 10ms
+                printf("Client connecting...\n");
+                client.connect(sprintf("localhost:%d", LISTEN_PORT), 5s);
+                printf("Client connected\n");
+                # Keep connection open briefly
+                usleep(100000);  # 100ms
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("Client error: %s: %s\n", ex.err, ex.desc);
+            }
+            client_done.dec();
+        }();
+
+        client_started.waitForZero();
+
+        # Poll for connection with a timeout
+        date start = now_us();
+        list<hash<SocketPollInfo>> poll_list = (
+            <SocketPollInfo>{"socket": listener, "events": SOCK_POLLIN},
+        );
+
+        printf("Polling listener socket...\n");
+        *list<hash<SocketPollInfo>> ready = Socket::poll(poll_list, 5s);
+
+        date elapsed = now_us() - start;
+        printf("Poll returned after %y, ready=%d items\n", elapsed, ready ? ready.size() : 0);
+
+        if (!ready) {
+            printf("ERROR: poll() timed out - no connection detected\n");
+            client_done.waitForZero();
+            continue;
+        }
+
+        # Check if listener is ready
+        bool listener_ready = False;
+        for (int j = 0; j < ready.size(); ++j) {
+            if (ready[j].socket === listener) {
+                listener_ready = True;
+                printf("Listener socket is ready (events=%d)\n", ready[j].events);
+                break;
+            }
+        }
+
+        if (!listener_ready) {
+            printf("Listener not in ready list\n");
+            client_done.waitForZero();
+            continue;
+        }
+
+        # Try to accept
+        printf("Attempting accept...\n");
+        try {
+            *Socket client_sock = listener.accept(0ms);  # 0 timeout = non-blocking
+            if (client_sock) {
+                printf("Accept succeeded!\n");
+                client_sock.close();
+                ++success_count;
+
+                # Check elapsed time
+                if (elapsed > 1s) {
+                    printf("WARNING: Poll took %y (> 1s) - possible kqueue issue\n", elapsed);
+                    ++slow_count;
+                }
+            } else {
+                printf("Accept returned nothing (EAGAIN)\n");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            printf("Accept error: %s: %s\n", ex.err, ex.desc);
+        }
+
+        client_done.waitForZero();
+    }
+
+    printf("\n=== Summary ===\n");
+    printf("Success: %d/%d\n", success_count, NUM_ITERATIONS);
+    printf("Slow polls (>1s): %d\n", slow_count);
+
+    if (slow_count > 0) {
+        printf("FAIL: Detected %d slow polls - kqueue issue present\n", slow_count);
+        exit(1);
+    } else if (success_count < NUM_ITERATIONS) {
+        printf("FAIL: Only %d/%d successful accepts\n", success_count, NUM_ITERATIONS);
+        exit(1);
+    } else {
+        printf("PASS: All connections detected promptly\n");
+    }
+}
+
+main();

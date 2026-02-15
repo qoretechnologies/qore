@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Mapper.qm data mapping module
 
-/*  Mapper.qm Copyright 2014 - 2025 Qore Technologies, s.r.o.
+/*  Mapper.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,13 +26,11 @@
 %requires qore >= 1.19.2
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not use "$" for vars
-%new-style
+%modern
 
 # common definitions
 %requires(reexport) MapperUtil
@@ -41,7 +39,7 @@
 %requires(reexport) DataProvider
 
 module Mapper {
-    version = "1.6.2";
+    version = "1.7";
     desc = "user module providing basic data mapping infrastructure";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -177,7 +175,7 @@ list: (2 elements)
       also the data itself.  The use of this option enables the use of the
       @ref Mapper::Mapper::getOutputIterator() "Mapper::getOutputIterator()" API.  This option is mutually exclusive
       with the \a input option.  If an \c "output_provider" is also provided, the
-      @ref Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
+      \c Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
       in a single call
     - \c "input_provider_search": the search criteria for the input provider; see the \a where_cond option of
       @ref DataProvider::AbstractDataProvider::searchRecords() "AbstractDataProvider::searchRecords()" for more
@@ -223,7 +221,7 @@ list: (2 elements)
         request is made for each output record.
       .
       This option is mutually exclusive with the \a output option.  If an \c "input_provider" is also provided, the
-      @ref Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
+      \c Mapper::Mapper::runAutonomous() "Mapper::runAutonomous()" method can be used to map from input to output
       in a single call
     - \c "output_provider_bulk": if this option is used with a record-based output provider, then bulk operations are
       used with the output provider, and the @ref Mapper::Mapper::flushOutput() "Mapper::flushOutput()" method must be
@@ -304,11 +302,14 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     @ref Mapper::Mapper "Mapper".
 
     Note that the @ref Mapper::Mapper::setRuntime() "Mapper::setRuntime()" and
-    @ref Mapper::Mapper::replaceRuntime() "Mapper::replaceRuntime()" methods are deprecated - please use
+    \c Mapper::Mapper::replaceRuntime() "Mapper::replaceRuntime()" methods are deprecated - please use
     @ref Mapper::Mapper "Mapper" construction options to set runtime values instead. The methods are deprecated since
     runtime options duplicate existing functionality and are confusing and error-prone to use.
 
     @section mapperrelnotes Release Notes
+
+    @subsection mapperv1_7 Mapper v1.7
+    - added @ref Mapper::Mapper::getMapHash() "Mapper::getMapHash()" to return the original field mapping hash
 
     @subsection mapperv1_6_2 Mapper v1.6.2
     - fixed a bug handling default values for output fields with required (not-null) types
@@ -317,7 +318,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/4845">issue 4845</a>)
 
     @subsection mapperv1_6_1 Mapper v1.6.1
-    - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
+    - fixed \c Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
       (<a href="https://github.com/qoretechnologies/qore/issues/4629">issue 4629</a>)
 
     @subsection mapperv1_6 Mapper v1.6
@@ -354,13 +355,13 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/3931">issue 3931</a>)
 
     @subsection mapperv1_5_2 Mapper v1.5.2
-    - added the @ref Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
+    - added the \c Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
     - added the following \c output_create_ignore_duplicates option
     - fixed a bug where mapper output data was not logged in case of an error in an output provider
       (<a href="https://github.com/qoretechnologies/qore/issues/3909">issue 3909</a>)
     - added support for mapper context in mapper field key handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/3893">issue 3893</a>)
-    - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to return @ref NOTHING with no input
+    - fixed \c Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to return @ref NOTHING with no input
       (<a href="https://github.com/qoretechnologies/qore/issues/3872">issue 3872</a>)
     - implemented support for nested mappers including the \c submappers option
       (<a href="https://github.com/qoretechnologies/qore/issues/3414">issue 3414</a>)
@@ -370,7 +371,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       (<a href="https://github.com/qoretechnologies/qore/issues/3837">issue 3837</a>)
     - added support for the \c use_input_record output field mapping key
       (<a href="https://github.com/qoretechnologies/qore/issues/3823">issue 3823</a>)
-    - added the @ref Mapper::Mapper::setNullableOutput() "Mapper::setNullableOutput()" method and the
+    - added the \c Mapper::Mapper::setNullableOutput() "Mapper::setNullableOutput()" method and the
       \c output_nullable option
       (<a href="https://github.com/qoretechnologies/qore/issues/3788">issue 3788</a>)
 
@@ -415,7 +416,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     - added runtime option handling (@ref mapper_runtime_handling):
       - \c "runtime" mapper option
       - @ref Mapper::Mapper::getRuntime()
-      - @ref Mapper::Mapper::replaceRuntime()
+      - \c Mapper::Mapper::replaceRuntime()
       - @ref Mapper::Mapper::setRuntime()
     - implemented \c "index" field tag for current row index
     - improved the @ref Mapper::Mapper::mapAll() method by adding support for hashes of lists to better support input from bulk DML (@ref Qore::SQL::SQLStatement::fetchColumns() "SQLStatement::fetchColumns()")
@@ -642,7 +643,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         #! an optional output data logging callback; must accept a hash giving the output data hash
         *code<nothing(hash<auto>)> output_log;
 
-        #! an optional callback for retrieving a nested mapper; sig: <tt>sub (string name, *hash<auto> opts) {}</tt>
+        #! an optional callback for retrieving a nested mapper; sig: <tt>sub (string name, *hash&lt;auto&gt; opts) {}</tt>
         *code<Mapper(string, *hash<auto>)> submapper_get;
 
         #! an optional callback for substituting templated values
@@ -1808,7 +1809,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use @ref constructor() "Mapper construction options" to set
+        @deprecated use \c constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already
@@ -1836,7 +1837,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use @ref constructor() "Mapper construction options" to set
+        @deprecated use \c constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already
@@ -1864,7 +1865,7 @@ Mapper mapv(DataMap);
 
         @since %Mapper 1.1
 
-        @deprecated use @ref constructor() "Mapper construction options" to set
+        @deprecated use \c constructor() "Mapper construction options" to set
                     the runtime options.
 
         @throw RUNTIME-OPTION-CHANGED the option has changed during while already
@@ -2409,6 +2410,7 @@ Mapper mapv(DataMap);
         are in that order
 
         @param rec the record to translate
+        @param do_log_output if @ref True, output logging is performed
 
         @return a hash of field values in the target format based on the input data and processed according to the
         logic in the map hash
@@ -2943,6 +2945,15 @@ Mapper mapv(DataMap);
     */
     resetCount() {
         count = 0;
+    }
+
+    #! returns the original field mapping hash
+    /** @return a hash where each key is an output field name and the value is the mapping specification
+
+        @since %Mapper 1.7
+    */
+    hash<auto> getMapHash() {
+        return mapc;
     }
 
     #! performs type handling

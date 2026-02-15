@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/*  EmpathicBuildingDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  EmpathicBuildingDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,6 +62,7 @@ module EmpathicBuildingDataProvider {
             "logo": EmpathicBuildingLogo,
             "logo_file_name": "empathicbuilding-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Iot,),
         });
 
         # register all supported actions
@@ -149,7 +150,7 @@ module EmpathicBuildingDataProvider {
     </div>
     @endhtmlonly
 
-    The %EmpathicBuildingDataProvider module provides a @ref dataproviderintro "data provider" API for Haltian
+    The %EmpathicBuildingDataProvider module provides a \c dataproviderintro "data provider" API for Haltian
     Empathic Building servers.
 
     This data provider provides EmpathicBuilding API access to:
@@ -186,8 +187,5 @@ module EmpathicBuildingDataProvider {
 
 #! Contains all public definitions in the EmpathicBuildingDataProvider module
 public namespace EmpathicBuildingDataProvider {
-}
-
-namespace Priv {
-const EmpathicBuildingLogo = File::readTextFile(get_script_dir() + "/Haltian-EmpathicBuilding.svg");
+public const EmpathicBuildingLogo = File::readTextFile(get_script_dir() + "/Haltian-EmpathicBuilding.svg");
 }

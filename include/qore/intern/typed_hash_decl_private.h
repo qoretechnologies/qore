@@ -147,6 +147,12 @@ public:
     }
 
     DLLLOCAL bool deref() {
+        if (!thd) {
+            if (refs.ROdereference()) {
+                delete this;
+            }
+            return true;
+        }
         if (refs.ROdereference()) {
             assert(thd->priv == this);
             delete thd;
@@ -295,6 +301,12 @@ public:
         parentHashDecl = parent;
     }
 
+    //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)
+    //! Uses the stored name to avoid dereferencing potentially dangling parentHashDecl pointer
+    DLLLOCAL const char* getParentHashDeclName() const {
+        return parentHashDeclName.empty() ? nullptr : parentHashDeclName.c_str();
+    }
+
     //! Returns true if this hashdecl is a descendant of the given hashdecl
     DLLLOCAL bool isDescendantOf(const typed_hash_decl_private& ancestor) const {
         const typed_hash_decl_private* current = this;
@@ -332,6 +344,8 @@ protected:
 
     // parent hashdecl (resolved after parseInit)
     const TypedHashDecl* parentHashDecl = nullptr;
+    // parent hashdecl name (stored during copy to avoid dangling pointer dereference)
+    std::string parentHashDeclName;
     // parse-time parent scope (to be resolved during parseInit)
     NamedScope* parse_parent = nullptr;
 

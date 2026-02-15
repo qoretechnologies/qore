@@ -60,7 +60,7 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
     }
 
     #! Increments the row pointer when retrieving rows from a select statement
-    /** Implements pagination support via @odata.nextLink
+    /** Implements pagination support via \c \@odata.nextLink
         @return @ref True if there is a row to retrieve, @ref False if not
     */
     private bool nextImpl() {

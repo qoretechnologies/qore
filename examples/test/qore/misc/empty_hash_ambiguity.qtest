@@ -3,6 +3,7 @@
 
 %modern
 %no-child-restrictions
+%disable-warning invalid-operation
 
 %requires ../../../../qlib/QUnit.qm
 

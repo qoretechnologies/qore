@@ -47,6 +47,7 @@
 #include <cstring>
 #include <libgen.h>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <sys/stat.h>
@@ -66,6 +67,7 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -D, --define=arg       define a preprocessor macro (can be used multiple times)\n"
     " -h, --help             this help text\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
+    " -m, --metadata=arg     JSON metadata output file name\n"
     " -o, --output=arg       cpp output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
@@ -76,6 +78,7 @@ static const option pgm_opts[] = {
     {"dox-output", required_argument, nullptr, 'd'},
     {"help", no_argument, nullptr, 'h'},
     {"javadoc", required_argument, nullptr, 'j'},
+    {"metadata", required_argument, nullptr, 'm'},
     {"output", required_argument, nullptr, 'o'},
     {"table", required_argument, nullptr, 't'},
     {"unit", required_argument, nullptr, 'u'},
@@ -95,6 +98,7 @@ static struct qpp_opts {
     std::string output_fn;
     std::string dox_fn;
     std::string javadoc_fn;
+    std::string metadata_fn;
     std::string unit_test_fn;
     std::string table_fn;
     int verbose;
@@ -142,6 +146,9 @@ static strmap_t dmap;
 
 // map of negative functional domains to parse restriction codes
 static strmap_t dnmap;
+
+// enum name to base type map
+static strmap_t enum_base_type_map;
 
 // set of possible code flags
 static strset_t fset;
@@ -224,6 +231,30 @@ static bool idchar(const char c) {
 
 static bool idnschar(const char c) {
     return isalnum(c) || c == '_' || c == ':';
+}
+
+static std::string json_escape_string(const std::string& s) {
+    std::string result;
+    result.reserve(s.size() + 16);
+    for (char c : s) {
+        switch (c) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    result += buf;
+                } else {
+                    result += c;
+                }
+                break;
+        }
+    }
+    return result;
 }
 
 static int my_vsprintf(std::string& buf, const char* fmt, va_list args) {
@@ -846,8 +877,15 @@ static int get_string_list(strlist_t& l, const std::string& str, char separator 
                 element += ',';
                 while (true) {
                     if (++sep == str.size()) {
-                        error("unbalanced angle brackets in '%s'\n", element.c_str());
-                        return -1;
+                        // Reached end of string - check if brackets are balanced
+                        if (ac) {
+                            error("unbalanced angle brackets in '%s'\n", element.c_str());
+                            return -1;
+                        }
+                        // Brackets are balanced, this is the last element
+                        // The element includes the comma and everything after it as part of the type
+                        l.push_back(element);
+                        return 0;
                     }
                     char c = str[sep];
                     element += c;
@@ -859,7 +897,7 @@ static int get_string_list(strlist_t& l, const std::string& str, char separator 
                             return -1;
                         }
                         --ac;
-                    } else if (c == ',') {
+                    } else if (c == ',' && ac == 0) {
                         element.pop_back();
                         break;
                     }
@@ -1076,7 +1114,31 @@ int parse_properties(const char* fileName, unsigned lineNumber, std::string& pro
 
 int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t& flags, paramlist_t& params,
         attr_t& attr, std::string& sc, size_t p, const std::string& dn, bool abstract = false) {
-    size_t i = sc.find(')', p);
+    // Find the closing ')' that matches the opening '(' at position p-1
+    // Must handle nested parens and angle brackets in complex types like code<int(string, int)>
+    size_t i = std::string::npos;
+    int paren_depth = 1;  // We're already inside the opening paren
+    int angle_depth = 0;
+    for (size_t j = p; j < sc.size(); ++j) {
+        char c = sc[j];
+        if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>') {
+            --angle_depth;
+            if (angle_depth < 0) {
+                error("%s:%d: unmatched '>' in parameter list for %s()\n", fileName, lineNumber, dn.c_str());
+                return -1;
+            }
+        } else if (c == '(' && angle_depth == 0) {
+            ++paren_depth;
+        } else if (c == ')' && angle_depth == 0) {
+            --paren_depth;
+            if (paren_depth == 0) {
+                i = j;
+                break;
+            }
+        }
+    }
     if (i == std::string::npos) {
         error("%s:%d: premature EOL reading parameters for %s()\n", fileName, lineNumber, dn.c_str());
         return -1;
@@ -1119,7 +1181,11 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
         trim(pstr);
         if (!pstr.empty()) {
             strlist_t pl;
-            get_string_list(pl, pstr);
+            if (get_string_list(pl, pstr, ',', true)) {
+                error("%s:%d: %s(): error parsing parameter list '%s'\n", fileName, lineNumber, dn.c_str(),
+                    pstr.c_str());
+                return -1;
+            }
 
             for (unsigned xi = 0; xi < pl.size(); ++xi) {
                 trim(pl[xi]);
@@ -1137,7 +1203,32 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
                     pl[xi].erase(0, 7);
                 }
 
-                i = pl[xi].find(' ');
+                // Find space between type and parameter name, respecting nested brackets/parens
+                // Types like code<int(hash<string, int>)> have spaces inside them
+                i = std::string::npos;
+                int angle_depth = 0;
+                int paren_depth = 0;
+                for (size_t j = 0; j < pl[xi].size(); ++j) {
+                    char c = pl[xi][j];
+                    if (c == '<') {
+                        ++angle_depth;
+                    } else if (c == '>') {
+                        --angle_depth;
+                        if (angle_depth < 0) {
+                            angle_depth = 0;
+                        }
+                    } else if (c == '(') {
+                        ++paren_depth;
+                    } else if (c == ')') {
+                        --paren_depth;
+                        if (paren_depth < 0) {
+                            paren_depth = 0;
+                        }
+                    } else if (c == ' ' && angle_depth == 0 && paren_depth == 0) {
+                        i = j;
+                        break;
+                    }
+                }
                 if (i == std::string::npos) {
                     error("%s:%d: %s(): cannot find type for parameter '%s'\n", fileName, lineNumber, dn.c_str(),
                         pl[xi].c_str());
@@ -1365,13 +1456,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 }
             }
         } else if (!qt.compare(on ? 1 : 0, 5, "list<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like list<hash<string, int>>
             std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex list type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -1387,13 +1473,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             }
             log(LL_DEBUG, "registering complex list return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 9, "softlist<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like softlist<hash<string, int>>
             std::string subtype = qt.substr((on ? 10 : 9), qt.size() - (on ? 11 : 10));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex softlist type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -1410,13 +1491,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             }
             log(LL_DEBUG, "registering complex softlist return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 10, "reference<")) {
-            // extract subtype name
+            // extract subtype name - supports nested complex types like reference<hash<string, int>>
             std::string subtype = qt.substr((on ? 11 : 10), qt.size() - (on ? 12 : 11));
-
-            if (subtype.find(',') != std::string::npos) {
-                log(LL_CRITICAL, "unsupported complex reference type found: '%s'\n", qt.c_str());
-                assert(false);
-            }
 
             std::string subtype_qt;
             get_qore_type(subtype, subtype_qt);
@@ -1427,6 +1503,18 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             else
                 qc = "qore_get_complex_reference_type(" + subtype_qt + ")";
             log(LL_DEBUG, "registering complex reference return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 5, "date<")) {
+            // extract subtype name
+            std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
+            if (subtype == "absolute") {
+                qc = on ? "dateAbsoluteOrNothingTypeInfo" : "dateAbsoluteTypeInfo";
+            } else if (subtype == "relative") {
+                qc = on ? "dateRelativeOrNothingTypeInfo" : "dateRelativeTypeInfo";
+            } else {
+                log(LL_CRITICAL, "unsupported date subtype '%s' in '%s'\n", subtype.c_str(), qt.c_str());
+                assert(false);
+            }
+            log(LL_DEBUG, "registering date subtype return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 6, "union<")) {
             // extract subtypes: union<type1, type2, ...>
             std::string subtypes_str = qt.substr((on ? 7 : 6), qt.size() - (on ? 8 : 7));
@@ -1439,17 +1527,14 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 assert(false);
             }
 
-            // Generate type_vec_t initialization
-            std::string type_vec = "type_vec_t{";
+            // Generate type_vec_t initialization - build element by element for GCC 15
+            std::string type_vec = "[&]() { type_vec_t v; ";
             for (size_t j = 0; j < subtypes.size(); ++j) {
                 std::string subtype_qt;
                 get_qore_type(subtypes[j], subtype_qt);
-                if (j > 0) {
-                    type_vec += ", ";
-                }
-                type_vec += subtype_qt;
+                type_vec += "v.push_back(" + subtype_qt + "); ";
             }
-            type_vec += "}";
+            type_vec += "return v; }()";
 
             if (on) {
                 qc = "qore_get_union_or_nothing_type(" + type_vec + ")";
@@ -1506,21 +1591,18 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 get_qore_type(ret_type, ret_type_qt);
             }
 
-            // Parse param types
-            std::string params_vec = "type_vec_t{";
+            // Parse param types - build element by element for GCC 15
+            std::string params_vec = "[&]() { type_vec_t v; ";
             if (!params_str.empty()) {
                 std::vector<std::string> param_types;
                 parseSubtypes(params_str, param_types);
                 for (size_t j = 0; j < param_types.size(); ++j) {
                     std::string param_qt;
                     get_qore_type(param_types[j], param_qt);
-                    if (j > 0) {
-                        params_vec += ", ";
-                    }
-                    params_vec += param_qt;
+                    params_vec += "v.push_back(" + param_qt + "); ";
                 }
             }
-            params_vec += "}";
+            params_vec += "return v; }()";
 
             if (on) {
                 qc = "qore_get_complex_code_or_nothing_type(" + ret_type_qt + ", " + params_vec +
@@ -2369,6 +2451,26 @@ public:
         fprintf(fp, "    const %s = %s;\n", name.c_str(), qv.c_str());
         return 0;
     }
+
+    void serializeMetadataConstantJson(FILE* fp, const std::string& ns_path, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns_path.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns_path).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+        if (!value.empty()) {
+            std::string qv;
+            if (!get_dox_value(value, qv)) {
+                fprintf(fp, ",\"value\":\"%s\"", json_escape_string(qv).c_str());
+            }
+        }
+        fputc('}', fp);
+    }
 };
 
 class TextGroupElement {
@@ -2577,6 +2679,52 @@ protected:
                 continue;
             }
 
+            if (ptype == "enum" || ptype == "*enum") {
+                size_t lt = p.type.find('<');
+                size_t gt = p.type.rfind('>');
+                std::string ename;
+                if (lt != std::string::npos && gt != std::string::npos && gt > lt) {
+                    ename = p.type.substr(lt + 1, gt - lt - 1);
+                    trim(ename);
+                    if (!ename.compare(0, 2, "::")) {
+                        ename.erase(0, 2);
+                    }
+                }
+                strmap_t::iterator ei = enum_base_type_map.find(ename);
+                if (ei == enum_base_type_map.end()) {
+                    size_t nspos = ename.rfind(':');
+                    if (nspos != std::string::npos) {
+                        std::string short_name = ename.substr(nspos + 1);
+                        ei = enum_base_type_map.find(short_name);
+                    }
+                }
+
+                if (ei != enum_base_type_map.end()) {
+                    const std::string& base = ei->second;
+                    if (base == "int") {
+                        fprintf(fp, "    int64 %s = HARD_QORE_VALUE_INT(args, %d);\n", p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "string") {
+                        fprintf(fp, "    const QoreStringNode* %s = HARD_QORE_VALUE_STRING(args, %d);\n",
+                            p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "float") {
+                        fprintf(fp, "    double %s = HARD_QORE_VALUE_FLOAT(args, %d);\n", p.name.c_str(), i);
+                        continue;
+                    }
+                    if (base == "number") {
+                        fprintf(fp, "    const QoreNumberNode* %s = HARD_QORE_VALUE_NUMBER(args, %d);\n",
+                            p.name.c_str(), i);
+                        continue;
+                    }
+                }
+
+                fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
+                continue;
+            }
+
             if (ptype == "any" || ptype == "data" || ptype == "auto") {
                 fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
                 continue;
@@ -2649,47 +2797,42 @@ protected:
     }
 
     // Generate vector-based arguments for abstract methods to avoid varargs ABI issues
+    // Build vectors element by element to avoid GCC 15 initializer_list issues
     int serializeBindingArgsVectors(FILE* fp) const {
         size_t size = params.size();
         if (size && params[size - 1].type == "...")
             --size;
 
-        // Generate type_vec_t
-        fputs(", type_vec_t{", fp);
+        // Generate type_vec_t - build element by element
+        fputs(", [&]() { type_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
             std::string str;
             if (get_qore_type(params[i].type, str))
                 return -1;
-            fputs(str.c_str(), fp);
+            fprintf(fp, "v.push_back(%s); ", str.c_str());
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
-        // Generate arg_vec_t
-        fputs(", arg_vec_t{", fp);
+        // Generate arg_vec_t - build element by element
+        fputs(", [&]() { arg_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
             if (params[i].val.empty())
-                fputs("QoreValue()", fp);
+                fputs("v.push_back(QoreValue()); ", fp);
             else {
                 std::string vs;
                 if (get_qore_value(params[i].val, vs, nullptr, nullptr, true))
                     return -1;
-                fputs(vs.c_str(), fp);
+                fprintf(fp, "v.push_back(%s); ", vs.c_str());
             }
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
-        // Generate name_vec_t
-        fputs(", name_vec_t{", fp);
+        // Generate name_vec_t - build element by element
+        fputs(", [&]() { name_vec_t v; ", fp);
         for (unsigned i = 0; i < size; ++i) {
-            if (i > 0)
-                fputs(", ", fp);
-            fprintf(fp, "\"%s\"", params[i].name.c_str());
+            fprintf(fp, "v.push_back(\"%s\"); ", params[i].name.c_str());
         }
-        fputs("}", fp);
+        fputs("return v; }()", fp);
 
         return 0;
     }
@@ -2707,6 +2850,86 @@ protected:
             fputs("private ", fp);
         if (attr & QCA_PRIVATE_INTERNAL)
             fputs("private:internal ", fp);
+    }
+
+    void serializeMetadataParamsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < params.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            const Param& p = params[i];
+            std::string ptype = p.type;
+            if (!ptype.empty() && ptype[0] == '!') {
+                ptype = ptype.substr(1);
+            }
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\"",
+                json_escape_string(p.name).c_str(),
+                json_escape_string(ptype).c_str());
+            if (!p.val.empty()) {
+                std::string qv;
+                if (!get_dox_value(p.val, qv)) {
+                    fprintf(fp, ",\"default_value\":\"%s\"", json_escape_string(qv).c_str());
+                }
+            }
+            fputc('}', fp);
+        }
+        fputc(']', fp);
+    }
+
+    void serializeMetadataFlagsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < flags.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            fprintf(fp, "\"%s\"", json_escape_string(flags[i]).c_str());
+        }
+        fputc(']', fp);
+    }
+
+    void serializeMetadataDomainsJson(FILE* fp) const {
+        fputc('[', fp);
+        for (unsigned i = 0; i < dom.size(); ++i) {
+            if (i) {
+                fputc(',', fp);
+            }
+            fprintf(fp, "\"%s\"", json_escape_string(dom[i]).c_str());
+        }
+        fputc(']', fp);
+    }
+
+    std::string buildMetadataSignature(const char* prefix = nullptr) const {
+        std::string sig = (return_type.empty() ? "nothing" : return_type) + " ";
+        if (prefix) {
+            sig += prefix;
+            sig += "::";
+        }
+        sig += name;
+        sig += "(";
+        for (unsigned i = 0; i < params.size(); ++i) {
+            if (i) {
+                sig += ", ";
+            }
+            std::string ptype = params[i].type;
+            if (!ptype.empty() && ptype[0] == '!') {
+                ptype = ptype.substr(1);
+            }
+            sig += ptype;
+            if (params[i].type != "...") {
+                sig += " ";
+                sig += params[i].name;
+                if (!params[i].val.empty()) {
+                    std::string qv;
+                    if (!get_dox_value(params[i].val, qv)) {
+                        sig += " = ";
+                        sig += qv;
+                    }
+                }
+            }
+        }
+        sig += ")";
+        return sig;
     }
 
     const char* getReturnType() const {
@@ -2738,7 +2961,7 @@ protected:
     }
 
     const char* getFunctionType() const {
-        return "q_func_n_t";
+        return "q_func_t";
     }
 
     int appendMangledParamCodes() {
@@ -2753,12 +2976,12 @@ protected:
                 if (p != std::string::npos)
                     cn.append((*i).type, p + 2, -1);
                 else {
-                    size_t j = (*i).type.find_first_of("<>*");
+                    size_t j = (*i).type.find_first_of("<>*(),: ");
                     if (j != std::string::npos) {
                         std::string ptype = (*i).type;
                         while (j != std::string::npos) {
                             ptype.replace(j, 1, "_");
-                            j = ptype.find_first_of("<>*");
+                            j = ptype.find_first_of("<>*(),: ");
                         }
                         cn = ptype;
                     }
@@ -2899,7 +3122,8 @@ public:
 
         serializeQorePrototypeComment(fp);
 
-        fprintf(fp, "static %s f_%s(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {\n", getReturnType(), vname.c_str());
+        fprintf(fp, "static %s f_%s(const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            getReturnType(), vname.c_str());
         serializeArgs(fp);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
@@ -2961,6 +3185,30 @@ public:
         fputs(");\n\n", fp);
 
         return 0;
+    }
+
+    void serializeMetadataFunctionJson(FILE* fp, const std::string& ns_path, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns_path.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns_path).c_str());
+        }
+        std::string sig = buildMetadataSignature();
+        fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
+        fprintf(fp, ",\"return_type\":\"%s\"",
+            json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        fputs(",\"params\":", fp);
+        serializeMetadataParamsJson(fp);
+        fputs(",\"flags\":", fp);
+        serializeMetadataFlagsJson(fp);
+        fputs(",\"domains\":", fp);
+        serializeMetadataDomainsJson(fp);
+        fputc('}', fp);
     }
 };
 
@@ -3217,9 +3465,14 @@ public:
                     return;
                 }
                 if (!line.compare(0, 3, "/**")) {
-                    if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
-                        valid = false;
-                        return;
+                    // Check if the block comment is complete on this line
+                    // Start search at position 3 (after /**) for efficiency
+                    if (line.find("*/", 3) == std::string::npos) {
+                        // Multi-line block comment - need to read more
+                        if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
+                            valid = false;
+                            return;
+                        }
                     }
                     cdoc += line;
                     line.clear();
@@ -3441,6 +3694,18 @@ public:
     bool hasConstants() const {
         return !cmap.empty();
     }
+
+    void serializeMetadataFunctionsJson(FILE* fp, bool& first) const {
+        for (auto& i : fmap) {
+            i.second->serializeMetadataFunctionJson(fp, ns, first);
+        }
+    }
+
+    void serializeMetadataConstantsJson(FILE* fp, bool& first) const {
+        for (auto& i : cmap) {
+            i.second->serializeMetadataConstantJson(fp, ns, first);
+        }
+    }
 };
 
 typedef std::vector<Group*> grouplist_t;
@@ -3575,6 +3840,18 @@ public:
         return 0;
     }
 
+    void serializeMetadataFunctionsJson(FILE* fp, bool& first) const {
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            grouplist[i]->serializeMetadataFunctionsJson(fp, first);
+        }
+    }
+
+    void serializeMetadataConstantsJson(FILE* fp, bool& first) const {
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            grouplist[i]->serializeMetadataConstantsJson(fp, first);
+        }
+    }
+
     void clear() {
         for (unsigned i = 0; i < grouplist.size(); ++i)
             delete grouplist[i];
@@ -3676,9 +3953,9 @@ public:
         while (whitespace(*p1))
             ++p1;
 
-        // Check for inheritance: hashdecl Child : Parent { ... }
-        if (*p1 == ':') {
-            ++p1;
+        // Check for inheritance: hashdecl Child inherits Parent { ... }
+        if (!strncmp(p1, "inherits", 8) && (whitespace(p1[8]) || !p1[8])) {
+            p1 += 8;
             while (whitespace(*p1))
                 ++p1;
 
@@ -3733,9 +4010,14 @@ public:
                 }
                 size_t t = line.find("/**", 3);
                 if (t != std::string::npos) {
-                    if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
-                        valid = false;
-                        return;
+                    // Check if the block comment is complete on this line
+                    // Search for */ starting after the /** (position t + 3)
+                    if (line.find("*/", t + 3) == std::string::npos) {
+                        // Multi-line block comment - need to read more
+                        if (get_dox_comment(fileName, lineNumber, line, fp, true)) {
+                            valid = false;
+                            return;
+                        }
                     }
                     trim_end(line);
                     cdoc += "\n";
@@ -3862,6 +4144,39 @@ public:
         return valid;
     }
 
+    void serializeMetadataJson(FILE* fp, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        if (!parent_name.empty()) {
+            fprintf(fp, ",\"parent_name\":\"%s\"", json_escape_string(parent_name).c_str());
+        }
+        fputs(",\"members\":[", fp);
+        bool first_member = true;
+        for (auto& i : hdmap) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"description\":\"%s\"",
+                json_escape_string(i.first).c_str(),
+                json_escape_string(i.second.type).c_str(),
+                json_escape_string(i.second.comment).c_str());
+            if (!i.second.value.empty()) {
+                fprintf(fp, ",\"default_value\":\"%s\"", json_escape_string(i.second.value).c_str());
+            }
+            fputc('}', fp);
+        }
+        fputs("]}", fp);
+    }
+
 protected:
     std::string comment;
     std::string name;
@@ -3958,9 +4273,14 @@ struct EnumMemberInfo {
     EnumMemberInfo(std::string&& c, std::string&& v, std::string&& cv)
         : comment(std::move(c)), value(std::move(v)), computed_value(std::move(cv)) {}
 
-    int serializeCpp(FILE* fp, const char* n) const {
+    int serializeCpp(FILE* fp, const char* n, const std::string& baseType) const {
         // Use computed_value which handles auto-increment
-        fprintf(fp, "    ed->addMember(\"%s\", %s);\n", n, computed_value.c_str());
+        // For string enums, wrap the value in QoreStringNode to avoid implicit bool conversion
+        if (baseType == "string") {
+            fprintf(fp, "    ed->addMember(\"%s\", new QoreStringNode(%s));\n", n, computed_value.c_str());
+        } else {
+            fprintf(fp, "    ed->addMember(\"%s\", %s);\n", n, computed_value.c_str());
+        }
         return 0;
     }
 
@@ -4049,6 +4369,14 @@ public:
             return;
         }
 
+        {
+            std::string key = name;
+            enum_base_type_map[key] = baseType;
+            if (!ns.empty()) {
+                enum_base_type_map[ns + "::" + name] = baseType;
+            }
+        }
+
         if (parseMembers(fp, fileName, lineNumber)) {
             valid = false;
         }
@@ -4080,7 +4408,7 @@ public:
                 name.c_str(), ns_path.c_str(), base_type_info.c_str());
 
         for (auto& m : members) {
-            m.second.serializeCpp(fp, m.first.c_str());
+            m.second.serializeCpp(fp, m.first.c_str(), baseType);
         }
 
         fprintf(fp, "    ns.addSystemEnum(ed);\n    return ed;\n}\n\n");
@@ -4127,6 +4455,37 @@ public:
 
     operator bool() const {
         return valid;
+    }
+
+    void serializeMetadataJson(FILE* fp, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        fprintf(fp, ",\"base_type\":\"%s\"", json_escape_string(baseType).c_str());
+        fputs(",\"values\":[", fp);
+        bool first_val = true;
+        for (auto& m : members) {
+            if (!first_val) {
+                fputc(',', fp);
+            }
+            first_val = false;
+            fprintf(fp, "{\"name\":\"%s\"", json_escape_string(m.first).c_str());
+            if (!m.second.computed_value.empty()) {
+                fprintf(fp, ",\"value\":\"%s\"", json_escape_string(m.second.computed_value).c_str());
+            }
+            if (!m.second.comment.empty()) {
+                fprintf(fp, ",\"description\":\"%s\"", json_escape_string(m.second.comment).c_str());
+            }
+            fputc('}', fp);
+        }
+        fputs("]}", fp);
     }
 
 protected:
@@ -4281,7 +4640,9 @@ protected:
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
         serializeQoreConstructorPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_%s(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) {\n", cname, vname.c_str());
+        fprintf(fp,
+            "static void %s_%s(QoreObject* self, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, vname.c_str());
         serializeArgs(fp, cname, false);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
@@ -4290,7 +4651,9 @@ protected:
 
     void serializeCppDestructor(FILE* fp, const char* cname, const char* arg) const {
         serializeQoreDestructorCopyPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_destructor(QoreObject* self, %s, ExceptionSink* xsink) {\n", cname, arg);
+        fprintf(fp,
+            "static void %s_destructor(QoreObject* self, %s, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, arg);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
         fputs("\n}\n\n", fp);
@@ -4298,7 +4661,9 @@ protected:
 
     void serializeCppCopy(FILE* fp, const char* cname, const char* arg) const {
         serializeQoreDestructorCopyPrototypeComment(fp, cname);
-        fprintf(fp, "static void %s_copy(QoreObject* self, QoreObject* old, %s, ExceptionSink* xsink) {\n", cname, arg);
+        fprintf(fp,
+            "static void %s_copy(QoreObject* self, QoreObject* old, %s, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {\n",
+            cname, arg);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
         output_file(fp, code);
         fputs("\n}\n\n", fp);
@@ -4360,7 +4725,7 @@ protected:
     }
 
     const char* getMethodType() const {
-        return "q_method_n_t";
+        return "q_method_t";
     }
 
     std::string getJavaAttrs() const {
@@ -4465,6 +4830,37 @@ public:
         serializeQorePrototypeComment(fp, cname, 8, "#");
     }
 
+    void serializeMetadataMethodJson(FILE* fp, const std::string& class_name, bool& first) const {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        std::string sig = buildMetadataSignature(class_name.c_str());
+        fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
+        fprintf(fp, ",\"return_type\":\"%s\"",
+            json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        fputs(",\"params\":", fp);
+        serializeMetadataParamsJson(fp);
+
+        const char* access_str = "public";
+        if (attr & QCA_PRIVATE) {
+            access_str = "private";
+        } else if (attr & QCA_PRIVATE_INTERNAL) {
+            access_str = "private:internal";
+        }
+        fprintf(fp, ",\"access\":\"%s\"", access_str);
+        fprintf(fp, ",\"is_static\":%s", (attr & QCA_STATIC) ? "true" : "false");
+        fprintf(fp, ",\"is_abstract\":%s", (attr & QCA_ABSTRACT) ? "true" : "false");
+        fputs(",\"flags\":", fp);
+        serializeMetadataFlagsJson(fp);
+        fputs(",\"domains\":", fp);
+        serializeMetadataDomainsJson(fp);
+        fputc('}', fp);
+    }
+
     void serializeNormalJavadocMethod(FILE* fp, const char* cname) const {
         if (name == "constructor") {
             serializeJavadocConstructor(fp, cname);
@@ -4523,7 +4919,7 @@ public:
 
         serializeQorePrototypeComment(fp, cname);
 
-        fprintf(fp, "static %s %s_%s(QoreObject* self, %s, const QoreListNode* args, q_rt_flags_t rtflags, " \
+        fprintf(fp, "static %s %s_%s(QoreObject* self, %s, const QoreListNode* args, RuntimeConfig& runtime_cfg, " \
             "ExceptionSink* xsink) {\n", getReturnType(), cname, vname.c_str(), arg);
 
         serializeArgs(fp, cname);
@@ -4617,7 +5013,7 @@ public:
 
         serializeQorePrototypeComment(fp, cname);
 
-        fprintf(fp, "static %s static_%s_%s(const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink) " \
+        fprintf(fp, "static %s static_%s_%s(const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) " \
             "{\n", getReturnType(), cname, vname.c_str());
         serializeArgs(fp, cname);
         fprintf(fp, "# %d \"%s\"\n", line, fileName.c_str());
@@ -5246,6 +5642,98 @@ public:
         outputNamespaceEnd(fp);
         return 0;
     }
+
+    void serializeMetadataJson(FILE* fp, bool& first) {
+        if (!first) {
+            fputc(',', fp);
+        }
+        first = false;
+
+        fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
+        if (!ns.empty()) {
+            fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
+        }
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+
+        // parents
+        if (!vparents.empty()) {
+            fputs(",\"parents\":[", fp);
+            for (unsigned i = 0; i < vparents.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(vparents[i]).c_str());
+            }
+            fputc(']', fp);
+        }
+
+        fprintf(fp, ",\"is_final\":%s", is_final ? "true" : "false");
+
+        // class-level domains
+        if (!dom.empty()) {
+            fputs(",\"domains\":[", fp);
+            for (unsigned i = 0; i < dom.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(dom[i]).c_str());
+            }
+            fputc(']', fp);
+        }
+
+        // instance methods
+        fputs(",\"instance_methods\":[", fp);
+        bool first_method = true;
+        for (auto& i : normal_mmap) {
+            i.second->serializeMetadataMethodJson(fp, name, first_method);
+        }
+        fputs("]", fp);
+
+        // static methods
+        fputs(",\"static_methods\":[", fp);
+        first_method = true;
+        for (auto& i : static_mmap) {
+            i.second->serializeMetadataMethodJson(fp, name, first_method);
+        }
+        fputs("]", fp);
+
+        // members
+        fputs(",\"members\":[", fp);
+        bool first_member = true;
+        for (auto& m : public_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"public\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        for (auto& m : private_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"private\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        for (auto& m : internal_members) {
+            if (!first_member) {
+                fputc(',', fp);
+            }
+            first_member = false;
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"access\":\"private:internal\",\"is_static\":%s}",
+                json_escape_string(m.name).c_str(),
+                json_escape_string(m.type).c_str(),
+                m.is_static ? "true" : "false");
+        }
+        fputs("]", fp);
+
+        fputc('}', fp);
+    }
 };
 
 typedef std::map<std::string, ClassElement*> cemap_t;
@@ -5774,6 +6262,70 @@ public:
         return 0;
     }
 
+    int serializeMetadata() {
+        if (opts.metadata_fn.empty()) {
+            return 0;
+        }
+        std::unique_ptr<FILE, int(*)(FILE*)> fp(
+            fopen(opts.metadata_fn.c_str(), "w"), fclose);
+        if (!fp) {
+            error("%s: %s\n", opts.metadata_fn.c_str(), strerror(errno));
+            return -1;
+        }
+        log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
+
+        fprintf(fp.get(), "{\"schema_version\":\"1.0\",\"source_file\":\"%s\"",
+            json_escape_string(fileName).c_str());
+
+        // classes
+        fputs(",\"classes\":[", fp.get());
+        bool first = true;
+        for (auto* elem : source) {
+            auto* ce = dynamic_cast<ClassElement*>(elem);
+            if (ce) {
+                ce->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // hashdecls
+        fputs(",\"hashdecls\":[", fp.get());
+        first = true;
+        for (auto* elem : source) {
+            auto* hd = dynamic_cast<HashDecl*>(elem);
+            if (hd) {
+                hd->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // enums
+        fputs(",\"enums\":[", fp.get());
+        first = true;
+        for (auto* elem : source) {
+            auto* en = dynamic_cast<Enum*>(elem);
+            if (en) {
+                en->serializeMetadataJson(fp.get(), first);
+            }
+        }
+        fputs("]", fp.get());
+
+        // functions
+        fputs(",\"functions\":[", fp.get());
+        first = true;
+        groups.serializeMetadataFunctionsJson(fp.get(), first);
+        fputs("]", fp.get());
+
+        // constants
+        fputs(",\"constants\":[", fp.get());
+        first = true;
+        groups.serializeMetadataConstantsJson(fp.get(), first);
+        fputs("]", fp.get());
+
+        fputs("}\n", fp.get());
+        return 0;
+    }
+
     operator bool() const {
         return valid;
     }
@@ -6027,7 +6579,7 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -6046,6 +6598,10 @@ void process_command_line(int& argc, char**& argv) {
 
             case 'j':
                 opts.javadoc_fn = optarg;
+                break;
+
+            case 'm':
+                opts.metadata_fn = optarg;
                 break;
 
             case 'o':
@@ -6112,6 +6668,10 @@ int main(int argc, char* argv[]) {
 
         // create javadoc output file
         code.serializeJavadoc();
+
+        // create metadata output file
+        if (code.serializeMetadata())
+            return -1;
     }
 
     if (!opts.table_fn.empty())

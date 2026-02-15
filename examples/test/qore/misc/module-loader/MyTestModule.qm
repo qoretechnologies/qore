@@ -9,24 +9,23 @@ module MyTestModule {
     license = "MIT";
 }
 
-public namespace MyTest;
+public namespace MyTest {
+    public class IndirectFileLineIterator inherits Qore::FileLineIterator {
+        constructor(string file_name, *string h, *string g) : FileLineIterator(file_name, h, g) {
+        }
+    }
 
-public class MyTest::IndirectFileLineIterator inherits Qore::FileLineIterator {
-    constructor(string file_name, *string h, *string g) : FileLineIterator(file_name, h, g) {
+    public class TagClass {
+        private {
+            string tag;
+        }
+
+        constructor(string t) {
+            tag = t;
+        }
+
+        string getTag() {
+            return tag;
+        }
     }
 }
-
-public class MyTest::TagClass {
-    private {
-        string tag;
-    }
-
-    constructor(string t) {
-        tag = t;
-    }
-
-    string getTag() {
-        return tag;
-    }
-}
-

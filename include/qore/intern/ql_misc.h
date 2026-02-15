@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,5 +36,16 @@
 DLLLOCAL void init_misc_functions(QoreNamespace& ns);
 
 DLLLOCAL TypedHashDecl* init_hashdecl_UrlInfo(QoreNamespace& ns);
+
+//! Returns the approximate byte size of a QoreValue
+/** Recursively calculates the byte size of strings, binary data, hashes, and lists.
+    Throws an exception for objects.
+
+    @param v the value to calculate the size for
+    @param xsink exception sink for error handling
+
+    @return the approximate byte size of the value
+*/
+DLLEXPORT int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink);
 
 #endif

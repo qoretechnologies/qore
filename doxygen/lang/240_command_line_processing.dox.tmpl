@@ -16,7 +16,9 @@
     |!Long Param|!Short|!Description
     |<tt>--define=</tt><em>arg</em>|\c -D|Creates and optionally sets a value for a parse define
     |<tt>--load=</tt><em>arg</em>|\c -l|Loads a module immediately. The argument can be a module/feature name or an absolute path to the module
-    |<tt>--no-global-vars</tt>|\c -G|Disallows the use of global variables. Equivalent to parse option @ref Qore::PO_NO_GLOBAL_VARS and the @ref no-global-vars "%no-global-vars" directive
+    |<tt>--enable-debug</tt>|\c -G|Enables @@assert and @@debug statements; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG and the @ref enable-debug "%enable-debug" directive
+    |<tt>--modern</tt>|\c -M|Enables the recommended parse option set; equivalent to parse option @ref Qore::PO_MODERN and the @ref modern "%modern" directive
+    |<tt>--no-global-vars</tt>|n/a|Disallows the use of global variables. Equivalent to parse option @ref Qore::PO_NO_GLOBAL_VARS and the @ref no-global-vars "%no-global-vars" directive
     |<tt>--no-subroutine-defs</tt>|\c -S|Disallows subroutine (function) definitions. Equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the @ref no-subroutine-defs "%no-subroutine-defs" directive
     |<tt>--no-thread-control</tt>|\c -R|Disallows any thread control operations (@ref background "background operator" and @ref thread_exit "thread_exit statement", for example). Equivalent to parse option @ref Qore::PO_NO_THREAD_CONTROL and the @ref no-thread-control "%no-thread-control" directive
     |<tt>--no-thread-classes</tt>|n/a|Disallows access to thread classes (for example, the @ref Qore::Thread::Mutex "Mutex" class, @ref Qore::Thread::Gate "Gate" class, @ref Qore::Thread::Queue "Queue" class, etc). Equivalent to parse option @ref Qore::PO_NO_THREAD_CLASSES and the @ref no-thread-classes "%no-thread-classes" directive
@@ -35,8 +37,9 @@
     |<tt>--require-our</tt>|\c -O|Requires global variables to be declared with our prior to use (similar to perl's <tt>use strict vars</tt> pragma). Equivalent to parse option @ref Qore::PO_REQUIRE_OUR and the @ref require-our "%require-our" directive
     |<tt>--lock-options</tt>|\c -K|Prohibits further changes to parse options (equivalent to the @ref lock-options "%lock-options" directive)
     |<tt>--lock-warnings</tt>|\c -A|Prohibits further changes to the warning mask. Equivalent to parse option @ref Qore::PO_LOCK_WARNINGS and the @ref lock-warnings "%lock-warnings" directive
-    |<tt>--enable-all-warnings</tt>|\c -W|Enables all @ref warnings "warnings". Equivalent to the @ref enable-all-warnings "%enable-all-warnings" directive
+    |<tt>--enable-all-warnings</tt>|\c -W|Enables all non-strict @ref warnings "warnings". Equivalent to the @ref enable-all-warnings "%enable-all-warnings" directive
     |<tt>--enable-warning=</tt><em>arg</em>|\c -w|Enables the named @ref warnings "warning". Equivalent to the @ref enable-warning "%enable-warning" directive
+    |<tt>--strict-warnings</tt>|n/a|Enables strict warnings (ambiguous overload/call resolution)
     |<tt>--list-warnings</tt>|\c -i|Lists all valid @ref warnings "warnings" in %Qore and exits immediately
 
     <b>Miscellaneous Command-Line Parameters</b>
@@ -77,6 +80,37 @@
     Hello, World!
     qore>
     @endcode
+
+    @subsection repl_linenoise Line Editing and History (linenoise)
+
+    When the \c linenoise module is installed, the REPL provides enhanced line editing capabilities
+    similar to those in other shells like bash. This includes:
+
+    - Arrow key navigation within the current line
+    - Command history navigation with Up/Down arrows
+    - Reverse history search with Ctrl+R
+    - Tab completion for REPL commands
+
+    <b>Keyboard Shortcuts</b> (available when linenoise is installed)
+    |!Shortcut|!Description
+    |Up/Down|Navigate through command history
+    |Left/Right|Move cursor within the current line
+    |Ctrl+A|Move cursor to beginning of line
+    |Ctrl+E|Move cursor to end of line
+    |Ctrl+R|Reverse search through history
+    |Tab|Complete REPL commands (commands starting with \c /)
+    |Ctrl+C|Cancel current input; if at prompt, exit the REPL
+
+    <b>Persistent History</b>
+
+    When linenoise is available, the REPL automatically saves command history to
+    \c ~/.qore-repl-history (or \c %USERPROFILE%\\.qore-repl-history on Windows).
+    History is loaded when the REPL starts and saved when it exits, so your
+    command history persists across sessions.
+
+    @note The linenoise module is optional. If it is not installed, the REPL
+    will still work but without line editing, history navigation, or tab completion.
+    Install the linenoise module for the best interactive experience.
 
     @subsection repl_commands REPL Commands
 
@@ -194,6 +228,7 @@
     - The REPL maintains state between commands, so you can build up complex programs incrementally
     - Use \c /reset to start fresh if you want to clear all definitions
     - Use \c /save to save your work before exiting
+    - Install the \c linenoise module for enhanced line editing and command history
 
-    @see @ref QoreRepl::QoreRepl "QoreRepl" for programmatic REPL access
+    @see \c QoreRepl::QoreRepl for programmatic REPL access
 */

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,7 @@
 #include "qore/intern/ql_compression.h"
 
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -67,8 +68,184 @@ constexpr int SPS_RECEIVING_HEADER = 5;
 constexpr int SPS_RECEIVING_BODY = 6;
 constexpr int SPS_CONNECTING_PROXY_SSL = 7;
 constexpr int SPS_RECEIVED = 8;
+constexpr int SPS_H2_ACTIVE = 9;  // HTTP/2 bidirectional send/receive
+
+//! Poll state for HTTP/2 client operations
+/** Handles bidirectional send/receive for HTTP/2 using Http2Session.
+    This state manages:
+    - Connection preface sending (on first call)
+    - Request submission
+    - Bidirectional data flow (sending pending data + receiving frames)
+    - Response completion detection
+*/
+class Http2ClientPollState : public AbstractPollState {
+public:
+    //! Constructor - creates HTTP/2 session and submits request
+    /** @param xsink Exception sink
+        @param sock Socket private data
+        @param method HTTP method
+        @param path Request path
+        @param headers Request headers
+        @param body Request body (can be nullptr)
+        @param body_len Length of body
+        @param scheme URL scheme ("https" or "http")
+    */
+    DLLLOCAL Http2ClientPollState(ExceptionSink* xsink, qore_socket_private* sock,
+            const char* method, const char* path,
+            const std::vector<std::pair<std::string, std::string>>& headers,
+            const void* body, size_t body_len, const char* scheme = "https")
+            : sock(sock) {
+        // Create HTTP/2 session
+        h2_session = Http2Session::createClient(sock, xsink, scheme);
+        if (*xsink || !h2_session) {
+            return;
+        }
+
+        // Send connection preface
+        if (h2_session->sendConnectionPreface(xsink)) {
+            return;
+        }
+
+        // Submit the request
+        stream_id = h2_session->submitRequest(method, path, headers, body, body_len, xsink);
+        if (*xsink || stream_id < 0) {
+            return;
+        }
+
+        // Try initial non-blocking send of pending data
+        h2_session->sendPendingData(0, xsink);
+    }
+
+    DLLLOCAL virtual ~Http2ClientPollState() = default;
+
+    //! Returns the HTTP/2 session
+    DLLLOCAL Http2Session* getSession() const { return h2_session.get(); }
+
+    //! Takes ownership of the HTTP/2 session
+    DLLLOCAL Http2SessionPtr takeSession() { return std::move(h2_session); }
+
+    //! Returns the stream ID
+    DLLLOCAL int32_t getStreamId() const { return stream_id; }
+
+    //! Returns true if the response is complete
+    DLLLOCAL bool isResponseComplete() const {
+        if (!h2_session) {
+            return false;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        return stream && stream->headers_complete && stream->body_complete;
+    }
+
+    //! Returns response headers if available
+    DLLLOCAL QoreHashNode* getResponseHeaders() const {
+        if (!h2_session) {
+            return nullptr;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        if (!stream || stream->headers.empty()) {
+            return nullptr;
+        }
+        return h2HeadersToQoreHash(stream->headers);
+    }
+
+    //! Returns the HTTP status code
+    DLLLOCAL int getStatusCode() const {
+        if (!h2_session) {
+            return -1;
+        }
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        return stream ? stream->status_code : -1;
+    }
+
+    //! Returns the response body
+    DLLLOCAL BinaryNode* getResponseBody(ExceptionSink* xsink) const {
+        if (!h2_session) {
+            return nullptr;
+        }
+        // Take all available stream data
+        return h2_session->takeStreamData(stream_id, 0, xsink);
+    }
+
+    /** @return:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - SOCK_POLLIN | SOCK_POLLOUT = wait for read or write
+        - 0 = done (response complete)
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override {
+        if (!h2_session) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
+            return -1;
+        }
+
+        // Check if we're done
+        Http2StreamInfo* stream = h2_session->getStream(stream_id);
+        if (stream && stream->headers_complete && stream->body_complete) {
+            return 0;  // Done
+        }
+
+        // Try to send any pending data (e.g., WINDOW_UPDATE frames)
+        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+            int rc = h2_session->sendPendingData(0, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            // If send returned -1, we need to wait for POLLOUT
+            if (rc < 0) {
+                // Determine poll flags
+                int flags = SOCK_POLLOUT;
+                if (h2_session->wantRead()) {
+                    flags |= SOCK_POLLIN;
+                }
+                return flags;
+            }
+        }
+
+        // Try to receive data
+        if (h2_session->wantRead()) {
+            int rv = h2_session->receiveData(0, xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (rv == 1) {
+                // EOF - connection closed by peer
+                stream = h2_session->getStream(stream_id);
+                if (!stream || !(stream->headers_complete && stream->body_complete)) {
+                    xsink->raiseException("HTTP2-ERROR", "connection closed before response was complete");
+                    return -1;
+                }
+                return 0;  // Done
+            }
+        }
+
+        // Check again if we're done after receiving
+        stream = h2_session->getStream(stream_id);
+        if (stream && stream->headers_complete && stream->body_complete) {
+            return 0;  // Done
+        }
+
+        // Determine what we need to poll for
+        int flags = 0;
+        if (h2_session->wantRead()) {
+            flags |= SOCK_POLLIN;
+        }
+        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
+            flags |= SOCK_POLLOUT;
+        }
+
+        // If no flags, default to waiting for input
+        return flags ? flags : SOCK_POLLIN;
+    }
+
+private:
+    qore_socket_private* sock;
+    Http2SessionPtr h2_session;
+    int32_t stream_id = -1;
+};
 
 // states: none [-> connecting [-> connecting-ssl]] -> sending -> receiving-header [-> receiving-body] [-> connecting-proxy-ssl] -> [received | connected]
+// HTTP/2 path: none -> connecting -> connecting-ssl -> h2-active -> received
 /**
     state transitions:
     - none
@@ -156,6 +333,8 @@ private:
                 return "received";
             case SPS_CONNECTED:
                 return "connected";
+            case SPS_H2_ACTIVE:
+                return "h2-active";
             default:
                 assert(false);
         }
@@ -188,6 +367,7 @@ private:
     DLLLOCAL int processResponse(ExceptionSink* xsink);
     DLLLOCAL int redirect(ExceptionSink* xsink);
     DLLLOCAL int processReceivedBody(ExceptionSink* xsink);
+    DLLLOCAL int processH2Response(ExceptionSink* xsink);
     DLLLOCAL int responseDone(ExceptionSink* xsink);
     DLLLOCAL void setFinal(int final_state);
 };
@@ -216,7 +396,7 @@ static const QoreStringNode* get_string_header_node(ExceptionSink* xsink, QoreHa
         n = l->retrieveEntry(i);
         assert(n.getType() == NT_STRING);
         rv->concat(',');
-        rv->concat(n.get<const QoreStringNode>());
+        qore_string_private::get(rv)->concat(n.get<const QoreStringNode>());
     }
     // dereference old list and save reference to return value in header hash
     h.setKeyValue(header, rv, xsink);
@@ -227,6 +407,215 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
         bool allow_multiple = false) {
    const QoreStringNode* str = get_string_header_node(xsink, h, header, allow_multiple);
    return str && !str->empty() ? str->c_str() : nullptr;
+}
+
+static const char* get_http_status_message(int code) {
+    switch (code) {
+        // 1xx: Informational
+        case 100: return "Continue";
+        case 101: return "Switching Protocols";
+        case 102: return "Processing";
+        // 2xx: Success
+        case 200: return "OK";
+        case 201: return "Created";
+        case 202: return "Accepted";
+        case 203: return "Non-Authoritative Information";
+        case 204: return "No Content";
+        case 205: return "Reset Content";
+        case 206: return "Partial Content";
+        case 207: return "Multi-Status";
+        case 208: return "Already Reported";
+        case 226: return "IM Used";
+        // 3xx: Redirection
+        case 300: return "Multiple Choices";
+        case 301: return "Moved Permanently";
+        case 302: return "Found";
+        case 303: return "See Other";
+        case 304: return "Not Modified";
+        case 305: return "Use Proxy";
+        case 307: return "Temporary Redirect";
+        case 308: return "Permanent Redirect";
+        // 4xx: Client Errors
+        case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 402: return "Payment Required";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 406: return "Not Acceptable";
+        case 407: return "Proxy Authentication Required";
+        case 408: return "Request Timeout";
+        case 409: return "Conflict";
+        case 410: return "Gone";
+        case 411: return "Length Required";
+        case 412: return "Precondition Failed";
+        case 413: return "Request Entity Too Large";
+        case 414: return "Request-URI Too Long";
+        case 415: return "Unsupported Media Type";
+        case 416: return "Requested Range Not Satisfiable";
+        case 417: return "Expectation Failed";
+        case 418: return "I'm a teapot";
+        case 420: return "Enhance Your Calm";
+        case 422: return "Unprocessable Entity";
+        case 423: return "Locked";
+        case 424: return "Failed Dependency";
+        case 425: return "Unordered Collection";
+        case 426: return "Upgrade Required";
+        case 428: return "Precondition Required";
+        case 429: return "Too Many Requests";
+        case 431: return "Request Header Fields Too Large";
+        // 5xx: Server Errors
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 502: return "Bad Gateway";
+        case 503: return "Service Unavailable";
+        case 504: return "Gateway Timeout";
+        case 505: return "HTTP Version Not Supported";
+        case 509: return "Bandwidth Limit Exceeded";
+        case 510: return "Not Extended";
+        case 511: return "Network Authentication Required";
+    }
+    return "Unknown";
+}
+
+static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info,
+        int code) {
+    headers.setKeyValue("status_code", code, xsink);
+    const char* status_msg = get_http_status_message(code);
+    headers.setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
+    headers.setKeyValue("http_version", new QoreStringNode("2"), xsink);
+
+    QoreStringNode* response_uri = new QoreStringNode();
+    response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
+    info.setKeyValue("response-uri", response_uri, xsink);
+}
+
+static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info) {
+    const QoreStringNode* ct = get_string_header_node(xsink, headers, "content-type", true);
+    if (*xsink || !ct || ct->empty()) {
+        return;
+    }
+
+    const char* start = ct->c_str();
+    while (*start == ' ') {
+        ++start;
+    }
+    const char* end = start;
+    while (*end && *end != ';' && *end != ',') {
+        ++end;
+    }
+    QoreStringNode* base_ct = new QoreStringNode();
+    if (end > start) {
+        base_ct->concat(start, end - start);
+    }
+    base_ct->trim();
+    if (!base_ct->empty()) {
+        info.setKeyValue("body-content-type", base_ct, xsink);
+    } else {
+        base_ct->deref(xsink);
+    }
+
+    QoreValue orig = headers.getKeyValue("_qore_orig_content_type");
+    if (orig.getType() != NT_STRING) {
+        return;
+    }
+
+    const char* orig_str = orig.get<const QoreStringNode>()->c_str();
+    const char* p = strstr(orig_str, "charset=");
+    if (!p || (p != orig_str && *(p - 1) != ';' && *(p - 1) != ' ')) {
+        return;
+    }
+
+    const char* c = p + 8;
+    char quote = '\0';
+    if (*c == '\'' || *c == '"') {
+        quote = *c;
+        ++c;
+    }
+    QoreString enc;
+    while (*c && *c != ';' && *c != ' ' && *c != quote) {
+        enc.concat(*(c++));
+    }
+    if (!enc.empty()) {
+        info.setKeyValue("charset", new QoreStringNode(enc.c_str()), xsink);
+    }
+}
+
+static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
+        bool& ignore_encoding) {
+    ignore_encoding = false;
+    if (!content_encoding) {
+        return nullptr;
+    }
+
+    const char* start = content_encoding;
+    while (*start == ' ' || *start == '\t') {
+        ++start;
+    }
+    const char* end = start;
+    while (*end && *end != ',' && *end != ';' && *end != ' ') {
+        ++end;
+    }
+    if (end <= start) {
+        return nullptr;
+    }
+
+    QoreString token;
+    token.concat(start, end - start);
+    const char* tok = token.c_str();
+
+    if (!strcasecmp(tok, "identity")) {
+        ignore_encoding = true;
+        return nullptr;
+    }
+
+    if (!strcasecmp(tok, "deflate") || !strcasecmp(tok, "x-deflate")) {
+        return qore_inflate_to_string;
+    }
+    if (!strcasecmp(tok, "gzip") || !strcasecmp(tok, "x-gzip")) {
+        return qore_gunzip_to_string;
+    }
+    if (!strcasecmp(tok, "bzip2") || !strcasecmp(tok, "x-bzip2")) {
+        return qore_bunzip2_to_string;
+    }
+    if (!strcasecmp(tok, "br")) {
+        return qore_unbrotli_to_string;
+    }
+    if (!strcasecmp(tok, "zstd")) {
+        return qore_unzstd_to_string;
+    }
+
+    return nullptr;
+}
+
+static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
+        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
+        ExceptionSink* xsink) {
+    if (!bin || !bin->size()) {
+        return QoreValue();
+    }
+
+    if (content_encoding) {
+        if (encoding_passthru) {
+            return bin->refSelf();
+        }
+        if (!dec) {
+            bool ignore_encoding = false;
+            dec = get_decoder_for_content_encoding(content_encoding, ignore_encoding);
+            if (ignore_encoding) {
+                return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+            }
+            if (!dec) {
+                xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding '%s'",
+                    content_encoding);
+                return QoreValue();
+            }
+        }
+        QoreStringNode* decoded = dec(bin, body_enc, xsink);
+        return decoded;
+    }
+
+    return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
 }
 
 void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
@@ -303,25 +692,20 @@ struct qore_httpclient_priv {
     // NOTE: The h2_session is now stored on the socket, not HTTPClient,
     // so that all layers (Socket, HTTPClient) share the same session
     DLLLOCAL Http2Session* getH2Session() const {
-        return msock ? msock->socket->priv->h2_session : nullptr;
+        return msock ? msock->socket->priv->h2_session.get() : nullptr;
     }
 
-    DLLLOCAL void setH2Session(Http2Session* session) {
+    DLLLOCAL void setH2Session(const Http2SessionPtr& session) {
         if (msock) {
             msock->socket->priv->h2_session = session;
         }
     }
 
     DLLLOCAL void clearH2Session() {
-        // Delete the session - HTTPClient manages the lifecycle even though
-        // it's stored on the socket for shared access
-        if (msock && msock->socket->priv->h2_session) {
-            delete msock->socket->priv->h2_session;
-            msock->socket->priv->h2_session = nullptr;
-        }
-        // Also clear the stream ID
+        // Reset the shared_ptr - will delete session if this is the last reference
         if (msock) {
-            msock->socket->priv->h2_active_stream_id = -1;
+            msock->socket->priv->h2_session.reset();
+            msock->socket->priv->setH2ActiveStreamId(-1);
         }
         h2_stream_id = 0;
         http2_active = false;
@@ -331,7 +715,7 @@ struct qore_httpclient_priv {
     DLLLOCAL void setActiveH2StreamId(int32_t stream_id) {
         h2_stream_id = stream_id;
         if (msock) {
-            msock->socket->priv->h2_active_stream_id = stream_id;
+            msock->socket->priv->setH2ActiveStreamId(stream_id);
         }
     }
 
@@ -581,37 +965,42 @@ struct qore_httpclient_priv {
             ? proxy_connection.ssl
             : connection.ssl;
 
-        // Set up ALPN protocols for HTTP/2 if not already set and http2_mode allows HTTP/2
-        if (connect_ssl && (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)) {
-            // Check global HTTP/2 mode - don't set ALPN if globally disabled
+        // Set up ALPN protocols based on current HTTP/2 mode and global settings
+        // Always re-evaluate to handle mode changes on reused connections
+        if (connect_ssl) {
+            // Check global HTTP/2 mode
             int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
             bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-            if (global_mode != HTTP2_MODE_DISABLED && !lib_disabled) {
-                // Set ALPN protocols if not already configured
-                if (!msock->socket->priv->hasAlpnProtocols()) {
-                    ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-                    if (http2_mode == HTTP2_MODE_REQUIRED) {
-                        // HTTP/2 only
-                        protocols->push(new QoreStringNode("h2"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
-                    } else {
-                        // Auto mode: prefer h2, fall back to http/1.1
-                        protocols->push(new QoreStringNode("h2"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
-                        protocols->push(new QoreStringNode("http/1.1"), xsink);
-                        if (*xsink) {
-                            return -1;
-                        }
+            bool http2_enabled = (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)
+                && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+            if (http2_enabled) {
+                // Set ALPN protocols for HTTP/2
+                ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+                if (http2_mode == HTTP2_MODE_REQUIRED) {
+                    // HTTP/2 only
+                    protocols->push(new QoreStringNode("h2"), xsink);
+                    if (*xsink) {
+                        return -1;
                     }
-                    msock->socket->setAlpnProtocols(*protocols, xsink);
+                } else {
+                    // Auto mode: prefer h2, fall back to http/1.1
+                    protocols->push(new QoreStringNode("h2"), xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    protocols->push(new QoreStringNode("http/1.1"), xsink);
                     if (*xsink) {
                         return -1;
                     }
                 }
+                msock->socket->setAlpnProtocols(*protocols, xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            } else {
+                // HTTP/2 is disabled - clear any previously set ALPN protocols
+                msock->socket->clearAlpnProtocols();
             }
         }
 
@@ -644,6 +1033,9 @@ struct qore_httpclient_priv {
             if (effective_http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
                 // Direct h2c: start HTTP/2 immediately with prior knowledge
                 http2_active = true;
+                // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+                // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+                msock->socket->setNoDelay(1);
                 setH2Session(Http2Session::createClient(msock->socket->priv, xsink, "http"));
                 if (*xsink) {
                     msock->socket->close();
@@ -681,6 +1073,9 @@ struct qore_httpclient_priv {
                 }
                 // Create HTTP/2 session if HTTP/2 is active
                 if (http2_active) {
+                    // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+                    // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+                    msock->socket->setNoDelay(1);
                     setH2Session(Http2Session::createClient(msock->socket->priv, xsink));
                     if (*xsink) {
                         msock->socket->close();
@@ -769,9 +1164,9 @@ struct qore_httpclient_priv {
         }
     }
 
-    // FIXME: redirects reset the connection URL for all further connections - they need to reset it only for the next
-    // connection
     // issue #3474: process redirect messages correctly
+    // NOTE: callers pass a local copy of `connection` (e.g., `this_connection` in send_internal),
+    // so redirects only affect the current request chain, not the client's base URL
     DLLLOCAL int redirectUrlUnlocked(const char* str, con_info& connection, ExceptionSink* xsink) {
         QoreURL url(str);
         if (!url.isValid()) {
@@ -1417,12 +1812,52 @@ struct qore_httpclient_priv {
         return 0;
     }
 
+    DLLLOCAL const char* normalizeContentEncoding(ExceptionSink* xsink, QoreHashNode& ans, bool recv_callback,
+            qore_uncompress_to_string_t& dec) {
+        const char* content_encoding = get_string_header(xsink, ans, "content-encoding");
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (content_encoding) {
+            const char* start = content_encoding;
+            while (*start == ' ' || *start == '\t') {
+                ++start;
+            }
+            const char* end = start;
+            while (*end && *end != ',' && *end != ';' && *end != ' ') {
+                ++end;
+            }
+            QoreString token;
+            if (end > start) {
+                token.concat(start, end - start);
+            }
+
+            // check for misuse of this header by including a character encoding value
+            if (!token.empty() && (!strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4))) {
+                msock->socket->setEncoding(QEM.findCreate(token.c_str()));
+                content_encoding = nullptr;
+            } else if (!encoding_passthru && !token.empty()) {
+                bool ignore_encoding = false;
+                dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+                if (ignore_encoding) {
+                    content_encoding = nullptr;
+                } else if (!dec) {
+                    // issue #2953 ignore unknown content encodings or a crash will result
+                    content_encoding = nullptr;
+                }
+            }
+        }
+
+        return content_encoding;
+    }
+
     DLLLOCAL QoreHashNode* send_internal(ExceptionSink* xsink, const char* mname, const char* meth, const char* mpath,
         const QoreHashNode* headers, const QoreStringNode* body, const void* data, unsigned size,
         const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info, int timeout_ms,
         const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr,
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
-        const ResolvedCallReferenceNode* trailer_callback = nullptr);
+        const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
 
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
@@ -2304,6 +2739,18 @@ QoreHashNode* HttpClientConnectSendRecvPollOperation::continuePoll(ExceptionSink
             }
 
             continue;
+        } else if (state == SPS_H2_ACTIVE) {
+            // HTTP/2 bidirectional send/receive
+            int rc = checkContinuePoll(xsink, true);
+            if (rc != 0) {
+                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                break;
+            }
+            // Poll completed - process HTTP/2 response
+            if (processH2Response(xsink)) {
+                break;
+            }
+            continue;
         } else if (state == SPS_RECEIVED || state == SPS_CONNECTED) {
             if (close_connection) {
                 client->http_priv->disconnect_unlocked();
@@ -2541,6 +2988,122 @@ int HttpClientConnectSendRecvPollOperation::processReceivedBody(ExceptionSink* x
     return responseDone(xsink);
 }
 
+int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsink) {
+    assert(client->http_priv->msock->m.trylock());
+    assert(poll_state);
+
+    Http2ClientPollState* h2_poll = static_cast<Http2ClientPollState*>(poll_state.get());
+
+    // Get HTTP status code
+    http_response_code = h2_poll->getStatusCode();
+    if (http_response_code < 0) {
+        xsink->raiseException("HTTP2-ERROR", "no status code in HTTP/2 response");
+        return -1;
+    }
+
+    // Get response headers
+    response_headers = h2_poll->getResponseHeaders();
+    if (!response_headers) {
+        response_headers = new QoreHashNode(autoTypeInfo);
+    }
+
+    ReferenceHolder<QoreHashNode> response_headers_raw(response_headers->copy(), xsink);
+    info->setKeyValue("response-headers-raw", response_headers_raw.release(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    set_http2_response_info(xsink, **response_headers, **info, http_response_code);
+    if (*xsink) {
+        return -1;
+    }
+
+    if (client->http_priv->processContentType(xsink, **response_headers)) {
+        return -1;
+    }
+    set_body_content_type_info(xsink, **response_headers, **info);
+    if (*xsink) {
+        return -1;
+    }
+
+    info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Get response body
+    recv_data_holder = h2_poll->getResponseBody(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Process Content-Encoding (decompression) if present
+    if (recv_data_holder && response_headers) {
+        const char* content_encoding = get_string_header(xsink, **response_headers, "content-encoding");
+        if (*xsink) {
+            return -1;
+        }
+        if (content_encoding) {
+            // check for misuse of this header by including a character encoding value
+            if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
+                client->http_priv->msock->socket->setEncoding(QEM.findCreate(content_encoding));
+            } else {
+                qore_uncompress_to_binary_t dec = nullptr;
+                // only decode message bodies automatically if there is no receive callback
+                if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate")) {
+                    dec = qore_inflate_to_binary;
+                } else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip")) {
+                    dec = qore_gunzip_to_binary;
+                } else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2")) {
+                    dec = qore_bunzip2_to_binary;
+                } else if (!strcasecmp(content_encoding, "br")) {
+                    dec = qore_unbrotli_to_binary;
+                } else if (!strcasecmp(content_encoding, "zstd")) {
+                    dec = qore_unzstd_to_binary;
+                } else if (strcasecmp(content_encoding, "identity")) {
+                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
+                        "'%s'", content_encoding);
+                    return -1;
+                }
+                if (dec) {
+                    int64 body_size = recv_data_holder->size();
+                    recv_data_holder = dec(*recv_data_holder, xsink);
+                    if (*xsink) {
+                        xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size " QLLD,
+                            content_encoding, body_size);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
+
+    if (recv_data_holder) {
+        info->setKeyValue("response-body", recv_data_holder->refSelf(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    // Transfer HTTP/2 session to client for potential reuse
+    Http2SessionPtr session = h2_poll->takeSession();
+    if (session) {
+        client->http_priv->setH2Session(session);
+    }
+
+    // Clear the poll state
+    poll_state.reset();
+
+    // Handle redirects
+    if (!client->http_priv->redirect_passthru && http_response_code >= 300 && http_response_code < 400
+        && http_response_code != 304) {
+        return redirect(xsink);
+    }
+
+    setFinal(SPS_RECEIVED);
+    return 0;
+}
+
 int HttpClientConnectSendRecvPollOperation::responseDone(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
@@ -2650,9 +3213,47 @@ int HttpClientConnectSendRecvPollOperation::redirect(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
-    if (client->http_priv->proxy_connection.has_url()
+    bool connect_ssl = client->http_priv->proxy_connection.has_url()
         ? client->http_priv->proxy_connection.ssl
-        : client->http_priv->connection.ssl) {
+        : client->http_priv->connection.ssl;
+    if (connect_ssl) {
+        // Set up ALPN protocols based on current HTTP/2 mode and global settings
+        // Always re-evaluate to handle mode changes on reused connections
+        int http2_mode = client->http_priv->http2_mode;
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool http2_enabled = (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+        if (http2_enabled) {
+            // Set ALPN protocols for HTTP/2
+            ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
+            if (http2_mode == HTTP2_MODE_REQUIRED) {
+                // HTTP/2 only
+                protocols->push(new QoreStringNode("h2"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            } else {
+                // Auto mode: prefer h2, fall back to http/1.1
+                protocols->push(new QoreStringNode("h2"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                protocols->push(new QoreStringNode("http/1.1"), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+            }
+            client->http_priv->msock->socket->setAlpnProtocols(*protocols, xsink);
+            if (*xsink) {
+                return -1;
+            }
+        } else {
+            // HTTP/2 is disabled - clear any previously set ALPN protocols
+            client->http_priv->msock->socket->clearAlpnProtocols();
+        }
+
         poll_state.reset(client->http_priv->msock->socket->startSslConnect(xsink,
             client->http_priv->msock->cert, client->http_priv->msock->pk));
         if (*xsink) {
@@ -2670,9 +3271,86 @@ int HttpClientConnectSendRecvPollOperation::connectDone(ExceptionSink* xsink) {
 int HttpClientConnectSendRecvPollOperation::startSend(ExceptionSink* xsink) {
     assert(client->http_priv->msock->m.trylock());
 
-    // Check if HTTP/2 is active - poll operations don't support HTTP/2
+    // Check if HTTP/2 was negotiated via ALPN during the SSL connection
+    // First check global mode - even if ALPN negotiated h2, respect the global setting
+    int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+    bool http2_globally_disabled = (global_mode == HTTP2_MODE_DISABLED || lib_disabled);
+
+    if (!http2_globally_disabled && client->http_priv->msock->socket->isHttp2()) {
+        // Set http2_active flag on the client
+        client->http_priv->http2_active = true;
+        // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
+        // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
+        client->http_priv->msock->socket->setNoDelay(1);
+
+        // For connect-only mode, we're done after HTTP/2 connection is established
+        if (connect_only) {
+            setFinal(SPS_CONNECTED);
+            return 0;
+        }
+
+        // Convert QoreHashNode headers to vector of pairs for HTTP/2
+        // Using vector<pair> allows duplicate header names (e.g., multiple cookie entries)
+        std::vector<std::pair<std::string, std::string>> h2_headers;
+
+        // Set host field automatically if not overridden
+        if (!host_override && request_headers) {
+            request_headers->setKeyValue("Host", client->http_priv->getHostHeaderValueUnlocked(connection),
+                xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+
+        // Convert headers from QoreHashNode to vector of pairs
+        // HTTP/2 supports multiple header fields with the same name as separate entries
+        if (request_headers) {
+            ConstHashIterator hi(*request_headers);
+            while (hi.next()) {
+                const char* key = hi.getKey();
+                QoreValue val = hi.get();
+                if (val.getType() == NT_STRING) {
+                    h2_headers.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+                } else if (val.getType() == NT_LIST) {
+                    // Emit separate header entries for each list value
+                    const QoreListNode* l = val.get<const QoreListNode>();
+                    for (size_t i = 0; i < l->size(); ++i) {
+                        QoreValue lv = l->retrieveEntry(i);
+                        if (lv.getType() == NT_STRING) {
+                            h2_headers.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Get the request path
+        qore_socket_private* spriv = client->http_priv->msock->socket->priv;
+        QoreString pathstr(spriv->enc);
+        client->http_priv->getMsgPath(xsink, connection, path.c_str(), pathstr, path_already_encoded);
+        if (*xsink) {
+            return -1;
+        }
+
+        // Determine scheme
+        const char* scheme = connection.ssl ? "https" : "http";
+
+        // Create HTTP/2 poll state
+        poll_state.reset(new Http2ClientPollState(xsink, spriv, method.c_str(), pathstr.c_str(),
+            h2_headers, data, size, scheme));
+        if (*xsink) {
+            return -1;
+        }
+
+        // Session transfer to client happens when poll completes (in processH2Response)
+        state = SPS_H2_ACTIVE;
+        return 0;
+    }
+
+    // Check if HTTP/2 is active from a previous operation (shouldn't happen in poll mode normally)
     if (client->http_priv->http2_active) {
-        xsink->raiseException("HTTP2-POLL-ERROR", "poll operations are not supported with HTTP/2 connections; "
+        xsink->raiseException("HTTP2-POLL-ERROR", "HTTP/2 session already active; "
             "use the synchronous send() method or disable HTTP/2 with http_version=1.1");
         return -1;
     }
@@ -3204,18 +3882,11 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     } else if (!strcasecmp(version, "auto")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_AUTO;
-        // Set up ALPN protocols for auto mode
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        protocols->push(new QoreStringNode("h2"), xsink);
-        protocols->push(new QoreStringNode("http/1.1"), xsink);
-        priv->socket->setAlpnProtocols(*protocols, xsink);
+        // ALPN protocols are set at connect time based on both object mode and global mode
     } else if (!strcmp(version, "2.0") || !strcmp(version, "2")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_REQUIRED;
-        // Set up ALPN protocols for required mode (h2 only)
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        protocols->push(new QoreStringNode("h2"), xsink);
-        priv->socket->setAlpnProtocols(*protocols, xsink);
+        // ALPN protocols are set at connect time based on both object mode and global mode
     } else {
         xsink->raiseException("HTTP-VERSION-ERROR", "only 'auto', '1.0', '1.1', '2.0', '2' are valid "
             "(value passed: '%s')", version);
@@ -3251,14 +3922,8 @@ bool QoreHttpClientObject::isHttp2Enabled() const {
 void QoreHttpClientObject::setHttp2Enabled(bool enable) {
     // Map old API to new http2_mode
     http_priv->http2_mode = enable ? HTTP2_MODE_AUTO : HTTP2_MODE_DISABLED;
-    // Set up ALPN protocols when HTTP/2 is enabled
-    if (enable) {
-        ExceptionSink xsink;
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), &xsink);
-        protocols->push(new QoreStringNode("h2"), &xsink);
-        protocols->push(new QoreStringNode("http/1.1"), &xsink);
-        priv->socket->setAlpnProtocols(*protocols, &xsink);
-    }
+    // ALPN protocols are set at connect time based on both object mode and global mode
+    // This allows the global mode to override the object setting at runtime
 }
 
 void QoreHttpClientObject::setHttp2Mode(int mode, ExceptionSink* xsink) {
@@ -3268,19 +3933,8 @@ void QoreHttpClientObject::setHttp2Mode(int mode, ExceptionSink* xsink) {
         return;
     }
     http_priv->http2_mode = mode;
-    // Set up ALPN protocols based on mode (not used for h2c modes)
-    if (mode != HTTP2_MODE_DISABLED && mode != HTTP2_MODE_H2C_DIRECT && mode != HTTP2_MODE_H2C_UPGRADE) {
-        ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-        if (mode == HTTP2_MODE_REQUIRED) {
-            // Only advertise HTTP/2
-            protocols->push(new QoreStringNode("h2"), xsink);
-        } else {
-            // Auto mode: prefer h2, fall back to http/1.1
-            protocols->push(new QoreStringNode("h2"), xsink);
-            protocols->push(new QoreStringNode("http/1.1"), xsink);
-        }
-        priv->socket->setAlpnProtocols(*protocols, xsink);
-    }
+    // ALPN protocols are set at connect time based on both object mode and global mode
+    // This allows the global mode to override the object setting at runtime
 }
 
 int QoreHttpClientObject::getHttp2Mode() const {
@@ -3347,12 +4001,26 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         }
     }
 
+    // RFC 8441: Check if server supports extended CONNECT before sending.
+    // Some nghttp2 versions silently drop :protocol when ENABLE_CONNECT_PROTOCOL
+    // is not advertised, causing the CONNECT to be processed as a bare tunnel
+    // request with no response sent to the client.
+    if (http_priv->getH2Session()->isExtendedConnectRejected()) {
+        xsink->raiseException("HTTP2-CONNECT-ERROR",
+            "server does not support extended CONNECT "
+            "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+        return nullptr;
+    }
+
     // Build headers map with :protocol for extended CONNECT (RFC 8441)
     std::map<std::string, std::string> h2_headers;
     h2_headers[":protocol"] = protocol;
 
-    // Add Host header
-    h2_headers["host"] = http_priv->connection.host.c_str();
+    // Add Host header with port when needed (used to derive :authority)
+    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
+    if (host_header) {
+        h2_headers["host"] = host_header->c_str();
+    }
 
     // Copy custom headers
     if (headers) {
@@ -3378,10 +4046,38 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         return nullptr;
     }
 
-    // Read the response
+    // Read the response with overall timeout
+    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
     while (true) {
-        int rv = http_priv->getH2Session()->receiveData(http_priv->timeout, xsink);
+        int recv_timeout = http_priv->timeout;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)",
+                    (int)http_priv->timeout);
+                return nullptr;
+            }
+            recv_timeout = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = http_priv->getH2Session()->receiveData(recv_timeout, xsink);
         if (rv < 0) {
+            return nullptr;
+        }
+        // Flush pending output (SETTINGS_ACK, etc.) after processing received frames.
+        // Following nginx pattern: always send pending data after recv processing.
+        // Recompute timeout from deadline since receiveData() may have consumed time.
+        // NOTE: unlike the loop entry deadline check above, we use zero-timeout (non-blocking)
+        // rather than raising an error when the deadline has passed, because this flush is a
+        // necessary consequence of processing inbound frames — the pending data (typically small
+        // control frames like SETTINGS_ACK) must be sent for the protocol to proceed, and a
+        // non-blocking send will almost always succeed for small frames in the kernel buffer.
+        int flush_timeout = recv_timeout;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            flush_timeout = now_ms >= deadline_ms ? 0 : static_cast<int>(deadline_ms - now_ms);
+        }
+        if (http_priv->getH2Session()->sendPendingDataBlocking(flush_timeout, xsink) < 0) {
             return nullptr;
         }
         if (rv == 1) {
@@ -3398,6 +4094,37 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             }
         }
 
+        // Check if SETTINGS revealed that server doesn't support extended CONNECT.
+        // This catches the case where SETTINGS are received after the CONNECT was sent;
+        // some nghttp2 versions silently drop :protocol, so no RST_STREAM will arrive.
+        if (http_priv->getH2Session()->isExtendedConnectRejected()) {
+            // Cancel the submitted stream to prevent leaking it in the session map
+            // and notify the server to stop processing the bare CONNECT.
+            // sendPendingDataBlocking() triggers onStreamCloseCallback which removes
+            // the stream from the session map.
+            http_priv->getH2Session()->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+            if (!*xsink) {
+                http_priv->getH2Session()->sendPendingDataBlocking(0, xsink);
+            }
+            // Clear cleanup errors — the real error is missing ENABLE_CONNECT_PROTOCOL
+            xsink->clear();
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "server does not support extended CONNECT "
+                "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+            return nullptr;
+        }
+
+        // Check if the stream was reset (e.g., RST_STREAM from server)
+        {
+            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
+            if (stream && stream->reset) {
+                xsink->raiseException("HTTP2-CONNECT-ERROR",
+                    "HTTP/2 CONNECT request was rejected by the server "
+                    "(stream reset with error code %d)", (int)stream->error_code);
+                return nullptr;
+            }
+        }
+
         // Check if we have a response
         Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
         if (stream && stream->headers_complete) {
@@ -3406,12 +4133,8 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             rv->setKeyValue("status_code", stream->status_code, xsink);
             rv->setKeyValue("stream_id", stream_id, xsink);
 
-            // Add response headers
-            ReferenceHolder<QoreHashNode> rh(new QoreHashNode(autoTypeInfo), xsink);
-            for (const auto& h : stream->headers) {
-                rh->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
-            }
-            rv->setKeyValue("headers", rh.release(), xsink);
+            // Add response headers (handle duplicate headers per RFC 7540)
+            rv->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
 
             // Store stream ID on both HTTPClient and socket for isDataAvailable()
             http_priv->setActiveH2StreamId(stream_id);
@@ -3447,7 +4170,13 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
     const void* ptr = data ? data->getPtr() : nullptr;
     size_t len = data ? data->size() : 0;
 
-    if (http_priv->getH2Session()->sendStreamData(stream_id, ptr, len, end_stream, xsink) < 0) {
+    int h2rv = http_priv->getH2Session()->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (h2rv < 0) {
+        return -1;
+    }
+    if (h2rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL",
+            "stream %d buffer full: data dropped", stream_id);
         return -1;
     }
 
@@ -3479,14 +4208,32 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
         return nullptr;
     }
 
+    // Flush pending output (WINDOW_UPDATE frames generated by receiveData).
+    // With no_auto_window_update, WINDOW_UPDATE is only sent when sendPendingData is called.
+    {
+        Http2Session* h2 = http_priv->getH2Session();
+        if (h2) {
+            ExceptionSink flush_xsink;
+            h2->sendPendingDataBlocking(100, &flush_xsink);
+            // Ignore flush errors — they don't affect the read path
+        }
+    }
+
     // Get stream data again
-    stream = http_priv->getH2Session()->getStream(stream_id);
+    Http2Session* h2_check = http_priv->getH2Session();
+    stream = h2_check ? h2_check->getStream(stream_id) : nullptr;
 
     if (recv_rv == 1) {
-        // Connection closed - return any data we have, or nullptr
-        if (!stream || stream->body.empty()) {
-            return nullptr;
+        // Connection closed by peer (EOF) — return buffered data if any,
+        // otherwise raise an exception so the caller knows the connection was lost
+        if (stream && !stream->body.empty()) {
+            SimpleRefHolder<BinaryNode> rv(new BinaryNode());
+            rv->append(stream->body.data(), stream->body.size());
+            stream->body.clear();
+            return rv.release();
         }
+        xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
+        return nullptr;
     }
     if (!stream || stream->body.empty()) {
         return nullptr;
@@ -3513,67 +4260,151 @@ bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
 }
 
 bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    // Threading design:
+    // - SSL objects are not thread-safe: SSL_peek/SSL_read and SSL_write must not run concurrently
+    // - The sender thread (sendHttp2StreamData) holds priv->m when doing SSL_write
+    // - Therefore ALL SSL operations here must be under priv->m
+    // - The raw fd poll (asyncIoWait) uses poll()/select() only — no SSL — safe without locks
+    //
+    // Flow:
+    // 1. Under lock: check HTTP/2 stream buffer and SSL/socket buffered data
+    // 2. Without lock: raw fd poll (thread-safe, no SSL involvement)
+    // 3. Under lock: process received HTTP/2 frames via SSL_read
+
     SafeLocker sl(priv->m);
+
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         // Fall back to socket-level check if not in HTTP/2 mode
         return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
     }
 
-    // First check if there's already buffered data
+    // Step 1a: Check HTTP/2 stream buffer for already-decoded data
     Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
     if (stream && !stream->body.empty()) {
         return true;
     }
 
-    // Get socket reference before releasing lock
-    QoreSocket* sock = http_priv->msock->socket;
+    // Step 1b: Check if socket read buffer or SSL layer has already-decrypted data
+    // These checks are safe under priv->m (no concurrent SSL operations possible)
+    Http2Session* h2_buffered = http_priv->getH2Session();
+    if (h2_buffered && h2_buffered->hasSocketBufferedData()) {
+        // Buffered data exists — process HTTP/2 frames immediately under lock
+        Http2Session* h2 = h2_buffered;
+        if (h2) {
+            int rv = h2->receiveData(100, xsink);
+            if (rv < 0 && *xsink) {
+                return false;
+            }
+            if (rv == 1) {
+                // EOF: connection closed by peer
+                xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
+                return false;
+            }
+            // Flush pending output (WINDOW_UPDATE frames generated by receiveData)
+            // With no_auto_window_update, WINDOW_UPDATE is queued by onDataChunkRecvCallback
+            // but only sent when sendPendingData is called
+            h2 = http_priv->getH2Session();
+            if (h2) {
+                h2->sendPendingDataBlocking(100, xsink);
+                if (*xsink) {
+                    xsink->clear();
+                }
+            }
+            h2 = http_priv->getH2Session();
+            if (h2) {
+                stream = h2->getStream(stream_id);
+                if (stream && !stream->body.empty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
-    // Release lock during blocking I/O operations
+    // Step 2: No buffered data — poll the raw file descriptor for new data
+    // asyncIoWait() uses poll()/select()/kqueue() on the raw fd only — no SSL operations
+    // Safe to call without locks; the sender can freely do SSL_write() concurrently
+    QoreSocket* sock = http_priv->msock->socket;
     sl.unlock();
 
-    // Check if socket has data available
-    bool has_socket_data = sock->isDataAvailable(xsink, timeout_ms);
+    int rc = sock->asyncIoWait(timeout_ms, true, false);
 
-    // Re-acquire lock BEFORE any Http2Session operations
-    // (Http2Session is not thread-safe and requires external locking)
     sl.lock();
 
-    if (!has_socket_data) {
-        // No data available within timeout
-        return false;
-    }
-    if (*xsink) {
-        return false;
-    }
-
-    // Re-check HTTP/2 is still active after re-acquiring lock (state could have changed)
+    // Step 3: Re-check state after re-acquiring lock
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         return false;
     }
 
-    // Verify session is still valid before proceeding
+    // Step 3a: Always check SSL pending/socket buffer after re-acquiring lock.
+    // While the lock was released, the sender's SSL_write() may have read incoming
+    // TLS records into the SSL buffer (TLS renegotiation, key update, etc.).
+    // Also covers the case where asyncIoWait() timed out but data is now available.
+    if (rc <= 0) {
+        // Poll timed out or errored — check if SSL/socket has buffered data
+        Http2Session* h2_recheck = http_priv->getH2Session();
+        if (h2_recheck && h2_recheck->hasSocketBufferedData()) {
+            Http2Session* h2 = h2_recheck;
+            if (h2) {
+                int rv = h2->receiveData(100, xsink);
+                if (rv < 0 && *xsink) {
+                    return false;
+                }
+                if (rv == 1) {
+                    // EOF: connection closed by peer
+                    xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
+                    return false;
+                }
+                // Flush pending WINDOW_UPDATE
+                h2 = http_priv->getH2Session();
+                if (h2) {
+                    h2->sendPendingDataBlocking(100, xsink);
+                    if (*xsink) {
+                        xsink->clear();
+                    }
+                }
+                h2 = http_priv->getH2Session();
+                if (h2) {
+                    stream = h2->getStream(stream_id);
+                    if (stream && !stream->body.empty()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // Step 3b: Raw data detected — process HTTP/2 frames under lock
     Http2Session* h2_session = http_priv->getH2Session();
-    if (!h2_session) {
+    int rv = h2_session->receiveData(100, xsink);
+
+    if (rv < 0 && *xsink) {
+        return false;
+    }
+    if (rv == 1) {
+        // EOF: connection closed by peer
+        xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
         return false;
     }
 
-    // Note: Use a small timeout (100ms) to allow SSL to decrypt the raw socket data.
-    // We already waited for socket data to be available, but SSL_read needs time to process it.
-    // CRITICAL: Lock MUST be held here - Http2Session is not thread-safe
-    int rc = h2_session->receiveData(100, xsink);
-
-    // Check if we got an error (not just timeout)
-    if (rc < 0 && *xsink) {
-        return false;
+    // Flush pending output (WINDOW_UPDATE frames generated by receiveData).
+    // With no_auto_window_update, WINDOW_UPDATE is only sent when sendPendingData is called.
+    // Without this flush, the server's flow control window stays at 0 and it cannot send data.
+    h2_session = http_priv->getH2Session();
+    if (h2_session) {
+        h2_session->sendPendingDataBlocking(100, xsink);
+        if (*xsink) {
+            xsink->clear();
+        }
     }
 
-    // Re-check session after receiveData (it might have been invalidated)
+    // Re-check session after receiveData + sendPendingData
     h2_session = http_priv->getH2Session();
     if (!h2_session) {
         return false;
     }
 
-    // Now check if the stream has data
     stream = h2_session->getStream(stream_id);
     return stream && !stream->body.empty();
 }
@@ -3854,9 +4685,81 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         return nullptr;
     }
 
+    // Ensure the request body is fully sent, driving flow control if necessary
+    int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
+    if (body_len > 0) {
+        while (h2_session->hasPendingBodyData(stream_id)) {
+            int remaining_ms = -1;
+            if (deadline_ms >= 0) {
+                int64 now_ms = q_clock_getmillis();
+                if (now_ms >= deadline_ms) {
+                    xsink->raiseException("HTTP2-TIMEOUT", "timeout sending HTTP/2 request body (timeout: %d ms)", (int)timeout_ms);
+                    return nullptr;
+                }
+                remaining_ms = static_cast<int>(deadline_ms - now_ms);
+            }
+            int rv = h2_session->receiveData(remaining_ms, xsink);
+            if (rv < 0 || *xsink) {
+                return nullptr;
+            }
+            if (rv == 1) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 connection closed by peer while sending request body");
+                return nullptr;
+            }
+            if (h2_session->sendPendingDataBlocking(remaining_ms, xsink)) {
+                return nullptr;
+            }
+        }
+    }
+    while (h2_session->wantWrite() || h2_session->hasPendingData()) {
+        int remaining_ms = -1;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting to send HTTP/2 request data (timeout: %d ms)", (int)timeout_ms);
+                return nullptr;
+            }
+            remaining_ms = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = h2_session->receiveData(remaining_ms, xsink);
+        if (rv < 0 || *xsink) {
+            return nullptr;
+        }
+        if (rv == 1) {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/2 connection closed by peer while sending request data");
+            return nullptr;
+        }
+        if (h2_session->sendPendingDataBlocking(remaining_ms, xsink)) {
+            return nullptr;
+        }
+    }
+
     // Receive data until we have a complete response
     while (!h2_session->hasCompletedStreams()) {
-        if (h2_session->receiveData(timeout_ms, xsink)) {
+        int remaining_ms = -1;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP2-TIMEOUT", "timeout waiting for HTTP/2 response (timeout: %d ms)", (int)timeout_ms);
+                return nullptr;
+            }
+            remaining_ms = static_cast<int>(deadline_ms - now_ms);
+        }
+        int rv = h2_session->receiveData(remaining_ms, xsink);
+        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) after every receive
+        // This is critical for HTTP/2 flow control - without WINDOW_UPDATE frames,
+        // the server will stop sending data when the receive window is exhausted
+        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv == 0 && remaining_ms >= 0) {
+            // no data yet; loop until the overall deadline expires
+            continue;
+        }
+        if (rv) {
             if (*xsink) {
                 return nullptr;
             }
@@ -3866,11 +4769,6 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
                 return nullptr;
             }
             break;
-        }
-        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) - use blocking version
-        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
-        if (*xsink) {
-            return nullptr;
         }
     }
 
@@ -3883,6 +4781,30 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
 
     code = stream->status_code;
 
+    // HTTP/2: status code 0 means no :status pseudo-header was received;
+    // this typically indicates the connection was reset or is stale
+    if (code == 0) {
+        // Build minimal response hash for the exception arg
+        ReferenceHolder<QoreHashNode> err_response(new QoreHashNode(autoTypeInfo), xsink);
+        err_response->setKeyValue("status_code", 0, xsink);
+        err_response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+        if (stream->reset) {
+            err_response->setKeyValue("status_message", new QoreStringNode("Stream Reset"), xsink);
+            xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", err_response.release(),
+                "HTTP/2 stream %d was reset by the remote end (HTTP/2 error code %d); "
+                "the connection is stale and must be re-established",
+                stream_id, (int)stream->error_code);
+        } else {
+            err_response->setKeyValue("status_message",
+                new QoreStringNode("No Response"), xsink);
+            xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", err_response.release(),
+                "HTTP/2 stream %d closed without a response (no :status header received); "
+                "the connection is likely stale and must be re-established",
+                stream_id);
+        }
+        return nullptr;
+    }
+
     // Build response hash similar to HTTP/1.x format
     ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
 
@@ -3890,79 +4812,18 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     response->setKeyValue("status_code", code, xsink);
 
     // Map status codes to messages (HTTP/2 only transmits status code, not message)
-    const char* status_msg = "Unknown";
-    switch (code) {
-        // 1xx: Informational
-        case 100: status_msg = "Continue"; break;
-        case 101: status_msg = "Switching Protocols"; break;
-        case 102: status_msg = "Processing"; break;
-        // 2xx: Success
-        case 200: status_msg = "OK"; break;
-        case 201: status_msg = "Created"; break;
-        case 202: status_msg = "Accepted"; break;
-        case 203: status_msg = "Non-Authoritative Information"; break;
-        case 204: status_msg = "No Content"; break;
-        case 205: status_msg = "Reset Content"; break;
-        case 206: status_msg = "Partial Content"; break;
-        case 207: status_msg = "Multi-Status"; break;
-        case 208: status_msg = "Already Reported"; break;
-        case 226: status_msg = "IM Used"; break;
-        // 3xx: Redirection
-        case 300: status_msg = "Multiple Choices"; break;
-        case 301: status_msg = "Moved Permanently"; break;
-        case 302: status_msg = "Found"; break;
-        case 303: status_msg = "See Other"; break;
-        case 304: status_msg = "Not Modified"; break;
-        case 305: status_msg = "Use Proxy"; break;
-        case 307: status_msg = "Temporary Redirect"; break;
-        case 308: status_msg = "Permanent Redirect"; break;
-        // 4xx: Client Errors
-        case 400: status_msg = "Bad Request"; break;
-        case 401: status_msg = "Unauthorized"; break;
-        case 402: status_msg = "Payment Required"; break;
-        case 403: status_msg = "Forbidden"; break;
-        case 404: status_msg = "Not Found"; break;
-        case 405: status_msg = "Method Not Allowed"; break;
-        case 406: status_msg = "Not Acceptable"; break;
-        case 407: status_msg = "Proxy Authentication Required"; break;
-        case 408: status_msg = "Request Timeout"; break;
-        case 409: status_msg = "Conflict"; break;
-        case 410: status_msg = "Gone"; break;
-        case 411: status_msg = "Length Required"; break;
-        case 412: status_msg = "Precondition Failed"; break;
-        case 413: status_msg = "Request Entity Too Large"; break;
-        case 414: status_msg = "Request-URI Too Long"; break;
-        case 415: status_msg = "Unsupported Media Type"; break;
-        case 416: status_msg = "Requested Range Not Satisfiable"; break;
-        case 417: status_msg = "Expectation Failed"; break;
-        case 418: status_msg = "I'm a teapot"; break;
-        case 420: status_msg = "Enhance Your Calm"; break;
-        case 422: status_msg = "Unprocessable Entity"; break;
-        case 423: status_msg = "Locked"; break;
-        case 424: status_msg = "Failed Dependency"; break;
-        case 425: status_msg = "Unordered Collection"; break;
-        case 426: status_msg = "Upgrade Required"; break;
-        case 428: status_msg = "Precondition Required"; break;
-        case 429: status_msg = "Too Many Requests"; break;
-        case 431: status_msg = "Request Header Fields Too Large"; break;
-        // 5xx: Server Errors
-        case 500: status_msg = "Internal Server Error"; break;
-        case 501: status_msg = "Not Implemented"; break;
-        case 502: status_msg = "Bad Gateway"; break;
-        case 503: status_msg = "Service Unavailable"; break;
-        case 504: status_msg = "Gateway Timeout"; break;
-        case 505: status_msg = "HTTP Version Not Supported"; break;
-        case 509: status_msg = "Bandwidth Limit Exceeded"; break;
-        case 510: status_msg = "Not Extended"; break;
-        case 511: status_msg = "Network Authentication Required"; break;
-    }
+    const char* status_msg = get_http_status_message(code);
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
 
-    // Add response headers
-    for (const auto& h : stream->headers) {
-        // Convert header name to lowercase for consistency
-        response->setKeyValue(h.first.c_str(), new QoreStringNode(h.second), xsink);
+    // Add response headers (handle duplicate headers per RFC 7540)
+    // Merge into the response hash directly (headers are at the top level)
+    {
+        ReferenceHolder<QoreHashNode> h2h(h2HeadersToQoreHash(stream->headers), xsink);
+        ConstHashIterator hi(*(*h2h));
+        while (hi.next()) {
+            response->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
     }
 
     // Add body if present (must copy data as stream->body will be freed)
@@ -4003,7 +4864,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
-        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback) {
+        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, bool streaming) {
     assert(!(data && send_callback));
     assert(!(data && is));
     assert(!(is && send_callback));
@@ -4203,7 +5064,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                 info->setKeyValue(tmp.c_str(), mess ? mess->refSelf() : 0, xsink);
             }
 
-            // FIXME: reset send callback and send_aborted here
+            // NOTE: Per RFC 7231, 301/302/303 redirects should change POST/PUT to GET (dropping the body),
+            // while 307/308 should preserve the method and body. Currently we always resend with the same
+            // method and body, which is incorrect for 301/302/303. The send_callback and body parameters
+            // should be cleared for those redirect codes.
 
             // set mpath to NULL so that the new path will be taken
             mpath = nullptr;
@@ -4294,73 +5158,18 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         if (h2_body.getType() == NT_BINARY) {
             const BinaryNode* bin = h2_body.get<const BinaryNode>();
             if (bin && bin->size()) {
-                // Get charset from content-type header
                 const QoreEncoding* body_enc = msock->socket->getEncoding();
-                const char* ct = get_string_header(xsink, **ans, "content-type", true);
-                if (!*xsink && ct) {
-                    // Look for charset parameter
-                    const char* charset = strstr(ct, "charset=");
-                    if (charset) {
-                        charset += 8;
-                        // Skip quotes if present
-                        if (*charset == '"' || *charset == '\'') {
-                            ++charset;
-                        }
-                        // Extract charset name
-                        QoreString charset_str;
-                        while (*charset && *charset != '"' && *charset != '\'' && *charset != ';' && *charset != ' ') {
-                            charset_str.concat(*charset++);
-                        }
-                        if (!charset_str.empty()) {
-                            body_enc = QEM.findCreate(charset_str.c_str());
-                        }
-                    }
-                }
                 if (!*xsink && !recv_callback) {
                     // Only process body encoding/conversion when no recv_callback
                     // Check content-encoding for compression
-                    content_encoding = get_string_header(xsink, **ans, "content-encoding");
-                    if (!*xsink && content_encoding && !encoding_passthru) {
-                        qore_uncompress_to_string_t dec = nullptr;
-                        if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
-                            dec = qore_inflate_to_string;
-                        else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
-                            dec = qore_gunzip_to_string;
-                        else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
-                            dec = qore_bunzip2_to_string;
-                        else if (!strcasecmp(content_encoding, "br"))
-                            dec = qore_unbrotli_to_string;
-                        else if (!strcasecmp(content_encoding, "zstd"))
-                            dec = qore_unzstd_to_string;
-                        if (dec) {
-                            QoreStringNode* decoded = dec(bin, body_enc, xsink);
-                            if (!*xsink && decoded) {
-                                ans->setKeyValue("body", decoded, xsink);
-                            }
+                    qore_uncompress_to_string_t h2_dec = nullptr;
+                    content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, h2_dec);
+                    if (!*xsink) {
+                        QoreValue body_val = process_binary_body(bin, body_enc, content_encoding, h2_dec,
+                            encoding_passthru, xsink);
+                        if (!*xsink && body_val) {
+                            ans->setKeyValue("body", body_val.getInternalNode(), xsink);
                         }
-                    } else if (!*xsink) {
-                        // Only convert binary to string for text content types
-                        // Keep binary data as-is (e.g., for application/octet-stream, images, etc.)
-                        bool is_text = false;
-                        if (ct) {
-                            // Check for text content types
-                            if (!strncasecmp(ct, "text/", 5)) {
-                                is_text = true;
-                            } else if (!strncasecmp(ct, "application/json", 16) ||
-                                       !strncasecmp(ct, "application/xml", 15) ||
-                                       !strncasecmp(ct, "application/yaml", 16) ||
-                                       !strncasecmp(ct, "application/x-yaml", 18) ||
-                                       !strncasecmp(ct, "application/javascript", 22) ||
-                                       !strncasecmp(ct, "application/x-www-form-urlencoded", 33)) {
-                                is_text = true;
-                            }
-                        }
-                        if (is_text) {
-                            // Convert binary to string with detected encoding
-                            QoreStringNode* str_body = new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
-                            ans->setKeyValue("body", str_body, xsink);
-                        }
-                        // else: keep body as binary
                     }
                 }
                 if (*xsink) {
@@ -4401,33 +5210,17 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
 
     if (bodyp && (code < 100 || code >= 200) && code != 204) {
         // see if we should do a binary or string read
-        content_encoding = get_string_header(xsink, **ans, "content-encoding");
-        if (*xsink) {
-            disconnect_unlocked();
-            return nullptr;
-        }
-
-        if (content_encoding && !os) {
-            // check for misuse of this header by including a character encoding value
-            if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
-                msock->socket->setEncoding(QEM.findCreate(content_encoding));
-                content_encoding = nullptr;
-            } else if (!recv_callback) {
-                // only decode message bodies automatically if there is no receive callback
-                if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate"))
-                    dec = qore_inflate_to_string;
-                else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip"))
-                    dec = qore_gunzip_to_string;
-                else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2"))
-                    dec = qore_bunzip2_to_string;
-                else if (!strcasecmp(content_encoding, "br"))
-                    dec = qore_unbrotli_to_string;
-                else if (!strcasecmp(content_encoding, "zstd"))
-                    dec = qore_unzstd_to_string;
-                // issue #2953 ignore unknown content encodings or a crash will result
-                else {
-                    content_encoding = nullptr;
-                }
+        if (!os) {
+            content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, dec);
+            if (*xsink) {
+                disconnect_unlocked();
+                return nullptr;
+            }
+        } else {
+            content_encoding = get_string_header(xsink, **ans, "content-encoding");
+            if (*xsink) {
+                disconnect_unlocked();
+                return nullptr;
             }
         }
 
@@ -4467,8 +5260,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             do_content_length_event(event_queue, msock->socket->priv, len);
         }
 
-        // do *not* read a chunked body if the content-type is "text/event-stream", indicating an SSE stream
-        if (te && !strcasecmp(te, "chunked") && (!ct || strcmp(ct, "text/event-stream"))) {
+        // do *not* read a chunked body if streaming mode is enabled or the content-type is "text/event-stream"
+        if (te && !strcasecmp(te, "chunked") && !streaming && (!ct || strcmp(ct, "text/event-stream"))) {
             // check for chunked response body
             do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
             ReferenceHolder<QoreHashNode> nah(xsink);
@@ -4523,7 +5316,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                     return nullptr;
                 }
             }
-        } else if (getbody || len) {
+        } else if (!streaming && (getbody || len)) {
             if (os) {
                 msock->socket->priv->recvToOutputStream(os, len, timeout_ms, xsink, &msock->m,
                     QORE_SOURCE_HTTPCLIENT);
@@ -4571,19 +5364,14 @@ http2_body_done:
 
     // add body to result hash and process content encoding if necessary
     if (body) {
-        if (content_encoding && !encoding_passthru) {
-            if (!dec) {
-                if (!recv_callback) {
-                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
-                        "'%s'", content_encoding);
-                    ans = nullptr;
-                }
-            } else {
-                ValueHolder bobj(body.release(), xsink);
-                body = dec(bobj->get<BinaryNode>(), msock->socket->getEncoding(), xsink);
-                if (*xsink) {
-                    ans = nullptr;
-                }
+        if (body->getType() == NT_BINARY) {
+            const BinaryNode* bin = body->get<BinaryNode>();
+            QoreValue processed = process_binary_body(bin, msock->socket->getEncoding(), content_encoding, dec,
+                encoding_passthru, xsink);
+            if (*xsink) {
+                ans = nullptr;
+            } else if (processed) {
+                body = processed.getInternalNode();
             }
         }
 
@@ -4637,6 +5425,25 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
     }
     return http_priv->send_internal(xsink, "send", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
         nullptr, getbody, info, http_priv->timeout, nullptr);
+}
+
+QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
+        const void* data, unsigned size, QoreHashNode* info, ExceptionSink* xsink) {
+    // streaming=true means don't read the body, leave it on the socket for streaming
+    return http_priv->send_internal(xsink, "sendAndStream", meth, new_path, headers, nullptr, data, size, nullptr,
+        false, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, true);
+}
+
+QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
+        const QoreStringNode& body, QoreHashNode* info, ExceptionSink* xsink) {
+    const QoreEncoding* enc = http_priv->getEncoding();
+    QoreStringNodeValueHelper tstr(&body, enc, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // streaming=true means don't read the body, leave it on the socket for streaming
+    return http_priv->send_internal(xsink, "sendAndStream", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
+        nullptr, false, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, true);
 }
 
 QoreHashNode* QoreHttpClientObject::sendWithSendCallback(const char* meth, const char* mpath,

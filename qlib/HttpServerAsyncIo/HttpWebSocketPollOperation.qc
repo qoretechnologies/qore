@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file HttpWebSocketPollOperation.qc Poll operation for WebSocket connections
 
-/** HttpWebSocketPollOperation.qc Copyright 2024 Qore Technologies, s.r.o.
+/** HttpWebSocketPollOperation.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,6 @@ public namespace HttpServerAsyncIo {
 
     WebSocket frames are handled according to RFC 6455.
 
-    @since HttpServerAsyncIo 1.0
 */
 public class HttpWebSocketPollOperation inherits AbstractPollOperation {
     public {

@@ -1,0 +1,1010 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class QoreAnalyticsProcessorsTest
+
+#! Simple sink processor for collecting pipeline output
+class TestAnalyticsSinkProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        list<auto> results;
+    }
+
+    private submitImpl(code enqueue, auto _data) {
+        push results, _data;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+class QoreAnalyticsProcessorsTest inherits QUnit::Test {
+    constructor() : Test("QoreAnalyticsProcessorsTest", "1.0") {
+        # RunningStats tests
+        addTestCase("running-stats - basic window", \runningStatsBasicWindow());
+        addTestCase("running-stats - multi-field", \runningStatsMultiField());
+        addTestCase("running-stats - multiple windows", \runningStatsMultipleWindows());
+        addTestCase("running-stats - flush partial window", \runningStatsFlushPartial());
+        addTestCase("running-stats - single value window", \runningStatsSingleValue());
+        addTestCase("running-stats - non-numeric field skipped", \runningStatsNonNumeric());
+        addTestCase("running-stats - missing field skipped", \runningStatsMissingField());
+        addTestCase("running-stats - not configured error", \runningStatsNotConfigured());
+        addTestCase("running-stats - capabilities", \runningStatsCapabilities());
+        addTestCase("running-stats - output type", \runningStatsOutputType());
+
+        # MovingAverage tests
+        addTestCase("moving-average - per-record emission", \movingAvgPerRecord());
+        addTestCase("moving-average - SMA correctness", \movingAvgSmaCorrectness());
+        addTestCase("moving-average - EMA seeding", \movingAvgEmaSeeding());
+        addTestCase("moving-average - EMA update", \movingAvgEmaUpdate());
+        addTestCase("moving-average - custom ema_alpha", \movingAvgCustomAlpha());
+        addTestCase("moving-average - invalid alpha", \movingAvgInvalidAlpha());
+        addTestCase("moving-average - flush", \movingAvgFlush());
+
+        # TrendAnalysis tests
+        addTestCase("trend-analysis - rising trend", \trendRising());
+        addTestCase("trend-analysis - falling trend", \trendFalling());
+        addTestCase("trend-analysis - flat trend", \trendFlat());
+        addTestCase("trend-analysis - r-squared perfect fit", \trendRSquaredPerfect());
+        addTestCase("trend-analysis - single value flush", \trendSingleValueFlush());
+        addTestCase("trend-analysis - custom direction threshold", \trendCustomDirectionThreshold());
+        addTestCase("trend-analysis - negative direction threshold", \trendNegativeDirectionThreshold());
+
+        # AnomalyDetection tests
+        addTestCase("anomaly-detection - normal values", \anomalyNormal());
+        addTestCase("anomaly-detection - anomaly detected", \anomalyDetected());
+        addTestCase("anomaly-detection - zero stddev", \anomalyZeroStddev());
+        addTestCase("anomaly-detection - custom threshold", \anomalyCustomThreshold());
+        addTestCase("anomaly-detection - negative threshold", \anomalyNegativeThreshold());
+        addTestCase("anomaly-detection - history excludes current value", \anomalyHistoryExcludesCurrent());
+
+        # GroupBy tests
+        addTestCase("group-by - single field count", \groupBySingleFieldCount());
+        addTestCase("group-by - single field sum", \groupBySingleFieldSum());
+        addTestCase("group-by - multiple group fields", \groupByMultipleFields());
+        addTestCase("group-by - all aggregate operations", \groupByAllAggOps());
+        addTestCase("group-by - no group_by (global aggregate)", \groupByGlobalAggregate());
+        addTestCase("group-by - missing group field skipped", \groupByMissingGroupField());
+        addTestCase("group-by - non-numeric sum skipped", \groupByNonNumericSkipped());
+        addTestCase("group-by - empty flush", \groupByEmptyFlush());
+        addTestCase("group-by - not configured error", \groupByNotConfigured());
+        addTestCase("group-by - invalid aggregate expression", \groupByInvalidExpr());
+        addTestCase("group-by - unknown operation", \groupByUnknownOp());
+        addTestCase("group-by - missing field in sum", \groupByMissingFieldInSum());
+        addTestCase("group-by - capabilities", \groupByCapabilities());
+        addTestCase("group-by - named output columns", \groupByNamedOutputColumns());
+        addTestCase("group-by - avg with no numeric values", \groupByAvgNoValues());
+
+        # Integration tests
+        addTestCase("integration - pipeline with analytics", \integrationPipeline());
+        addTestCase("integration - pipeline group-by flush", \integrationGroupByPipeline());
+        addTestCase("integration - navigation children count", \integrationNavigationChildren());
+        addTestCase("integration - action registration", \integrationActionRegistration());
+        addTestCase("integration - DPC_ANALYTICS constant", \integrationDpcAnalyticsConstant());
+        addTestCase("integration - ProcessorCapabilityNameMap", \integrationCapabilityNameMap());
+
+        # Real-world question tests
+        addTestCase("question - sales by region", \questionSalesByRegion());
+        addTestCase("question - city with most customers", \questionCityMostCustomers());
+        addTestCase("question - error count over time period", \questionErrorCount());
+
+        set_return_value(main());
+    }
+
+    # --- RunningStats Tests ---
+
+    runningStatsBasicWindow() {
+        QoreRunningStatsProcessor proc({"fields": "value", "window_size": 5});
+        # feed 5 records to fill one window
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"value": v});
+        }
+        # event should be emitted on the 5th record
+        assertEq(True, exists result);
+        assertEq("statistics", result.event_type);
+        assertEq("value", result.field);
+        assertEq(5, result.window_size);
+        assertEq(5, result.count);
+        assertEq(150.0, result.sum);
+        assertEq(30.0, result.avg);
+        assertEq(10.0, result.min_val);
+        assertEq(50.0, result.max_val);
+        # sample variance: sum((v - 30)^2) / 4 = (400+100+0+100+400)/4 = 250
+        assertEq(250.0, result.variance);
+        # stddev = sqrt(250) ~= 15.8114
+        float expected_stddev = sqrt(250.0);
+        assertEq(True, abs(result.stddev - expected_stddev) < 0.0001);
+    }
+
+    runningStatsMultiField() {
+        QoreRunningStatsProcessor proc({"fields": "a,b", "window_size": 3});
+        # feed 3 records with both fields
+        list<auto> result_list;
+        for (int i = 1; i <= 3; ++i) {
+            *auto result = proc.processRecord({"a": float(i), "b": float(i * 10)});
+            if (exists result) {
+                if (result.typeCode() == NT_LIST) {
+                    result_list += result;
+                } else {
+                    push result_list, result;
+                }
+            }
+        }
+        # should get 2 events (one for "a", one for "b")
+        assertEq(2, result_list.size());
+        # find events by field
+        *hash<auto> event_a;
+        *hash<auto> event_b;
+        foreach auto ev in (result_list) {
+            if (ev.field == "a") {
+                event_a = ev;
+            } else if (ev.field == "b") {
+                event_b = ev;
+            }
+        }
+        assertEq(True, exists event_a);
+        assertEq(True, exists event_b);
+        assertEq(2.0, event_a.avg);
+        assertEq(20.0, event_b.avg);
+    }
+
+    runningStatsMultipleWindows() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 2});
+        # feed 4 records -> 2 windows
+        list<auto> events;
+        for (int i = 1; i <= 4; ++i) {
+            *auto result = proc.processRecord({"val": float(i)});
+            if (exists result) {
+                push events, result;
+            }
+        }
+        assertEq(2, events.size());
+        # first window: [1, 2], avg = 1.5
+        assertEq(1.5, events[0].avg);
+        assertEq(1, events[0].window_count);
+        # second window: [3, 4], avg = 3.5
+        assertEq(3.5, events[1].avg);
+        assertEq(2, events[1].window_count);
+    }
+
+    runningStatsFlushPartial() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 5});
+        # feed only 3 records (partial window)
+        for (int i = 1; i <= 3; ++i) {
+            proc.processRecord({"val": float(i)});
+        }
+        *list<auto> flushed = proc.flushRecords();
+        assertEq(True, exists flushed);
+        assertEq(1, flushed.size());
+        assertEq(3, flushed[0].count);
+        assertEq(2.0, flushed[0].avg);
+    }
+
+    runningStatsSingleValue() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 1});
+        *auto result = proc.processRecord({"val": 42.0});
+        assertEq(True, exists result);
+        assertEq(1, result.count);
+        assertEq(42.0, result.avg);
+        assertEq(0.0, result.variance);
+        assertEq(0.0, result.stddev);
+    }
+
+    runningStatsNonNumeric() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 1});
+        *auto result = proc.processRecord({"val": "not-a-number"});
+        # non-numeric should be skipped, no event
+        assertNothing(result);
+    }
+
+    runningStatsMissingField() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 1});
+        *auto result = proc.processRecord({"other_field": 42.0});
+        # missing field should be skipped
+        assertNothing(result);
+    }
+
+    runningStatsNotConfigured() {
+        QoreRunningStatsProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub () {
+            proc.processRecord({"val": 1});
+        });
+    }
+
+    runningStatsCapabilities() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 5});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    runningStatsOutputType() {
+        QoreRunningStatsProcessor proc({"fields": "val", "window_size": 5});
+        *AbstractDataProviderType output_type = proc.getPipelineProcessorOutputType();
+        assertEq(True, exists output_type);
+        # should have direct fields from StatisticsEventInfo (inherited fields from
+        # AnalyticsEventInfo are not returned by TypedHash::getMembers())
+        *hash<string, AbstractDataField> type_fields = output_type.getFields();
+        assertEq(True, exists type_fields);
+        assertEq(True, type_fields.hasKey("count"));
+        assertEq(True, type_fields.hasKey("sum"));
+        assertEq(True, type_fields.hasKey("avg"));
+        assertEq(True, type_fields.hasKey("min_val"));
+        assertEq(True, type_fields.hasKey("max_val"));
+        assertEq(True, type_fields.hasKey("stddev"));
+        assertEq(True, type_fields.hasKey("variance"));
+    }
+
+    # --- MovingAverage Tests ---
+
+    movingAvgPerRecord() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 3});
+        # each record should produce an event
+        *auto r1 = proc.processRecord({"val": 10.0});
+        assertEq(True, exists r1);
+        assertEq("moving-average", r1.event_type);
+        *auto r2 = proc.processRecord({"val": 20.0});
+        assertEq(True, exists r2);
+        *auto r3 = proc.processRecord({"val": 30.0});
+        assertEq(True, exists r3);
+    }
+
+    movingAvgSmaCorrectness() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 3});
+        proc.processRecord({"val": 10.0});
+        proc.processRecord({"val": 20.0});
+        *auto r3 = proc.processRecord({"val": 30.0});
+        # SMA of [10, 20, 30] = 20.0
+        assertEq(20.0, r3.sma);
+
+        # 4th record: window slides to [20, 30, 40]
+        *auto r4 = proc.processRecord({"val": 40.0});
+        assertEq(30.0, r4.sma);
+    }
+
+    movingAvgEmaSeeding() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 3});
+        *auto r1 = proc.processRecord({"val": 100.0});
+        # first record: EMA = value
+        assertEq(100.0, r1.ema);
+    }
+
+    movingAvgEmaUpdate() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 3, "ema_alpha": 0.5});
+        proc.processRecord({"val": 100.0});
+        *auto r2 = proc.processRecord({"val": 200.0});
+        # EMA = 0.5 * 200 + 0.5 * 100 = 150
+        assertEq(150.0, r2.ema);
+        *auto r3 = proc.processRecord({"val": 300.0});
+        # EMA = 0.5 * 300 + 0.5 * 150 = 225
+        assertEq(225.0, r3.ema);
+    }
+
+    movingAvgCustomAlpha() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 3, "ema_alpha": 0.8});
+        proc.processRecord({"val": 100.0});
+        *auto r2 = proc.processRecord({"val": 200.0});
+        # EMA = 0.8 * 200 + 0.2 * 100 = 180
+        assertEq(180.0, r2.ema);
+        assertEq(0.8, r2.ema_alpha);
+    }
+
+    movingAvgInvalidAlpha() {
+        # alpha = 0
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreMovingAverageProcessor({"fields": "val", "window_size": 3, "ema_alpha": 0.0});
+        });
+        # alpha = 1
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreMovingAverageProcessor({"fields": "val", "window_size": 3, "ema_alpha": 1.0});
+        });
+        # alpha negative
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreMovingAverageProcessor({"fields": "val", "window_size": 3, "ema_alpha": -0.5});
+        });
+    }
+
+    movingAvgFlush() {
+        QoreMovingAverageProcessor proc({"fields": "val", "window_size": 5});
+        proc.processRecord({"val": 10.0});
+        proc.processRecord({"val": 20.0});
+        *list<auto> flushed = proc.flushRecords();
+        assertEq(True, exists flushed);
+        assertEq(1, flushed.size());
+        assertEq("moving-average", flushed[0].event_type);
+        # SMA of [10, 20] = 15.0
+        assertEq(15.0, flushed[0].sma);
+    }
+
+    # --- TrendAnalysis Tests ---
+
+    trendRising() {
+        QoreTrendAnalysisProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (1.0, 2.0, 3.0, 4.0, 5.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq("trend", result.event_type);
+        assertEq("rising", result.direction);
+        assertEq(True, result.slope > 0.001);
+    }
+
+    trendFalling() {
+        QoreTrendAnalysisProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (5.0, 4.0, 3.0, 2.0, 1.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq("falling", result.direction);
+        assertEq(True, result.slope < -0.001);
+    }
+
+    trendFlat() {
+        QoreTrendAnalysisProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (3.0, 3.0, 3.0, 3.0, 3.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq("flat", result.direction);
+        assertEq(True, abs(result.slope) <= 0.001);  # default direction_threshold
+    }
+
+    trendRSquaredPerfect() {
+        QoreTrendAnalysisProcessor proc({"fields": "val", "window_size": 5});
+        # perfectly linear data: r_squared should be very close to 1.0
+        list<float> values = (1.0, 2.0, 3.0, 4.0, 5.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq(True, abs(result.r_squared - 1.0) < 0.0001);
+    }
+
+    trendSingleValueFlush() {
+        QoreTrendAnalysisProcessor proc({"fields": "val", "window_size": 5});
+        proc.processRecord({"val": 42.0});
+        *list<auto> flushed = proc.flushRecords();
+        assertEq(True, exists flushed);
+        assertEq(1, flushed.size());
+        assertEq(0.0, flushed[0].slope);
+        assertEq(42.0, flushed[0].intercept);
+        assertEq(1.0, flushed[0].r_squared);
+        assertEq("flat", flushed[0].direction);
+    }
+
+    trendCustomDirectionThreshold() {
+        # With a large threshold, a slope of 1.0 should be classified as "flat"
+        QoreTrendAnalysisProcessor proc({
+            "fields": "val", "window_size": 5, "direction_threshold": 2.0,
+        });
+        list<float> values = (1.0, 2.0, 3.0, 4.0, 5.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        # slope = 1.0, but threshold = 2.0, so "flat"
+        assertEq("flat", result.direction);
+        assertEq(True, result.slope > 0.0);
+
+        # With a very small threshold, even tiny slopes are detected
+        QoreTrendAnalysisProcessor proc2({
+            "fields": "val", "window_size": 5, "direction_threshold": 0.0,
+        });
+        list<float> values2 = (1.0, 1.0001, 1.0002, 1.0003, 1.0004);
+        *auto result2;
+        foreach float v in (values2) {
+            result2 = proc2.processRecord({"val": v});
+        }
+        assertEq(True, exists result2);
+        assertEq("rising", result2.direction);
+    }
+
+    trendNegativeDirectionThreshold() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreTrendAnalysisProcessor({
+                "fields": "val", "window_size": 5, "direction_threshold": -0.1,
+            });
+        });
+    }
+
+    # --- AnomalyDetection Tests ---
+
+    anomalyNormal() {
+        QoreAnomalyDetectionProcessor proc({"fields": "val", "window_size": 5, "threshold": 3.0});
+        # fill window with similar values
+        list<float> values = (10.0, 10.5, 9.8, 10.2, 10.1);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq("anomaly", result.event_type);
+        assertEq(False, result.is_anomaly);
+    }
+
+    anomalyDetected() {
+        QoreAnomalyDetectionProcessor proc({"fields": "val", "window_size": 10, "threshold": 2.0});
+        # fill window with consistent values so the historical mean=10, stddev=0
+        list<float> values = (10.0, 10.0, 10.0, 10.0, 10.0);
+        foreach float v in (values) {
+            proc.processRecord({"val": v});
+        }
+        # history is [10,10,10,10,10] — all identical, stddev=0
+        # with stddev=0, z_score=0 regardless of the value (division guarded)
+        # add some variance to make stddev > 0
+        proc.processRecord({"val": 10.1});
+        proc.processRecord({"val": 9.9});
+        proc.processRecord({"val": 10.1});
+        proc.processRecord({"val": 9.9});
+        # now history has [10,10,10,10,10,10.1,9.9,10.1,9.9], mean ~= 10.0, small stddev
+        # insert a large outlier
+        *auto result = proc.processRecord({"val": 1000.0});
+        assertEq(True, exists result);
+        assertEq(True, result.is_anomaly);
+        assertEq(True, result.z_score > 2.0);
+        # verify the mean was computed from history (excluding the outlier)
+        assertEq(True, result.mean < 11.0);
+    }
+
+    anomalyZeroStddev() {
+        QoreAnomalyDetectionProcessor proc({"fields": "val", "window_size": 3});
+        # all identical values: history stddev=0, z_score should be 0
+        list<float> values = (5.0, 5.0, 5.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq(0.0, result.z_score);
+        assertEq(False, result.is_anomaly);
+        # verify mean is from history (the two values before the third)
+        assertEq(5.0, result.mean);
+    }
+
+    anomalyCustomThreshold() {
+        QoreAnomalyDetectionProcessor proc({"fields": "val", "window_size": 5, "threshold": 1.0});
+        # lower threshold = more sensitive
+        list<float> values = (10.0, 10.0, 10.0, 10.0, 15.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq(1.0, result.threshold);
+        # history for last record is [10, 10, 10, 10]: mean=10, stddev=0
+        # with stddev=0, z_score=0 — not anomalous
+        # To test custom threshold properly, need history with variance
+        QoreAnomalyDetectionProcessor proc2({"fields": "val", "window_size": 5, "threshold": 1.0});
+        list<float> values2 = (10.0, 11.0, 9.0, 10.0, 15.0);
+        *auto result2;
+        foreach float v in (values2) {
+            result2 = proc2.processRecord({"val": v});
+        }
+        assertEq(True, exists result2);
+        assertEq(1.0, result2.threshold);
+        # history [10, 11, 9, 10]: mean=10, stddev ~= 0.816
+        # z_score for 15 = |15 - 10| / 0.816 ~= 6.12 > 1.0
+        assertEq(True, result2.is_anomaly);
+        assertEq(True, result2.z_score > 1.0);
+    }
+
+    anomalyNegativeThreshold() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreAnomalyDetectionProcessor({"fields": "val", "window_size": 3, "threshold": -1.0});
+        });
+    }
+
+    anomalyHistoryExcludesCurrent() {
+        # Verify that z-score is computed from history only (not including current value)
+        QoreAnomalyDetectionProcessor proc({"fields": "val", "window_size": 5, "threshold": 3.0});
+        # first record: no history, z_score = 0
+        *auto r1 = proc.processRecord({"val": 10.0});
+        assertEq(True, exists r1);
+        assertEq(0.0, r1.z_score);
+
+        # second record: history = [10.0], stddev=0 (only 1 value), z_score = 0
+        *auto r2 = proc.processRecord({"val": 100.0});
+        assertEq(True, exists r2);
+        assertEq(0.0, r2.z_score);
+        # mean should be from history [10.0], not including the 100.0
+        assertEq(10.0, r2.mean);
+
+        # third record: history = [10.0, 100.0], now stddev > 0
+        *auto r3 = proc.processRecord({"val": 10.0});
+        assertEq(True, exists r3);
+        # mean of history [10.0, 100.0] = 55.0
+        assertEq(55.0, r3.mean);
+    }
+
+    # --- GroupBy Tests ---
+
+    groupBySingleFieldCount() {
+        QoreGroupByProcessor proc({"group_by": "city", "aggregates": "count()"});
+        proc.processRecord({"city": "NYC", "name": "Alice"});
+        proc.processRecord({"city": "LA", "name": "Bob"});
+        proc.processRecord({"city": "NYC", "name": "Carol"});
+        proc.processRecord({"city": "NYC", "name": "Dave"});
+        proc.processRecord({"city": "LA", "name": "Eve"});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(True, exists results);
+        assertEq(2, results.size());
+
+        # find results by city
+        hash<string, hash<auto>> by_city;
+        foreach auto r in (results) {
+            by_city{r.city} = r;
+        }
+        assertEq(3, by_city.NYC.count);
+        assertEq(2, by_city.LA.count);
+    }
+
+    groupBySingleFieldSum() {
+        QoreGroupByProcessor proc({
+            "group_by": "region",
+            "aggregates": "total=sum(amount)",
+        });
+        proc.processRecord({"region": "North", "amount": 100});
+        proc.processRecord({"region": "South", "amount": 200});
+        proc.processRecord({"region": "North", "amount": 150});
+        proc.processRecord({"region": "South", "amount": 50});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(2, results.size());
+
+        hash<string, hash<auto>> by_region;
+        foreach auto r in (results) {
+            by_region{r.region} = r;
+        }
+        assertEq(250.0, by_region.North.total);
+        assertEq(250.0, by_region.South.total);
+    }
+
+    groupByMultipleFields() {
+        QoreGroupByProcessor proc({
+            "group_by": "region,product",
+            "aggregates": "count(),revenue=sum(amount)",
+        });
+        proc.processRecord({"region": "US", "product": "A", "amount": 100});
+        proc.processRecord({"region": "US", "product": "B", "amount": 200});
+        proc.processRecord({"region": "EU", "product": "A", "amount": 150});
+        proc.processRecord({"region": "US", "product": "A", "amount": 50});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(3, results.size());
+
+        # find US+A group
+        *hash<auto> us_a;
+        foreach auto r in (results) {
+            if (r.region == "US" && r.product == "A") {
+                us_a = r;
+            }
+        }
+        assertEq(True, exists us_a);
+        assertEq(2, us_a.count);
+        assertEq(150.0, us_a.revenue);
+    }
+
+    groupByAllAggOps() {
+        QoreGroupByProcessor proc({
+            "group_by": "grp",
+            "aggregates": "n=count(),s=sum(val),a=avg(val),mn=min(val),mx=max(val),"
+                "f=first(name),l=last(name)",
+        });
+        proc.processRecord({"grp": "X", "val": 10, "name": "Alice"});
+        proc.processRecord({"grp": "X", "val": 20, "name": "Bob"});
+        proc.processRecord({"grp": "X", "val": 30, "name": "Carol"});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        hash<auto> r = results[0];
+        assertEq("X", r.grp);
+        assertEq(3, r.n);
+        assertEq(60.0, r.s);
+        assertEq(20.0, r.a);
+        assertEq(10.0, r.mn);
+        assertEq(30.0, r.mx);
+        assertEq("Alice", r.f);
+        assertEq("Carol", r.l);
+    }
+
+    groupByGlobalAggregate() {
+        # no group_by field: all records form one group
+        QoreGroupByProcessor proc({"aggregates": "total=count(),sum_val=sum(val)"});
+        proc.processRecord({"val": 10});
+        proc.processRecord({"val": 20});
+        proc.processRecord({"val": 30});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        assertEq(3, results[0].total);
+        assertEq(60.0, results[0].sum_val);
+    }
+
+    groupByMissingGroupField() {
+        QoreGroupByProcessor proc({"group_by": "city", "aggregates": "count()"});
+        proc.processRecord({"city": "NYC", "val": 1});
+        proc.processRecord({"val": 2});  # missing "city" — should be skipped
+        proc.processRecord({"city": "NYC", "val": 3});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        assertEq(2, results[0].count);  # only 2 records counted
+    }
+
+    groupByNonNumericSkipped() {
+        QoreGroupByProcessor proc({"group_by": "grp", "aggregates": "total=sum(val)"});
+        proc.processRecord({"grp": "A", "val": 10});
+        proc.processRecord({"grp": "A", "val": "not-a-number"});
+        proc.processRecord({"grp": "A", "val": 20});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        assertEq(30.0, results[0].total);  # non-numeric skipped
+    }
+
+    groupByEmptyFlush() {
+        QoreGroupByProcessor proc({"group_by": "city", "aggregates": "count()"});
+        # no records submitted
+        *list<auto> results = proc.flushRecords();
+        assertNothing(results);
+    }
+
+    groupByNotConfigured() {
+        QoreGroupByProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub () {
+            proc.processRecord({"city": "NYC"});
+        });
+    }
+
+    groupByInvalidExpr() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreGroupByProcessor({"aggregates": "invalid-expression"});
+        });
+    }
+
+    groupByUnknownOp() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreGroupByProcessor({"aggregates": "median(val)"});
+        });
+    }
+
+    groupByMissingFieldInSum() {
+        # sum() without a field name should throw
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreGroupByProcessor({"aggregates": "sum()"});
+        });
+    }
+
+    groupByCapabilities() {
+        QoreGroupByProcessor proc({"aggregates": "count()"});
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    groupByNamedOutputColumns() {
+        QoreGroupByProcessor proc({
+            "group_by": "g",
+            "aggregates": "num_records=count(),total_value=sum(v)",
+        });
+        proc.processRecord({"g": "A", "v": 5});
+        proc.processRecord({"g": "A", "v": 15});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        assertEq(True, results[0].hasKey("num_records"));
+        assertEq(True, results[0].hasKey("total_value"));
+        assertEq(2, results[0].num_records);
+        assertEq(20.0, results[0].total_value);
+    }
+
+    groupByAvgNoValues() {
+        # avg when no numeric values found should return 0.0
+        QoreGroupByProcessor proc({"group_by": "g", "aggregates": "a=avg(val)"});
+        proc.processRecord({"g": "X", "val": "text"});
+
+        *list<auto> results = proc.flushRecords();
+        assertEq(1, results.size());
+        assertEq(0.0, results[0].a);
+    }
+
+    # --- Integration Tests ---
+
+    integrationPipeline() {
+        # source -> running-stats -> sink
+        QoreRunningStatsProcessor stats({"fields": "val", "window_size": 3});
+        TestAnalyticsSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(stats);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"val": 1.0},
+            {"val": 2.0},
+            {"val": 3.0},
+            {"val": 4.0},
+            {"val": 5.0},
+            {"val": 6.0},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        # 6 records, window_size=3 -> 2 complete windows
+        assertEq(2, sink.results.size());
+        assertEq("statistics", sink.results[0].event_type);
+        assertEq("statistics", sink.results[1].event_type);
+        # first window [1,2,3] avg=2.0
+        assertEq(2.0, sink.results[0].avg);
+        # second window [4,5,6] avg=5.0
+        assertEq(5.0, sink.results[1].avg);
+    }
+
+    integrationGroupByPipeline() {
+        # source -> group-by -> sink (flush emits grouped results)
+        QoreGroupByProcessor grouper({
+            "group_by": "type",
+            "aggregates": "total=count(),sum_val=sum(amount)",
+        });
+        TestAnalyticsSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(grouper);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"type": "sale", "amount": 100},
+            {"type": "refund", "amount": 25},
+            {"type": "sale", "amount": 200},
+            {"type": "sale", "amount": 50},
+            {"type": "refund", "amount": 10},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        assertEq(2, sink.results.size());
+        hash<string, hash<auto>> by_type;
+        foreach auto r in (sink.results) {
+            by_type{r.type} = r;
+        }
+        assertEq(3, by_type.sale.total);
+        assertEq(350.0, by_type.sale.sum_val);
+        assertEq(2, by_type.refund.total);
+        assertEq(35.0, by_type.refund.sum_val);
+    }
+
+    integrationNavigationChildren() {
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        *list<string> children = root.getChildProviderNames();
+        assertEq(True, exists children);
+        # 6 original + 4 analytics + 1 group-by + 7 statistical = 18
+        assertEq(18, children.size());
+
+        # verify new children are present
+        list<string> new_children = ("running-stats", "moving-average",
+            "trend-analysis", "anomaly-detection", "group-by");
+        foreach string name in (new_children) {
+            assertEq(True, children.contains(name),
+                sprintf("child %y should be listed", name));
+        }
+    }
+
+    integrationActionRegistration() {
+        *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Qore");
+        assertEq(True, exists actions);
+
+        # check all 4 analytics actions are registered
+        list<string> analytics_actions = (
+            "running-stats",
+            "moving-average",
+            "trend-analysis",
+            "anomaly-detection",
+        );
+        foreach string action_name in (analytics_actions) {
+            assertEq(True, actions.hasKey(action_name),
+                sprintf("action %y should exist", action_name));
+            assertEq(DPAT_PIPELINE_PROCESSOR, actions{action_name}.action_code);
+            assertEq(DPC_ANALYTICS, actions{action_name}.processor_capabilities,
+                sprintf("action %y should have DPC_ANALYTICS capability", action_name));
+        }
+
+        # check group-by action is registered with DPC_AGGREGATE
+        assertEq(True, actions.hasKey("group-by"));
+        assertEq(DPAT_PIPELINE_PROCESSOR, actions."group-by".action_code);
+        assertEq(DPC_AGGREGATE, actions."group-by".processor_capabilities);
+
+        # verify total actions = 6 original + 4 analytics + 1 group-by + 7 statistical = 18
+        assertEq(18, actions.size());
+    }
+
+    integrationDpcAnalyticsConstant() {
+        # DPC_ANALYTICS should be 32 (1 << 5)
+        assertEq(32, DPC_ANALYTICS);
+    }
+
+    integrationCapabilityNameMap() {
+        assertEq("ANALYTICS", ProcessorCapabilityNameMap{DPC_ANALYTICS});
+    }
+
+    # --- Real-World Question Tests ---
+
+    questionSalesByRegion() {
+        # "Create a table of sales numbers by region for February"
+        # Pipeline: filter(month=February) -> group-by(region, sum(sales))
+
+        # simulate filter for February
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "month"}, "February"),
+        };
+        QoreFilterRecordsProcessor filter({"where_cond": expr});
+
+        QoreGroupByProcessor grouper({
+            "group_by": "region",
+            "aggregates": "total_sales=sum(sales),order_count=count()",
+        });
+        TestAnalyticsSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(filter);
+        pipeline.append(grouper);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"month": "January", "region": "North", "sales": 500},
+            {"month": "February", "region": "North", "sales": 100},
+            {"month": "February", "region": "South", "sales": 200},
+            {"month": "February", "region": "North", "sales": 150},
+            {"month": "February", "region": "South", "sales": 50},
+            {"month": "March", "region": "North", "sales": 300},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        # only February records should be grouped
+        assertEq(2, sink.results.size());
+        hash<string, hash<auto>> by_region;
+        foreach auto r in (sink.results) {
+            by_region{r.region} = r;
+        }
+        assertEq(250.0, by_region.North.total_sales);
+        assertEq(2, by_region.North.order_count);
+        assertEq(250.0, by_region.South.total_sales);
+        assertEq(2, by_region.South.order_count);
+    }
+
+    questionCityMostCustomers() {
+        # "Which city has the most customers?"
+        # Pipeline: group-by(city, count()) -> find max in code
+        QoreGroupByProcessor grouper({
+            "group_by": "city",
+            "aggregates": "customer_count=count()",
+        });
+        TestAnalyticsSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(grouper);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"city": "NYC", "name": "Alice"},
+            {"city": "LA", "name": "Bob"},
+            {"city": "NYC", "name": "Carol"},
+            {"city": "Chicago", "name": "Dave"},
+            {"city": "NYC", "name": "Eve"},
+            {"city": "LA", "name": "Frank"},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        assertEq(3, sink.results.size());
+
+        # find the city with the most customers
+        *hash<auto> max_city;
+        foreach auto r in (sink.results) {
+            if (!max_city || r.customer_count > max_city.customer_count) {
+                max_city = r;
+            }
+        }
+        assertEq("NYC", max_city.city);
+        assertEq(3, max_city.customer_count);
+    }
+
+    questionErrorCount() {
+        # "How many times did technical errors happen over a given time period?"
+        # Pipeline: filter(type=technical AND date in range) -> group-by(count())
+
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "type"}, "technical"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "day"}, 1),
+                },
+                <DataProviderExpression>{
+                    "exp": "<=",
+                    "args": (<DataProviderFieldReference>{"field": "day"}, 28),
+                },
+            ),
+        };
+        QoreFilterRecordsProcessor filter({"where_cond": expr});
+
+        # no group_by: all filtered records are counted as one group
+        QoreGroupByProcessor counter({"aggregates": "error_count=count()"});
+        TestAnalyticsSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(filter);
+        pipeline.append(counter);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"type": "technical", "day": 5, "msg": "timeout"},
+            {"type": "user", "day": 7, "msg": "bad input"},
+            {"type": "technical", "day": 15, "msg": "connection lost"},
+            {"type": "technical", "day": 30, "msg": "out of range"},  # day > 28, filtered out
+            {"type": "technical", "day": 22, "msg": "disk full"},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        assertEq(1, sink.results.size());
+        assertEq(3, sink.results[0].error_count);
+    }
+}

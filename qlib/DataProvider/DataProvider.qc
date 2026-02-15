@@ -75,6 +75,7 @@ public class DataProvider {
             "busylight": "BusyLightDataProvider",
 
             "cdsrest": "CdsRestDataProvider",
+            "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
             "db": "DbDataProvider",
@@ -90,18 +91,26 @@ public class DataProvider {
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
+            "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+            "jotform": "JotformDataProvider",
 
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            "linear": "LinearDataProvider",
+
             # provided by the json module
             "mcpclient": "McpClientDataProvider",
 
+            "ml": "DataProviderML",
+
+            "mailgun": "MailgunDataProvider",
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
             "mongodb": "MongoDbDataProvider",
@@ -117,6 +126,9 @@ public class DataProvider {
             "salesforcerest": "SalesforceRestDataProvider",
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
+            "shippo": "ShippoDataProvider",
+            "shipstation": "ShipStationDataProvider",
+            "square": "SquareDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",
@@ -144,6 +156,14 @@ public class DataProvider {
 
             # provided by the zip module
             "zip": "ZipDataProvider",
+
+            "unleashed": "UnleashedDataProvider",
+
+            "wave": "WaveDataProvider",
+
+            "zohobooks": "ZohoBooksDataProvider",
+            "zohoinventory": "ZohoInventoryDataProvider",
+            "zohoinvoice": "ZohoInvoiceDataProvider",
         };
 
         #! Map of known type path prefixes to modules
@@ -223,7 +243,7 @@ public class DataProvider {
     }
 
     #! Adds the given global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -235,7 +255,7 @@ public class DataProvider {
     }
 
     #! Removes the given global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -256,7 +276,7 @@ public class DataProvider {
     }
 
     #! Replaces data provider global options with the value provided
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @throw INVALID-OPTIONS Invalid options provided
 
@@ -268,7 +288,7 @@ public class DataProvider {
     }
 
     #! Checks for valid global data provider options
-    /** @param options a bitfield of @ref DataProviderGlobalOptions "global data provider options"
+    /** @param options a bitfield of global data provider options (DPO_*)
 
         @since DataProvider 3.0
     */
@@ -450,7 +470,9 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
         hash<FactoryInfo> info = DataProvider::getFactoryInfoFromString(name);
 
         AbstractDataProviderFactory factory;
-        if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
+        if (*AbstractDataProviderFactory cached = DataProvider::getFactory(info.name)) {
+            factory = cached;
+        } else if ((*string factory_name = FactoryMap{info.name}) && DataProvider::tryLoad(factory_name)) {
             factory = DataProvider::getFactoryEx(info.name);
         } else {
             *object v = DataProvider::loadFromEnvironment("get_data_provider_map", "data provider", <SymbolInfo>{
@@ -635,7 +657,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John" && @age > 18');
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DataProviderExpression> parseDpqlExpression(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -659,7 +681,7 @@ if (!result.success) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -683,7 +705,7 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
 # Result: @name == "John"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static string serializeDpqlExpression(hash<DataProviderExpression> exp,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -704,7 +726,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlTokenInfo>> getDpqlTokens(string text) {
         DpqlTokenizer tokenizer(text);
@@ -729,7 +751,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 # Returns completions for fields starting with "na"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
             hash<string, AbstractDataField> fields,
@@ -758,7 +780,7 @@ if (errors) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,
@@ -1189,7 +1211,8 @@ if (errors) {
         if (v.typeCode() == NT_STRING && (v =~ /^\$[a-z][-a-z]+:({.*}|[a-zA-Z0-9_\.]+|'.*')$/)) {
             return v;
         }
-        return trim(make_yaml(v));
+        # strip YAML header (e.g., "%YAML 1.2\n--- " or "%YAML 1.2\n---\n") for inline rendering
+        return regex_subst(trim(make_yaml(v)), "^%YAML [0-9.]+\\n---\\s*", "");
 %else
         throw "MISSING-YAML", "Missing YAML module";
 %endif

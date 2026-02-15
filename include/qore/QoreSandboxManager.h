@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -204,7 +204,7 @@ public:
         - \c "allowed_paths": List of hashes with "path" and "mode" keys
         - \c "denied_paths": List of denied path strings
     */
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Creates a copy with the same restrictions (for child programs)
     /** @return A new QoreFilesystemSecurityManager with the same configuration
@@ -385,7 +385,7 @@ public:
     DLLEXPORT bool checkHostname(const char* hostname, int port, int proto) const;
 
     //! Returns the current configuration as a hash
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Creates a copy with the same restrictions
     DLLEXPORT QoreNetworkSecurityManager* copy() const;
@@ -573,7 +573,7 @@ public:
     /** @return A hash containing all sandbox configuration including
         filesystem, network, and resource limit settings
     */
-    DLLEXPORT QoreHashNode* getConfiguration() const;
+    DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
 
     //! Checks if filesystem access is allowed
     /** @param path The path to check
@@ -666,13 +666,56 @@ private:
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
 };
 
-//! Returns the sandbox manager for the current running program, if any
-/** @return Pointer to the current sandbox manager, or nullptr if none
+//! RAII helper that acquires a ref'd sandbox manager for the current running program
+/** Acquires a strong reference under lock to prevent use-after-free
+    when the sandbox manager is cleared during program cleanup.
 
-    @note This is used internally by QoreFile, QoreSocket, etc. to check
-    security restrictions.
+    @par Example:
+    @code{.cpp}
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        smh->checkIOInterrupt(xsink, "reading file");
+    }
+    @endcode
+
+    @since Qore 2.1
 */
-DLLEXPORT QoreSandboxManager* runtime_get_sandbox_manager();
+class DLLEXPORT QoreSandboxManagerHelper {
+public:
+    //! Acquires a ref'd sandbox manager for the current program
+    QoreSandboxManagerHelper();
+
+    //! Acquires a ref'd sandbox manager for the given program
+    /** @param pgm the program to get the sandbox manager from; if nullptr, no reference is acquired
+    */
+    QoreSandboxManagerHelper(QoreProgram* pgm);
+
+    //! Releases the reference if held
+    ~QoreSandboxManagerHelper();
+
+    //! Returns true if a valid reference is held
+    operator bool() const {
+        return ptr != nullptr;
+    }
+
+    //! Provides access to the sandbox manager
+    QoreSandboxManager* operator->() const {
+        return ptr;
+    }
+
+    //! Returns the raw pointer
+    QoreSandboxManager* get() const {
+        return ptr;
+    }
+
+private:
+    QoreSandboxManager* ptr;
+
+    // non-copyable
+    QoreSandboxManagerHelper(const QoreSandboxManagerHelper&) = delete;
+    QoreSandboxManagerHelper& operator=(const QoreSandboxManagerHelper&) = delete;
+};
+
 
 //! Checks if the current program has been interrupted and raises exception if so
 /** This is a convenience function for I/O operations that need to check

@@ -75,8 +75,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
             }
             # add to app info map
             index.appinfomap{app.name} = app;
-            # add to app action info map
-            index.actioninfomap{app.name} = getSerializableAppActions(app.name);
+            # add to app action info map (skip apps with no actions)
+            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name)) {
+                index.actioninfomap{app.name} = actions;
+            }
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, paths;
                 map log(LoggerLevel::LevelDebug, "Registered data provider app %y -> %y", app.name, $1), paths;
@@ -225,7 +227,7 @@ class IndexFileHelper {
         orig_path = ProviderIndexUtil::getIndexPath(type);
 
         # check if the index file exists and is readable
-        if (hstat(orig_path) == "REGULAR") {
+        if (hstat(orig_path).type == "REGULAR") {
             # if so, make a backup
             new_path = orig_path + ".orig";
             rename(orig_path, new_path);

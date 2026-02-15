@@ -37,13 +37,11 @@
 %endtry
 
 # don't use "$" signs for variables and class members, assume local variable scope
-%new-style
+%modern
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 module OracleSqlUtilBase {
     version = "1.6";
@@ -124,7 +122,7 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     @subsection ora_partitioning_select Partition Support in Selects
 
     It's possible to select from a particular partition of a table with %OracleSqlUtilBase;
-    @ref OracleSqlUtilBase::OracleTable::OracleSelectOptions "OracleSelectOptions" defines the \c "partition" key which
+    \c OracleSqlUtilBase::OracleTable::OracleSelectOptions "OracleSelectOptions" defines the \c "partition" key which
     can be added to a @ref select_option_hash "select option hash" to specify the partition to select from as in the
     following example:
     @code{.py}
@@ -174,7 +172,7 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     |@ref SqlUtil::VARCHAR|\c varchar2
 
     To use other types, use the \c "native_type"
-    @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Oracle type name
+    \c SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Oracle type name
     instead (under the \c "driver" and \c "oracle" keys for schemas supporting multiple databases).
 
     @subsection ora_other_objects Additional Object Types Supported
@@ -192,9 +190,9 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     The \c "materialized_views" should be assigned to a hash, each key name is the name of the materialized view, and
     the values are hashes with the
     following keys:
-    - \c "logging": (@ref bool_type "bool") if the materialized view should be logged
-    - \c "use_index": (@ref bool_type "bool") if the materialized view should be indexed
-    - \c "src": (@ref bool_type "bool") the source of the materialized view
+    - \c "logging": (\c bool_type "bool") if the materialized view should be logged
+    - \c "use_index": (\c bool_type "bool") if the materialized view should be indexed
+    - \c "src": (\c bool_type "bool") the source of the materialized view
 
     The \c "materialized_views" key can go in the top level of the @ref schema_desc_hash for Oracle-only schemas, or,
     for schemas targeting multiple database types, under the \c "driver" and \c "oracle" keys as in the following
@@ -223,7 +221,7 @@ hash schema = (
 
     The \c "packages" should be assigned to a hash, each key name is the name of the package, and the values are
     hashes with the following key:
-    - \c "src": (@ref bool_type "bool") the source of the package
+    - \c "src": (\c bool_type "bool") the source of the package
 
     The \c "packages" key can go in the top level of the @ref schema_desc_hash for Oracle-only schemas, or, for
     schemas targeting multiple database types, under the \c "driver" and \c "oracle" keys as in the following example:
@@ -336,7 +334,7 @@ hash schema = (
     @subsection v123 OracleSqlUtilBase v1.2.3
     - fixed a bug in \c character_semantics for standalone column
       (<a href="https://github.com/qoretechnologies/qore/issues/1688">issue 1688</a>)
-    - implemented @ref cop_trunc_date() operator
+    - implemented \c cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection v122 OracleSqlUtilBase v1.2.2
@@ -1996,13 +1994,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         const OraColumnOptions = AbstractTable::ColumnOptions + OraColumnOpts;
 
         #! Oracle-specific column options
-        /** this constant extends @ref SqlUtil::AbstractTable::ColumnDescOptions as returned by \c OracleSqlUtilBase::OracleTable::getColumnDescOptions() with the following keys:
+        /** this constant extends \c SqlUtil::AbstractTable::ColumnDescOptions as returned by \c OracleSqlUtilBase::OracleTable::getColumnDescOptions() with the following keys:
             - \c character_semantics: to specify that applicable character columns use character semantics in the column definition
         */
         const OraColumnDescOptions = AbstractTable::ColumnDescOptions + OraColumnOpts;
 
         #! Oracle-specific index options
-        /** this constant extends @ref SqlUtil::AbstractTable::IndexOptions as returned by \c OracleSqlUtilBase::OracleTable::getIndexOptions() with the following keys:
+        /** this constant extends \c SqlUtil::AbstractTable::IndexOptions as returned by \c OracleSqlUtilBase::OracleTable::getIndexOptions() with the following keys:
             - \c compute_statistics: adds "compute statistics" to index creation strings
         */
         const OracleIndexOptions = AbstractTable::IndexOptions + {
@@ -2027,7 +2025,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         #! Oracle select options
         /** This constant extends @ref SqlUtil::AbstractTable::SelectOptions with the following options as returned by
-            @ref OracleSqlUtilBase::OracleTable::getSelectOptions():
+            @ref OracleSqlUtilBase::OracleTable::getSelectOptions() :
             - \c partition: the partition name to use in a query (see @ref ora_partitioning_select)
         */
         const OracleSelectOptions = AbstractTable::SelectOptions + {

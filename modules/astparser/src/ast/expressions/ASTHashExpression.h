@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -42,9 +42,18 @@ public:
     //! Pointer type.
     using Ptr = std::unique_ptr<ASTHashExpression>;
 
+    //! Kind of hash delimiter used.
+    enum class HashKind {
+        AHE_CurlyBraces = 0,   //!< Hash with curly braces: {"key": val}
+        AHE_Parentheses = 1,   //!< Hash with parentheses: ("key": val)
+    };
+
 public:
     //! Hash elements.
     std::vector<ASTHashElementExpression*> elements;
+
+    //! Delimiter kind (curly braces vs parentheses).
+    HashKind hashKind = HashKind::AHE_CurlyBraces;
 
 public:
     ASTHashExpression(std::vector<ASTHashElementExpression*>* elems = nullptr) : ASTExpression() {

@@ -38,6 +38,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <string>
 #include <set>
@@ -496,6 +497,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
         if (current_cls.isSystem()) {
             q_serializer_t serializer = current_cls.getSerializer();
             assert(serializer);
+            RuntimeConfig& rc = rc_get_current_ref();
 
             // get class private data for serialization call
             ReferenceHolder<AbstractPrivateData> private_data(self.getReferencedPrivateData(current_cls.getID(),
@@ -505,7 +507,7 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
             }
 
             class_members = serializer(self, **private_data, reinterpret_cast<QoreSerializationContext&>(context),
-                xsink);
+                rc, xsink);
             if (*xsink) {
                 return context.imap.end();
             }
@@ -900,8 +902,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (mcls.isSystem()) {
                     q_deserializer_t deserializer = mcls.getDeserializer();
                     assert(deserializer);
+                    RuntimeConfig& rc = rc_get_current_ref();
 
-                    deserializer(*obj, cmh, reinterpret_cast<QoreDeserializationContext&>(context), xsink);
+                    deserializer(*obj, cmh, reinterpret_cast<QoreDeserializationContext&>(context), rc, xsink);
                     if (*xsink) {
                         return QoreValue();
                     }

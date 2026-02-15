@@ -26,13 +26,11 @@
 %requires qore >= 2.2
 
 # require type definitions everywhere
-%require-types
 
 # enable all warnings
-%enable-all-warnings
 
 # do not use "$" signs, assume local vars
-%new-style
+%modern
 
 module WebUtil {
     version = "1.7";
@@ -107,7 +105,7 @@ module WebUtil {
     @subsection webutil_v1_3 WebUtil v1.3
     - updated @ref WebUtil::FileHandler::handleRequest() "FileHandler::handleRequest()" to allow for chunked sends
     - fixed a bug where template programs with @ref Qore::PO_ALLOW_BARE_REFS set did not work
-    - fixed a bug serving index files in @ref WebUtil::FileHandler::tryServeRequest() "FileHandler::tryServeRequest()"
+    - fixed a bug serving index files in \c WebUtil::FileHandler::tryServeRequest() "FileHandler::tryServeRequest()"
       where index files could be incorrectly served with a \c "204 No Content" response
       (<a href="https://github.com/qoretechnologies/qore/issues/616">issue 616</a>)
 
@@ -953,7 +951,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         @param body message body, if any
 
         @return a hash with the following keys:
-        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+        - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
         - \c "body": the message body to return in the response
         - \c "close": (optional) set this key to @ref True "True" if the connection should be unconditionally
             closed when the handler returns
@@ -1183,7 +1181,11 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     private hash<HttpResponseInfo> sendFileChunked(HttpServer::HttpListenerInterface listener, Qore::Socket s,
             hash<auto> cx, hash<auto> hdr, *data body, InputStream stream, *hash<auto> respHdr) {
         AbstractStreamRequest fsr = getStreamRequestImpl(listener, s, cx, hdr, body, stream, respHdr);
-        return cast<hash<HttpResponseInfo>>(fsr.handleRequest());
+        hash<auto> rv = fsr.handleRequest();
+        if (exists rv."raw_response") {
+            delete rv."raw_response";
+        }
+        return cast<hash<HttpResponseInfo>>(rv);
     }
 
     #! this method is called when a directory should be rendered
@@ -1218,7 +1220,7 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         @param body message body, if any
 
         @return a hash with the following keys:
-        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+        - \c "code": the HTTP return code (see \c HttpServer::HttpCodes)
         - \c "body": the message body to return in the response
         - \c "close": (optional) set this key to @ref True "True" if the connection should be unconditionally closed when the handler returns
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response

@@ -22,6 +22,8 @@ class TypedefTest inherits QUnit::Test {
         addTestCase("Typedef with %no-typedef", \testNoTypedefOption());
         addTestCase("Typedef duplicate error", \testTypedefDuplicateError());
         addTestCase("Typedef class conflict error", \testTypedefClassConflict());
+        addTestCase("Typedef hashdecl conflict error", \testTypedefHashdeclConflict());
+        addTestCase("Typedef with namespace prefix", \testTypedefNamespacePrefix());
         set_return_value(main());
     }
 
@@ -152,7 +154,7 @@ class TypedefTest inherits QUnit::Test {
         p.parse("
             typedef MyInt = int;
 
-            class Counter {
+            class TypedefCounter {
                 private {
                     MyInt count = 0;
                 }
@@ -167,7 +169,7 @@ class TypedefTest inherits QUnit::Test {
             }
 
             int sub test() {
-                Counter c();
+                TypedefCounter c();
                 c.increment(5);
                 c.increment(3);
                 return c.getCount();
@@ -221,5 +223,40 @@ class TypedefTest inherits QUnit::Test {
             class Foo {}
             typedef Foo = int;  # Should fail - conflicts with class
         ", "test"));
+    }
+
+    testTypedefHashdeclConflict() {
+        # Test that typedef with same name as hashdecl causes error
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+            hashdecl Bar {
+                int x;
+            }
+            typedef Bar = int;  # Should fail - conflicts with hashdecl
+        ", "test"));
+    }
+
+    testTypedefNamespacePrefix() {
+        # Test accessing typedef with namespace prefix
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            namespace Outer {
+                public typedef MyInt = int;
+
+                namespace Inner {
+                    public typedef MyString = string;
+                }
+            }
+
+            auto sub test() {
+                Outer::MyInt x = 42;
+                Outer::Inner::MyString s = 'hello';
+                return (x, s);
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq(42, result[0]);
+        assertEq("hello", result[1]);
     }
 }

@@ -313,7 +313,8 @@ public class FileDataType inherits AbstractDataProviderType {
     }
 
     #! returns the value if the value can be assigned to the type
-    /** @param value the value to assign to the type
+    /** @param type the data provider type to check against
+        @param value the value to assign to the type
 
         @return the value to be assigned; can be converted by the type
 

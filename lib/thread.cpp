@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,7 @@
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/StatementBlock.h"
@@ -1047,6 +1048,14 @@ int check_stack(ExceptionSink* xsink) {
 }
 #endif
 
+int q_check_stack(ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack(xsink);
+#else
+    return 0;
+#endif
+}
+
 void inc_active_exceptions(int diff) {
     ThreadData* td = thread_data.get();
     assert(diff == 1 || diff < 0);
@@ -1139,7 +1148,11 @@ void thread_ref_remove(const lvalue_ref* r) {
 }
 
 LocalVarValue* thread_instantiate_lvar() {
-    return thread_data.get()->tlpd->lvstack.instantiate();
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    LocalVarValue* var = tlpd->lvstack.instantiate();
+    // Set declaration order for proper cleanup ordering (issue #5168)
+    var->setDeclOrder(tlpd->getNextVarOrder());
+    return var;
 }
 
 void thread_uninstantiate_lvar(ExceptionSink* xsink) {
@@ -1159,11 +1172,20 @@ LocalVarValue* thread_find_lvar(const char* id) {
 }
 
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
-    return thread_data.get()->tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    // Get declaration order for this stack entry (issue #5168)
+    uint64_t order = tlpd->getNextVarOrder();
+    ClosureVarValue* cvv = tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign, order);
+    return cvv;
 }
 
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
-    return thread_data.get()->tlpd->cvstack.instantiate(cvar);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    // Get declaration order for this stack entry (issue #5168)
+    // The order is stored per-stack-entry, NOT on the shared ClosureVarValue object,
+    // because the same object can be pushed multiple times or across different threads
+    uint64_t order = tlpd->getNextVarOrder();
+    tlpd->cvstack.instantiate(cvar, order);
 }
 
 void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
@@ -1748,11 +1770,41 @@ void clear_argv_ref() {
 }
 
 int get_implicit_element() {
-    return thread_data.get()->getElement();
+    // Read from tl_runtime_config - the authoritative source for element
+    return rc_get_tls_ref().getElement();
 }
 
 int save_implicit_element(int n_element) {
-    return thread_data.get()->saveElement(n_element);
+    // Update tl_runtime_config - the authoritative source for element
+    RuntimeConfig& rc = rc_get_tls_ref();
+    int old = rc.getElement();
+    rc.setElement(n_element);
+    return old;
+}
+
+void qore_get_runtime_context(QoreRuntimeContext* rc) {
+    if (!rc) {
+        return;
+    }
+
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        rc->pgm = nullptr;
+        rc->loc = nullptr;
+        rc->stmt = nullptr;
+        rc->po = 0;
+        rc->stack_loc = nullptr;
+        rc->element = 0;
+        return;
+    }
+
+    QoreProgram* pgm = td->current_pgm;
+    rc->pgm = pgm ? pgm : td->call_program_context;
+    rc->loc = td->runtime_loc;
+    rc->stmt = td->runtime_statement;
+    rc->po = td->runtime_po;
+    rc->stack_loc = td->current_stack_location;
+    rc->element = get_implicit_element();
 }
 
 void end_signal_thread(ExceptionSink* xsink) {
@@ -1796,7 +1848,8 @@ const char* set_module_context_name(const char* n) {
 }
 
 const char* get_module_context_name() {
-    return thread_data.get()->module_context_name;
+    ThreadData* td = thread_data.get();
+    return td ? td->module_context_name : nullptr;
 }
 
 const char* set_module_context_path(const char* p) {
@@ -1807,7 +1860,8 @@ const char* set_module_context_path(const char* p) {
 }
 
 const char* get_module_context_path() {
-    return thread_data.get()->module_context_path;
+    ThreadData* td = thread_data.get();
+    return td ? td->module_context_path : nullptr;
 }
 
 void ModuleContextNamespaceList::clear() {
@@ -1880,12 +1934,23 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    old_rc_class = rc.getClass();
+    rc.setObject(obj);
+    rc.setClass(c);
+    do_rc_update = true;
 }
 
 ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
     ThreadData* td  = thread_data.get();
     td->current_obj = old_obj;
     td->current_class = old_class;
+    if (do_rc_update) {
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
+    }
 }
 
 class qore_object_context_helper : public ObjectSubstitutionHelper {
@@ -1907,11 +1972,18 @@ ClassOnlySubstitutionHelper::ClassOnlySubstitutionHelper(const qore_class_privat
     ThreadData* td = thread_data.get();
     old_class = td->current_class;
     td->current_class = qc;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_class = rc.getClass();
+    rc.setClass(qc);
+    do_rc_update = true;
 }
 
 ClassOnlySubstitutionHelper::~ClassOnlySubstitutionHelper() {
     ThreadData* td = thread_data.get();
     td->current_class = old_class;
+    if (do_rc_update) {
+        rc_get_tls_ref().setClass(old_rc_class);
+    }
 }
 
 OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const qore_class_private* qc)
@@ -1920,6 +1992,9 @@ OptionalClassOnlySubstitutionHelper::OptionalClassOnlySubstitutionHelper(const q
         ThreadData* td = thread_data.get();
         old_class = td->current_class;
         td->current_class = qc;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        old_rc_class = rc.getClass();
+        rc.setClass(qc);
     }
 }
 
@@ -1927,6 +2002,7 @@ OptionalClassOnlySubstitutionHelper::~OptionalClassOnlySubstitutionHelper() {
     if (subst) {
         ThreadData* td = thread_data.get();
         td->current_class = old_class;
+        rc_get_tls_ref().setClass(old_rc_class);
     }
 }
 
@@ -1938,6 +2014,11 @@ OptionalClassObjSubstitutionHelper::OptionalClassObjSubstitutionHelper(const qor
         old_class = td->current_class;
         td->current_obj = nullptr;
         td->current_class = qc;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        old_rc_obj = rc.getObject();
+        old_rc_class = rc.getClass();
+        rc.setObject(nullptr);
+        rc.setClass(qc);
     }
 }
 
@@ -1946,10 +2027,14 @@ OptionalClassObjSubstitutionHelper::~OptionalClassObjSubstitutionHelper() {
         ThreadData* td = thread_data.get();
         td->current_obj = old_obj;
         td->current_class = old_class;
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
     }
 }
 
 OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreObject* obj) {
+    do_rc_update = false;
     if (obj) {
 #ifdef DEBUG
         old_obj = nullptr;
@@ -1961,6 +2046,9 @@ OptionalObjectOnlySubstitutionHelper::OptionalObjectOnlySubstitutionHelper(QoreO
 OptionalObjectOnlySubstitutionHelper::~OptionalObjectOnlySubstitutionHelper() {
     if (subst) {
         thread_data.get()->current_obj = old_obj;
+        if (do_rc_update) {
+            rc_get_tls_ref().setObject(old_rc_obj);
+        }
     }
 }
 
@@ -1971,6 +2059,10 @@ void OptionalObjectOnlySubstitutionHelper::set(QoreObject* obj) {
     old_obj = td->current_obj;
     td->current_obj = obj;
     subst = true;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    rc.setObject(obj);
+    do_rc_update = true;
 }
 
 CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
@@ -1984,6 +2076,12 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
 
     old_class = td->current_class;
     td->current_class = c;
+    RuntimeConfig& rc = rc_get_tls_ref();
+    old_rc_obj = rc.getObject();
+    old_rc_class = rc.getClass();
+    rc.setObject(obj);
+    rc.setClass(c);
+    do_rc_update = true;
 
     if (obj && ref_obj && obj != old_obj && !qore_object_private::get(*obj)->startCall(code, xsink)) {
         do_ref = true;
@@ -2024,6 +2122,11 @@ CodeContextHelperBase::~CodeContextHelperBase() {
     td->current_code = old_code;
     td->current_obj = old_obj;
     td->current_class = old_class;
+    if (do_rc_update) {
+        RuntimeConfig& rc = rc_get_tls_ref();
+        rc.setObject(old_rc_obj);
+        rc.setClass(old_rc_class);
+    }
 }
 
 ArgvContextHelper::ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink) : xsink(n_xsink) {
@@ -2507,8 +2610,17 @@ void qore_exit_process(int rc) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
     // call exit() in a single-threaded process; flushes file buffers, etc
-    if (thread_list.getNumThreads() <= 1)
+    // NOTE: the signal handler thread (TID 0) is not counted in getNumThreads(),
+    // so when called from the signal handler thread (e.g., SIGTERM handler),
+    // other application threads may still be active; we must use _Exit() to
+    // avoid running static destructors while other threads access static data
+    if (thread_list.getNumThreads() <= 1
+#ifdef HAVE_SIGNAL_HANDLING
+        && q_gettid() > 0
+#endif
+    ) {
         exit(rc);
+    }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
     // in multithreaded programs; call _Exit() instead
     _Exit(rc);
@@ -2846,57 +2958,48 @@ namespace {
 }
 
 QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return do_op_background(rc, left, xsink);
+}
+
+QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
     if (!left)
         return QoreValue();
 
-    //printd(2, "op_background() before crlr left = %p\n", left);
-    ValueHolder nl(copy_value_and_resolve_lvar_refs(left, xsink), xsink);
-    //printd(2, "op_background() after crlr nl = %p\n", nl);
+    ValueHolder nl(copy_value_and_resolve_lvar_refs(rc, left, xsink), xsink);
     if (*xsink || !nl)
         return QoreValue();
 
-    // now we are ready to create the new thread
-
-    // get thread entry
-    //printd(2, "calling get_thread_entry()\n");
     int tid = get_thread_entry();
-    //printd(2, "got %d()\n", tid);
-
-    // if can't start thread, then throw exception
     if (tid == -1) {
         xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
         return QoreValue();
     }
 
     BGThreadParams* tp = new BGThreadParams(nl.release(), tid, xsink);
-    //printd(5, "created BGThreadParams(%p, %d) = %p\n", *nl, tid, tp);
     if (*xsink) {
         deregister_thread(tid);
         return QoreValue();
     }
-    //printd(5, "tp = %p\n", tp);
-    // create thread
-    int rc;
+
+    int rc_thread;
     pthread_t ptid;
 
-    //printd(5, "calling pthread_create(%p, %p, %p, %p)\n", &ptid, &ta_default, op_background_thread, tp);
     thread_counter.inc();
 
 #ifdef QORE_MANAGE_STACK
-    // make sure accesses to ta_default are made locked
     AutoLocker al(stack_lck);
 #endif
 
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
+    if ((rc_thread = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
         tp->cleanup(xsink);
         tp->del();
 
         thread_counter.dec();
         deregister_thread(tid);
-        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create thread");
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc_thread, "could not create thread");
         return QoreValue();
     }
-    //printd(5, "pthread_create() new thread TID %d, pthread_create() returned %d\n", tid, rc);
     return tid;
 }
 

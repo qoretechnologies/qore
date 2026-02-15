@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -189,7 +189,7 @@ int QoreParseListNode::initArgs(QoreParseContext& parse_context, type_vec_t& arg
     int err = parseInitIntern(v_needs_eval, parse_context);
     arg_types = std::move(vtypes);
 
-    ReferenceHolder<QoreListNode> l(new QoreListNode(needs_eval()), nullptr);
+    ReferenceHolder<QoreListNode> l(qore_list_private::newList(needs_eval()), nullptr);
     qore_list_private* ll = qore_list_private::get(**l);
     ll->complexTypeInfo = qore_get_complex_list_type(autoTypeInfo);
     ll->reserve(values.size());

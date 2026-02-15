@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,7 @@
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
+#include "qore/intern/qore_program_private.h"
 
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
         RObject(n_obj->references, true),
@@ -83,6 +84,30 @@ qore_object_private::~qore_object_private() {
     // release weak reference
     if (pgm) {
         pgm->depDeref();
+    }
+}
+
+void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
+    if (privateData) {
+        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
+        privateData->derefAll(xsink);
+        delete privateData;
+#ifdef DEBUG
+        privateData = nullptr;
+#endif
+    }
+
+    if (td) {
+        qore_hash_private::clear(*td, xsink, true);
+        td->deref(xsink);
+    }
+
+    if (cdm) {
+        for (auto& i : *cdm) {
+            qore_hash_private::clear(*i.second, xsink, true);
+            i.second->deref(xsink);
+        }
+        delete cdm;
     }
 }
 
@@ -186,7 +211,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         }
     }
 
-    ReferenceHolder<QoreHashNode> rv(data->getSlice(*nl, xsink), xsink);
+    ReferenceHolder<QoreHashNode> rv(qore_hash_private::get(data)->getSlice(*nl, xsink), xsink);
     if (*xsink)
         return nullptr;
     // get internal members for each internal class
@@ -569,11 +594,7 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-        return odata->priv->swapKeyValue(key, QoreTypeInfo::getDefaultQoreValue(mti), this);
-    } else {
-        return odata->priv->swapKeyValue(key, QoreValue(), this);
-    }
+    return odata->priv->swapKeyValue(key, QoreValue(), this);
 }
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
@@ -597,12 +618,7 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv{};
-    if (getProgram()->getParseOptions64() & PO_STRICT_TYPES) {
-        rv = odata->priv->swapKeyValue(key, QoreTypeInfo::getDefaultQoreValue(mti), this);
-    } else {
-        rv = odata->priv->swapKeyValue(key, QoreValue(), this);
-    }
+    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
 
     if (needs_scan(rv)) {
         if (!getScanCount()) {
@@ -663,9 +679,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 
         // issue #4122: do not return values that are not set in the object
         bool exists;
-        QoreValue n = (getProgram()->getParseOptions64() & PO_STRICT_TYPES)
-            ? odata->priv->swapKeyValueIfExists(key, QoreTypeInfo::getDefaultQoreValue(mti), this, exists)
-            : odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists);
+        QoreValue n = odata->priv->swapKeyValueIfExists(key, QoreValue(), this, exists);
 
         if (!exists) {
             continue;
@@ -839,7 +853,7 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
 }
 
 QoreValue qore_object_private::evalBuiltinMethodWithPrivateData(const QoreMethod& method,
-        const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, q_rt_flags_t rtflags,
+        const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     // get referenced object
     ReferenceHolder<AbstractPrivateData> pd(getReferencedPrivateData(
@@ -856,7 +870,7 @@ QoreValue qore_object_private::evalBuiltinMethodWithPrivateData(const QoreMethod
         return QoreValue();
     }
     assert(pd);
-    return meth->evalImpl(obj, *pd, args, rtflags, xsink);
+    return meth->evalImpl(obj, *pd, args, rc, xsink);
 }
 
 AbstractPrivateData* qore_object_private::getReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const {
@@ -898,7 +912,8 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink) {
         ++obj->references;
     }
 
-    qore_class_private::get(*theclass)->execDestructor(obj, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
 
     cdmap_t* cdm;
     QoreHashNode* td;
@@ -1178,13 +1193,19 @@ void QoreObject::tDeref() {
     priv->tDeref();
 }
 
+QoreValue QoreObject::evalBuiltinMethodWithPrivateData(const QoreMethod& method,
+        const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return priv->evalBuiltinMethodWithPrivateData(method, meth, args, rc, xsink);
+}
+
 void QoreObject::evalCopyMethodWithPrivateData(const QoreClass &thisclass, const BuiltinCopyVariantBase* meth,
-        QoreObject* self, ExceptionSink* xsink) {
+        QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) {
     // get referenced object
     AbstractPrivateData* pd = getReferencedPrivateData(thisclass.getID(), xsink);
 
     if (pd) {
-        meth->evalImpl(thisclass, self, this, pd, xsink);
+        meth->evalImpl(thisclass, self, this, pd, rc, xsink);
         pd->deref(xsink);
         return;
     }
@@ -1227,55 +1248,65 @@ QoreValue QoreObject::evalMethod(const QoreString* name, const QoreListNode* arg
 }
 
 QoreValue QoreObject::evalMethod(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
-    return qore_class_private::get(*priv->theclass)->evalMethod(this, name, args, runtime_get_class(), xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_class_private::get(*priv->theclass)->evalMethod(this, name, args, runtime_get_class(), rc, xsink);
 }
 
 QoreValue QoreObject::evalMethod(const char* name, const QoreClass* class_ctx, const QoreListNode* args,
         ExceptionSink* xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
     return qore_class_private::get(*priv->theclass)->evalMethod(this, name, args, qore_class_private::get(*class_ctx),
-        xsink);
+        rc, xsink);
 }
 
 QoreValue QoreObject::evalMethod(const QoreMethod& method, const QoreListNode* args, ExceptionSink* xsink) {
-    return qore_method_private::eval(method, xsink, this, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(method, xsink, rc, this, args);
 }
 
 QoreValue QoreObject::evalMethod(const QoreMethod& method, const QoreClass* class_ctx, const QoreListNode* args,
         ExceptionSink* xsink) {
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
-    return qore_method_private::eval(method, xsink, this, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(method, xsink, rc, this, args);
 }
 
 QoreValue QoreObject::evalMethodVariant(const QoreMethod& method, const QoreExternalMethodVariant* variant,
         const QoreListNode* args, ExceptionSink* xsink) {
-    return qore_method_private::evalNormalVariant(method, xsink, this, variant, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalNormalVariant(method, xsink, rc, this, variant, args);
 }
 
 QoreValue QoreObject::evalMethodVariant(const QoreMethod& method, const QoreClass* class_ctx,
         const QoreExternalMethodVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
-    return qore_method_private::evalNormalVariant(method, xsink, this, variant, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalNormalVariant(method, xsink, rc, this, variant, args);
 }
 
 QoreValue QoreObject::evalStaticMethod(const QoreMethod& method, const QoreListNode* args, ExceptionSink* xsink) {
-    return qore_method_private::eval(method, xsink, nullptr, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(method, xsink, rc, nullptr, args);
 }
 
 QoreValue QoreObject::evalStaticMethod(const QoreMethod& method, const QoreClass* class_ctx, const QoreListNode* args,
         ExceptionSink* xsink) {
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
-    return qore_method_private::eval(method, xsink, nullptr, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(method, xsink, rc, nullptr, args);
 }
 
 QoreValue QoreObject::evalStaticMethodVariant(const QoreMethod& method, const QoreExternalMethodVariant* variant,
         const QoreListNode* args, ExceptionSink* xsink) {
-    return qore_method_private::evalNormalVariant(method, xsink, nullptr, variant, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalNormalVariant(method, xsink, rc, nullptr, variant, args);
 }
 
 QoreValue QoreObject::evalStaticMethodVariant(const QoreMethod& method, const QoreClass* class_ctx,
         const QoreExternalMethodVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
     ObjectSubstitutionHelper osh(nullptr, qore_class_private::get(*class_ctx));
-    return qore_method_private::evalNormalVariant(method, xsink, nullptr, variant, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalNormalVariant(method, xsink, rc, nullptr, variant, args);
 }
 
 const QoreClass* QoreObject::getClass(qore_classid_t cid) const {

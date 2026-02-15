@@ -156,7 +156,7 @@ NetSuiteRestClient rest(opts);
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
-        that the URL is set by default if not provided (see @ref DefaultUrl)
+        that the URL is set by default if not provided (see \c DefaultUrl)
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -253,7 +253,7 @@ NetSuiteRestClient rest(opts);
 }
 
 #! Class for NetSuite REST connections; returns @ref NetSuiteRestClient objects
-/** This class implements all options of @ref RestClient::RestClientConnection "RestClientConnection";  in addition,
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection";  in addition,
     this class provides the following default values for the following options:
     - \c oauth2_auth_url: \c auto
     - \c oauth2_grant_type: \c authorization_code
@@ -382,10 +382,10 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     }
 
 %ifdef HaveNetSuiteDataProvider
-    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
-    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see @ref getDataProvider()
+        @see \c getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -439,7 +439,7 @@ public class NetSuiteRestConnection inherits RestClient::RestConnection {
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */

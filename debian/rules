@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure --buildsystem=cmake -- \
+		-DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+		-DSINGLE_COMPILATION_UNIT=1
+
+override_dh_auto_install:
+	dh_auto_install --buildsystem=cmake
+	# ensure module directories exist
+	mkdir -p debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore-modules

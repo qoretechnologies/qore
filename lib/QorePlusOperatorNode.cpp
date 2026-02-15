@@ -68,7 +68,6 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         if (rt == NT_STRING)
             str->concat(rh->get<const QoreStringNode>(), xsink);
         else {
-            assert(rh->isScalar() || !runtime_check_parse_option(PO_STRICT_TYPES));
             QoreStringValueHelper r(*rh, str->getEncoding(), xsink);
             if (*xsink)
                 return QoreValue();
@@ -258,20 +257,10 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
-                SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("cannot mix %s and %s types with " \
-                    "the + operator", QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo)));
-                // issue #2943: raise an error for mixing string and non-scalar values with %strict-types
-                if (parse_get_parse_options() & PO_STRICT_TYPES) {
-                    desc->concat("; the non-string value is ignored in this case; this is an error when " \
-                        "%strict-types is in effect");
-                    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc.release());
-                    if (!err) {
-                        err = -1;
-                    }
-                } else {
-                    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
-                        "INVALID-OPERATION", desc.release());
-                }
+                QoreStringMaker desc("cannot mix %s and %s types with the + operator",
+                    QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
+                qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
+                    "INVALID-OPERATION", desc.c_str());
             }
             returnTypeInfo = stringTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_DATE) || QoreTypeInfo::isType(rightTypeInfo, NT_DATE)) {

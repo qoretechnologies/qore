@@ -38,7 +38,7 @@
 
 %requires(reexport) Mime >= 1.4
 %requires(reexport) Util >= 1.3
-%requires(reexport) RestSchemaValidator >= 1.0
+%requires(reexport) RestSchemaValidator >= 2.5
 %requires(reexport) FileLocationHandler
 %requires(reexport) DataProvider >= 3.0
 %requires(reexport) Logger
@@ -183,7 +183,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
 
     Multiple \@subscribe and \@publish blocks can be defined per channel to support
     different message types. The parser extracts all message schemas into the
-    \c subscribe_schemas and \c publish_schemas lists in @ref ChannelSchemaInfo.
+    \c subscribe_schemas and \c publish_schemas lists in \c ChannelSchemaInfo.
 
     @verbatim
     /** @WEBSOCKET /api
@@ -378,9 +378,9 @@ public bool sub optional_field(string obj_type, hash<auto> oh, string name, auto
             throw "INVALID-FIELD-TYPE", sprintf("%s Object: '%s' field has invalid type %y; expected one of: %y",
                 obj_type, name, val.type(), (map Qore::type($1), keys type_codes));
         }
-        # check for conversion
-        code conv = type_codes{tc};
-        if (exists conv) {
+        # check for conversion; hash values can be True (accept as-is) or a closure (convert)
+        auto conv = type_codes{tc};
+        if (conv.callp()) {
             target = conv(val);
         } else {
             target = val;
@@ -408,16 +408,7 @@ public sub required_field(string obj_type, hash<auto> oh, string name, auto type
 }
 
 #! Base class for the %AsyncApi specification objects, wrapping the vendor extensions.
-public class ObjectBase inherits Qore::Serializable {
-    public {
-        #! Allows extensions to the %AsyncApi Schema.
-        /**
-            The field name MUST begin with \c x-, for example, \c x-internal-id.
-            The value can be \c null, a primitive, an array or an object.
-         */
-        hash<auto> vendorExtensions;
-    }
-
+public class ObjectBase inherits RestSchemaValidator::AbstractObjectBase {
     #! Constructor.
     public constructor() {
     }
@@ -426,61 +417,19 @@ public class ObjectBase inherits Qore::Serializable {
     /**
         @param oh deserialized hash from the source schema description describing the object
      */
-    public constructor(hash<auto> oh) {
-        initialize(oh);
+    public constructor(hash<auto> oh) : AbstractObjectBase(oh) {
     }
 
     #! copy constructor
-    constructor(ObjectBase other) {
-        vendorExtensions = other.vendorExtensions;
-    }
-
-    #! Initialize.
-    /**
-        @param oh deserialized hash from the source schema description
-    */
-    public initialize(hash<auto> oh) {
-        vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
-    }
-
-    #! Returns True if this object has the x-deprecated extension set.
-    /** This extension marks an object as deprecated without using the standard deprecated field. */
-    *bool isXDeprecated() {
-        return vendorExtensions."x-deprecated";
-    }
-
-    #! Returns True if this object has the x-internal extension set.
-    /** This extension marks an object as internal/private and not for public consumption. */
-    *bool isInternal() {
-        return vendorExtensions."x-internal";
-    }
-
-    #! Returns True if this object has the x-hidden extension set.
-    /** This extension marks an object as hidden from documentation. */
-    *bool isHidden() {
-        return vendorExtensions."x-hidden";
-    }
-
-    #! Returns the x-displayName extension value if set.
-    /** This extension provides a display name override for documentation. */
-    *string getDisplayName() {
-        return vendorExtensions."x-displayName";
+    constructor(ObjectBase other) : AbstractObjectBase(other) {
     }
 }
 
 #! Base used by @ref SchemaObject for JSON Schema validation constraints
-/** Inherits common validation constraint members from
-    @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase".
+/** Inherits common validation constraint members and methods from
+    @ref RestSchemaValidator::AbstractSchemaBaseValidator "AbstractSchemaBaseValidator".
 */
-public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
-    public {
-        #! Numeric exclusiveMaximum value (JSON Schema draft-07+)
-        *softfloat exclusiveMaxValue;
-
-        #! Numeric exclusiveMinimum value (JSON Schema draft-07+)
-        *softfloat exclusiveMinValue;
-    }
-
+public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
     #! Constructor.
     /** @param obj_type the type of object
         @param oh deserialized hash from the source schema description
@@ -538,490 +487,19 @@ public class SchemaBase inherits RestSchemaValidator::AbstractSchemaBase {
     private constructor() {
     }
 
-    #! returns an example value for the given type
-    private auto getExampleValueWithFormat(string type, *string format, *string fname) {
-        if (enumValues) {
-            auto rv = enumValues.firstKey();
-            switch (type) {
-                case "integer": {
-                    rv = rv.toInt();
-                    switch (format) {
-                        case "unix-time":
-                            rv = localtime(rv);
-                            break;
-                    }
-                    break;
-                }
-                case "number": rv = (format && ValidNumberFormatsHash{format} ? rv.toFloat() : rv.toNumber()); break;
-                case "boolean": rv = rv.toBool(); break;
-                case "string": {
-                    switch (format) {
-                        case "byte": return parse_base64_string(rv);
-                        case "date":
-                        case "date-time":
-                        default:
-                            break;
-                    }
-                }
-            }
-            return rv;
-        }
-        switch (type) {
-            case "string": {
-                switch (format) {
-                    case "byte":
-                    case "binary": return <feedface>;
-                    case "date": return 1987-05-23;
-                    case "date-time": return 1987-05-23T07:45:30Z;
-                    case "uuid": return "d242e639-4ed6-4930-a375-b139c13f89da";
-                    default:
-                        return sprintf("Example %s", fname ?? "string");
-                }
-            }
-            case "integer": {
-                switch (format) {
-                    case "unix-time": return 1726733382;
-                }
-                if (exists minimum)
-                    return exclusiveMin ? minimum + 1 : minimum;
-                if (exists maximum)
-                    return exclusiveMax ? maximum - 1 : maximum;
-                return 1;
-            }
-            case "number": {
-                number rv;
-                if (exists minimum)
-                    rv = exclusiveMin ? minimum + 0.1 : minimum;
-                else if (exists maximum)
-                    rv = exclusiveMax ? maximum - 0.1 : maximum;
-                else
-                    rv = 1.1n;
-                if (format && ValidNumberFormatsHash{format})
-                    return rv.toFloat();
-                return rv;
-            }
-            case "boolean":
-                return True;
-            case "null":
-                return NOTHING;
-            case "any": {
-                return "any value";
-            }
-        }
+    #! Returns the label for the path concept in this API type
+    string getPathLabel() {
+        return "channel";
     }
 
-    #! validates the value against the schema definition
-    private check(bool serialize, bool request, string type, *string format, *SchemaObject items, string channel,
-            string operation, string name, reference<auto> value) {
-        # accept a single value for an array (= one-element list)
-        if (type == "array") {
-            # convert to a list before checking
-            if (exists value && value.typeCode() != NT_LIST) {
-                value = (value,);
-            }
-            checkArrayParam(serialize, request, items, channel, operation, name, \value);
-        } else {
-            on_error rethrow $1.err, sprintf("%s (while checking parameter %y)", $1.desc, name);
-            checkIntern(serialize, request, type, format, channel, operation, name, value, \value);
-        }
+    #! Returns the label for the method concept in this API type
+    string getMethodLabel() {
+        return "operation";
     }
 
-    private checkStringIntern(string channel, string operation, string name, string value) {
-        # minLength and maxLength are based on the number of characters in the string, not bytes
-        if (exists maxLength && value.length() > maxLength)
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y is too long (maxLength: %d, actual: %d)",
-                    name, channel, operation, maxLength, value.length());
-        if (exists minLength && value.length() < minLength)
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y is too short (minLength: %d, actual: %d)",
-                    name, channel, operation, minLength, value.length());
-        if (exists pattern && !value.regex(pattern))
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y does not fit the parameter string pattern "
-                    "(pattern: %y, value: %y)", name, channel, operation, pattern, value);
-        if (enumValues && !enumValues{value})
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values (enum: %y, "
-                    "actual: %y)", name, channel, operation, keys enumValues, value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, list<auto> v, reference<list> value) {
-        if (type != "list" && type != "any")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is an array (%y), "
-                "but the expected type is %y", name, channel, operation, v, type);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, hash<auto> v, reference<hash> value) {
-        if (type != "file" && type != "any" && type != "object")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is an object (%y), "
-                "but the expected type is %y", name, channel, operation, v, type);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, int v, reference<auto> value) {
-        # NOTE: "number" also accepts "int"
-        if (type == "number") {
-            checkIntern(serialize, request, type, format, channel, operation, name, v.toNumber(), \value);
-            return;
-        }
-        if (type != "integer" && type != "any")
-            throwInvalidType(name, "integer", type, v);
-
-        if (!serialize) {
-            switch (format) {
-                case "unix-time":
-                    value = localtime(v);
-                    break;
-            }
-        }
-
-        # Check maximum constraint
-        if (exists maximum) {
-            if (exclusiveMax) {
-                if (value >= maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
-                            name, channel, operation, maximum, value);
-            } else {
-                if (value > maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %y, actual: %y)",
-                            name, channel, operation, maximum, value);
-            }
-        }
-
-        # Check exclusiveMaximum constraint (numeric value)
-        if (exists exclusiveMaxValue) {
-            if (value >= exclusiveMaxValue)
-                throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %y, "
-                        "actual: %y)", name, channel, operation, exclusiveMaxValue, value);
-        }
-
-        # Check minimum constraint
-        if (exists minimum) {
-            if (exclusiveMin) {
-                if (value <= minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
-                            name, channel, operation, minimum, value);
-            } else {
-                if (value < minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %y, actual: %y)",
-                            name, channel, operation, minimum, value);
-            }
-        }
-
-        # Check exclusiveMinimum constraint (numeric value)
-        if (exists exclusiveMinValue) {
-            if (value <= exclusiveMinValue)
-                throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %y, "
-                        "actual: %y)", name, channel, operation, exclusiveMinValue, value);
-        }
-
-        if (enumValues && !enumValues{value})
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values "
-                    "(enum: %y, actual: %y)", name, channel, operation, keys enumValues, value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, number v, reference<number> value) {
-        checkInternNumber(serialize, request, type, format, channel, operation, name, v, \value);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, float v, reference<number> value) {
-        checkInternNumber(serialize, request, type, format, channel, operation, name, v, \value);
-    }
-
-    private checkInternNumber(bool serialize, bool request, string type, *string format, string channel,
-            string operation, string name, auto v, reference<auto> value) {
-        if (type != "number" && type != "any")
-            throwInvalidType(name, "number", type, v);
-
-        # Check maximum constraint
-        if (exists maximum) {
-            if (exclusiveMax) {
-                if (value >= maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %f)",
-                            name, channel, operation, maximum, value);
-            } else {
-                if (value > maximum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too big (maximum: %f, actual: %f)",
-                            name, channel, operation, maximum, value);
-            }
-        }
-
-        # Check exclusiveMaximum constraint (numeric value)
-        if (exists exclusiveMaxValue) {
-            if (value >= exclusiveMaxValue)
-                throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too big (exclusiveMaximum: %f, "
-                        "actual: %f)", name, channel, operation, exclusiveMaxValue, value);
-        }
-
-        # Check minimum constraint
-        if (exists minimum) {
-            if (exclusiveMin) {
-                if (value <= minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %f)",
-                            name, channel, operation, minimum, value);
-            } else {
-                if (value < minimum)
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("Parameter %y for channel %y and operation %y is too small (minimum: %f, actual: %f)",
-                            name, channel, operation, minimum, value);
-            }
-        }
-
-        # Check exclusiveMinimum constraint (numeric value)
-        if (exists exclusiveMinValue) {
-            if (value <= exclusiveMinValue)
-                throw "SCHEMA-VALIDATION-ERROR",
-                    sprintf("Parameter %y for channel %y and operation %y is too small (exclusiveMinimum: %f, "
-                        "actual: %f)", name, channel, operation, exclusiveMinValue, value);
-        }
-
-        if (enumValues && !enumValues{value}) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y does not fit the enumerated values (enum: %y, "
-                    "actual: %f)", name, channel, operation, keys enumValues, value);
-        }
-
-        switch (format) {
-            case "float":
-            case "double":
-            case NOTHING:
-                value = v.toFloat();
-                break;
-
-            default:
-                throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y has an invalid format: %y; expecting "
-                    "(\"float\", \"double\", or no value; value provided: %y)",
-                    name, channel, operation, format, value);
-        }
-    }
-
-    #! converts binary values to strings for supported formats
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, binary v, reference value) {
-        if (type != "string" && type != "any")
-            throwInvalidType(name, "string", type, v);
-
-        if (serialize) {
-            switch (format) {
-                case "byte":
-                    value = make_base64_string(v);
-                    break;
-                case "binary":
-                    value = v;
-                    return;
-                default:
-                    throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter %y: cannot serialize a binary value "
-                        "to a string value with format %y", operation, channel, name, format);
-            }
-            checkStringIntern(channel, operation, name, value);
-        }
-    }
-
-    #! validates string values
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, string v, reference<auto> value) {
-        if (type != "string" && type != "any") {
-            throwInvalidType(name, "string", type, v);
-        }
-
-        if (serialize) {
-            switch (format) {
-                case "byte":
-                    value = make_base64_string(v);
-                    break;
-                case "binary":
-                    value = binary(v);
-                    break;
-                # for date/date-time formats, keep strings as-is during serialization
-            }
-        } else {
-            switch (format) {
-                case "byte":
-                    try {
-                        value = parse_base64_string(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
-                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
-                            ex.desc);
-                    }
-                    break;
-                case "binary":
-                    try {
-                        value = binary(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
-                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
-                            ex.desc);
-                    }
-                    break;
-                case "date":
-                case "date-time":
-                    try {
-                        value = date(v);
-                    } catch (hash<ExceptionInfo> ex) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y of "
-                            "type %y is invalid; value provided: %y (%s)", name, channel, operation, format, v,
-                            ex.desc);
-                    }
-                    break;
-            }
-        }
-        if (value.typeCode() == NT_STRING) {
-            checkStringIntern(channel, operation, name, value);
-        }
-    }
-
-    #! converts dates to/from string or int values for supported formats
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, date v, reference<auto> value) {
-        if (type != "string" && type != "any" && (type != "integer" || format != "unix-time"))
-            throwInvalidType(name, "string", type, v);
-
-        if (serialize) {
-            if (type == "integer" && format == "unix-time") {
-                value = v.getEpochSeconds();
-            } else {
-                switch (format) {
-                    case "date":
-                        value = v.format("YYYY-MM-DD");
-                        break;
-                    case "date-time":
-                        if (v.milliseconds() != 0)
-                            value = v.format("YYYY-MM-DDTHH:mm:SS.yZ");
-                        else
-                            value = v.format("YYYY-MM-DDTHH:mm:SSZ");
-                        break;
-                    default:
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter %y: cannot serialize a date/time "
-                            "value to a string value with format %y", operation, channel, name, format);
-                }
-                checkStringIntern(channel, operation, name, value);
-            }
-        }
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, bool v, reference<bool> value) {
-        if (type != "boolean" && type != "any")
-            throwInvalidType(name, "boolean", type, v);
-    }
-
-    private checkIntern(bool serialize, bool request, string type, *string format, string channel, string operation,
-            string name, nothing v, reference<nothing> value) {
-        if (type != "null" && type != "any")
-            throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for channel %y and operation %y is null, but the "
-                "expected type is %y", name, channel, operation, type);
-    }
-
-    #! validates the value against the schema definition
-    private checkArrayParam(bool serialize, bool request, SchemaObject items, string channel, string operation,
-            string name, reference<list<auto>> value) {
-        if (exists maxItems && value.size() > maxItems) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y has too many items (maxItems: %d, actual: %d)",
-                    name, channel, operation, maxItems, value.size());
-        }
-        if (exists minItems && value.size() < minItems) {
-            throw "SCHEMA-VALIDATION-ERROR",
-                sprintf("Parameter %y for channel %y and operation %y has too few items (minItems: %d, actual: %d)",
-                    name, channel, operation, minItems, value.size());
-        }
-
-        if (!value) {
-            return;
-        }
-
-        # check array element types
-        if (!uniqueItems || items.type != "array") {
-            # hash for checking uniqueness if uniqueItems is true
-            hash<string, bool> h;
-            foreach auto v in (\value) {
-                items.check(serialize, request, channel, operation, name, \v);
-                if (uniqueItems) {
-                    if (h{v}) {
-                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter value %y is duplicated in the "
-                            "array", operation, channel, v);
-                    }
-                    h{v} = True;
-                }
-            }
-        } else {
-            # perform slow array uniqueness check
-            list<auto> uniqueItemsList = ();
-            foreach auto val in (\value) {
-                items.check(serialize, request, channel, operation, name, \val);
-                if (uniqueItemsList.contains(val)) {
-                    throw "SCHEMA-VALIDATION-ERROR",
-                        sprintf("%s %s: Array parameter %y does not have unique items",
-                            operation, channel, name);
-                }
-                uniqueItemsList += val;
-            }
-        }
-    }
-
-    #! throws a \c SCHEMA-VALIDATION-ERROR exception
-    static private throwInvalidType(string name, string actual, string expected, auto value) {
-        throw "SCHEMA-VALIDATION-ERROR",
-            sprintf("Parameter %y has invalid type %y (should be %y); value: %y", name, actual, expected, value);
-    }
-
-    #! Checks the value against the type
-    /** @return True if the value is OK, False if not
-    */
-    static bool checkValueType(reference<auto> value, string type) {
-        if (type == "any") {
-            return True;
-        }
-        int vt = value.typeCode();
-
-        # check for string values
-        if (vt == NT_STRING) {
-            if (type == "boolean") {
-                if (value == "true") {
-                    value = True;
-                    return True;
-                } else if (value == "false") {
-                    value = False;
-                    return True;
-                }
-            } else if (type == "int" && value =~ /^[0-9]+$/) {
-                value = value.toInt();
-                return True;
-            }
-        }
-
-        # check for number values
-        if (vt == NT_INT && type == "number") {
-            value = value.toFloat();
-            return True;
-        }
-
-        if ((vt == NT_BOOLEAN && type != "boolean") ||
-            (vt == NT_INT && type != "integer") ||
-            (vt == NT_FLOAT && type != "number") ||
-            (vt == NT_STRING && (type != "string" && type != "file")) ||
-            (vt == NT_LIST && type != "array")) {
-            return False;
-        }
-        return True;
+    #! AsyncApi keeps date-time strings as-is during serialization
+    bool serializeDateTimeStrings() {
+        return False;
     }
 }
 
@@ -2246,6 +1724,8 @@ public hashdecl EventSchemaInfo {
     *string severity;
     #! Schema for the event's info/payload field
     *hash<auto> info_schema;
+    #! JSON examples for the event info payload
+    *list<auto> examples;
 }
 
 #! WebSocket channel information parsed from \@WEBSOCKET blocks
@@ -2335,16 +1815,16 @@ public class AsyncApiSchemaTokenizer {
             throw "PARSE-ERROR", "Cannot find event name in @EVENT block";
         }
 
-        # Extract @summary
-        match = (block =~ x/@summary\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @summary (don't stop at inline doxygen tags like @ref)
+        match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            event.summary = trim(match[0]);
+            event.summary = trim(processDoxygenRefs(match[0]));
         }
 
-        # Extract @desc (stop at @ENDEVENTSCHEMA or other tags)
-        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @desc (stop at @ENDEVENTSCHEMA or other schema tags, not @ref)
+        match = (block =~ x/@desc\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            event.desc = trim(match[0]);
+            event.desc = trim(processDoxygenRefs(match[0]));
         }
 
         # Extract @class
@@ -2361,24 +1841,44 @@ public class AsyncApiSchemaTokenizer {
 
         # Parse @info schema
         event.info_schema = parseInfoSchema(block);
+        # Parse @example JSON blocks (optional)
+        event.examples = parseJsonExamples(block);
 
         return event;
     }
 
-    #! Parse the @info section of an event block
+    #! Resolve doxygen \@ref tags in description text
+    /** Converts <tt>\@ref</tt> tags to their display text for use in AsyncAPI schema descriptions.
+
+        Handles two forms:
+        - <tt>\@ref Namespace::Name "Display Text"</tt> becomes \c "Display Text"
+        - <tt>\@ref Namespace::Name</tt> (no display text) becomes \c "Name"
+
+        @param text the description text to process
+        @return the text with <tt>\@ref</tt> tags resolved to display text
+    */
+    private static string processDoxygenRefs(string text) {
+        # Handle @ref with display text: @ref Namespace::Name "Display Text" -> Display Text
+        text = regex_subst(text, "@ref\\s+\\S+\\s+\"([^\"]+)\"", "$1", RE_Global);
+        # Handle @ref without display text: @ref Namespace::Name -> Name
+        text = regex_subst(text, "@ref\\s+(?:\\w+::)*(\\w+)", "$1", RE_Global);
+        return text;
+    }
+
+    #! Parse the \@info section of an event block
     /** Handles nested field definitions with proper indentation tracking.
 
         Nested fields under arrays become the array's items schema.
         Nested fields under objects become the object's properties.
 
         Example:
-        @code
+        @verbatim
         @info
         - messages (list): shutdown messages
           - title (string): message title
           - content (string): message content
         - count (int): message count
-        @endcode
+        @endverbatim
 
         Results in:
         - messages: array with items having properties: title, content
@@ -2436,7 +1936,7 @@ public class AsyncApiSchemaTokenizer {
 
             hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
             if (field_desc) {
-                field_schema.description = trim(field_desc);
+                field_schema.description = trim(processDoxygenRefs(field_desc));
             }
 
             # Pop stack until we find a parent with smaller indentation
@@ -2509,6 +2009,78 @@ public class AsyncApiSchemaTokenizer {
         };
     }
 
+    #! Parse \@example JSON blocks (payload examples)
+    private static list<auto> parseJsonExamples(string block) {
+        list<auto> examples = ();
+        list<string> lines = block.split("\n");
+        bool in_example = False;
+        string buf = "";
+
+        foreach string line in (lines) {
+            string trimmed = trim(line);
+
+            # Start of example block
+            if (trimmed == "@example" || trimmed =~ /^@example\s+/) {
+                if (in_example && trim(buf)) {
+                    auto ex = parseExampleJson(buf);
+                    if (ex) {
+                        examples += ex;
+                    }
+                }
+                in_example = True;
+                buf = "";
+
+                # Inline JSON on the @example line, if any
+                if (trimmed.size() > 8) {
+                    buf += trimmed.substr(8) + "\n";
+                }
+                continue;
+            }
+
+            if (in_example) {
+                # Stop at next tag line
+                if (trimmed =~ /^@\w+/) {
+                    if (trim(buf)) {
+                        auto ex = parseExampleJson(buf);
+                        if (ex) {
+                            examples += ex;
+                        }
+                    }
+                    in_example = False;
+                    buf = "";
+                    continue;
+                }
+                buf += line + "\n";
+            }
+        }
+
+        if (in_example && trim(buf)) {
+            auto ex = parseExampleJson(buf);
+            if (ex) {
+                examples += ex;
+            }
+        }
+
+        return examples;
+    }
+
+    private static *auto parseExampleJson(string buf) {
+        string ex = trim(buf);
+        if (!ex) {
+            return NOTHING;
+        }
+%ifdef NoJson
+        return NOTHING;
+%else
+        try {
+            return parse_json(ex);
+        } catch () {
+            # Silently ignore malformed JSON examples
+            return NOTHING;
+        }
+%endif
+    }
+
     #! Parse a \@WEBSOCKET block and extract channel information
     /** @param block the text content of the \@WEBSOCKET block
         @return the parsed channel schema information
@@ -2524,16 +2096,16 @@ public class AsyncApiSchemaTokenizer {
             throw "PARSE-ERROR", "Cannot find path in @WEBSOCKET block";
         }
 
-        # Extract @summary
-        match = (block =~ x/@summary\s+(.+?)(?=@|\n\s*\n|$)/s);
+        # Extract @summary (don't stop at inline doxygen tags like @ref)
+        match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            channel.summary = trim(match[0]);
+            channel.summary = trim(processDoxygenRefs(match[0]));
         }
 
-        # Extract @desc (stop at @ENDASYNCAPI or other tags)
-        match = (block =~ x/@desc\s+(.+?)(?=@[a-zA-Z]|\n\s*\n|$)/s);
+        # Extract @desc (stop at @ENDASYNCAPI or other schema tags, not @ref)
+        match = (block =~ x/@desc\s+(.+?)(?=@(?!ref\b)[a-zA-Z]|\n\s*\n|$)/s);
         if (match.typeCode() == NT_LIST && match[0]) {
-            channel.desc = trim(match[0]);
+            channel.desc = trim(processDoxygenRefs(match[0]));
         }
 
         # Extract all @subscribe schemas
@@ -2553,7 +2125,7 @@ public class AsyncApiSchemaTokenizer {
         return channel;
     }
 
-    #! Parse all @subscribe or @publish message blocks from a channel block
+    #! Parse all \@subscribe or \@publish message blocks from a channel block
     /** @param block the channel block text
         @param msg_type "subscribe" or "publish"
         @return list of message schema hashes, each with "name" and "schema" keys
@@ -2611,10 +2183,15 @@ public class AsyncApiSchemaTokenizer {
             }
 
             if (name) {
+                string msg_block = block.substr(start, line_start - start);
+                list<auto> examples = parseJsonExamples(msg_block);
                 hash<auto> msg = {
                     "name": name,
                     "schema": parseMessageFields(fields_text),
                 };
+                if (examples) {
+                    msg.examples = examples;
+                }
                 messages += msg;
             }
 
@@ -2632,19 +2209,93 @@ public class AsyncApiSchemaTokenizer {
         };
 
         list<string> lines = text.split("\n");
+        if (!lines) {
+            return schema;
+        }
+
+        # Stack to track parent fields: each entry has {indent, field_name, props_ref, is_array}
+        list<hash<auto>> stack = ();
+
+        # Determine minimum indentation (first field's indentation)
+        *int min_indent;
+        foreach string line in (lines) {
+            auto indent_match = (line =~ x/^(\s*)-/);
+            if (indent_match.typeCode() == NT_LIST && indent_match[0]) {
+                min_indent = indent_match[0].length();
+                break;
+            }
+        }
+        if (!min_indent.val()) {
+            min_indent = 0;
+        }
+
         foreach string line in (lines) {
             # Use Qore identifier pattern for field names
-            auto field_match = (line =~ x/^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
-            if (field_match.typeCode() == NT_LIST && field_match[0] && field_match[1]) {
-                string field_name = field_match[0];
-                string field_type = field_match[1];
-                *string field_desc = field_match[2];
+            auto field_match = (line =~ x/^(\s*)-\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(([^)]+)\)(?::\s*(.*))?/);
+            if (field_match.typeCode() != NT_LIST || !field_match[1] || !field_match[2]) {
+                continue;
+            }
 
-                hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
-                if (field_desc) {
-                    field_schema.description = trim(field_desc);
-                }
+            int indent = field_match[0] ? field_match[0].length() : 0;
+            string field_name = field_match[1];
+            string field_type = field_match[2];
+            *string field_desc = field_match[3];
+
+            hash<auto> field_schema = AsyncApiTypeMapper::mapType(field_type);
+            if (field_desc) {
+                field_schema.description = trim(processDoxygenRefs(field_desc));
+            }
+
+            # Pop stack until we find a parent with smaller indentation
+            while (stack && stack.last().indent >= indent) {
+                pop stack;
+            }
+
+            if (!stack) {
                 schema.properties{field_name} = field_schema;
+                if (field_schema.type == "array" || field_schema.type == "object") {
+                    push stack, {
+                        "indent": indent,
+                        "field_name": field_name,
+                        "props_ref": \schema.properties,
+                        "is_array": field_schema.type == "array",
+                    };
+                }
+            } else {
+                reference<hash<auto>> parent_props = stack.last().props_ref;
+                string parent_name = stack.last().field_name;
+                bool is_array = stack.last().is_array;
+
+                if (is_array) {
+                    if (!parent_props{parent_name}.items) {
+                        parent_props{parent_name}.items = {
+                            "type": "object",
+                            "properties": {},
+                        };
+                    }
+                    parent_props{parent_name}.items.properties{field_name} = field_schema;
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.items.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                } else {
+                    if (!parent_props{parent_name}.properties) {
+                        parent_props{parent_name}.properties = {};
+                    }
+                    parent_props{parent_name}.properties{field_name} = field_schema;
+                    if (field_schema.type == "array" || field_schema.type == "object") {
+                        push stack, {
+                            "indent": indent,
+                            "field_name": field_name,
+                            "props_ref": \parent_props{parent_name}.properties,
+                            "is_array": field_schema.type == "array",
+                        };
+                    }
+                }
             }
         }
 
@@ -2873,6 +2524,10 @@ public class AsyncApiSchemaGenerator {
         hash<string, hash<auto>> schemas;
         #! Server definitions
         hash<string, hash<auto>> servers;
+        #! Additional EventData properties
+        *hash<auto> event_data_fields;
+        #! Additional required EventData fields
+        list<string> event_data_required;
     }
 
     #! Create a generator with API metadata
@@ -2887,6 +2542,14 @@ public class AsyncApiSchemaGenerator {
         channels = {};
         schemas = {};
         servers = {};
+        if (api_info.event_data_fields) {
+            event_data_fields = api_info.event_data_fields;
+        }
+        if (api_info.event_data_required) {
+            foreach string req in (api_info.event_data_required) {
+                event_data_required += req;
+            }
+        }
     }
 
     #! Add an event definition
@@ -2939,19 +2602,63 @@ public class AsyncApiSchemaGenerator {
 
         # Add channels
         asyncapi.channels = {};
+        hash<string, list<string>> channel_subscribe_msgs;
+        hash<string, list<string>> channel_publish_msgs;
+        hash<auto> message_components = generateMessageComponents();
+
         if (channels) {
             foreach hash<auto> ch in (channels.pairIterator()) {
                 string channel_name = ch.key;
                 channel_name =~ s/^\///;
                 hash<ChannelSchemaInfo> channel = ch.value;
 
+                hash<auto> channel_messages = {};
+                list<string> subscribe_keys = ();
+                list<string> publish_keys = ();
+
+                list<hash<auto>> subscribe_schemas = channel.subscribe_schemas
+                    ?? (channel.subscribe_schema ? (channel.subscribe_schema,) : ());
+                list<hash<auto>> publish_schemas = channel.publish_schemas
+                    ?? (channel.publish_schema ? (channel.publish_schema,) : ());
+
+                if (subscribe_schemas) {
+                    foreach hash<auto> msg in (subscribe_schemas) {
+                        hash<auto> msg_info = registerChannelMessageComponent(msg, channel_name,
+                            \message_components);
+                        string msg_key = makeUniqueChannelMessageKey(channel_messages, msg_info.message_key);
+                        channel_messages{msg_key} = {
+                            "\$ref": "#/components/messages/" + msg_info.component_key,
+                        };
+                        subscribe_keys += msg_key;
+                    }
+                }
+
+                if (publish_schemas) {
+                    foreach hash<auto> msg in (publish_schemas) {
+                        hash<auto> msg_info = registerChannelMessageComponent(msg, channel_name,
+                            \message_components);
+                        string msg_key = makeUniqueChannelMessageKey(channel_messages, msg_info.message_key);
+                        channel_messages{msg_key} = {
+                            "\$ref": "#/components/messages/" + msg_info.component_key,
+                        };
+                        publish_keys += msg_key;
+                    }
+                }
+
+                if (!channel_messages) {
+                    channel_messages.subscribe = {"\$ref": "#/components/messages/SubscribeMessage"};
+                    channel_messages.event = {"\$ref": "#/components/messages/EventMessage"};
+                    subscribe_keys += "subscribe";
+                    publish_keys += "event";
+                }
+
+                channel_subscribe_msgs{channel_name} = subscribe_keys;
+                channel_publish_msgs{channel_name} = publish_keys;
+
                 asyncapi.channels{channel_name} = {
                     "address": channel.path,
                     "description": channel.desc ?? channel.summary ?? "",
-                    "messages": {
-                        "subscribe": {"\$ref": "#/components/messages/SubscribeMessage"},
-                        "event": {"\$ref": "#/components/messages/EventMessage"},
-                    },
+                    "messages": channel_messages,
                 };
             }
         }
@@ -2966,28 +2673,54 @@ public class AsyncApiSchemaGenerator {
                     "event": {"\$ref": "#/components/messages/EventMessage"},
                 },
             };
+            channel_subscribe_msgs.events = ("subscribe",);
+            channel_publish_msgs.events = ("event",);
         }
 
         # Add operations
-        string first_channel = asyncapi.channels.firstKey();
-        asyncapi.operations = {
-            "subscribeToEvents": {
+        asyncapi.operations = {};
+        foreach string channel_name in (keys asyncapi.channels) {
+            foreach string msg_key in (channel_subscribe_msgs{channel_name} ?? ()) {
+                string op_name = makeOperationName("send", channel_name, msg_key);
+                asyncapi.operations{op_name} = {
+                    "action": "send",
+                    "channel": {"\$ref": "#/channels/" + channel_name},
+                    "summary": "Send " + msg_key + " message",
+                    "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
+                };
+            }
+            foreach string msg_key in (channel_publish_msgs{channel_name} ?? ()) {
+                string op_name = makeOperationName("receive", channel_name, msg_key);
+                asyncapi.operations{op_name} = {
+                    "action": "receive",
+                    "channel": {"\$ref": "#/channels/" + channel_name},
+                    "summary": "Receive " + msg_key + " message",
+                    "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
+                };
+            }
+        }
+
+        if (asyncapi.channels) {
+            string first_channel = asyncapi.channels.firstKey();
+            asyncapi.operations.subscribeToEvents = {
                 "action": "send",
                 "channel": {"\$ref": "#/channels/" + first_channel},
                 "summary": "Subscribe to event stream",
-                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/subscribe"},),
-            },
-            "receiveEvents": {
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/"
+                    + (channel_subscribe_msgs{first_channel} ? channel_subscribe_msgs{first_channel}[0] : "subscribe")},),
+            };
+            asyncapi.operations.receiveEvents = {
                 "action": "receive",
                 "channel": {"\$ref": "#/channels/" + first_channel},
                 "summary": "Receive event notifications",
-                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/event"},),
-            },
-        };
+                "messages": ({"\$ref": "#/channels/" + first_channel + "/messages/"
+                    + (channel_publish_msgs{first_channel} ? channel_publish_msgs{first_channel}[0] : "event")},),
+            };
+        }
 
         # Add components
         asyncapi.components = {
-            "messages": generateMessageComponents(),
+            "messages": message_components,
             "schemas": generateSchemaComponents(),
         };
 
@@ -3014,8 +2747,113 @@ public class AsyncApiSchemaGenerator {
         };
     }
 
+    private static hash<auto> registerChannelMessageComponent(hash<auto> msg, string channel_name,
+        reference<hash<auto>> message_components) {
+        string base_key = msg.name;
+        string component_key = makeUniqueComponentKey(base_key, channel_name, \message_components);
+
+        hash<auto> component = {
+            "name": msg.name,
+            "title": msg.name,
+            "summary": msg.summary ?? msg.name,
+            "contentType": msg.content_type ?? "application/json",
+            "payload": msg.schema ?? {"type": "object", "additionalProperties": True},
+        };
+        if (msg.desc) {
+            component.description = msg.desc;
+        }
+        if (msg.examples) {
+            list<hash<auto>> example_msgs;
+            foreach auto ex in (msg.examples) {
+                example_msgs += {
+                    "payload": ex,
+                };
+            }
+            component.examples = example_msgs;
+        }
+        message_components{component_key} = component;
+
+        return {
+            "component_key": component_key,
+            "message_key": getMessageKey(msg.name),
+        };
+    }
+
+    private static string getMessageKey(string name) {
+        if (name == "SubscribeMessage") {
+            return "subscribe";
+        }
+        if (name == "EventMessage") {
+            return "event";
+        }
+        return name;
+    }
+
+    private static string makeUniqueComponentKey(string base_key, string channel_name,
+        reference<hash<auto>> message_components) {
+        string key = base_key;
+        if (message_components{key}) {
+            key = channel_name + "_" + base_key;
+        }
+        int idx = 2;
+        while (message_components{key}) {
+            key = channel_name + "_" + base_key + "_" + idx.toString();
+            idx++;
+        }
+        return key;
+    }
+
+    private static string makeUniqueChannelMessageKey(hash<auto> channel_messages, string base_key) {
+        string key = base_key;
+        int idx = 2;
+        while (channel_messages{key}) {
+            key = base_key + "_" + idx.toString();
+            idx++;
+        }
+        return key;
+    }
+
+    private static string makeOperationName(string direction, string channel_name, string msg_key) {
+        string base = direction + "_" + channel_name + "_" + msg_key;
+        base =~ s/[^A-Za-z0-9_]/_/g;
+        return base;
+    }
+
     #! Generate schema component definitions
     private hash<auto> generateSchemaComponents() {
+        hash<auto> event_data_properties = {
+            "id": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Unique event sequence ID",
+            },
+            "time": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Event timestamp",
+            },
+            "event": {
+                "type": "string",
+                "description": "Event name",
+            },
+            "severity": {
+                "type": "string",
+                "enum": ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL"),
+                "description": "Event severity",
+            },
+            "info": {
+                "type": "object",
+                "description": "Event-specific payload",
+            },
+        };
+        if (event_data_fields) {
+            event_data_properties += event_data_fields;
+        }
+        list<string> event_data_required_fields = ("id", "time", "event");
+        if (event_data_required) {
+            event_data_required_fields += event_data_required;
+        }
+
         hash<auto> component_schemas = schemas + {
             "SubscribePayload": {
                 "type": "object",
@@ -3061,32 +2899,8 @@ public class AsyncApiSchemaGenerator {
             },
             "EventData": {
                 "type": "object",
-                "required": ("id", "time", "event"),
-                "properties": {
-                    "id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Unique event sequence ID",
-                    },
-                    "time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "Event timestamp",
-                    },
-                    "event": {
-                        "type": "string",
-                        "description": "Event name",
-                    },
-                    "severity": {
-                        "type": "string",
-                        "enum": ("INFO", "WARNING", "MINOR", "MAJOR", "FATAL"),
-                        "description": "Event severity",
-                    },
-                    "info": {
-                        "type": "object",
-                        "description": "Event-specific payload",
-                    },
-                },
+                "required": event_data_required_fields,
+                "properties": event_data_properties,
             },
         };
 
@@ -3097,6 +2911,9 @@ public class AsyncApiSchemaGenerator {
 
             hash<auto> event_schema = event.info_schema ?? {"type": "object"};
             event_schema.description = event.desc ?? event.summary ?? sprintf("Info payload for %s event", event.name);
+            if (event.examples) {
+                event_schema.examples = event.examples;
+            }
 
             component_schemas{schema_name} = event_schema;
         }

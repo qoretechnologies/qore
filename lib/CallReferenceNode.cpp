@@ -34,6 +34,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RuntimeConfig.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -90,8 +91,13 @@ const char* CallReferenceCallNode::getTypeName() const {
 
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    ValueEvalOptimizedRefHolder lv(exp, xsink);
+    ValueEvalRefHolder lv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -180,6 +186,11 @@ QoreString* AbstractCallReferenceNode::getAsString(bool& del, int foff, Exceptio
 }
 
 QoreValue AbstractCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue AbstractCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     assert(false);
     return QoreValue();
@@ -213,9 +224,14 @@ ParseObjectMethodReferenceNode::~ParseObjectMethodReferenceNode() {
 
 // returns a RunTimeObjectMethodReference or NULL if there's an exception
 QoreValue ParseObjectMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     // evaluate lvalue expression
-    ValueEvalOptimizedRefHolder lv(exp, xsink);
+    ValueEvalRefHolder lv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -226,8 +242,6 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionS
                               "expression does not evaluate to an object; got type '%s' instead", lv->getTypeName());
         return QoreValue();
     }
-
-    //printd(5, "ParseObjectMethodReferenceNode::evalImpl() this: %p o: %p %s::%s() m: %p\n", this, o, o->getClassName(), method.c_str(), m);
 
     const QoreClass* oc = o->getClass();
 
@@ -242,24 +256,32 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionS
             if (!m) {
                 m = oc->findStaticMethod(method.c_str(), access);
                 if (!m) {
-                    xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(), "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
+                    xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
+                        "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
                     return QoreValue();
                 }
             }
 
             if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
                 if (m->isPrivate())
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(), "cannot create a call reference to %s %s::%s() from outside the class", privpub(access), o->getClassName(), method.c_str());
+                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                        "cannot create a call reference to %s %s::%s() from outside the class",
+                        privpub(access), o->getClassName(), method.c_str());
                 else
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(), "cannot create a call reference to %s::%s() because the parent class that implements the method (%s::%s()) is privately inherited", o->getClassName(), method.c_str(), m->getClass()->getName(), method.c_str());
+                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                        "cannot create a call reference to %s::%s() because the parent class that implements the method "
+                        "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
+                        m->getClass()->getName(), method.c_str());
 
                 return QoreValue();
             }
         }
     }
 
-    if (oc == m->getClass() || oc == qc)
+    if (o->getClass() == m->getClass()) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
+    }
+
     return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
 }
 
@@ -318,13 +340,19 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
 
 // returns a RunTimeObjectMethodReferenceNode or NULL if there's an exception
 QoreValue ParseSelfMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    QoreObject* o = runtime_get_stack_object();
+    QoreObject* o = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(o);
 
     // return class with method already found at parse time if known
     if (o->getClass() == meth->getClass())
-        return new RunTimeResolvedMethodReferenceNode(loc, o, meth);
+        return new RunTimeResolvedMethodReferenceNode(loc, o, meth,
+            rc.getClass() ? rc.getClass() : runtime_get_class());
 
     return new RunTimeObjectMethodReferenceNode(loc, o, meth->getName());
 }
@@ -354,6 +382,11 @@ StaticMethodReferenceNode::~StaticMethodReferenceNode() {
 
 // returns a RunTimeObjectMethodReference or nullptr if there's an exception
 QoreValue StaticMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue StaticMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     return new LocalStaticMethodCallReferenceNode(loc, meth);
 }
@@ -372,8 +405,15 @@ ParseScopedSelfMethodReferenceNode::~ParseScopedSelfMethodReferenceNode() {
 
 // returns a RunTimeObjectMethodReference or nullptr if there's an exception
 QoreValue ParseScopedSelfMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ParseScopedSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    return new RunTimeResolvedMethodReferenceNode(loc, runtime_get_stack_object(), method);
+    QoreObject* o = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    return new RunTimeResolvedMethodReferenceNode(loc, o, method,
+        rc.getClass() ? rc.getClass() : runtime_get_class());
 }
 
 int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -414,7 +454,8 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
             "deleted");
         return QoreValue();
     }
-    return qore_method_private::eval(*method, xsink, obj, args, qc, pgm);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm);
 }
 
 QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
@@ -426,7 +467,7 @@ bool RunTimeResolvedMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v
     return vc && vc->obj == obj && vc->method == method;
 }
 
-QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() {
+QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : 0;
 }
 
@@ -448,7 +489,8 @@ QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, 
     //printd(5, "RunTimeObjectMethodReferenceNode::exec() this: %p obj: %p %s::%s() qc: %p (%s)\n", this, obj,
     //    obj->getClassName(), method.c_str(), qc, qc ? qc->name.c_str() : "n/a");
     // issue #2145: set class context after evaluating arguments
-    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);
 }
 
 QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
@@ -506,12 +548,20 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
 
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue LocalStaticMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue LocalStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    return new StaticMethodCallReferenceNode(loc, method, ::getProgram(), runtime_get_class());
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
+    const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
+    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
 }
 
 QoreValue LocalStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    return qore_method_private::eval(*method, xsink, 0, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args);
 }
 
 bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -521,18 +571,26 @@ bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v
     return vc && method == vc->method;
 }
 
-QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() {
+QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : nullptr;
 }
 
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue LocalMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue LocalMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    return new MethodCallReferenceNode(loc, method, ::getProgram());
+    QoreObject* o = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    return new RunTimeResolvedMethodReferenceNode(loc, o, method,
+        rc.getClass() ? rc.getClass() : runtime_get_class());
 }
 
 QoreValue LocalMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    return qore_method_private::eval(*method, xsink, runtime_get_stack_object(), args, nullptr);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
 }
 
 bool LocalMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -568,7 +626,8 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
-    return qore_method_private::eval(*method, xsink, nullptr, args, class_ctx, pgm);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
@@ -590,7 +649,8 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue MethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    return qore_method_private::eval(*method, xsink, obj, args);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*method, xsink, rc, obj, args);
 }
 
 UnresolvedStaticMethodCallReferenceNode::UnresolvedStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -684,12 +744,19 @@ LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgram
 }
 
 QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
-    return new FunctionCallReferenceNode(loc, uf, ::getProgram());
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
+    return new FunctionCallReferenceNode(loc, uf, call_pgm);
 }
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    return uf->evalFunction(0, args, 0, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return uf->evalFunction(0, args, nullptr, rc, xsink);
 }
 
 bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -707,7 +774,8 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    return uf->evalFunction(0, args, pgm, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return uf->evalFunction(0, args, pgm, rc, xsink);
 }
 
 ResolvedCallReferenceNode::ResolvedCallReferenceNode() : AbstractCallReferenceNode(false, NT_FUNCREF) {
@@ -737,6 +805,11 @@ bool ResolvedCallReferenceNode::is_equal_soft(const AbstractQoreNode *v, Excepti
 }
 
 QoreValue ResolvedCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue ResolvedCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     needs_deref = false;
     return this;
 }

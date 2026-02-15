@@ -70,3 +70,23 @@ abstract nothing OutputStream::close();
     @endcode
  */
 abstract nothing OutputStream::write(binary data);
+
+//! Returns @ref True if this stream supports non-blocking I/O
+/**
+    @return @ref True if non-blocking I/O is supported
+
+    @since %Qore 2.2
+*/
+bool OutputStream::supportsNonBlockingIo() [flags=CONSTANT] {
+    return os->supportsNonBlockingIo();
+}
+
+//! Returns the pollable file descriptor for this stream, or -1 if not pollable
+/**
+    @return the file descriptor, or -1
+
+    @since %Qore 2.2
+*/
+int OutputStream::getPollableDescriptor() [flags=CONSTANT] {
+    return os->getPollableDescriptor();
+}

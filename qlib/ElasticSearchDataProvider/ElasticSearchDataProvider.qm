@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/*  ElasticSearchDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  ElasticSearchDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -67,6 +67,7 @@ module ElasticSearchDataProvider {
             "logo": ElasticSearchLogo,
             "logo_file_name": "elasticsearch-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
         });
 
         # register all supported actions
@@ -137,7 +138,7 @@ module ElasticSearchDataProvider {
     </div>
     @endhtmlonly
 
-    The %ElasticSearchDataProvider module provides a @ref dataproviderintro "data provider" API for ElasticSearch
+    The %ElasticSearchDataProvider module provides a \c dataproviderintro "data provider" API for ElasticSearch
     instances and data.  It provides introspection into the configuration and document attributes as well as APIs and
     a record-based data provider to use ElasticSearch indices as DB table-like objects as well.
 
@@ -246,9 +247,6 @@ module ElasticSearchDataProvider {
 
 #! Contains all public definitions in the ElasticSearchDataProvider module
 public namespace ElasticSearchDataProvider {
-}
-
-namespace Priv {
 #! ElasticSearch logo
-const ElasticSearchLogo = File::readTextFile(get_script_dir() + "/elastic-logo.svg");
+public const ElasticSearchLogo = File::readTextFile(get_script_dir() + "/elastic-logo.svg");
 }

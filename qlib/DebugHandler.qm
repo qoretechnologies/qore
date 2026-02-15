@@ -34,10 +34,8 @@
 %requires Mime
 
 # require type definitions everywhere
-%require-types
 # enable all warnings
-%enable-all-warnings
-%new-style
+%modern
 %no-debugging
 %allow-debugger
 
@@ -62,7 +60,7 @@ module DebugHandler {
     @see
     - @ref DebugProgramControl::DebugProgramControl "DebugProgramControl"
 
-    @subsection debughandler_v0_1 DebugHandler Version 0.2
+    @subsection debughandler_v0_2 DebugHandler Version 0.2
     - updated to new WebSocket APIs
 
     @subsection debughandler_v0_1 DebugHandler Version 0.1
@@ -129,7 +127,7 @@ public namespace DebugHandler {
         @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" which is
         instantiated via @ref WebSocketHandler::WebSocketHandler::getConnectionImpl().
 
-        The handler is registered via @ref HtpServer::HttpServer::setHandler() "HttpServer::setHandler()" to receive
+        The handler is registered via \c HtpServer::HttpServer::setHandler() "HttpServer::setHandler()" to receive
         messages.
 
         @par Receiving WebSocket Messages from Clients
@@ -141,7 +139,7 @@ public namespace DebugHandler {
         To send a message to a websocket client, call one of the following methods @ref sendData or @ref broadcastData
 
         Websocket connections are identified by their HTTP connection ID as passed in
-        @ref WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
+        \c WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
         argument when the connection is first established.
     */
     public class AbstractWebSocketDebugHandler inherits WebSocketHandler::WebSocketHandler {
@@ -150,6 +148,11 @@ public namespace DebugHandler {
             # default socket send timeout
             #const DefaultSocketSendTimeout = 30s;
         }
+        #! creates the object
+        /** @param dpc the debug program controller object
+            @param auth the authentication object to use to authenticate connections
+            @param opts options passed to the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor
+        */
         constructor(WebSocketDebugProgramControl dpc, *HttpServer::AbstractAuthenticator auth, *hash<auto> opts)
                 : WebSocketHandler::WebSocketHandler(auth, opts) {
             debugProgram = dpc;
@@ -178,7 +181,7 @@ public namespace DebugHandler {
         #! sends data to the given connection
         /**
             Encodes data and sends using
-            @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()" to send a message
+            \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()" to send a message
             to a single connection given its connection ID
 
             Override this method when implementing a 3rd party protocol
@@ -190,7 +193,7 @@ public namespace DebugHandler {
         #! sends data to all connections
         /**
             Encodes broadcasts data using
-            @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to send a message to all
+            \c WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to send a message to all
             connected clients
 
             Override this method when implementing a 3rd party protocol
@@ -269,7 +272,8 @@ public namespace DebugHandler {
 
         #! creates the object
         /**
-            @param serverName is used identifier fr \c welcome message
+            @param serverName is used as identifier for \c welcome message
+            @param logger an optional logger interface for logging
         */
         constructor(string serverName, *Logger::LoggerInterface logger) : DebugProgramControl(serverName, logger) {
         }

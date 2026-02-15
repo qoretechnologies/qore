@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -30,11 +30,25 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/RethrowStatement.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreException.h"
 
 int RethrowStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     if (args) {
         ValueEvalOptimizedRefHolder v(args, xsink);
+        if (!*xsink) {
+            QoreException* ex = catch_get_exception()->replaceTop(*v->get<QoreListNode>(), *xsink);
+            qore_es_private::get(*xsink)->rethrow(ex);
+        }
+    } else {
+        qore_es_private::get(*xsink)->rethrow(catch_get_exception());
+    }
+    return 0;
+}
+
+int RethrowStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    if (args) {
+        ValueEvalRefHolder v(rc, args, xsink);
         if (!*xsink) {
             QoreException* ex = catch_get_exception()->replaceTop(*v->get<QoreListNode>(), *xsink);
             qore_es_private::get(*xsink)->rethrow(ex);
@@ -62,7 +76,7 @@ int RethrowStatement::parseInitImpl(QoreParseContext& parse_context) {
             default: {
                 //printd(5, "ThrowStatement::parseInitImpl() v: %p '%s' e: %d\n", args, get_type_name(args),
                 //  args->needs_eval());
-                QoreListNode* l = new QoreListNode(args.needsEval());
+                QoreListNode* l = qore_list_private::newList(args.needsEval());
                 l->push(args, nullptr);
                 args = l;
                 break;

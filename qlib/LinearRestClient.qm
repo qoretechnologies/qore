@@ -1,0 +1,423 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LinearRestClient.qm Qore user module for calling Linear GraphQL API services
+
+/*  LinearRestClient.qm Copyright (C) 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module LinearRestClient {
+    version = "1.0";
+    desc = "User module for calling Linear GraphQL API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("linear", LinearRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage LinearRestClient Module
+
+    @tableofcontents
+
+    @section linearrestclientintro LinearRestClient Introduction
+
+    The %LinearRestClient module provides an API for calling Linear's GraphQL API services.
+
+    To use this module, use \c "%requires LinearRestClient" in your code.
+
+    All the public symbols in the module are defined in the LinearRestClient namespace.
+
+    The main classes are:
+    - @ref LinearRestClient::LinearRestClient "LinearRestClient":
+      this class provides the GraphQL client API for communication with the Linear API;
+      it handles authentication via API key or OAuth2
+    - @ref LinearRestClient::LinearRestConnection "LinearRestConnection":
+      provides a connection object to Linear services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires LinearRestClient
+
+LinearRestClient linear({"token": ENV.LINEAR_TOKEN});
+hash<auto> result = linear.graphql("query { viewer { id name email } }");
+printf("User: %s <%s>\n", result.body.data.viewer.name, result.body.data.viewer.email);
+    @endcode
+
+    @section linearrestclientrelnotes Release Notes
+
+    @subsection linearrestclientv1_0 LinearRestClient v1.0
+    - the initial version of the %LinearRestClient module
+*/
+
+#! the LinearRestClient namespace contains all the objects in the LinearRestClient module
+public namespace LinearRestClient {
+
+#! This class provides the GraphQL client API for communication with Linear servers
+/** Linear uses a GraphQL-only API. This client wraps RestClient to handle GraphQL
+    queries and mutations via HTTP POST requests.
+
+    Authentication can be done via:
+    - API key (token option): Simple bearer token authentication
+    - OAuth2: Using oauth2_client_id, oauth2_client_secret, and token
+
+    @par Rate Limits:
+    - API key: 1,500 requests per hour per user
+    - OAuth2: 500 requests per hour per user/app
+*/
+public class LinearRestClient inherits RestClient::RestClient {
+    public {
+        #! Default Linear GraphQL API URL
+        const DefaultUrl = "https://api.linear.app/graphql";
+
+        #! Default authorization request URL
+        const DefaultAuthUrl = "https://linear.app/oauth/authorize";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default token request URL
+        const DefaultTokenUrl = "https://api.linear.app/oauth/token";
+
+        #! Default OAuth2 scopes
+        const DefaultScopes = ("read", "write", "issues:create", "comments:create");
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default Linear ping method
+        const DefaultPingMethod = "POST";
+
+        #! Default Linear ping path (empty for GraphQL endpoint)
+        const DefaultPingPath = "";
+
+        #! Default Linear ping body (viewer query)
+        const DefaultPingBody = {
+            "query": "query { viewer { id } }",
+        };
+
+        #! Default Linear ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+            "Content-Type": MimeTypeJson,
+        };
+
+        #! Default constructor options (without OAuth2 - added conditionally)
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "ping_body": DefaultPingBody,
+            "url": DefaultUrl,
+        };
+
+        #! OAuth2 options (added when OAuth2 credentials are provided)
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+            "oauth2_scopes": DefaultScopes,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+LinearRestClient linear({"token": "lin_api_xxxxx"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c token: the Linear API key or OAuth2 access token (required)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(LinearRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Executes a GraphQL query or mutation
+    /**
+        @param query the GraphQL query or mutation string
+        @param variables optional variables for the query
+        @param info optional reference to return request/response info
+
+        @return the parsed response body with data and/or errors
+
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors
+    */
+    hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+        hash<auto> body = {
+            "query": query,
+            "variables": variables,
+        };
+        hash<auto> response = post("", body, \info);
+        return response;
+    }
+
+    #! Executes a GraphQL query
+    /**
+        @param query the GraphQL query string
+        @param variables optional variables for the query
+        @param info optional reference to return request/response info
+
+        @return the parsed response body
+
+        @see graphql()
+    */
+    hash<auto> query(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+        return graphql(query, variables, \info);
+    }
+
+    #! Executes a GraphQL mutation
+    /**
+        @param mutation the GraphQL mutation string
+        @param variables optional variables for the mutation
+        @param info optional reference to return request/response info
+
+        @return the parsed response body
+
+        @see graphql()
+    */
+    hash<auto> mutate(string mutation, *hash<auto> variables, *reference<hash<auto>> info) {
+        return graphql(mutation, variables, \info);
+    }
+
+    #! returns options for @ref LinearRestClient::LinearRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        # Only add OAuth2 options if OAuth2 credentials are provided
+        if (opts.oauth2_client_id) {
+            rv += OAuth2Options;
+            # For OAuth2, let RestClient handle the token with Bearer prefix
+        } else if (opts.token) {
+            # API key mode: Set authorization header directly
+            # Linear API keys should NOT use "Bearer" prefix - just the raw key
+            rv.headers.Authorization = opts.token;
+            # Remove token from opts so RestClient doesn't add "Bearer" prefix
+            remove rv.token;
+        }
+        return rv;
+    }
+}
+
+#! Class for Linear REST connections; returns @ref LinearRestClient objects
+/** This class implements all options of \c RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following default values for the following options:
+    - \c oauth2_auth_url: \c https://linear.app/oauth/authorize
+    - \c oauth2_grant_type: \c authorization_code
+    - \c oauth2_token_url: \c https://api.linear.app/oauth/token
+
+    @see @ref LinearRestClient::LinearRestClient::constructor() for more information on the above options
+*/
+public class LinearRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Linear API URL
+        const DefaultConnectionUrl = "linear://api.linear.app/graphql";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Linear REST Connection",
+            "short_desc": "A connection to the Linear GraphQL API",
+            "desc": "A connection to the Linear GraphQL API for issue tracking and project management",
+            "cls": Class::forName("LinearRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "linear": True,
+            },
+            "base_scheme_map": {
+                "https": "linear",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultData,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultScopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultTokenUrl,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultPingPath,
+                },
+                "ping_body": RestConnection::ConnectionScheme.options."ping_body"
+                + <ConnectionOptionInfo>{
+                    "default_value": LinearRestClient::DefaultPingBody,
+                },
+            },
+            "required_options": "token|oauth2_auth_url,oauth2_grant_type,oauth2_token_url,"
+                "oauth2_client_id,oauth2_client_secret",
+        };
+    }
+
+    #! creates the LinearRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = LinearRestClient::DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the LinearRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+    }
+
+    #! returns \c "linear"
+    string getType() {
+        return "linear";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
+
+        @see \c getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "Linear";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the LinearDataProvider and creates the data provider
+        # object dynamically
+        load_module("LinearDataProvider");
+        return create_object("LinearDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt>update_options(hash<auto> options)</tt>
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        # update the URL immediately if necessary
+        if (update_options && url != DefaultConnectionUrl) {
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
+            # believe that no changes are necessary
+            doUpdateOptions(self, {
+                "url": DefaultConnectionUrl,
+            });
+        }
+    }
+
+    #! returns a @ref LinearRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref LinearRestClient object
+    */
+    private LinearRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new LinearRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

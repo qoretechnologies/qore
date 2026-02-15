@@ -4,7 +4,7 @@
 
   Qore AST Parser
 
-  Copyright (C) 2023 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2023 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -34,8 +34,8 @@
 #include "qore/Qore.h"
 
 class AstParser;
+class AstParseResult;
 class ASTParseError;
-class ASTTree;
 
 class AstParserHolder : public AbstractPrivateData {
 private:
@@ -45,11 +45,23 @@ public:
     AstParserHolder();
     ~AstParserHolder();
 
-    ASTTree* parseFile(const char* filename);
-    ASTTree* parseFile(std::string& filename);
+    AstParseResult* parseFile(const char* filename);
+    AstParseResult* parseFile(std::string& filename);
 
-    ASTTree* parseString(const char* str);
-    ASTTree* parseString(std::string& str);
+    AstParseResult* parseString(const char* str);
+    AstParseResult* parseString(std::string& str);
+
+    //! Enable or disable conditional parsing.
+    void setConditionalParsing(bool enabled);
+
+    //! Clear predefined symbols for conditional parsing.
+    void clearDefines();
+
+    //! Add a predefined symbol for conditional parsing.
+    void addDefine(const char* name);
+
+    //! Set predefined symbols for conditional parsing.
+    void setDefines(const QoreListNode* names);
 
     //! Get the count of reported errors.
     size_t getErrorCount() const;

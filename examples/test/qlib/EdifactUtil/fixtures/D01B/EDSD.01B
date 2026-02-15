@@ -1,0 +1,29 @@
+2.   Segment specifications
+
+     Change indicators
+
+     a plus sign (+)    for an addition
+     an asterisk (*)    for an amendment to structure
+     a hash sign (#)    for changes to names
+     a vertical bar (|) for changes to text for functional
+                        descriptions or notes
+     a letter X (X)     for marked for deletion
+
+       BGM  BEGINNING OF MESSAGE
+
+       Function: To indicate the type and function of a message.
+
+010    C002 DOCUMENT/MESSAGE NAME                     C    1
+020    1004 DOCUMENT IDENTIFIER                       C    1 an..35
+
+       DTM  DATE/TIME/PERIOD
+
+       Function: To specify date/time/period.
+
+010    C507 DATE/TIME/PERIOD                           C    1
+
+       RFF  REFERENCE
+
+       Function: To specify a reference.
+
+010    C506 REFERENCE                                  M    1

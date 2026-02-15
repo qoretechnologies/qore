@@ -33,6 +33,8 @@
 
 #define _QORE_FUNCTIONREFERENCENODE_H
 
+class RuntimeConfig;
+
 //! base class for call references, reference-counted, dynamically allocated only
 /** cannot be a ParseNode or SimpleQoreNode because we require deref(xsink)
  */
@@ -87,6 +89,7 @@ protected:
     /** in debug mode this function calls assert(false)
     */
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! protected constructor for subclasses that are not reference-counted
     DLLLOCAL AbstractCallReferenceNode(bool n_needs_eval, bool n_there_can_be_only_one,
@@ -140,7 +143,7 @@ public:
     DLLEXPORT virtual QoreProgram* getProgram() const;
 
     //! Returns the internal function object, if any; can return nullptr
-    DLLLOCAL virtual QoreFunction* getFunction() = 0;
+    DLLLOCAL virtual QoreFunction* getFunction() const = 0;
 
     //! references itself and returns this
     DLLLOCAL ResolvedCallReferenceNode* refRefSelf() const {
@@ -162,6 +165,7 @@ public:
 
     // the following function must be defined, but is never called
     DLLEXPORT virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLEXPORT virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! Increments the weak reference count
     DLLLOCAL void weakRef() {

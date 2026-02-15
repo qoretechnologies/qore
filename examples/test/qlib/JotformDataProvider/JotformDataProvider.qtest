@@ -1,0 +1,995 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JotformDataProvider.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/JotformRestClient.qm
+%requires ../../../../qlib/JotformDataProvider
+
+%exec-class JotformDataProviderTest
+
+public class JotformDataProviderTest inherits QUnit::Test {
+    private {
+        #! JotForm REST client for integration tests
+        *JotformRestClient::JotformRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+            "domain": "d,domain=s",
+        };
+
+        #! Form ID for integration tests (created during test)
+        *string testFormID;
+
+        #! Submission ID for integration tests (created during test)
+        *string testSubmissionID;
+    }
+
+    constructor() : Test("JotformDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require JOTFORM_TOKEN environment variable or -t option)
+        addTestCase("integration tests", \integrationTests());
+
+        # Webhook trigger tests (require JOTFORM_TOKEN and webhook infrastructure)
+        addTestCase("webhook trigger tests", \webhookTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the JotForm client for integration tests
+    private setupConnection() {
+        *string token = m_options.token ?? ENV.JOTFORM_TOKEN;
+        if (!token) {
+            if (m_options.verbose) {
+                printf("No token provided (use -t option or JOTFORM_TOKEN env var)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {"apikey": token};
+        if (m_options.domain) {
+            opts.api_domain = m_options.domain;
+        }
+        client = new JotformRestClient::JotformRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a JotformDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *JotformDataProvider::JotformDataProvider tryCreateProvider() {
+        try {
+            return new JotformDataProvider::JotformDataProvider({"apikey": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to JotForm API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("jotform", prov.getName());
+        assertEq("JotForm data provider for form and submission management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("jotform");
+        assertEq("jotform", factory.getInfo().name);
+        assertEq("JotForm data provider factory", factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("jotformrestclient"));
+        assertTrue(factoryOpts.hasKey("api_domain"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("JotformDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("apikey"));
+        assertTrue(info.constructor_options.hasKey("jotformrestclient"));
+        assertTrue(info.constructor_options.hasKey("api_domain"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *JotformDataProvider::JotformDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("forms"));
+        assertTrue(children.contains("submissions"));
+        assertTrue(children.contains("events"));
+        assertTrue(children.contains("create-submission"));
+        assertTrue(children.contains("update-submission"));
+        assertTrue(children.contains("delete-submission"));
+
+        # Check forms child provider
+        AbstractDataProvider forms = prov.getChildProvider("forms");
+        assertEq("forms", forms.getName());
+        hash<DataProviderInfo> formsInfo = forms.getInfo();
+        assertTrue(formsInfo.supports_read);
+        assertTrue(formsInfo.supports_native_search);
+        assertTrue(formsInfo.has_record);
+
+        # Check submissions child provider
+        AbstractDataProvider submissions = prov.getChildProvider("submissions");
+        assertEq("submissions", submissions.getName());
+        hash<DataProviderInfo> submissionsInfo = submissions.getInfo();
+        assertTrue(submissionsInfo.supports_read);
+        assertTrue(submissionsInfo.supports_create);
+        assertTrue(submissionsInfo.supports_native_search);
+        assertTrue(submissionsInfo.has_record);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("new-submission"));
+        assertTrue(eventChildren.contains("new-payment"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test submission data type
+        JotformDataProvider::JotformSubmissionDataType submissionType();
+        hash<string, AbstractDataField> submissionFields = submissionType.getFields();
+        assertTrue(submissionFields.hasKey("id"));
+        assertTrue(submissionFields.hasKey("form_id"));
+        assertTrue(submissionFields.hasKey("status"));
+        assertTrue(submissionFields.hasKey("answers"));
+        assertTrue(submissionFields.hasKey("created_at"));
+        assertTrue(submissionFields.hasKey("updated_at"));
+        assertTrue(submissionFields.hasKey("ip"));
+
+        # Verify example_value is set for key fields
+        assertEq("5432109876543210987", submissionFields.id.getExampleValue());
+        assertEq("ACTIVE", submissionFields.status.getExampleValue());
+
+        # Test form data type
+        JotformDataProvider::JotformFormDataType formType();
+        hash<string, AbstractDataField> formFields = formType.getFields();
+        assertTrue(formFields.hasKey("id"));
+        assertTrue(formFields.hasKey("title"));
+        assertTrue(formFields.hasKey("status"));
+        assertTrue(formFields.hasKey("url"));
+        assertTrue(formFields.hasKey("count"));
+        assertTrue(formFields.hasKey("created_at"));
+        assertTrue(formFields.hasKey("updated_at"));
+
+        # Verify example_value for form fields
+        assertEq("Contact Form", formFields.title.getExampleValue());
+        assertEq("ENABLED", formFields.status.getExampleValue());
+
+        # Test report data type
+        JotformDataProvider::JotformReportDataType reportType();
+        hash<string, AbstractDataField> reportFields = reportType.getFields();
+        assertTrue(reportFields.hasKey("id"));
+        assertTrue(reportFields.hasKey("form_id"));
+        assertTrue(reportFields.hasKey("title"));
+        assertTrue(reportFields.hasKey("list_type"));
+
+        # Test submission create data type
+        JotformDataProvider::JotformSubmissionCreateDataType createType();
+        hash<string, AbstractDataField> createFields = createType.getFields();
+        assertTrue(createFields.hasKey("formID"));
+        assertTrue(createFields.hasKey("submission"));
+
+        # Test submission update data type
+        JotformDataProvider::JotformSubmissionUpdateDataType updateType();
+        hash<string, AbstractDataField> updateFields = updateType.getFields();
+        assertTrue(updateFields.hasKey("submissionID"));
+        assertTrue(updateFields.hasKey("submission"));
+
+        # Test webhook event data types
+        JotformDataProvider::JotformSubmissionWebhookEventDataType submissionEventType();
+        hash<string, AbstractDataField> submissionEventFields = submissionEventType.getFields();
+        assertTrue(submissionEventFields.hasKey("submissionID"));
+        assertTrue(submissionEventFields.hasKey("formID"));
+        assertTrue(submissionEventFields.hasKey("answers"));
+        assertTrue(submissionEventFields.hasKey("rawRequest"));
+
+        JotformDataProvider::JotformPaymentWebhookEventDataType paymentEventType();
+        hash<string, AbstractDataField> paymentEventFields = paymentEventType.getFields();
+        assertTrue(paymentEventFields.hasKey("submissionID"));
+        assertTrue(paymentEventFields.hasKey("formID"));
+        assertTrue(paymentEventFields.hasKey("paymentType"));
+        assertTrue(paymentEventFields.hasKey("paymentAmount"));
+        assertTrue(paymentEventFields.hasKey("transactionID"));
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        JotformDataProvider::JotformDataProvider prov({"apikey": "invalid-token"});
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in forms provider
+        AbstractDataProvider forms = prov.getChildProvider("forms");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            forms.getChildProvider("some-form-id").getChildProviderEx("invalid-child");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test with different API domains
+        # Note: these create actual connections, so catch connection errors in CI
+        try {
+            JotformRestClient::JotformRestClient clientStandard({"apikey": "x", "api_domain": "api.jotform.com"});
+            assertEq("https://api.jotform.com", clientStandard.getURL());
+
+            JotformRestClient::JotformRestClient clientEU({"apikey": "x", "api_domain": "eu-api.jotform.com"});
+            assertEq("https://eu-api.jotform.com", clientEU.getURL());
+
+            JotformRestClient::JotformRestClient clientHIPAA({"apikey": "x", "api_domain": "hipaa-api.jotform.com"});
+            assertEq("https://hipaa-api.jotform.com", clientHIPAA.getURL());
+
+            # Test default domain
+            JotformRestClient::JotformRestClient clientDefault({"apikey": "x"});
+            assertEq("https://api.jotform.com", clientDefault.getURL());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to JotForm API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("jotform");
+        assertEq("JotForm REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("token"));
+        assertTrue(scheme.options.hasKey("api_domain"));
+        assertTrue(scheme.options."token".sensitive);
+
+        # Check API domain allowed values
+        assertTrue(scheme.options.api_domain.allowed_values.size() == 3);
+
+        # Verify connection can create data provider
+        JotformRestClient::JotformRestConnection conn("test", "test connection",
+            "jotform://api.jotform.com", {}, {"apikey": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("JotForm", conn.getAppName());
+        assertEq("jotform", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the JotForm app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            JotformDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+
+        # Verify submission actions
+        list<string> actionNames = map $1.action, actions;
+        assertTrue(actionNames.contains("create-submission"));
+        assertTrue(actionNames.contains("get-submission"));
+        assertTrue(actionNames.contains("get-form-submissions"));
+        assertTrue(actionNames.contains("update-submission"));
+        assertTrue(actionNames.contains("delete-submission"));
+
+        # Verify form actions
+        assertTrue(actionNames.contains("get-form"));
+        assertTrue(actionNames.contains("get-forms"));
+        assertTrue(actionNames.contains("get-form-reports"));
+
+        # Verify trigger actions
+        assertTrue(actionNames.contains("new-submission"));
+        assertTrue(actionNames.contains("new-payment"));
+
+        # Verify create-submission action has ref_data for forms
+        *hash<DataProviderActionInfo> createAction = DataProviderActionCatalog::getAppAction(
+            JotformDataProvider::AppName, "create-submission");
+        assertTrue(exists createAction, "create-submission action should exist");
+        assertTrue(createAction.options.formID.ref_data == "forms");
+
+        # Verify event actions have correct action_code
+        *hash<DataProviderActionInfo> newSubmissionAction = DataProviderActionCatalog::getAppAction(
+            JotformDataProvider::AppName, "new-submission");
+        assertTrue(exists newSubmissionAction, "new-submission action should exist");
+        assertEq(DPAT_EVENT, newSubmissionAction.action_code);
+    }
+
+    #! Integration tests - require JOTFORM_TOKEN
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No JotForm credentials provided (use -t option or JOTFORM_TOKEN env var)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test forms provider
+        testFormsProvider();
+
+        # Test reference data
+        testReferenceData();
+
+        # Test submission CRUD (if we have a form)
+        if (testFormID) {
+            testSubmissionCRUD();
+        }
+
+        # Test submission data integrity (verifies data actually saved in JotForm)
+        if (testFormID) {
+            testSubmissionDataIntegrity();
+        }
+
+        # Test get form and reports
+        if (testFormID) {
+            testFormAndReports();
+        }
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        # Test that we can connect to the API
+        hash<auto> response = client.get("/user");
+        assertTrue(response.body.content.val());
+        if (m_options.verbose) {
+            printf("Connected as: %s <%s>\n", response.body.content.name, response.body.content.email);
+        }
+    }
+
+    #! Test forms provider
+    private testFormsProvider() {
+        JotformDataProvider::JotformDataProvider prov(client);
+
+        # Get forms
+        AbstractDataProvider formsProvider = prov.getChildProvider("forms");
+        list<hash<auto>> forms = map $1, formsProvider.searchRecords();
+
+        if (m_options.verbose) {
+            printf("Found %d forms\n", forms.size());
+        }
+
+        # Store first form ID for further tests
+        if (forms.size() > 0) {
+            testFormID = forms[0].id;
+            if (m_options.verbose) {
+                printf("Using form: %s (%s)\n", forms[0].title, testFormID);
+            }
+        }
+    }
+
+    #! Test reference data
+    private testReferenceData() {
+        JotformDataProvider::JotformDataProvider prov(client);
+
+        # Test forms reference data
+        *list<hash<AllowedValueInfo>> forms = prov.getReferenceData("forms");
+        if (forms) {
+            assertTrue(forms.size() > 0);
+            assertTrue(forms[0].display_name.val());
+            assertTrue(forms[0].value.val());
+            if (m_options.verbose) {
+                printf("Reference data: %d forms available\n", forms.size());
+            }
+        }
+    }
+
+    #! Test submission CRUD operations
+    private testSubmissionCRUD() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Submission CRUD ---\n");
+        }
+
+        JotformDataProvider::JotformDataProvider prov(client);
+
+        # Get submissions provider for the test form
+        AbstractDataProvider formsProvider = prov.getChildProvider("forms");
+        AbstractDataProvider formProvider = formsProvider.getChildProvider(testFormID);
+        AbstractDataProvider submissionsProvider = formProvider.getChildProvider("submissions");
+
+        # Create a test submission
+        # Note: JotForm submission format depends on form questions - using a simple hash
+        hash<auto> submissionData = {
+            "submission": {
+                "1": "Test Answer from QUnit " + now_us().toString(),
+            },
+        };
+
+        try {
+            hash<auto> newSubmission = submissionsProvider.createRecord(submissionData);
+            if (newSubmission.id) {
+                testSubmissionID = newSubmission.id;
+                if (m_options.verbose) {
+                    printf("Created submission: %s\n", testSubmissionID);
+                }
+
+                # Get the submission by ID
+                AbstractDataProvider submissionProvider = submissionsProvider.getChildProvider(testSubmissionID);
+                AbstractDataProviderRecordIterator submissionIter = submissionProvider.searchRecords();
+                if (submissionIter.next()) {
+                    hash<auto> fetchedSubmission = submissionIter.getValue();
+                    assertEq(testSubmissionID, fetchedSubmission.id);
+                    if (m_options.verbose) {
+                        printf("Fetched submission: %s (status: %s)\n", fetchedSubmission.id,
+                            fetchedSubmission.status ?? "N/A");
+                    }
+                }
+
+                # Update the submission
+                try {
+                    submissionProvider.updateSingleRecord({
+                        "1": "Updated Answer " + now_us().toString(),
+                    }, {});
+                    if (m_options.verbose) {
+                        printf("Updated submission: %s\n", testSubmissionID);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Update submission failed (may not be supported): %s\n", ex.desc);
+                    }
+                }
+
+                # Delete the submission (cleanup)
+                try {
+                    int deleted = submissionProvider.deleteRecords();
+                    assertEq(1, deleted);
+                    if (m_options.verbose) {
+                        printf("Deleted submission: %s\n", testSubmissionID);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Delete submission failed: %s\n", ex.desc);
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Create may fail if form doesn't have questions matching our data
+            if (m_options.verbose) {
+                printf("Submission CRUD test skipped (form may not accept test data): %s\n", ex.desc);
+            }
+        }
+
+        # Test listing submissions with filters
+        try {
+            AbstractDataProviderRecordIterator submissionsIter = submissionsProvider.searchRecords(
+                NOTHING, {"limit": 5});
+            int count = 0;
+            while (submissionsIter.next()) {
+                count++;
+                hash<auto> submission = submissionsIter.getValue();
+                assertTrue(submission.hasKey("id"));
+                if (m_options.verbose && count == 1) {
+                    printf("First submission: %s (created: %s)\n", submission.id,
+                        submission.created_at ?? "N/A");
+                }
+            }
+            if (m_options.verbose) {
+                printf("Found %d submissions (limited to 5)\n", count);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("List submissions failed: %s\n", ex.desc);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Submission CRUD tests completed ---\n");
+        }
+    }
+
+    #! Test submission data integrity - verifies data actually appears in JotForm
+    /** CRITICAL: This test verifies that submission data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type (JSON vs form-encoded)
+        - Incorrect field name to qid transformation
+        - Silent API acceptance without data persistence
+
+        The test creates a submission with known values, retrieves it, and verifies the values match.
+    */
+    private testSubmissionDataIntegrity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Submission Data Integrity ---\n");
+        }
+
+        JotformDataProvider::JotformDataProvider prov(client);
+
+        # First, get form questions to know what fields are available
+        hash<auto> questionsResponse = client.get(sprintf("/form/%s/questions", testFormID));
+        if (!questionsResponse.body.content) {
+            if (m_options.verbose) {
+                printf("No questions found for form %s, skipping data integrity test\n", testFormID);
+            }
+            return;
+        }
+
+        hash<auto> questions = questionsResponse.body.content;
+        if (m_options.verbose) {
+            printf("Form has %d questions\n", questions.size());
+        }
+
+        # Find a text field to test with
+        *string testQid;
+        *string testFieldName;
+        foreach string qid in (keys questions) {
+            hash<auto> q = questions{qid};
+            string qtype = q.type ?? "";
+            # Look for simple text fields
+            if (qtype =~ /control_text|control_textarea|control_email/) {
+                testQid = qid;
+                testFieldName = q.name ?? qid;
+                if (m_options.verbose) {
+                    printf("Using question %s (%s) of type %s for test\n", testQid, testFieldName, qtype);
+                }
+                break;
+            }
+        }
+
+        if (!testQid) {
+            if (m_options.verbose) {
+                printf("No suitable text field found for testing, skipping\n");
+            }
+            return;
+        }
+
+        # Generate unique test value
+        string testValue = sprintf("IntegrationTest_%s_%d", now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+        # Test 1: Create submission using create-submission action provider
+        if (m_options.verbose) {
+            printf("\nTest 1: Create submission via create-submission action...\n");
+        }
+
+        AbstractDataProvider createProvider = prov.getChildProvider("create-submission");
+        hash<auto> createRequest = {
+            "formID": testFormID,
+        };
+        createRequest{testFieldName} = testValue;
+
+        *string createdSubmissionId;
+        try {
+            auto createResult = createProvider.doRequest(createRequest);
+            if (m_options.verbose) {
+                printf("  Create result type: %s\n", createResult.type());
+                printf("  Create result: %y\n", createResult);
+            }
+            createdSubmissionId = createResult.id;
+            assertTrue(createdSubmissionId.val(), "Submission should be created with an ID");
+            if (m_options.verbose) {
+                printf("  Created submission: %s\n", createdSubmissionId);
+            }
+
+            # Verify the data was actually saved by fetching it back
+            hash<auto> fetchResponse = client.get(sprintf("/submission/%s", createdSubmissionId));
+            hash<auto> fetchedSubmission = fetchResponse.body.content;
+
+            # Check that answers hash is not empty
+            assertTrue(fetchedSubmission.answers.size() > 0,
+                "Submission answers should not be empty - data format may be wrong");
+
+            # Find our test field in the answers
+            bool foundValue = False;
+            foreach string answerQid in (keys fetchedSubmission.answers) {
+                hash<auto> answer = fetchedSubmission.answers{answerQid};
+                string answerValue = answer.answer ?? "";
+                if (answerValue == testValue) {
+                    foundValue = True;
+                    if (m_options.verbose) {
+                        printf("  Found test value in qid %s: %s\n", answerQid, answerValue);
+                    }
+                    break;
+                }
+            }
+
+            assertTrue(foundValue, sprintf("Test value '%s' should be found in submission answers", testValue));
+
+            if (m_options.verbose) {
+                printf("  Data integrity verified: value saved and retrieved correctly\n");
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Create submission failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        # Test 2: Update submission using update-submission action provider
+        if (createdSubmissionId) {
+            if (m_options.verbose) {
+                printf("\nTest 2: Update submission via update-submission action...\n");
+            }
+
+            string updatedValue = sprintf("UpdatedTest_%s_%d", now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+            AbstractDataProvider updateProvider = prov.getChildProvider("update-submission");
+            hash<auto> updateRequest = {
+                "submissionID": createdSubmissionId,
+                "formID": testFormID,
+            };
+            updateRequest{testFieldName} = updatedValue;
+
+            try {
+                updateProvider.doRequest(updateRequest);
+
+                # Verify the update was saved
+                hash<auto> fetchResponse = client.get(sprintf("/submission/%s", createdSubmissionId));
+                hash<auto> fetchedSubmission = fetchResponse.body.content;
+
+                # Find our updated value
+                bool foundUpdatedValue = False;
+                foreach string answerQid in (keys fetchedSubmission.answers) {
+                    hash<auto> answer = fetchedSubmission.answers{answerQid};
+                    string answerValue = answer.answer ?? "";
+                    if (answerValue == updatedValue) {
+                        foundUpdatedValue = True;
+                        if (m_options.verbose) {
+                            printf("  Found updated value in qid %s: %s\n", answerQid, answerValue);
+                        }
+                        break;
+                    }
+                }
+
+                assertTrue(foundUpdatedValue, sprintf("Updated value '%s' should be found in submission", updatedValue));
+
+                if (m_options.verbose) {
+                    printf("  Update integrity verified: value updated and retrieved correctly\n");
+                }
+
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("  Update submission failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+
+            # Cleanup: delete the test submission
+            try {
+                client.del(sprintf("/submission/%s", createdSubmissionId));
+                if (m_options.verbose) {
+                    printf("\nCleaned up test submission: %s\n", createdSubmissionId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Cleanup failed: %s\n", ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Submission Data Integrity tests completed ---\n");
+        }
+    }
+
+    #! Test get form and reports
+    private testFormAndReports() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Form and Reports ---\n");
+        }
+
+        JotformDataProvider::JotformDataProvider prov(client);
+
+        # Get single form details
+        AbstractDataProvider formsProvider = prov.getChildProvider("forms");
+        AbstractDataProvider formProvider = formsProvider.getChildProvider(testFormID);
+        AbstractDataProviderRecordIterator formIter = formProvider.searchRecords();
+        if (formIter.next()) {
+            hash<auto> form = formIter.getValue();
+            assertTrue(form.hasKey("id"));
+            assertEq(testFormID, form.id);
+            if (m_options.verbose) {
+                printf("Form: %s (status: %s, count: %s)\n", form.title ?? "N/A",
+                    form.status ?? "N/A", form.count ?? "0");
+            }
+        }
+
+        # Get form reports
+        try {
+            AbstractDataProvider reportsProvider = formProvider.getChildProvider("reports");
+            AbstractDataProviderRecordIterator reportsIter = reportsProvider.searchRecords();
+            int reportCount = 0;
+            while (reportsIter.next()) {
+                reportCount++;
+                hash<auto> report = reportsIter.getValue();
+                if (m_options.verbose && reportCount == 1) {
+                    printf("First report: %s (%s)\n", report.title ?? "N/A", report.id ?? "N/A");
+                }
+            }
+            if (m_options.verbose) {
+                printf("Found %d reports\n", reportCount);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Get reports failed: %s\n", ex.desc);
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Form and Reports tests completed ---\n");
+        }
+    }
+
+    #! Webhook trigger tests - require JOTFORM_TOKEN and webhook infrastructure
+    webhookTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No JotForm credentials provided");
+            return;
+        }
+
+        if (!testFormID) {
+            testSkip("No form ID available for webhook tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Webhook Trigger Registration/Deregistration ---\n");
+        }
+
+        # ============================================
+        # Test Submission Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting JotformSubmissionEventDataProvider (new-submission)...\n");
+        }
+
+        # Test event provider instantiation
+        JotformDataProvider::JotformSubmissionEventDataProvider eventProv(client, {"formID": testFormID});
+        assertEq("new-submission", eventProv.getName());
+
+        # Verify provider metadata
+        assertTrue(eventProv.getInfo().supports_observable);
+
+        # Test event types
+        hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+        assertTrue(eventTypes.hasKey("new-submission"));
+        assertTrue(eventTypes{"new-submission"}.desc.val());
+
+        # Test example event data
+        auto exampleData = eventProv.getExampleEventData("new-submission");
+        assertTrue(exampleData.formID.val());
+        assertTrue(exampleData.submissionID.val());
+        assertTrue(exampleData.hasKey("answers"));
+        assertTrue(exampleData.hasKey("rawRequest"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys eventTypes);
+            printf("  Example data has keys: %y\n", keys exampleData);
+        }
+
+        # ============================================
+        # Test Payment Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting JotformPaymentEventDataProvider (new-payment)...\n");
+        }
+
+        JotformDataProvider::JotformPaymentEventDataProvider paymentProv(client, {"formID": testFormID});
+        assertEq("new-payment", paymentProv.getName());
+
+        # Verify provider metadata
+        assertTrue(paymentProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> paymentEventTypes = paymentProv.getEventTypes();
+        assertTrue(paymentEventTypes.hasKey("new-payment"));
+        assertTrue(paymentEventTypes{"new-payment"}.desc.val());
+
+        # Test example event data
+        auto paymentExampleData = paymentProv.getExampleEventData("new-payment");
+        assertTrue(paymentExampleData.formID.val());
+        assertTrue(paymentExampleData.submissionID.val());
+        assertTrue(paymentExampleData.hasKey("paymentType"));
+        assertTrue(paymentExampleData.hasKey("paymentAmount"));
+        assertTrue(paymentExampleData.hasKey("transactionID"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys paymentEventTypes);
+            printf("  Example data has keys: %y\n", keys paymentExampleData);
+        }
+
+        # ============================================
+        # Test Webhook Registration/Deregistration with Mock
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting webhook registration lifecycle...\n");
+        }
+
+        # Track webhooks created/deleted
+        list<hash<auto>> created_webhooks = ();
+        list<string> deleted_webhook_ids = ();
+        int webhook_counter = 0;
+
+        code mockCreate = hash<auto> sub (hash<auto> config) {
+            webhook_counter++;
+            string url = sprintf("https://test-webhook-%d.example.com/webhook", webhook_counter);
+            hash<auto> ctx = {
+                "id": webhook_counter,
+                "config": config,
+            };
+            created_webhooks += {"url": url, "ctx": ctx};
+            return {"url": url, "ctx": ctx};
+        };
+
+        code mockDelete = sub (hash<auto> info) {
+            deleted_webhook_ids += info.ctx.id.toString();
+        };
+
+        # Only register if not already registered (avoid conflicts with Qorus environment)
+        bool registered_mock = False;
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            DataProvider::DataProviderWebhook::registerWebhookApis(mockCreate, mockDelete);
+            registered_mock = True;
+        }
+
+        if (!DataProvider::DataProviderWebhook::hasWebhookSupport()) {
+            if (m_options.verbose) {
+                printf("Webhook infrastructure not available, skipping registration tests\n");
+            }
+        } else {
+            # Create a test observer
+            TestObserver observer();
+
+            # Create event provider and register observer
+            JotformDataProvider::JotformSubmissionEventDataProvider testEventProv(client, {"formID": testFormID});
+            testEventProv.registerObserver(observer);
+
+            int webhooksCreatedBefore = created_webhooks.size();
+
+            # Signal that observers are ready - this should trigger webhook creation
+            try {
+                testEventProv.observersReady();
+
+                if (registered_mock) {
+                    # Verify webhook was created (via mock)
+                    assertTrue(created_webhooks.size() > webhooksCreatedBefore,
+                        "Webhook should be created when observers are ready");
+                    if (m_options.verbose) {
+                        printf("  Mock webhook created: %y\n", created_webhooks[created_webhooks.size() - 1].url);
+                    }
+                }
+
+                # Stop events - this should trigger webhook deletion
+                testEventProv.stopEvents();
+
+                if (registered_mock) {
+                    # Verify webhook was deleted (via mock)
+                    assertTrue(deleted_webhook_ids.size() > 0,
+                        "Webhook should be deleted when events are stopped");
+                    if (m_options.verbose) {
+                        printf("  Mock webhook deleted: %y\n", deleted_webhook_ids[deleted_webhook_ids.size() - 1]);
+                    }
+                }
+
+                if (m_options.verbose) {
+                    printf("  Webhook lifecycle test passed\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # This might fail if JotForm API rejects the webhook URL
+                if (m_options.verbose) {
+                    printf("  Webhook registration failed (expected in test environment): %s\n", ex.desc);
+                }
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Webhook Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}

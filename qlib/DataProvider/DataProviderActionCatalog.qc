@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderActionCatalog.qc provides the DataProvider catalog API
 
-/** DataProviderActionCatalog.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** DataProviderActionCatalog.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -117,6 +117,13 @@ public hashdecl DataProviderAppInfo {
     */
     bool supports_delete = False;
 
+    #! If the app supports pipeline processor actions
+    /** This attribute is filled automatically when actions are registered
+
+        @since %DataProvider 3.3
+    */
+    bool supports_pipeline_processors = False;
+
     #! Was the application added dynamically?
     bool dynamic = False;
 
@@ -125,42 +132,54 @@ public hashdecl DataProviderAppInfo {
 
     #! User-defined info about the app
     *hash<auto> info;
+
+    #! Per-app connection options override
+    /** When set, these options are used instead of @c ConnectionSchemeInfo.options for connection
+        creation forms. This allows multiple apps to share the same connection scheme (e.g. @c "db")
+        while presenting different form fields.
+
+        @since %DataProvider 3.3
+    */
+    *hash<string, hash<ConnectionProvider::ConnectionOptionInfo>> connection_options;
+
+    #! Per-app auto_url override
+    /** When @ref True, the connection URL is generated automatically from options and the URL
+        field is not shown in the connection creation form, regardless of the scheme's auto_url setting.
+
+        @since %DataProvider 3.3
+    */
+    *bool auto_url;
 }
 
-/** @defgroup dp_action_type DataProvider Action Type Codes
+#! Data Provider Action Type Codes
+/** Each action implements only one type, so these codes do not make up a bitfield
 
-    Each action implements only one type, so these codes do not make up a bitfield
+    @since %DataProvider 3.3 converted from individual constants to an enum
 */
-#/@{
-#! Data Provider Action Type: wait for an event
-public const DPAT_EVENT = 1;
+public enum DataProviderActionType {
+    #! Wait for an event
+    DPAT_EVENT = 1,
+    #! Make an API call
+    DPAT_API = 2,
+    #! Send a message
+    DPAT_SEND_MESSAGE = 3,
+    #! Find all matching records
+    DPAT_FIND = 4,
+    #! Find a single record
+    DPAT_FIND_SINGLE = 5,
+    #! Create a record
+    DPAT_CREATE = 6,
+    #! Upsert a record
+    DPAT_UPSERT = 7,
+    #! Update a record
+    DPAT_UPDATE = 8,
+    #! Delete a record
+    DPAT_DELETE = 9,
+    #! Pipeline processor
+    DPAT_PIPELINE_PROCESSOR = 10
+}
 
-#! Data Provider Action Type: make an API call
-public const DPAT_API = 2;
-
-#! Data Provider Action Type: send a message
-public const DPAT_SEND_MESSAGE = 3;
-
-#! Data Provider Action Type: find all matching records
-public const DPAT_FIND = 4;
-
-#! Data Provider Action Type: find a single record
-public const DPAT_FIND_SINGLE = 5;
-
-#! Data Provider Action Type: create a record
-public const DPAT_CREATE = 6;
-
-#! Data Provider Action Type: upsert a record
-public const DPAT_UPSERT = 7;
-
-#! Data Provider Action Type: update a record
-public const DPAT_UPDATE = 8;
-
-#! Data Provider Action Type: delete a record
-public const DPAT_DELETE = 9;
-#/@}
-
-#! Maps @ref dp_action_type "action type codes"  to app action flags
+#! Maps DPAT_* action type codes to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
     DPAT_API: "supports_apis",
@@ -171,12 +190,13 @@ public const ActionCodeFlagMap = {
     DPAT_UPSERT: "supports_upsert",
     DPAT_UPDATE: "supports_update",
     DPAT_DELETE: "supports_delete",
+    DPAT_PIPELINE_PROCESSOR: "supports_pipeline_processors",
 };
 
 #! List of app action flags
 public const AppActionFlags = ActionCodeFlagMap.values();
 
-#! Maps @ref dp_action_type "action type codes" to a data provider attribute string
+#! Maps DPAT_* action type codes to a data provider attribute string
 public const ActionAttrMap = {
     DPAT_EVENT: "supports_observable",
     DPAT_API: "supports_request",
@@ -187,9 +207,10 @@ public const ActionAttrMap = {
     DPAT_UPSERT: "supports_upsert",
     DPAT_UPDATE: "supports_update",
     DPAT_DELETE: "supports_delete",
+    DPAT_PIPELINE_PROCESSOR: "supports_pipeline_processor",
 };
 
-#! Maps @ref dp_action_type "action type codes" to a user-friendly name
+#! Maps DPAT_* action type codes to a user-friendly name
 public const ActionNameMap = {
     DPAT_EVENT: "EVENT",
     DPAT_API: "API",
@@ -200,6 +221,7 @@ public const ActionNameMap = {
     DPAT_UPSERT: "UPSERT",
     DPAT_UPDATE: "UPDATE",
     DPAT_DELETE: "DELETE",
+    DPAT_PIPELINE_PROCESSOR: "PIPELINE_PROCESSOR",
 };
 
 #! Set of actions that support search expressions
@@ -218,9 +240,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! The group names for the option, if any
     *softlist<string> groups;
 
-    #! Is the option required or not?
-    bool required;
-
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set
     */
@@ -231,13 +250,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! An optional regex pattern for validating string values
     *string validation_regex;
-
-    #! A list of other options that must be set before this option can be chosen
-    /** Each element in the list is either
-       - a string: giving a single option that the element depends on
-       - a list of strings: giving a group of options, one of which must be set before this option can be chosen
-    */
-    *softlist<softstring> depends_on;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -263,15 +275,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! A tag allowing the type of the option to be retrieved at runtime
     *string dynamic_type;
 
-    #! If the option should be preselected
-    bool preselected;
-
-    #! Is this option read-only?
-    bool readonly;
-
-    #! Is this option disabled?
-    bool disabled;
-
     #! Does this option support templates?
     bool supports_templates = True;
 
@@ -295,9 +298,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! Does the value of this option determine the structure of other options?
     bool structural_determinate;
-
-    #! Any information about how to react to changes
-    *softlist<softstring> on_change;
 }
 
 #! DataProvider path var info
@@ -364,7 +364,7 @@ public hashdecl DataProviderActionInfo {
     string desc;
 
     #! Action type code
-    /** @see @ref dp_action_type for valid values
+    /** @see DataProviderActionType for valid values
     */
     int action_code;
 
@@ -379,8 +379,21 @@ public hashdecl DataProviderActionInfo {
     /** This is for the case when there is no application \c scheme and the application is not implied by the context.
 
         It is an error to supply both application \c scheme and \c cls.
+
+        If the class is provided by a module that must be loaded at runtime, set \c cls_mod to the module name so
+        that \c load_module() can be called before \c Class::forName() to ensure the class is available in the
+        calling program's context.
     */
     *string cls;
+
+    #! The module that provides the class in \c cls
+    /** If set, \c load_module() will be called with this value before resolving the class with
+        \c Class::forName().
+
+        This is necessary because \c Class::forName() resolves in the calling program's context, and the module
+        providing the class may not yet be loaded into that context.
+    */
+    *string cls_mod;
 
     #! Values to add to any "where" argument for record-based actions
     *hash<auto> where_add;
@@ -418,11 +431,29 @@ public hashdecl DataProviderActionInfo {
     #! Describes the output data of the action and how the output type relates to it
     string output_data_type;
 
+    #! If True, indicates the action can only be added when adding in the given action context
+    /** This implies that the action also defines an \c action_context value.
+    */
+    *bool requires_action_context;
+
+    #! Optional context set by this action for child actions
+    *string action_context;
+
+    #! If True, the UI should use a child eligibility API to determine which children can be added
+    /** This is used for actions that can have child actions with specific constraints, such as data pipeline states.
+    */
+    *bool requires_child_eligibility_check;
+
     #! A free-form string giving information about the exec type
     *string exec_type;
 
     #! Free-form metadata for the action
     *hash<auto> metadata;
+
+    #! Processor capability bitfield (DPC_* constants) for pipeline processor actions
+    /** @since %DataProvider 3.3
+    */
+    int processor_capabilities = 0;
 }
 
 #! DataProvider action and application catalog class
@@ -457,7 +488,7 @@ public class DataProviderActionCatalog {
         #! Top-level master application cache keyed by application name
         static hash<string, hash<DataProviderAppInfo>> appcache;
 
-        #! Master action cache, the key <app>/<action>
+        #! Master action cache, the key is \c app/action
         static hash<string, hash<DataProviderActionInfo>> top_actionmap;
 
         #! Action cache, the key is the application key, the second key is the action string
@@ -648,8 +679,12 @@ public class DataProviderActionCatalog {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
                 missing, action);
         }
-        if (action.action_code < 1 || action.action_code > DPAT_DELETE) {
+        if (!ActionCodeFlagMap.hasKey(action.action_code)) {
             throw "ACTION-ERROR", sprintf("invalid action code %y in action: %y", action.action_code, action);
+        }
+        if (action.action_code == DPAT_PIPELINE_PROCESSOR && !action.processor_capabilities) {
+            throw "ACTION-ERROR", sprintf("pipeline processor action %y/%y must have processor_capabilities set",
+                action.app, action.action);
         }
         if (DataProviderActionCatalog::checkName(action.action)) {
             throw "APP-ERROR", sprintf("Action name %y is illegal; only A-Za-z0-9_- are accepted", action.action);
@@ -683,6 +718,11 @@ public class DataProviderActionCatalog {
             action.has_dynamic_options = True;
         }
 
+        # auto-detect the module providing the class so callers can load it before Class::forName()
+        if (action.cls && !action.cls_mod) {
+            action.cls_mod = get_module_context_name();
+        }
+
         if (!action.input_data_types) {
             switch (action.action_code) {
                 case DPAT_CREATE:
@@ -691,6 +731,13 @@ public class DataProviderActionCatalog {
                         DPAD_NORMAL: True,
                         DPAD_RECORD_SET: True,
                         DPAD_RECORD_STREAM: True,
+                    };
+                    break;
+
+                case DPAT_PIPELINE_PROCESSOR:
+                    action.input_data_types = {
+                        DPAD_NORMAL: True,
+                        DPAD_RECORD_SET: True,
                     };
                     break;
 
@@ -710,6 +757,10 @@ public class DataProviderActionCatalog {
 
                 case DPAT_CREATE:
                     action.output_data_type = DPAD_RECORD_SET;
+                    break;
+
+                case DPAT_PIPELINE_PROCESSOR:
+                    action.output_data_type = DPAD_NORMAL;
                     break;
 
                 default:
@@ -1136,6 +1187,12 @@ public class DataProviderActionCatalog {
             *reference<hash<auto>> options) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
+        }
+        # load the module into this program's context so Class::forName() can resolve the class;
+        # load_module() in ProviderIndexUtil loads into ProviderIndexUtil's program context,
+        # but Class::forName() resolves in the calling program's context
+        if (action.cls_mod) {
+            load_module(action.cls_mod);
         }
         hash<auto> constructor_opts;
         map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),

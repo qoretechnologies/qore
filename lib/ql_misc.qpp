@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,6 +58,58 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 }
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
+
+int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
+    switch (v.getType()) {
+        case NT_NOTHING:
+        case NT_NULL:
+            return 0;
+        case NT_STRING:
+            return v.get<const QoreStringNode>()->size();
+        case NT_BINARY:
+            return v.get<const BinaryNode>()->size();
+        case NT_INT:
+        case NT_FLOAT:
+            return 8;
+        case NT_BOOLEAN:
+            return 1;
+        case NT_DATE:
+            return 64;  // Estimate for DateTime structure
+        case NT_NUMBER:
+            return 32;  // Estimate for arbitrary precision number
+        case NT_LIST: {
+            int64 total = 0;
+            const QoreListNode* l = v.get<const QoreListNode>();
+            ConstListIterator li(l);
+            while (li.next()) {
+                total += q_get_value_byte_size(li.getValue(), xsink);
+                if (*xsink) {
+                    return 0;
+                }
+            }
+            return total;
+        }
+        case NT_HASH: {
+            int64 total = 0;
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            ConstHashIterator hi(h);
+            while (hi.next()) {
+                total += strlen(hi.getKey());
+                total += q_get_value_byte_size(hi.get(), xsink);
+                if (*xsink) {
+                    return 0;
+                }
+            }
+            return total;
+        }
+        case NT_OBJECT:
+            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
+                "calculating byte size for objects is not currently supported");
+            return 0;
+        default:
+            return 64;  // Default estimate for other complex types
+    }
+}
 
 // signal constants - if they are not defined define them here
 #ifndef SIGABRT
@@ -743,7 +795,7 @@ auto call_builtin_function(string name, ...) {
         vargs = args->copyListFrom(1);
     }
 
-    return f->evalDynamic(*vargs, xsink);
+    return f->evalDynamic(*vargs, runtime_cfg, xsink);
 }
 
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
@@ -770,7 +822,7 @@ auto call_builtin_function_args(string name, *softlist<auto> vargs) {
     if (!f)
         return QoreValue();
 
-    return f->evalDynamic(vargs, xsink);
+    return f->evalDynamic(vargs, runtime_cfg, xsink);
 }
 
 //! A function performing the same role as the @ref exists "exists operator"
@@ -1242,6 +1294,12 @@ nothing parseURL() [flags=RUNTIME_NOOP] {
     @param rc an optional reference to an integer to return the return code of the process
 
     @return The stdout of the shell command that was executed
+
+    @par Process group behavior:
+    - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
+      that @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" can terminate the entire process group.
+    - Without a SandboxManager, the child stays in the current process group, so terminal signals (for example, Ctrl-C)
+      are delivered to both the parent and child as usual.
 
     @par Example:
     @code{.py}
@@ -3260,5 +3318,29 @@ string get_module_context_path_ex() [flags=CONSTANT] {
         return QoreValue();
     }
     return new QoreStringNode(str);
+}
+
+//! Returns the approximate memory size in bytes of any Qore value
+/** @param val the value to calculate the byte size for
+
+    @return the approximate byte size of the value's data
+
+    @par Example:
+    @code{.py}
+int size = get_value_byte_size("hello world");  # returns 11
+int hash_size = get_value_byte_size({"a": 1, "b": "test"});  # returns ~13
+    @endcode
+
+    @throw GET-VALUE-BYTE-SIZE-ERROR thrown if an object is passed, as calculating byte size for objects
+    is not currently supported
+
+    @note For strings and binary data, the exact byte size is returned.
+    For hashes and lists, the function recursively calculates the total size of contained data.
+    For simple types (int, float, bool, date, number), fixed estimates are used.
+
+    @since %Qore 2.3
+*/
+int get_value_byte_size(auto val) [flags=CONSTANT] {
+    return q_get_value_byte_size(val, xsink);
 }
 ///@}

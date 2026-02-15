@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     will unlink (delete) UNIX domain socket files when closed
 
@@ -137,9 +137,12 @@ class QoreSocket {
     friend class HttpClientConnectSendRecvPollOperation;
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
+    friend class SocketSendAndReadHeaderPollOperation;
     friend class my_socket_priv;
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
+    friend class SocketHttp2SendStreamingResponsePollOperation;
+    friend class SocketHttp2ClientMultiplexPollOperation;
 
 public:
     //! creates an empty, unconnected socket
@@ -1688,7 +1691,7 @@ public:
         The message body is returned as a QoreStringNode in the "body" key, any footers read after the body
         are returned as the other hash keys in the hash.
 
-        @param timeout_ms timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
+        @param timeout timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
         data waiting
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
@@ -1855,6 +1858,13 @@ public:
     */
     DLLEXPORT int setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
 
+    //! Clears ALPN protocol settings
+    /** This should be called when HTTP/2 mode is disabled to ensure proper protocol negotiation
+
+        @since Qore 2.1
+    */
+    DLLEXPORT void clearAlpnProtocols();
+
     //! Returns the negotiated ALPN protocol after TLS handshake
     /** @return the selected protocol string, or nullptr if ALPN was not negotiated
 
@@ -1880,7 +1890,82 @@ public:
         @since Qore 2.2
     */
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
-        const QoreHashNode* headers, ExceptionSink* xsink);
+            const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 response to the nghttp2 session without creating a poll operation
+    /** The response headers and body are queued in the nghttp2 session.  The actual
+        socket write is handled by the active read poll operation's sendPendingData() calls.
+        This is thread-safe and can be called from any thread.
+
+        @param stream_id the HTTP/2 stream ID from the request
+        @param status_code the HTTP status code
+        @param headers response headers
+        @param body response body data (optional)
+        @param body_len response body length
+        @param xsink exception sink for Qore-language exceptions
+        @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, const void* body, size_t body_len,
+            ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
+    /** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
+        the stream open for bidirectional data transfer. The actual socket write is handled
+        by the active read poll operation's sendPendingData() calls.
+
+        This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
+        thread and CONNECT responses are submitted from handler threads.
+
+        @param stream_id the HTTP/2 stream ID from the CONNECT request
+        @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+        @param headers response headers
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2ConnectResponse(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 client request on an active multiplexed connection
+    /** @param headers request headers (must include :method, :path, :scheme, :authority)
+        @param body request body (optional)
+        @param body_len body length
+        @param xsink exception sink for error reporting
+
+        @return the stream ID assigned to this request, or -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
+            size_t body_len, ExceptionSink* xsink);
+
+    //! Cancels a pending HTTP/2 stream by sending RST_STREAM
+    /** @param stream_id the stream ID to cancel
+        @param xsink exception sink for error reporting
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
+    /** Must be called before the HTTP/2 session is created (i.e., before the connection
+        preface is exchanged). When \c enable is \c false, the server will not advertise
+        RFC 8441 extended CONNECT protocol support, so clients will not attempt WebSocket
+        over HTTP/2 CONNECT.
+
+        @param enable \c true to advertise ENABLE_CONNECT_PROTOCOL (default), \c false to disable
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
+
+    DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+    DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     //! Sets the active HTTP/2 stream ID for transparent send/recv operations
     /** @param stream_id the stream ID to use for subsequent send/recv operations

@@ -1,0 +1,610 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpStreamClient.qm
+
+%requires qore >= 2.0
+
+%modern
+
+%exec-class HttpStreamClientTest
+
+const SseContentType = "text/event-stream";
+
+# Single SSE event for simpler testing
+const SingleSseEvent = "event: message\ndata: {\"id\": 1}\n\n";
+
+# Multiple SSE events
+const MultipleSseEvents =
+    "event: message\ndata: {\"id\": 1}\n\n" +
+    "event: update\ndata: {\"id\": 2}\n\n" +
+    "event: done\ndata: {\"id\": 3}\n\n";
+
+#! SSE handler that streams events using chunked transfer encoding
+class SseChunkedHandler inherits AbstractHttpRequestHandler {
+    private {
+        string events;
+    }
+
+    constructor(string events = MultipleSseEvents) {
+        self.events = events;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": SseContentType,
+                "Transfer-Encoding": "chunked",
+                "Cache-Control": "no-cache",
+            },
+            "chunked_body": new StringInputStream(events),
+        };
+    }
+}
+
+#! Handler that returns an error response with SSE content-type (to allow streaming error handling)
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    private {
+        int code;
+        string message;
+    }
+
+    constructor(int code = 500, string message = "Internal Server Error") {
+        self.code = code;
+        self.message = message;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": code,
+            "hdr": {
+                "Content-Type": "text/plain",
+            },
+            "body": message,
+        };
+    }
+}
+
+#! Handler that echoes the request body and method
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string response_body = sprintf("method=%s\n", hdr.method);
+        if (body) {
+            response_body += sprintf("body=%s\n", body.toString());
+        }
+        # Return as SSE so we can stream the response
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": SseContentType,
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new StringInputStream("event: echo\ndata: " + response_body + "\n\n"),
+        };
+    }
+}
+
+#! Handler that returns chunked JSON response (non-SSE)
+class ChunkedJsonHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string json_body = "{\"message\": \"Hello, World!\", \"count\": 42}";
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "application/json",
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new StringInputStream(json_body),
+        };
+    }
+}
+
+#! Handler that returns gzip-compressed chunked response
+class GzipChunkedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string json_body = "{\"compressed\": true, \"algorithm\": \"gzip\"}";
+        binary compressed = gzip(json_body);
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "application/json",
+                "Content-Encoding": "gzip",
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new BinaryInputStream(compressed),
+        };
+    }
+}
+
+#! Handler that returns brotli-compressed chunked response
+class BrotliChunkedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string json_body = "{\"compressed\": true, \"algorithm\": \"brotli\"}";
+        binary compressed = brotli(json_body);
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "application/json",
+                "Content-Encoding": "br",
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new BinaryInputStream(compressed),
+        };
+    }
+}
+
+#! Handler that returns non-chunked response with Content-Length
+class PlainContentLengthHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string response_body = "Fixed length response body";
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/plain",
+            },
+            "body": response_body,
+        };
+    }
+}
+
+#! Handler that returns gzip-compressed non-chunked response
+class GzipContentLengthHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string original = "Compressed fixed length response";
+        binary compressed = gzip(original);
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/plain",
+                "Content-Encoding": "gzip",
+            },
+            "body": compressed,
+        };
+    }
+}
+
+public class HttpStreamClientTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+    }
+
+    public {
+        static int verbose = 0;
+    }
+
+    constructor() : Test("HttpStreamClientTest", "1.0") {
+        if (m_options.verbose) {
+            verbose = m_options.verbose;
+        }
+        addTestCase("SSE streaming tests", \sseStreamingTests());
+        addTestCase("Error response tests", \errorResponseTests());
+        addTestCase("HTTPResponseStreamInfo tests", \responseInfoTests());
+        addTestCase("Timeout configuration tests", \timeoutTests());
+        addTestCase("sendAndStream function tests", \sendAndStreamTests());
+        addTestCase("Stream lifecycle tests", \streamLifecycleTests());
+        addTestCase("Non-SSE chunked response tests", \nonSseChunkedTests());
+        addTestCase("Chunked decompression tests", \chunkedDecompressionTests());
+        addTestCase("Non-chunked response tests", \nonChunkedTests());
+        addTestCase("Headers merging tests", \headersMergingTests());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+
+        # Add handlers
+        m_http.setHandler("/sse", "/sse", MimeTypeHtml, new SseChunkedHandler());
+        m_http.setHandler("/sse-single", "/sse-single", MimeTypeHtml, new SseChunkedHandler(SingleSseEvent));
+        m_http.setHandler("/error-404", "/error-404", MimeTypeHtml, new ErrorHandler(404, "Not Found"));
+        m_http.setHandler("/error-500", "/error-500", MimeTypeHtml, new ErrorHandler(500, "Server Error"));
+        m_http.setHandler("/echo", "/echo", MimeTypeHtml, new EchoHandler());
+        m_http.setHandler("/json-chunked", "/json-chunked", MimeTypeHtml, new ChunkedJsonHandler());
+        m_http.setHandler("/gzip-chunked", "/gzip-chunked", MimeTypeHtml, new GzipChunkedHandler());
+        m_http.setHandler("/brotli-chunked", "/brotli-chunked", MimeTypeHtml, new BrotliChunkedHandler());
+        m_http.setHandler("/plain-cl", "/plain-cl", MimeTypeHtml, new PlainContentLengthHandler());
+        m_http.setHandler("/gzip-cl", "/gzip-cl", MimeTypeHtml, new GzipContentLengthHandler());
+
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete m_http;
+    }
+
+    sseStreamingTests() {
+        # Test SSE streaming
+        HTTPClient client({"url": "http://localhost:" + port});
+
+        hash<auto> info;
+        HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+            NOTHING, NOTHING, \info);
+
+        hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+        assertEq(200, resp.status_code);
+        assertEq("text/event-stream", resp.content_type);
+        assertTrue(resp.chunked);
+        assertFalse(stream.isEof());
+        assertFalse(stream.isClosed());
+
+        # Read SSE event(s)
+        # Note: Server may send all events in one chunk, so we may get one event with combined data
+        *hash<SseMessageInfo> evt = stream.readServerSentEvent(5s);
+        assertEq(True, exists evt);
+        # The event type should start with "message" (or contain it if multiple events combined)
+        assertTrue(evt.event.regex("message"));
+
+        stream.close();
+        assertTrue(stream.isClosed());
+
+        # Verify reading after close returns NOTHING
+        assertEq(NOTHING, stream.readServerSentEvent(1s));
+    }
+
+    errorResponseTests() {
+        # Test 404 error - the stream should be created successfully but with error status
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/error-404",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(404, resp.status_code);
+            stream.close();
+        }
+
+        # Test 500 error
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/error-500",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(500, resp.status_code);
+            stream.close();
+        }
+    }
+
+    responseInfoTests() {
+        HTTPClient client({"url": "http://localhost:" + port});
+
+        hash<auto> info;
+        HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+            NOTHING, NOTHING, \info);
+
+        hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+
+        # Verify all fields are populated correctly
+        assertEq(200, resp.status_code);
+        assertEq("OK", resp.status_message);
+        assertTrue(resp.http_version.val());
+        assertTrue(resp.headers instanceof hash);
+        assertEq("text/event-stream", resp.content_type);
+        assertTrue(resp.chunked);
+
+        stream.close();
+    }
+
+    timeoutTests() {
+        HTTPClient client({"url": "http://localhost:" + port});
+
+        hash<auto> info;
+        HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+            NOTHING, NOTHING, \info);
+
+        # Test timeout configuration - timeout values are stored as milliseconds
+        assertEq(30000, stream.getReadTimeout());
+
+        stream.setReadTimeout(10s);
+        assertEq(10000, stream.getReadTimeout());
+
+        stream.setReadTimeout(60s);
+        assertEq(60000, stream.getReadTimeout());
+
+        stream.close();
+    }
+
+    sendAndStreamTests() {
+        # Test with custom headers
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+                NOTHING, {"X-Custom-Header": "test-value"}, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+
+            stream.close();
+        }
+
+        # Test with custom default timeout
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+                NOTHING, NOTHING, \info, 45s);
+
+            assertEq(45000, stream.getReadTimeout());
+
+            stream.close();
+        }
+
+        # Test POST request with body (echo handler returns SSE)
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "POST", "/echo",
+                "test body", {"Content-Type": "text/plain"}, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+            assertEq("text/event-stream", resp.content_type);
+
+            # Read the echo response event
+            *hash<SseMessageInfo> evt = stream.readServerSentEvent(5s);
+            assertEq(True, exists evt);
+            assertEq("echo", evt.event);
+            assertTrue(evt.data.regex("method=POST"));
+
+            stream.close();
+        }
+    }
+
+    streamLifecycleTests() {
+        # Test destructor closes connection
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            {
+                HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+                    NOTHING, NOTHING, \info);
+                assertFalse(stream.isClosed());
+                # Stream goes out of scope, destructor should close
+            }
+            # After destructor, client should be disconnected
+        }
+
+        # Test multiple close() calls are safe
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse",
+                NOTHING, NOTHING, \info);
+
+            stream.close();
+            assertTrue(stream.isClosed());
+
+            # Second close should not throw
+            stream.close();
+            assertTrue(stream.isClosed());
+        }
+
+        # Test isEof and reading behavior
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/sse-single",
+                NOTHING, NOTHING, \info);
+
+            assertFalse(stream.isEof());
+
+            # Read the single event
+            *hash<SseMessageInfo> evt = stream.readServerSentEvent(5s);
+            assertEq(True, exists evt);
+
+            # After reading all data, subsequent reads should return NOTHING and set EOF
+            # (though this depends on the server closing the connection)
+            stream.close();
+            assertTrue(stream.isClosed());
+        }
+    }
+
+    nonSseChunkedTests() {
+        # Test non-SSE chunked JSON response using readChunk()
+        HTTPClient client({"url": "http://localhost:" + port});
+        hash<auto> info;
+        HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/json-chunked",
+            NOTHING, NOTHING, \info);
+
+        hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+        assertEq(200, resp.status_code);
+        assertEq("application/json", resp.content_type);
+        assertTrue(resp.chunked);
+
+        # Read all chunks (server may split data across multiple HTTP chunks)
+        binary all_data;
+        while (*binary chunk = stream.readChunk(5s)) {
+            all_data += chunk;
+        }
+        assertEq(True, all_data.val());
+        string body = all_data.toString();
+        assertTrue(body.regex("Hello, World!"));
+        assertTrue(body.regex("\"count\": 42"));
+
+        stream.close();
+    }
+
+    chunkedDecompressionTests() {
+        # Test gzip-compressed chunked response with automatic decompression
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/gzip-chunked",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+            assertEq("application/json", resp.content_type);
+            assertEq("gzip", resp.content_encoding);
+            assertTrue(resp.chunked);
+
+            # Read all chunks with automatic decompression (default)
+            binary all_data;
+            while (*binary chunk = stream.readChunk(5s)) {
+                all_data += chunk;
+            }
+            assertEq(True, all_data.val());
+            string body = all_data.toString();
+            assertTrue(body.regex("\"compressed\": true"));
+            assertTrue(body.regex("\"algorithm\": \"gzip\""));
+
+            stream.close();
+        }
+
+        # Test gzip-compressed chunked response with readRawChunk() (no decompression)
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/gzip-chunked",
+                NOTHING, NOTHING, \info);
+
+            # Read all raw compressed chunks
+            binary raw_data;
+            while (*binary raw_chunk = stream.readRawChunk(5s)) {
+                raw_data += raw_chunk;
+            }
+            assertEq(True, raw_data.val());
+
+            # Raw data should be gzip-compressed (starts with gzip magic bytes 1f 8b)
+            assertEq(0x1f, raw_data[0]);
+            assertEq(0x8b, raw_data[1]);
+
+            # Manually decompress and verify
+            string body = gunzip_to_string(raw_data);
+            assertTrue(body.regex("\"algorithm\": \"gzip\""));
+
+            stream.close();
+        }
+
+        # Test brotli-compressed chunked response
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/brotli-chunked",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+            assertEq("br", resp.content_encoding);
+
+            # Read all chunks with automatic decompression
+            binary all_data;
+            while (*binary chunk = stream.readChunk(5s)) {
+                all_data += chunk;
+            }
+            assertEq(True, all_data.val());
+            string body = all_data.toString();
+            assertTrue(body.regex("\"algorithm\": \"brotli\""));
+
+            stream.close();
+        }
+    }
+
+    nonChunkedTests() {
+        # Test non-chunked response with Content-Length
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/plain-cl",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+            assertEq("text/plain", resp.content_type);
+            assertFalse(resp.chunked);
+            assertTrue(resp.content_length > 0);
+
+            # Read entire body via readChunk
+            *binary body = stream.readChunk(5s);
+            assertEq(True, exists body);
+            assertEq("Fixed length response body", body.toString());
+            assertTrue(stream.isEof());
+
+            stream.close();
+        }
+
+        # Test gzip-compressed non-chunked response with automatic decompression
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/gzip-cl",
+                NOTHING, NOTHING, \info);
+
+            hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+            assertEq(200, resp.status_code);
+            assertEq("gzip", resp.content_encoding);
+            assertFalse(resp.chunked);
+
+            # Read with automatic decompression
+            *binary body = stream.readChunk(5s);
+            assertEq(True, exists body);
+            assertEq("Compressed fixed length response", body.toString());
+
+            stream.close();
+        }
+
+        # Test gzip-compressed non-chunked response without decompression
+        {
+            HTTPClient client({"url": "http://localhost:" + port});
+            hash<auto> info;
+            HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/gzip-cl",
+                NOTHING, NOTHING, \info);
+
+            # Read raw compressed bytes
+            *binary raw_body = stream.readRawChunk(5s);
+            assertEq(True, exists raw_body);
+
+            # Should be gzip-compressed
+            assertEq(0x1f, raw_body[0]);
+            assertEq(0x8b, raw_body[1]);
+
+            # Manually decompress
+            assertEq("Compressed fixed length response", gunzip_to_string(raw_body));
+
+            stream.close();
+        }
+    }
+
+    headersMergingTests() {
+        # Verify that response-headers contains only actual HTTP headers,
+        # not status_code, status_message, http_version, etc.
+        HTTPClient client({"url": "http://localhost:" + port});
+        hash<auto> info;
+        HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "GET", "/json-chunked",
+            NOTHING, NOTHING, \info);
+
+        hash<HttpStreamClient::HTTPResponseStreamInfo> resp = stream.getInfo();
+
+        # Verify headers hash exists and is a hash
+        assertTrue(resp.headers instanceof hash);
+
+        # Verify headers does NOT contain non-header keys
+        assertFalse(resp.headers.hasKey("status_code"), "headers should not contain status_code");
+        assertFalse(resp.headers.hasKey("status_message"), "headers should not contain status_message");
+        assertFalse(resp.headers.hasKey("http_version"), "headers should not contain http_version");
+
+        # Verify actual headers ARE present
+        assertTrue(resp.headers.hasKey("content-type") || resp.headers.hasKey("Content-Type"),
+            "headers should contain content-type");
+
+        stream.close();
+    }
+}

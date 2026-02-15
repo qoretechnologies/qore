@@ -64,6 +64,7 @@ module ServerSentEventClient {
             "logo": ServerSentEventsLogo,
             "logo_file_name": "sse-generic-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Messaging,),
         });
 
         # register all supported actions

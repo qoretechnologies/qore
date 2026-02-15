@@ -54,6 +54,7 @@ module RestClientDataProvider {
             "logo": WebHookLogo,
             "logo_mime_type": MimeTypeSvg,
             "logo_file_name": "generic-rest-logo.svg",
+            "groups": (DataProvider::AppGroup::ApiIntegration,),
         });
 
         # register all supported actions
@@ -91,7 +92,7 @@ module RestClientDataProvider {
     @section restclientdataproviderintro Introduction to the RestClientDataProvider Module
 
     The %RestClientDataProvider module provides a data provider API for REST servers through the
-    @ref dataproviderintro "DataProvider" API.
+    \c dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref RestClientDataProvider::RestClientCallDataProvider "RestClientCallDataProvider"

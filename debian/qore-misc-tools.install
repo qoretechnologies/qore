@@ -1,0 +1,10 @@
+usr/bin/qdp
+usr/bin/qget
+usr/bin/rest
+usr/bin/sfrest
+usr/bin/saprest
+usr/bin/sqlutil
+usr/bin/schema-reverse
+usr/bin/qore-openapi3-gen
+usr/bin/qore-asyncapi-gen
+usr/bin/qfmt

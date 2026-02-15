@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreBigIntNode.h>
 #include <qore/QoreBigFloatNode.h>
+#include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -632,15 +633,16 @@ AbstractQoreNode* QoreValue::takeIfNode() {
 
 int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xsink) const {
     if (isNothing()) {
-        str.concat((format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
-            ? &YamlNullString : &NothingTypeString);
+        qore_string_private::get(str)->concat(
+            (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
+                ? &YamlNullString : &NothingTypeString);
         return 0;
     }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
     } else if (isBool()) {
-        str.concat(getBool() ? &TrueString : &FalseString);
+        qore_string_private::get(str)->concat(getBool() ? &TrueString : &FalseString);
     } else if (isFloat()) {
         size_t offset = str.size();
         str.sprintf("%.9g", getDouble());
@@ -730,6 +732,20 @@ QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
         return *this;
     }
     return n->eval(needs_deref, xsink);
+}
+
+QoreValue QoreValue::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(needs_deref == true);
+    if (!isPointer()) {
+        needs_deref = false;
+        return *this;
+    }
+    AbstractQoreNode* n = getPointerUnsafe();
+    if (!n) {
+        needs_deref = false;
+        return *this;
+    }
+    return n->eval(rc, needs_deref, xsink);
 }
 
 // ============================================================================
@@ -903,44 +919,72 @@ QoreValue ValueOptionalRefHolder::takeReferencedValue() {
     return v;
 }
 
-ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
-ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
-    : ValueOptionalRefHolder(xs) {
-    evalIntern(exp);
-}
-
 ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
 }
 
-int ValueEvalRefHolder::evalIntern(const AbstractQoreNode* exp) {
+// Backwards-compatible constructor that gets RuntimeConfig from TLS
+ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    evalIntern(rc, exp);
+}
+
+// Backwards-compatible constructor that gets RuntimeConfig from TLS
+ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    evalIntern(rc, exp);
+}
+
+ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    evalIntern(rc, exp);
+}
+
+ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const QoreValue exp, ExceptionSink* xs)
+    : ValueOptionalRefHolder(xs) {
+    evalIntern(rc, exp);
+}
+
+int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp) {
     if (!exp) {
         needs_deref = false;
         return 0;
     }
     needs_deref = true;
-    v = exp->eval(needs_deref, xsink);
+    v = exp->eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
 }
 
-int ValueEvalRefHolder::evalIntern(const QoreValue& exp) {
+int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const QoreValue& exp) {
     needs_deref = true;
-    v = exp.eval(needs_deref, xsink);
+    v = exp.eval(rc, needs_deref, xsink);
     return xsink && *xsink ? -1 : 0;
 }
 
+// Backwards-compatible eval that gets RuntimeConfig from TLS
 int ValueEvalRefHolder::eval(const AbstractQoreNode* exp) {
     v.discard(xsink);
-    return evalIntern(exp);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalIntern(rc, exp);
 }
 
+// Backwards-compatible eval that gets RuntimeConfig from TLS
 int ValueEvalRefHolder::eval(const QoreValue exp) {
     v.discard(xsink);
-    return evalIntern(exp);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalIntern(rc, exp);
+}
+
+int ValueEvalRefHolder::eval(RuntimeConfig& rc, const AbstractQoreNode* exp) {
+    v.discard(xsink);
+    return evalIntern(rc, exp);
+}
+
+int ValueEvalRefHolder::eval(RuntimeConfig& rc, const QoreValue exp) {
+    v.discard(xsink);
+    return evalIntern(rc, exp);
 }
 
 ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)

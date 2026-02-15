@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DiscordDataProvider module definition
 
-/*  DiscordDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  DiscordDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -54,6 +54,7 @@ module DiscordDataProvider {
             "logo": DiscordLogo,
             "logo_file_name": "Discord-logo.svg",
             "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Messaging,),
         });
 
         # register all supported actions
@@ -95,7 +96,7 @@ module DiscordDataProvider {
 
     @section discorddataproviderintro Introduction to the DiscordDataProvider Module
 
-    The %DiscordDataProvider module provides a @ref dataproviderintro "data provider" API for Discord cloud REST API
+    The %DiscordDataProvider module provides a \c dataproviderintro "data provider" API for Discord cloud REST API
     services.
 
     This data provider provides Discord API access to:
@@ -140,9 +141,6 @@ module DiscordDataProvider {
 
 #! Contains all public definitions in the DiscordDataProvider module
 public namespace DiscordDataProvider {
-}
-
-namespace Priv {
 #! used in accordance with: https://discord.com/branding
-const DiscordLogo = File::readTextFile(get_script_dir() + "/discord-logo.svg");
+public const DiscordLogo = File::readTextFile(get_script_dir() + "/discord-logo.svg");
 }

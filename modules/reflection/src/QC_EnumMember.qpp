@@ -103,7 +103,11 @@ Type EnumMember::getType() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    return new QoreObject(QC_TYPE, m->pgm, new QoreType(m->ed->getBaseTypeInfo()));
+    // pass the source program to keep it alive while the Type object exists (issue #4816)
+    QoreType* qt = new QoreType(m->ed->getBaseTypeInfo(), m->pgm);
+    QoreObject* rv = new QoreObject(QC_TYPE, m->pgm, qt);
+    qt->setContainer(rv);
+    return rv;
 }
 
 //! Returns the enum that this member belongs to
