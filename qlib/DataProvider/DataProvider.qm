@@ -1078,6 +1078,14 @@ if (errors) {
       @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
       @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
     - added methods to return data provider types in the context of option dataprovider_message_support
+    - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
+      @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously
+      defined only in child hashdecls and are now shared across all option types
+    - @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo": added @c connection_options and @c auto_url
+      fields to support per-app connection option overrides for connection creation forms
+    - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
+      resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
+      compatibility
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

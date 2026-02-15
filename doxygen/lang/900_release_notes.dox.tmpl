@@ -548,6 +548,9 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::HTTPClient::setHttp2Settings() "HTTPClient::setHttp2Settings()": sets HTTP/2 settings
       - @ref Qore::HTTPClient::getHttpVersion() "HTTPClient::getHttpVersion()": returns negotiated HTTP version
       - @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()": sends HTTP request and returns headers without reading body, enabling streaming response handling
+      - static @ref Qore::SQL::Datasource::makeConfigString() "Datasource::makeConfigString()": builds a datasource
+        connection string from a @ref datasource_hash "datasource hash" (the inverse of
+        @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new functions:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
@@ -558,6 +561,9 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::inflate_raw_to_string() "inflate_raw_to_string()": raw DEFLATE decompression to string
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::SQL::make_datasource_string() "make_datasource_string()": builds a datasource connection string
+        from a @ref datasource_hash "datasource hash" (the inverse of
+        @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
     - new zero-cost assertion and debug statements
@@ -916,6 +922,12 @@ cargo install tree-sitter-cli@0.26.5
         operator wrapping
       - preserves comments, parse directives, and string literals
       - idempotent formatting (formatting already-formatted code produces identical output)
+
+    - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
+      - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
+        connectivity using the \c db:// URL scheme with automatic connection scheme registration
+      - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
+        (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
