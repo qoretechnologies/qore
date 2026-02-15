@@ -59,7 +59,7 @@ printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
 
     @since ml 1.0
 */
-qclass LinearRegression [arg=QoreLinearRegression* lr; ns=ML; flags=final];
+qclass LinearRegression [arg=QoreLinearRegression* lr; ns=Qore::ML; flags=final];
 
 //! Creates a LinearRegression with the given options
 /** @param options a hash with the following optional keys:

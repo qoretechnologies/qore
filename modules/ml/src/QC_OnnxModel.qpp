@@ -62,7 +62,7 @@ printf("Output: %y\n", result);
 
     @since ml 1.0
 */
-qclass OnnxModel [arg=QoreOnnxModel* model; ns=ML; flags=final; dom=FILESYSTEM];
+qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESYSTEM];
 
 //! Creates an OnnxModel by loading the ONNX model from the given file path
 /** @param model_path the filesystem path to the .onnx model file

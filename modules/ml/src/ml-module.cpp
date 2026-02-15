@@ -58,7 +58,7 @@ extern "C" DLLEXPORT void ml_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.license_str = "MIT";
 }
 
-QoreNamespace MLNS("ML");
+QoreNamespace MLNS("Qore::ML");
 
 // Forward declarations for hashdecl init functions (generated from ql_ml.qpp)
 DLLLOCAL TypedHashDecl* init_hashdecl_IsolationForestResult(QoreNamespace& ns);

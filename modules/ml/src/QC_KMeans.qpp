@@ -44,7 +44,7 @@ hash<KMeansResult> result = km.predict({"x": 1.0, "y": 2.0});
 
     @since ml 1.0
 */
-qclass KMeans [arg=QoreKMeans* kmeans; ns=ML; flags=final];
+qclass KMeans [arg=QoreKMeans* kmeans; ns=Qore::ML; flags=final];
 
 //! Creates a KMeans instance with the given options
 /** @param options a hash with the following keys:

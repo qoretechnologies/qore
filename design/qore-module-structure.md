@@ -134,6 +134,57 @@ Reference implementations:
 - qore lang docs two-phase build: `CMakeLists.txt` (search for `docs-lang-final`)
 - ncurses module: `CMakeLists.txt` (search for `docs-module-final`)
 
+## Binary Module Namespace Registration
+
+Binary modules (C++ `.qmod` files) register their namespaces in the `ns_init` callback, which
+receives two namespace pointers:
+- `rns` — the root namespace (`::`)
+- `qns` — the Qore namespace (`::Qore`)
+
+### Namespace naming convention
+
+The `QoreNamespace` constructor argument must include the **full path** from the parent namespace
+where it will be added. When adding to `qns`, include the `Qore::` prefix:
+
+```cpp
+// CORRECT: full path matches where the namespace is added
+QoreNamespace MLNS("Qore::ML");
+
+static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+    qns->addNamespace(MLNS.copy());
+}
+```
+
+```cpp
+// WRONG: missing Qore:: prefix causes getPathName() to return incomplete paths
+QoreNamespace MLNS("ML");  // DO NOT do this
+```
+
+When the namespace name doesn't include the full path, `Class::getPathName()` in the reflection API
+returns an incomplete path (e.g., `ML::DBSCAN` instead of `Qore::ML::DBSCAN`). This breaks:
+- `qjar` JNI bytecode generation (uses `'::' + cls.getPathName()` for class resolution)
+- Any code that relies on `getPathName()` for absolute namespace lookups
+
+### QPP `ns=` attribute must match
+
+The `ns=` attribute in `qclass` declarations must match the full namespace path:
+
+```cpp
+// If namespace is Qore::ML, use ns=Qore::ML
+qclass DBSCAN [arg=QoreDBSCAN* dbscan; ns=Qore::ML; flags=final];
+```
+
+See `design/qpp-development.md` for more details on the `ns=` attribute.
+
+### Examples from existing modules
+
+| Module     | QoreNamespace constructor  | `ns=` in qpp        | Added to |
+|------------|---------------------------|----------------------|----------|
+| reflection | `"Qore::Reflection"`      | `Qore::Reflection`   | `qns`    |
+| logger     | `"Qore::Logger"`          | `Qore::Logger`       | `qns`    |
+| ml         | `"Qore::ML"`              | `Qore::ML`           | `qns`    |
+| linenoise  | (user module pattern)     | `Qore::Linenoise`    | `qns`    |
+
 ## %include Deprecation (Modules)
 
 The `%include` parse directive is deprecated for Qore user modules in this
@@ -170,6 +221,8 @@ Current usages to migrate:
 - [ ] entry in `doxygen/lang/900_release_notes.dox.tmpl` for new modules or updates
 - [ ] Tests added/updated for the module
 - [ ] External module dependencies use `%try-module` (not `%requires`) — only in-repo modules use hard `%requires`
+- [ ] Binary module `QoreNamespace` constructor uses full path (e.g., `"Qore::ML"`, not just `"ML"`)
+- [ ] QPP `ns=` attribute matches the full namespace path
 - [ ] all scripts have the execute bit set
 - [ ] all tests and scripts use `%modern`
 - [ ] module mainpage has `@section <lowercasemodname>intro` as first section
