@@ -12,15 +12,15 @@
 
 class TestDebugProgramControl inherits DebugProgramControl {
     public {
-        list<hash> sentMessages = ();
+        list<hash<auto>> sentMessages = ();
         list<auto> broadcastMessages = ();
     }
 
     constructor() : DebugProgramControl("test-server") {
     }
 
-    public sendDataImpl(hash cx, auto data) {
-        push sentMessages, ("cx": cx, "data": data);
+    public sendDataImpl(hash<auto> cx, auto data) {
+        push sentMessages, {"cx": cx, "data": data};
     }
 
     public broadcastDataImpl(auto data) {
@@ -36,7 +36,7 @@ class TestDebugProgramControl inherits DebugProgramControl {
 public class DebugProgramControlTest inherits QUnit::Test {
     private {
         TestDebugProgramControl dpc;
-        const CX = ("id": 1);
+        const CX = {"id": 1};
     }
 
     constructor() : Test("DebugProgramControlTest", "1.0") {
@@ -65,59 +65,64 @@ public class DebugProgramControlTest inherits QUnit::Test {
     helpVersionTests() {
         # help command
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "help"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "help"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result instanceof list);
             assertTrue(ret.result.size() > 0);
         }
 
         # version command
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "version"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "version"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result.hasKey("class"));
             assertEq("TestDebugProgramControl", ret.result.class);
+            # verify enhanced version info
+            assertTrue(ret.result.hasKey("DebugProgramControl"));
+            assertTrue(ret.result.hasKey("DebugUtil"));
+            assertTrue(ret.result.hasKey("qore"));
+            assertEq(Qore::VersionString, ret.result.qore);
         }
     }
 
     optionsTests() {
         # fullexceptioninfo get (default)
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/get"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "options/fullexceptioninfo/get"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertEq(False, ret.result);
         }
 
         # fullexceptioninfo set/get
         {
-            dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/set", "value": True));
-            *hash ret = dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/get"));
+            dpc.processCommand(CX, {"cmd": "options/fullexceptioninfo/set", "value": True});
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "options/fullexceptioninfo/get"});
             assertEq(True, ret.result);
             # reset
-            dpc.processCommand(CX, ("cmd": "options/fullexceptioninfo/set", "value": False));
+            dpc.processCommand(CX, {"cmd": "options/fullexceptioninfo/set", "value": False});
         }
 
         # sourcepath get (default)
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "options/sourcepath/get"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "options/sourcepath/get"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertEq("", ret.result);
         }
 
         # sourcepath set/get
         {
-            dpc.processCommand(CX, ("cmd": "options/sourcepath/set", "value": "/tmp"));
-            *hash ret = dpc.processCommand(CX, ("cmd": "options/sourcepath/get"));
+            dpc.processCommand(CX, {"cmd": "options/sourcepath/set", "value": "/tmp"});
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "options/sourcepath/get"});
             assertEq("/tmp", ret.result);
             # reset
-            dpc.processCommand(CX, ("cmd": "options/sourcepath/set", "value": ""));
+            dpc.processCommand(CX, {"cmd": "options/sourcepath/set", "value": ""});
         }
     }
 
     sessionTests() {
         # get session with no programs added to debugging
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "session/get"));
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "session/get"});
             # with no programs added to debugging, result is NOTHING so no response is sent
             assertNothing(ret);
         }
@@ -130,8 +135,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
             dpc.addProgram(pc);
             int pgmId = pc.getProgramId();
 
-            *hash ret = dpc.processCommand(CX, ("cmd": "session/get"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "session/get"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result.hasKey(string(pgmId)));
 
             dpc.removeProgram(pc);
@@ -141,8 +146,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
     programListTests() {
         # list programs (global list) — returns all ProgramControl instances
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "program//list"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program//list"});
+            assertEq(DebugResponseType::Response,ret.type);
             # result is a hash of programs; at minimum our own program exists
             assertTrue(ret.result instanceof hash);
             assertTrue(ret.result.size() > 0);
@@ -150,7 +155,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
 
         # list with filter — nonexistent name returns no result (NOTHING)
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "program/nonexistent_xyz/list"));
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program/nonexistent_xyz/list"});
             # no programs match the filter, so result is NOTHING and no response is generated
             assertNothing(ret);
         }
@@ -167,8 +172,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         dpc.clearMessages();
 
         # create breakpoint
-        *hash ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint//create"));
-        assertEq("response", ret.type);
+        *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint//create"});
+        assertEq(DebugResponseType::Response,ret.type);
         assertTrue(ret.result.hasKey("bkptid"));
         int bkptId = ret.result.bkptid;
 
@@ -178,65 +183,65 @@ public class DebugProgramControlTest inherits QUnit::Test {
 
         # list breakpoints
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint//list"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint//list"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertTrue(ret2.result instanceof list);
             assertTrue(ret2.result.size() >= 1);
         }
 
         # list all breakpoints (no pgmId)
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program//breakpoint//list"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program//breakpoint//list"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertTrue(ret2.result instanceof list);
         }
 
         # enable/disable
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/disable"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/disable"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertEq("ok", ret2.result);
         }
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/enable"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/enable"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertEq("ok", ret2.result);
         }
 
         # policy get/set
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertEq("none", ret2.result);
         }
         {
-            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/set", "value": "accept"));
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"));
+            dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/set", "value": "accept"});
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/policy/get"});
             assertEq("accept", ret2.result);
         }
 
         # thread get/set/add/remove
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertEq((), ret2.result);
         }
         {
-            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/add", "value": 42));
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
+            dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/add", "value": 42});
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"});
             assertTrue(inlist(42, ret2.result));
         }
         {
-            dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/remove", "value": 42));
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"));
+            dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/remove", "value": 42});
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/thread/get"});
             assertFalse(inlist(42, ret2.result));
         }
 
         # delete breakpoint
         {
             dpc.clearMessages();
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertEq("ok", ret2.result);
             # verify delete broadcast
             assertTrue(dpc.broadcastMessages.size() > 0);
@@ -249,15 +254,15 @@ public class DebugProgramControlTest inherits QUnit::Test {
     threadStackTests() {
         # thread stack all (no tid)
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "thread/stack"));
-            assertEq("response", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "thread/stack"});
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result instanceof hash);
         }
 
         # thread command without tid when tid is required
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "thread/go", "tid": 99999));
-            assertEq("error", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "thread/go", "tid": 99999});
+            assertEq(DebugResponseType::Error,ret.type);
             assertTrue(ret.result.err.find("DEBUG-HANDLER-ERROR") >= 0);
         }
     }
@@ -265,37 +270,37 @@ public class DebugProgramControlTest inherits QUnit::Test {
     errorHandlingTests() {
         # unknown command
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "nonexistent_command"));
-            assertEq("error", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "nonexistent_command"});
+            assertEq(DebugResponseType::Error,ret.type);
         }
 
         # invalid program ID
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "program/999999/add"));
-            assertEq("error", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program/999999/add"});
+            assertEq(DebugResponseType::Error,ret.type);
         }
 
         # invalid breakpoint ID
         {
-            *hash ret = dpc.processCommand(CX, ("cmd": "program//breakpoint/999999/enable"));
-            assertEq("error", ret.type);
+            *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program//breakpoint/999999/enable"});
+            assertEq(DebugResponseType::Error,ret.type);
         }
     }
 
     connectionTests() {
         # register new connection
-        hash cx2 = ("id": 2);
+        hash<auto> cx2 = {"id": 2};
         dpc.registerConnection(cx2);
 
         # welcome message
         dpc.clearMessages();
         dpc.connectionRegistered(cx2);
         assertTrue(dpc.sentMessages.size() > 0);
-        assertEq("welcome", dpc.sentMessages[0].data.cmd);
+        assertEq(DebugEventCmd::Welcome, dpc.sentMessages[0].data.cmd);
         assertEq("test-server", dpc.sentMessages[0].data.result);
 
         # getConnectionIds
-        list ids = dpc.getConnectionIds();
+        list<auto> ids = dpc.getConnectionIds();
         assertTrue(inlist(1, ids));
         assertTrue(inlist(2, ids));
 
@@ -305,8 +310,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertFalse(inlist(2, ids));
 
         # unregisterAll
-        hash cx3 = ("id": 3);
-        hash cx4 = ("id": 4);
+        hash<auto> cx3 = {"id": 3};
+        hash<auto> cx4 = {"id": 4};
         dpc.registerConnection(cx3);
         dpc.registerConnection(cx4);
         dpc.unregisterAllConnections();
@@ -322,8 +327,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         # shutdown with no blocked threads should not deadlock
         TestDebugProgramControl dpc2();
         dpc2.registerConnection(CX);
-        *hash ret = dpc2.processCommand(CX, ("cmd": "shutdown"));
-        assertEq("response", ret.type);
+        *hash<auto> ret= dpc2.processCommand(CX, {"cmd": "shutdown"});
+        assertEq(DebugResponseType::Response,ret.type);
         assertEq("ok", ret.result);
         dpc2.unregisterConnection(CX);
     }
@@ -336,36 +341,36 @@ public class DebugProgramControlTest inherits QUnit::Test {
 
         # add to debug control
         int pgmId = pc.getProgramId();
-        *hash ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
-        assertEq("response", ret.type);
+        *hash<auto> ret= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/add"});
+        assertEq(DebugResponseType::Response,ret.type);
 
         # verify program appears in session
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "session/get"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "session/get"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertTrue(ret2.result.hasKey(string(pgmId)));
         }
 
         # remove program
-        ret = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
-        assertEq("response", ret.type);
+        ret = dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/remove"});
+        assertEq(DebugResponseType::Response,ret.type);
 
         # add duplicate check
-        dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
+        dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/add"});
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/add"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/add"});
+            assertEq(DebugResponseType::Response,ret2.type);
             # result should indicate already added
             assertTrue(ret2.result.find("already added") >= 0);
         }
 
         # remove and clean up
-        dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
+        dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/remove"});
 
         # remove not-added
         {
-            *hash ret2 = dpc.processCommand(CX, ("cmd": "program/" + pgmId + "/remove"));
-            assertEq("response", ret2.type);
+            *hash<auto> ret2= dpc.processCommand(CX, {"cmd": "program/" + pgmId + "/remove"});
+            assertEq(DebugResponseType::Response,ret2.type);
             assertTrue(ret2.result.find("not added") >= 0);
         }
     }

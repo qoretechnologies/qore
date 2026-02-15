@@ -16,13 +16,14 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("evalCondition tests", \evalConditionTests());
         addTestCase("WrapperGetOpt.split tests", \wrapperGetOptTests());
         addTestCase("constants tests", \constantsTests());
+        addTestCase("ResponseSync tests", \responseSyncTests());
         set_return_value(main());
     }
 
     serializeTests() {
         # NOTHING round-trip
         {
-            hash sv = AbstractDebugControl::serialize(NOTHING);
+            hash<auto> sv = AbstractDebugControl::serialize(NOTHING);
             assertEq("nothing", sv.type);
             assertFalse(sv.hasKey("value"));
             auto val = AbstractDebugControl::unserialize(sv);
@@ -31,7 +32,7 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # NULL round-trip
         {
-            hash sv = AbstractDebugControl::serialize(NULL);
+            hash<auto> sv = AbstractDebugControl::serialize(NULL);
             assertEq("NULL", sv.type);
             assertFalse(sv.hasKey("value"));
             auto val = AbstractDebugControl::unserialize(sv);
@@ -40,7 +41,7 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # int round-trip
         {
-            hash sv = AbstractDebugControl::serialize(42);
+            hash<auto> sv = AbstractDebugControl::serialize(42);
             assertEq("integer", sv.type);
             assertEq(42, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -49,7 +50,7 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # float round-trip
         {
-            hash sv = AbstractDebugControl::serialize(3.14);
+            hash<auto> sv = AbstractDebugControl::serialize(3.14);
             assertEq("float", sv.type);
             assertEq(3.14, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -58,7 +59,7 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # string round-trip
         {
-            hash sv = AbstractDebugControl::serialize("hello");
+            hash<auto> sv = AbstractDebugControl::serialize("hello");
             assertEq("string", sv.type);
             assertEq("hello", sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -67,7 +68,7 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # bool round-trip
         {
-            hash sv = AbstractDebugControl::serialize(True);
+            hash<auto> sv = AbstractDebugControl::serialize(True);
             assertEq("bool", sv.type);
             assertEq(True, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -75,7 +76,7 @@ public class DebugUtilTest inherits QUnit::Test {
         }
 
         {
-            hash sv = AbstractDebugControl::serialize(False);
+            hash<auto> sv = AbstractDebugControl::serialize(False);
             assertEq("bool", sv.type);
             assertEq(False, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -85,7 +86,7 @@ public class DebugUtilTest inherits QUnit::Test {
         # date round-trip
         {
             date d = 2026-01-15T10:30:00Z;
-            hash sv = AbstractDebugControl::serialize(d);
+            hash<auto> sv = AbstractDebugControl::serialize(d);
             assertEq("date", sv.type);
             assertEq(d, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -95,7 +96,7 @@ public class DebugUtilTest inherits QUnit::Test {
         # binary round-trip
         {
             binary b = <deadbeef>;
-            hash sv = AbstractDebugControl::serialize(b);
+            hash<auto> sv = AbstractDebugControl::serialize(b);
             assertEq("binary", sv.type);
             assertEq(b, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -105,7 +106,7 @@ public class DebugUtilTest inherits QUnit::Test {
         # number round-trip
         {
             number n = 123.456n;
-            hash sv = AbstractDebugControl::serialize(n);
+            hash<auto> sv = AbstractDebugControl::serialize(n);
             assertEq("number", sv.type);
             assertEq(n, sv.value);
             auto val = AbstractDebugControl::unserialize(sv);
@@ -114,8 +115,8 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # list round-trip (mixed types)
         {
-            list l = (1, "two", 3.0, True);
-            hash sv = AbstractDebugControl::serialize(l);
+            list<auto> l =(1, "two", 3.0, True);
+            hash<auto> sv = AbstractDebugControl::serialize(l);
             assertEq("list", sv.type);
             assertEq(4, sv.value.size());
             # verify each element is serialized
@@ -129,8 +130,8 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # hash round-trip
         {
-            hash h = ("key1": 1, "key2": "val");
-            hash sv = AbstractDebugControl::serialize(h);
+            hash<auto> h ={"key1": 1, "key2": "val"};
+            hash<auto> sv = AbstractDebugControl::serialize(h);
             assertEq("hash", sv.type);
             assertEq("integer", sv.value.key1.type);
             assertEq("string", sv.value.key2.type);
@@ -140,8 +141,8 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # nested structure round-trip
         {
-            hash nested = ("list": (1, ("inner": "val")), "num": 42);
-            hash sv = AbstractDebugControl::serialize(nested);
+            hash<auto> nested ={"list": (1, {"inner": "val"}), "num": 42};
+            hash<auto> sv = AbstractDebugControl::serialize(nested);
             assertEq("hash", sv.type);
             auto val = AbstractDebugControl::unserialize(sv);
             assertEq(nested, val);
@@ -150,7 +151,7 @@ public class DebugUtilTest inherits QUnit::Test {
         # object serialization preserves class name
         {
             Mutex m();
-            hash sv = AbstractDebugControl::serialize(m);
+            hash<auto> sv = AbstractDebugControl::serialize(m);
             assertEq("object", sv.type);
             assertEq("Mutex", sv.value.class);
         }
@@ -158,15 +159,15 @@ public class DebugUtilTest inherits QUnit::Test {
         # unsupported type (code/closure) — no value in serialized form
         {
             code c = sub() {};
-            hash sv = AbstractDebugControl::serialize(c);
+            hash<auto> sv = AbstractDebugControl::serialize(c);
             assertEq("closure", sv.type);
             assertFalse(sv.hasKey("value"));
         }
 
         # empty list serializes, unserialize returns empty list via push
         {
-            list l = ();
-            hash sv = AbstractDebugControl::serialize(l);
+            list<auto> l =();
+            hash<auto> sv = AbstractDebugControl::serialize(l);
             assertEq("list", sv.type);
             assertEq((), sv.value);
             # unserialize uses push loop over empty list -> returns NOTHING
@@ -176,8 +177,8 @@ public class DebugUtilTest inherits QUnit::Test {
 
         # empty hash serializes, unserialize iterates over empty keys -> returns NOTHING
         {
-            hash h = {};
-            hash sv = AbstractDebugControl::serialize(h);
+            hash<auto> h ={};
+            hash<auto> sv = AbstractDebugControl::serialize(h);
             assertEq("hash", sv.type);
             auto val = AbstractDebugControl::unserialize(sv);
             assertNothing(val);
@@ -193,12 +194,12 @@ public class DebugUtilTest inherits QUnit::Test {
     unserializeErrorTests() {
         # unknown type throws DEBUG-ERROR
         assertThrows("DEBUG-ERROR", sub() {
-            AbstractDebugControl::unserialize(("type": "unknown_type", "value": 1));
+            AbstractDebugControl::unserialize({"type": "unknown_type", "value": 1});
         });
     }
 
     enumFilterTests() {
-        list items = ("alpha", "beta", "gamma", "alphabet");
+        list<auto> items =("alpha", "beta", "gamma", "alphabet");
 
         # no path returns all
         assertEq(items, AbstractDebugControl::enumFilter(items, NOTHING));
@@ -239,11 +240,11 @@ public class DebugUtilTest inherits QUnit::Test {
     }
 
     wrapperGetOptTests() {
-        hash opts = (
+        hash<auto> opts = {
             'help': 'h,help',
             'verbose': 'v,verbose',
             'listen': 'l,listen=s@',
-        );
+        };
 
         # standard args: wrapper opts, then program name, then program args
         {
@@ -338,5 +339,109 @@ public class DebugUtilTest inherits QUnit::Test {
         assertTrue(AbstractDebugControl::policyStrings.hasKey("none"));
         assertTrue(AbstractDebugControl::policyStrings.hasKey("accept"));
         assertTrue(AbstractDebugControl::policyStrings.hasKey("reject"));
+    }
+
+    responseSyncTests() {
+        # basic deliver/wait cycle
+        {
+            ResponseSync sync();
+            sync.prepare();
+            assertTrue(sync.isPending());
+            # deliver from same thread (simulating immediate response)
+            assertTrue(sync.deliver({"type": DebugResponseType::Response, "result": "ok"}));
+            assertFalse(sync.isPending());
+            *auto result = sync.waitForResponse(100ms);
+            assertEq(DebugResponseType::Response, result.type);
+            assertEq("ok", result.result);
+        }
+
+        # deliver before waitForResponse returns the data
+        {
+            ResponseSync sync();
+            sync.prepare();
+            sync.deliver(42);
+            *auto result = sync.waitForResponse(100ms);
+            assertEq(42, result);
+        }
+
+        # deliver when not pending returns False
+        {
+            ResponseSync sync();
+            assertFalse(sync.isPending());
+            assertFalse(sync.deliver("data"));
+        }
+
+        # waitForResponse without prepare returns NOTHING (not pending)
+        {
+            ResponseSync sync();
+            *auto result = sync.waitForResponse(50ms);
+            assertNothing(result);
+        }
+
+        # timeout returns NOTHING
+        {
+            ResponseSync sync();
+            sync.prepare();
+            *auto result = sync.waitForResponse(10ms);
+            assertNothing(result);
+            # after timeout, pending is reset
+            assertFalse(sync.isPending());
+        }
+
+        # prepare resets previous state
+        {
+            ResponseSync sync();
+            sync.prepare();
+            sync.deliver("first");
+            # prepare again for new cycle
+            sync.prepare();
+            assertTrue(sync.isPending());
+            sync.deliver("second");
+            *auto result = sync.waitForResponse(100ms);
+            assertEq("second", result);
+        }
+
+        # cross-thread deliver/wait
+        {
+            ResponseSync sync();
+            sync.prepare();
+            background sub() {
+                usleep(10ms);
+                sync.deliver({"status": "done"});
+            }();
+            *auto result = sync.waitForResponse(2s);
+            assertEq("done", result.status);
+        }
+
+        # cross-thread timeout
+        {
+            ResponseSync sync();
+            sync.prepare();
+            # no one delivers
+            *auto result = sync.waitForResponse(50ms);
+            assertNothing(result);
+        }
+
+        # NOTHING data is a valid delivery
+        {
+            ResponseSync sync();
+            sync.prepare();
+            assertTrue(sync.deliver(NOTHING));
+            # waitForResponse returns NOTHING (valid response)
+            # but this is indistinguishable from timeout in this case
+            *auto result = sync.waitForResponse(100ms);
+            assertNothing(result);
+        }
+
+        # multiple prepare/deliver cycles work correctly
+        {
+            ResponseSync sync();
+            for (int i = 0; i < 5; i++) {
+                sync.prepare();
+                sync.deliver(i);
+                *auto result = sync.waitForResponse(100ms);
+                assertEq(i, result);
+            }
+        }
     }
 }

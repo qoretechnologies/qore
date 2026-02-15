@@ -41,36 +41,25 @@ sub printErr(string fmt) {
 class VscDebugAdapterLocal inherits VscDebugAdapter {
     public {
         DebugProgramControlLocal dpc;
-        # increment when command is sent and decrement when response is received
-        Counter requestFlag();
-        any threadData;
-        *hash programOpts;
+        ResponseSync sync();
+        *hash<auto> programOpts;
     }
-    constructor(Logger logger, DebugProgramControlLocal n_dpc, hash opts) : VscDebugAdapter(logger) {
+    constructor(Logger logger, DebugProgramControlLocal n_dpc, hash<auto> opts) : VscDebugAdapter(logger) {
         dpc = n_dpc;
         dpc.vda = self;
         programOpts = opts;
     }
-    public *hash doCommandImpl(hash data) {
+    public *hash<auto> doCommandImpl(hash<auto> data) {
         if (exists data.tid) {
-            while (requestFlag.getCount() > 0) {
-                requestFlag.dec();
-            }
-            requestFlag.inc();
-            threadData = NOTHING;
+            sync.prepare();
         }
-        *hash ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
-        if (ret.type == 'thread') {
-            if (requestFlag.waitForZero(200)) {
-                return NOTHING;
-            } else {
-                return threadData;
-            }
+        *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
+        if (ret.type == DebugResponseType::Thread) {
+            return sync.waitForResponse(200ms);
         } else {
             return ret;
         }
     }
-
 }
 
 class DebugProgramControlLocal inherits DebugProgramControl {
@@ -82,14 +71,15 @@ class DebugProgramControlLocal inherits DebugProgramControl {
         registerConnection(CX);
     }
     destructor() {
-        unregisterConnection(CX);
+        try {
+            unregisterConnection(CX);
+        } catch () {
+            # suppress exceptions during program shutdown (PROGRAM-ERROR)
+        }
     }
-    public sendDataImpl(hash cx, auto data) {
+    public sendDataImpl(hash<auto> cx, auto data) {
         logger.debug("sendDataImpl: %y: %y", cx, data);
-        if (vda.requestFlag.getCount() > 0) {
-            vda.threadData = data;
-            vda.requestFlag.dec();
-        } else {
+        if (!vda.sync.deliver(data)) {
             vda.pushEvent(data);
         }
     }
@@ -102,16 +92,14 @@ class DebugProgramControlLocal inherits DebugProgramControl {
 class VscDebugAdapterRemote inherits VscDebugAdapter {
     const WSC_TIMEOUT = 1500ms;
     public {
-        # increment when command is sent and decrement when response is received
-        Counter requestFlag();
+        ResponseSync sync();
         int pendingUid;
-        any recData;
         WebSocketClient wsc;
         timeout wscTimeout;
         bool connecting;
         string serverName;
         string url;
-        *hash headers;
+        *hash<auto> headers;
     }
 
     constructor(hash<auto> opts, *Logger::LoggerInterface logger) : VscDebugAdapter(logger) {
@@ -123,59 +111,61 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
         if (opts.header) {
             foreach string h in (opts.header) {
                 *list<string> rv = regex_extract(h, "^([a-zA-Z0-9\\-]+)=(.*)$");
-                if (!rv)
+                if (!rv) {
                     throw "GETOPT-ERROR", sprintf("Wrong header specification %y", h);
+                }
                 headers{rv[0]} = rv[1];
             }
         }
         wsc = new WebSocketClient(\wscEvent(), opts);
     }
 
-    public *hash doCommandImpl(hash data) {
+    public *hash<auto> doCommandImpl(hash<auto> data) {
         pendingUid = clock_getmicros();
         data.uid = pendingUid;
         string d = make_yaml(data);
-        while (requestFlag.getCount() > 0) {
-            requestFlag.dec();
-        }
-        requestFlag.inc();
-        recData = NOTHING;
+        sync.prepare();
         logger.debug("send: %y", d);
         wsc.send(d);
-        if (requestFlag.waitForZero(wscTimeout)) {
-            return NOTHING;
-        } else {
-            return recData;
-        }
+        return sync.waitForResponse(wscTimeout);
     }
 
     public nothing connect() {
         connecting = True;
-        requestFlag.inc();
-        hash hh = wsc.connect({"hdr": headers});
+        sync.prepare();
+        hash<auto> hh = wsc.connect({"hdr": headers});
         *string prot_ver = hh{QoreDebugWsProtocolHeader.lwr()};
-        if (!prot_ver.val())
-            throw "QORE-DEBUG", sprintf("Connected to %y, but no %y header received in response; check the URI path and try again", url, QoreDebugWsProtocolHeader);
-        if (prot_ver != QoreDebugProtocolVersion)
-            throw "QORE-DEBUG", sprintf("Qore debug server at %y claims unsupported protocol version %y; expecting %y", url, prot_ver, QoreDebugProtocolVersion);
-        if (requestFlag.waitForZero(wscTimeout)) {
+        if (!prot_ver.val()) {
+            throw "QORE-DEBUG", sprintf("Connected to %y, but no %y header received in response; check the URI path "
+                "and try again", url, QoreDebugWsProtocolHeader);
+        }
+        if (prot_ver != QoreDebugProtocolVersion) {
+            throw "QORE-DEBUG", sprintf("Qore debug server at %y claims unsupported protocol version %y; expecting "
+                "%y", url, prot_ver, QoreDebugProtocolVersion);
+        }
+        *auto resp = sync.waitForResponse(wscTimeout);
+        if (!exists resp) {
             throw "QORE-DEBUG", "No response from debug server";
         } else {
-            serverName = recData.result;
+            serverName = resp.result;
         }
     }
 
     public wscEvent(*data msg) {
         logger.debug("received: %y", msg);
-        if (!exists msg)
+        if (!exists msg) {
             return;
+        }
         try {
             auto d = parse_yaml(msg);
-            if (requestFlag.getCount() > 0) {
-                if (((d.type == "response" || d.type == "error") && pendingUid == d.uid && !connecting) ||
-                    (d.type == "event" && d.cmd == "welcome" && connecting) ) {
-                    recData = d;
-                    requestFlag.dec();
+            if (d.typeCode() != NT_HASH) {
+                wscErr("wscEvent: received non-hash data, ignoring");
+                return;
+            }
+            if (sync.isPending()) {
+                if (((d.type == DebugResponseType::Response || d.type == DebugResponseType::Error) && pendingUid == d.uid && !connecting) ||
+                    (d.type == DebugResponseType::Event && d.cmd == DebugEventCmd::Welcome && connecting)) {
+                    sync.deliver(d);
                     connecting = False;
                     return;
                 }
@@ -197,14 +187,12 @@ class VscDebugAdapterRemote inherits VscDebugAdapter {
 
     public wscErr(string s) {
         logger.info(s);
-        #stderr.print(s+"\n");
     }
-
 }
 
 class DebugWrapper {
     private {
-        hash opts = (
+        hash<auto> opts = (
             'help': 'h,help',
             'verbose': 'v,verbose:+',
             'full_exception': 'f,full-exception',
@@ -235,10 +223,10 @@ class DebugWrapper {
 
     constructor() {
         GetOpt g(opts);
-        hash opt;
+        hash<auto> opt;
         try {
             opt = g.parse2(\ARGV);
-        } catch (hash ex) {
+        } catch (hash<ExceptionInfo> ex) {
             printErr("QORE_ARGV: %y", QORE_ARGV);
             printErr("ARGV: %y", ARGV);
             printErr("%s: %s", ex.err, ex.desc);
@@ -316,15 +304,20 @@ class DebugWrapper {
                 vda.run();
             }
 
-            # resume any blocked debug threads
+            # resume any blocked debug threads and clean up before program exit
+            # to avoid PROGRAM-ERROR in destructors
             if (vda instanceof VscDebugAdapterLocal) {
                 logger.debug("Shutdown local adapter");
-                cast<VscDebugAdapterLocal>(vda).dpc.shutdown();
+                VscDebugAdapterLocal local_vda = cast<VscDebugAdapterLocal>(vda);
+                local_vda.dpc.shutdown();
+                local_vda.dpc.unregisterConnection(DebugProgramControlLocal::CX);
+                local_vda.dpc.waitForTerminationAndClear();
+                delete vda;
             } else {
                 logger.debug("Disconnect remote adapter");
                 cast<VscDebugAdapterRemote>(vda).wsc.disconnect();
             }
-        } catch (hash e) {
+        } catch (hash<ExceptionInfo> e) {
             logger.info("%y", e);
             printErr("%s: %s", e.err, e.desc);
             exit(-1);

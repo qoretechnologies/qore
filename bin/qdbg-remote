@@ -19,15 +19,14 @@
 class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
     const WSC_TIMEOUT = 1500ms;
     public {
-        Counter counter();
+        ResponseSync sync();
         int pendingUid;
-        any recData;
         WebSocketClient wsc;
         timeout wscTimeout;
         bool connecting;
         string serverName;
         string url;
-        *hash headers;
+        *hash<auto> headers;
     }
 
     constructor(hash<auto> opts) : DebugLinenoiseCommandLine() {
@@ -37,62 +36,61 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
         if (opts.header) {
             foreach string h in (opts.header) {
                 *list<string> rv = (h =~ x/^([a-zA-Z0-9\-]+)=(.*)$/);
-                if (!rv)
+                if (!rv) {
                     throw "GETOPT-ERROR", sprintf("Wrong header specification %y", h);
+                }
                 headers{rv[0]} = rv[1];
             }
         }
         wsc = new WebSocketClient(\wscEvent(), opts);
     }
 
-    public *hash doCommandImpl(hash data) {
-        #if (!wsc.isOpen()) throw
+    public *hash<auto> doCommandImpl(hash<auto> data) {
         pendingUid = clock_getmicros();
         data.uid = pendingUid;
         string d = make_yaml(data);
-        while (counter.getCount() > 0) {
-            counter.dec();
-        }
-        counter.inc();
-        recData = NOTHING;
+        sync.prepare();
         debug("send: %y", d);
         wsc.send(d);
-        if (counter.waitForZero(wscTimeout)) {
-            return NOTHING;
-        } else {
-            return recData;
-        }
+        return sync.waitForResponse(wscTimeout);
     }
 
     public nothing connect() {
         connecting = True;
-        counter.inc();
-        hash hh = wsc.connect({"hdr": headers});
+        sync.prepare();
+        hash<auto> hh = wsc.connect({"hdr": headers});
         *string prot_ver = hh{QoreDebugWsProtocolHeader.lwr()};
-        if (!prot_ver.val())
+        if (!prot_ver.val()) {
             throw "QORE-DEBUG", sprintf("Connected to %y, but no %y header received in response; check the URI path "
                 "and try again", url, QoreDebugWsProtocolHeader);
-        if (prot_ver != QoreDebugProtocolVersion)
+        }
+        if (prot_ver != QoreDebugProtocolVersion) {
             throw "QORE-DEBUG", sprintf("Qore debug server at %y claims unsupported protocol version %y; expecting "
                 "%y", url, prot_ver, QoreDebugProtocolVersion);
-        if (counter.waitForZero(wscTimeout)) {
+        }
+        *auto resp = sync.waitForResponse(wscTimeout);
+        if (!exists resp) {
             throw "QORE-DEBUG", "No response from debug server";
         } else {
-            serverName = recData.result;
+            serverName = resp.result;
         }
     }
 
     public wscEvent(*data msg) {
         debug("received: %y", msg);
-        if (!exists msg)
+        if (!exists msg) {
             return;
+        }
         try {
             auto d = parse_yaml(msg);
-            if (counter.getCount() > 0) {
-                if (((d.type == "response" || d.type == "error") && pendingUid == d.uid && !connecting) ||
-                    (d.type == "event" && d.cmd == "welcome" && connecting) ) {
-                    recData = d;
-                    counter.dec();
+            if (d.typeCode() != NT_HASH) {
+                error("wscEvent: received non-hash data, ignoring");
+                return;
+            }
+            if (sync.isPending()) {
+                if (((d.type == DebugResponseType::Response || d.type == DebugResponseType::Error) && pendingUid == d.uid && !connecting) ||
+                    (d.type == DebugResponseType::Event && d.cmd == DebugEventCmd::Welcome && connecting)) {
+                    sync.deliver(d);
                     connecting = False;
                     return;
                 }
@@ -106,7 +104,7 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
 
 class DebugWrapper {
     private {
-        hash opts = (
+        hash<auto> opts = (
             'help': 'h,help',
             'verbose': 'v,verbose:+',
             'url': 'u,url=s',
@@ -118,16 +116,18 @@ class DebugWrapper {
             'response_timeout': 'w,resp-timeout=i',
             "history": "y,history=s",
             "session": "s,session=s",
+            "color": "color",
+            "no_color": "no-color",
         );
         DebugCommandLineRemote dcl;
         Logger logger;
     }
 
     constructor() {
-        hash opt;
+        hash<auto> opt;
         try {
             GetOpt g(opts);
-            list a = ARGV;
+            list<auto> a = ARGV;
             opt = g.parse2(\a);
             opt.url = shift a;
             if (a) {
@@ -140,7 +140,7 @@ class DebugWrapper {
             string orig_url = opt.url;
             try {
                 # check if it's in "connection_name/path" format
-                *list l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
+                *list<auto> l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
                 if (l) {
                     opt.url = get_connection_url(l[0]);
                     path_suffix = l[1];
@@ -192,7 +192,7 @@ class DebugWrapper {
             help();
         }
         logger = new Logger();
-        logger.addAppender(new StdoutAppender());
+        logger.addAppender(new LoggerAppenderStdErr("stderr", new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")));
         if (opt.verbose) {
             if (opt.verbose == 1) {
                 logger.setLevel("INFO");
@@ -208,11 +208,21 @@ class DebugWrapper {
         }
         logger.info("url: %s verbose: %s", opt.url, logger.getLevel().getStr());
         dcl = new DebugCommandLineRemote(opt + {"logger": logger});
+        # signal handler for clean WebSocket shutdown
+        code sig_handler = sub (int sig) {
+            try {
+                dcl.wsc.disconnect();
+            } catch () {
+                # suppress exceptions during signal-triggered disconnect
+            }
+        };
+        set_signal_handler(SIGINT, sig_handler);
+        set_signal_handler(SIGTERM, sig_handler);
         try {
             dcl.connect();
             # unconditional connection message
             stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
-            *hash sess = dcl.doCommandImpl(('cmd': 'session'));
+            *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session'});
             if (sess.result) {
                 string pgmId = sess.result.firstKey();
                 dcl.setContextValue('programId', pgmId);
@@ -223,11 +233,15 @@ class DebugWrapper {
             dcl.init(opt);
             dcl.runCmdLine();
             dcl.wsc.disconnect();
-
         } catch (hash<ExceptionInfo> e) {
             stderr.printf("%s: %s\n", e.err, e.desc);
             exit(-1);
         }
+        # remove signal handlers before exit so their closures release
+        # references to dcl; otherwise dcl is destroyed during program
+        # shutdown when module programs may already be deleted
+        remove_signal_handler(SIGINT);
+        remove_signal_handler(SIGTERM);
     }
 
     private help(int exCode=1) {
@@ -239,7 +253,7 @@ class DebugWrapper {
             "  ConnectionProvider <conn-id> name is considered and when is resolved then http(s) protocol is changed to ws(s).\n"
             "  The '/debug' path is appended unless a path already exists in the URL and the <path> follows\n"
             "\n"
-            "  -v                      verbose\n"
+            "  -v                      verbose (use -v -v for debug output)\n"
             "  -h                      help\n"
             "  -H,--header=<hdr>=<val> headers for connection request\n"
             "  -m,--max-redir=<num>    the maximum number of redirects before throwing an exception (the default is 5)\n"
@@ -250,7 +264,13 @@ class DebugWrapper {
             "  -y,--history=file       load command line history from file, default: %s in home directory\n"
             "                          When \".\" name is provided then history is not loaded/saved\n"
             "  -s,--session=file       load session from file\n"
-
+            "  --color                 force color output\n"
+            "  --no-color              disable color output\n"
+            "\n"
+            "Keyboard shortcuts:\n"
+            "  Ctrl+D                  quit debugger\n"
+            "  Ctrl+G                  show current program/thread context\n"
+            "  TAB                     command completion (cycles through matches)\n"
             "\n"
             "Example:\n"
             "  %s -v localhost:8000/debug\n"
@@ -265,7 +285,6 @@ class DebugWrapper {
             get_script_name(),
             get_script_name(),
             get_script_name(),
-
         );
         exit(exCode);
     }

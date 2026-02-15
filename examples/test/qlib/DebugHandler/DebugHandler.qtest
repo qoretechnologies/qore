@@ -151,26 +151,27 @@ public class DebugHandlerTest inherits QUnit::Test {
                 try {
                     collector.addEvent(parse_yaml(msg));
                 } catch (hash<ExceptionInfo> ex) {
-                    collector.addEvent(("error": ex.desc, "type": "error"));
+                    collector.addEvent({"error": ex.desc, "type": DebugResponseType::Error});
                 }
             }
-        }, ("url": "ws://localhost:" + port));
+        }, {"url": "ws://localhost:" + port});
 
-        hash hdr = wsc.connect();
+        hash<auto> hdr = wsc.connect();
         # wait for welcome message
         collector.waitForEvents(1, to);
 
-        return ("wsc": wsc, "hdr": hdr, "collector": collector);
+        return {"wsc": wsc, "hdr": hdr, "collector": collector};
     }
 
-    private *hash<auto> sendCommand(WebSocketClient wsc, hash cmd, WsEventCollector collector, *timeout to) {
+    private *hash<auto> sendCommand(WebSocketClient wsc, hash<auto> cmd, WsEventCollector collector, *timeout to) {
         if (!to) {
             to = 5s;
         }
         int uid = clock_getmicros();
-        cmd.uid = uid;
+        hash<auto!> send_cmd = cmd;
+        send_cmd.uid = uid;
         int before = collector.size();
-        wsc.send(make_yaml(cmd));
+        wsc.send(make_yaml(send_cmd));
 
         # wait for response with matching uid (event-driven via Queue)
         date start = now_us();
@@ -209,8 +210,8 @@ public class DebugHandlerTest inherits QUnit::Test {
         # verify welcome message
         assertTrue(conn.collector.size() > 0);
         list<auto> evts = conn.collector.getEvents();
-        assertEq("event", evts[0].type);
-        assertEq("welcome", evts[0].cmd);
+        assertEq(DebugResponseType::Event, evts[0].type);
+        assertEq(DebugEventCmd::Welcome, evts[0].cmd);
         assertEq("test-debug-server", evts[0].result);
     }
 
@@ -220,22 +221,22 @@ public class DebugHandlerTest inherits QUnit::Test {
 
         # help command
         {
-            *hash ret = sendCommand(conn.wsc, ("cmd": "help"), conn.collector);
-            assertEq("response", ret.type);
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "help"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result instanceof list);
         }
 
         # version command
         {
-            *hash ret = sendCommand(conn.wsc, ("cmd": "version"), conn.collector);
-            assertEq("response", ret.type);
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "version"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
             assertEq("WebSocketDebugProgramControl", ret.result.class);
         }
 
         # program list
         {
-            *hash ret = sendCommand(conn.wsc, ("cmd": "program//list"), conn.collector);
-            assertEq("response", ret.type);
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "program//list"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
         }
 
         # breakpoint CRUD cycle
@@ -248,19 +249,19 @@ public class DebugHandlerTest inherits QUnit::Test {
             int pgmId = pc.getProgramId();
 
             # create breakpoint
-            *hash ret = sendCommand(conn.wsc, ("cmd": "program/" + pgmId + "/breakpoint//create"), conn.collector);
-            assertEq("response", ret.type);
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint//create"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result.hasKey("bkptid"));
             int bkptId = ret.result.bkptid;
 
             # list breakpoints
-            ret = sendCommand(conn.wsc, ("cmd": "program/" + pgmId + "/breakpoint//list"), conn.collector);
-            assertEq("response", ret.type);
+            ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint//list"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
             assertTrue(ret.result instanceof list);
 
             # delete breakpoint
-            ret = sendCommand(conn.wsc, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"), conn.collector);
-            assertEq("response", ret.type);
+            ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
             assertEq("ok", ret.result);
 
             dpc.removeProgram(pc);
@@ -284,16 +285,16 @@ public class DebugHandlerTest inherits QUnit::Test {
         int events_before = conn2.collector.size();
 
         # create breakpoint from client 1 — should broadcast to client 2
-        *hash ret = sendCommand(conn1.wsc, ("cmd": "program/" + pgmId + "/breakpoint//create"), conn1.collector);
-        assertEq("response", ret.type);
+        *hash<auto> ret = sendCommand(conn1.wsc, {"cmd": "program/" + pgmId + "/breakpoint//create"}, conn1.collector);
+        assertEq(DebugResponseType::Response,ret.type);
         int bkptId = ret.result.bkptid;
 
         # wait for broadcast to arrive at client 2 (event-driven via Queue)
-        *hash<auto> found = conn2.collector.waitForEvent("event", "breakpoint", "create", events_before, 3s);
+        *hash<auto> found = conn2.collector.waitForEvent(DebugResponseType::Event, DebugEventCmd::Breakpoint, "create", events_before, 3s);
         assertTrue(exists found);
 
         # clean up
-        sendCommand(conn1.wsc, ("cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"), conn1.collector);
+        sendCommand(conn1.wsc, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"}, conn1.collector);
         dpc.removeProgram(pc);
     }
 
@@ -303,8 +304,8 @@ public class DebugHandlerTest inherits QUnit::Test {
 
         # invalid command
         {
-            *hash ret = sendCommand(conn.wsc, ("cmd": "totally_invalid_command"), conn.collector);
-            assertEq("error", ret.type);
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "totally_invalid_command"}, conn.collector);
+            assertEq(DebugResponseType::Error,ret.type);
         }
 
         # invalid YAML - send raw invalid data
@@ -312,7 +313,7 @@ public class DebugHandlerTest inherits QUnit::Test {
             int before = conn.collector.size();
             conn.wsc.send("{{{{invalid yaml");
             # wait for error response (event-driven via Queue)
-            *hash<auto> found = conn.collector.waitForEvent("error", NOTHING, NOTHING, before, 3s);
+            *hash<auto> found = conn.collector.waitForEvent(DebugResponseType::Error, NOTHING, NOTHING, before, 3s);
             assertTrue(exists found);
         }
     }

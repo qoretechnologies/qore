@@ -69,9 +69,9 @@ public namespace DebugProgramControl {
     public class DebugProgramControl inherits DebugProgram, AbstractDebugControl {
         private {
             #! data pool related to suspended thread, key is threadId
-            hash ctxThread;
+            hash<auto> ctxThread;
             #! data pool for data related to cx.id
-            hash ctxConnection;
+            hash<auto> ctxConnection;
             #! lock for @ref ctxThread access
             Qore::Thread::RWLock rwlThread();
             #! lock for @ref ctxConnection access
@@ -98,7 +98,11 @@ public namespace DebugProgramControl {
 
         #! resumes any blocked threads and destroys the object
         destructor() {
-            shutdown();
+            try {
+                shutdown();
+            } catch () {
+                # suppress exceptions during program shutdown (PROGRAM-ERROR)
+            }
         }
 
         #! resume any blocked threads
@@ -106,18 +110,18 @@ public namespace DebugProgramControl {
             rwlThread.writeLock();
             on_exit rwlThread.writeUnlock();
 
-            hash qrd = (
-                "data": (
+            hash<auto> qrd = {
+                "data": {
                     "cmd": "thread/go",
-                ),
+                },
                 "cx": {},
-            );
+            };
 
             map $1.queue.push(qrd), ctxThread.iterator(), $1.queue;
         }
 
         #! register context for new connection
-        public registerConnection(hash cx) {
+        public registerConnection(hash<auto> cx) {
             rwlConnection.writeLock();
             on_exit rwlConnection.writeUnlock();
             ctxConnection{cx.id} = {};
@@ -125,10 +129,10 @@ public namespace DebugProgramControl {
         }
 
         #! send welcome message
-        public connectionRegistered(hash cx) {
-            hash sd.type = 'event';
+        public connectionRegistered(hash<auto> cx) {
+            hash<auto> sd.type = DebugResponseType::Event;
             sd.stamp = now_us();
-            sd.cmd = 'welcome';
+            sd.cmd = DebugEventCmd::Welcome;
             sd.result = serverName;
             try {
                 sendDataImpl(cx, sd);
@@ -138,7 +142,7 @@ public namespace DebugProgramControl {
         }
 
         #! unregister a connection context
-        public unregisterConnection(hash cx) {
+        public unregisterConnection(hash<auto> cx) {
             rwlConnection.writeLock();
             on_exit rwlConnection.writeUnlock();
 
@@ -163,30 +167,30 @@ public namespace DebugProgramControl {
         /**
             Note: Calling party should consider threads calling class register/unregister methods
         */
-        public list getConnectionIds() {
+        public list<auto> getConnectionIds() {
             rwlConnection.readLock();
             on_exit rwlConnection.readUnlock();
             return (keys ctxConnection) ?? ();
         }
 
         #! send data to particular client
-        abstract public sendDataImpl(hash cx, auto data);
+        abstract public sendDataImpl(hash<auto> cx, auto data);
         #! send data to all clients
         abstract public broadcastDataImpl(auto data);
 
-        private broadcastBreakpoint(hash cx, Breakpoint b, string change) {
-            hash sd = (
-                'type': 'event',
-                'cmd': 'breakpoint',
+        private broadcastBreakpoint(hash<auto> cx, Breakpoint b, string change) {
+            hash<auto> sd = {
+                'type': DebugResponseType::Event,
+                'cmd': DebugEventCmd::Breakpoint,
                 'event': change,
                 'info': getBreakpointInfo(b),
                 'stamp': now_us(),
-            );
+            };
             broadcastDataImpl(sd);
         }
 
         #! Create new program
-        public Program createProgram(string fileName, *hash opts, list args, *string script) {
+        public Program createProgram(string fileName, *hash<auto> opts, list<auto> args, *string script) {
             debug("create program: %y", fileName);
             # must set PO_NO_CHILD_PO_RESTRICTIONS in order to avoid parse options being locked in the child
             Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
@@ -194,7 +198,7 @@ public namespace DebugProgramControl {
             # note this program has PO_NO_TOP_LEVEL_STATEMENTS | PO_NEW_STYLE
             #pgm.replaceParseOptions(PO_DEFAULT);
             if (exists opts.parse_option) {
-                hash poops = Qore::ParseOptionCmdStringMap;
+                hash<auto> poops = Qore::ParseOptionCmdStringMap;
                 int oo = 0;
                 foreach string o in (opts.parse_option) {
                     if (!exists poops{o}) {
@@ -236,9 +240,9 @@ public namespace DebugProgramControl {
             }
             pgm.setScriptPath(fileName);
             debug("parse code");
-            *hash wh = pgm.parse(script, fileName, WARN_DEFAULT, NOTHING, NOTHING, False);
+            *hash<auto> wh = pgm.parse(script, fileName, WARN_DEFAULT, NOTHING, NOTHING, False);
             if (wh) {
-                warn("warning: %N", wh);
+                warn("warning: %Y", wh);
             }
             return pgm;
         }
@@ -251,12 +255,12 @@ public namespace DebugProgramControl {
         }
 
         #! process message in debugging thread, if message is related to debugged thread then put it in particular queue
-        public *hash processCommand(hash cx, hash receiveData) {
+        public *hash<auto> processCommand(hash<auto> cx, hash<auto> receiveData) {
             debug("processCommand: %y", receiveData);
-            hash sendData;
+            hash<auto> sendData;
             auto result;
             try {
-                list cmd = receiveData.cmd.split('/');
+                list<auto> cmd = receiveData.cmd.split('/');
                 debug("command: %y", cmd);
 
                 switch (shift cmd) {
@@ -270,7 +274,13 @@ public namespace DebugProgramControl {
                         );
                         break;
                     case 'version':
-                        result = ('class': self.className());
+                        hash<auto> mods = get_module_hash();
+                        result = {
+                            'class': self.className(),
+                            'DebugProgramControl': mods.DebugProgramControl.version ?? "n/a",
+                            'DebugUtil': mods.DebugUtil.version ?? "n/a",
+                            'qore': Qore::VersionString,
+                        };
                         break;
                     case 'options':
                         string optionName = shift cmd;
@@ -327,8 +337,9 @@ public namespace DebugProgramControl {
                                     foreach Breakpoint b2 in (p.getBreakpoints()) {
                                         push result{pgmId}.breakpoints, getBreakpointInfo(b2);
                                     }
-                                    if (!result{pgmId}.breakpoints)
+                                    if (!result{pgmId}.breakpoints) {
                                         remove result{pgmId}.breakpoints;
+                                    }
                                 }
                                 break;
                             case 'set':
@@ -336,13 +347,13 @@ public namespace DebugProgramControl {
                                 # go through provided list and match current programs, no sophisticated matching algorithm
                                 result = hash();
                                 foreach string pgmName in (keys receiveData.value) {
-                                    hash pgm = receiveData.value{pgmName};
+                                    hash<auto> pgm = receiveData.value{pgmName};
                                     try {
                                         ProgramControl p = ProgramControl::resolveProgramId(int(pgmName));
                                         if (pgm.scriptName != p.getScriptName()) {
                                             throw 'PROGRAM-ERROR', sprintf('script name does not match: %y vs. %y', pgm.scriptName, p.getScriptName());
                                         }
-                                        foreach hash bkpt in (pgm.breakpoints) {
+                                        foreach hash<auto> bkpt in (pgm.breakpoints) {
                                             Breakpoint b = new Breakpoint();
                                             if (exists bkpt.enabled) {
                                                 b.setEnabled(AbstractDebugControl::boolStrings{bkpt.enabled});
@@ -354,20 +365,21 @@ public namespace DebugProgramControl {
                                                 b.setThreadIds(bkpt.threads);
                                             }
                                             b.assignProgram(p);
-                                            foreach hash stmt in (bkpt.statements) {
+                                            foreach hash<auto> stmt in (bkpt.statements) {
                                                 # assing by id is the easiest way
                                                 try {
                                                     b.assignStatement(resolveStatement(p, ('id': stmt.id)));
-                                                } catch (hash ex) {
+                                                } catch (hash<ExceptionInfo> ex) {
                                                     result{pgmName} += list(ex.desc);
                                                 }
                                             }
                                         }
-                                    } catch (hash ex) {
+                                    } catch (hash<ExceptionInfo> ex) {
                                         if (ex.err == 'PROGRAM-ERROR') {
                                             result{pgmName} = ex.desc;
-                                        } else
-                                            rethrow;
+                                        } else {
+                                        rethrow;
+                                    }
                                     }
                                 }
                                 break;
@@ -521,8 +533,8 @@ public namespace DebugProgramControl {
                                         break;
 
                                     case 'list':
-                                        *hash defs = pgmb.getAllDefines();
-                                        list dd = AbstractDebugControl::enumFilter(keys defs, defName);
+                                        *hash<auto> defs = pgmb.getAllDefines();
+                                        list<auto> dd = AbstractDebugControl::enumFilter(keys defs, defName);
                                         result = hash();
                                         map result{$1} = defs{$1}, dd;
                                         break;
@@ -567,7 +579,7 @@ public namespace DebugProgramControl {
                                     case 'get':
                                         int sid = resolveStatement(pgmb, receiveData.value);
                                         result = hash(pgmb.getStatementIdInfo(sid, True));
-                                        list bkpts = remove result.breakpoints;
+                                        list<auto> bkpts =remove result.breakpoints;
                                         result.id = sid;
                                         result.breakpoints = ();
                                         foreach Breakpoint b2 in (bkpts) {
@@ -610,7 +622,7 @@ public namespace DebugProgramControl {
                                 switch (shift cmd) {
                                     case 'list':
                                         if (pgmb) {
-                                            list bkpts = pgmb.getBreakpoints();
+                                            list<auto> bkpts =pgmb.getBreakpoints();
                                             result = ();
                                             foreach Breakpoint b2 in (bkpts) {
                                                 if (AbstractDebugControl::evalCondition(b2.getBreakpointId(), bkptName)) {
@@ -640,7 +652,7 @@ public namespace DebugProgramControl {
                                         broadcastBreakpoint(cx, b, "delete");
                                         b.unassignProgram();
                                         b.clearThreadIds();
-                                        list sl = b.getStatementIds();
+                                        list<auto> sl = b.getStatementIds();
                                         foreach int s in (sl) {
                                             b.unassignStatement(s);
                                         }
@@ -690,7 +702,7 @@ public namespace DebugProgramControl {
                                         break;
 
                                     case 'thread':
-                                        list saveThreadIds = b.getThreadIds();
+                                        list<auto> saveThreadIds = b.getThreadIds();
                                         switch (shift cmd) {
                                             case 'add':
                                                 b.addThreadId(receiveData.value);
@@ -745,7 +757,7 @@ public namespace DebugProgramControl {
                         if (!exists receiveData.tid) {
                             switch (cmd[0]) {
                                 case 'stack':
-                                    hash stacks = get_all_thread_call_stacks();
+                                    hash<auto> stacks = get_all_thread_call_stacks();
                                     foreach softint tid in (keys stacks) {
                                         rwlThread.readLock();
                                         on_exit rwlThread.readUnlock();
@@ -769,8 +781,8 @@ public namespace DebugProgramControl {
                             rwlThread.readLock();
                             on_exit rwlThread.readUnlock();
                             if (ctxThread{receiveData.tid}) {
-                                ctxThread{receiveData.tid}.queue.push(('cx': cx, 'data': receiveData));
-                                sendData.type = 'thread';
+                                ctxThread{receiveData.tid}.queue.push({'cx': cx, 'data': receiveData});
+                                sendData.type = DebugResponseType::Thread;
                                 sendData.tid = receiveData.tid;
                             } else {
                                 throw "DEBUG-HANDLER-ERROR", sprintf("threadId %y is not stopped", receiveData.tid);
@@ -780,15 +792,16 @@ public namespace DebugProgramControl {
                         }
                 }
                 if (exists result) {
-                    sendData.type = 'response';
+                    sendData.type = DebugResponseType::Response;
                 }
             } catch (hash<ExceptionInfo> ex) {
-                debug("exception: %y", ex);
-                sendData.type = 'error';
+                @debug(sprintf("processCommand exception: %y", ex));
+                sendData.type = DebugResponseType::Error;
                 result.err = ex.err;
                 result.desc = ex.desc;
-                if (showFullException)
+                if (showFullException) {
                     result.ex = ex;
+                }
             }
             if (sendData) {
                 sendData.uid = receiveData.uid;
@@ -799,7 +812,7 @@ public namespace DebugProgramControl {
             }
         }
 
-        private auto resolveValue(string name, *string val, hash strings, auto defVal) {
+        private auto resolveValue(string name, *string val, hash<auto> strings, auto defVal) {
             if (exists val) {
                 if (!exists strings{val}) {
                     throw "DEBUG-HANDLER-ERROR", sprintf("%y value %y is not found in %y", name, val, keys strings);
@@ -810,7 +823,7 @@ public namespace DebugProgramControl {
             }
         }
 
-        private string encodeValue(string name, auto val, hash strings) {
+        private string encodeValue(string name, auto val, hash<auto> strings) {
             foreach string k in (keys strings) {
                 if (strings{k} == val) {
                     return k;
@@ -819,7 +832,7 @@ public namespace DebugProgramControl {
             throw "DEBUG-HANDLER-ERROR", sprintf("Cannot encode %y value %y", name, val);
         }
 
-        private int resolveStatement(ProgramControl pgm, *hash value) {
+        private int resolveStatement(ProgramControl pgm, *hash<auto> value) {
             if (exists value.id) {
                 return value.id;
             }
@@ -832,14 +845,14 @@ public namespace DebugProgramControl {
             throw "DEBUG-HANDLER-ERROR", sprintf("Cannot resolve statement from %y", value);
         }
 
-        private hash getProgramInfo(ProgramControl p, bool listFiles = False, *list threads) {
-            hash result;
+        private hash<auto> getProgramInfo(ProgramControl p, bool listFiles = False, *list<auto> threads) {
+            hash<auto> result;
             result.scriptName = p.getScriptName();
             result.scriptPath = p.getScriptPath();
             result.threads = threads ?? p.getThreadList();
             result.debugging = (p.getParseOptions() & PO_NO_DEBUGGING) == 0;
             if (result.debugging && listFiles) {
-                hash h;
+                hash<auto> h;
                 h = p.getSourceFileNames();
                 if (h) {
                     result.files = h;
@@ -852,8 +865,8 @@ public namespace DebugProgramControl {
             return result;
         }
 
-        private hash getBreakpointInfo(Breakpoint b, bool listStatements = True) {
-            hash binfo.id = b.getBreakpointId();
+        private hash<auto> getBreakpointInfo(Breakpoint b, bool listStatements = True) {
+            hash<auto> binfo.id = b.getBreakpointId();
             binfo.programId = b.getProgram().getProgramId();
             binfo.enabled = encodeValue('enabled', b.getEnabled(), boolStrings);
             binfo.threads = b.getThreadIds();
@@ -863,19 +876,21 @@ public namespace DebugProgramControl {
                 foreach int sid in (b.getStatementIds()) {
                     push binfo.statements, ('id': sid) + b.getProgram().getStatementIdInfo(sid);
                 }
-                if (!binfo.statements)
+                if (!binfo.statements) {
                     remove binfo.statements;
+                }
             }
-            if (!binfo.threads)
+            if (!binfo.threads) {
                 remove binfo.threads;
+            }
             return binfo;
         }
 
         # stackInfo keys: file, [source], [offset], line
-        private *hash getSourceCodeFromFileOrLabel(ProgramControl pgm, hash stackInfo, int linesBefore, int linesAfter) {
+        private *hash<auto> getSourceCodeFromFileOrLabel(ProgramControl pgm, hash<auto> stackInfo, int linesBefore, int linesAfter) {
             string type = 'file';
             int offset = 0;
-            hash h;
+            hash<auto> h;
             if (exists stackInfo.source) {
                 # label used
                 if (isSupportedSourceCodeForLabel()) {
@@ -903,8 +918,8 @@ public namespace DebugProgramControl {
             return getSourceCode(pgm, type, h).('code', 'startline', 'origin') + ('currentline': stackInfo.line + offset);
         }
 
-        private *hash getSourceCode(ProgramControl pgmb, string type, hash rd) {
-            hash res;
+        private *hash<auto> getSourceCode(ProgramControl pgmb, string type, hash<auto> rd) {
+            hash<auto> res;
             if (!exists (type=='file' ? pgmb.getSourceFileNames() : pgmb.getSourceLabels() ){rd{type}}) {
                 throw "DEBUG-HANDLER-ERROR", sprintf("Cannot get source for %y", rd{type});
             }
@@ -925,7 +940,7 @@ public namespace DebugProgramControl {
                     rd.line = 1;
                 }
                 if (rd.line > 1 || rd.count > 0) {
-                    list l = sc.content.split("\n");
+                    list<auto> l = sc.content.split("\n");
                     l = l[rd.line-1..rd.line+rd.count-2];
                     sc.content = l.join("\n");
                 }
@@ -963,21 +978,21 @@ public namespace DebugProgramControl {
             };
         }
 
-        private *hash serializeLocal(string name, hash val) {
+        private *hash<auto> serializeLocal(string name, hash<auto> val) {
             val.value = AbstractDebugControl::serialize(val.value);
             return ('name': name) + val;
         }
 
-        private *hash serializeLocals(*hash vals) {
+        private *hash<auto> serializeLocals(*hash<auto> vals) {
             foreach string k in (keys vals) {
                 vals{k}.value = AbstractDebugControl::serialize(vals{k}.value);
             }
             return vals;
         }
 
-        private list adjustStack(list stack, *hash ctx) {
+        private list<auto> adjustStack(list<auto> stack, *hash<auto> ctx) {
             if (ctx && ctx.stackSize >= frameOffset) {
-                #assert(ctx.stackSize >= frameOffset);
+                @assert(ctx.stackSize >= frameOffset);
                 while (stack.size() > ctx.stackSize - frameOffset) {
                     shift stack;
                 }
@@ -1005,16 +1020,16 @@ public namespace DebugProgramControl {
             return stack;
         }
 
-        private *hash handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash except) {
+        private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {
             # serialize data, send to all websockets, break/suspend thread
             int tid = gettid();
-            hash ctx = (
+            hash<auto> ctx = {
                 "queue": new Queue(),
                 "pgmId": pgm.getProgramId(),
                 "stackSize": get_thread_call_stack().size(),
-                "intrInfo": (
-                    'type': 'event',
-                    'cmd': 'interrupt',
+                "intrInfo": {
+                    'type': DebugResponseType::Event,
+                    'cmd': DebugEventCmd::Interrupt,
                     'pgmid': pgm.getProgramId(),
                     'tid': tid,
                     'stamp': now_us(),
@@ -1022,8 +1037,8 @@ public namespace DebugProgramControl {
                     'runstate': encodeValue('runState', runState, runStateStrings),
                     'runtostatementid': runToStatementId,
                     'frame': 0,
-                ),
-            );
+                },
+            };
             runToStatementId = 0; # reset RunToStatement
             ctx.intrInfo.framecnt = ctx.stackSize - frameOffset;
             if (exists statementId) {
@@ -1033,7 +1048,7 @@ public namespace DebugProgramControl {
                 ctx.intrInfo.bkptid = breakpointId;
             }
             if (exists statementId && statementId > 0) {
-                hash location = pgm.getStatementIdInfo(statementId);
+                hash<auto> location = pgm.getStatementIdInfo(statementId);
                 ctx.intrInfo.file = location.file;
                 ctx.intrInfo.line = location.start_line;
                 ctx.intrInfo.endline = location.end_line;
@@ -1060,7 +1075,7 @@ public namespace DebugProgramControl {
                     switch (k) {
                         case "callstack":
                             ctx.intrInfo.exception{k} = ();
-                            foreach hash cs in (except{k}) {
+                            foreach hash<auto> cs in (except{k}) {
                                 push ctx.intrInfo.exception{k}, cs;
                             }
                             break;
@@ -1079,7 +1094,7 @@ public namespace DebugProgramControl {
             {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
-             #   assert(!exists ctxThread{tid});
+                @assert(!exists ctxThread{tid});
                 ctxThread{tid} = ctx;
             }
 
@@ -1090,23 +1105,23 @@ public namespace DebugProgramControl {
             for (int i=0; i < 8; i++) {
                 # to show important stack values each step
                 try {
-                    *hash lv = get_local_vars(i);   # the same for each dump (serializeLocals adds frame!)
-                    if (i >= 20 && i < 8) {
+                    *hash<auto> lv = get_local_vars(i);   # the same for each dump (serializeLocals adds frame!)
+                    if (i >= 2 && i < 8) {
                         ctx.intrInfo.localvars[i] = serializeLocals(lv);
                     } else {
                         ctx.intrInfo.localvars[i] = keys lv;
                     }
                 } catch (hash<ExceptionInfo> ex) {
-                    # exception intentionally suppressed because local vars dump is only for debug purposses and failure must not break main functionality
-                    #printf("Exception: %y\n", ex);
+                    # exception intentionally suppressed; local vars dump is only for debug purposes
+                    @debug(sprintf("local vars dump exception: %y", ex));
                 }
             }
             try {
                 ctx.intrInfo.stackDump = get_thread_call_stack();
                 ctx.intrInfo.dpgmid = ProgramControl::getProgram().getProgramId();
             } catch (hash<ExceptionInfo> ex) {
-                # exception intentionally suppressed because failure must not break main functionality
-                #printf("Exception: %y\n", ex);
+                # exception intentionally suppressed; stack dump is only for debug purposes
+                @debug(sprintf("stack dump exception: %y", ex));
             }
 %endif
 
@@ -1116,7 +1131,7 @@ public namespace DebugProgramControl {
                 # suppress exceptions
             }
 
-            hash ctxCT;
+            hash<auto> ctxCT;
             if (exists refName) {
                 ctxCT{refName} = refValue;
             }
@@ -1127,13 +1142,13 @@ public namespace DebugProgramControl {
                 auto qrd = ctx.queue.get();
                 {
                     auto result;
-                    hash sd;
-                    hash cx;
-                    hash rd;
+                    hash<auto> sd;
+                    hash<auto> cx;
+                    hash<auto> rd;
                     try {
                         rd = qrd.data;
                         cx = qrd.cx;
-                        list cmd = rd.cmd.split('/');
+                        list<auto> cmd = rd.cmd.split('/');
                         shift cmd;  # remove thread
                         switch (shift cmd) {
                             case 'go':
@@ -1152,7 +1167,7 @@ public namespace DebugProgramControl {
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
                                 switch (shift cmd) {
                                     case 'get':
-                                        *hash lv = get_local_vars(frameId2);
+                                        *hash<auto> lv = get_local_vars(frameId2);
                                         if (exists lv{varName}) {
                                             result = serializeLocal(varName, lv{varName});
                                         }
@@ -1226,7 +1241,7 @@ public namespace DebugProgramControl {
                                         }
                                         break;
                                     case 'list':
-                                        list l  = list('frame', 'event');
+                                        list<auto> l  = list('frame', 'event');
                                         if (refName) {
                                             l += refName;
                                         }
@@ -1236,7 +1251,7 @@ public namespace DebugProgramControl {
                                 break;
 
                             case 'stack':
-                                list stack = adjustStack(get_thread_call_stack(), ctx);
+                                list<auto> stack = adjustStack(get_thread_call_stack(), ctx);
                                 if ((rd.frameid ?? ctxCT.frameId) < stack.size()) {
                                     stack[rd.frameid ?? ctxCT.frameId].current = True;
                                 }
@@ -1247,7 +1262,7 @@ public namespace DebugProgramControl {
                                 break;
 
                             case 'source':
-                                list stack = adjustStack(get_thread_call_stack(), ctx);
+                                list<auto> stack = adjustStack(get_thread_call_stack(), ctx);
                                 int frame = rd.frameid ?? ctxCT.frameId;
                                 if (frame < stack.size()) {
                                     result = getSourceCodeFromFileOrLabel(pgm, stack[frame], rd.linesbefore ?? DEFAULT_LINES_BEFORE, rd.linesafter ?? DEFAULT_LINES_AFTER);
@@ -1256,15 +1271,16 @@ public namespace DebugProgramControl {
                         }
 
                         if (exists result) {
-                            sd.type = 'response';
+                            sd.type = DebugResponseType::Response;
                         }
 
                     } catch (hash<ExceptionInfo> ex) {
-                        sd.type = 'error';
+                        sd.type = DebugResponseType::Error;
                         result.err = ex.err;
                         result.desc = ex.desc;
-                        if (showFullException)
+                        if (showFullException) {
                             result.ex = ex;
+                        }
                     }
                     if (exists result) {
                         sd.tid = tid;
@@ -1289,15 +1305,15 @@ public namespace DebugProgramControl {
                 remove ctxThread{tid};
             }
             # notify program is running again
-            hash sd = (
-                'type': 'event',
-                'cmd': 'run',
+            hash<auto> sd = {
+                'type': DebugResponseType::Event,
+                'cmd': DebugEventCmd::Run,
                 'pgmid': ctx.pgmId,
                 'tid': tid,
                 'stamp': now_us(),
                 'runstate': encodeValue('runState', runState, runStateStrings),
                 'runtostatementid': runToStatementId,
-            );
+            };
             try {
                 broadcastDataImpl(sd);
             } catch (hash<ExceptionInfo> ex) {
@@ -1346,7 +1362,7 @@ public namespace DebugProgramControl {
             }
         }
 
-        onException(ProgramControl pgm, int statementId, hash ex, reference dismiss, reference rs, reference runToStatementId) {
+        onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs, reference runToStatementId) {
             if (statementId) {
                 handleInterrupt('exception', pgm, \rs, \runToStatementId, statementId, "dismiss", \dismiss, NOTHING, ex);
             }

@@ -5,6 +5,7 @@
 
 %requires ../../../../qlib/DebugUtil.qm
 %requires ../../../../qlib/DebugCmdLine.qm
+%requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 
 %exec-class DebugCmdLineTest
@@ -12,8 +13,8 @@
 class TestDebugCommandLine inherits DebugCommandLine {
     public {
         list<string> outputLines = ();
-        *hash lastCommandData;
-        *hash commandResponse;
+        *hash<auto> lastCommandData;
+        *hash<auto> commandResponse;
     }
 
     constructor() : DebugCommandLine() {
@@ -23,13 +24,13 @@ class TestDebugCommandLine inherits DebugCommandLine {
         push outputLines, vsprintf(fmt, argv);
     }
 
-    public *hash doCommandImpl(hash data) {
+    public *hash<auto> doCommandImpl(hash<auto> data) {
         lastCommandData = data;
         return commandResponse;
     }
 
     # expose private methods for testing
-    public hash testSplitCmd(string line) {
+    public hash<auto> testSplitCmd(string line) {
         return splitCmd(line);
     }
 }
@@ -43,6 +44,8 @@ public class DebugCmdLineTest inherits QUnit::Test {
         addTestCase("formatSource tests", \formatSourceTests());
         addTestCase("context tests", \contextTests());
         addTestCase("validateInt tests", \validateIntTests());
+        addTestCase("color output tests", \colorOutputTests());
+        addTestCase("version command tests", \versionCommandTests());
         set_return_value(main());
     }
 
@@ -51,33 +54,33 @@ public class DebugCmdLineTest inherits QUnit::Test {
 
         # simple command
         {
-            hash r = dcl.testSplitCmd("help");
+            hash<auto> r = dcl.testSplitCmd("help");
             assertEq(list("help"), r.args);
             assertEq(1, r.pos.size());
         }
 
         # multiple args
         {
-            hash r = dcl.testSplitCmd("pgm set 123");
+            hash<auto> r = dcl.testSplitCmd("pgm set 123");
             assertEq(("pgm", "set", "123"), r.args);
             assertEq(3, r.pos.size());
         }
 
         # single-quoted string
         {
-            hash r = dcl.testSplitCmd("cmd 'hello world'");
+            hash<auto> r = dcl.testSplitCmd("cmd 'hello world'");
             assertEq(("cmd", "hello world"), r.args);
         }
 
         # double-quoted string
         {
-            hash r = dcl.testSplitCmd('cmd "hello world"');
+            hash<auto> r = dcl.testSplitCmd('cmd "hello world"');
             assertEq(("cmd", "hello world"), r.args);
         }
 
         # escape sequences: backslash-n and backslash-t in the input
         {
-            hash r = dcl.testSplitCmd("cmd \\n\\t");
+            hash<auto> r = dcl.testSplitCmd("cmd \\n\\t");
             assertEq(("cmd", "\n\t"), r.args);
         }
 
@@ -88,37 +91,37 @@ public class DebugCmdLineTest inherits QUnit::Test {
 
         # empty string
         {
-            hash r = dcl.testSplitCmd("");
+            hash<auto> r = dcl.testSplitCmd("");
             assertEq((), r.args);
         }
 
         # multiple spaces between args
         {
-            hash r = dcl.testSplitCmd("cmd    arg1    arg2");
+            hash<auto> r = dcl.testSplitCmd("cmd    arg1    arg2");
             assertEq(("cmd", "arg1", "arg2"), r.args);
         }
 
         # single quote inside double quotes
         {
-            hash r = dcl.testSplitCmd("cmd \"it's\"");
+            hash<auto> r = dcl.testSplitCmd("cmd \"it's\"");
             assertEq(("cmd", "it's"), r.args);
         }
 
         # double quote inside single quotes
         {
-            hash r = dcl.testSplitCmd("cmd 'say \"hi\"'");
+            hash<auto> r = dcl.testSplitCmd("cmd 'say \"hi\"'");
             assertEq(("cmd", 'say "hi"'), r.args);
         }
 
         # null escape
         {
-            hash r = dcl.testSplitCmd("cmd \\0end");
+            hash<auto> r = dcl.testSplitCmd("cmd \\0end");
             assertEq(("cmd", "\0end"), r.args);
         }
 
         # carriage return escape
         {
-            hash r = dcl.testSplitCmd("cmd \\r");
+            hash<auto> r = dcl.testSplitCmd("cmd \\r");
             assertEq(("cmd", "\r"), r.args);
         }
     }
@@ -128,34 +131,34 @@ public class DebugCmdLineTest inherits QUnit::Test {
 
         # line number
         {
-            hash r = dcl.getStatementValue(list("42"));
+            hash<auto> r = dcl.getStatementValue(list("42"));
             assertEq("", r.file);
             assertEq(42, r.lineno);
         }
 
         # function()
         {
-            hash r = dcl.getStatementValue(list("myFunc()"));
+            hash<auto> r = dcl.getStatementValue(list("myFunc()"));
             assertEq("myFunc", r.function);
             assertEq((), r.args);
         }
 
         # function(args)
         {
-            hash r = dcl.getStatementValue(list("myFunc(int, string)"));
+            hash<auto> r = dcl.getStatementValue(list("myFunc(int, string)"));
             assertEq("myFunc", r.function);
             assertEq(("int", "string"), r.args);
         }
 
         # #statementId
         {
-            hash r = dcl.getStatementValue(list("#123"));
+            hash<auto> r = dcl.getStatementValue(list("#123"));
             assertEq(123, r.id);
         }
 
         # file + lineno
         {
-            hash r = dcl.getStatementValue(("myfile.q", "10"));
+            hash<auto> r = dcl.getStatementValue(("myfile.q", "10"));
             assertEq("myfile.q", r.file);
             assertEq(10, r.lineno);
         }
@@ -174,13 +177,13 @@ public class DebugCmdLineTest inherits QUnit::Test {
     formatBreakpointTests() {
         TestDebugCommandLine dcl();
 
-        hash b = (
+        hash<auto> b = {
             "id": 1,
             "programId": 42,
             "enabled": "true",
             "policy": "none",
             "threads": (1, 2, 3),
-        );
+        };
         string result = dcl.formatBreakpoint(b);
         assertTrue(result.find("1") >= 0);
         assertTrue(result.find("42") >= 0);
@@ -188,7 +191,7 @@ public class DebugCmdLineTest inherits QUnit::Test {
         assertTrue(result.find("none") >= 0);
 
         # without threads — threads value is NOTHING which formats with %y
-        hash b2 = b - "threads";
+        hash<auto> b2 = b - "threads";
         string result2 = dcl.formatBreakpoint(b2);
         # verify it doesn't crash and produces output
         assertTrue(result2.size() > 0);
@@ -199,13 +202,13 @@ public class DebugCmdLineTest inherits QUnit::Test {
 
         # basic statement without source
         {
-            hash stmt = (
+            hash<auto> stmt = {
                 "id": 100,
                 "file": "test.q",
                 "start_line": 10,
                 "end_line": 15,
                 "offset": 0,
-            );
+            };
             string result = dcl.formatStatement(stmt);
             assertTrue(result.find("100") >= 0);
             assertTrue(result.find("test.q") >= 0);
@@ -214,14 +217,14 @@ public class DebugCmdLineTest inherits QUnit::Test {
 
         # statement with source (label)
         {
-            hash stmt = (
+            hash<auto> stmt = {
                 "id": 200,
                 "file": "test.q",
                 "start_line": 10,
                 "end_line": 20,
                 "offset": 5,
                 "source": "label::method",
-            );
+            };
             string result = dcl.formatStatement(stmt);
             assertTrue(result.find("label::method") >= 0);
         }
@@ -234,27 +237,29 @@ public class DebugCmdLineTest inherits QUnit::Test {
         assertNothing(dcl.formatSource(NOTHING));
 
         # no code key
-        assertNothing(dcl.formatSource(("other": "data")));
+        assertNothing(dcl.formatSource({"other": "data"}));
 
         # code without line numbers
         {
-            *string result = dcl.formatSource(("code": "line1\nline2"));
+            *string result = dcl.formatSource({"code": "line1\nline2"});
             assertEq("line1\nline2", result);
         }
 
-        # code with line numbers
+        # code with line numbers (strip ANSI codes for assertions)
         {
-            *string result = dcl.formatSource(("code": "first\nsecond", "startline": 10));
-            assertTrue(result.find("10") >= 0);
-            assertTrue(result.find("first") >= 0);
-            assertTrue(result.find("11") >= 0);
-            assertTrue(result.find("second") >= 0);
+            *string result = dcl.formatSource({"code": "first\nsecond", "startline": 10});
+            string stripped = TerminalColor::stripAnsi(result);
+            assertTrue(stripped.find("10") >= 0);
+            assertTrue(stripped.find("first") >= 0);
+            assertTrue(stripped.find("11") >= 0);
+            assertTrue(stripped.find("second") >= 0);
         }
 
-        # code with current line marker
+        # code with current line marker (> character, possibly with ANSI codes)
         {
-            *string result = dcl.formatSource(("code": "a\nb\nc", "startline": 1, "currentline": 2));
-            assertTrue(result.find("*") >= 0);
+            *string result = dcl.formatSource({"code": "a\nb\nc", "startline": 1, "currentline": 2});
+            string stripped = TerminalColor::stripAnsi(result);
+            assertTrue(stripped.find(">") >= 0);
         }
     }
 
@@ -318,5 +323,107 @@ public class DebugCmdLineTest inherits QUnit::Test {
         assertThrows("CMD-ARG-ERROR", sub() {
             DebugCommandLine::validateInt(dcl, list("cmd"), list("abc"));
         });
+    }
+
+    colorOutputTests() {
+        # TerminalColor is accessible and has expected methods
+        {
+            TerminalColor tc(False);
+            assertEq("test", tc.error("test"));
+            assertEq("test", tc.success("test"));
+            assertEq("test", tc.warning("test"));
+            assertEq("test", tc.dim("test"));
+            assertEq("test", tc.number("test"));
+            assertEq("test", tc.value("test"));
+        }
+
+        # TerminalColor with color enabled wraps text with ANSI
+        {
+            TerminalColor tc(True);
+            if (tc.enabled) {
+                string colored = tc.error("test");
+                assertTrue(colored.size() > 4);
+                assertEq("test", TerminalColor::stripAnsi(colored));
+            }
+        }
+
+        # formatBreakpoint strips cleanly
+        {
+            TestDebugCommandLine dcl();
+            hash<auto> b = {
+                "id": 1,
+                "programId": 42,
+                "enabled": "true",
+                "policy": "none",
+                "threads": (1, 2),
+            };
+            string result = dcl.formatBreakpoint(b);
+            string stripped = TerminalColor::stripAnsi(result);
+            assertTrue(stripped.find("1") >= 0);
+            assertTrue(stripped.find("42") >= 0);
+            assertTrue(stripped.find("true") >= 0);
+        }
+
+        # formatStatement strips cleanly
+        {
+            TestDebugCommandLine dcl();
+            hash<auto> stmt = {
+                "id": 100,
+                "file": "test.q",
+                "start_line": 10,
+                "end_line": 15,
+                "offset": 0,
+            };
+            string result = dcl.formatStatement(stmt);
+            string stripped = TerminalColor::stripAnsi(result);
+            assertTrue(stripped.find("100") >= 0);
+            assertTrue(stripped.find("test.q") >= 0);
+        }
+
+        # printData with event type
+        {
+            TestDebugCommandLine dcl();
+            hash<auto> data = {
+                "type": DebugResponseType::Event,
+                "cmd": DebugEventCmd::Interrupt,
+                "stamp": now_us(),
+                "pgmid": 1,
+                "tid": 2,
+            };
+            dcl.printData(data);
+            assertTrue(dcl.outputLines.size() > 0);
+            string stripped = TerminalColor::stripAnsi(dcl.outputLines[0]);
+            assertTrue(stripped.find("interrupt") >= 0);
+            assertTrue(stripped.find("pgm:") >= 0);
+        }
+
+        # printData with error type
+        {
+            TestDebugCommandLine dcl();
+            hash<auto> data = {
+                "type": DebugResponseType::Error,
+                "cmd": "test",
+                "result": {
+                    "err": "TEST-ERROR",
+                    "desc": "test description",
+                },
+            };
+            dcl.printData(data);
+            assertTrue(dcl.outputLines.size() > 0);
+            string stripped = TerminalColor::stripAnsi(dcl.outputLines[0]);
+            assertTrue(stripped.find("TEST-ERROR") >= 0);
+            assertTrue(stripped.find("test description") >= 0);
+        }
+    }
+
+    versionCommandTests() {
+        TestDebugCommandLine dcl();
+        # trigger the version action by calling processCmdLine
+        dcl.processCmdLine("version");
+        # version output should include qore version
+        assertTrue(dcl.outputLines.size() > 0);
+        string allOutput = dcl.outputLines.join("\n");
+        string stripped = TerminalColor::stripAnsi(allOutput);
+        assertTrue(stripped.find("qore") >= 0 || stripped.find("Qore") >= 0);
     }
 }
