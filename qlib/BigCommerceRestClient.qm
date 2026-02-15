@@ -1,0 +1,383 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BigCommerceRestClient.qm Qore user module for calling BigCommerce REST API services
+
+/*  BigCommerceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module BigCommerceRestClient {
+    version = "1.0";
+    desc = "User module for calling BigCommerce REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("bigcommerceres",
+            BigCommerceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage BigCommerceRestClient Module
+
+    @tableofcontents
+
+    @section bigcommercerestclientintro BigCommerceRestClient Introduction
+
+    The %BigCommerceRestClient module provides an API for calling BigCommerce REST API services.
+
+    To use this module, use \c "%requires BigCommerceRestClient" in your code.
+
+    All the public symbols in the module are defined in the BigCommerceRestClient namespace.
+
+    The main classes are:
+    - @ref BigCommerceRestClient::BigCommerceRestClient "BigCommerceRestClient":
+      this class provides the REST client API for communication with the BigCommerce API;
+      it handles X-Auth-Token authentication
+    - @ref BigCommerceRestClient::BigCommerceRestConnection "BigCommerceRestConnection":
+      provides a connection object to BigCommerce services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires BigCommerceRestClient
+
+BigCommerceRestClient bc({
+    "store_hash": ENV.BIGCOMMERCE_STORE_HASH,
+    "access_token": ENV.BIGCOMMERCE_ACCESS_TOKEN,
+});
+hash<auto> result = bc.get("v3/catalog/summary");
+printf("Product count: %d\n", result.body.data.product_count);
+    @endcode
+
+    @section bigcommercerestclientrelnotes Release Notes
+
+    @subsection bigcommercerestclientv1_0 BigCommerceRestClient v1.0
+    - the initial version of the %BigCommerceRestClient module
+*/
+
+#! the BigCommerceRestClient namespace contains all the objects in the BigCommerceRestClient module
+public namespace BigCommerceRestClient {
+
+#! This class provides the REST client API for communication with BigCommerce servers
+/** BigCommerce uses a REST API at https://api.bigcommerce.com/stores/{store_hash} with
+    X-Auth-Token authentication.
+
+    @par Authentication:
+    - X-Auth-Token header with API access token
+    - Access tokens are generated from the BigCommerce admin panel
+    - No OAuth2 refresh flow; tokens are long-lived
+
+    @par API Structure:
+    - V3 endpoints under /v3/ (customers, products, catalog, blog, carts)
+    - V2 endpoints under /v2/ (orders, shipments)
+    - The base URL includes /stores/{store_hash} but no version prefix
+*/
+public class BigCommerceRestClient inherits RestClient::RestClient {
+    public {
+        #! Default BigCommerce API URL base
+        const DefaultApiHost = "https://api.bigcommerce.com";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (relative - no leading slash since base URL has /stores/{hash})
+        const DefaultPingPath = "v3/catalog/summary";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+BigCommerceRestClient bc({
+    "store_hash": "g3uz5c7jx",
+    "access_token": "your-access-token",
+});
+        @endcode
+
+        @param opts valid options are:
+        - \c store_hash (required): the BigCommerce store hash
+        - \c access_token (required): the API access token
+        - plus all options for the @ref RestClient::RestClient "RestClient" class
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately
+        established to the remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data
+        serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(BigCommerceRestClient::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref BigCommerceRestClient::BigCommerceRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Build URL from store_hash
+        if (opts.store_hash) {
+            rv.url = sprintf("%s/stores/%s", DefaultApiHost, opts.store_hash);
+            remove rv.store_hash;
+        }
+
+        # Set X-Auth-Token header from access_token
+        if (opts.access_token) {
+            rv.headers."X-Auth-Token" = opts.access_token;
+            remove rv.access_token;
+        }
+
+        return rv;
+    }
+}
+
+#! Class for BigCommerce REST connections; returns @ref BigCommerceRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref BigCommerceRestClient::BigCommerceRestClient::constructor() for more information
+    on the above options
+*/
+public class BigCommerceRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default connection URL
+        const DefaultConnectionUrl = "bigcommerceres://api.bigcommerce.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "BigCommerce REST Connection",
+            "short_desc": "A connection to the BigCommerce REST API",
+            "desc": "A connection to the BigCommerce REST API for e-commerce management "
+                "including customers, products, orders, carts, shipments, and blog posts",
+            "cls": Class::forName("BigCommerceRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "bigcommerceres": True,
+            },
+            "base_scheme_map": {
+                "https": "bigcommerceres",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigCommerceRestClient::DefaultData,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigCommerceRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigCommerceRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigCommerceRestClient::DefaultPingPath,
+                },
+                "store_hash": <ConnectionOptionInfo>{
+                    "display_name": "Store Hash",
+                    "short_desc": "BigCommerce store hash",
+                    "type": "string",
+                    "desc": "The store hash identifying your BigCommerce store. "
+                        "You can find it in the BigCommerce admin under Settings > "
+                        "API Accounts > API Path (e.g., "
+                        "https://api.bigcommerce.com/stores/<store_hash>/v3)",
+                    "preselected": True,
+                },
+                "access_token": <ConnectionOptionInfo>{
+                    "display_name": "Access Token",
+                    "short_desc": "BigCommerce API access token",
+                    "type": "string",
+                    "desc": "The API access token for authenticating with the BigCommerce API. "
+                        "Generate one from your BigCommerce admin under Settings > "
+                        "API Accounts > Create API Account (V2/V3 Token)",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "access_token,store_hash",
+        };
+    }
+
+    #! creates the BigCommerceRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes
+        and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = BigCommerceRestClient::DefaultApiHost,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the BigCommerceRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(BigCommerceRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns \c "bigcommerceres"
+    string getType() {
+        return "bigcommerceres";
+    }
+
+    #! Returns connection options
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return RestConnection::getConnectionOptions(rtopts);
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
+    #! method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "BigCommerce";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the BigCommerceDataProvider and
+        # creates the data provider object dynamically
+        load_module("BigCommerceDataProvider");
+        return create_object("BigCommerceDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            # Auto-correct URL from store_hash
+            if (opts.store_hash) {
+                string expected_url = sprintf("bigcommerceres://api.bigcommerce.com/stores/%s",
+                    opts.store_hash);
+                if (url != expected_url) {
+                    update.url = expected_url;
+                }
+            }
+            # Auto-correct ping path - remove leading slash
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! returns a @ref BigCommerceRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this
+        parameter is ignored
+
+        @return a @ref BigCommerceRestClient object
+    */
+    private BigCommerceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BigCommerceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Builds the connection configuration from options
+    private static hash<auto> getConfig(hash<auto> config) {
+        if (config.opts.store_hash) {
+            config.url = sprintf("bigcommerceres://api.bigcommerce.com/stores/%s",
+                config.opts.store_hash);
+        }
+        return config;
+    }
+}
+}

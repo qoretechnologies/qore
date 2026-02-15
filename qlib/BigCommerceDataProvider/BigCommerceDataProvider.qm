@@ -1,0 +1,1881 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BigCommerceDataProvider.qm Qore user module for BigCommerce data provider
+
+/*  BigCommerceDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) BigCommerceRestClient
+
+module BigCommerceDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for BigCommerce e-commerce";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new BigCommerceDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BigCommerceDataProvider::AppName,
+            "display_name": "BigCommerce",
+            "short_desc": "BigCommerce e-commerce platform",
+            "desc": "BigCommerce is a leading e-commerce platform for online stores.\n\n"
+                "This integration supports customers, products, orders, carts, "
+                "shipments, blog posts, and customer addresses.",
+            "scheme": "bigcommerceres",
+            "logo": BigCommerceLogo,
+            "logo_file_name": "bigcommerce-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # Create a Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customers/create",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create a Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Customer first name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "First name of the customer",
+                    "example_value": "John",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Customer last name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "Last name of the customer",
+                    "example_value": "Smith",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Customer email address",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "Email address of the customer",
+                    "example_value": "john@example.com",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Company name of the customer",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Phone number of the customer",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Admin notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Admin notes about the customer",
+                },
+                "customer_group_id": <ActionOptionInfo>{
+                    "display_name": "Customer Group",
+                    "short_desc": "Customer group ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "ID of the customer group to assign",
+                    "ref_data": "customer_groups",
+                },
+            },
+        });
+
+        # Update a Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customers/update",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update a Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Customer first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Customer last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Customer email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Admin notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "customer_group_id": <ActionOptionInfo>{
+                    "display_name": "Customer Group",
+                    "short_desc": "Customer group ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customer_groups",
+                },
+            },
+        });
+
+        # Delete a Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customers/delete",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete a Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Get a Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customers/get",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get a Customer",
+            "short_desc": "Get a single customer by ID",
+            "desc": "Retrieve a single customer by ID from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Search Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customers",
+            "action": "search-customers",
+            "groups": "Customers",
+            "display_name": "Search Customers",
+            "short_desc": "Search for customers or list all",
+            "desc": "Search for specific customers or list all customers in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Filter by company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "customer_group_id": <ActionOptionInfo>{
+                    "display_name": "Customer Group ID",
+                    "short_desc": "Filter by customer group",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by exact name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name_like": <ActionOptionInfo>{
+                    "display_name": "Name (Like)",
+                    "short_desc": "Filter by partial name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "date_created_min": <ActionOptionInfo>{
+                    "display_name": "Date Created (Min)",
+                    "short_desc": "Minimum creation date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "date_modified_min": <ActionOptionInfo>{
+                    "display_name": "Date Modified (Min)",
+                    "short_desc": "Minimum modification date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "date_created:asc",
+                            "desc": "Sort by creation date ascending"},
+                        <AllowedValueInfo>{"value": "date_created:desc",
+                            "desc": "Sort by creation date descending"},
+                        <AllowedValueInfo>{"value": "last_name:asc",
+                            "desc": "Sort by last name ascending"},
+                        <AllowedValueInfo>{"value": "last_name:desc",
+                            "desc": "Sort by last name descending"},
+                        <AllowedValueInfo>{"value": "date_modified:asc",
+                            "desc": "Sort by modification date ascending"},
+                        <AllowedValueInfo>{"value": "date_modified:desc",
+                            "desc": "Sort by modification date descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== CUSTOMER ADDRESS ACTIONS ==========
+
+        # Create a Customer Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customer-addresses/create",
+            "action": "create-customer-address",
+            "groups": "Customers",
+            "display_name": "Create a Customer Address",
+            "short_desc": "Create a new address for a customer",
+            "desc": "Create a new address for a customer in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to add address to",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Recipient first name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Recipient last name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "address1": <ActionOptionInfo>{
+                    "display_name": "Address Line 1",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "example_value": "123 Main St",
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "state_or_province": <ActionOptionInfo>{
+                    "display_name": "State/Province",
+                    "short_desc": "State or province",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "postal_code": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "ZIP/postal code",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "ISO country code",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "example_value": "US",
+                },
+                "address2": <ActionOptionInfo>{
+                    "display_name": "Address Line 2",
+                    "short_desc": "Additional address info",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "address_type": <ActionOptionInfo>{
+                    "display_name": "Address Type",
+                    "short_desc": "Type of address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "residential",
+                            "desc": "Residential address"},
+                        <AllowedValueInfo>{"value": "commercial",
+                            "desc": "Commercial address"},
+                    ),
+                },
+            },
+        });
+
+        # Search Customer Addresses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customer-addresses",
+            "action": "search-customer-addresses",
+            "groups": "Customers",
+            "display_name": "Search Customer Addresses",
+            "short_desc": "Search for customer addresses or list all",
+            "desc": "Search for specific customer addresses or list them all in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Filter by company",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "address_id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "Filter by address ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Update a Customer Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customer-addresses/update",
+            "action": "update-customer-address",
+            "groups": "Customers",
+            "display_name": "Update a Customer Address",
+            "short_desc": "Update an existing customer address",
+            "desc": "Update an existing customer address in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "The address to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Recipient first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Recipient last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "address1": <ActionOptionInfo>{
+                    "display_name": "Address Line 1",
+                    "short_desc": "Street address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "address2": <ActionOptionInfo>{
+                    "display_name": "Address Line 2",
+                    "short_desc": "Additional address info",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "state_or_province": <ActionOptionInfo>{
+                    "display_name": "State/Province",
+                    "short_desc": "State or province",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "postal_code": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "ZIP/postal code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "ISO country code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Company name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "address_type": <ActionOptionInfo>{
+                    "display_name": "Address Type",
+                    "short_desc": "Type of address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "residential",
+                            "desc": "Residential address"},
+                        <AllowedValueInfo>{"value": "commercial",
+                            "desc": "Commercial address"},
+                    ),
+                },
+            },
+        });
+
+        # Delete a Customer Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/customer-addresses/delete",
+            "action": "delete-customer-address",
+            "groups": "Customers",
+            "display_name": "Delete a Customer Address",
+            "short_desc": "Delete a customer address",
+            "desc": "Delete a customer address from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "address_id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "The address to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # Create a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/products/create",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create a Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Product name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "example_value": "My Product",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Product type",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "Product type",
+                    "example_value": "physical",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "physical", "desc": "Physical product"},
+                        <AllowedValueInfo>{"value": "digital", "desc": "Digital product"},
+                    ),
+                },
+                "weight": <ActionOptionInfo>{
+                    "display_name": "Weight",
+                    "short_desc": "Product weight",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                },
+                "price": <ActionOptionInfo>{
+                    "display_name": "Price",
+                    "short_desc": "Product price",
+                    "type": AbstractDataProviderTypeMap."float",
+                    "required": True,
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Product description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "categories": <ActionOptionInfo>{
+                    "display_name": "Categories",
+                    "short_desc": "Category IDs",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "brand_id": <ActionOptionInfo>{
+                    "display_name": "Brand ID",
+                    "short_desc": "Brand ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "brands",
+                },
+                "is_visible": <ActionOptionInfo>{
+                    "display_name": "Is Visible",
+                    "short_desc": "Visible on storefront",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "inventory_level": <ActionOptionInfo>{
+                    "display_name": "Inventory Level",
+                    "short_desc": "Current inventory",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "condition": <ActionOptionInfo>{
+                    "display_name": "Condition",
+                    "short_desc": "Product condition",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Product condition",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "New", "desc": "New product"},
+                        <AllowedValueInfo>{"value": "Used", "desc": "Used product"},
+                        <AllowedValueInfo>{"value": "Refurbished",
+                            "desc": "Refurbished product"},
+                    ),
+                },
+            },
+        });
+
+        # Update a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/products/update",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update a Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Product name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Product type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "physical", "desc": "Physical product"},
+                        <AllowedValueInfo>{"value": "digital", "desc": "Digital product"},
+                    ),
+                },
+                "weight": <ActionOptionInfo>{
+                    "display_name": "Weight",
+                    "short_desc": "Product weight",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "price": <ActionOptionInfo>{
+                    "display_name": "Price",
+                    "short_desc": "Product price",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Product description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_visible": <ActionOptionInfo>{
+                    "display_name": "Is Visible",
+                    "short_desc": "Visible on storefront",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "categories": <ActionOptionInfo>{
+                    "display_name": "Categories",
+                    "short_desc": "Category IDs",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "brand_id": <ActionOptionInfo>{
+                    "display_name": "Brand ID",
+                    "short_desc": "Product brand ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "brands",
+                },
+                "inventory_level": <ActionOptionInfo>{
+                    "display_name": "Inventory Level",
+                    "short_desc": "Current inventory level",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "condition": <ActionOptionInfo>{
+                    "display_name": "Condition",
+                    "short_desc": "Product condition",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "New", "desc": "New product"},
+                        <AllowedValueInfo>{"value": "Used", "desc": "Used product"},
+                        <AllowedValueInfo>{"value": "Refurbished",
+                            "desc": "Refurbished product"},
+                    ),
+                },
+                "inventory_tracking": <ActionOptionInfo>{
+                    "display_name": "Inventory Tracking",
+                    "short_desc": "Inventory tracking method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "none",
+                            "desc": "No inventory tracking"},
+                        <AllowedValueInfo>{"value": "product",
+                            "desc": "Track at product level"},
+                        <AllowedValueInfo>{"value": "variant",
+                            "desc": "Track at variant level"},
+                    ),
+                },
+                "availability": <ActionOptionInfo>{
+                    "display_name": "Availability",
+                    "short_desc": "Product availability",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "available",
+                            "desc": "Available for purchase"},
+                        <AllowedValueInfo>{"value": "disabled", "desc": "Disabled"},
+                        <AllowedValueInfo>{"value": "preorder",
+                            "desc": "Available for pre-order"},
+                    ),
+                },
+                "is_featured": <ActionOptionInfo>{
+                    "display_name": "Is Featured",
+                    "short_desc": "Whether the product is featured",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "cost_price": <ActionOptionInfo>{
+                    "display_name": "Cost Price",
+                    "short_desc": "Cost price",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "retail_price": <ActionOptionInfo>{
+                    "display_name": "Retail Price",
+                    "short_desc": "Retail price (MSRP)",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "sale_price": <ActionOptionInfo>{
+                    "display_name": "Sale Price",
+                    "short_desc": "Sale price",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+            },
+        });
+
+        # Delete a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/products/delete",
+            "action": "delete-product",
+            "groups": "Products",
+            "display_name": "Delete a Product",
+            "short_desc": "Delete a product",
+            "desc": "Delete a product from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # Get a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/products/get",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get a Product",
+            "short_desc": "Get a single product by ID",
+            "desc": "Retrieve a single product by ID from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # Search Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/products",
+            "action": "search-products",
+            "groups": "Products",
+            "display_name": "Search Products",
+            "short_desc": "Search for products or list all",
+            "desc": "Search for specific products or list all products in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Filter by product ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by exact name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "name_like": <ActionOptionInfo>{
+                    "display_name": "Name (Like)",
+                    "short_desc": "Filter by partial name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Filter by SKU",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "keyword": <ActionOptionInfo>{
+                    "display_name": "Keyword",
+                    "short_desc": "Search keyword",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "brand_id": <ActionOptionInfo>{
+                    "display_name": "Brand ID",
+                    "short_desc": "Filter by brand",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "brands",
+                },
+                "condition": <ActionOptionInfo>{
+                    "display_name": "Condition",
+                    "short_desc": "Filter by condition",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "New", "desc": "New products"},
+                        <AllowedValueInfo>{"value": "Used", "desc": "Used products"},
+                        <AllowedValueInfo>{"value": "Refurbished",
+                            "desc": "Refurbished products"},
+                    ),
+                },
+                "categories": <ActionOptionInfo>{
+                    "display_name": "Categories",
+                    "short_desc": "Filter by category IDs",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_visible": <ActionOptionInfo>{
+                    "display_name": "Is Visible",
+                    "short_desc": "Filter by visibility",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "date_modified_min": <ActionOptionInfo>{
+                    "display_name": "Date Modified (Min)",
+                    "short_desc": "Minimum modification date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "id", "desc": "Sort by product ID"},
+                        <AllowedValueInfo>{"value": "name", "desc": "Sort by product name"},
+                        <AllowedValueInfo>{"value": "sku", "desc": "Sort by SKU"},
+                        <AllowedValueInfo>{"value": "price", "desc": "Sort by price"},
+                        <AllowedValueInfo>{"value": "date_modified",
+                            "desc": "Sort by modification date"},
+                        <AllowedValueInfo>{"value": "date_last_imported",
+                            "desc": "Sort by last import date"},
+                        <AllowedValueInfo>{"value": "inventory_level",
+                            "desc": "Sort by inventory level"},
+                        <AllowedValueInfo>{"value": "is_visible",
+                            "desc": "Sort by visibility"},
+                        <AllowedValueInfo>{"value": "name:asc",
+                            "desc": "Sort by name ascending"},
+                        <AllowedValueInfo>{"value": "name:desc",
+                            "desc": "Sort by name descending"},
+                    ),
+                },
+                "direction": <ActionOptionInfo>{
+                    "display_name": "Direction",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Descending order"},
+                    ),
+                },
+            },
+        });
+
+        # ========== BLOG POST ACTIONS ==========
+
+        # Create a Blog Post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/blog-posts/create",
+            "action": "create-blog-post",
+            "groups": "Content",
+            "display_name": "Create a Blog Post",
+            "short_desc": "Create a new blog post",
+            "desc": "Create a new blog post in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Blog post title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "example_value": "My Blog Post",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Blog post content (HTML)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+                "url": <ActionOptionInfo>{
+                    "display_name": "URL",
+                    "short_desc": "URL slug",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tags": <ActionOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "Tags for categorization",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "is_published": <ActionOptionInfo>{
+                    "display_name": "Is Published",
+                    "short_desc": "Publish the post",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "author": <ActionOptionInfo>{
+                    "display_name": "Author",
+                    "short_desc": "Author name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "meta_description": <ActionOptionInfo>{
+                    "display_name": "Meta Description",
+                    "short_desc": "SEO description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "published_date": <ActionOptionInfo>{
+                    "display_name": "Published Date",
+                    "short_desc": "Publication date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "thumbnail_path": <ActionOptionInfo>{
+                    "display_name": "Thumbnail Path",
+                    "short_desc": "Thumbnail image path",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "meta_keywords": <ActionOptionInfo>{
+                    "display_name": "Meta Keywords",
+                    "short_desc": "SEO keywords",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get a Blog Post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/blog-posts/get",
+            "action": "get-blog-post",
+            "groups": "Content",
+            "display_name": "Get a Blog Post",
+            "short_desc": "Get a single blog post by ID",
+            "desc": "Retrieve a single blog post by ID from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "blog_post_id": <ActionOptionInfo>{
+                    "display_name": "Blog Post ID",
+                    "short_desc": "The blog post to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "blog_posts",
+                },
+            },
+        });
+
+        # Update a Blog Post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/blog-posts/update",
+            "action": "update-blog-post",
+            "groups": "Content",
+            "display_name": "Update a Blog Post",
+            "short_desc": "Update an existing blog post",
+            "desc": "Update an existing blog post in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "blog_post_id": <ActionOptionInfo>{
+                    "display_name": "Blog Post ID",
+                    "short_desc": "The blog post to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "blog_posts",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Blog post title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Body",
+                    "short_desc": "Blog post content (HTML)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "url": <ActionOptionInfo>{
+                    "display_name": "URL",
+                    "short_desc": "URL slug",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tags": <ActionOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "Tags for categorization",
+                    "type": AbstractDataProviderTypeMap."*list",
+                },
+                "is_published": <ActionOptionInfo>{
+                    "display_name": "Is Published",
+                    "short_desc": "Publish the post",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "author": <ActionOptionInfo>{
+                    "display_name": "Author",
+                    "short_desc": "Author name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "meta_description": <ActionOptionInfo>{
+                    "display_name": "Meta Description",
+                    "short_desc": "SEO description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "published_date": <ActionOptionInfo>{
+                    "display_name": "Published Date",
+                    "short_desc": "Publication date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "thumbnail_path": <ActionOptionInfo>{
+                    "display_name": "Thumbnail Path",
+                    "short_desc": "Thumbnail image path",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "meta_keywords": <ActionOptionInfo>{
+                    "display_name": "Meta Keywords",
+                    "short_desc": "SEO keywords",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Delete a Blog Post
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/blog-posts/delete",
+            "action": "delete-blog-post",
+            "groups": "Content",
+            "display_name": "Delete a Blog Post",
+            "short_desc": "Delete a blog post",
+            "desc": "Delete a blog post from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "blog_post_id": <ActionOptionInfo>{
+                    "display_name": "Blog Post ID",
+                    "short_desc": "The blog post to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "blog_posts",
+                },
+            },
+        });
+
+        # Search Blog Posts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/blog-posts",
+            "action": "search-blog-posts",
+            "groups": "Content",
+            "display_name": "Search Blog Posts",
+            "short_desc": "Search for blog posts or list all",
+            "desc": "Search for specific blog posts or list all blog posts in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "is_published": <ActionOptionInfo>{
+                    "display_name": "Is Published",
+                    "short_desc": "Filter by published status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "tag": <ActionOptionInfo>{
+                    "display_name": "Tag",
+                    "short_desc": "Filter by tag",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        # Get an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/orders/get",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get an Order",
+            "short_desc": "Get a single order by ID",
+            "desc": "Retrieve a single order by ID from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+            },
+        });
+
+        # Update an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/orders/update",
+            "action": "update-order",
+            "groups": "Orders",
+            "display_name": "Update an Order",
+            "short_desc": "Update an existing order",
+            "desc": "Update an existing order in BigCommerce (e.g., change status, add notes)",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "New order status ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Numeric ID of the new order status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 0, "desc": "Incomplete"},
+                        <AllowedValueInfo>{"value": 1, "desc": "Pending"},
+                        <AllowedValueInfo>{"value": 2, "desc": "Shipped"},
+                        <AllowedValueInfo>{"value": 3, "desc": "Partially Shipped"},
+                        <AllowedValueInfo>{"value": 4, "desc": "Refunded"},
+                        <AllowedValueInfo>{"value": 5, "desc": "Cancelled"},
+                        <AllowedValueInfo>{"value": 6, "desc": "Declined"},
+                        <AllowedValueInfo>{"value": 7, "desc": "Awaiting Payment"},
+                        <AllowedValueInfo>{"value": 8, "desc": "Awaiting Pickup"},
+                        <AllowedValueInfo>{"value": 9, "desc": "Awaiting Shipment"},
+                        <AllowedValueInfo>{"value": 10, "desc": "Completed"},
+                        <AllowedValueInfo>{"value": 11, "desc": "Awaiting Fulfillment"},
+                        <AllowedValueInfo>{"value": 12, "desc": "Manual Verification Required"},
+                        <AllowedValueInfo>{"value": 13, "desc": "Disputed"},
+                        <AllowedValueInfo>{"value": 14, "desc": "Partially Refunded"},
+                    ),
+                },
+                "staff_notes": <ActionOptionInfo>{
+                    "display_name": "Staff Notes",
+                    "short_desc": "Internal staff notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "customer_message": <ActionOptionInfo>{
+                    "display_name": "Customer Message",
+                    "short_desc": "Customer message",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "billing_address": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address object",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address object for the order",
+                },
+            },
+        });
+
+        # Search Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/orders",
+            "action": "search-orders",
+            "groups": "Orders",
+            "display_name": "Search Orders",
+            "short_desc": "Search for orders or list all",
+            "desc": "Search for specific orders or list all orders in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Filter by order ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                },
+                "status_id": <ActionOptionInfo>{
+                    "display_name": "Status ID",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "min_date_created": <ActionOptionInfo>{
+                    "display_name": "Min Date Created",
+                    "short_desc": "Minimum creation date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "max_date_created": <ActionOptionInfo>{
+                    "display_name": "Max Date Created",
+                    "short_desc": "Maximum creation date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "min_date_modified": <ActionOptionInfo>{
+                    "display_name": "Min Date Modified",
+                    "short_desc": "Minimum modification date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "min_total": <ActionOptionInfo>{
+                    "display_name": "Min Total",
+                    "short_desc": "Minimum order total",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "max_total": <ActionOptionInfo>{
+                    "display_name": "Max Total",
+                    "short_desc": "Maximum order total",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "is_deleted": <ActionOptionInfo>{
+                    "display_name": "Is Deleted",
+                    "short_desc": "Filter by deletion status",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "payment_method": <ActionOptionInfo>{
+                    "display_name": "Payment Method",
+                    "short_desc": "Filter by payment method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sort": <ActionOptionInfo>{
+                    "display_name": "Sort",
+                    "short_desc": "Sort field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "id",
+                            "desc": "Sort by order ID"},
+                        <AllowedValueInfo>{"value": "date_created",
+                            "desc": "Sort by creation date"},
+                        <AllowedValueInfo>{"value": "date_modified",
+                            "desc": "Sort by modification date"},
+                        <AllowedValueInfo>{"value": "customer_id",
+                            "desc": "Sort by customer ID"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== SHIPMENT ACTIONS ==========
+
+        # Create a Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/shipments/create",
+            "action": "create-shipment",
+            "groups": "Shipments",
+            "display_name": "Create a Shipment",
+            "short_desc": "Create a new shipment for an order",
+            "desc": "Create a new shipment for an order in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order to ship",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "order_address_id": <ActionOptionInfo>{
+                    "display_name": "Order Address ID",
+                    "short_desc": "Shipping address ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "desc": "ID of the shipping address for this shipment",
+                },
+                "items": <ActionOptionInfo>{
+                    "display_name": "Items",
+                    "short_desc": "Items to ship",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "desc": "Array of items to ship, each with order_product_id and quantity",
+                },
+                "tracking_number": <ActionOptionInfo>{
+                    "display_name": "Tracking Number",
+                    "short_desc": "Tracking number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_method": <ActionOptionInfo>{
+                    "display_name": "Shipping Method",
+                    "short_desc": "Shipping method name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_provider": <ActionOptionInfo>{
+                    "display_name": "Shipping Provider",
+                    "short_desc": "Shipping provider name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tracking_carrier": <ActionOptionInfo>{
+                    "display_name": "Tracking Carrier",
+                    "short_desc": "Carrier for tracking",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "comments": <ActionOptionInfo>{
+                    "display_name": "Comments",
+                    "short_desc": "Shipment comments",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get a Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/shipments/get",
+            "action": "get-shipment",
+            "groups": "Shipments",
+            "display_name": "Get a Shipment",
+            "short_desc": "Get a single shipment by ID",
+            "desc": "Retrieve a single shipment by order ID and shipment ID from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order the shipment belongs to",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment ID",
+                    "short_desc": "The shipment to retrieve",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # Update a Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/shipments/update",
+            "action": "update-shipment",
+            "groups": "Shipments",
+            "display_name": "Update a Shipment",
+            "short_desc": "Update an existing shipment",
+            "desc": "Update an existing shipment in BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order the shipment belongs to",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment ID",
+                    "short_desc": "The shipment to update",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+                "tracking_number": <ActionOptionInfo>{
+                    "display_name": "Tracking Number",
+                    "short_desc": "Tracking number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_method": <ActionOptionInfo>{
+                    "display_name": "Shipping Method",
+                    "short_desc": "Shipping method name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "shipping_provider": <ActionOptionInfo>{
+                    "display_name": "Shipping Provider",
+                    "short_desc": "Shipping provider name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "tracking_carrier": <ActionOptionInfo>{
+                    "display_name": "Tracking Carrier",
+                    "short_desc": "Carrier for tracking",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "comments": <ActionOptionInfo>{
+                    "display_name": "Comments",
+                    "short_desc": "Shipment comments",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "order_address_id": <ActionOptionInfo>{
+                    "display_name": "Order Address ID",
+                    "short_desc": "Shipping address ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "items": <ActionOptionInfo>{
+                    "display_name": "Items",
+                    "short_desc": "Shipment items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "Array of items in the shipment with order_product_id and quantity",
+                },
+            },
+        });
+
+        # Delete a Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/shipments/delete",
+            "action": "delete-shipment",
+            "groups": "Shipments",
+            "display_name": "Delete a Shipment",
+            "short_desc": "Delete a shipment",
+            "desc": "Delete a shipment from BigCommerce",
+            "action_code": DPAT_API,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order the shipment belongs to",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "shipment_id": <ActionOptionInfo>{
+                    "display_name": "Shipment ID",
+                    "short_desc": "The shipment to delete",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # Search Shipments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/shipments",
+            "action": "search-shipments",
+            "groups": "Shipments",
+            "display_name": "Search Shipments",
+            "short_desc": "Search for shipments by order",
+            "desc": "List shipments for a specific order in BigCommerce",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Order to list shipments for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "orders",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== EXECUTE API CALL ==========
+
+        # API Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "Other",
+            "display_name": "Make an API Call",
+            "short_desc": "Make a custom API call",
+            "desc": "Make a custom API call to the BigCommerce API",
+            "action_code": DPAT_API,
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "The HTTP method",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The HTTP method to use",
+                    "example_value": "GET",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "desc": "Retrieve data"},
+                        <AllowedValueInfo>{"value": "POST", "desc": "Create data"},
+                        <AllowedValueInfo>{"value": "PUT", "desc": "Update data"},
+                        <AllowedValueInfo>{"value": "DELETE", "desc": "Delete data"},
+                    ),
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "The API path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The API path relative to the store URL "
+                        "(e.g., v3/catalog/products or v2/orders)",
+                    "example_value": "v3/catalog/summary",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Request body (JSON)",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Request body for POST/PUT requests",
+                },
+            },
+        });
+
+        # ========== TRIGGERS ==========
+
+        # Watch Abandoned Cart
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CART_ABANDONED,
+            "action": EVENT_CART_ABANDONED,
+            "groups": "Triggers",
+            "display_name": "Watch Abandoned Cart",
+            "short_desc": "Trigger when a cart is abandoned",
+            "desc": "Fires when a cart is abandoned. "
+                "Uses polling to detect incomplete orders (status Incomplete).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CART_ABANDONED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Cart
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CART_CREATED,
+            "action": EVENT_CART_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Cart",
+            "short_desc": "Trigger when a new cart is created",
+            "desc": "Fires when a new cart is created. "
+                "Uses polling to detect new incomplete orders.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CART_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CUSTOMER_CREATED,
+            "action": EVENT_CUSTOMER_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Customer",
+            "short_desc": "Trigger when a new customer is created",
+            "desc": "Fires when a new customer is created in BigCommerce. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Customer Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CUSTOMER_ADDRESS_CREATED,
+            "action": EVENT_CUSTOMER_ADDRESS_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Customer Address",
+            "short_desc": "Trigger when a new customer address is created",
+            "desc": "Fires when a new customer address is created in BigCommerce. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_ADDRESS_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_CREATED,
+            "action": EVENT_ORDER_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Order",
+            "short_desc": "Trigger when a new order is created",
+            "desc": "Fires when a new order is created from the storefront. "
+                "Uses polling to detect new records (V2 Orders API).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_PRODUCT_CREATED,
+            "action": EVENT_PRODUCT_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Product",
+            "short_desc": "Trigger when a new product is created",
+            "desc": "Fires when a new product is created in BigCommerce. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch New Shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_SHIPMENT_CREATED,
+            "action": EVENT_SHIPMENT_CREATED,
+            "groups": "Triggers",
+            "display_name": "Watch New Shipment",
+            "short_desc": "Trigger when a new shipment is created",
+            "desc": "Fires when a new shipment is created in BigCommerce. "
+                "Uses polling to detect new records (V2 Orders API).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SHIPMENT_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Updated Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CUSTOMER_UPDATED,
+            "action": EVENT_CUSTOMER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Watch Updated Customer",
+            "short_desc": "Trigger when a customer is updated",
+            "desc": "Fires when a customer is updated in BigCommerce. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Updated Customer Address
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_CUSTOMER_ADDRESS_UPDATED,
+            "action": EVENT_CUSTOMER_ADDRESS_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Watch Updated Customer Address",
+            "short_desc": "Trigger when a customer address is updated",
+            "desc": "Fires when a customer address is updated in BigCommerce. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CUSTOMER_ADDRESS_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Updated Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_UPDATED,
+            "action": EVENT_ORDER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Watch Updated Order",
+            "short_desc": "Trigger when an order is updated",
+            "desc": "Fires when an order is updated in BigCommerce. "
+                "Uses polling to detect changes (V2 Orders API).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Updated Order Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigCommerceDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_STATUS_UPDATED,
+            "action": EVENT_ORDER_STATUS_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Watch Updated Order Status",
+            "short_desc": "Trigger when an order status changes",
+            "desc": "Fires when the order status has changed in BigCommerce. "
+                "Uses polling to detect status changes (V2 Orders API).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage BigCommerceDataProvider Module
+
+    @tableofcontents
+
+    @section bigcommercedataproviderintro BigCommerceDataProvider Introduction
+
+    The %BigCommerceDataProvider module provides a data provider API for BigCommerce
+    e-commerce services.
+
+    To use this module, use \c "%requires BigCommerceDataProvider" in your code.
+
+    All the public symbols in the module are defined in the BigCommerceDataProvider namespace.
+
+    The main classes are:
+    - @ref BigCommerceDataProvider::BigCommerceDataProvider "BigCommerceDataProvider":
+      the root data provider for BigCommerce APIs
+    - @ref BigCommerceDataProvider::BigCommerceDataProviderFactory "BigCommerceDataProviderFactory":
+      the data provider factory for creating BigCommerce data providers
+
+    @section bigcommercedataprovidersupport Supported Features
+
+    This data provider supports:
+    - Customer management (create, get, update, delete, search)
+    - Customer address management (create, update, delete, search)
+    - Product management (create, get, update, delete, search)
+    - Blog post management (create, get, update, delete, search)
+    - Order management (get, update, search)
+    - Shipment management (create, get, update, delete, search)
+    - Custom API calls
+    - 11 polling-based triggers for carts, customers, orders, products, and shipments
+
+    @section bigcommercedataproviderrelnotes Release Notes
+
+    @subsection bigcommercedataproviderv1_0 BigCommerceDataProvider v1.0
+    - the initial version of the %BigCommerceDataProvider module
+*/
+
+#! the BigCommerceDataProvider namespace contains all the objects in the BigCommerceDataProvider module
+public namespace BigCommerceDataProvider {
+}

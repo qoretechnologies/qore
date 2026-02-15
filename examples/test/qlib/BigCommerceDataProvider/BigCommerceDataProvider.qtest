@@ -1,0 +1,712 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BigCommerceDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/BigCommerceRestClient.qm
+%requires ../../../../qlib/BigCommerceDataProvider
+
+%exec-class BigCommerceDataProviderTest
+
+public class BigCommerceDataProviderTest inherits QUnit::Test {
+    private {
+        #! BigCommerce REST client for integration tests
+        *BigCommerceRestClient::BigCommerceRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "access_token": "t,access-token=s",
+            "store_hash": "H,store-hash=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test customer ID (created during test, for cleanup)
+        *int testCustomerId;
+
+        #! Test product ID (created during test, for cleanup)
+        *int testProductId;
+    }
+
+    constructor() : Test("BigCommerceDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require BigCommerce credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the BigCommerce client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.BIGCOMMERCE_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            client = get_connection(conn_name).get();
+            return;
+        }
+
+        *string access_token = m_options.access_token ?? ENV.BIGCOMMERCE_ACCESS_TOKEN;
+        *string store_hash = m_options.store_hash ?? ENV.BIGCOMMERCE_STORE_HASH;
+
+        if (!access_token || !store_hash) {
+            if (m_options.verbose) {
+                printf("Missing BigCommerce credentials. Required:\n");
+                printf("  - BIGCOMMERCE_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - BIGCOMMERCE_ACCESS_TOKEN or -t option (access token)\n");
+                printf("  - BIGCOMMERCE_STORE_HASH or -H option (store hash)\n");
+            }
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Connecting to BigCommerce store: %s\n", store_hash);
+        }
+
+        client = new BigCommerceRestClient::BigCommerceRestClient({
+            "access_token": access_token,
+            "store_hash": store_hash,
+        });
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        BigCommerceDataProvider::BigCommerceDataProvider prov({
+            "bigcommercerestclient_options": {
+                "access_token": "fake-token",
+                "store_hash": "fake-hash",
+            },
+        });
+        assertEq("bigcommerce", prov.getName());
+        assertTrue(prov.getDesc().val());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("bigcommerce");
+        assertEq("bigcommerce", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+        assertTrue(factory.getInfo().children_can_support_observers);
+
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("bigcommercerestclient"));
+        assertTrue(factoryOpts.hasKey("bigcommercerestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        BigCommerceDataProvider::BigCommerceDataProvider prov({
+            "bigcommercerestclient_options": {
+                "access_token": "fake-token",
+                "store_hash": "fake-hash",
+            },
+        });
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertTrue(info.children_can_support_observers);
+        assertEq("BigCommerceDataProvider", info.type);
+
+        assertTrue(info.constructor_options.hasKey("bigcommercerestclient"));
+        assertTrue(info.constructor_options.hasKey("bigcommercerestclient_options"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        BigCommerceDataProvider::BigCommerceDataProvider prov({
+            "bigcommercerestclient_options": {
+                "access_token": "fake-token",
+                "store_hash": "fake-hash",
+            },
+        });
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify top-level collection and action providers exist
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("customer-addresses"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("blog-posts"));
+        assertTrue(children.contains("orders"));
+        assertTrue(children.contains("shipments"));
+        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains("events"));
+
+        # Check customers child provider
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        assertEq("customers", customers.getName());
+        hash<DataProviderInfo> customersInfo = customers.getInfo();
+        assertTrue(customersInfo.supports_read);
+        assertTrue(customersInfo.supports_native_search);
+        assertTrue(customersInfo.supports_children);
+
+        # Verify customers has action children
+        list<string> customerChildren = customers.getChildProviderNames();
+        assertTrue(customerChildren.contains("create"));
+        assertTrue(customerChildren.contains("get"));
+        assertTrue(customerChildren.contains("update"));
+        assertTrue(customerChildren.contains("delete"));
+
+        # Check products child provider
+        AbstractDataProvider products = prov.getChildProvider("products");
+        assertEq("products", products.getName());
+        hash<DataProviderInfo> productsInfo = products.getInfo();
+        assertTrue(productsInfo.supports_read);
+        assertTrue(productsInfo.supports_native_search);
+        assertTrue(productsInfo.supports_children);
+
+        # Verify products has action children
+        list<string> productChildren = products.getChildProviderNames();
+        assertTrue(productChildren.contains("create"));
+        assertTrue(productChildren.contains("update"));
+        assertTrue(productChildren.contains("delete"));
+        assertTrue(productChildren.contains("get"));
+
+        # Check customer-addresses child provider
+        AbstractDataProvider addresses = prov.getChildProvider("customer-addresses");
+        assertEq("customer-addresses", addresses.getName());
+        hash<DataProviderInfo> addressesInfo = addresses.getInfo();
+        assertTrue(addressesInfo.supports_read);
+        assertTrue(addressesInfo.supports_native_search);
+
+        # Verify customer-addresses has action children
+        list<string> addressChildren = addresses.getChildProviderNames();
+        assertTrue(addressChildren.contains("create"));
+        assertTrue(addressChildren.contains("update"));
+        assertTrue(addressChildren.contains("delete"));
+
+        # Check blog-posts child provider (now a collection with search support)
+        AbstractDataProvider blogPosts = prov.getChildProvider("blog-posts");
+        assertEq("blog-posts", blogPosts.getName());
+        hash<DataProviderInfo> blogPostsInfo = blogPosts.getInfo();
+        assertTrue(blogPostsInfo.supports_children);
+        assertTrue(blogPostsInfo.supports_read);
+        assertTrue(blogPostsInfo.supports_native_search);
+
+        # Verify blog-posts has action children
+        list<string> blogChildren = blogPosts.getChildProviderNames();
+        assertTrue(blogChildren.contains("create"));
+        assertTrue(blogChildren.contains("get"));
+        assertTrue(blogChildren.contains("update"));
+        assertTrue(blogChildren.contains("delete"));
+
+        # Check orders child provider
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        assertEq("orders", orders.getName());
+        hash<DataProviderInfo> ordersInfo = orders.getInfo();
+        assertTrue(ordersInfo.supports_read);
+        assertTrue(ordersInfo.supports_native_search);
+        assertTrue(ordersInfo.supports_children);
+
+        # Verify orders has action children
+        list<string> orderChildren = orders.getChildProviderNames();
+        assertTrue(orderChildren.contains("get"));
+        assertTrue(orderChildren.contains("update"));
+
+        # Check shipments child provider
+        AbstractDataProvider shipments = prov.getChildProvider("shipments");
+        assertEq("shipments", shipments.getName());
+        hash<DataProviderInfo> shipmentsInfo = shipments.getInfo();
+        assertTrue(shipmentsInfo.supports_read);
+        assertTrue(shipmentsInfo.supports_native_search);
+        assertTrue(shipmentsInfo.supports_children);
+
+        # Verify shipments has action children
+        list<string> shipmentChildren = shipments.getChildProviderNames();
+        assertTrue(shipmentChildren.contains("create"));
+        assertTrue(shipmentChildren.contains("get"));
+        assertTrue(shipmentChildren.contains("update"));
+        assertTrue(shipmentChildren.contains("delete"));
+
+        # Check execute-api-call child provider
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        assertEq("execute-api-call", apiCall.getName());
+        hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
+        assertTrue(apiCallInfo.supports_request);
+
+        # Check events child provider and triggers
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("customer-created"));
+        assertTrue(eventChildren.contains("customer-updated"));
+        assertTrue(eventChildren.contains("customer-address-created"));
+        assertTrue(eventChildren.contains("customer-address-updated"));
+        assertTrue(eventChildren.contains("order-created"));
+        assertTrue(eventChildren.contains("order-updated"));
+        assertTrue(eventChildren.contains("order-status-updated"));
+        assertTrue(eventChildren.contains("product-created"));
+        assertTrue(eventChildren.contains("shipment-created"));
+        assertTrue(eventChildren.contains("cart-created"));
+        assertTrue(eventChildren.contains("cart-abandoned"));
+
+        # Verify event providers have correct info
+        AbstractDataProvider customerCreated = events.getChildProvider("customer-created");
+        assertEq("customer-created", customerCreated.getName());
+        hash<DataProviderInfo> customerCreatedInfo = customerCreated.getInfo();
+        assertTrue(customerCreatedInfo.supports_observable);
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test customer data type
+        BigCommerceDataProvider::BigCommerceCustomerDataType customerType();
+        hash<string, AbstractDataField> customerFields = customerType.getFields();
+        assertTrue(customerFields.hasKey("id"));
+        assertTrue(customerFields.hasKey("email"));
+        assertTrue(customerFields.hasKey("first_name"));
+        assertTrue(customerFields.hasKey("last_name"));
+        assertTrue(customerFields.hasKey("company"));
+        assertTrue(customerFields.hasKey("phone"));
+        assertTrue(customerFields.hasKey("customer_group_id"));
+        assertTrue(customerFields.hasKey("date_created"));
+
+        # Test customer address data type
+        BigCommerceDataProvider::BigCommerceCustomerAddressDataType addressType();
+        hash<string, AbstractDataField> addressFields = addressType.getFields();
+        assertTrue(addressFields.hasKey("id"));
+        assertTrue(addressFields.hasKey("customer_id"));
+        assertTrue(addressFields.hasKey("first_name"));
+        assertTrue(addressFields.hasKey("last_name"));
+        assertTrue(addressFields.hasKey("address1"));
+        assertTrue(addressFields.hasKey("city"));
+        assertTrue(addressFields.hasKey("state_or_province"));
+        assertTrue(addressFields.hasKey("postal_code"));
+        assertTrue(addressFields.hasKey("country_code"));
+
+        # Test product data type
+        BigCommerceDataProvider::BigCommerceProductDataType productType();
+        hash<string, AbstractDataField> productFields = productType.getFields();
+        assertTrue(productFields.hasKey("id"));
+        assertTrue(productFields.hasKey("name"));
+        assertTrue(productFields.hasKey("type"));
+        assertTrue(productFields.hasKey("sku"));
+        assertTrue(productFields.hasKey("price"));
+        assertTrue(productFields.hasKey("weight"));
+        assertTrue(productFields.hasKey("categories"));
+        assertTrue(productFields.hasKey("is_visible"));
+
+        # Test blog post data type
+        BigCommerceDataProvider::BigCommerceBlogPostDataType blogType();
+        hash<string, AbstractDataField> blogFields = blogType.getFields();
+        assertTrue(blogFields.hasKey("id"));
+        assertTrue(blogFields.hasKey("title"));
+        assertTrue(blogFields.hasKey("body"));
+        assertTrue(blogFields.hasKey("url"));
+        assertTrue(blogFields.hasKey("is_published"));
+        assertTrue(blogFields.hasKey("author"));
+
+        # Test order data type
+        BigCommerceDataProvider::BigCommerceOrderDataType orderType();
+        hash<string, AbstractDataField> orderFields = orderType.getFields();
+        assertTrue(orderFields.hasKey("id"));
+        assertTrue(orderFields.hasKey("customer_id"));
+        assertTrue(orderFields.hasKey("status_id"));
+        assertTrue(orderFields.hasKey("status"));
+        assertTrue(orderFields.hasKey("total_inc_tax"));
+        assertTrue(orderFields.hasKey("payment_method"));
+
+        # Test cart data type
+        BigCommerceDataProvider::BigCommerceCartDataType cartType();
+        hash<string, AbstractDataField> cartFields = cartType.getFields();
+        assertTrue(cartFields.hasKey("id"));
+        assertTrue(cartFields.hasKey("customer_id"));
+        assertTrue(cartFields.hasKey("email"));
+        assertTrue(cartFields.hasKey("cart_amount"));
+        assertTrue(cartFields.hasKey("line_items"));
+
+        # Test shipment data type
+        BigCommerceDataProvider::BigCommerceShipmentDataType shipmentType();
+        hash<string, AbstractDataField> shipmentFields = shipmentType.getFields();
+        assertTrue(shipmentFields.hasKey("id"));
+        assertTrue(shipmentFields.hasKey("order_id"));
+        assertTrue(shipmentFields.hasKey("tracking_number"));
+        assertTrue(shipmentFields.hasKey("shipping_method"));
+        assertTrue(shipmentFields.hasKey("items"));
+    }
+
+    #! Trigger example data tests
+    triggerExampleDataTests() {
+        checkJson();
+        BigCommerceDataProvider::BigCommerceDataProvider prov({
+            "bigcommercerestclient_options": {
+                "access_token": "fake-token",
+                "store_hash": "fake-hash",
+            },
+        });
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+        list<string> triggerNames = (
+            "customer-created",
+            "customer-updated",
+            "customer-address-created",
+            "customer-address-updated",
+            "order-created",
+            "order-updated",
+            "order-status-updated",
+            "product-created",
+            "shipment-created",
+            "cart-created",
+            "cart-abandoned",
+        );
+
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider triggerProvider = events.getChildProvider(triggerName);
+
+            # Verify event types are defined
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = triggerProvider.getEventTypes();
+            assertTrue(eventTypes.hasKey(triggerName),
+                sprintf("%s should define event type '%s'", triggerName, triggerName));
+
+            # Verify event type has a data type
+            assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
+                sprintf("%s event type should have a data type", triggerName));
+        }
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        BigCommerceDataProvider::BigCommerceDataProvider prov({
+            "bigcommercerestclient_options": {
+                "access_token": "fake-token",
+                "store_hash": "fake-hash",
+            },
+        });
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test execute-api-call has correct info
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        hash<DataProviderInfo> apiCallInfo = apiCall.getInfo();
+        assertTrue(apiCallInfo.supports_request);
+    }
+
+    #! Connection tests - verify REST connection
+    connectionTests() {
+        checkJson();
+        # Verify the scheme is registered
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("bigcommerceres");
+        assertTrue(scheme.schemes.bigcommerceres);
+        assertTrue(scheme.auto_url);
+
+        # Verify scheme has required options
+        assertTrue(scheme.options.hasKey("access_token"));
+        assertTrue(scheme.options.hasKey("store_hash"));
+    }
+
+    #! Integration tests - require real BigCommerce credentials
+    integrationTests() {
+        checkJson();
+
+        if (!client) {
+            testSkip("No BigCommerce credentials available - skipping integration tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Running BigCommerce integration tests...\n");
+        }
+
+        # Test 1: Search customers
+        testSearchCustomers();
+
+        # Test 2: Create customer
+        testCreateCustomer();
+
+        # Test 3: Update customer
+        testUpdateCustomer();
+
+        # Test 4: Search products
+        testSearchProducts();
+
+        # Test 5: Create product
+        testCreateProduct();
+
+        # Test 6: Execute API call
+        testExecuteApiCall();
+
+        # Cleanup
+        cleanup();
+    }
+
+    #! Test searching customers
+    private testSearchCustomers() {
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+
+        # Search with limit
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "Customer should have 'id' field");
+            assertTrue(record.hasKey("email"), "Customer should have 'email' field");
+            ++count;
+        }
+
+        if (m_options.verbose) {
+            printf("Listed %d customers\n", count);
+        }
+        assertTrue(True, "Search customers completed without error");
+    }
+
+    #! Test creating a customer
+    private testCreateCustomer() {
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("customers").getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result = createAction.doRequest({
+            "first_name": "Test",
+            "last_name": "User_" + unique,
+            "email": sprintf("test_%s@example.com", unique),
+        });
+
+        assertTrue(result.hasKey("id"), "Created customer should have 'id' field");
+        assertTrue(result.id > 0, "Customer ID should be positive");
+        testCustomerId = result.id;
+
+        if (m_options.verbose) {
+            printf("Created customer: %d\n", testCustomerId);
+        }
+
+        # Verify data persistence - search for the created customer by ID
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
+            "customer_id": string(testCustomerId),
+        });
+        assertTrue(iter.next(), "Should find created customer by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Test", fetched.first_name, "Customer first_name should match");
+        assertTrue(fetched.last_name.regex("User_" + unique),
+            "Customer last_name should match");
+        assertEq(sprintf("test_%s@example.com", unique), fetched.email,
+            "Customer email should match");
+    }
+
+    #! Test updating a customer
+    private testUpdateCustomer() {
+        if (!testCustomerId) {
+            testSkip("No test customer created");
+            return;
+        }
+
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider updateAction = prov.getChildProvider("customers")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "id": testCustomerId,
+            "notes": "Updated by integration test",
+        });
+
+        assertTrue(result.hasKey("id"), "Updated customer should have 'id' field");
+        assertEq(testCustomerId, result.id, "Updated customer ID should match");
+
+        # Verify the update persisted
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        AbstractDataProviderRecordIterator iter = customers.searchRecords(NOTHING, {
+            "customer_id": string(testCustomerId),
+        });
+        assertTrue(iter.next(), "Should find updated customer");
+        hash<auto> fetched = iter.getValue();
+        assertEq("Updated by integration test", fetched.notes, "Customer notes should be updated");
+    }
+
+    #! Test searching products
+    private testSearchProducts() {
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider products = prov.getChildProvider("products");
+
+        # Search with limit
+        AbstractDataProviderRecordIterator iter = products.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> record = iter.getValue();
+            assertTrue(record.hasKey("id"), "Product should have 'id' field");
+            assertTrue(record.hasKey("name"), "Product should have 'name' field");
+            ++count;
+        }
+
+        if (m_options.verbose) {
+            printf("Listed %d products\n", count);
+        }
+        assertTrue(True, "Search products completed without error");
+    }
+
+    #! Test creating a product
+    private testCreateProduct() {
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider createAction = prov.getChildProvider("products").getChildProvider("create");
+
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        hash<auto> result = createAction.doRequest({
+            "name": "Test Product " + unique,
+            "type": "physical",
+            "weight": 1.0,
+            "price": 9.99,
+        });
+
+        assertTrue(result.hasKey("id"), "Created product should have 'id' field");
+        assertTrue(result.id > 0, "Product ID should be positive");
+        testProductId = result.id;
+
+        if (m_options.verbose) {
+            printf("Created product: %d\n", testProductId);
+        }
+
+        # Verify data persistence - get the product by ID
+        AbstractDataProvider getAction = prov.getChildProvider("products").getChildProvider("get");
+        hash<auto> fetched = getAction.doRequest({
+            "product_id": testProductId,
+        });
+        assertEq("Test Product " + unique, fetched.name, "Product name should match");
+        assertEq("physical", fetched.type, "Product type should match");
+    }
+
+    #! Test execute API call
+    private testExecuteApiCall() {
+        BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+
+        # Use the catalog summary endpoint (V3)
+        hash<auto> result = apiCall.doRequest({
+            "method": "GET",
+            "path": "v3/catalog/summary",
+        });
+
+        assertTrue(result instanceof hash, "API call should return a hash");
+        if (m_options.verbose) {
+            printf("API call result keys: %y\n", keys result);
+        }
+    }
+
+    #! Cleanup test data
+    private cleanup() {
+        # Delete test product
+        if (testProductId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test product: %d\n", testProductId);
+            }
+            try {
+                BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("products")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({
+                    "product_id": testProductId,
+                });
+                if (m_options.verbose) {
+                    printf("Test product deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: product cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test customer
+        if (testCustomerId) {
+            if (m_options.verbose) {
+                printf("Cleaning up test customer: %d\n", testCustomerId);
+            }
+            try {
+                BigCommerceDataProvider::BigCommerceDataProvider prov(client);
+                AbstractDataProvider deleteAction = prov.getChildProvider("customers")
+                    .getChildProvider("delete");
+                deleteAction.doRequest({
+                    "customer_id": testCustomerId,
+                });
+                if (m_options.verbose) {
+                    printf("Test customer deleted successfully\n");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: customer cleanup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}

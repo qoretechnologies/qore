@@ -639,6 +639,20 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for new customers and new sales orders
       - action catalog integration with 27 actions and 2 triggers
       - connection support with \c unleashed:// URL scheme
+    - @ref bigcommercerestclientintro "BigCommerceRestClient" module
+      - new module providing a REST client for BigCommerce's e-commerce API
+      - supports access token authentication with X-Auth-Token header
+      - provides BigCommerceRestConnection for connection management with \c bigcommerceres:// URL scheme
+    - @ref bigcommercedataproviderintro "BigCommerceDataProvider" module
+      - new module providing a data provider API for BigCommerce e-commerce
+      - customer management (create, update, search, delete)
+      - product management (create, update, search, get, delete)
+      - blog post creation
+      - customer address management (create, search)
+      - generic API call execution
+      - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
+      - action catalog integration with 13 actions and 11 triggers
+      - connection support with \c bigcommerceres:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for Square's payments and commerce API
       - supports OAuth2 authentication with bearer tokens
