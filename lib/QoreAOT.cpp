@@ -1469,6 +1469,208 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
     return true;
 }
 
+//! Map a license string to a qore_license_t enum value
+/** Returns the enum value for "GPL", "LGPL", or "MIT" (case-insensitive).
+    Defaults to QL_MIT for unrecognized strings.
+*/
+static int getLicenseEnum(const std::string& license_str) {
+    if (license_str == "GPL" || license_str == "gpl") {
+        return QL_GPL;
+    }
+    if (license_str == "LGPL" || license_str == "lgpl") {
+        return QL_LGPL;
+    }
+    return QL_MIT;
+}
+
+//! Generate the API 2.0 module descriptor function and adapter functions
+/** Creates:
+    - Init adapter: wraps the AOT init impl (returns QoreStringNode*) into the
+      qore_module_init_t signature (void(QoreModuleInitContext&, ExceptionSink&))
+    - NS init adapter: wraps the AOT ns_init impl (2-arg) into the
+      qore_module_ns_init_t signature (3-arg, ignoring ExceptionSink)
+    - Module desc function: {sanitized_name}_qore_module_desc(QoreModuleInfo&)
+      that calls qore_aot_fill_module_desc() with all metadata
+
+    @param ctx LLVM context
+    @param module LLVM module
+    @param init_impl_fn the __qore_aot_module_init_impl function (returns ptr)
+    @param ns_init_impl_fn the __qore_aot_module_ns_init_impl function (ptr, ptr -> void)
+    @param del_impl_fn the __qore_aot_module_delete_impl function (void -> void)
+    @param mod_info module metadata
+*/
+static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
+        llvm::Function* init_impl_fn, llvm::Function* ns_init_impl_fn,
+        llvm::Function* del_impl_fn, const QoreAOTModuleInfo& mod_info) {
+    auto* i32_type = llvm::Type::getInt32Ty(ctx);
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+
+    // Helper to create a private global C string constant
+    auto createPrivateString = [&](const std::string& gv_name, const std::string& value) -> llvm::GlobalVariable* {
+        auto* str_data = llvm::ConstantDataArray::getString(ctx, value, true);
+        return new llvm::GlobalVariable(module, str_data->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, str_data, gv_name);
+    };
+
+    // --- Init adapter: void(ptr %ctx, ptr %xsink) ---
+    // Calls init_impl_fn() -> QoreStringNode*, then if non-null calls
+    // qore_aot_raise_init_error(xsink, result)
+    llvm::Function* init_adapter_fn;
+    {
+        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        init_adapter_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_init_adapter", module);
+
+        auto arg_it = init_adapter_fn->arg_begin();
+        llvm::Value* ctx_arg = &*arg_it++;  // QoreModuleInitContext* (unused)
+        (void)ctx_arg;
+        llvm::Value* xsink_arg = &*arg_it;
+
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", init_adapter_fn);
+        auto* err_bb = llvm::BasicBlock::Create(ctx, "has_error", init_adapter_fn);
+        auto* ok_bb = llvm::BasicBlock::Create(ctx, "no_error", init_adapter_fn);
+
+        llvm::IRBuilder<> builder(entry_bb);
+
+        // Call the init impl
+        llvm::Value* result = builder.CreateCall(init_impl_fn);
+
+        // Check if result is non-null
+        llvm::Value* is_null = builder.CreateICmpEQ(result,
+            llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
+        builder.CreateCondBr(is_null, ok_bb, err_bb);
+
+        // Error path: call qore_aot_raise_init_error(xsink, result)
+        builder.SetInsertPoint(err_bb);
+        auto* raise_fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        auto raise_fn = module.getOrInsertFunction("qore_aot_raise_init_error", raise_fn_type);
+        builder.CreateCall(raise_fn, {xsink_arg, result});
+        builder.CreateRetVoid();
+
+        // OK path: just return
+        builder.SetInsertPoint(ok_bb);
+        builder.CreateRetVoid();
+    }
+
+    // --- NS init adapter: void(ptr %root, ptr %qore, ptr %xsink) ---
+    // Calls ns_init_impl_fn(root, qore) (ignores xsink)
+    llvm::Function* ns_init_adapter_fn;
+    {
+        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false);
+        ns_init_adapter_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
+            "__qore_aot_module_ns_init_adapter", module);
+
+        auto arg_it = ns_init_adapter_fn->arg_begin();
+        llvm::Value* root_arg = &*arg_it++;
+        llvm::Value* qore_arg = &*arg_it++;
+        llvm::Value* xsink_arg = &*arg_it;
+        (void)xsink_arg;
+
+        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", ns_init_adapter_fn);
+        llvm::IRBuilder<> builder(entry_bb);
+
+        builder.CreateCall(ns_init_impl_fn, {root_arg, qore_arg});
+        builder.CreateRetVoid();
+    }
+
+    // --- Module desc function: {sanitized_name}_qore_module_desc(ptr %mod_info) ---
+    // Calls qore_aot_fill_module_desc() with all metadata, adapter function pointers,
+    // and dependency array
+
+    // Sanitize module name: replace hyphens with underscores for valid C identifier
+    std::string sanitized_name = mod_info.name;
+    for (char& c : sanitized_name) {
+        if (c == '-') {
+            c = '_';
+        }
+    }
+
+    // Create string constants for metadata
+    auto* name_gv = createPrivateString("qore_aot_desc_name", mod_info.name);
+    auto* version_gv = createPrivateString("qore_aot_desc_version", mod_info.version);
+    auto* desc_gv = createPrivateString("qore_aot_desc_desc", mod_info.desc);
+    auto* author_gv = createPrivateString("qore_aot_desc_author", mod_info.author);
+    auto* url_gv = createPrivateString("qore_aot_desc_url", mod_info.url.empty() ? "" : mod_info.url);
+    auto* license_gv = createPrivateString("qore_aot_desc_license", mod_info.license);
+
+    // Create dependency array (array of const char* pointers)
+    int num_deps = static_cast<int>(mod_info.dependencies.size());
+    llvm::GlobalVariable* deps_array_gv = nullptr;
+    if (num_deps > 0) {
+        std::vector<llvm::Constant*> dep_ptrs;
+        for (const auto& dep : mod_info.dependencies) {
+            auto* dep_gv = createPrivateString("qore_aot_desc_dep_" + dep, dep);
+            dep_ptrs.push_back(dep_gv);
+        }
+        auto* deps_array = llvm::ConstantArray::get(
+            llvm::ArrayType::get(ptr_type, num_deps), dep_ptrs);
+        deps_array_gv = new llvm::GlobalVariable(module, deps_array->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, deps_array, "qore_aot_desc_deps");
+    }
+
+    // Declare qore_aot_fill_module_desc
+    auto* fill_fn_type = llvm::FunctionType::get(void_type, {
+        ptr_type,   // QoreModuleInfo*
+        ptr_type,   // name
+        ptr_type,   // version
+        ptr_type,   // desc
+        ptr_type,   // author
+        ptr_type,   // url
+        ptr_type,   // license_str
+        i32_type,   // api_major
+        i32_type,   // api_minor
+        i32_type,   // license
+        ptr_type,   // init_fn
+        ptr_type,   // ns_init_fn
+        ptr_type,   // del_fn
+        ptr_type,   // deps
+        i32_type    // num_deps
+    }, false);
+    auto fill_fn = module.getOrInsertFunction("qore_aot_fill_module_desc", fill_fn_type);
+
+    // Create the exported desc function
+    std::string desc_fn_name = sanitized_name + "_qore_module_desc";
+    auto* desc_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+    llvm::Function* desc_fn = llvm::Function::Create(desc_fn_type,
+        llvm::Function::ExternalLinkage, desc_fn_name, module);
+    desc_fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", desc_fn);
+    llvm::IRBuilder<> builder(entry_bb);
+
+    llvm::Value* mod_info_arg = &*desc_fn->arg_begin();
+
+    // Build deps pointer
+    llvm::Value* deps_ptr;
+    if (deps_array_gv) {
+        deps_ptr = builder.CreateInBoundsGEP(
+            llvm::ArrayType::get(ptr_type, num_deps), deps_array_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+    } else {
+        deps_ptr = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
+    }
+
+    builder.CreateCall(fill_fn, {
+        mod_info_arg,
+        name_gv,
+        version_gv,
+        desc_gv,
+        author_gv,
+        url_gv,
+        license_gv,
+        builder.getInt32(QORE_MODULE_API_MAJOR),
+        builder.getInt32(QORE_MODULE_API_MINOR),
+        builder.getInt32(getLicenseEnum(mod_info.license)),
+        init_adapter_fn,
+        ns_init_adapter_fn,
+        del_impl_fn,
+        deps_ptr,
+        builder.getInt32(num_deps)
+    });
+    builder.CreateRetVoid();
+}
+
 //! Generate LLVM IR for binary module ABI symbols and init/ns_init/delete functions
 static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
         const char* source, int source_len, const char* label,
@@ -1508,10 +1710,10 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
     createExportedInt("qore_module_api_major", QORE_MODULE_API_MAJOR);
     createExportedInt("qore_module_api_minor", QORE_MODULE_API_MINOR);
 
-    // License enum (QL_MIT = 0)
+    // License enum
     auto* license_gv = new llvm::GlobalVariable(module, i32_type, true,
         llvm::GlobalValue::ExternalLinkage,
-        llvm::ConstantInt::get(i32_type, 0), "qore_module_license");
+        llvm::ConstantInt::get(i32_type, getLicenseEnum(mod_info.license)), "qore_module_license");
     license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
     // Export module dependencies as null-terminated array of C strings
@@ -1699,6 +1901,9 @@ static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
         new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
+
+    // Generate API 2.0 module descriptor function
+    emitModuleDescFunction(ctx, module, init_impl_fn, ns_init_impl_fn, del_impl_fn, mod_info);
 }
 
 //! Generate LLVM IR for source-stripped binary module ABI symbols
@@ -1743,10 +1948,10 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     createExportedInt("qore_module_api_major", QORE_MODULE_API_MAJOR);
     createExportedInt("qore_module_api_minor", QORE_MODULE_API_MINOR);
 
-    // License enum (QL_MIT = 0)
+    // License enum
     auto* license_gv = new llvm::GlobalVariable(module, i32_type, true,
         llvm::GlobalValue::ExternalLinkage,
-        llvm::ConstantInt::get(i32_type, 0), "qore_module_license");
+        llvm::ConstantInt::get(i32_type, getLicenseEnum(mod_info.license)), "qore_module_license");
     license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
     // Embed metadata blob as a private global constant
@@ -1910,6 +2115,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         new llvm::GlobalVariable(module, ptr_type, true,
             llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
     }
+
+    // Generate API 2.0 module descriptor function
+    emitModuleDescFunction(ctx, module, init_impl_fn, ns_init_impl_fn, del_impl_fn, mod_info);
 }
 
 //! Link an object file into a shared library
@@ -3630,9 +3838,9 @@ void QoreAOT::printSupportedTargets() {
     printf("\n");
 
     printf("\nExamples:\n");
-    printf("  x86_64-pc-linux-gnu       Linux x86-64 (GNU libc)\n");
-    printf("  aarch64-unknown-linux-gnu  Linux ARM64 (GNU libc)\n");
-    printf("  x86_64-unknown-linux-musl  Linux x86-64 (musl libc / Alpine)\n");
-    printf("  aarch64-apple-darwin       macOS ARM64\n");
-    printf("  x86_64-apple-darwin        macOS x86-64\n");
+    printf("  %-30s %s\n", "x86_64-pc-linux-gnu", "Linux x86-64 (GNU libc)");
+    printf("  %-30s %s\n", "aarch64-unknown-linux-gnu", "Linux ARM64 (GNU libc)");
+    printf("  %-30s %s\n", "x86_64-unknown-linux-musl", "Linux x86-64 (musl libc / Alpine)");
+    printf("  %-30s %s\n", "aarch64-apple-darwin", "macOS ARM64");
+    printf("  %-30s %s\n", "x86_64-apple-darwin", "macOS x86-64");
 }

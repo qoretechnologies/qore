@@ -164,10 +164,10 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - <b>Alpine:</b> \c llvm-dev
 
     Four execution modes are available via \c --exec-mode:
-    - \c ast (default): traditional AST interpreter
+    - \c ast: traditional AST interpreter
     - \c ir: IR-based interpreter
     - \c jit: LLVM JIT with automatic fallback to IR
-    - \c tiered: automatic per-function tier promotion (AST → IR → JIT)
+    - \c tiered (default): automatic per-function tier promotion (AST → IR → JIT)
 
     In \c tiered mode, functions start on the AST interpreter and are automatically promoted to
     IR after a configurable number of calls (default: 100), then to native JIT after a higher

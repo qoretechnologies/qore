@@ -895,9 +895,16 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
+                    // Clear any pending deopt request from top-level JIT execution.
+                    // Top-level code handles guard failures internally (e.g., via
+                    // try-catch) and must not propagate deopt to subsequent calls.
+                    qore_jit_deopt_requested();
                 } else {
+                    // suppress_guard_deopt=true: top-level code must not deopt on
+                    // guard failure because re-executing the entire block from the
+                    // beginning would duplicate side effects (I/O, mutations).
                     ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
-                        nullptr, nullptr, &pre_instantiated);
+                        nullptr, nullptr, &pre_instantiated, nullptr, nullptr, true);
                 }
 
                 // Uninstantiate nested locals after JIT execution (reverse order)

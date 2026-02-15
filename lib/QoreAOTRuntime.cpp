@@ -1528,6 +1528,17 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
     ExceptionSink xsink;
     RootQoreNamespace* target_root = static_cast<RootQoreNamespace*>(root_ns);
 
+    // Set up the target program as the current program context.
+    // scanMergeCommittedNamespace() calls parse_check_parse_option() which requires
+    // current_pgm to be set. QoreBuiltinModule::addToProgramImpl() only sets
+    // call_program_context (via ProgramCallContextHelper), not current_pgm.
+    // Use the same approach as QoreUserModule::addToProgramImpl().
+    QoreProgram* tpgm = getProgram();
+    ProgramThreadCountContextHelper ptcch(&xsink, tpgm, false);
+    if (xsink) {
+        return;
+    }
+
     printd(5, "AOT module ns_init '%s': starting merge\n", aot_module_name.c_str());
 
     QoreModuleContext qmc(aot_module_name.c_str(), qore_root_ns_private::get(*target_root), xsink);
@@ -1664,4 +1675,39 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     }
 
     return nullptr;  // success
+}
+
+extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
+        const char* name, const char* version, const char* desc,
+        const char* author, const char* url, const char* license_str,
+        int api_major, int api_minor, int license,
+        void* init_fn, void* ns_init_fn, void* del_fn,
+        const char** deps, int num_deps) {
+    mod_info->name = name;
+    mod_info->version = version;
+    mod_info->desc = desc;
+    mod_info->author = author;
+    if (url) {
+        mod_info->url = url;
+    }
+    mod_info->api_major = api_major;
+    mod_info->api_minor = api_minor;
+    mod_info->license = static_cast<qore_license_t>(license);
+    if (license_str) {
+        mod_info->license_str = license_str;
+    }
+    mod_info->init = reinterpret_cast<qore_module_init_t>(init_fn);
+    mod_info->ns_init = reinterpret_cast<qore_module_ns_init_t>(ns_init_fn);
+    mod_info->del = reinterpret_cast<qore_module_delete_t>(del_fn);
+    for (int i = 0; i < num_deps; ++i) {
+        if (deps[i]) {
+            mod_info->dependencies.push_back(deps[i]);
+        }
+    }
+}
+
+extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err) {
+    if (err) {
+        xsink->raiseException("MODULE-LOAD-ERROR", err);
+    }
 }

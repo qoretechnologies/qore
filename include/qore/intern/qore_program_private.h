@@ -432,7 +432,7 @@ public:
         expression_mode : 1
         ;
 
-    qore_exec_mode_t exec_mode = QEM_AST;
+    qore_exec_mode_t exec_mode = QEM_TIERED;
     bool ir_dump = false;
     bool ir_fallback_warn = false;
     bool ir_fallback_warned = false;

@@ -12,9 +12,9 @@
 
     |!Mode|!Description|!Best For
     |@ref exec_mode_ast "AST"|Traditional tree-walking interpreter|Legacy code, maximum compatibility
-    |@ref exec_mode_ir "IR"|Bytecode interpreter (default)|General use, good balance of startup and speed
+    |@ref exec_mode_ir "IR"|Bytecode interpreter|General use, good balance of startup and speed
     |@ref exec_mode_jit "JIT"|LLVM JIT compilation|CPU-intensive, long-running programs
-    |@ref exec_mode_tiered "Tiered"|Adaptive compilation|Production services, mixed workloads
+    |@ref exec_mode_tiered "Tiered"|Adaptive compilation (default)|Production services, mixed workloads
     |@ref exec_mode_aot "AOT"|Ahead-of-time compilation|Deployment, IP protection, fastest startup
 
     @section exec_mode_ast AST Execution Mode
@@ -41,8 +41,7 @@
     @section exec_mode_ir IR Execution Mode
 
     The IR (Intermediate Representation) mode compiles %Qore code to a bytecode intermediate
-    representation, which is then executed by a bytecode interpreter. This is the default execution
-    mode in %Qore 2.3+.
+    representation, which is then executed by a bytecode interpreter.
 
     <b>Characteristics:</b>
     - Faster execution than AST for most code
@@ -124,7 +123,7 @@
 
     The tiered mode provides adaptive compilation by automatically promoting hot functions through
     execution tiers: AST → IR → JIT. Functions start on the AST interpreter and are promoted
-    based on call frequency.
+    based on call frequency. This is the default execution mode in %Qore 2.3+.
 
     <b>Characteristics:</b>
     - Fast startup (starts with AST)

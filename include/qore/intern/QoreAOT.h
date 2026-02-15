@@ -264,6 +264,40 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_delete()
 extern "C" void qore_aot_module_delete();
 
+struct QoreModuleInfo;
+
+//! C ABI helper to populate a QoreModuleInfo from flat C parameters
+/** Called by the generated module descriptor function to fill in the module info struct.
+    @param mod_info pointer to the QoreModuleInfo to populate
+    @param name module feature name
+    @param version version string
+    @param desc description
+    @param author author string
+    @param url URL (may be nullptr)
+    @param license_str license string (may be nullptr)
+    @param api_major API major version
+    @param api_minor API minor version
+    @param license license enum value (qore_license_t cast to int)
+    @param init_fn module init callback
+    @param ns_init_fn namespace init callback
+    @param del_fn module delete callback
+    @param deps array of dependency name strings (may be nullptr if num_deps == 0)
+    @param num_deps number of entries in deps array
+*/
+extern "C" void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
+        const char* name, const char* version, const char* desc,
+        const char* author, const char* url, const char* license_str,
+        int api_major, int api_minor, int license,
+        void* init_fn, void* ns_init_fn, void* del_fn,
+        const char** deps, int num_deps);
+
+//! C ABI helper to convert a QoreStringNode* init error to an exception
+/** Called by the init adapter when the AOT init implementation returns a non-null error.
+    @param xsink exception sink to raise the error in
+    @param err the error string node (takes ownership)
+*/
+extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:

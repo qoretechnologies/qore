@@ -71,7 +71,7 @@ static cl_mod_list_t cl_mod_list;
 static int64 parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
-static qore_exec_mode_t exec_mode = QEM_AST;
+static qore_exec_mode_t exec_mode = QEM_TIERED;
 
 // lock options
 static bool lock_options = false;
@@ -183,7 +183,7 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or tiered\n"
+   "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered (default)\n"
    "                               (tiered auto-promotes AST->IR->JIT per function)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"

@@ -1119,7 +1119,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
-        const StatementBlock* statements, QoreProgram* pgm) {
+        const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;
@@ -3358,18 +3358,23 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     func.guard_profiles[guard_inst->guard_id].record(value);
                 }
                 if (!guardPredicate(inst->opcode, value, guard_inst->type_info)) {
-                    if (guard_inst->deopt_target) {
-                        // Guard has a deopt target (e.g. catch block) — route to it
-                        if (xsink) {
-                            xsink->raiseException("IR-EXEC-GUARD-FAIL",
-                                "guard type check failed — deoptimizing");
-                        }
-                        prev_block = block;
-                        block = guard_inst->deopt_target;
-                        ip = 0;
-                        break;
+                    if (guard_inst->deopt_target && !suppress_guard_deopt) {
+                        // Guard type check failed — fall back to AST execution.
+                        // Don't raise an exception; returning false without setting
+                        // xsink tells evalTiered() to re-execute via AST.
+                        printd(2, "QoreIRInterpreter::execute() guard failed for '%s' "
+                            "— falling back to AST\n", func.name.c_str());
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
                     }
-                    // No deopt target — guard failure is speculative, continue silently
+                    // No deopt target, or top-level code (suppress_guard_deopt) —
+                    // guard failure is handled silently; continue execution with the
+                    // current value. For top-level code, deopt would re-execute the
+                    // entire block, duplicating side effects (I/O, mutations).
                 }
                 ++ip;
                 break;

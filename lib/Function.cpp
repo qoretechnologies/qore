@@ -2684,9 +2684,25 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 } else {
                     result_bits = cached_jit_fn(xsink);
                 }
-                QoreValue result;
-                std::memcpy(&result, &result_bits, sizeof(result));
-                val = result;
+
+                // Check for JIT guard failure requesting deopt to AST.
+                // In the IR interpreter, guard failure returns false (no exception)
+                // and evalTiered falls through to AST.  In JIT, the guard sets a
+                // thread-local flag and returns NOTHING via error_return_block.
+                // Body locals are still instantiated, so AST can re-execute.
+                if (!*xsink && qore_jit_deopt_requested()) {
+                    printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
+                    if (pgm) {
+                        pgm->recordIRFallback("JIT guard failure");
+                    }
+                    if (statements) {
+                        val = statements->exec(xsink);
+                    }
+                } else {
+                    QoreValue result;
+                    std::memcpy(&result, &result_bits, sizeof(result));
+                    val = result;
+                }
 
                 // Restore thread-local parse options
                 runtime_set_parse_options(saved_po);

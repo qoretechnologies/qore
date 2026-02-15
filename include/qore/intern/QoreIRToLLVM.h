@@ -244,6 +244,11 @@ private:
     // jumps here to return NOTHING immediately.  Created lazily on first use.
     llvm::BasicBlock* error_return_block = nullptr;
 
+    // JIT deopt block: on guard failure, sets thread-local deopt flag and branches
+    // to error_return_block.  evalTiered() checks the flag and re-executes via AST.
+    // Created lazily on first guard with deopt_target.
+    llvm::BasicBlock* jit_deopt_block = nullptr;
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 
@@ -343,6 +348,12 @@ private:
     // Emit exception check: if xsink has exception, branch to exception_target
     void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
+
+    // Get or create the per-function JIT deopt block.
+    // On guard failure, branches here to set the thread-local deopt flag
+    // and return to evalTiered() which re-executes via AST.
+    llvm::BasicBlock* getOrCreateJitDeoptBlock(llvm::Module& module,
+            llvm::Function* llvm_func);
 
     // Phase 5b: Try to emit a specialized hash key access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.

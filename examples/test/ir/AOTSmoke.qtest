@@ -1867,7 +1867,7 @@ public namespace StripDepMod {
         }
         string dep_qmod_path = base_info.tmp_dir + "/StripDepMod.qmod";
         string dep_compile_cmd = sprintf(
-            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
             libqore_dir, base_info.tmp_dir, qore_bin, dep_qmod_path, dep_qm_path);
         string dep_compile_out = backquote(dep_compile_cmd);
 

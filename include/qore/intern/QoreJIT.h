@@ -55,6 +55,11 @@ class UserVariantBase;
 //! JIT-compiled function signature: takes ExceptionSink*, returns NaN-boxed QoreValue as uint64_t
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 
+//! Check and clear the thread-local JIT deopt flag.
+//! Returns true if a JIT guard failure requested deopt to AST.
+//! Called by evalTiered() after JIT execution returns.
+DLLLOCAL bool qore_jit_deopt_requested();
+
 //! Info about a batch callee for LLVM lowering (Approach B: direct LLVM arg passing).
 //! Used by QoreIRToLLVM to decide how to emit CallDirect instructions.
 struct BatchCalleeInfo {

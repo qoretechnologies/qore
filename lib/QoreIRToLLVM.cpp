@@ -1160,6 +1160,34 @@ void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
     builder->SetCurrentDebugLocation(llvm::DILocation::get(ctx, line, 0, di_sp));
 }
 
+llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (jit_deopt_block) {
+        return jit_deopt_block;
+    }
+    jit_deopt_block = llvm::BasicBlock::Create(ctx, "jit_deopt", llvm_func);
+    // Save current insert point, emit the deopt block, then restore
+    llvm::BasicBlock* saved_block = builder->GetInsertBlock();
+    llvm::BasicBlock::iterator saved_point = builder->GetInsertPoint();
+    builder->SetInsertPoint(jit_deopt_block);
+    // Call qore_rt_request_jit_deopt(deopt_counter_ptr) to set the thread-local
+    // deopt flag and increment the deopt counter
+    auto deopt_fn = module.getOrInsertFunction("qore_rt_request_jit_deopt",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+    llvm::Value* counter_ptr = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
+        ptr_type);
+    builder->CreateCall(deopt_fn, {counter_ptr});
+    // Return NOTHING directly — the caller (evalTiered or JITRuntime fast path)
+    // checks the deopt flag and falls back to AST execution.  Body locals are
+    // pre-instantiated by the caller and cleaned up there, so no JIT-side
+    // cleanup is needed.
+    builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    // Restore insert point
+    builder->SetInsertPoint(saved_block, saved_point);
+    return jit_deopt_block;
+}
+
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
     llvm::BasicBlock* exception_block = nullptr;
@@ -1402,6 +1430,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     pending_phis.clear();
     local_reload_trackers.clear();
     error_return_block = nullptr;
+    jit_deopt_block = nullptr;
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
@@ -2436,6 +2465,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     builder->CreateCall(assign_helper, {var_as_ptr, boxed, xsink_arg});
                 }
+                // Check for exceptions from type-checked assignment (e.g. RUNTIME-TYPE-ERROR
+                // when assigning NOTHING to a typed variable like hash<ExceptionInfo>)
+                emitExceptionCheck(module, llvm_func, inst);
                 // If the variable holds a reference, qore_rt_assign_local wrote through
                 // the reference to another variable on the thread-local stack.  Reload all
                 // local allocas from runtime to prevent stale reads from the target variable.
@@ -2714,34 +2746,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 guard_pass = builder->CreateICmpNE(guard_result,
                         llvm::ConstantInt::get(i64_type, 0));
             }
-            // Branch: pass → continue (next instruction in same block),
-            //         fail → deopt_target (via deopt counter block if profiled)
+            // Branch: pass → continue, fail → JIT deopt (return to evalTiered
+            // which re-executes via AST, matching IR interpreter behavior)
             if (ginst->deopt_target) {
-                auto deopt_it = block_map.find(ginst->deopt_target);
-                if (deopt_it == block_map.end()) {
-                    error = "guard deopt target block not found";
-                    return false;
-                }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                llvm::BasicBlock* fail_target = deopt_it->second;
-                // When profiled and deopt counter is set, create intermediate block to track failures
-                if (profile_hot && deopt_counter_ptr) {
-                    llvm::BasicBlock* deopt_block = llvm::BasicBlock::Create(ctx, "guard_deopt", llvm_func);
+                llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
+                if (profile_hot) {
                     auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, deopt_block, weights);
-                    builder->SetInsertPoint(deopt_block);
-                    auto deopt_fn = module.getOrInsertFunction("qore_rt_deopt",
-                            llvm::FunctionType::get(void_type, {ptr_type}, false));
-                    llvm::Value* counter_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
-                        ptr_type);
-                    builder->CreateCall(deopt_fn, {counter_ptr});
-                    builder->CreateBr(fail_target);
-                } else if (profile_hot) {
-                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, fail_target, weights);
+                    builder->CreateCondBr(guard_pass, cont, deopt, weights);
                 } else {
-                    builder->CreateCondBr(guard_pass, cont, fail_target);
+                    builder->CreateCondBr(guard_pass, cont, deopt);
                 }
                 builder->SetInsertPoint(cont);
             }
@@ -2784,30 +2798,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type, 0));
             }
             if (ginst->deopt_target) {
-                auto deopt_it = block_map.find(ginst->deopt_target);
-                if (deopt_it == block_map.end()) {
-                    error = "guard deopt target block not found";
-                    return false;
-                }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                llvm::BasicBlock* fail_target = deopt_it->second;
-                if (profile_hot && deopt_counter_ptr) {
-                    llvm::BasicBlock* deopt_block = llvm::BasicBlock::Create(ctx, "guard_deopt", llvm_func);
+                llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
+                if (profile_hot) {
                     auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, deopt_block, weights);
-                    builder->SetInsertPoint(deopt_block);
-                    auto deopt_fn = module.getOrInsertFunction("qore_rt_deopt",
-                            llvm::FunctionType::get(void_type, {ptr_type}, false));
-                    llvm::Value* counter_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
-                        ptr_type);
-                    builder->CreateCall(deopt_fn, {counter_ptr});
-                    builder->CreateBr(fail_target);
-                } else if (profile_hot) {
-                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, fail_target, weights);
+                    builder->CreateCondBr(guard_pass, cont, deopt, weights);
                 } else {
-                    builder->CreateCondBr(guard_pass, cont, fail_target);
+                    builder->CreateCondBr(guard_pass, cont, deopt);
                 }
                 builder->SetInsertPoint(cont);
             }
@@ -2852,30 +2849,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type, 0));
             }
             if (ginst->deopt_target) {
-                auto deopt_it = block_map.find(ginst->deopt_target);
-                if (deopt_it == block_map.end()) {
-                    error = "guard deopt target block not found";
-                    return false;
-                }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                llvm::BasicBlock* fail_target = deopt_it->second;
-                if (profile_hot && deopt_counter_ptr) {
-                    llvm::BasicBlock* deopt_block = llvm::BasicBlock::Create(ctx, "guard_deopt", llvm_func);
+                llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
+                if (profile_hot) {
                     auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, deopt_block, weights);
-                    builder->SetInsertPoint(deopt_block);
-                    auto deopt_fn = module.getOrInsertFunction("qore_rt_deopt",
-                            llvm::FunctionType::get(void_type, {ptr_type}, false));
-                    llvm::Value* counter_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
-                        ptr_type);
-                    builder->CreateCall(deopt_fn, {counter_ptr});
-                    builder->CreateBr(fail_target);
-                } else if (profile_hot) {
-                    auto* weights = llvm::MDBuilder(ctx).createBranchWeights(999, 1);
-                    builder->CreateCondBr(guard_pass, cont, fail_target, weights);
+                    builder->CreateCondBr(guard_pass, cont, deopt, weights);
                 } else {
-                    builder->CreateCondBr(guard_pass, cont, fail_target);
+                    builder->CreateCondBr(guard_pass, cont, deopt);
                 }
                 builder->SetInsertPoint(cont);
             }
@@ -7267,13 +7247,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* guard_pass = builder->CreateICmpNE(guard_result,
                     llvm::ConstantInt::get(i64_type, 0));
             if (ginst->deopt_target) {
-                auto deopt_it = block_map.find(ginst->deopt_target);
-                if (deopt_it == block_map.end()) {
-                    error = "guard deopt target block not found";
-                    return false;
-                }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "guard_pass", llvm_func);
-                builder->CreateCondBr(guard_pass, cont, deopt_it->second);
+                llvm::BasicBlock* deopt = getOrCreateJitDeoptBlock(module, llvm_func);
+                builder->CreateCondBr(guard_pass, cont, deopt);
                 builder->SetInsertPoint(cont);
             }
             if (inst->result.isValid()) {

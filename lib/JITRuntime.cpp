@@ -255,6 +255,27 @@ extern "C" DLLEXPORT int64_t qore_rt_has_exception(ExceptionSink* xsink) {
     return (xsink && *xsink) ? 1 : 0;
 }
 
+// --- JIT deopt flag ---
+// Thread-local flag set by JIT guard failure to request deopt to AST.
+// evalTiered() checks this after JIT returns and re-executes via AST if set.
+static thread_local bool tl_jit_deopt_requested = false;
+
+extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
+    tl_jit_deopt_requested = true;
+    if (deopt_counter_ptr) {
+        auto* counter = static_cast<std::atomic<uint32_t>*>(deopt_counter_ptr);
+        counter->fetch_add(1, std::memory_order_relaxed);
+        printd(2, "qore_rt_request_jit_deopt: guard failure, deopt_count now %u\n",
+            counter->load(std::memory_order_relaxed));
+    }
+}
+
+bool qore_jit_deopt_requested() {
+    bool val = tl_jit_deopt_requested;
+    tl_jit_deopt_requested = false;
+    return val;
+}
+
 // --- Invoke helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink) {
@@ -1937,6 +1958,63 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
     return toBits(result);
 }
 
+/** Handle body local instantiation before JIT execution and deopt/cleanup after.
+
+    Before the JIT call: instantiates body locals unless all are IR-only.
+    Calls the provided function to execute JIT code.
+    After the call: checks for JIT guard failure, falls back to AST if needed,
+    and uninstantiates body locals.
+
+    @param uvb the user variant body (for statement block, program, and body locals)
+    @param exec_fn callable that executes the JIT code and returns raw NaN-boxed result bits
+    @param val reference to receive the final result value
+    @param xsink exception sink
+*/
+template <typename ExecFn>
+static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
+        QoreValue& val, ExceptionSink* xsink) {
+    const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+    if (!skip_body_locals) {
+        int64 po = uvb->pgm->getParseOptions64();
+        for (LocalVar* lv : body_locals) {
+            lv->instantiate(po);
+        }
+    }
+
+    uint64_t result_bits = exec_fn(xsink);
+
+    // Check for JIT guard failure requesting deopt to AST
+    if (!*xsink && qore_jit_deopt_requested()) {
+        // Ensure body locals are on thread stack for AST execution
+        if (skip_body_locals) {
+            int64 po = uvb->pgm->getParseOptions64();
+            for (LocalVar* lv : body_locals) {
+                lv->instantiate(po);
+            }
+        }
+        StatementBlock* stmts = uvb->getStatementBlock();
+        if (stmts) {
+            val = stmts->exec(xsink);
+        }
+        if (skip_body_locals) {
+            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                body_locals[i]->uninstantiate(xsink);
+            }
+        }
+    } else {
+        QoreValue result;
+        std::memcpy(&result, &result_bits, sizeof(result));
+        val = result;
+    }
+
+    if (!skip_body_locals) {
+        for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+            body_locals[i]->uninstantiate(xsink);
+        }
+    }
+}
+
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
@@ -2009,31 +2087,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-
-        // Note: synchronized functions are excluded at compile time (isStaticallyFastCallEligible check)
-
-        // Get body locals — skip instantiation if all are IR-only (managed by LLVM allocas,
-        // never accessed via thread-local stack)
-        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
-        if (!skip_body_locals) {
-            int64 po = uvb->pgm->getParseOptions64();
-            for (LocalVar* lv : body_locals) {
-                lv->instantiate(po);
-            }
-        }
-
-        uint64_t result_bits = uvb->execCachedFunction(xsink);
-        QoreValue result;
-        std::memcpy(&result, &result_bits, sizeof(result));
-        val = result;
-
-        if (!skip_body_locals) {
-            // Uninstantiate body locals in reverse order
-            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                body_locals[i]->uninstantiate(xsink);
-            }
-        }
+        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
+            return uvb->execCachedFunction(xs);
+        }, val, xsink);
     }
 
     if (sig->argvid) {
@@ -2108,28 +2164,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-
-        // Get body locals — skip instantiation if all are IR-only
-        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
-        if (!skip_body_locals) {
-            int64 po = uvb->pgm->getParseOptions64();
-            for (LocalVar* lv : body_locals) {
-                lv->instantiate(po);
-            }
-        }
-
-        // Call the provided target function directly instead of execCachedFunction
-        uint64_t result_bits = target_fn(xsink);
-        QoreValue result;
-        std::memcpy(&result, &result_bits, sizeof(result));
-        val = result;
-
-        if (!skip_body_locals) {
-            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                body_locals[i]->uninstantiate(xsink);
-            }
-        }
+        execJITWithDeopt(uvb, [target_fn](ExceptionSink* xs) {
+            return target_fn(xs);
+        }, val, xsink);
     }
 
     if (sig->argvid) {
@@ -2271,29 +2308,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-
-        // Get body locals — skip instantiation if all are IR-only (managed by LLVM allocas,
-        // never accessed via thread-local stack)
-        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
-        if (!skip_body_locals) {
-            int64 po = uvb->pgm->getParseOptions64();
-            for (LocalVar* lv : body_locals) {
-                lv->instantiate(po);
-            }
-        }
-
-        uint64_t result_bits = uvb->execCachedFunction(xsink);
-        QoreValue result;
-        std::memcpy(&result, &result_bits, sizeof(result));
-        val = result;
-
-        if (!skip_body_locals) {
-            // Uninstantiate body locals in reverse order
-            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                body_locals[i]->uninstantiate(xsink);
-            }
-        }
+        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
+            return uvb->execCachedFunction(xs);
+        }, val, xsink);
     }
 
     if (sig->argvid) {
@@ -2789,27 +2806,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-
-        // Get body locals — skip instantiation if all are IR-only
-        const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
-        bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
-        if (!skip_body_locals) {
-            int64 po = uvb->pgm->getParseOptions64();
-            for (LocalVar* lv : body_locals) {
-                lv->instantiate(po);
-            }
-        }
-
-        uint64_t result_bits = uvb->execCachedFunction(xsink);
-        QoreValue fn_result;
-        std::memcpy(&fn_result, &result_bits, sizeof(fn_result));
-        val = fn_result;
-
-        if (!skip_body_locals) {
-            for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                body_locals[i]->uninstantiate(xsink);
-            }
-        }
+        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
+            return uvb->execCachedFunction(xs);
+        }, val, xsink);
     }
 
     if (sig->argvid) {
@@ -2845,10 +2844,14 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), arg_list)
             : qore_method_private::eval(*method, xsink, rc, o, arg_list));
     }
-    // Class mismatch — name-based lookup
+    // Class mismatch — name-based lookup (virtual dispatch to the runtime class)
+    // Pass the runtime class context so that private method access checks succeed
+    // when a base class method calls a private method on self and the runtime type
+    // is a derived class (mirrors AbstractMethodCallNode::exec() in AST mode)
+    const qore_class_private* class_ctx = runtime_get_class();
     RuntimeConfig& rc = rc_get_current_ref();
     return toBits(qore_class_private::get(*o->getClass())->evalMethod(o, method->getName(),
-        arg_list, nullptr, rc, xsink));
+        arg_list, class_ctx, rc, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method,
