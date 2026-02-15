@@ -4388,9 +4388,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                // Only invalidate caches for opcodes that modify variables via AST
-                // Pure expression opcodes (Cast, Exists, Elements, etc.)
-                // don't modify variables and don't need cache invalidation
+                // Invalidate caches for opcodes that modify variables via AST.
+                // Cast opcodes also need invalidation because their inner
+                // expression (evaluated via AST delegation) may contain
+                // side-effecting operations (e.g. "remove body{key}").
                 switch (inst->opcode) {
                     case QoreIROpcode::ExtractAny:
                     case QoreIROpcode::ExtractList:
@@ -4413,6 +4414,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     case QoreIROpcode::PopAny:
                     case QoreIROpcode::PushAny:
                     case QoreIROpcode::ListAssignAny:
+                    case QoreIROpcode::CastAny:
+                    case QoreIROpcode::CastList:
+                    case QoreIROpcode::CastHash:
+                    case QoreIROpcode::CastObject:
+                    case QoreIROpcode::CastEnum:
                         cleanupStoredValues(locals, nullptr);
                         cleanupStoredValues(globals, nullptr);
                         cleanupStoredValues(threadlocals, nullptr);

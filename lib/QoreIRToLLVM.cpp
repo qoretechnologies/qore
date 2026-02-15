@@ -1585,10 +1585,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     pending_phis.clear();
 
-    // Finalize the error return block (if used): emit cleanup for all tracked
-    // allocas and pre-instantiated locals before returning NOTHING.
+    // Finalize the error return block (if used): fire on_block_exit handlers,
+    // emit cleanup for all tracked allocas and pre-instantiated locals before
+    // returning NOTHING.
     if (error_return_block) {
         builder->SetInsertPoint(error_return_block);
+        emitOnBlockExitExec(module);
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);

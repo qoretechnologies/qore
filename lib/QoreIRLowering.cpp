@@ -5561,10 +5561,12 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     const QoreSingleExpressionOperatorNode<>* cast_node = cast
         ? static_cast<const QoreSingleExpressionOperatorNode<>*>(cast)
         : static_cast<const QoreSingleExpressionOperatorNode<>*>(parse_cast);
-    QoreIRValue value = lowerExpression(cast_node->getExp(), error);
-    if (!value.isValid()) {
-        return QoreIRValue();
-    }
+    // NOTE: Do NOT lower the inner expression separately here.  Cast opcodes
+    // delegate to AST via evalExprNode() which evaluates the full cast
+    // expression (including the inner expression) in one pass.  If we also
+    // lower the inner expression to IR instructions, side-effecting
+    // sub-expressions (e.g. "remove body{key}") would fire twice: once from
+    // the IR instruction and once from the AST delegation.
     QoreIROpcode opcode = QoreIROpcode::CastAny;
     if (cast) {
         if (dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
@@ -5579,7 +5581,6 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
         }
     }
     std::vector<QoreIRValue> operands;
-    operands.push_back(value);
     return lowerExprOpOrInvoke(opcode, expr, operands, cast_node->loc, error);
 }
 

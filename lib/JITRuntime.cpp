@@ -2101,6 +2101,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         sig->lv[i]->uninstantiate(xsink);
     }
 
+    // Apply return type coercion (e.g. softlist wrapping) to match
+    // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+
     return toBits(val);
 }
 
@@ -2176,6 +2183,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
+    }
+
+    // Apply return type coercion (e.g. softlist wrapping) to match
+    // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
     }
 
     return toBits(val);
@@ -2325,6 +2339,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     // Uninstantiate self
     if (sig->selfid) {
         sig->selfid->uninstantiateSelf();
+    }
+
+    // Apply return type coercion (e.g. softlist wrapping) to match
+    // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
     }
 
     return toBits(val);
@@ -2823,6 +2844,13 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Uninstantiate self
     if (sig->selfid) {
         sig->selfid->uninstantiateSelf();
+    }
+
+    // Apply return type coercion (e.g. softlist wrapping) to match
+    // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
     }
 
     result = toBits(val);

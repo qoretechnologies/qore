@@ -2136,7 +2136,6 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
     unsigned num_params = signature.numParams();
 
     for (unsigned i = 0; i < num_params; ++i) {
-        // np is unused, kept for reference
         if (args && *args) {
             if (args->canEdit()) {
                 assert(**args);
@@ -2732,13 +2731,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             });
         }
 
-        if (!*xsink && val.isNothing()) {
+        if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                xsink->overrideLocation(*signature.getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
+            // Apply return type coercion (e.g. softlist wrapping) to match
+            // ReturnStatement::execImpl behavior
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
         }
         return val;
     }
@@ -2848,13 +2845,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             });
         }
 
-        if (!*xsink && val.isNothing()) {
+        if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
-            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-            if (*xsink) {
-                xsink->overrideLocation(*signature.getParseLocation());
-                xsink->appendLastDescription(": block missing return statement");
-            }
+            // Apply return type coercion (e.g. softlist wrapping) to match
+            // ReturnStatement::execImpl behavior
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
         }
         return val;
     }
@@ -3007,9 +3002,6 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
         const qore_class_private* qc) const {
     QORE_TRACE("UserVariantBase::eval()");
-    //printd(5, "UserVariantBase::eval() this: %p '%s()' args: %p (size: %d) self: %p class: %p '%s' cctx: %p\n", this,
-    //    name, ceh ? ceh->getArgs() : 0, ceh && ceh->getArgs() ? ceh->getArgs()->size() : 0, self, qc,
-    //    qc ? qc->name.c_str() : "n/a", runtime_get_class());
 
     assert(!self || (ceh ? ceh->getClass() : qc));
 
