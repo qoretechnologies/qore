@@ -83,6 +83,9 @@ lib/ql_thread.cpp
 lib/ql_time.cpp
 lib/ql_type.cpp
 
+# Generated SCU files for modules
+modules/*/src/*_scu.cpp
+
 # Bison & Flex
 lib/parser.cpp
 lib/parser.hpp
