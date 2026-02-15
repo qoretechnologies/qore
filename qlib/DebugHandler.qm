@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugHandler.qm Qore handler definition for the HttpServer module for providing debug server via WebSocket server services
 
-/*  DebugHandler.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugHandler.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,12 +22,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 1.19 or better
-%requires qore >= 1.19
+# minimum required Qore version
+%requires qore >= 2.0
 
 %requires WebSocketUtil
 %requires WebSocketHandler
-%requires yaml >= 0.5
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
 %requires HttpServerUtil >= 0.3.11
 %requires DebugUtil
 %requires DebugProgramControl
@@ -81,7 +83,7 @@ public namespace DebugHandler {
     public class WebSocketDebugConnection inherits WebSocketHandler::WebSocketConnection {
         public {
             #! websocket context, cx.id is used for sending messages to particular client, custom field may be added as well
-            hash cx;
+            hash<auto> cx;
         }
         private {
             AbstractWebSocketDebugHandler dhandler;
@@ -91,7 +93,7 @@ public namespace DebugHandler {
         /**
             It is called from @ref WebSocketHandler::WebSocketHandler::getConnectionImpl() "WebSocketHandler::getConnectionImpl()".
         */
-        constructor(AbstractWebSocketDebugHandler n_handler, hash n_cx): WebSocketConnection(n_handler) {
+        constructor(AbstractWebSocketDebugHandler n_handler, hash<auto> n_cx): WebSocketConnection(n_handler) {
             dhandler = n_handler;
             cx = n_cx;
             cx.handler = dhandler;
@@ -160,7 +162,7 @@ public namespace DebugHandler {
         }
 
         #! called when a connection is established; the default implementation creates a WebSocketConnection object
-        WebSocketHandler::WebSocketConnection getConnectionImpl(hash cx, hash hdr, string cid) {
+        WebSocketHandler::WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
             return new WebSocketDebugConnection(self, cx);
         }
 
@@ -176,7 +178,7 @@ public namespace DebugHandler {
 
             Override this method when implementing a 3rd party protocol
         */
-        abstract public receiveData(hash cx, string msg);
+        abstract public receiveData(hash<auto> cx, string msg);
 
         #! sends data to the given connection
         /**
@@ -186,7 +188,7 @@ public namespace DebugHandler {
 
             Override this method when implementing a 3rd party protocol
         */
-        public sendData(hash cx, auto data) {
+        public sendData(hash<auto> cx, auto data) {
             sendOne(cx.id, encodeData(data));
         }
 
@@ -206,13 +208,14 @@ public namespace DebugHandler {
         /**
             It adds custom header \c X-QoreDebugWsProtocol to the response
          */
-        hash handleRequest(hash cx, hash hdr, *data b) {
-            hash rv = WebSocketHandler::handleRequest(cx, hdr, b);
+        hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+            hash<auto> rv = WebSocketHandler::handleRequest(cx, hdr, b);
             rv.hdr{QoreDebugWsProtocolHeader} = QoreDebugProtocolVersion;
             return rv;
         }
     }
 
+%ifndef NoYaml
     #! the main web socket debug handler class implementing internal protocol in YAML format.
     public class WebSocketDebugHandler inherits AbstractWebSocketDebugHandler {
         #! create the object optionally with the given @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator"
@@ -240,16 +243,17 @@ public namespace DebugHandler {
         }
 
         #! called when web socket receive data
-        public receiveData(hash cx, string msg) {
-            *hash sd;
+        public receiveData(hash<auto> cx, string msg) {
+            *hash<auto> sd;
             try {
                 any rd = parse_yaml(msg);
                 sd = debugProgram.processCommand(cx, rd);
-                if (exists sd)
+                if (exists sd) {
                     sendData(cx, sd);
+                }
             } catch (hash<ExceptionInfo> ex) {
                 logDebug("exception: %y", ex);
-                sd.type = 'error';
+                sd.type = DebugResponseType::Error;
                 sd.result.err = ex.err;
                 sd.result.desc = ex.desc;
                 sd.result.ex = ex;
@@ -258,6 +262,7 @@ public namespace DebugHandler {
         }
 
     }
+%endif
 
     #! debug program control via @ref AbstractWebSocketDebugHandler
     /**
@@ -279,7 +284,7 @@ public namespace DebugHandler {
         }
 
         #! sends data to the given connection
-        public sendDataImpl(hash cx, auto data) {
+        public sendDataImpl(hash<auto> cx, auto data) {
             if (cx.handler) {
                 cx.handler.sendData(cx, data);
             }

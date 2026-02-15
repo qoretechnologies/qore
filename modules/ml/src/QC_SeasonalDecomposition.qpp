@@ -42,7 +42,7 @@ list<hash<SeasonalDecompositionResult>> results = sd.decompose(monthly_values);
 
     @since ml 1.0
 */
-qclass SeasonalDecomposition [arg=QoreSeasonalDecomposition* sd; ns=ML; flags=final];
+qclass SeasonalDecomposition [arg=QoreSeasonalDecomposition* sd; ns=Qore::ML; flags=final];
 
 //! Creates a SeasonalDecomposition instance with the given options
 /** @param options a hash with the following keys:

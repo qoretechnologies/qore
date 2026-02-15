@@ -42,7 +42,7 @@ list<hash<DBSCANResult>> results = db.cluster(data_records);
 
     @since ml 1.0
 */
-qclass DBSCAN [arg=QoreDBSCAN* dbscan; ns=ML; flags=final];
+qclass DBSCAN [arg=QoreDBSCAN* dbscan; ns=Qore::ML; flags=final];
 
 //! Creates a DBSCAN instance with the given options
 /** @param options a hash with the following keys:

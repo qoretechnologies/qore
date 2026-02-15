@@ -61,7 +61,7 @@ printf("Anomaly score: %f, is anomaly: %y\n", result.anomaly_score, result.is_an
 
     @since ml 1.0
 */
-qclass IsolationForest [arg=QoreIsolationForest* iforest; ns=ML; flags=final];
+qclass IsolationForest [arg=QoreIsolationForest* iforest; ns=Qore::ML; flags=final];
 
 //! Creates an IsolationForest with the given options
 /** @param options a hash with the following optional keys:

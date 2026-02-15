@@ -27,8 +27,6 @@
 
 #include "qore/Qore.h"
 
-#ifdef HAVE_ONNXRUNTIME
-
 #include "QC_OnnxModel.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
@@ -64,7 +62,7 @@ printf("Output: %y\n", result);
 
     @since ml 1.0
 */
-qclass OnnxModel [arg=QoreOnnxModel* model; ns=ML; flags=final; dom=FILESYSTEM];
+qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESYSTEM];
 
 //! Creates an OnnxModel by loading the ONNX model from the given file path
 /** @param model_path the filesystem path to the .onnx model file
@@ -77,12 +75,17 @@ OnnxModel model("/path/to/model.onnx");
     @throw ML-ONNX-ERROR if the model cannot be loaded
 */
 OnnxModel::constructor(string model_path) {
+#ifdef HAVE_ONNXRUNTIME
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), xsink), xsink);
     if (*xsink) {
         return;
     }
     self->setPrivate(CID_ONNXMODEL, model_holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before calling this constructor");
+#endif
 }
 
 //! Creates an OnnxModel with session configuration options
@@ -105,12 +108,17 @@ OnnxModel model("/path/to/model.onnx", config);
     @since ml 1.1
 */
 OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
+#ifdef HAVE_ONNXRUNTIME
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), options, xsink), xsink);
     if (*xsink) {
         return;
     }
     self->setPrivate(CID_ONNXMODEL, model_holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before calling this constructor");
+#endif
 }
 
 //! Creates a copy of the OnnxModel
@@ -228,5 +236,3 @@ printf("Configured provider: %s\n", provider);
 string OnnxModel::getProviderInfo() [flags=CONSTANT] {
     return new QoreStringNode(model->getActiveProvider());
 }
-
-#endif // HAVE_ONNXRUNTIME

@@ -68,7 +68,7 @@ printf("LOF score: %f, is anomaly: %y\n", result.lof_score, result.is_anomaly);
 
     @since ml 1.0
 */
-qclass LOF [arg=QoreLOF* lof; ns=ML; flags=final];
+qclass LOF [arg=QoreLOF* lof; ns=Qore::ML; flags=final];
 
 //! Creates an LOF model with the given options
 /** @param options a hash with the following optional keys:

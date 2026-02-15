@@ -60,7 +60,7 @@ printf("Cluster: %d, Probability: %f\n", result.cluster, result.max_probability)
 
     @since ml 1.0
 */
-qclass GMM [arg=QoreGMM* gmm; ns=ML; flags=final];
+qclass GMM [arg=QoreGMM* gmm; ns=Qore::ML; flags=final];
 
 //! Creates a GMM with the given options
 /** @param options a hash with the following keys:

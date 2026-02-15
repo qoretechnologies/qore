@@ -44,12 +44,10 @@ extern const TypedHashDecl* hashdeclLinearRegressionModelInfo;
 extern const TypedHashDecl* hashdeclLOFResult;
 extern const TypedHashDecl* hashdeclGMMResult;
 extern const TypedHashDecl* hashdeclMLCapabilities;
-#ifdef HAVE_ONNXRUNTIME
 extern const TypedHashDecl* hashdeclOnnxTensorInfo;
 extern const TypedHashDecl* hashdeclOnnxModelInfo;
 extern const TypedHashDecl* hashdeclOnnxProviderConfig;
 extern const TypedHashDecl* hashdeclOnnxSessionConfig;
-#endif
 
 //! Result of Isolation Forest anomaly scoring
 /** @since ml 1.0
@@ -188,7 +186,6 @@ hashdecl GMMResult {
     float log_likelihood;
 }
 
-#ifdef HAVE_ONNXRUNTIME
 //! ONNX tensor metadata
 /** @since ml 1.0
 */
@@ -280,7 +277,6 @@ hashdecl OnnxModelInfo {
     */
     *string active_provider;
 }
-#endif
 
 //! ML module capability information
 /** @since ml 1.0
@@ -360,9 +356,9 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     return rv.release();
 }
 
-#ifdef HAVE_ONNXRUNTIME
 //! Returns the list of available ONNX Runtime execution providers
-/** @return a list of provider name strings (e.g. "CPUExecutionProvider", "CUDAExecutionProvider")
+/** @return a list of provider name strings (e.g. "CPUExecutionProvider", "CUDAExecutionProvider");
+    returns an empty list if ONNX Runtime support is not available
 
     @par Example:
     @code{.py}
@@ -373,13 +369,17 @@ printf("Available providers: %y\n", providers);
     @since ml 1.1
 */
 list<string> ml_get_onnx_providers() [flags=CONSTANT; dom=DEFAULT] {
-    std::vector<std::string> available = Ort::GetAvailableProviders();
+#ifdef HAVE_ONNXRUNTIME
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    std::vector<std::string> available = Ort::GetAvailableProviders();
     for (const auto& p : available) {
         rv->push(new QoreStringNode(p), xsink);
     }
     return rv.release();
-}
+#else
+    return xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX Runtime "
+        "support; check MLCapabilities.has_onnx before calling this function");
 #endif
+}
 
 ///@}

@@ -4,11 +4,12 @@
 %modern
 
 %requires linenoise
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires DebugCmdLine
 %requires DebugLinenoiseCmdLine
 %requires DebugProgramControl
 %requires Util
+%requires Logger
 
 %allow-debugger
 %no-debugging
@@ -18,28 +19,19 @@
 class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
     public {
         DebugProgramControlLocal dpc;
-        Counter counter();
-        any threadData;
+        ResponseSync sync();
     }
     constructor(DebugProgramControlLocal n_dpc): DebugLinenoiseCommandLine() {
         dpc = n_dpc;
         dpc.dcl = self;
     }
-    public *hash doCommandImpl(hash data) {
+    public *hash<auto> doCommandImpl(hash<auto> data) {
         if (exists data.tid) {
-            while (counter.getCount() > 0) {
-                counter.dec();
-            }
-            counter.inc();
-            threadData = NOTHING;
+            sync.prepare();
         }
-        *hash ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
-        if (ret.type == 'thread') {
-            if (counter.waitForZero(200)) {
-                return NOTHING;
-            } else {
-                return threadData;
-            }
+        *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
+        if (ret.type == DebugResponseType::Thread) {
+            return sync.waitForResponse(200ms);
         } else {
             return ret;
         }
@@ -55,26 +47,27 @@ class DebugProgramControlLocal inherits DebugProgramControl {
         registerConnection(CX);
     }
     destructor() {
-        unregisterConnection(CX);
+        try {
+            unregisterConnection(CX);
+        } catch () {
+            # suppress exceptions during program shutdown (PROGRAM-ERROR)
+        }
     }
-    public nothing sendDataImpl(hash cx, any data) {    # TODO: nothing needed. why? I cannot reproduce in simple case to report issue
+    public nothing sendDataImpl(hash<auto> cx, any data) {    # TODO: nothing needed. why? I cannot reproduce in simple case to report issue
         debug("sendDataImpl: %y: %y", cx, data);
-        if (dcl.counter.getCount() > 0) {
-            dcl.threadData = data;
-            dcl.counter.dec();
-        } else {
+        if (!dcl.sync.deliver(data)) {
             dcl.printData(data);
         }
     }
     public nothing broadcastDataImpl(any data) {
-        debug("broadcastDataImpl: %y: %y", data);
+        debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
     }
 }
 
 class DebugWrapper {
     private {
-        hash opts = (
+        hash<auto> opts = (
             'help': 'h,help',
             'verbose': 'v,verbose:+',
             'run': 'r,run',
@@ -85,9 +78,11 @@ class DebugWrapper {
             #"exec_class": "x,exec-class:s",
             "history": "y,history=s",
             "session": "s,session=s",
+            "color": "color",
+            "no_color": "no-color",
         );
         DebugCommandLineLocal dcl;
-        DebugLogger logger;
+        Logger logger;
     }
 
     constructor() {
@@ -100,14 +95,14 @@ class DebugWrapper {
         #    qore-dbg -v --listen xxx xxx   #the second xxx is program name
         # GetOpt does not support such a parse function
         #
-        list dargs;
-        hash opt;
+        list<auto> dargs;
+        hash<auto> opt;
         *string fileName;
         g.split(cast<list<string>>(ARGV), \dargs, \fileName, \ARGV);
 
         try {
             opt = g.parse2(\dargs);
-        } catch (hash ex) {
+        } catch (hash<ExceptionInfo> ex) {
             stderr.printf("%s: %s\n", ex.err, ex.desc);
             help(-1);
         }
@@ -115,50 +110,71 @@ class DebugWrapper {
         if (opt.help) {
             help();
         }
-        logger = new DebugLogger();
-        if (opt.verbose) {
-            logger.verbose = opt.verbose;
+        logger = new Logger();
+        logger.addAppender(new LoggerAppenderStdErr("stderr", new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")));
+        if (opt.verbose > 1) {
+            logger.setLevel("DEBUG");
+        } else if (opt.verbose) {
+            logger.setLevel("INFO");
+        } else {
+            logger.setLevel("ERROR");
         }
         DebugProgramControlLocal dpcl();
         dcl = new DebugCommandLineLocal(dpcl);
-        dcl.logger = logger;
-        dcl.dpc.logger = logger;
+        dcl.setLogger(logger);
+        dcl.dpc.setLogger(logger);
+        # signal handler for graceful shutdown
+        code sig_handler = sub (int sig) {
+            dpcl.shutdown();
+        };
+        set_signal_handler(SIGINT, sig_handler);
+        set_signal_handler(SIGTERM, sig_handler);
         try {
+            if (fileName == "--") {
+                fileName = "/dev/stdin";
+            }
             if (exists fileName) {
                 Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
-                logger.log(DUV_INFO, "run program");
+                logger.info("run program");
                 background pgm.run();
-                # Seems workaround no more needed
-                #sleep(1);  # to avoid OBJECT-ALREADY-DELETED: attempt to access member 'pgm' of an already-deleted object of class 'DebugWrapper'
             }
             dcl.init(opt);
             dcl.runCmdLine();
 
-            # resume any blocked debug threads
+            # explicit cleanup before program exit to avoid PROGRAM-ERROR
+            # in destructors when module programs are destroyed first
             dpcl.shutdown();
         } catch (hash<ExceptionInfo> ex) {
             stderr.print(get_exception_string(ex) + "\n");
             exit(-1);
         }
+        # remove signal handlers before exit so their closures release
+        # references to dpcl; otherwise dpcl is destroyed during program
+        # shutdown when module programs may already be deleted
+        remove_signal_handler(SIGINT);
+        remove_signal_handler(SIGTERM);
     }
 
     private help(int exCode=1) {
         printf("usage: %s [options] <program> [<program params> ...]\n"
             "  where <program> is the program to debug, use \"--\" to get code from stdin\n"
-            "  -v     verbose\n"
-            "  -h     help\n"
-            #"  -c, --charset=arg            sets default character set encoding\n"
+            "  -v                           verbose (use -v -v for debug output)\n"
+            "  -h                           help\n"
             "  -D, --define=arg             sets the value of a parse define\n"
             "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
-            #"  -x, --exec-class[=arg]       instantiate class with same name as file name\n"
-            #"                               (override with arg, also sets --no-top-level)\n"
             "  -z, --time-zone=arg          sets the time zone from the argument; can be\n"
-            "                               either a region name (ex: 'Europe/Prague') or a\n"
-            "                               UTC offset with format S[DD[:DD[:DD]]], S=+ or -  TODO\n"
+            "                               a region name (ex: 'Europe/Prague') or a\n"
+            "                               UTC offset (ex: '+01:00')\n"
             "  -y, --history=file           load command line history from file, default: %s in home directory\n"
             "                               When \".\" name is provided then history is not loaded/saved\n"
             "  -s, --session=file           load session from file\n"
-
+            "  --color                      force color output\n"
+            "  --no-color                   disable color output\n"
+            "\n"
+            "Keyboard shortcuts:\n"
+            "  Ctrl+D                       quit debugger\n"
+            "  Ctrl+G                       show current program/thread context\n"
+            "  TAB                          command completion (cycles through matches)\n"
             "\n"
             "Example:\n"
             "  %s -v myfile.q -my -program params\n"
@@ -167,7 +183,6 @@ class DebugWrapper {
             get_script_name(),
             DebugLinenoiseCommandLine::defaultHistoryFileName,
             get_script_name(),
-
         );
         exit(exCode);
     }

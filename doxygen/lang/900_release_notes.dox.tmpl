@@ -309,6 +309,30 @@ cargo install tree-sitter-cli@0.26.5
     needs to be pre-installed.
     @endparblock
 
+    @par New Build Dependencies for the ml Module: Eigen3 (Required) and ONNX Runtime (Optional)
+    @parblock
+    The new \c ml binary module requires <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4) for linear
+    algebra operations. If Eigen3 is not found, the \c ml module will not be built.
+
+    Install the Eigen3 development packages:
+    - <b>Debian/Ubuntu:</b> \c libeigen3-dev
+    - <b>RHEL/Fedora:</b> \c eigen3-devel
+    - <b>Alpine:</b> \c eigen-dev
+    - <b>macOS (Homebrew):</b> \c eigen
+
+    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the \c OnnxModel class for
+    running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.
+
+    Install ONNX Runtime development packages where available:
+    - <b>RHEL/Fedora:</b> not available as a system package; install from
+      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
+    - <b>Debian/Ubuntu (24.04):</b> not available as a system package; build from
+      <a href="https://github.com/microsoft/onnxruntime">source</a> or install from
+      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
+    - <b>Alpine:</b> \c onnxruntime-dev
+    - <b>macOS (Homebrew):</b> \c onnxruntime
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",

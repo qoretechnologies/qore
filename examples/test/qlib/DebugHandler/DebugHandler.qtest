@@ -1,0 +1,335 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-debugger
+
+%requires ../../../../qlib/DebugUtil.qm
+%requires ../../../../qlib/DebugProgramControl.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/DebugHandler.qm
+
+%try-module yaml >= 0.5
+%define NoYaml
+%endtry
+
+%exec-class DebugHandlerTest
+
+%ifndef NoYaml
+#! Helper class to collect WebSocket events in a thread-safe way
+class WsEventCollector {
+    public {
+        Queue queue();
+    }
+    private {
+        Mutex m();
+        list<auto> events = ();
+    }
+
+    addEvent(auto ev) {
+        m.lock();
+        on_exit m.unlock();
+        push events, ev;
+        queue.push(ev);
+    }
+
+    list<auto> getEvents() {
+        m.lock();
+        on_exit m.unlock();
+        return events;
+    }
+
+    int size() {
+        m.lock();
+        on_exit m.unlock();
+        return events.size();
+    }
+
+    #! Wait for at least n events with timeout (event-driven via Queue)
+    bool waitForEvents(int n, timeout to) {
+        date start = now_us();
+        while (True) {
+            if (size() >= n) {
+                return True;
+            }
+            if ((now_us() - start) > to) {
+                return False;
+            }
+            try {
+                queue.get(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    #! Wait for an event matching type/cmd/event_name after index 'after' (event-driven via Queue)
+    *hash<auto> waitForEvent(string type, *string cmd, *string event_name, int after, timeout to) {
+        date start = now_us();
+        while (True) {
+            {
+                m.lock();
+                on_exit m.unlock();
+                for (int i = after; i < events.size(); i++) {
+                    if (events[i].type == type
+                        && (!cmd.val() || events[i].cmd == cmd)
+                        && (!event_name.val() || events[i].event == event_name)) {
+                        return events[i];
+                    }
+                }
+            }
+            if ((now_us() - start) > to) {
+                break;
+            }
+            try {
+                queue.get(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+        }
+    }
+}
+%endif
+
+public class DebugHandlerTest inherits QUnit::Test {
+%ifdef NoYaml
+    constructor() : Test("DebugHandlerTest", "1.0") {
+        addTestCase("skipped", sub() { testSkip("yaml module not available"); });
+        set_return_value(main());
+    }
+%else
+    private {
+        HttpServer mServer;
+        WebSocketDebugProgramControl dpc;
+        int port;
+    }
+
+    constructor() : Test("DebugHandlerTest", "1.0") {
+        addTestCase("protocol header", \protocolHeaderTests());
+        addTestCase("welcome message", \welcomeMessageTests());
+        addTestCase("commands via WebSocket", \commandTests());
+        addTestCase("multiple connections", \multiConnectionTests());
+        addTestCase("error handling", \errorHandlingTests());
+        addTestCase("content type", \contentTypeTests());
+        addTestCase("handler management", \handlerMgmtTests());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("debug-test", LoggerLevel::getLevelError());
+        dpc = new WebSocketDebugProgramControl("test-debug-server", logger);
+        WebSocketDebugHandler wsHandler(dpc, NOTHING, {"logger": logger});
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        mServer = new HttpServer(http_opts);
+        mServer.setHandler("ws-handler", "", wsHandler.getContentType(), wsHandler);
+        mServer.setDefaultHandler("ws-handler", wsHandler);
+        port = mServer.addListener(0).port;
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    private hash<auto> connectClient(*timeout to) {
+        if (!to) {
+            to = 5s;
+        }
+        WsEventCollector collector();
+
+        WebSocketClient wsc(sub(*data msg) {
+            if (exists msg) {
+                try {
+                    collector.addEvent(parse_yaml(msg));
+                } catch (hash<ExceptionInfo> ex) {
+                    collector.addEvent({"error": ex.desc, "type": DebugResponseType::Error});
+                }
+            }
+        }, {"url": "ws://localhost:" + port});
+
+        hash<auto> hdr = wsc.connect();
+        # wait for welcome message
+        collector.waitForEvents(1, to);
+
+        return {"wsc": wsc, "hdr": hdr, "collector": collector};
+    }
+
+    private *hash<auto> sendCommand(WebSocketClient wsc, hash<auto> cmd, WsEventCollector collector, *timeout to) {
+        if (!to) {
+            to = 5s;
+        }
+        int uid = clock_getmicros();
+        hash<auto!> send_cmd = cmd;
+        send_cmd.uid = uid;
+        int before = collector.size();
+        wsc.send(make_yaml(send_cmd));
+
+        # wait for response with matching uid (event-driven via Queue)
+        date start = now_us();
+        while ((now_us() - start) < to) {
+            list<auto> evts = collector.getEvents();
+            for (int i = before; i < evts.size(); i++) {
+                if (evts[i].uid == uid) {
+                    return evts[i];
+                }
+            }
+            before = evts.size();
+            try {
+                collector.queue.get(100ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    protocolHeaderTests() {
+        hash<auto> conn = connectClient();
+        on_exit conn.wsc.disconnect();
+
+        # verify protocol header
+        *string prot_ver = conn.hdr{QoreDebugWsProtocolHeader.lwr()};
+        assertTrue(prot_ver.val());
+        assertEq(QoreDebugProtocolVersion, prot_ver);
+    }
+
+    welcomeMessageTests() {
+        hash<auto> conn = connectClient();
+        on_exit conn.wsc.disconnect();
+
+        # verify welcome message
+        assertTrue(conn.collector.size() > 0);
+        list<auto> evts = conn.collector.getEvents();
+        assertEq(DebugResponseType::Event, evts[0].type);
+        assertEq(DebugEventCmd::Welcome, evts[0].cmd);
+        assertEq("test-debug-server", evts[0].result);
+    }
+
+    commandTests() {
+        hash<auto> conn = connectClient();
+        on_exit conn.wsc.disconnect();
+
+        # help command
+        {
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "help"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+            assertTrue(ret.result instanceof list);
+        }
+
+        # version command
+        {
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "version"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+            assertEq("WebSocketDebugProgramControl", ret.result.class);
+        }
+
+        # program list
+        {
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "program//list"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+        }
+
+        # breakpoint CRUD cycle
+        {
+            # create a program for breakpoints
+            Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+            pgm.parse("int sub ws_test() { return 1; }", "ws-test.q");
+            ProgramControl pc = pgm.getProgram();
+            dpc.addProgram(pc);
+            int pgmId = pc.getProgramId();
+
+            # create breakpoint
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint//create"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+            assertTrue(ret.result.hasKey("bkptid"));
+            int bkptId = ret.result.bkptid;
+
+            # list breakpoints
+            ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint//list"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+            assertTrue(ret.result instanceof list);
+
+            # delete breakpoint
+            ret = sendCommand(conn.wsc, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"}, conn.collector);
+            assertEq(DebugResponseType::Response,ret.type);
+            assertEq("ok", ret.result);
+
+            dpc.removeProgram(pc);
+        }
+    }
+
+    multiConnectionTests() {
+        hash<auto> conn1 = connectClient();
+        on_exit conn1.wsc.disconnect();
+
+        hash<auto> conn2 = connectClient();
+        on_exit conn2.wsc.disconnect();
+
+        # create a program for breakpoints
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse("int sub multi_test() { return 1; }", "multi-test.q");
+        ProgramControl pc = pgm.getProgram();
+        dpc.addProgram(pc);
+        int pgmId = pc.getProgramId();
+
+        int events_before = conn2.collector.size();
+
+        # create breakpoint from client 1 — should broadcast to client 2
+        *hash<auto> ret = sendCommand(conn1.wsc, {"cmd": "program/" + pgmId + "/breakpoint//create"}, conn1.collector);
+        assertEq(DebugResponseType::Response,ret.type);
+        int bkptId = ret.result.bkptid;
+
+        # wait for broadcast to arrive at client 2 (event-driven via Queue)
+        *hash<auto> found = conn2.collector.waitForEvent(DebugResponseType::Event, DebugEventCmd::Breakpoint, "create", events_before, 3s);
+        assertTrue(exists found);
+
+        # clean up
+        sendCommand(conn1.wsc, {"cmd": "program/" + pgmId + "/breakpoint/" + bkptId + "/delete"}, conn1.collector);
+        dpc.removeProgram(pc);
+    }
+
+    errorHandlingTests() {
+        hash<auto> conn = connectClient();
+        on_exit conn.wsc.disconnect();
+
+        # invalid command
+        {
+            *hash<auto> ret = sendCommand(conn.wsc, {"cmd": "totally_invalid_command"}, conn.collector);
+            assertEq(DebugResponseType::Error,ret.type);
+        }
+
+        # invalid YAML - send raw invalid data
+        {
+            int before = conn.collector.size();
+            conn.wsc.send("{{{{invalid yaml");
+            # wait for error response (event-driven via Queue)
+            *hash<auto> found = conn.collector.waitForEvent(DebugResponseType::Error, NOTHING, NOTHING, before, 3s);
+            assertTrue(exists found);
+        }
+    }
+
+    contentTypeTests() {
+        # verify the handler returns the correct MIME type
+        WebSocketDebugHandler handler(dpc);
+        assertEq(MimeTypeYamlRpc, handler.getContentType());
+    }
+
+    handlerMgmtTests() {
+        # addHandler should not add duplicates and should not throw
+        WebSocketDebugHandler handler(dpc);
+        dpc.addHandler(handler);
+        # verify handler is still functional after duplicate add
+        assertEq(MimeTypeYamlRpc, handler.getContentType());
+    }
+%endif
+}
