@@ -131,11 +131,6 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         return getDriverLogo(ds_urlh.type);
     }
 
-    #! Returns the connection type
-    string getConnectionType() {
-        return "db";
-    }
-
     #! Returns connection info
     /** Overridden to strip the @c pass key from @c url_hash (datasource URLs use @c pass instead of @c password)
     */
