@@ -39,7 +39,9 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 ### Registration
 - [ ] Factory registered in `qlib/DataProvider/DataProvider.qc` -> `FactoryMap`
 - [ ] `registerApp()` called with correct fields
-- [ ] `groups` uses `AppGroup` enum values (not strings)
+- [ ] `groups` includes at least one `AppGroup` enum value (enforced at runtime by `RequiredAppKeys`)
+- [ ] `groups` uses only `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc` (not raw strings)
+- [ ] `groups` assigned appropriately (see [AppGroup Reference](#appgroup-reference) below)
 
 ### App Info
 - [ ] `display_name` is user-friendly ("Zoho Books" not "zohobooks")
@@ -226,3 +228,73 @@ For each major resource (identified by having a list action), verify CRUD covera
 - [ ] Entry in `doxygen/lang/120_modules.dox.tmpl`
 - [ ] Release note in `doxygen/lang/900_release_notes.dox.tmpl`
 - [ ] Copyright year is current (2026)
+
+---
+
+## AppGroup Reference
+
+Every app registered with `DataProviderActionCatalog::registerApp()` **must** include at least one group from the
+`DataProvider::AppGroup` enum (defined in `qlib/DataProvider/AppGroup.qc`). This is enforced at runtime by
+`RequiredAppKeys` in `DataProviderActionCatalog`.
+
+Apps may belong to multiple groups where appropriate (e.g., MQTT belongs to both `Messaging` and `Iot`).
+
+Use the fully qualified enum path (`DataProvider::AppGroup::XYZ`) from modules outside the `DataProvider` namespace.
+Within the `DataProvider` namespace, the shorter `AppGroup::XYZ` form works.
+
+### Available Groups
+
+| Enum Value | Display Name | Use For |
+|---|---|---|
+| `AccountingErp` | Accounting & ERP | Zoho Books, FreshBooks, Wave, Cin7, Unleashed, Zoho Invoice, Business Central |
+| `AiLlm` | AI & Language Models | OpenAI, MCP, AI/ML tools |
+| `Analytics` | Analytics & Reporting | DataProviderML, analytics platforms |
+| `ApiIntegration` | API & Integration | REST client, SOAP, MCP, Qorus remote, generic API tools |
+| `CloudStorage` | Cloud Storage & File Management | WebDAV, cloud file services |
+| `CrmSales` | CRM & Sales Management | Salesforce, Dynamics CRM/CDS |
+| `CustomerSupport` | Customer Support & Helpdesk | ServiceNow |
+| `Databases` | Databases & Backend Services | DB, ElasticSearch, Redis, Memcached, MongoDB |
+| `DataTransformation` | Data Transformation | CSV, FixedLength, EDIFACT, Generator, Tar, Zip |
+| `DesignCreative` | Design & Creative Tools | ImageMagick |
+| `DevOps` | DevOps & Cloud Infrastructure | Qorus integration engine |
+| `DocumentSigning` | Document Signing & Contracts | DocuSign, signing services |
+| `Documents` | Documents & Documentation | Word, PDF |
+| `Ecommerce` | E-commerce Platforms | Zoho Inventory, Square |
+| `Email` | Email & Email Marketing | SMTP, Gmail, Mailgun, POP3 |
+| `FileSystem` | File System & Local Storage | File data provider, file poller |
+| `FileTransfer` | File Transfer Protocols | FTP, SFTP |
+| `FormsSurveys` | Forms, Surveys & Scheduling | Jotform |
+| `GoogleWorkspace` | Google Workspace Suite | Gmail, Google Calendar |
+| `Hospitality` | Hospitality & Property Management | Mews |
+| `Hr` | HR & People Management | HR platforms |
+| `Iot` | IoT & Smart Building | Empathic Building, BusyLight, MQTT |
+| `Marketing` | Marketing Automation | Marketing platforms |
+| `Messaging` | Messaging & Real-time Communication | WebSocket, SSE, Discord, Kafka, MQTT |
+| `Notifications` | Notifications & Alerts | Notification services |
+| `Payments` | Payment Processing | Square |
+| `ProjectManagement` | Project & Task Management | Linear |
+| `Shipping` | Shipping & Logistics | Shippo, ShipStation |
+| `SocialMedia` | Social Media Management | Social media platforms |
+| `Spreadsheets` | Spreadsheets & Data Tables | Excel |
+| `VersionControl` | Version Control & Code Repositories | Git platforms |
+| `VideoConferencing` | Video Conferencing & Meetings | Video meeting platforms |
+| `Weather` | Weather | Weather services |
+| `WebAutomation` | Web Scraping & Automation | Web scraping tools |
+
+### Example
+
+```qore
+# Single group (from outside DataProvider namespace)
+DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+    ...
+    "groups": (DataProvider::AppGroup::Messaging,),
+    ...
+});
+
+# Multiple groups
+DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+    ...
+    "groups": (DataProvider::AppGroup::Messaging, DataProvider::AppGroup::Iot,),
+    ...
+});
+```

@@ -465,6 +465,7 @@ public class DataProviderActionCatalog {
             "display_name": True,
             "short_desc": True,
             "desc": True,
+            "groups": True,
             "logo": True,
             "logo_file_name": True,
             "logo_mime_type": True,
