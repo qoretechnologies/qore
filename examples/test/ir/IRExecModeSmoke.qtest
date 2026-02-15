@@ -153,6 +153,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR nested exception type smoke", \testIrNestedExceptionTypeSmoke());
         addTestCase("IR compound assign in try smoke", \testIrCompoundAssignInTrySmoke());
         addTestCase("IR hash slice smoke", \testIrHashSliceSmoke());
+        addTestCase("IR map dot-eval in try smoke", \testIrMapDotEvalInTrySmoke());
         set_return_value(main());
     }
 
@@ -5266,5 +5267,47 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("slice:1:3\n", stdout_output, "Hash slice should extract correct keys");
+    }
+
+    testIrMapDotEvalInTrySmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test: map with $1.member() call inside try/catch
+        # Regression: lowerStatement() pre-evaluated map's child expressions
+        # for the Invoke path, but $1 is only valid inside the map body context.
+        # The fix skips pre-evaluation for map/select/foldl/foldr operators.
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("list<hash<auto>> l = ({\"fn\": auto sub () { return \"ok\"; }},);\n");
+        script.file.write("auto v;\n");
+        script.file.write("try {\n");
+        script.file.write("    map v = $1.fn(), l;\n");
+        script.file.write("} catch (hash<ExceptionInfo> ex) {\n");
+        script.file.write("    v = \"ERROR: \" + ex.err;\n");
+        script.file.write("}\n");
+        script.file.write("printf(\"map-dot-try:%s\\n\", v);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR map dot-eval in try should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("map-dot-try:ok\n", stdout_output, "map $1.fn() in try/catch should call closure");
     }
 }

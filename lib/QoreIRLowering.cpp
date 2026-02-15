@@ -375,18 +375,25 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                             loc = ternary->loc;
                             invoked = true;
                         } else if (auto* binary = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-                            QoreIRValue left = lowerExpression(binary->getLeft(), error);
-                            if (!left.isValid()) {
-                                return false;
+                            // map, select, foldl, foldr operators use implicit arguments
+                            // ($1, $#) set up during operator evaluation — their child
+                            // expressions must NOT be pre-evaluated outside that context
+                            if (!dynamic_cast<const QoreMapOperatorNode*>(node)
+                                && !dynamic_cast<const QoreSelectOperatorNode*>(node)
+                                && !dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
+                                QoreIRValue left = lowerExpression(binary->getLeft(), error);
+                                if (!left.isValid()) {
+                                    return false;
+                                }
+                                QoreIRValue right = lowerExpression(binary->getRight(), error);
+                                if (!right.isValid()) {
+                                    return false;
+                                }
+                                operands.push_back(left);
+                                operands.push_back(right);
+                                loc = binary->loc;
+                                invoked = true;
                             }
-                            QoreIRValue right = lowerExpression(binary->getRight(), error);
-                            if (!right.isValid()) {
-                                return false;
-                            }
-                            operands.push_back(left);
-                            operands.push_back(right);
-                            loc = binary->loc;
-                            invoked = true;
                         } else if (auto* unary = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
                             // BackgroundOperatorNode inherits from QoreSingleExpressionOperatorNode
                             // but must NOT be handled here — lowering the inner expression would
@@ -2992,6 +2999,10 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         if (!guardLValueBase(assign->getLeft(), error)) {
             return QoreIRValue();
         }
+        // StoreLValue delegates lvalue evaluation to AST at runtime;
+        // track as AST delegation so map/select body emits PushImplicitArg
+        // when the lvalue contains $1/$# references (e.g., hash{$1} = val)
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3057,6 +3068,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3133,6 +3146,8 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3208,6 +3223,8 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3282,6 +3299,8 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3357,6 +3376,8 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3427,6 +3448,8 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3497,6 +3520,8 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3567,6 +3592,8 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3645,6 +3672,8 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
+    // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+    ++ast_delegate_count;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3708,6 +3737,8 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
+    // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+    ++ast_delegate_count;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3765,6 +3796,8 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
+    // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+    ++ast_delegate_count;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -3828,6 +3861,8 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
+    // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+    ++ast_delegate_count;
     if (!exception_stack.empty()) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -4481,6 +4516,8 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -4545,6 +4582,8 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         if (!guardLValueBase(op->getLeft(), error)) {
             return QoreIRValue();
         }
+        // lvalue evaluation delegates to AST at runtime; track for implicit arg push
+        ++ast_delegate_count;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
