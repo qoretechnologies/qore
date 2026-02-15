@@ -87,6 +87,8 @@ lib/ql_type.cpp
 lib/generated-scu.cpp
 # Generated SCU (CMake in-tree builds)
 lib/single-compilation-unit.cpp
+# Generated SCU files for modules
+modules/*/src/*_scu.cpp
 
 # Bison & Flex
 lib/parser.cpp
