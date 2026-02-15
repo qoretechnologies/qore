@@ -307,7 +307,8 @@ class FtpTest inherits QUnit::Test {
             assertEq(False, fc.pwd() =~ /"/);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-TIMEOUT"
-                    || ex.err == "SOCKET-CLOSED" || ex.err == "FTP-CONNECT-ERROR") {
+                    || ex.err == "SOCKET-CLOSED" || ex.err == "FTP-CONNECT-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 testSkip(sprintf("External FTP server unreachable: %s: %s", ex.err, ex.desc));
                 return;
             }
