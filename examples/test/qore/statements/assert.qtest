@@ -290,7 +290,7 @@ class AssertDebugTest inherits QUnit::Test {
         # Find qore executable - ENV._ points to the current interpreter
         # Skip test if running under valgrind or other wrappers
         string qore_bin = ENV._;
-        if (qore_bin !~ /qore/) {
+        if (qore_bin !~ /\/qore$/) {
             testSkip("skipping command-line test: running under wrapper (valgrind, etc.)");
             return;
         }
@@ -347,7 +347,7 @@ public namespace TestDebugModule {
 
         # Find qore executable
         string qore_bin = ENV._;
-        if (qore_bin !~ /qore/) {
+        if (qore_bin !~ /\/qore$/) {
             testSkip("skipping module debug test: running under wrapper (valgrind, etc.)");
             return;
         }
