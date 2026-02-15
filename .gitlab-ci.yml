@@ -192,7 +192,6 @@ test-tiered-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
-  allow_failure: true
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \

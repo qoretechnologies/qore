@@ -1140,6 +1140,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         pholder = mpgm = new QoreProgram(parseOptions);
         mpgm->setScriptPath(modulePath.c_str());
     }
+    // inherit execution mode from parent program
+    if (p) {
+        mpgm->setExecMode(p->getExecMode());
+    }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
@@ -1539,6 +1543,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         pholder = mpgm = new QoreProgram(po);
         mpgm->setScriptPath(path);
     }
+    // inherit execution mode from parent program
+    if (p) {
+        mpgm->setExecMode(p->getExecMode());
+    }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; feature '%s' is already loaded in "
@@ -1629,6 +1637,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     } else {
         pholder = mpgm = new QoreProgram(po);
         mpgm->setScriptPath(path);
+    }
+    // inherit execution mode from parent program
+    if (p) {
+        mpgm->setExecMode(p->getExecMode());
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {

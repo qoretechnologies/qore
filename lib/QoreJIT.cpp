@@ -140,7 +140,24 @@ bool QoreJIT::initialize(std::string& error) {
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
 
+#if LLVM_VERSION_MAJOR == 20 && defined(__aarch64__)
+    // Workaround: LLVM 20's greedy/basic register allocators crash on certain
+    // valid IR patterns on aarch64 (complex control flow with many phi nodes).
+    // https://github.com/llvm/llvm-project/issues/181566
+    // Use CodeGenOptLevel::None to select the fast register allocator instead.
+    // IR-level optimizations are still applied separately via optimizeModule().
+    auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
+    if (!jtmb) {
+        error = llvm::toString(jtmb.takeError());
+        return false;
+    }
+    jtmb->setCodeGenOptLevel(llvm::CodeGenOptLevel::None);
+    auto jit_or_err = llvm::orc::LLJITBuilder()
+        .setJITTargetMachineBuilder(std::move(*jtmb))
+        .create();
+#else
     auto jit_or_err = llvm::orc::LLJITBuilder().create();
+#endif
     if (!jit_or_err) {
         error = llvm::toString(jit_or_err.takeError());
         return false;
