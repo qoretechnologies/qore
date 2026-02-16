@@ -25,16 +25,17 @@
 #! Contains all public definitions in the QdrantDataProvider module
 public namespace QdrantDataProvider {
 #! The Qdrant service health check API data provider
-/** This API checks the health status of the Qdrant server
+/** This API checks the health status of the Qdrant server by returning server info
+    (title, version, commit) from the root endpoint
 
-    @note Corresponds to: GET /healthz
+    @note Corresponds to: GET /
 */
 public class QdrantServiceHealthDataProvider inherits QdrantDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "health",
-            "desc": "Qdrant service health check data provider (`GET /healthz`)",
+            "desc": "Qdrant service health check data provider (`GET /`)",
             "type": "QdrantServiceHealthDataProvider",
             "constructor_options": QdrantDataProvider::ConstructorOptions,
             "supports_request": True,

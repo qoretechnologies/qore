@@ -27,14 +27,14 @@ public namespace QdrantDataProvider {
 #! The Qdrant list all aliases API data provider
 /** This API lists all aliases in the Qdrant instance
 
-    @note Corresponds to: GET /collections/aliases
+    @note Corresponds to: GET /aliases
 */
 public class QdrantAliasesListAllDataProvider inherits QdrantDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "list-all",
-            "desc": "Qdrant list all aliases API data provider (`GET /collections/aliases`)",
+            "desc": "Qdrant list all aliases API data provider (`GET /aliases`)",
             "type": "QdrantAliasesListAllDataProvider",
             "constructor_options": QdrantDataProvider::ConstructorOptions,
             "supports_request": True,
