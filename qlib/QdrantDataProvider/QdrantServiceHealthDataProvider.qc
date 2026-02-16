@@ -114,7 +114,7 @@ public class QdrantServiceHealthResponseDataType inherits DataProvider::HashData
                 "display_name": "Title",
                 "short_desc": "The health check title",
                 "desc": "The title of the health check response",
-                "example_value": "qdrant - vectorass engine",
+                "example_value": "qdrant - vector search engine",
             },
             "version": {
                 "type": StringOrNothingType,
