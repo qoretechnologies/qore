@@ -99,7 +99,7 @@ public class QdrantSnapshotsDeleteCollectionDataProvider inherits QdrantDataProv
             }
             uri_path += sprintf("%s=%s", arg, QdrantDataProviderBase::formatQueryValue(remove req{arg}));
         }
-        return doQdrantDelete(uri_path);
+        return {"result": doQdrantDelete(uri_path)};
     }
 
     #! Returns the description of a successful request message, if any

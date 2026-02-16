@@ -48,8 +48,9 @@ public class QdrantSearchQueryBatchDataProvider inherits QdrantDataProviderBase 
         #! Request type
         const RequestType = new QdrantSearchQueryBatchRequestDataType();
 
-        #! Response type
-        const ResponseType = new QdrantSearchQueryBatchResponseDataType();
+        #! Response type - list of query result sets (Qdrant returns result as a list directly)
+        const ResponseType = new ListDataType("QdrantSearchQueryBatchResponse",
+            new QdrantSearchQueryBatchResponseElementDataType(), True);
     }
 
     #! Creates the object from constructor options
@@ -132,18 +133,19 @@ public class QdrantSearchQueryBatchRequestDataType inherits DataProvider::HashDa
     }
 }
 
-#! Qdrant search query batch response data type
-public class QdrantSearchQueryBatchResponseDataType inherits DataProvider::HashDataType {
+#! Qdrant search query batch response element data type
+/** Each element represents the result of a single query in the batch, containing a list of scored points
+*/
+public class QdrantSearchQueryBatchResponseElementDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
             "points": {
                 "type": AutoListType,
                 "display_name": "Points",
-                "short_desc": "List of result lists",
-                "desc": "A list of result lists, one for each query in the batch; each inner list contains "
-                    "scored point results",
-                "example_value": (({"id": 1, "version": 0, "score": 0.95},),),
+                "short_desc": "Scored point results for this query",
+                "desc": "A list of scored point results for this query in the batch",
+                "example_value": ({"id": 1, "version": 0, "score": 0.95},),
             },
         };
     }
@@ -151,6 +153,7 @@ public class QdrantSearchQueryBatchResponseDataType inherits DataProvider::HashD
     #! Creates the object
     constructor() {
         addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
     }
 }
 }

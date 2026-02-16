@@ -48,8 +48,9 @@ public class QdrantSnapshotsListCollectionDataProvider inherits QdrantDataProvid
         #! Request type
         const RequestType = new QdrantSnapshotsListCollectionRequestDataType();
 
-        #! Response type
-        const ResponseType = new QdrantSnapshotsListCollectionResponseDataType();
+        #! Response type - list of snapshot objects (Qdrant returns result as a list directly)
+        const ResponseType = new ListDataType("QdrantSnapshotsListCollectionResponse",
+            new QdrantSnapshotElementDataType(), True);
     }
 
     #! Creates the object from constructor options
@@ -123,19 +124,31 @@ public class QdrantSnapshotsListCollectionRequestDataType inherits DataProvider:
     }
 }
 
-#! Qdrant list collection snapshots response data type
-public class QdrantSnapshotsListCollectionResponseDataType inherits DataProvider::HashDataType {
+#! Qdrant snapshot element data type for snapshot list responses
+public class QdrantSnapshotElementDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
-            "snapshots": {
-                "type": AutoListOrNothingType,
-                "display_name": "Snapshots",
-                "short_desc": "List of collection snapshots",
-                "desc": "A list of snapshot description objects, each containing `name`, `creation_time`, "
-                    "and `size` fields",
-                "example_value": ({"name": "my_collection-snapshot.snapshot", "creation_time":
-                    "2026-01-01T00:00:00", "size": 1048576},),
+            "name": {
+                "type": StringType,
+                "display_name": "Name",
+                "short_desc": "Snapshot file name",
+                "desc": "The name of the snapshot file",
+                "example_value": "my_collection-snapshot.snapshot",
+            },
+            "creation_time": {
+                "type": StringOrNothingType,
+                "display_name": "Creation Time",
+                "short_desc": "Snapshot creation time",
+                "desc": "The date/time when the snapshot was created",
+                "example_value": "2026-01-01T00:00:00",
+            },
+            "size": {
+                "type": IntOrNothingType,
+                "display_name": "Size",
+                "short_desc": "Snapshot size in bytes",
+                "desc": "The size of the snapshot file in bytes",
+                "example_value": 1048576,
             },
         };
     }

@@ -48,8 +48,9 @@ public class QdrantPointsGetDataProvider inherits QdrantDataProviderBase {
         #! Request type
         const RequestType = new QdrantPointsGetRequestDataType();
 
-        #! Response type
-        const ResponseType = new QdrantPointsGetResponseDataType();
+        #! Response type - list of point objects (Qdrant returns result as a list directly)
+        const ResponseType = new ListDataType("QdrantPointsGetResponse",
+            new QdrantPointsGetResponseElementDataType(), True);
     }
 
     #! Creates the object from constructor options
@@ -145,17 +146,31 @@ public class QdrantPointsGetRequestDataType inherits DataProvider::HashDataType 
     }
 }
 
-#! Qdrant points get response data type
-public class QdrantPointsGetResponseDataType inherits DataProvider::HashDataType {
+#! Qdrant point element data type for points get response
+public class QdrantPointsGetResponseElementDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
-            "points": {
-                "type": AutoListType,
-                "display_name": "Points",
-                "short_desc": "List of retrieved point results",
-                "desc": "A list of point result objects, each containing `id`, `payload`, and optionally `vector`",
-                "example_value": ({"id": 1, "payload": {"text": "hello"}, "vector": (0.1, 0.2, 0.3)},),
+            "id": {
+                "type": AutoType,
+                "display_name": "ID",
+                "short_desc": "Point ID",
+                "desc": "The point ID; can be an integer or a UUID string",
+                "example_value": 1,
+            },
+            "payload": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Payload",
+                "short_desc": "Point payload",
+                "desc": "The payload data stored with the point",
+                "example_value": {"text": "hello"},
+            },
+            "vector": {
+                "type": AutoType,
+                "display_name": "Vector",
+                "short_desc": "Point vector",
+                "desc": "The vector data stored with the point; can be a list of floats or a hash of named vectors",
+                "example_value": (0.1, 0.2, 0.3),
             },
         };
     }
@@ -163,6 +178,7 @@ public class QdrantPointsGetResponseDataType inherits DataProvider::HashDataType
     #! Creates the object
     constructor() {
         addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
     }
 }
 }

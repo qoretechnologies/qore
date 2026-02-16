@@ -885,7 +885,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             "collection": collection,
             "snapshot_name": snap_name,
         });
-        assertTrue(h);
+        assertTrue(h.result);
 
         # Verify snapshot was deleted
         h = list_snap.doRequest({"collection": collection});
@@ -923,7 +923,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             "location": sprintf("file:///qdrant/snapshots/%s/%s", collection, recover_snap),
             "wait": True,
         });
-        assertTrue(h);
+        assertTrue(h.result);
 
         # After recovery, the point we added should be gone
         QdrantPointsCountDataProvider count_prov(rest);
@@ -958,7 +958,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
 
         QdrantSnapshotsDeleteStorageDataProvider del_storage(rest);
         h = del_storage.doRequest({"snapshot_name": storage_snap});
-        assertTrue(h);
+        assertTrue(h.result);
     }
 
     #! Test cluster info

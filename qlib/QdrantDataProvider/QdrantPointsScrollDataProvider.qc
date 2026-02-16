@@ -131,11 +131,11 @@ public class QdrantPointsScrollRequestDataType inherits DataProvider::HashDataTy
                 "example_value": 10,
             },
             "offset": {
-                "type": IntOrNothingType,
+                "type": AutoType,
                 "display_name": "Offset",
                 "short_desc": "Point ID to start from",
                 "desc": "The point ID to start scrolling from; use the `next_page_offset` from the previous "
-                    "response to paginate",
+                    "response to paginate; can be an integer or a UUID string",
                 "example_value": 0,
             },
             "with_payload": {
@@ -181,11 +181,11 @@ public class QdrantPointsScrollResponseDataType inherits DataProvider::HashDataT
                 "example_value": ({"id": 1, "payload": {"text": "hello"}},),
             },
             "next_page_offset": {
-                "type": IntOrNothingType,
+                "type": AutoType,
                 "display_name": "Next Page Offset",
                 "short_desc": "Offset for the next page",
-                "desc": "The offset to use for the next scroll request; if not present, all points have been "
-                    "returned",
+                "desc": "The offset to use for the next scroll request; can be an integer or a UUID string; "
+                    "if not present, all points have been returned",
             },
         };
     }

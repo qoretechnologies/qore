@@ -98,7 +98,7 @@ public class QdrantSnapshotsRecoverDataProvider inherits QdrantDataProviderBase 
             }
             uri_path += sprintf("%s=%s", arg, QdrantDataProviderBase::formatQueryValue(remove req{arg}));
         }
-        return doQdrantPut(uri_path, req);
+        return {"result": doQdrantPut(uri_path, req)};
     }
 
     #! Returns the description of a successful request message, if any
