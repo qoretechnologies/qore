@@ -2185,6 +2185,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
             // The alloca cache becomes stale after any call that may invoke a closure.
+            //
+            // qore_rt_load_local() returns a ref-counted value (refSelf'd).  This
+            // is an independent reference — not aliased to the local alloca — so it
+            // must be tracked for cleanup.  Without tracking, consumers like MakeList
+            // (which do their own refSelf) leave the LoadLocal ref leaked.
             if (linst->local && linst->local->closureUse()) {
                 llvm::Value* result;
                 if (aot_mode) {
@@ -2203,6 +2208,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
+                // Track the ref-counted result for cleanup.  Also associate the
+                // tracking alloca with the loaded local's block-scope cleanup so
+                // the ref is dropped when the local is uninstantiated — not delayed
+                // until function exit.  This ensures timely object destruction at
+                // block scope exit (matching AST mode behavior).
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (block_scoped_locals.count(key)) {
+                    auto alloca_it = invoke_alloca_map.find(inst->result.id);
+                    if (alloca_it != invoke_alloca_map.end()) {
+                        local_cleanup_allocas[key].push_back(alloca_it->second);
+                    }
+                }
                 return true;
             }
 
@@ -2518,6 +2535,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // First, clear any invoke-result cleanup allocas that hold references
                 // to values stored in this local.  This drops the intermediate reference
                 // so the object can be destroyed when the runtime stack is cleared.
+                // NOTE: We do NOT clear the local_cleanup_allocas list here because
+                // multiple code paths (break, continue, normal exit) may each have
+                // their own UninstantiateLocal for the same variable.  Each path must
+                // independently generate decref code for the cleanup allocas.  At
+                // runtime, only one path executes, and the alloca is reset to NOTHING
+                // after decref, so duplicate paths (if somehow both reached) are safe.
                 auto cleanup_it = local_cleanup_allocas.find(key);
                 if (cleanup_it != local_cleanup_allocas.end()) {
                     for (llvm::Value* cleanup_alloca : cleanup_it->second) {
@@ -2526,7 +2549,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup_alloca);
                         builder->CreateCall(decref_fn, {old_val, xsink_arg});
                     }
-                    cleanup_it->second.clear();
                 }
 
                 // Clear the reload tracker for this local (if it exists).

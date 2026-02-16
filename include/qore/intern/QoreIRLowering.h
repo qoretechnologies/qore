@@ -47,6 +47,7 @@ class VarRefNode;
 class AbstractStatement;
 class StatementBlock;
 class QoreTypeInfo;
+class LVList;
 class QoreMapOperatorNode;
 class QoreSelectOperatorNode;
 class QoreFoldlOperatorNode;
@@ -228,6 +229,17 @@ private:
      */
     void emitScopeExits(size_t target_depth, bool is_error = false);
 
+    //! Emit block cleanup instructions (ScopeExit + UninstantiateLocal) from innermost to target depth
+    /** Used by return/break/continue to properly unwind both on_exit handlers and
+     *  block-scoped local variables in the correct interleaved order matching AST mode.
+     *  Within a single block, scope exits fire before lvars cleanup (on_exit runs first,
+     *  then LVListInstantiator destructor).  Across blocks, inner blocks clean up before
+     *  outer blocks.
+     *  @param target_depth the cleanup_stack depth to unwind to
+     *  @param is_error true if exiting due to an exception
+     */
+    void emitBlockCleanups(size_t target_depth, bool is_error = false);
+
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     //! Values known to never be NOTHING (produced by typed opcodes)
@@ -238,6 +250,22 @@ private:
 
     //! Stack of active scope IDs for tracking nested on_exit handlers
     std::vector<uint32_t> scope_stack;
+
+    //! Entry in the block cleanup stack for interleaved cleanup of on_exit handlers
+    //! and block-scoped local variables on break/continue/return
+    struct BlockCleanupEntry {
+        enum Type { Scope, Lvars };
+        Type type;
+        uint32_t scope_id = 0;         //!< scope ID for Scope entries
+        const LVList* lvars = nullptr;  //!< local variables for Lvars entries
+        const QoreProgramLocation* loc = nullptr; //!< location for UninstantiateLocal
+    };
+    //! Unified cleanup stack tracking both scope exits and block-scoped locals
+    /** Entries are pushed in nesting order: lvars first, then scope for each block.
+     *  This ensures correct reverse ordering on cleanup: scope exit fires before
+     *  lvars cleanup (matching AST mode's on_exit-before-LVListInstantiator ordering).
+     */
+    std::vector<BlockCleanupEntry> cleanup_stack;
 
     class GuardExceptionTargetOverrideScope {
     public:
@@ -253,8 +281,8 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
-        size_t scope_stack_depth = 0;  //!< scope_stack depth when this flow target was created
         int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
+        size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
     };
     std::vector<FlowTarget> flow_stack;

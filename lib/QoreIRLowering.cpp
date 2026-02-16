@@ -433,7 +433,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
-            // Emit ScopeExit for all active scopes before returning
+            // Emit ScopeExit for all active scopes before returning.
+            // Note: we do NOT emit UninstantiateLocal for block-scoped locals here
+            // because the pre-instantiated locals mechanism handles all local cleanup
+            // at function exit. The break/continue paths need explicit UninstantiateLocal
+            // because execution continues after the loop, but on return the function
+            // exits immediately and the caller handles cleanup.
             emitScopeExits(0, false);
             // Emit CatchCleanup for all active catch scopes before returning
             for (int i = 0; i < catch_cleanup_depth; ++i) {
@@ -452,7 +457,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!lowered.isValid()) {
             return false;
         }
-        // Now emit ScopeExit for all active scopes (fires on_exit handlers)
+        // Now emit ScopeExit for all active scopes (fires on_exit handlers).
+        // Same as ReturnNothing — no UninstantiateLocal, pre-instantiated locals
+        // mechanism handles cleanup at function exit.
         emitScopeExits(0, false);
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
@@ -514,7 +521,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+        flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -559,7 +566,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, cond_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+        flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -611,7 +618,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.createBranchIf(cond_value, body_block, exit_block);
 
         builder.setBlock(body_block);
-        flow_stack.push_back({exit_block, iter_block, false, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+        flow_stack.push_back({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             flow_stack.pop_back();
             return false;
@@ -726,8 +733,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         ft.break_target = exit_block;
         ft.continue_target = latch_block;
         ft.is_switch = false;
-        ft.scope_stack_depth = scope_stack.size();
         ft.catch_cleanup_depth = catch_cleanup_depth;
+        ft.cleanup_stack_depth = cleanup_stack.size();
         ft.old_implicit_element = old_element;
         flow_stack.push_back(ft);
         StatementBlock* body = foreach_stmt->getCode();
@@ -849,13 +856,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
-        size_t target_scope_depth = 0;
+        size_t target_cleanup_depth = 0;
         int target_catch_depth = 0;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->break_target) {
                 target = it->break_target;
-                target_scope_depth = it->scope_stack_depth;
+                target_cleanup_depth = it->cleanup_stack_depth;
                 target_catch_depth = it->catch_cleanup_depth;
                 old_elem = it->old_implicit_element;
                 break;
@@ -865,8 +872,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "break statement has no active target for IR lowering";
             return false;
         }
-        // Emit ScopeExit for scopes entered since the loop started
-        emitScopeExits(target_scope_depth, false);
+        // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
+        // since the loop started (matches AST mode's destruction ordering)
+        emitBlockCleanups(target_cleanup_depth, false);
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -880,12 +888,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     }
     if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
         QoreIRBasicBlock* target = nullptr;
-        size_t target_scope_depth = 0;
+        size_t target_cleanup_depth = 0;
         int target_catch_depth = 0;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
-                target_scope_depth = it->scope_stack_depth;
+                target_cleanup_depth = it->cleanup_stack_depth;
                 target_catch_depth = it->catch_cleanup_depth;
                 break;
             }
@@ -894,8 +902,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "continue statement has no active target for IR lowering";
             return false;
         }
-        // Emit ScopeExit for scopes entered since the loop started
-        emitScopeExits(target_scope_depth, false);
+        // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
+        // since the loop started (matches AST mode's destruction ordering)
+        emitBlockCleanups(target_cleanup_depth, false);
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -996,7 +1005,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+            flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1074,7 +1083,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+            flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -1199,7 +1208,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        flow_stack.push_back({end_block, nullptr, true, scope_stack.size(), catch_cleanup_depth, QoreIRValue()});
+        flow_stack.push_back({end_block, nullptr, true, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
@@ -1246,10 +1255,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // jumps directly to the catch block (bypassing normal ScopeExit).
         uint32_t try_scope_id = ++scope_counter;
         scope_stack.push_back(try_scope_id);
+        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Scope, try_scope_id, nullptr, nullptr});
         builder.createScopeEnter(try_scope_id);
 
         if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
             scope_stack.pop_back();
+            cleanup_stack.pop_back();
             exception_stack.pop_back();
             exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
@@ -1263,9 +1274,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // inner scopes already cleaned up their handlers)
             builder.createScopeExit(try_scope_id, false);
             scope_stack.pop_back();
+            cleanup_stack.pop_back();
             builder.createBranch(merge_block);
         } else {
             scope_stack.pop_back();
+            cleanup_stack.pop_back();
         }
 
         builder.setBlock(catch_block);
@@ -1360,6 +1373,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         return false;
     }
 
+    // Get the block's local variables for cleanup
+    const LVList* lvars = block->getLVList();
+
+    // Push lvars to cleanup_stack BEFORE scope entry.
+    // This ensures correct reverse ordering on cleanup: scope exit fires before
+    // lvars cleanup, matching AST mode where on_exit handlers run inside execIntern()
+    // before LVListInstantiator destructor fires in execImpl().
+    if (lvars) {
+        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Lvars, 0, lvars, block->loc});
+    }
+
     // Check if this block has on_exit/on_success/on_error handlers
     bool has_on_block_exit = block->hasOnBlockExit();
     uint32_t scope_id = 0;
@@ -1368,11 +1392,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // Allocate a unique scope ID and emit ScopeEnter
         scope_id = ++scope_counter;
         scope_stack.push_back(scope_id);
+        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Scope, scope_id, nullptr, nullptr});
         builder.createScopeEnter(scope_id);
     }
-
-    // Get the block's local variables for cleanup
-    const LVList* lvars = block->getLVList();
 
     bool terminated = false;
     for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
@@ -1382,6 +1404,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (!lowerStatement(*it, error)) {
             if (has_on_block_exit) {
                 scope_stack.pop_back();
+                cleanup_stack.pop_back();
+            }
+            if (lvars) {
+                cleanup_stack.pop_back();
             }
             return false;
         }
@@ -1392,20 +1418,27 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     }
 
     // Emit ScopeExit if we have on_exit handlers and didn't terminate early
-    // (early termination like return/break/continue will handle ScopeExit themselves)
+    // (early termination like return/break/continue will handle ScopeExit themselves
+    // via emitBlockCleanups)
     if (has_on_block_exit) {
         if (!terminated) {
             builder.createScopeExit(scope_id, false);
         }
         scope_stack.pop_back();
+        cleanup_stack.pop_back();
     }
 
     // Emit UninstantiateLocal for block-scoped local variables in reverse order
     // (reverse order ensures destructors are called in LIFO order like in AST mode)
+    // When terminated, the break/continue/return handler has already emitted these
+    // via emitBlockCleanups
     if (lvars && !terminated) {
         for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
             builder.createUninstantiateLocal(lvars->lv[i], block->loc);
         }
+    }
+    if (lvars) {
+        cleanup_stack.pop_back();
     }
 
     return true;
@@ -1417,6 +1450,26 @@ void QoreIRLowering::emitScopeExits(size_t target_depth, bool is_error) {
     for (size_t i = scope_stack.size(); i > target_depth; --i) {
         uint32_t scope_id = scope_stack[i - 1];
         builder.createScopeExit(scope_id, is_error);
+    }
+}
+
+void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error) {
+    // Emit interleaved ScopeExit and UninstantiateLocal instructions from innermost
+    // to outermost block until we reach the target depth.  Within each block, entries
+    // were pushed as: lvars first, then scope.  Reverse iteration gives: scope exit
+    // first (fires on_exit handlers), then lvars cleanup (destroys block-scoped locals).
+    // This matches AST mode where on_exit runs inside execIntern() before
+    // LVListInstantiator destructor fires in execImpl().
+    for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
+        const BlockCleanupEntry& entry = cleanup_stack[i - 1];
+        if (entry.type == BlockCleanupEntry::Scope) {
+            builder.createScopeExit(entry.scope_id, is_error);
+        } else {
+            assert(entry.lvars);
+            for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
+                builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
+            }
+        }
     }
 }
 
