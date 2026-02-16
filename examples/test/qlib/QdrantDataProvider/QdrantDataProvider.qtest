@@ -1,0 +1,2230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/QdrantDataProvider
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class QdrantDataProviderTest
+
+public class QdrantDataProviderTest inherits QUnit::Test {
+    private {
+        RestClient rest;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    # checkModule helper
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("QdrantDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("serviceTest", \serviceTest());
+        addTestCase("collectionsTest", \collectionsTest());
+        addTestCase("pointsTest", \pointsTest());
+        addTestCase("searchTest", \searchTest());
+        addTestCase("aliasesTest", \aliasesTest());
+        addTestCase("snapshotsTest", \snapshotsTest());
+        addTestCase("clusterTest", \clusterTest());
+        addTestCase("tablesTest", \tablesTest());
+        addTestCase("tablesCrudTest", \tablesCrudTest());
+        addTestCase("tablesExpressionTest", \tablesExpressionTest());
+        addTestCase("connectionTest", \connectionTest());
+        addTestCase("factoryTest", \factoryTest());
+        addTestCase("providerHierarchyTest", \providerHierarchyTest());
+        addTestCase("negativeTests", \negativeTests());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    #! Test service endpoints (health, liveness, readiness, telemetry, metrics, issues)
+    private serviceTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Test health endpoint
+        QdrantServiceHealthDataProvider health(rest);
+        auto h = health.doRequest();
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("title"));
+
+        # Test liveness - returns plain text
+        QdrantServiceLivenessDataProvider liveness(rest);
+        h = liveness.doRequest();
+        assertEq(Type::String, h.type());
+
+        # Test readiness - returns plain text
+        QdrantServiceReadinessDataProvider readiness(rest);
+        h = readiness.doRequest();
+        assertEq(Type::String, h.type());
+
+        # Test telemetry
+        QdrantServiceTelemetryDataProvider telemetry(rest);
+        h = telemetry.doRequest();
+        assertEq(Type::Hash, h.type());
+
+        # Test telemetry with details_level
+        h = telemetry.doRequest({"details_level": 0});
+        assertEq(Type::Hash, h.type());
+
+        # Test metrics
+        QdrantServiceMetricsDataProvider metrics(rest);
+        h = metrics.doRequest();
+        # metrics returns Prometheus text format, check it's non-empty
+        assertTrue(h.val());
+
+        # Test issues - returns .result which has issues key
+        QdrantServiceIssuesDataProvider issues(rest);
+        h = issues.doRequest();
+        assertEq(Type::Hash, h.type());
+    }
+
+    #! Test collection lifecycle: create → exists → get → list → update → create-index → delete-index → delete
+    private collectionsTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create(rest);
+        auto h = create.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+        assertTrue(h);
+
+        on_exit {
+            # Delete collection
+            QdrantCollectionsDeleteDataProvider del(rest);
+            try {
+                del.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Check collection exists
+        QdrantCollectionsExistsDataProvider exists_prov(rest);
+        h = exists_prov.doRequest({"collection": collection});
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.exists);
+
+        # Get collection info
+        QdrantCollectionsGetDataProvider get_prov(rest);
+        h = get_prov.doRequest({"collection": collection});
+        assertEq(Type::Hash, h.type());
+        assertEq("green", h.status);
+
+        # List collections
+        QdrantCollectionsListDataProvider list_prov(rest);
+        h = list_prov.doRequest();
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("collections"));
+        assertTrue(h.collections.size() > 0);
+        # verify our collection is in the list
+        bool found = False;
+        foreach hash<auto> c in (h.collections) {
+            if (c.name == collection) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found);
+
+        # Update collection (change optimizer settings)
+        QdrantCollectionsUpdateDataProvider update(rest);
+        h = update.doRequest({
+            "collection": collection,
+            "optimizers_config": {
+                "indexing_threshold": 10000,
+            },
+        });
+        assertTrue(h);
+
+        # Create payload index
+        QdrantCollectionsCreateIndexDataProvider create_idx(rest);
+        h = create_idx.doRequest({
+            "collection": collection,
+            "field_name": "color",
+            "field_schema": "keyword",
+            "wait": True,
+        });
+        assertEq(Type::Hash, h.type());
+
+        # Verify index was created
+        h = get_prov.doRequest({"collection": collection});
+        assertTrue(h.payload_schema.hasKey("color"));
+
+        # Delete payload index
+        QdrantCollectionsDeleteIndexDataProvider del_idx(rest);
+        h = del_idx.doRequest({
+            "collection": collection,
+            "field_name": "color",
+            "wait": True,
+        });
+        assertEq(Type::Hash, h.type());
+
+        # Verify non-existent collection does not exist
+        h = exists_prov.doRequest({"collection": "nonexistent_collection_xyz_12345"});
+        assertFalse(h.exists);
+    }
+
+    #! Test point operations: upsert, get, scroll, count, payload CRUD, delete
+    private pointsTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_points_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection with named vectors
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Upsert points
+        QdrantPointsUpsertDataProvider upsert(rest);
+        auto h = upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (0.05, 0.61, 0.76, 0.74),
+                    "payload": {"city": "Berlin", "country": "Germany", "population": 3644826},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.19, 0.81, 0.75, 0.11),
+                    "payload": {"city": "London", "country": "UK", "population": 8982000},
+                },
+                {
+                    "id": 3,
+                    "vector": (0.36, 0.55, 0.47, 0.94),
+                    "payload": {"city": "Paris", "country": "France", "population": 2161000},
+                },
+                {
+                    "id": 4,
+                    "vector": (0.18, 0.01, 0.85, 0.80),
+                    "payload": {"city": "Moscow", "country": "Russia", "population": 11920000},
+                },
+                {
+                    "id": 5,
+                    "vector": (0.24, 0.18, 0.22, 0.44),
+                    "payload": {"city": "New York", "country": "USA", "population": 8336817},
+                },
+            ),
+        });
+        assertEq("completed", h.status);
+
+        # Get points by ID
+        QdrantPointsGetDataProvider get_pts(rest);
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1, 2),
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertEq(Type::List, h.type());
+        assertEq(2, h.size());
+        assertEq(1, h[0].id);
+        assertEq("Berlin", h[0].payload.city);
+        assertEq(4, h[0].vector.size());
+
+        # Count points
+        QdrantPointsCountDataProvider count(rest);
+        h = count.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(5, h.count);
+
+        # Count with filter
+        h = count.doRequest({
+            "collection": collection,
+            "filter": {
+                "must": ({
+                    "key": "country",
+                    "match": {"value": "Germany"},
+                },),
+            },
+            "exact": True,
+        });
+        assertEq(1, h.count);
+
+        # Scroll points
+        QdrantPointsScrollDataProvider scroll(rest);
+        h = scroll.doRequest({
+            "collection": collection,
+            "limit": 2,
+            "with_payload": True,
+        });
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("points"));
+        assertEq(2, h.points.size());
+        assertTrue(h.hasKey("next_page_offset"));
+
+        # Scroll next page
+        h = scroll.doRequest({
+            "collection": collection,
+            "limit": 2,
+            "offset": h.next_page_offset,
+            "with_payload": True,
+        });
+        assertEq(2, h.points.size());
+
+        # Set payload
+        QdrantPointsSetPayloadDataProvider set_payload(rest);
+        h = set_payload.doRequest({
+            "collection": collection,
+            "wait": True,
+            "payload": {"language": "German"},
+            "points": (1,),
+        });
+        assertEq("completed", h.status);
+
+        # Verify payload was set
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1,),
+            "with_payload": True,
+        });
+        assertEq("German", h[0].payload.language);
+        assertEq("Berlin", h[0].payload.city);  # existing payload preserved
+
+        # Overwrite payload (replaces entirely)
+        QdrantPointsOverwritePayloadDataProvider overwrite_payload(rest);
+        h = overwrite_payload.doRequest({
+            "collection": collection,
+            "wait": True,
+            "payload": {"new_field": "value"},
+            "points": (2,),
+        });
+        assertEq("completed", h.status);
+
+        # Verify payload was overwritten (old payload gone)
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (2,),
+            "with_payload": True,
+        });
+        assertEq("value", h[0].payload.new_field);
+        assertFalse(h[0].payload.hasKey("city"));
+
+        # Delete payload keys
+        QdrantPointsDeletePayloadDataProvider del_payload(rest);
+        h = del_payload.doRequest({
+            "collection": collection,
+            "wait": True,
+            "keys": ("language",),
+            "points": (1,),
+        });
+        assertEq("completed", h.status);
+
+        # Verify payload key was deleted
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1,),
+            "with_payload": True,
+        });
+        assertFalse(h[0].payload.hasKey("language"));
+        assertEq("Berlin", h[0].payload.city);  # other keys preserved
+
+        # Clear all payload
+        QdrantPointsClearPayloadDataProvider clear_payload(rest);
+        h = clear_payload.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (3,),
+        });
+        assertEq("completed", h.status);
+
+        # Verify payload was cleared
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (3,),
+            "with_payload": True,
+        });
+        assertEq(0, h[0].payload.size());
+
+        # Delete points by ID
+        QdrantPointsDeleteDataProvider del_pts(rest);
+        h = del_pts.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (4, 5),
+        });
+        assertEq("completed", h.status);
+
+        # Verify points were deleted
+        h = count.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(3, h.count);
+
+        # Delete by filter
+        h = del_pts.doRequest({
+            "collection": collection,
+            "wait": True,
+            "filter": {
+                "must": ({
+                    "key": "city",
+                    "match": {"value": "Berlin"},
+                },),
+            },
+        });
+        assertEq("completed", h.status);
+
+        # Verify filter delete worked
+        h = count.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(2, h.count);
+
+        # Test batch update: upsert + set payload in one request
+        QdrantPointsBatchUpdateDataProvider batch_update(rest);
+        h = batch_update.doRequest({
+            "collection": collection,
+            "wait": True,
+            "operations": (
+                {"upsert": {"points": (
+                    {"id": 100, "vector": (0.9, 0.8, 0.7, 0.6), "payload": {"city": "Oslo"}},
+                    {"id": 101, "vector": (0.6, 0.7, 0.8, 0.9), "payload": {"city": "Helsinki"}},
+                )}},
+                {"set_payload": {"payload": {"batch": True}, "points": (100, 101)}},
+            ),
+        });
+        assertEq(Type::List, h.type());
+        assertEq(2, h.size());
+        assertEq("completed", h[0].status);
+        assertEq("completed", h[1].status);
+
+        # Verify batch results
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (100, 101),
+            "with_payload": True,
+        });
+        assertEq(2, h.size());
+        assertTrue(h[0].payload.batch);
+        assertTrue(h[1].payload.batch);
+
+        # Clean up batch points
+        h = del_pts.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (100, 101),
+        });
+        assertEq("completed", h.status);
+
+        # Test UUID point IDs
+        string uuid1 = "550e8400-e29b-41d4-a716-446655440000";
+        string uuid2 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+        h = upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": uuid1,
+                    "vector": (0.11, 0.22, 0.33, 0.44),
+                    "payload": {"city": "Tokyo", "country": "Japan"},
+                },
+                {
+                    "id": uuid2,
+                    "vector": (0.55, 0.66, 0.77, 0.88),
+                    "payload": {"city": "Seoul", "country": "South Korea"},
+                },
+            ),
+        });
+        assertEq("completed", h.status);
+
+        # Get UUID points
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (uuid1, uuid2),
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertEq(Type::List, h.type());
+        assertEq(2, h.size());
+        assertEq("Tokyo", h[0].payload.city);
+        assertEq(4, h[0].vector.size());
+
+        # Delete UUID points
+        h = del_pts.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (uuid1, uuid2),
+        });
+        assertEq("completed", h.status);
+
+        # Get points without payload (with_payload=False)
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (2,),
+            "with_payload": False,
+            "with_vector": False,
+        });
+        assertEq(Type::List, h.type());
+        assertEq(1, h.size());
+        assertEq(2, h[0].id);
+    }
+
+    #! Test search (query) operations
+    private searchTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_search_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Upsert test points
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (0.05, 0.61, 0.76, 0.74),
+                    "payload": {"city": "Berlin", "category": "A"},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.19, 0.81, 0.75, 0.11),
+                    "payload": {"city": "London", "category": "A"},
+                },
+                {
+                    "id": 3,
+                    "vector": (0.36, 0.55, 0.47, 0.94),
+                    "payload": {"city": "Paris", "category": "B"},
+                },
+                {
+                    "id": 4,
+                    "vector": (0.18, 0.01, 0.85, 0.80),
+                    "payload": {"city": "Moscow", "category": "B"},
+                },
+                {
+                    "id": 5,
+                    "vector": (0.24, 0.18, 0.22, 0.44),
+                    "payload": {"city": "New York", "category": "C"},
+                },
+            ),
+        });
+
+        # Basic vector search
+        QdrantSearchQueryDataProvider query(rest);
+        auto h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 3,
+            "with_payload": True,
+        });
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("points"));
+        assertTrue(h.points.size() <= 3);
+        assertTrue(h.points.size() > 0);
+        # results should have score
+        assertTrue(h.points[0].hasKey("score"));
+
+        # Filtered search
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "filter": {
+                "must": ({
+                    "key": "category",
+                    "match": {"value": "A"},
+                },),
+            },
+            "limit": 10,
+            "with_payload": True,
+        });
+        assertTrue(h.points.size() > 0);
+        foreach hash<auto> pt in (h.points) {
+            assertEq("A", pt.payload.category);
+        }
+
+        # Search with with_vector to return vectors
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertTrue(h.points.size() > 0);
+        # verify vectors are returned
+        assertTrue(h.points[0].hasKey("vector"));
+        assertEq(4, h.points[0].vector.size());
+
+        # Search with offset for pagination
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "offset": 0,
+            "with_payload": True,
+        });
+        assertTrue(h.points.size() > 0);
+        auto first_page_id = h.points[0].id;
+        # Get second page
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "offset": 2,
+            "with_payload": True,
+        });
+        assertEq(Type::Hash, h.type());
+        # second page should have different results or be shorter
+        if (h.points.size() > 0) {
+            assertNeq(first_page_id, h.points[0].id);
+        }
+
+        # Search with score threshold
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "score_threshold": 0.99,
+            "with_payload": True,
+        });
+        # with a very high threshold, we may get fewer or no results
+        assertEq(Type::Hash, h.type());
+
+        # Search with impossible filter (should return empty)
+        h = query.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "filter": {
+                "must": ({
+                    "key": "category",
+                    "match": {"value": "NONEXISTENT_CATEGORY_XYZ"},
+                },),
+            },
+            "limit": 10,
+            "with_payload": True,
+        });
+        assertEq(Type::Hash, h.type());
+        assertEq(0, h.points.size());
+
+        # Batch query
+        QdrantSearchQueryBatchDataProvider batch(rest);
+        h = batch.doRequest({
+            "collection": collection,
+            "searches": (
+                {
+                    "query": (0.2, 0.1, 0.9, 0.7),
+                    "limit": 2,
+                    "with_payload": True,
+                },
+                {
+                    "query": (0.05, 0.61, 0.76, 0.74),
+                    "limit": 2,
+                    "with_payload": True,
+                },
+            ),
+        });
+        assertEq(Type::List, h.type());
+        assertEq(2, h.size());
+
+        # Create payload index for group search
+        QdrantCollectionsCreateIndexDataProvider create_idx(rest);
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "category",
+            "field_schema": "keyword",
+        });
+
+        # Search with groups
+        QdrantSearchQueryGroupsDataProvider groups(rest);
+        h = groups.doRequest({
+            "collection": collection,
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "group_by": "category",
+            "group_size": 1,
+            "limit": 3,
+            "with_payload": True,
+        });
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("groups"));
+        assertTrue(h.groups.size() > 0);
+    }
+
+    #! Test alias operations
+    private aliasesTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_alias_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+        string alias_name = "alias_" + get_random_string(8);
+        alias_name =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            # Clean up alias first, then collection
+            QdrantAliasesUpdateDataProvider update_alias(rest);
+            try {
+                update_alias.doRequest({
+                    "actions": ({
+                        "delete_alias": {
+                            "alias_name": alias_name,
+                        },
+                    },),
+                });
+            } catch () {
+                # ignore
+            }
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore
+            }
+        }
+
+        # Create alias
+        QdrantAliasesUpdateDataProvider update_alias(rest);
+        auto h = update_alias.doRequest({
+            "actions": ({
+                "create_alias": {
+                    "collection_name": collection,
+                    "alias_name": alias_name,
+                },
+            },),
+        });
+        assertTrue(h);
+
+        # List all aliases
+        QdrantAliasesListAllDataProvider list_all(rest);
+        h = list_all.doRequest();
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("aliases"));
+        bool found = False;
+        foreach hash<auto> a in (h.aliases) {
+            if (a.alias_name == alias_name) {
+                assertEq(collection, a.collection_name);
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found);
+
+        # List collection aliases
+        QdrantAliasesListCollectionDataProvider list_col(rest);
+        h = list_col.doRequest({"collection": collection});
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("aliases"));
+        assertTrue(h.aliases.size() > 0);
+        assertEq(alias_name, h.aliases[0].alias_name);
+
+        # Rename alias (delete + create new)
+        string alias_name2 = "alias2_" + get_random_string(8);
+        alias_name2 =~ tr/A-Z/a-z/;
+        h = update_alias.doRequest({
+            "actions": (
+                {
+                    "delete_alias": {
+                        "alias_name": alias_name,
+                    },
+                },
+                {
+                    "create_alias": {
+                        "collection_name": collection,
+                        "alias_name": alias_name2,
+                    },
+                },
+            ),
+        });
+        assertTrue(h);
+
+        # Verify old alias gone, new alias exists
+        h = list_col.doRequest({"collection": collection});
+        assertEq(1, h.aliases.size());
+        assertEq(alias_name2, h.aliases[0].alias_name);
+
+        # Clean up: update alias_name for on_exit cleanup
+        alias_name = alias_name2;
+    }
+
+    #! Test snapshot operations
+    private snapshotsTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_snap_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore
+            }
+        }
+
+        # Create a collection snapshot
+        QdrantSnapshotsCreateCollectionDataProvider create_snap(rest);
+        auto h = create_snap.doRequest({"collection": collection, "wait": True});
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("name"));
+        string snap_name = h.name;
+
+        # List collection snapshots
+        QdrantSnapshotsListCollectionDataProvider list_snap(rest);
+        h = list_snap.doRequest({"collection": collection});
+        assertEq(Type::List, h.type());
+        assertTrue(h.size() > 0);
+        bool found = False;
+        foreach hash<auto> s in (h) {
+            if (s.name == snap_name) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found);
+
+        # Delete collection snapshot
+        QdrantSnapshotsDeleteCollectionDataProvider del_snap(rest);
+        h = del_snap.doRequest({
+            "collection": collection,
+            "snapshot_name": snap_name,
+        });
+        assertTrue(h.result);
+
+        # Verify snapshot was deleted
+        h = list_snap.doRequest({"collection": collection});
+        found = False;
+        foreach hash<auto> s in (h) {
+            if (s.name == snap_name) {
+                found = True;
+                break;
+            }
+        }
+        assertFalse(found);
+
+        # Test snapshot recover: create a snapshot, add data, recover from snapshot
+        create_snap = new QdrantSnapshotsCreateCollectionDataProvider(rest);
+        h = create_snap.doRequest({"collection": collection, "wait": True});
+        assertEq(Type::Hash, h.type());
+        string recover_snap = h.name;
+
+        # Add a point after the snapshot
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": ({
+                "id": 1,
+                "vector": (0.1, 0.2, 0.3, 0.4),
+                "payload": {"key": "after_snapshot"},
+            },),
+        });
+
+        # Recover from snapshot (restores the collection to snapshot state)
+        QdrantSnapshotsRecoverDataProvider recover(rest);
+        h = recover.doRequest({
+            "collection": collection,
+            "location": sprintf("file:///qdrant/snapshots/%s/%s", collection, recover_snap),
+            "wait": True,
+        });
+        assertTrue(h.result);
+
+        # After recovery, the point we added should be gone
+        QdrantPointsCountDataProvider count_prov(rest);
+        h = count_prov.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(0, h.count);
+
+        # Clean up the recover snapshot
+        del_snap = new QdrantSnapshotsDeleteCollectionDataProvider(rest);
+        try {
+            del_snap.doRequest({
+                "collection": collection,
+                "snapshot_name": recover_snap,
+            });
+        } catch () {
+            # ignore
+        }
+
+        # Test full storage snapshot operations
+        QdrantSnapshotsCreateStorageDataProvider create_storage(rest);
+        h = create_storage.doRequest({"wait": True});
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("name"));
+        string storage_snap = h.name;
+
+        QdrantSnapshotsListStorageDataProvider list_storage(rest);
+        h = list_storage.doRequest();
+        assertEq(Type::List, h.type());
+        assertTrue(h.size() > 0);
+
+        QdrantSnapshotsDeleteStorageDataProvider del_storage(rest);
+        h = del_storage.doRequest({"snapshot_name": storage_snap});
+        assertTrue(h.result);
+    }
+
+    #! Test cluster info
+    private clusterTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Get cluster info (works even in single-node mode)
+        QdrantClusterInfoDataProvider cluster_info(rest);
+        auto h = cluster_info.doRequest();
+        assertEq(Type::Hash, h.type());
+        assertTrue(h.hasKey("status"));
+
+        # Collection cluster info
+        string collection = "test_cluster_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore
+            }
+        }
+
+        QdrantClusterCollectionInfoDataProvider col_cluster(rest);
+        h = col_cluster.doRequest({"collection": collection});
+        assertEq(Type::Hash, h.type());
+
+        # Test cluster recover (triggers Raft consensus recovery; returns 500 on standalone mode)
+        QdrantClusterRecoverDataProvider cluster_recover(rest);
+        try {
+            h = cluster_recover.doRequest();
+            assertTrue(h);
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected on standalone Qdrant instances
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test cluster hierarchy navigation
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider cluster_parent = root.getChildProvider("cluster");
+        *list<string> cluster_children = cluster_parent.getChildProviderNames();
+        assertTrue(cluster_children.contains("info"));
+        assertTrue(cluster_children.contains("recover"));
+        assertTrue(cluster_children.contains("remove-peer"));
+        assertTrue(cluster_children.contains("collection-info"));
+        assertTrue(cluster_children.contains("update-collection"));
+        assertTrue(cluster_children.contains("create-shard-key"));
+        assertTrue(cluster_children.contains("delete-shard-key"));
+    }
+
+    #! Test tables (record-based search) provider
+    private tablesTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_tables_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Upsert test points
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (0.05, 0.61, 0.76, 0.74),
+                    "payload": {"city": "Berlin", "category": "A"},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.19, 0.81, 0.75, 0.11),
+                    "payload": {"city": "London", "category": "A"},
+                },
+                {
+                    "id": 3,
+                    "vector": (0.36, 0.55, 0.47, 0.94),
+                    "payload": {"city": "Paris", "category": "B"},
+                },
+                {
+                    "id": 4,
+                    "vector": (0.18, 0.01, 0.85, 0.80),
+                    "payload": {"city": "Moscow", "category": "B"},
+                },
+                {
+                    "id": 5,
+                    "vector": (0.24, 0.18, 0.22, 0.44),
+                    "payload": {"city": "New York", "category": "C"},
+                },
+            ),
+        });
+
+        # Navigate to the tables provider and verify test collection appears as child
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider tables = root.getChildProvider("tables");
+        *list<string> table_children = tables.getChildProviderNames();
+        assertTrue(table_children.contains(collection));
+
+        # Get the collection table provider
+        AbstractDataProvider col_prov = tables.getChildProvider(collection);
+        assertEq(collection, col_prov.getName());
+
+        # Verify provider info
+        hash<DataProvider::DataProviderInfo> info = col_prov.getInfo();
+        assertTrue(info.has_record);
+        assertTrue(info.supports_read);
+        assertTrue(info.supports_native_search);
+
+        # Basic search with query vector
+        AbstractDataProviderRecordIterator iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 3,
+        });
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> rec = iter.getValue();
+            assertTrue(rec.hasKey("id"));
+            assertTrue(rec.hasKey("score"));
+            assertTrue(rec.hasKey("payload"));
+            ++count;
+        }
+        assertTrue(count > 0);
+        assertTrue(count <= 3);
+
+        # Test limit option
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+        });
+        count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertTrue(count <= 2);
+
+        # Test offset option
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "offset": 0,
+        });
+        list<auto> first_page = ();
+        while (iter.next()) {
+            first_page += iter.getValue();
+        }
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "offset": 2,
+        });
+        list<auto> second_page = ();
+        while (iter.next()) {
+            second_page += iter.getValue();
+        }
+        if (first_page && second_page) {
+            assertNeq(first_page[0].id, second_page[0].id);
+        }
+
+        # Test filter search option
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "filter": {
+                "must": ({
+                    "key": "category",
+                    "match": {"value": "A"},
+                },),
+            },
+            "limit": 10,
+        });
+        while (iter.next()) {
+            assertEq("A", iter.getValue().payload.category);
+        }
+
+        # Test with_vector option
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "limit": 2,
+            "with_vector": True,
+        });
+        assertTrue(iter.next());
+        hash<auto> rec = iter.getValue();
+        assertTrue(rec.hasKey("vector"));
+        assertEq(4, rec.vector.size());
+
+        # Test impossible filter returns empty results
+        iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.2, 0.1, 0.9, 0.7),
+            "filter": {
+                "must": ({
+                    "key": "category",
+                    "match": {"value": "NONEXISTENT_CATEGORY_XYZ"},
+                },),
+            },
+            "limit": 10,
+        });
+        count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(0, count);
+
+        # Test non-existent collection returns NOTHING
+        *AbstractDataProvider no_prov = tables.getChildProvider("nonexistent_collection_xyz_999");
+        assertNothing(no_prov);
+
+        # Test record type
+        *hash<string, AbstractDataField> rec_type = col_prov.getRecordType();
+        assertTrue(rec_type.hasKey("id"));
+        assertTrue(rec_type.hasKey("score"));
+        assertTrue(rec_type.hasKey("payload"));
+        assertTrue(rec_type.hasKey("vector"));
+        assertTrue(rec_type.hasKey("version"));
+        assertTrue(rec_type.hasKey("shard_key"));
+    }
+
+    #! Test table CRUD operations (create, upsert, update, delete, bulk)
+    private tablesCrudTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_crud_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Get the collection table provider
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider col_prov = root.getChildProviderEx("tables").getChildProviderEx(collection);
+
+        # Verify provider info includes CRUD capabilities
+        hash<DataProvider::DataProviderInfo> info = col_prov.getInfo();
+        assertTrue(info.supports_create);
+        assertTrue(info.supports_upsert);
+        assertTrue(info.supports_update);
+        assertTrue(info.supports_delete);
+        assertTrue(info.supports_bulk_create);
+        assertTrue(info.supports_bulk_upsert);
+
+        # ---- CREATE ----
+        *hash<auto> created = col_prov.createRecord({
+            "id": 1,
+            "vector": (0.05, 0.61, 0.76, 0.74),
+            "payload": {"city": "Berlin", "category": "A"},
+        }, {"wait": True});
+        assertEq(1, created.id);
+        assertEq("Berlin", created.payload.city);
+
+        # Create more points
+        col_prov.createRecord({
+            "id": 2,
+            "vector": (0.19, 0.81, 0.75, 0.11),
+            "payload": {"city": "London", "category": "A"},
+        }, {"wait": True});
+        col_prov.createRecord({
+            "id": 3,
+            "vector": (0.36, 0.55, 0.47, 0.94),
+            "payload": {"city": "Paris", "category": "B"},
+        }, {"wait": True});
+
+        # Verify created points via search
+        AbstractDataProviderRecordIterator iter = col_prov.searchRecords(NOTHING, {
+            "query": (0.05, 0.61, 0.76, 0.74),
+            "limit": 10,
+        });
+        int count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(3, count);
+
+        # ---- UPSERT ----
+        # Upsert a new point
+        string upsert_result = col_prov.upsertRecord({
+            "id": 4,
+            "vector": (0.18, 0.01, 0.85, 0.80),
+            "payload": {"city": "Moscow", "category": "B"},
+        }, {"wait": True});
+        assertEq(UpsertResultInserted, upsert_result);
+
+        # Upsert overwrites existing point
+        col_prov.upsertRecord({
+            "id": 1,
+            "vector": (0.99, 0.88, 0.77, 0.66),
+            "payload": {"city": "Berlin", "category": "A", "updated": True},
+        }, {"wait": True});
+
+        # Verify upsert overwrote point 1
+        QdrantPointsGetDataProvider get_pts(rest);
+        auto h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1,),
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertTrue(h[0].payload.updated);
+        # verify vector was replaced
+        assertEq(4, h[0].vector.size());
+
+        # ---- UPDATE payload only ----
+        int updated_count = col_prov.updateRecords(
+            {"payload": {"language": "German"}},
+            {"id": 1},
+            {"wait": True},
+        );
+        assertEq(1, updated_count);
+
+        # Verify payload was merged (not replaced)
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1,),
+            "with_payload": True,
+        });
+        assertEq("German", h[0].payload.language);
+        assertEq("Berlin", h[0].payload.city);  # existing payload preserved
+
+        # ---- UPDATE vector only ----
+        list<float> new_vector = (0.11, 0.22, 0.33, 0.44);
+        updated_count = col_prov.updateRecords(
+            {"vector": new_vector},
+            {"id": 2},
+            {"wait": True},
+        );
+        assertEq(1, updated_count);
+
+        # Verify vector was updated
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (2,),
+            "with_vector": True,
+        });
+        assertEq(4, h[0].vector.size());
+
+        # ---- UPDATE both vector and payload (batch API) ----
+        updated_count = col_prov.updateRecords(
+            {
+                "vector": (0.55, 0.66, 0.77, 0.88),
+                "payload": {"city": "London", "updated_both": True},
+            },
+            {"id": 2},
+            {"wait": True},
+        );
+        assertEq(1, updated_count);
+
+        # Verify both updated
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (2,),
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertTrue(h[0].payload.updated_both);
+        assertEq("London", h[0].payload.city);
+        assertEq(4, h[0].vector.size());
+
+        # ---- DELETE ----
+        int deleted_count = col_prov.deleteRecords({"id": 4}, {"wait": True});
+        assertEq(1, deleted_count);
+
+        # Verify point was deleted
+        QdrantPointsCountDataProvider count_prov(rest);
+        h = count_prov.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(3, h.count);
+
+        # Delete multiple points
+        deleted_count = col_prov.deleteRecords({"id": (2, 3)}, {"wait": True});
+        assertEq(2, deleted_count);
+
+        h = count_prov.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(1, h.count);
+
+        # ---- BULK UPSERT ----
+        # Clean up remaining point first
+        col_prov.deleteRecords({"id": 1}, {"wait": True});
+
+        {
+            AbstractDataProviderBulkOperation bulk = col_prov.getBulkUpserter();
+            on_success bulk.flush();
+            on_error bulk.discard();
+
+            for (int i = 1; i <= 20; ++i) {
+                bulk.queueData({
+                    "id": i,
+                    "vector": (i * 0.01, i * 0.02, i * 0.03, i * 0.04),
+                    "payload": {"index": i},
+                });
+            }
+        }
+
+        # Verify all bulk points were created
+        h = count_prov.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(20, h.count);
+
+        # Verify bulk data integrity
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1, 10, 20),
+            "with_payload": True,
+            "with_vector": True,
+        });
+        assertEq(3, h.size());
+
+        # ---- BULK INSERT (same as upsert for Qdrant) ----
+        {
+            AbstractDataProviderBulkOperation bulk = col_prov.getBulkInserter();
+            on_success bulk.flush();
+            on_error bulk.discard();
+
+            # Overwrite first 5 points with new data
+            for (int i = 1; i <= 5; ++i) {
+                bulk.queueData({
+                    "id": i,
+                    "vector": (0.9, 0.8, 0.7, 0.6),
+                    "payload": {"index": i, "bulk_insert": True},
+                });
+            }
+        }
+
+        # Verify bulk insert overwrote existing points
+        h = get_pts.doRequest({
+            "collection": collection,
+            "ids": (1,),
+            "with_payload": True,
+        });
+        assertTrue(h[0].payload.bulk_insert);
+
+        # Verify total count unchanged (overwrite, not duplicates)
+        h = count_prov.doRequest({
+            "collection": collection,
+            "exact": True,
+        });
+        assertEq(20, h.count);
+
+        # ---- NEGATIVE: update without id ----
+        try {
+            col_prov.updateRecords({"payload": {"x": 1}}, NOTHING, {"wait": True});
+            fail("Expected exception for missing id");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "QDRANT-UPDATE-ERROR" || ex.err == "UPDATE-RECORDS-ERROR");
+        }
+
+        # ---- NEGATIVE: delete without id ----
+        try {
+            col_prov.deleteRecords(NOTHING, {"wait": True});
+            fail("Expected exception for missing id");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "QDRANT-DELETE-ERROR" || ex.err == "DELETE-RECORDS-ERROR");
+        }
+
+        # ---- NEGATIVE: update with no payload or vector ----
+        try {
+            col_prov.updateRecords({"score": 0.5}, {"id": 1}, {"wait": True});
+            fail("Expected exception for empty update");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "QDRANT-UPDATE-ERROR" || ex.err == "UPDATE-RECORDS-ERROR");
+        }
+    }
+
+    #! Test table search expression support (where_cond with DataProvider expressions)
+    private tablesExpressionTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_expr_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Upsert test points with varied payload
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (0.05, 0.61, 0.76, 0.74),
+                    "payload": {"city": "Berlin", "country": "Germany", "population": 3644826},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.19, 0.81, 0.75, 0.11),
+                    "payload": {"city": "London", "country": "UK", "population": 8982000},
+                },
+                {
+                    "id": 3,
+                    "vector": (0.36, 0.55, 0.47, 0.94),
+                    "payload": {"city": "Paris", "country": "France", "population": 2161000},
+                },
+                {
+                    "id": 4,
+                    "vector": (0.18, 0.01, 0.85, 0.80),
+                    "payload": {"city": "Moscow", "country": "Russia", "population": 11920000},
+                },
+                {
+                    "id": 5,
+                    "vector": (0.24, 0.18, 0.22, 0.44),
+                    "payload": {"city": "New York", "country": "USA", "population": 8336817},
+                },
+            ),
+        });
+
+        # Create payload indexes required for filtering
+        QdrantCollectionsCreateIndexDataProvider create_idx(rest);
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "city",
+            "field_schema": "keyword",
+            "wait": True,
+        });
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "country",
+            "field_schema": "keyword",
+            "wait": True,
+        });
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "population",
+            "field_schema": "integer",
+            "wait": True,
+        });
+
+        # Get the table data provider
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider col_prov = root.getChildProviderEx("tables").getChildProviderEx(collection);
+
+        # Verify expression support is declared in provider info
+        hash<DataProvider::DataProviderInfo> info = col_prov.getInfo();
+        assertTrue(info.supports_search_expressions);
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_EQ));
+        assertTrue(info.expressions.hasKey(DP_OP_AND));
+        assertTrue(info.expressions.hasKey(DP_OP_OR));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_NOT));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_IN));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_BETWEEN));
+
+        # ---- TEST EQ expression ----
+        {
+            hash<DataProviderExpression> eq_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    "Berlin",
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(eq_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST NE expression ----
+        {
+            hash<DataProviderExpression> ne_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    "Berlin",
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(ne_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(4, results.size());
+            foreach hash<auto> rec in (results) {
+                assertNeq("Berlin", rec.payload.city);
+            }
+        }
+
+        # ---- TEST GT expression ----
+        {
+            hash<DataProviderExpression> gt_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GT,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    8500000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(gt_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # London (8982000) and Moscow (11920000) have population > 8500000
+            assertEq(2, results.size());
+            foreach hash<auto> rec in (results) {
+                assertTrue(rec.payload.population > 8500000);
+            }
+        }
+
+        # ---- TEST GE expression ----
+        {
+            hash<DataProviderExpression> ge_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    8982000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(ge_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # London (8982000) and Moscow (11920000)
+            assertEq(2, results.size());
+        }
+
+        # ---- TEST LT expression ----
+        {
+            hash<DataProviderExpression> lt_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_LT,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3000000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(lt_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Only Paris (2161000) has population < 3000000
+            assertEq(1, results.size());
+            assertEq("Paris", results[0].payload.city);
+        }
+
+        # ---- TEST LE expression ----
+        {
+            hash<DataProviderExpression> le_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_LE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3644826,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(le_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Paris (2161000) and Berlin (3644826)
+            assertEq(2, results.size());
+        }
+
+        # ---- TEST BETWEEN expression ----
+        {
+            hash<DataProviderExpression> between_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_BETWEEN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3000000,
+                    9000000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(between_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Berlin (3644826), London (8982000), NYC (8336817) have 3000000 < pop < 9000000
+            assertEq(3, results.size());
+            foreach hash<auto> rec in (results) {
+                assertTrue(rec.payload.population > 3000000);
+                assertTrue(rec.payload.population < 9000000);
+            }
+        }
+
+        # ---- TEST IN expression ----
+        {
+            hash<DataProviderExpression> in_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_IN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    ("Berlin", "Paris", "Moscow"),
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(in_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(3, results.size());
+            list<string> cities = map $1.payload.city, results;
+            assertTrue(cities.contains("Berlin"));
+            assertTrue(cities.contains("Paris"));
+            assertTrue(cities.contains("Moscow"));
+        }
+
+        # ---- TEST AND expression ----
+        {
+            hash<DataProviderExpression> and_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "country"},
+                            "Germany",
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "population"},
+                            1000000,
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(and_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST OR expression ----
+        {
+            hash<DataProviderExpression> or_expr = <DataProviderExpression>{
+                "exp": DP_OP_OR,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Berlin",
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Paris",
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(or_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(2, results.size());
+            list<string> cities = map $1.payload.city, results;
+            assertTrue(cities.contains("Berlin"));
+            assertTrue(cities.contains("Paris"));
+        }
+
+        # ---- TEST NOT expression ----
+        {
+            hash<DataProviderExpression> not_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NOT,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Berlin",
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(not_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(4, results.size());
+            foreach hash<auto> rec in (results) {
+                assertNeq("Berlin", rec.payload.city);
+            }
+        }
+
+        # ---- TEST plain hash where_cond (implicit equality) ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"city": "Berlin"},
+                {"limit": 10},
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST plain hash where_cond with multiple keys (AND semantics) ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"city": "Berlin", "country": "Germany"},
+                {"limit": 10},
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST where_cond + search_options.filter merge ----
+        {
+            # where_cond filters by country=Germany, search_options filters population > 1000000
+            # Both should apply (AND semantics)
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"country": "Germany"},
+                {
+                    "limit": 10,
+                    "filter": {
+                        "must": ({"key": "population", "range": {"gt": 1000000}},),
+                    },
+                },
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST empty where_cond (NOTHING) returns all ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(NOTHING, {"limit": 10});
+            int count = 0;
+            while (iter.next()) {
+                ++count;
+            }
+            assertEq(5, count);
+        }
+
+        # ---- TEST nested expression: AND(OR(...), GT(...)) ----
+        {
+            hash<DataProviderExpression> nested_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_OP_OR,
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "city"},
+                                    "Berlin",
+                                ),
+                            },
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "city"},
+                                    "Moscow",
+                                ),
+                            },
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "population"},
+                            5000000,
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(nested_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Berlin (3644826) < 5000000, Moscow (11920000) > 5000000 → only Moscow
+            assertEq(1, results.size());
+            assertEq("Moscow", results[0].payload.city);
+        }
+
+        # ---- NEGATIVE: unknown expression operator ----
+        {
+            try {
+                col_prov.searchRecords(<DataProviderExpression>{
+                    "exp": "unknown_op",
+                    "args": (),
+                }, {"limit": 10});
+                fail("Expected exception for unknown operator");
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(ex.err == "WHERE-ERROR" || ex.err == "SEARCH-RECORDS-ERROR"
+                    || ex.err == "DATA-PROVIDER-EXPRESSION-ERROR");
+            }
+        }
+    }
+
+    #! Test connection class
+    private connectionTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        *string url = m_options.url ?? ENV.QDRANT_URL;
+        if (!url) {
+            testSkip("no connection URL");
+        }
+
+        # Test connection
+        QdrantRestConnection conn("test", "test connection", url);
+        assertEq("qdrantrest", conn.getType());
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("qdrant", prov.getName());
+
+        # Test connection scheme info has ping defaults
+        hash<auto> scheme = QdrantRestConnection::ConnectionScheme;
+        assertEq("GET", scheme.options.ping_method.default_value);
+        assertEq("/", scheme.options.ping_path.default_value);
+
+        # Test connection with API key option
+        QdrantRestConnection conn_api("test_api", "test api key connection", url, {},
+            {"api_key": "test_key_12345"});
+        assertEq("qdrantrest", conn_api.getType());
+    }
+
+    #! Test factory
+    private factoryTest() {
+        checkModule(self);
+
+        QdrantDataProviderFactory factory();
+        assertEq("qdrant", factory.getName());
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("qdrant", info.name);
+    }
+
+    #! Test provider hierarchy navigation
+    private providerHierarchyTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Test root provider
+        QdrantDataProvider root({"restclient": rest});
+        assertEq("qdrant", root.getName());
+        *list<string> children = root.getChildProviderNames();
+        assertTrue(children.size() >= 8);
+        assertTrue(children.contains("collections"));
+        assertTrue(children.contains("points"));
+        assertTrue(children.contains("search"));
+        assertTrue(children.contains("aliases"));
+        assertTrue(children.contains("snapshots"));
+        assertTrue(children.contains("cluster"));
+        assertTrue(children.contains("service"));
+        assertTrue(children.contains("tables"));
+
+        # Test navigating to children
+        AbstractDataProvider collections = root.getChildProvider("collections");
+        *list<string> col_children = collections.getChildProviderNames();
+        assertTrue(col_children.contains("create"));
+        assertTrue(col_children.contains("list"));
+        assertTrue(col_children.contains("get"));
+        assertTrue(col_children.contains("delete"));
+        assertTrue(col_children.contains("exists"));
+        assertTrue(col_children.contains("update"));
+        assertTrue(col_children.contains("create-index"));
+        assertTrue(col_children.contains("delete-index"));
+
+        AbstractDataProvider points = root.getChildProvider("points");
+        *list<string> pts_children = points.getChildProviderNames();
+        assertTrue(pts_children.contains("upsert"));
+        assertTrue(pts_children.contains("get"));
+        assertTrue(pts_children.contains("delete"));
+        assertTrue(pts_children.contains("scroll"));
+        assertTrue(pts_children.contains("count"));
+        assertTrue(pts_children.contains("set-payload"));
+        assertTrue(pts_children.contains("overwrite-payload"));
+        assertTrue(pts_children.contains("delete-payload"));
+        assertTrue(pts_children.contains("clear-payload"));
+        assertTrue(pts_children.contains("batch-update"));
+
+        AbstractDataProvider search = root.getChildProvider("search");
+        *list<string> search_children = search.getChildProviderNames();
+        assertTrue(search_children.contains("query"));
+        assertTrue(search_children.contains("query-batch"));
+        assertTrue(search_children.contains("query-groups"));
+
+        AbstractDataProvider service = root.getChildProvider("service");
+        *list<string> svc_children = service.getChildProviderNames();
+        assertTrue(svc_children.contains("health"));
+        assertTrue(svc_children.contains("liveness"));
+        assertTrue(svc_children.contains("readiness"));
+        assertTrue(svc_children.contains("telemetry"));
+        assertTrue(svc_children.contains("metrics"));
+        assertTrue(svc_children.contains("issues"));
+
+        AbstractDataProvider aliases = root.getChildProvider("aliases");
+        *list<string> alias_children = aliases.getChildProviderNames();
+        assertTrue(alias_children.contains("list-all"));
+        assertTrue(alias_children.contains("list-collection"));
+        assertTrue(alias_children.contains("update"));
+
+        AbstractDataProvider snapshots = root.getChildProvider("snapshots");
+        *list<string> snap_children = snapshots.getChildProviderNames();
+        assertTrue(snap_children.contains("list-collection"));
+        assertTrue(snap_children.contains("create-collection"));
+        assertTrue(snap_children.contains("delete-collection"));
+        assertTrue(snap_children.contains("recover"));
+        assertTrue(snap_children.contains("list-storage"));
+        assertTrue(snap_children.contains("create-storage"));
+        assertTrue(snap_children.contains("delete-storage"));
+
+        # Test that leaf providers report correct static info
+        AbstractDataProvider health_prov = service.getChildProvider("health");
+        hash<DataProvider::DataProviderInfo> health_info = health_prov.getInfo();
+        assertEq("health", health_info.name);
+        assertTrue(health_info.supports_request);
+    }
+
+    #! Negative tests
+    private negativeTests() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Test getting a non-existent collection
+        QdrantCollectionsGetDataProvider get_prov(rest);
+        try {
+            get_prov.doRequest({"collection": "nonexistent_collection_xyz_999"});
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test deleting a non-existent collection (idempotent - returns false, no error)
+        QdrantCollectionsDeleteDataProvider del_prov(rest);
+        auto del_result = del_prov.doRequest({"collection": "nonexistent_collection_xyz_999"});
+        assertFalse(del_result);
+
+        # Test duplicate collection creation
+        string collection = "test_neg_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+        QdrantCollectionsCreateDataProvider create_prov(rest);
+        create_prov.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+        on_exit {
+            try {
+                del_prov.doRequest({"collection": collection});
+            } catch () {
+                # ignore
+            }
+        }
+
+        try {
+            create_prov.doRequest({
+                "collection": collection,
+                "vectors": {
+                    "size": 4,
+                    "distance": "Cosine",
+                },
+            });
+            fail("Expected exception for duplicate collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test getting points from non-existent collection
+        QdrantPointsGetDataProvider get_pts(rest);
+        try {
+            get_pts.doRequest({
+                "collection": "nonexistent_collection_xyz_999",
+                "ids": (1,),
+            });
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test search on non-existent collection
+        QdrantSearchQueryDataProvider query_prov(rest);
+        try {
+            query_prov.doRequest({
+                "collection": "nonexistent_collection_xyz_999",
+                "query": (0.1, 0.2, 0.3, 0.4),
+                "limit": 10,
+            });
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test upsert with wrong vector dimensions
+        QdrantPointsUpsertDataProvider upsert_prov(rest);
+        try {
+            upsert_prov.doRequest({
+                "collection": collection,
+                "wait": True,
+                "points": ({
+                    "id": 999,
+                    "vector": (0.1, 0.2),  # collection expects 4 dimensions
+                },),
+            });
+            fail("Expected exception for wrong vector dimensions");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test scroll on non-existent collection
+        QdrantPointsScrollDataProvider scroll_prov(rest);
+        try {
+            scroll_prov.doRequest({
+                "collection": "nonexistent_collection_xyz_999",
+                "limit": 10,
+            });
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test count on non-existent collection
+        QdrantPointsCountDataProvider count_prov(rest);
+        try {
+            count_prov.doRequest({
+                "collection": "nonexistent_collection_xyz_999",
+                "exact": True,
+            });
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test creating index on non-existent collection
+        QdrantCollectionsCreateIndexDataProvider idx_prov(rest);
+        try {
+            idx_prov.doRequest({
+                "collection": "nonexistent_collection_xyz_999",
+                "field_name": "test",
+                "field_schema": "keyword",
+            });
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+
+        # Test aliases on non-existent collection (Qdrant returns empty list, not error)
+        QdrantAliasesListCollectionDataProvider alias_list(rest);
+        hash<auto> alias_result = alias_list.doRequest({"collection": "nonexistent_collection_xyz_999"});
+        assertEq(0, alias_result.aliases.size());
+
+        # Test snapshot operations on non-existent collection
+        QdrantSnapshotsCreateCollectionDataProvider snap_create(rest);
+        try {
+            snap_create.doRequest({"collection": "nonexistent_collection_xyz_999"});
+            fail("Expected exception for non-existent collection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the Qdrant server instance", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.QDRANT_URL;
+        if (!url) {
+            return;
+        }
+
+        try {
+            rest = new RestClient({"url": url});
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}

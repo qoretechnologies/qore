@@ -380,6 +380,435 @@ private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
 
 ---
 
+## Table Data Providers (Record-Based CRUD)
+
+Table data providers expose a collection/table as a record-based interface with support for search
+(DPAT_FIND), create, upsert, update, delete, and bulk operations. The key class is
+`AbstractDataProvider` with its `*Impl` methods.
+
+### Provider Info Declaration
+
+Declare capabilities in `ProviderInfo`:
+
+```qore
+const ProviderInfo = <DataProviderInfo>{
+    "desc": "My collection table data provider",
+    "type": "MyCollectionTableDataProvider",
+    "has_record": True,
+    "supports_read": True,
+    "supports_native_search": True,
+    "supports_create": True,
+    "supports_upsert": True,
+    "supports_update": True,
+    "supports_delete": True,
+    "supports_bulk_create": True,
+    "supports_bulk_upsert": True,
+    "search_options": GenericRecordSearchOptions{"columns", "limit", "offset", "requires_result"} + {
+        "query": <DataProviderOptionInfo>{...},
+        "filter": <DataProviderOptionInfo>{...},
+    },
+    "create_options": WriteOptions,
+    "upsert_options": WriteOptions,
+};
+```
+
+### Record Type
+
+Define the record type as a `HashDataType` subclass:
+
+```qore
+public class MyScoredPointRecordType inherits DataProvider::HashDataType {
+    private {
+        const Fields = {
+            "id": {"type": AbstractDataProviderTypeMap."auto", ...},
+            "score": {"type": SoftFloatOrNothingType, ...},
+            "payload": {"type": AutoHashOrNothingType, ...},
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+```
+
+### Key Implementation Methods
+
+| Method | Purpose |
+|--------|---------|
+| `searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)` | Returns `AbstractDataProviderRecordIterator` |
+| `createRecordImpl(hash<auto> rec, *hash<auto> create_options)` | Creates a record, returns it |
+| `upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options)` | Upserts, returns `UpsertResultInserted` or `UpsertResultUpdated` |
+| `updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options)` | Returns count updated |
+| `deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options)` | Returns count deleted |
+| `getRecordTypeImpl(*hash<auto> search_options)` | Returns record field definitions |
+| `getStaticInfoImpl()` | Returns `ProviderInfo` |
+
+### Record Iterator Pattern
+
+The iterator wraps backend query results:
+
+```qore
+public class MySearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+    private:internal {
+        const RecordType = new MyScoredPointRecordType();
+        Qore::ListHashIterator i;
+    }
+
+    constructor(RestClient rest, string collection, *hash<auto> where_cond,
+            *hash<auto> search_options)
+            : AbstractDataProviderRecordIterator(search_options.requires_result) {
+        hash<auto> body = buildRequestBody(search_options);
+        // ... process where_cond, merge with body ...
+        *list<auto> results = rest.post(uri, body).body.result.items;
+        i = new ListHashIterator(results);
+    }
+
+    bool valid() { return i.valid(); }
+    hash<auto> getValue() { return i.getValue(); }
+    *hash<string, DataProvider::AbstractDataField> getRecordType() { return RecordType.getFields(); }
+    private bool nextImpl() { return i.next(); }
+}
+```
+
+### Bulk Operations
+
+Implement `getBulkInserter()` and `getBulkUpserter()` returning
+`AbstractDataProviderBulkOperation` subclasses. The bulk operation collects records via
+`queueData()` and sends them in batches via `flushImpl()`.
+
+### Tables Container Pattern
+
+A parent "tables" provider lists available tables/collections as child providers:
+
+```qore
+public class MyTablesDataProvider inherits MyDataProviderBase {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "supports_children": True,
+            "children_can_support_records": True,
+        };
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return map $1.name, rest.get("/collections").body.result.collections;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        // Verify collection exists before returning provider
+        if (!collectionExists(name)) { return; }
+        return new MyCollectionTableDataProvider(rest, name);
+    }
+}
+```
+
+---
+
+## Server-Side Search Expressions
+
+Search expressions enable the standard DataProvider expression interface (`where_cond` with
+expression trees) for backend-specific query languages. This is a critical feature for integrating
+with the DPQL query language and UI-driven search builders.
+
+### Architecture
+
+The pattern has three components:
+
+1. **Expression definitions** (`*Defs.qc`): A constant mapping DP operator names to expression
+   metadata (`exp`) and implementation closures (`impl`)
+2. **Provider info**: Declares supported expressions and `supports_search_expressions: True`
+3. **Iterator**: `processExpressionArg()` method that walks the expression tree and calls `impl`
+   closures to build the backend-specific query
+
+### How the Framework Processes where_cond
+
+The `AbstractDataProvider` base class has two overloads for each search/update/delete method:
+
+- `*hash<DataProviderExpression> where_cond` — for pre-built expression trees; calls
+  `processSearchParameters()` to validate, then passes through to `*Impl()`
+- `*hash<auto> where_cond` — for plain hashes; calls `getSearchExpression()` which:
+  - If `supports_search_expressions` is True: converts plain hash to expression tree (each
+    `key: value` pair becomes a `DP_SEARCH_OP_EQ` expression, multiple pairs wrapped in `DP_OP_AND`)
+  - Otherwise: calls `processFieldValues()` for simple field validation
+
+**Important**: When `supports_search_expressions` is True, ALL `*Impl()` methods receive
+`DataProviderExpression` where_cond, even for update and delete. Your implementation must handle
+this (see "Update/Delete with Expressions" below).
+
+### Expression Definitions File
+
+Create a `*Defs.qc` file with the expression mapping. Each entry has:
+- `"exp"`: The expression info from `AbstractDataProvider::GenericExpressions{DP_OP_*}`
+- `"impl"`: A closure that builds the backend-specific query structure
+
+**Example** (Qdrant vector database → JSON filters):
+
+```qore
+public const MyExpressions = {
+    DP_OP_AND: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
+        "impl": hash<auto> sub (MyRecordIterator iter, list<auto> args) {
+            return {"must": map iter.processExpressionArg($1), args};
+        },
+    },
+    DP_OP_OR: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_OR},
+        "impl": hash<auto> sub (MyRecordIterator iter, list<auto> args) {
+            return {"should": map iter.processExpressionArg($1), args};
+        },
+    },
+    DP_SEARCH_OP_EQ: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_EQ},
+        "impl": hash<auto> sub (string field, auto value) {
+            return {"key": field, "match": {"value": value}};
+        },
+    },
+    // ... other operators ...
+};
+```
+
+**Example** (Salesforce → SOQL strings):
+
+```qore
+public const SoqlExpressions = {
+    DP_OP_AND: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
+        "impl": string sub (object iter, list<auto> args) {
+            list<string> clauses = map iter.processExpressionArg($1), args;
+            return "(" + (foldl $1 + " and " + $2, clauses) + ")";
+        },
+    },
+    DP_SEARCH_OP_EQ: {
+        "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_EQ},
+        "impl": string sub (object iter, string field, auto value) {
+            return sprintf("%s = %s", field, iter.getArgValue(field, value));
+        },
+    },
+    // ...
+};
+```
+
+### Declaring Expressions in ProviderInfo
+
+```qore
+const ProviderInfo = <DataProviderInfo>{
+    // ... other fields ...
+    "expressions": cast<hash<string, hash<DataProviderExpressionInfo>>>(
+        map {$1.key: $1.value.exp}, MyExpressions.pairIterator()
+    ),
+    "supports_search_expressions": True,
+};
+```
+
+### processExpressionArg() Method
+
+The record iterator needs a public `processExpressionArg()` method that logical operator `impl`
+closures can call recursively:
+
+```qore
+hash<auto> processExpressionArg(hash<DataProviderExpression> exp) {
+    *hash<auto> expinfo = MyExpressions{exp.exp};
+    if (!expinfo) {
+        throw "WHERE-ERROR", sprintf("unknown operator %y; known: %y", exp.exp, keys MyExpressions);
+    }
+
+    # Logical operators (AND, OR, NOT): pass all args to impl for recursive processing
+    if (exp.exp == DP_OP_AND || exp.exp == DP_OP_OR || exp.exp == DP_SEARCH_OP_NOT) {
+        return call_function_args(expinfo.impl, (self, exp.args));
+    }
+
+    # Comparison operators: first arg is field reference, rest are values
+    string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+
+    # IN operator: collect all value args into a list
+    if (exp.exp == DP_SEARCH_OP_IN) {
+        list<auto> values;
+        for (int j = 1; j < exp.args.size(); ++j) {
+            if (exp.args[j].typeCode() == NT_LIST) {
+                values += exp.args[j];
+            } else {
+                push values, exp.args[j];
+            }
+        }
+        return call_function_args(expinfo.impl, (field, values));
+    }
+
+    # BETWEEN: field + lo + hi
+    if (exp.exp == DP_SEARCH_OP_BETWEEN) {
+        return call_function_args(expinfo.impl, (field, exp.args[1], exp.args[2]));
+    }
+
+    # Standard comparison: field + value
+    return call_function_args(expinfo.impl, (field, exp.args[1]));
+}
+```
+
+### Processing where_cond in the Iterator
+
+The iterator constructor processes `where_cond` to build the backend filter:
+
+```qore
+constructor(RestClient rest, string collection, *hash<auto> where_cond,
+        *hash<auto> search_options) {
+    // ... build body from search_options ...
+
+    if (where_cond) {
+        *hash<auto> where_filter = processWhereCondition(where_cond);
+        if (where_filter) {
+            where_filter = ensureValidFilter(where_filter);
+            if (body.filter) {
+                // Merge with search_options filter using AND
+                body.filter = {"must": (where_filter, body.filter)};
+            } else {
+                body.filter = where_filter;
+            }
+        }
+    }
+}
+
+private *hash<auto> processWhereCondition(hash<auto> where_cond) {
+    if (where_cond.exp) {
+        return processExpressionArg(cast<hash<DataProviderExpression>>(where_cond));
+    }
+    // Plain hash: convert each key: value to equality conditions
+    list<auto> conditions;
+    foreach hash<auto> pair in (where_cond.pairIterator()) {
+        push conditions, {"key": pair.key, "match": {"value": pair.value}};
+    }
+    if (conditions.size() == 1) { return conditions[0]; }
+    return {"must": conditions};
+}
+```
+
+### Update/Delete with Expressions
+
+When `supports_search_expressions` is True, the framework converts ALL where_cond hashes to
+`DataProviderExpression` objects — including for update and delete operations. If your update/delete
+methods extract fields from where_cond (e.g., `where_cond.id`), you must handle the
+`DataProviderExpression` case:
+
+```qore
+private list<auto> getPointIds(*hash<auto> where_cond, string operation) {
+    if (!where_cond) {
+        throw "ERROR", "missing 'id' in where_cond";
+    }
+
+    # Handle DataProviderExpression (from framework expression conversion)
+    if (where_cond instanceof hash<DataProviderExpression>) {
+        return extractIdsFromExpression(
+            cast<hash<DataProviderExpression>>(where_cond), operation);
+    }
+
+    # Plain hash fallback
+    return where_cond.id.typeCode() == NT_LIST ? where_cond.id : (where_cond.id,);
+}
+
+private list<auto> extractIdsFromExpression(hash<DataProviderExpression> exp, string op) {
+    switch (exp.exp) {
+        case DP_SEARCH_OP_EQ: {
+            if (exp.args[0] instanceof hash<DataProviderFieldReference>
+                    && cast<hash<DataProviderFieldReference>>(exp.args[0]).field == "id") {
+                auto val = exp.args[1];
+                return val.typeCode() == NT_LIST ? val : (val,);
+            }
+            break;
+        }
+        case DP_OP_AND: {
+            foreach auto arg in (exp.args) {
+                if (arg instanceof hash<DataProviderExpression>) {
+                    try { return extractIdsFromExpression(cast<hash<DataProviderExpression>>(arg), op); }
+                    catch () {}
+                }
+            }
+            break;
+        }
+    }
+    throw "ERROR", sprintf("where_cond must reference 'id' field for %s", op);
+}
+```
+
+### Dynamic Payload Fields
+
+If your backend has dynamic/schemaless fields (e.g., Qdrant payloads, MongoDB documents), override
+`searchAcceptsForeignField()` to allow field names not in the record type:
+
+```qore
+bool searchAcceptsForeignField(string field) {
+    return True;
+}
+```
+
+Without this, the framework rejects plain hash where_cond keys that aren't in the declared record
+type.
+
+### Supported Operators
+
+The standard DataProvider operators available in `AbstractDataProvider::GenericExpressions`:
+
+| Operator | Constant | Expression Args | Description |
+|----------|----------|-----------------|-------------|
+| AND | `DP_OP_AND` | `(expr, expr, ...)` | Logical AND of sub-expressions |
+| OR | `DP_OP_OR` | `(expr, expr, ...)` | Logical OR of sub-expressions |
+| NOT | `DP_SEARCH_OP_NOT` | `(expr,)` | Logical negation |
+| EQ | `DP_SEARCH_OP_EQ` | `(field_ref, value)` | Equality |
+| NE | `DP_SEARCH_OP_NE` | `(field_ref, value)` | Not equal |
+| LT | `DP_SEARCH_OP_LT` | `(field_ref, value)` | Less than |
+| LE | `DP_SEARCH_OP_LE` | `(field_ref, value)` | Less than or equal |
+| GT | `DP_SEARCH_OP_GT` | `(field_ref, value)` | Greater than |
+| GE | `DP_SEARCH_OP_GE` | `(field_ref, value)` | Greater than or equal |
+| BETWEEN | `DP_SEARCH_OP_BETWEEN` | `(field_ref, lo, hi)` | Range (exclusive) |
+| IN | `DP_SEARCH_OP_IN` | `(field_ref, val, ...)` | Value in list |
+| REGEX | `DP_SEARCH_OP_REGEX` | `(field_ref, pattern)` | Regex match |
+
+### Constructing Expression Trees in Tests
+
+```qore
+# Simple equality
+hash<DataProviderExpression> eq_expr = <DataProviderExpression>{
+    "exp": DP_SEARCH_OP_EQ,
+    "args": (
+        <DataProviderFieldReference>{"field": "city"},
+        "Berlin",
+    ),
+};
+
+# Compound: AND(EQ, GT)
+hash<DataProviderExpression> and_expr = <DataProviderExpression>{
+    "exp": DP_OP_AND,
+    "args": (
+        <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "country"}, "Germany"),
+        },
+        <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_GT,
+            "args": (<DataProviderFieldReference>{"field": "population"}, 1000000),
+        },
+    ),
+};
+
+# IN with multiple values
+hash<DataProviderExpression> in_expr = <DataProviderExpression>{
+    "exp": DP_SEARCH_OP_IN,
+    "args": (
+        <DataProviderFieldReference>{"field": "city"},
+        ("Berlin", "Paris", "Moscow"),
+    ),
+};
+
+# Plain hash where_cond (implicit EQ, framework converts to expressions)
+AbstractDataProviderRecordIterator iter = prov.searchRecords({"city": "Berlin"}, {"limit": 10});
+```
+
+### Reference Implementations
+
+- **Qdrant** (JSON filters): `qlib/QdrantDataProvider/QdrantDataProviderDefs.qc`,
+  `QdrantSearchRecordIterator.qc`, `QdrantCollectionTableDataProvider.qc`
+- **Salesforce** (SOQL strings): `qlib/SalesforceRestDataProvider/SalesforceRestDataProviderDefs.qc`,
+  `SalesforceRestRecordIterator.qc`, `SalesforceRestObjectDataProvider.qc`
+
+---
+
 ## Common Pitfalls
 
 ### 1. Using `token` instead of `apikey`

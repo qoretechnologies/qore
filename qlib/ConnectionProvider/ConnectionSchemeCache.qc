@@ -105,6 +105,9 @@ public class ConnectionSchemeCache {
 
             "freshbooks": "FreshBooksRestClient",
 
+            "qdrantrest": "QdrantDataProvider",
+            "qdrantrests": "QdrantDataProvider",
+
             "gcal": "GoogleRestClient",
             "gmail": "GoogleRestClient",
             "grests": "GoogleRestClient",

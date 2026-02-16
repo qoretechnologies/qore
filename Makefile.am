@@ -50,6 +50,7 @@ DOX_SRC_SPLIT_MODULES = \
     qlib/DataProviderML \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
+    qlib/QdrantDataProvider \
     qlib/EmpathicBuildingDataProvider \
     qlib/GeneratorDataProvider \
     qlib/FileLocationHandler \
@@ -185,6 +186,7 @@ FreshBooksDataProvider_modverdir = $(modverdir)/FreshBooksDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 WaveDataProvider_modverdir = $(modverdir)/WaveDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
+QdrantDataProvider_modverdir = $(modverdir)/QdrantDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
 GeneratorDataProvider_modverdir = $(modverdir)/GeneratorDataProvider
 FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
@@ -246,6 +248,7 @@ dist_FreshBooksDataProvider_modver_DATA = $(wildcard qlib/FreshBooksDataProvider
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_WaveDataProvider_modver_DATA = $(wildcard qlib/WaveDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
+dist_QdrantDataProvider_modver_DATA = $(wildcard qlib/QdrantDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
 dist_GeneratorDataProvider_modver_DATA = $(wildcard qlib/GeneratorDataProvider/*.q[cm])
 dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
@@ -1233,6 +1236,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
+	qlib/QdrantDataProvider/qdrant-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/GeneratorDataProvider/generator-logo.svg \
 	qlib/FileDataProvider/file-logo-white.svg \
@@ -1440,6 +1444,10 @@ doxygen/qlib/Doxyfile.FsUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 # to provide the graphic file
 doxygen/qlib/Doxyfile.ElasticSearchDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/ElasticSearchDataProvider:doxygen/qlib/ElasticSearchDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.QdrantDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/QdrantDataProvider:doxygen/qlib/QdrantDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=qdrant-logo.svg $< $@
 
 # to provide the graphic file
 doxygen/qlib/Doxyfile.GeneratorDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
