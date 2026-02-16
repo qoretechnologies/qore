@@ -120,6 +120,7 @@ public class DataProvider {
 
             "openai": "OpenAiDataProvider",
             "pop3": "Pop3ClientDataProvider",
+            "qdrant": "QdrantDataProvider",
             "redis": "RedisDataProvider",
             "restclient": "RestClientDataProvider",
             "restschema": "RestSchemaDataProvider",
