@@ -113,6 +113,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("sandbox tests", \sandboxTests());
         addTestCase("pseudo-class tests", \pseudoClassTests());
         addTestCase("program tests", \programTests());
+        addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         set_return_value(main());
     }
 
@@ -1348,5 +1349,21 @@ class ReflectionTest inherits QUnit::Test {
             }
             assertThrows("PROGRAM-ERROR", \v.getReturnType());
         }
+    }
+
+    # verify that when a module extends another module's namespace, the namespace retains
+    # the correct module attribution (e.g., DataProvider.qm extends the ConnectionProvider
+    # namespace via ConnectionOptionInfo.qc - the ConnectionProvider namespace must still
+    # report "ConnectionProvider" as its module name, not "DataProvider")
+    crossModuleNamespaceTest() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("DataProvider");
+        p.loadModule("ConnectionProvider");
+
+        Namespace dp = Namespace::forName(p, "DataProvider");
+        assertEq("DataProvider", dp.getModuleName());
+
+        Namespace cp = Namespace::forName(p, "ConnectionProvider");
+        assertEq("ConnectionProvider", cp.getModuleName());
     }
 }

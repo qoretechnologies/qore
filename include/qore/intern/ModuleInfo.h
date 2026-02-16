@@ -443,6 +443,12 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! find a module by name without locking; the caller must hold the mutex
+    DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
+        module_map_t::iterator i = map.find(name);
+        return i == map.end() ? nullptr : i->second;
+    }
+
     //! Import a module's namespace into a program without acquiring the lock
     /** This is for use by AOT runtime code that is called from within a locked context
         (e.g., qore_aot_module_init called from loadBinaryModuleFromDesc).
@@ -612,11 +618,6 @@ protected:
 
     // list of module directories
     UniqueDirectoryList moduleDirList;
-
-    DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
-        module_map_t::iterator i = map.find(name);
-        return i == map.end() ? 0 : i->second;
-    }
 
     DLLLOCAL QoreAbstractModule* loadModuleIntern(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
         AutoLocker sl(mutex); // make sure checking and loading are atomic

@@ -39,6 +39,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
@@ -3540,9 +3541,26 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             nns = npns->ns;
             nns->priv->imported = true;
 
+            // fix from_module when a module extends another module's namespace: if the source namespace's
+            // from_module doesn't match the namespace name but a loaded module with the namespace's name exists,
+            // use that module's name so the namespace is correctly attributed to its original module
+            if (!npns->from_module.empty() && npns->from_module != i->first) {
+                if (QMM.findModuleUnlocked(i->first.c_str())) {
+                    printd(5, "qore_ns_private::copyMergeCommittedNamespace() fixing from_module for '%s' "
+                        "from '%s' to '%s'\n", i->first.c_str(), npns->from_module.c_str(), i->first.c_str());
+                    npns->from_module = i->first;
+                }
+            }
+
             //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s::' merged %p '%s::' pub: %d\n",
             //    this, name.c_str(), nns, nns->getName(), nns->priv->pub);
             nns = nsl.runtimeAdd(nns, this)->ns;
+        } else if (nns->priv->from_module != i->first && i->second->priv->from_module == i->first) {
+            // fix from_module when a module's own namespace was previously created by another module:
+            // the source namespace's from_module matches the namespace name, so it's the authoritative module
+            printd(5, "qore_ns_private::copyMergeCommittedNamespace() fixing from_module for existing '%s' "
+                "from '%s' to '%s'\n", i->first.c_str(), nns->priv->from_module.c_str(), i->first.c_str());
+            nns->priv->from_module = i->first;
         }
 
         nns->priv->copyMergeCommittedNamespace(*i->second->priv);
@@ -3558,6 +3576,15 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
     std::unique_ptr<QoreNamespace> ns_ptr(ans);
 
     qore_ns_private* pns = ans->priv;
+
+    // fix from_module when a module extends its own namespace that was previously created by a dependency:
+    // if the current module context name matches the namespace name, this module owns the namespace
+    const char* mod_name = get_module_context_name();
+    if (mod_name && from_module != name && name == mod_name) {
+        printd(5, "qore_ns_private::parseAssimilate() fixing from_module for '%s' from '%s' to '%s'\n",
+            name.c_str(), from_module.c_str(), mod_name);
+        from_module = mod_name;
+    }
 
     // ensure that either both namespaces are public or both are not
     if (parse_check_parse_option(PO_IN_MODULE) && (pub != pns->pub)) {
