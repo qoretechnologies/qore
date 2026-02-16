@@ -86,6 +86,10 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
             "supports_delete": True,
             "supports_bulk_create": True,
             "supports_bulk_upsert": True,
+            "expressions": cast<hash<string, hash<DataProviderExpressionInfo>>>(
+                map {$1.key: $1.value.exp}, QdrantExpressions.pairIterator()
+            ),
+            "supports_search_expressions": True,
             "create_options": WriteOptions,
             "upsert_options": WriteOptions,
             "search_options": GenericRecordSearchOptions{"columns", "limit", "offset", "requires_result"} + {
@@ -305,14 +309,31 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
         return ProviderInfo;
     }
 
+    #! Accepts foreign field names since Qdrant payload fields are dynamic and not part of the record type
+    bool searchAcceptsForeignField(string field) {
+        return True;
+    }
+
     #! Extracts and validates point ID(s) from where_cond
-    /** @param where_cond the where condition; must contain `id`
+    /** @param where_cond the where condition; must contain \c id — can be a plain hash or a
+        \c DataProviderExpression (when \c supports_search_expressions is True, the framework
+        converts plain hashes to expressions before calling the implementation)
         @param operation the operation name for error messages
 
         @return a list of point IDs
     */
     private list<auto> getPointIds(*hash<auto> where_cond, string operation) {
-        if (!where_cond || !exists where_cond.id) {
+        if (!where_cond) {
+            throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("missing 'id' field in where_cond to identify "
+                "point(s) to %s in collection %y", operation, collection_name);
+        }
+
+        # Handle DataProviderExpression where_cond (from framework search expression conversion)
+        if (where_cond instanceof hash<DataProviderExpression>) {
+            return extractIdsFromExpression(cast<hash<DataProviderExpression>>(where_cond), operation);
+        }
+
+        if (!exists where_cond.id) {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("missing 'id' field in where_cond to identify "
                 "point(s) to %s in collection %y", operation, collection_name);
         }
@@ -321,6 +342,68 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
                 "for %s in collection %y; got fields: %y", operation, collection_name, keys where_cond);
         }
         return where_cond.id.typeCode() == NT_LIST ? where_cond.id : (where_cond.id,);
+    }
+
+    #! Extracts point IDs from a DataProviderExpression
+    /** @param exp the expression to extract IDs from; must reference the \c id field
+        @param operation the operation name for error messages
+
+        @return a list of point IDs
+    */
+    private list<auto> extractIdsFromExpression(hash<DataProviderExpression> exp, string operation) {
+        switch (exp.exp) {
+            case DP_SEARCH_OP_EQ: {
+                if (exp.args.size() >= 2
+                        && (exp.args[0] instanceof hash<DataProviderFieldReference>)
+                        && cast<hash<DataProviderFieldReference>>(exp.args[0]).field == "id") {
+                    auto val = exp.args[1];
+                    return val.typeCode() == NT_LIST ? val : (val,);
+                }
+                break;
+            }
+            case DP_SEARCH_OP_IN: {
+                if (exp.args.size() >= 2
+                        && (exp.args[0] instanceof hash<DataProviderFieldReference>)
+                        && cast<hash<DataProviderFieldReference>>(exp.args[0]).field == "id") {
+                    list<auto> ids;
+                    for (int j = 1; j < exp.args.size(); ++j) {
+                        if (exp.args[j].typeCode() == NT_LIST) {
+                            ids += exp.args[j];
+                        } else {
+                            push ids, exp.args[j];
+                        }
+                    }
+                    return ids;
+                }
+                break;
+            }
+            case DP_OP_AND: {
+                # AND wrapping a single ID expression
+                foreach auto arg in (exp.args) {
+                    if (arg instanceof hash<DataProviderExpression>) {
+                        *list<auto> ids = extractIdsFromExpressionSafe(
+                            cast<hash<DataProviderExpression>>(arg), operation);
+                        if (ids) {
+                            return ids;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        throw "QDRANT-" + operation.upr() + "-ERROR",
+            sprintf("where_cond expression must reference the 'id' field for %s in collection %y; "
+                "got expression: %y", operation, collection_name, exp);
+    }
+
+    #! Safe version of extractIdsFromExpression that returns NOTHING instead of throwing
+    private *list<auto> extractIdsFromExpressionSafe(hash<DataProviderExpression> exp, string operation) {
+        try {
+            return extractIdsFromExpression(exp, operation);
+        } catch () {
+            # not an ID expression
+        }
     }
 
     #! Builds a collection URI with write query parameters (wait, ordering)

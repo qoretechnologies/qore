@@ -47,6 +47,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         addTestCase("clusterTest", \clusterTest());
         addTestCase("tablesTest", \tablesTest());
         addTestCase("tablesCrudTest", \tablesCrudTest());
+        addTestCase("tablesExpressionTest", \tablesExpressionTest());
         addTestCase("connectionTest", \connectionTest());
         addTestCase("factoryTest", \factoryTest());
         addTestCase("providerHierarchyTest", \providerHierarchyTest());
@@ -1475,6 +1476,466 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             fail("Expected exception for empty update");
         } catch (hash<ExceptionInfo> ex) {
             assertTrue(ex.err == "QDRANT-UPDATE-ERROR" || ex.err == "UPDATE-RECORDS-ERROR");
+        }
+    }
+
+    #! Test table search expression support (where_cond with DataProvider expressions)
+    private tablesExpressionTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_expr_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+
+        # Create collection
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {
+                "size": 4,
+                "distance": "Cosine",
+            },
+        });
+
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # Upsert test points with varied payload
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (0.05, 0.61, 0.76, 0.74),
+                    "payload": {"city": "Berlin", "country": "Germany", "population": 3644826},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.19, 0.81, 0.75, 0.11),
+                    "payload": {"city": "London", "country": "UK", "population": 8982000},
+                },
+                {
+                    "id": 3,
+                    "vector": (0.36, 0.55, 0.47, 0.94),
+                    "payload": {"city": "Paris", "country": "France", "population": 2161000},
+                },
+                {
+                    "id": 4,
+                    "vector": (0.18, 0.01, 0.85, 0.80),
+                    "payload": {"city": "Moscow", "country": "Russia", "population": 11920000},
+                },
+                {
+                    "id": 5,
+                    "vector": (0.24, 0.18, 0.22, 0.44),
+                    "payload": {"city": "New York", "country": "USA", "population": 8336817},
+                },
+            ),
+        });
+
+        # Create payload indexes required for filtering
+        QdrantCollectionsCreateIndexDataProvider create_idx(rest);
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "city",
+            "field_schema": "keyword",
+            "wait": True,
+        });
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "country",
+            "field_schema": "keyword",
+            "wait": True,
+        });
+        create_idx.doRequest({
+            "collection": collection,
+            "field_name": "population",
+            "field_schema": "integer",
+            "wait": True,
+        });
+
+        # Get the table data provider
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider col_prov = root.getChildProviderEx("tables").getChildProviderEx(collection);
+
+        # Verify expression support is declared in provider info
+        hash<DataProvider::DataProviderInfo> info = col_prov.getInfo();
+        assertTrue(info.supports_search_expressions);
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_EQ));
+        assertTrue(info.expressions.hasKey(DP_OP_AND));
+        assertTrue(info.expressions.hasKey(DP_OP_OR));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_NOT));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_IN));
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_BETWEEN));
+
+        # ---- TEST EQ expression ----
+        {
+            hash<DataProviderExpression> eq_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    "Berlin",
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(eq_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST NE expression ----
+        {
+            hash<DataProviderExpression> ne_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    "Berlin",
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(ne_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(4, results.size());
+            foreach hash<auto> rec in (results) {
+                assertNeq("Berlin", rec.payload.city);
+            }
+        }
+
+        # ---- TEST GT expression ----
+        {
+            hash<DataProviderExpression> gt_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GT,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    8500000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(gt_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # London (8982000) and Moscow (11920000) have population > 8500000
+            assertEq(2, results.size());
+            foreach hash<auto> rec in (results) {
+                assertTrue(rec.payload.population > 8500000);
+            }
+        }
+
+        # ---- TEST GE expression ----
+        {
+            hash<DataProviderExpression> ge_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_GE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    8982000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(ge_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # London (8982000) and Moscow (11920000)
+            assertEq(2, results.size());
+        }
+
+        # ---- TEST LT expression ----
+        {
+            hash<DataProviderExpression> lt_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_LT,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3000000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(lt_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Only Paris (2161000) has population < 3000000
+            assertEq(1, results.size());
+            assertEq("Paris", results[0].payload.city);
+        }
+
+        # ---- TEST LE expression ----
+        {
+            hash<DataProviderExpression> le_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_LE,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3644826,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(le_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Paris (2161000) and Berlin (3644826)
+            assertEq(2, results.size());
+        }
+
+        # ---- TEST BETWEEN expression ----
+        {
+            hash<DataProviderExpression> between_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_BETWEEN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "population"},
+                    3000000,
+                    9000000,
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(between_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Berlin (3644826), London (8982000), NYC (8336817) have 3000000 < pop < 9000000
+            assertEq(3, results.size());
+            foreach hash<auto> rec in (results) {
+                assertTrue(rec.payload.population > 3000000);
+                assertTrue(rec.payload.population < 9000000);
+            }
+        }
+
+        # ---- TEST IN expression ----
+        {
+            hash<DataProviderExpression> in_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_IN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "city"},
+                    ("Berlin", "Paris", "Moscow"),
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(in_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(3, results.size());
+            list<string> cities = map $1.payload.city, results;
+            assertTrue(cities.contains("Berlin"));
+            assertTrue(cities.contains("Paris"));
+            assertTrue(cities.contains("Moscow"));
+        }
+
+        # ---- TEST AND expression ----
+        {
+            hash<DataProviderExpression> and_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "country"},
+                            "Germany",
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "population"},
+                            1000000,
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(and_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST OR expression ----
+        {
+            hash<DataProviderExpression> or_expr = <DataProviderExpression>{
+                "exp": DP_OP_OR,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Berlin",
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Paris",
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(or_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(2, results.size());
+            list<string> cities = map $1.payload.city, results;
+            assertTrue(cities.contains("Berlin"));
+            assertTrue(cities.contains("Paris"));
+        }
+
+        # ---- TEST NOT expression ----
+        {
+            hash<DataProviderExpression> not_expr = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_NOT,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_EQ,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "city"},
+                            "Berlin",
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(not_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(4, results.size());
+            foreach hash<auto> rec in (results) {
+                assertNeq("Berlin", rec.payload.city);
+            }
+        }
+
+        # ---- TEST plain hash where_cond (implicit equality) ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"city": "Berlin"},
+                {"limit": 10},
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST plain hash where_cond with multiple keys (AND semantics) ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"city": "Berlin", "country": "Germany"},
+                {"limit": 10},
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST where_cond + search_options.filter merge ----
+        {
+            # where_cond filters by country=Germany, search_options filters population > 1000000
+            # Both should apply (AND semantics)
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(
+                {"country": "Germany"},
+                {
+                    "limit": 10,
+                    "filter": {
+                        "must": ({"key": "population", "range": {"gt": 1000000}},),
+                    },
+                },
+            );
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            assertEq(1, results.size());
+            assertEq("Berlin", results[0].payload.city);
+        }
+
+        # ---- TEST empty where_cond (NOTHING) returns all ----
+        {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(NOTHING, {"limit": 10});
+            int count = 0;
+            while (iter.next()) {
+                ++count;
+            }
+            assertEq(5, count);
+        }
+
+        # ---- TEST nested expression: AND(OR(...), GT(...)) ----
+        {
+            hash<DataProviderExpression> nested_expr = <DataProviderExpression>{
+                "exp": DP_OP_AND,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_OP_OR,
+                        "args": (
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "city"},
+                                    "Berlin",
+                                ),
+                            },
+                            <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_EQ,
+                                "args": (
+                                    <DataProviderFieldReference>{"field": "city"},
+                                    "Moscow",
+                                ),
+                            },
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (
+                            <DataProviderFieldReference>{"field": "population"},
+                            5000000,
+                        ),
+                    },
+                ),
+            };
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(nested_expr, {"limit": 10});
+            list<auto> results = ();
+            while (iter.next()) {
+                push results, iter.getValue();
+            }
+            # Berlin (3644826) < 5000000, Moscow (11920000) > 5000000 → only Moscow
+            assertEq(1, results.size());
+            assertEq("Moscow", results[0].payload.city);
+        }
+
+        # ---- NEGATIVE: unknown expression operator ----
+        {
+            try {
+                col_prov.searchRecords(<DataProviderExpression>{
+                    "exp": "unknown_op",
+                    "args": (),
+                }, {"limit": 10});
+                fail("Expected exception for unknown operator");
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(ex.err == "WHERE-ERROR" || ex.err == "SEARCH-RECORDS-ERROR"
+                    || ex.err == "DATA-PROVIDER-EXPRESSION-ERROR");
+            }
         }
     }
 
