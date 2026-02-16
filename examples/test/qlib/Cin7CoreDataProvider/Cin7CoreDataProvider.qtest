@@ -120,14 +120,33 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    #! Creates a Cin7CoreDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *Cin7CoreDataProvider::Cin7CoreDataProvider tryCreateProvider() {
+        try {
+            return new Cin7CoreDataProvider::Cin7CoreDataProvider({
+                "account_id": "x",
+                "apikey": "x",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Cin7Core API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
-            "account_id": "fake-account-id",
-            "apikey": "fake-key-for-testing",
-        });
+        *Cin7CoreDataProvider::Cin7CoreDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("cin7core", prov.getName());
         assertEq("Cin7Core data provider for inventory management, sales, and order processing", prov.getDesc());
     }
@@ -151,10 +170,10 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
-            "account_id": "x",
-            "apikey": "x",
-        });
+        *Cin7CoreDataProvider::Cin7CoreDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -178,10 +197,10 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
-            "account_id": "x",
-            "apikey": "x",
-        });
+        *Cin7CoreDataProvider::Cin7CoreDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -345,10 +364,10 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        Cin7CoreDataProvider::Cin7CoreDataProvider prov({
-            "account_id": "invalid-account",
-            "apikey": "invalid-key",
-        });
+        *Cin7CoreDataProvider::Cin7CoreDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -366,11 +385,19 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test REST client URL
-        Cin7CoreRestClient::Cin7CoreRestClient client1({
-            "account_id": "x",
-            "apikey": "x",
-        });
-        assertTrue(client1.getURL() =~ /inventory\.dearsystems\.com/);
+        try {
+            Cin7CoreRestClient::Cin7CoreRestClient client1({
+                "account_id": "x",
+                "apikey": "x",
+            });
+            assertTrue(client1.getURL() =~ /inventory\.dearsystems\.com/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Cin7Core API: %s", ex.desc));
+            }
+            rethrow;
+        }
     }
 
     #! Connection tests - verify connection scheme registration
