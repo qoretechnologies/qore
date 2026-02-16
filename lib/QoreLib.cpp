@@ -582,7 +582,6 @@ FeatureList::FeatureList() {
    push_back("DGC");
    push_back("NaNBoxing");
    push_back("HTTP2");
-   push_back("JIT");
 #ifdef DEBUG
    push_back("debug");
 #endif
