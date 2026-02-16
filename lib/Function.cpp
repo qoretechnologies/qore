@@ -53,6 +53,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FunctionCallNode.h"
 
+#include <atomic>
 #include <cassert>
 #include <cctype>
 #include <cmath>
@@ -2284,8 +2285,12 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
     // share the same display name (e.g. "<anonymous closure>"), but each variant has
     // its own LocalVar pointers baked into IR/JIT code, so they must compile to
-    // distinct JIT entries.
-    std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this);
+    // distinct JIT entries.  A monotonic counter is needed in addition to the address
+    // because when a variant is destroyed and a new one allocated at the same address,
+    // the old JIT cache entry would be returned with stale LocalVar pointers.
+    static std::atomic<uint64_t> variant_counter{0};
+    std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this)
+        + "_" + std::to_string(variant_counter.fetch_add(1));
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
     // Record which locals are pre-instantiated by the calling convention so the JIT
     // skips instantiation/uninstantiation for them.

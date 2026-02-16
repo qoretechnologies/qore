@@ -45,6 +45,7 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -807,8 +808,14 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // to avoid name collisions in the JIT's compiled_functions map.
                     // Different child Programs each have their own TopLevelStatementBlock
                     // with different LocalVar* pointers baked into JIT code.
+                    // A monotonic counter is needed in addition to the address because
+                    // when a Program is destroyed and a new one allocated at the same
+                    // address, the old JIT cache entry would be returned with stale
+                    // LocalVar pointers.
+                    static std::atomic<uint64_t> toplevel_counter{0};
                     std::string unique_name = std::string("_toplevel@")
-                        + std::to_string((uintptr_t)this);
+                        + std::to_string((uintptr_t)this) + "_"
+                        + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
 
                     // Collect ALL body locals from the statement tree (top-level + nested blocks

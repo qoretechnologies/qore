@@ -2056,8 +2056,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     // eval() returns a referenced value; use it directly for the value slot
                 } else {
                     auto it = locals.find(local_inst->local);
-                    if (it != locals.end()) {
-                        // Cache hit: val is shared with cache, needs refSelf for value slot
+                    if (it != locals.end() && it->second.getType() != NT_REFERENCE) {
+                        // Cache hit: val is shared with cache, needs refSelf for value slot.
+                        // ReferenceNode values are NOT cached because eval() must follow
+                        // the reference chain to return the target value, not the reference
+                        // itself.  Without this, lvalue references stored in containers
+                        // (e.g. list[n] = \var) would be passed through as raw references
+                        // instead of being transparently dereferenced.
                         QoreValue val = it->second;
                         out = val.hasNode() ? val.refSelf() : val;
                     } else if (local_inst->local) {

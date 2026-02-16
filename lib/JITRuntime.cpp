@@ -416,6 +416,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* x
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val);
+    if (v.hasNode() && v.getType() == NT_REFERENCE) {
+        // Dereference the reference like VarRefNode::evalImpl() does.
+        // The reference node stays in the alloca (not deref'd here);
+        // only the target value is returned with an extra reference.
+        bool needs_deref = true;
+        QoreValue result = v.getInternalNode()->eval(needs_deref, xsink);
+        if (!needs_deref && result.hasNode()) {
+            result = result.refSelf();
+        }
+        return toBits(result);
+    }
+    return val;
+}
+
 extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink) {
     if (!var) {
         return;

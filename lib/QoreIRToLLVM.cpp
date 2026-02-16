@@ -2293,10 +2293,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = builder->CreateLoad(double_type, it->second);
                 // NOT in nanboxed_values — this is a native double
             } else {
-                values[inst->result.id] = builder->CreateLoad(i64_type, it->second);
+                llvm::Value* loaded = builder->CreateLoad(i64_type, it->second);
                 if (!is_native_int) {
+                    // Untyped locals (auto/any) may hold reference nodes (NT_REFERENCE)
+                    // when assigned from container iterators (e.g., ListIterator::getValue()
+                    // returns raw references stored via \var).  In AST mode,
+                    // VarRefNode::evalImpl() transparently dereferences these; the JIT
+                    // must do the same via a runtime helper.
+                    // Only untyped locals need this check — typed locals can't hold raw
+                    // reference nodes because the type system prevents it.
+                    if (linst->local
+                            && !QoreTypeInfo::hasType(linst->local->getTypeInfo())) {
+                        auto deref_fn = module.getOrInsertFunction(
+                            "qore_rt_deref_if_reference",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                        loaded = builder->CreateCall(deref_fn, {loaded, xsink_arg});
+                    }
                     nanboxed_values.insert(inst->result.id);
                 }
+                values[inst->result.id] = loaded;
                 // Native int: NOT in nanboxed_values — ensureIntTypeInline skips unboxing
             }
             return true;
