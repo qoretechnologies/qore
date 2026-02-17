@@ -93,6 +93,7 @@ module ChargebeeDataProvider {
                     "short_desc": "Filter by customer status",
                     "desc": "Filter customers by their status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "active", "desc": "Active"},
                     ),
@@ -102,6 +103,7 @@ module ChargebeeDataProvider {
                     "short_desc": "Filter by email",
                     "desc": "Filter customers by their email address",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "first_name": <ActionOptionInfo>{
                     "display_name": "First Name",
@@ -151,6 +153,26 @@ module ChargebeeDataProvider {
             "desc": "Create a new customer in Chargebee with contact and billing information.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeCreateCustomerDataProvider::ProviderInfo,
+            "options": {
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Customer email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Customer first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Customer last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
         });
 
         # Update Customer
@@ -165,6 +187,28 @@ module ChargebeeDataProvider {
                 "information, and other customer attributes.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeUpdateCustomerDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Customer email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Customer first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
         });
 
         # Delete Customer
@@ -178,6 +222,16 @@ module ChargebeeDataProvider {
             "desc": "Delete a customer from Chargebee. This action cannot be undone.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeDeleteCustomerDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
         });
 
         # ========== SUBSCRIPTION ACTIONS ==========
@@ -203,6 +257,7 @@ module ChargebeeDataProvider {
                     "short_desc": "Filter by subscription status",
                     "desc": "Filter subscriptions by their status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "future", "desc": "Future"},
                         <AllowedValueInfo>{"value": "in_trial", "desc": "In Trial"},
@@ -218,6 +273,7 @@ module ChargebeeDataProvider {
                     "short_desc": "Filter by customer",
                     "desc": "Filter subscriptions by the customer they belong to",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "customers",
                 },
             },
@@ -256,6 +312,16 @@ module ChargebeeDataProvider {
             "desc": "Create a new subscription in Chargebee for a customer with a specified plan.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeCreateSubscriptionDataProvider::ProviderInfo,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the subscription",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
         });
 
         # Update Subscription
@@ -270,6 +336,16 @@ module ChargebeeDataProvider {
                 "add-ons, and other subscription details.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeUpdateSubscriptionDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Subscription ID",
+                    "short_desc": "The subscription to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "subscriptions",
+                },
+            },
         });
 
         # Delete Subscription
@@ -283,6 +359,16 @@ module ChargebeeDataProvider {
             "desc": "Delete a subscription from Chargebee. This action cannot be undone.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeDeleteSubscriptionDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Subscription ID",
+                    "short_desc": "The subscription to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "subscriptions",
+                },
+            },
         });
 
         # ========== INVOICE ACTIONS ==========
@@ -307,6 +393,7 @@ module ChargebeeDataProvider {
                     "short_desc": "Filter by invoice status",
                     "desc": "Filter invoices by their status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "paid", "desc": "Paid"},
                         <AllowedValueInfo>{"value": "posted", "desc": "Posted"},
@@ -352,6 +439,16 @@ module ChargebeeDataProvider {
             "desc": "Create a new invoice in Chargebee for a customer.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeCreateInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer for the invoice",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
         });
 
         # Update Invoice
@@ -365,6 +462,16 @@ module ChargebeeDataProvider {
             "desc": "Update an existing invoice in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeUpdateInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
         });
 
         # Delete Invoice
@@ -378,6 +485,16 @@ module ChargebeeDataProvider {
             "desc": "Delete an invoice from Chargebee. This action cannot be undone.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeDeleteInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
         });
 
         # Collect Invoice Payment
@@ -391,6 +508,22 @@ module ChargebeeDataProvider {
             "desc": "Collect payment for an outstanding invoice using the customer's payment method on file.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeCollectInvoicePaymentDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to collect payment for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount in cents",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
         });
 
         # Record Invoice Payment
@@ -404,6 +537,22 @@ module ChargebeeDataProvider {
             "desc": "Record an offline payment for an invoice in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeRecordInvoicePaymentDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to record payment for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Payment amount in cents",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
         });
 
         # Refund Invoice
@@ -417,6 +566,22 @@ module ChargebeeDataProvider {
             "desc": "Process a refund for a paid invoice in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeRefundInvoiceDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to refund",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+                "refund_amount": <ActionOptionInfo>{
+                    "display_name": "Refund Amount",
+                    "short_desc": "Refund amount in cents",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
         });
 
         # Get Invoice Link
@@ -430,6 +595,16 @@ module ChargebeeDataProvider {
             "desc": "Retrieve a download link for a Chargebee invoice PDF.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeGetInvoiceLinkDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice to get the PDF link for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
         });
 
         # ========== COUPON ACTIONS ==========
@@ -447,6 +622,37 @@ module ChargebeeDataProvider {
             "data_provider_info": ChargebeeCouponsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return new ListDataType("CouponList", new ChargebeeCouponDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by coupon status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active", "desc": "Active"},
+                        <AllowedValueInfo>{"value": "expired", "desc": "Expired"},
+                        <AllowedValueInfo>{"value": "archived", "desc": "Archived"},
+                        <AllowedValueInfo>{"value": "deleted", "desc": "Deleted"},
+                        <AllowedValueInfo>{"value": "future", "desc": "Future"},
+                    ),
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by coupon name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "discount_type": <ActionOptionInfo>{
+                    "display_name": "Discount Type",
+                    "short_desc": "Filter by discount type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "fixed_amount", "desc": "Fixed Amount"},
+                        <AllowedValueInfo>{"value": "percentage", "desc": "Percentage"},
+                        <AllowedValueInfo>{"value": "offer_quantity", "desc": "Offer Quantity"},
+                    ),
+                },
             },
         });
 
@@ -483,6 +689,46 @@ module ChargebeeDataProvider {
             "desc": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeCreateCouponDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Coupon ID",
+                    "short_desc": "Unique coupon code/identifier",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Coupon display name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+                "discount_type": <ActionOptionInfo>{
+                    "display_name": "Discount Type",
+                    "short_desc": "Type of discount",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "fixed_amount", "desc": "Fixed Amount"},
+                        <AllowedValueInfo>{"value": "percentage", "desc": "Percentage"},
+                        <AllowedValueInfo>{"value": "offer_quantity", "desc": "Offer Quantity"},
+                    ),
+                },
+                "duration_type": <ActionOptionInfo>{
+                    "display_name": "Duration Type",
+                    "short_desc": "How long the discount lasts",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "one_time", "desc": "One Time"},
+                        <AllowedValueInfo>{"value": "forever", "desc": "Forever"},
+                        <AllowedValueInfo>{"value": "limited_period", "desc": "Limited Period"},
+                    ),
+                },
+            },
         });
 
         # Update Coupon
@@ -496,6 +742,22 @@ module ChargebeeDataProvider {
             "desc": "Update an existing coupon in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeUpdateCouponDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Coupon ID",
+                    "short_desc": "The coupon to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "coupons",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Coupon display name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
         });
 
         # Delete Coupon
@@ -509,6 +771,16 @@ module ChargebeeDataProvider {
             "desc": "Delete a coupon from Chargebee. This action cannot be undone.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeDeleteCouponDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Coupon ID",
+                    "short_desc": "The coupon to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "coupons",
+                },
+            },
         });
 
         # ========== PROMOTIONAL CREDIT ACTIONS ==========
@@ -526,6 +798,26 @@ module ChargebeeDataProvider {
             "data_provider_info": ChargebeePromotionalCreditsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return new ListDataType("PromotionalCreditList", new ChargebeePromotionalCreditDataType(), True);
+            },
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Filter by credit type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "increment", "desc": "Increment"},
+                        <AllowedValueInfo>{"value": "decrement", "desc": "Decrement"},
+                        <AllowedValueInfo>{"value": "set", "desc": "Set"},
+                    ),
+                },
             },
         });
 
@@ -561,6 +853,30 @@ module ChargebeeDataProvider {
             "desc": "Add promotional credits to a customer's account in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeAddPromotionalCreditDataProvider::ProviderInfo,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to add credits to",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Credit amount in cents",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency Code",
+                    "short_desc": "Currency for the credits",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
         });
 
         # Deduct Promotional Credit
@@ -574,6 +890,30 @@ module ChargebeeDataProvider {
             "desc": "Deduct promotional credits from a customer's account in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeDeductPromotionalCreditDataProvider::ProviderInfo,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to deduct credits from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Credit amount in cents",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency Code",
+                    "short_desc": "Currency for the credits",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
         });
 
         # Set Promotional Credit
@@ -587,6 +927,30 @@ module ChargebeeDataProvider {
             "desc": "Set the promotional credit balance for a customer's account in Chargebee.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeSetPromotionalCreditDataProvider::ProviderInfo,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "The customer to set credits for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Credit amount in cents",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "preselected": True,
+                },
+                "currency_code": <ActionOptionInfo>{
+                    "display_name": "Currency Code",
+                    "short_desc": "Currency for the credits",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
         });
 
         # ========== TRANSACTION ACTIONS ==========
@@ -602,6 +966,15 @@ module ChargebeeDataProvider {
             "desc": "Retrieve detailed information about a specific Chargebee transaction.",
             "action_code": DPAT_API,
             "data_provider_info": ChargebeeGetTransactionDataProvider::ProviderInfo,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Transaction ID",
+                    "short_desc": "The transaction to retrieve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
         });
 
         # ========== TRIGGER ACTIONS (EVENTS) ==========
