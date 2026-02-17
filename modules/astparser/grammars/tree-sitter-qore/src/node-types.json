@@ -2421,43 +2421,15 @@
     "named": true,
     "fields": {
       "key": {
-        "multiple": true,
+        "multiple": false,
         "required": true,
         "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
           {
             "type": "assignment_expression",
             "named": true
           },
           {
             "type": "binary_expression",
-            "named": true
-          },
-          {
-            "type": "call_expression",
-            "named": true
-          },
-          {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "implicit_argument",
-            "named": true
-          },
-          {
-            "type": "index_expression",
-            "named": true
-          },
-          {
-            "type": "member_expression",
             "named": true
           },
           {
@@ -2469,23 +2441,11 @@
             "named": true
           },
           {
-            "type": "scoped_identifier",
-            "named": true
-          },
-          {
-            "type": "string",
-            "named": true
-          },
-          {
             "type": "ternary_expression",
             "named": true
           },
           {
             "type": "unary_expression",
-            "named": true
-          },
-          {
-            "type": "variable_name",
             "named": true
           }
         ]

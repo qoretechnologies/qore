@@ -985,14 +985,20 @@ module.exports = grammar({
     ),
 
     // Higher-order functions
-    // map expr, list[, filter] — no prec.right so that trailing commas
-    // in enclosing hash/list literals are correctly handled
+    // map expr, list[, filter] — Qore's LALR grammar uses `list: exp ','` to
+    // support trailing commas globally.  In the tree-sitter grammar we handle
+    // this locally: a trailing comma alternative (prec.dynamic -2) is only
+    // chosen when the enclosing context cannot consume the comma itself
+    // (e.g. inside a ternary expression).
     map_expression: $ => seq(
       'map',
       field('expression', $._expression),
       ',',
       field('list', $._expression),
-      optional(prec.dynamic(-1, seq(',', field('filter', $._expression)))),
+      optional(choice(
+        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
+        prec.dynamic(-2, ','),
+      )),
     ),
 
     select_expression: $ => seq(
@@ -1000,7 +1006,10 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
-      optional(prec.dynamic(-1, seq(',', field('filter', $._expression)))),
+      optional(choice(
+        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
+        prec.dynamic(-2, ','),
+      )),
     ),
 
     foldl_expression: $ => prec.right(seq(
@@ -1008,6 +1017,7 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      optional(prec.dynamic(-2, ',')),
     )),
 
     foldr_expression: $ => prec.right(seq(
@@ -1015,6 +1025,7 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      optional(prec.dynamic(-2, ',')),
     )),
 
     implicit_argument: $ => /\$\d+/,
@@ -1077,12 +1088,13 @@ module.exports = grammar({
       /[0-9]{4}-[0-9]{2}-[0-9]{2}/,
       optional(seq(
         /[T ]/,
-        /[0-9]{2}:[0-9]{2}:[0-9]{2}/,
-        optional(/\.[0-9]+/),
-        optional(choice(
-          /[+-][0-9]{2}:?[0-9]{2}/,  // timezone offset
-          'Z',                        // UTC timezone
-        )),
+        /[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?/,
+      )),
+      // Timezone applies to both date-only and date+time forms
+      // (Qore scanner: {YEAR}-{MONTH}-{DAY}?{TZ}?)
+      optional(choice(
+        /[+-][0-9]{2}(:?[0-9]{2}(:?[0-9]{2})?)?/,  // timezone offset: +HH, +HHMM, +HH:MM, etc.
+        'Z',                                          // UTC timezone
       )),
     )),
 
@@ -1197,23 +1209,9 @@ module.exports = grammar({
     ),
 
     hash_entry: $ => seq(
-      field('key', $._hash_key),
+      field('key', $._expression),
       ':',
       field('value', $._expression),
-    ),
-
-    // Hash keys are more restricted than general expressions to avoid
-    // ambiguity with ternary operator (a ? b : c vs hash key : value)
-    _hash_key: $ => choice(
-      $.string,
-      $.identifier,
-      $.variable_name,
-      $.scoped_identifier,
-      $.implicit_argument,  // $1, $2, etc. for map expressions
-      $.member_expression,  // $1.key, obj.field for map expressions
-      $.index_expression,   // Map{$1.key} etc. as computed key
-      $.call_expression,    // sprintf(...) etc. as computed key
-      seq('(', $._expression, ')'),  // computed key in parentheses
     ),
 
     // ==================== Regex ====================
