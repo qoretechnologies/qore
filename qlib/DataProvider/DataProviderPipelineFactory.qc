@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DataProviderPipelineFactory class definition
 
-/** DataProviderPipelineFactory.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderPipelineFactory.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -102,7 +102,7 @@ public class DataProviderPipelineFactory {
     */
     DataProviderPipeline create(*hash<PipelineOptionInfo> opts) {
         DataProviderPipeline pipe(self.opts + opts);
-        map processQueue(pipe, $1.key.toInt(), $1.value), pmap.pairIterator();
+        processQueue(pipe, 0, pmap."0");
         return pipe;
     }
 
@@ -178,6 +178,12 @@ public class DataProviderPipelineFactory {
     }
 
     #! Creates a queue in a pipeline
+    /** Recursively processes queue elements from queue 0, creating child queues in depth-first
+        order (matching the order in which appendQueue() assigned IDs during factory setup).
+
+        Uses the canonical pmap entry for each child queue (which has the elements added via
+        append()), not the copy stored in the parent's pipeline_list.
+    */
     private processQueue(DataProviderPipeline pipe, int id, hash<PipelineQueueInfo> queue) {
         foreach auto elem in (queue.elems) {
             if (elem instanceof AbstractDataProcessor) {
@@ -186,10 +192,12 @@ public class DataProviderPipelineFactory {
                 foreach hash<PipelineQueueInfo> new_queue in (elem) {
                     int queue_id = pipe.appendQueue(id);
                     if (queue_id != new_queue.id) {
-                        throw "PIPELINE-ERROR", sprintf("the pipeline factory configuration is inconsistent; adding "
-                            "queue %y; got new ID %y", new_queue, queue_id);
+                        throw "PIPELINE-ERROR", sprintf("the pipeline factory configuration is "
+                            "inconsistent; adding queue %y; got new ID %y", new_queue, queue_id);
                     }
-                    processQueue(pipe, queue_id, new_queue);
+                    # Use the canonical pmap entry (which has elements added via append()),
+                    # not the copy stored in the parent's pipeline_list
+                    processQueue(pipe, queue_id, pmap{new_queue.id.toString()});
                 }
             }
         }
