@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="294"
+   height="294"
+   viewBox="0 0 294 294"
+   version="1.1"
+   xml:space="preserve"
+   style="clip-rule:evenodd;fill-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:1.41421"
+   id="svg2"
+   sodipodi:docname="Qore-Q-square.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+   id="defs2" /><sodipodi:namedview
+   id="namedview2"
+   pagecolor="#ffffff"
+   bordercolor="#999999"
+   borderopacity="1"
+   inkscape:showpageshadow="0"
+   inkscape:pageopacity="0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="3.0765306"
+   inkscape:cx="121.40299"
+   inkscape:cy="147.08126"
+   inkscape:window-width="2198"
+   inkscape:window-height="1330"
+   inkscape:window-x="26"
+   inkscape:window-y="23"
+   inkscape:window-maximized="0"
+   inkscape:current-layer="svg2" />
+    <g
+   transform="matrix(4.16667,0,0,4.16667,-312.11495,-2747.37)"
+   id="g2">
+        <clipPath
+   id="_clip1">
+            <rect
+   x="81.054001"
+   y="659.36902"
+   width="58.266998"
+   height="70.429001"
+   id="rect1" />
+        </clipPath>
+        <g
+   clip-path="url(#_clip1)"
+   id="g1">
+            <path
+   d="m 139.321,705.517 v -26.889 c 0,0 0,-3.377 -2.924,-5.064 L 113.111,660.12 c 0,0 -2.924,-1.689 -5.848,0 l -23.286,13.444 c 0,0 -2.924,1.687 -2.924,5.064 v 26.889 c 0,0 0,3.376 2.924,5.063 l 32.218,18.428 c 0,0 2.924,1.742 5.848,0.054 l 13.096,-7.614 -24.937,-14.208 -0.015,0.008 -13.143,-7.587 v -15.176 l 13.143,-7.588 13.143,7.588 v 15.176 l -10.093,5.827 16.171,9.129 6.989,-4.037 c 0,0 2.924,-1.687 2.924,-5.063"
+   style="fill:#a11957;fill-rule:nonzero"
+   id="path1" />
+        </g>
+    </g>
+</svg>

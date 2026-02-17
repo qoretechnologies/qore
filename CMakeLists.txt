@@ -1454,7 +1454,7 @@ qore_user_module("qlib/TextWrap.qm" "Util")
 qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
-qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;qore-q-logo.svg")
+qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
 if (Eigen3_FOUND)
     qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
 endif()
