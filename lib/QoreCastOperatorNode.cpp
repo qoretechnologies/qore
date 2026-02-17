@@ -364,6 +364,13 @@ QoreValue QoreClassCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
     return rv.takeValue(needs_deref);
 }
 
+QoreValue QoreClassCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (QoreClassCastOperatorNode::checkValue(xsink, inner, false)) {
+        return QoreValue();
+    }
+    return inner.hasNode() ? inner.refSelf() : inner;
+}
+
 // checks if the value matches the expected type
 int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -429,6 +436,35 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     return typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
 }
 
+QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (QoreHashDeclCastOperatorNode::checkValue(xsink, inner, false)) {
+        return QoreValue();
+    }
+
+    if (inner.isNothing()) {
+        assert(or_nothing);
+        return QoreValue();
+    }
+
+    const QoreHashNode* h = inner.get<const QoreHashNode>();
+    const TypedHashDecl* vhd = h->getHashDecl();
+
+    if (!hd) {
+        if (!vhd && !h->getValueTypeInfo()) {
+            return inner.hasNode() ? inner.refSelf() : inner;
+        }
+        return qore_hash_private::getPlainHash(inner.get<QoreHashNode>()->hashRefSelf());
+    }
+
+    // if we already have the expected type, then there's nothing more to do
+    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*hd))) {
+        return inner.hasNode() ? inner.refSelf() : inner;
+    }
+
+    // do the runtime cast
+    return typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
+}
+
 // checks if the value matches the expected type
 int QoreComplexHashCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -477,6 +513,27 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
 
     // do the runtime cast
     return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink);
+}
+
+QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (QoreComplexHashCastOperatorNode::checkValue(xsink, inner, false)) {
+        return QoreValue();
+    }
+
+    if (inner.isNothing()) {
+        assert(or_nothing);
+        return QoreValue();
+    }
+
+    assert(inner.getType() == NT_HASH);
+
+    // if we already have the expected cast, then there's nothing to do
+    if (typeInfo == inner.getFullTypeInfo()) {
+        return inner.hasNode() ? inner.refSelf() : inner;
+    }
+
+    // do the runtime cast
+    return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink);
 }
 
 // checks if the value matches the expected type
@@ -546,6 +603,34 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
     return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink);
 }
 
+QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (checkValue(xsink, inner, false)) {
+        return QoreValue();
+    }
+
+    if (inner.isNothing()) {
+        assert(or_nothing);
+        return QoreValue();
+    }
+
+    assert(inner.getType() == NT_LIST);
+
+    // check if types are equal
+    const QoreTypeInfo* ti = inner.getFullTypeInfo();
+    if ((!typeInfo && (ti == listTypeInfo))
+        || (typeInfo && ti == typeInfo)) {
+        return inner.hasNode() ? inner.refSelf() : inner;
+    }
+
+    // do the runtime cast
+    if (!typeInfo) {
+        return qore_list_private::getPlainList(inner.get<QoreListNode>()->listRefSelf());
+    }
+
+    QoreValue ref_inner = inner.hasNode() ? inner.refSelf() : inner;
+    return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink);
+}
+
 // checks if the value matches the expected enum type
 int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -590,4 +675,11 @@ QoreValue QoreEnumCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
     }
 
     return rv.takeValue(needs_deref);
+}
+
+QoreValue QoreEnumCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    if (QoreEnumCastOperatorNode::checkValue(xsink, inner, false)) {
+        return QoreValue();
+    }
+    return inner.hasNode() ? inner.refSelf() : inner;
 }

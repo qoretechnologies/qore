@@ -102,6 +102,10 @@ public:
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const = 0;
 
+    //! Performs the cast on a pre-evaluated inner value (used by IR/JIT runtime).
+    //! Returns the cast result with a new reference; caller owns the result.
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const = 0;
+
 protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return 0;
@@ -130,6 +134,8 @@ public:
 
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
 
 protected:
     const QoreClass* qc;
@@ -160,6 +166,8 @@ public:
 
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
 
 protected:
     const TypedHashDecl* hd;
@@ -192,6 +200,8 @@ public:
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
 
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
 protected:
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
@@ -221,6 +231,8 @@ public:
 
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
 
 protected:
     const QoreTypeInfo* typeInfo;
@@ -252,6 +264,8 @@ public:
 
     // checks if the value matches the expected type
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
 
 protected:
     const QoreEnumDecl* ed;

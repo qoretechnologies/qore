@@ -50,6 +50,7 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreCastOperatorNode.h"
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -3695,6 +3696,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(push_fn, {list_boxed, val_boxed, xsink_arg});
                 // ListPush doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::CastList
+                    || inv->invoke_opcode == QoreIROpcode::CastHash
+                    || inv->invoke_opcode == QoreIROpcode::CastObject
+                    || inv->invoke_opcode == QoreIROpcode::CastEnum
+                    || inv->invoke_opcode == QoreIROpcode::CastAny) {
+                // Cast invoke: native cast with pre-evaluated inner value (operand[0])
+                auto* inner_val = getVal(inv->operands[0].id, error);
+                if (!inner_val) { return false; }
+                llvm::Value* inner_boxed = boxValue(inner_val, inv->operands[0].id);
+                QoreValue expr_val = inv->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner",
+                            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {expr_const, inner_boxed, xsink_arg});
+                }
+                // Cast doesn't modify locals — no reload needed
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
@@ -7114,6 +7142,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        // Cast operations: native cast with pre-evaluated inner value (operand[0])
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::CastAny: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            // operand[0] is the pre-evaluated inner value
+            auto* inner_val = getVal(inst->operands[0].id, error);
+            if (!inner_val) { return false; }
+            llvm::Value* inner_boxed = boxValue(inner_val, inst->operands[0].id);
+            QoreValue expr_val = expr_inst->expr;
+            uint64_t expr_bits;
+            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+            llvm::Value* result;
+            if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+            } else {
+                llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {expr_const, inner_boxed, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         // Remaining expression-based ops (non-DotEval)
         case QoreIROpcode::MapSelectList:
         case QoreIROpcode::MapSelectAny:
@@ -7121,11 +7183,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::HashMapSelect:
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMapSelectAny:
-        case QoreIROpcode::CastAny:
-        case QoreIROpcode::CastList:
-        case QoreIROpcode::CastHash:
-        case QoreIROpcode::CastObject:
-        case QoreIROpcode::CastEnum:
         case QoreIROpcode::InvokeSimError: {
             // These are expression-based ops — delegate to qore_rt_invoke_expr via the AST node
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);

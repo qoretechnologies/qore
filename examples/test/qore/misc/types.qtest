@@ -58,7 +58,52 @@ class TypeTest inherits QUnit::Test {
         addTestCase("complex assignments", \testComplexAssignments());
         addTestCase("auto", \testComplexAutoTypes());
         addTestCase("complex type compat", \testComplexTypesCompat());
-        addTestCase("types", \testTypes());
+        addTestCase("hash stat info type", \self.testHashStatInfoType());
+        addTestCase("int type", \self.testIntType());
+        addTestCase("float type", \self.testFloatType());
+        addTestCase("number type", \self.testNumberType());
+        addTestCase("string type", \self.testStringType());
+        addTestCase("bool type", \self.testBoolType());
+        addTestCase("date type", \self.testDateType());
+        addTestCase("date param type", \self.testDateParamType());
+        addTestCase("binary type", \self.testBinaryType());
+        addTestCase("hash type", \self.testHashType());
+        addTestCase("hash complex type", \self.testHashComplexType());
+        addTestCase("list type", \self.testListType());
+        addTestCase("list complex type", \self.testListComplexType());
+        addTestCase("object type", \self.testObjectType());
+        addTestCase("timeout type", \self.testTimeoutType());
+        addTestCase("data type", \self.testDataType());
+        addTestCase("null type", \self.testNullType());
+        addTestCase("nothing type", \self.testNothingType());
+        addTestCase("nullable int type", \self.testNullableIntType());
+        addTestCase("nullable float type", \self.testNullableFloatType());
+        addTestCase("nullable number type", \self.testNullableNumberType());
+        addTestCase("nullable string type", \self.testNullableStringType());
+        addTestCase("nullable bool type", \self.testNullableBoolType());
+        addTestCase("nullable date type", \self.testNullableDateType());
+        addTestCase("nullable binary type", \self.testNullableBinaryType());
+        addTestCase("nullable hash type", \self.testNullableHashType());
+        addTestCase("nullable list type", \self.testNullableListType());
+        addTestCase("nullable object type", \self.testNullableObjectType());
+        addTestCase("nullable timeout type", \self.testNullableTimeoutType());
+        addTestCase("nullable data type", \self.testNullableDataType());
+        addTestCase("nullable null type", \self.testNullableNullType());
+        addTestCase("soft int type", \self.testSoftIntType());
+        addTestCase("soft float type", \self.testSoftFloatType());
+        addTestCase("soft number type", \self.testSoftNumberType());
+        addTestCase("soft binary type", \self.testSoftBinaryType());
+        addTestCase("soft bool type", \self.testSoftBoolType());
+        addTestCase("soft string type", \self.testSoftStringType());
+        addTestCase("soft date type", \self.testSoftDateType());
+        addTestCase("soft list type", \self.testSoftListType());
+        addTestCase("nullable soft int type", \self.testNullableSoftIntType());
+        addTestCase("nullable soft float type", \self.testNullableSoftFloatType());
+        addTestCase("nullable soft number type", \self.testNullableSoftNumberType());
+        addTestCase("nullable soft bool type", \self.testNullableSoftBoolType());
+        addTestCase("nullable soft string type", \self.testNullableSoftStringType());
+        addTestCase("nullable soft date type", \self.testNullableSoftDateType());
+        addTestCase("nullable soft list type", \self.testNullableSoftListType());
         addTestCase("issue 2651", \issue2651());
         addTestCase("issue 2647", \issue2647());
 
@@ -784,7 +829,7 @@ class TypeTest inherits QUnit::Test {
         }
     }
 
-    testTypes() {
+    testHashStatInfoType() {
         {
             hash<StatInfo> h0({"size": 1});
             hash<auto> h1 = hash(h0);
@@ -793,6 +838,10 @@ class TypeTest inherits QUnit::Test {
             h1.newkey = 2;
             assertEq(2, h1.newkey);
         }
+
+    }
+
+    testIntType() {
         {
             int i = 1;
             assertEq(1, i);
@@ -945,6 +994,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testFloatType() {
         {
             float i = 1.0;
             assertEq(1.0, i);
@@ -1085,6 +1137,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNumberType() {
         {
             number i = 1n;
             assertEq(1n, i);
@@ -1216,6 +1271,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testStringType() {
         {
             string i = "1";
             assertEq("1", i);
@@ -1365,6 +1423,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testBoolType() {
         {
             bool i = True;
             assertEq(True, i);
@@ -1514,6 +1575,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testDateType() {
         {
             date i = 2017-07-10;
             assertEq(2017-07-10, i);
@@ -1664,6 +1728,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testDateParamType() {
         {
             date<absolute> abs = 2017-07-10;
             assertEq(2017-07-10, abs);
@@ -1737,6 +1804,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testBinaryType() {
         {
             binary i = <ab>;
             assertEq(<ab>, i);
@@ -1893,6 +1963,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testHashType() {
         {
             hash i = {};
             assertEq({}, i);
@@ -2042,6 +2115,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testHashComplexType() {
         {
             {
                 hash<string, softint> h(("a": "23"));
@@ -2116,6 +2192,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testListType() {
         {
             list i = ();
             assertEq((), i);
@@ -2265,6 +2344,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testListComplexType() {
         {
             {
                 list<softint> l("1", "2");
@@ -2350,6 +2432,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testObjectType() {
         {
             Mutex m();
             object i = m;
@@ -2500,6 +2585,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testTimeoutType() {
         {
             timeout i = 1970-01-01;
             assertEq(0, i);
@@ -2639,6 +2727,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testDataType() {
         {
             data i = "";
             assertEq("", i);
@@ -2773,6 +2864,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullType() {
         {
             null i = NULL;
             assertEq(NULL, i);
@@ -2905,6 +2999,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNothingType() {
         {
             nothing i = NOTHING;
             assertEq(NOTHING, i);
@@ -3031,6 +3128,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableIntType() {
         {
             *int i = 1;
             assertEq(1, i);
@@ -3156,6 +3256,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableFloatType() {
         {
             *float i = 1.0;
             assertEq(1.0, i);
@@ -3272,6 +3375,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableNumberType() {
         {
             *number i = 1n;
             assertEq(1n, i);
@@ -3379,6 +3485,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableStringType() {
         {
             *string i = "1";
             assertEq("1", i);
@@ -3504,6 +3613,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableBoolType() {
         {
             *bool i = True;
             assertEq(True, i);
@@ -3630,6 +3742,9 @@ class TypeTest inherits QUnit::Test {
 
         }
 
+    }
+
+    testNullableDateType() {
         {
             *date i = 2017-07-10;
             assertEq(2017-07-10, i);
@@ -3757,6 +3872,9 @@ class TypeTest inherits QUnit::Test {
 
         }
 
+    }
+
+    testNullableBinaryType() {
         {
             *binary i = <ab>;
             assertEq(<ab>, i);
@@ -3877,6 +3995,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableHashType() {
         {
             *hash i = {};
             assertEq({}, i);
@@ -4002,6 +4123,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableListType() {
         {
             *list i = ();
             assertEq((), i);
@@ -4127,6 +4251,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableObjectType() {
         {
             Mutex m();
             *object i = m;
@@ -4253,6 +4380,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableTimeoutType() {
         {
             *timeout i = 1970-01-01;
             assertEq(0, i);
@@ -4368,6 +4498,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableDataType() {
         {
             *data i = "";
             assertEq("", i);
@@ -4479,6 +4612,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableNullType() {
         {
             *null i = NULL;
             assertEq(NULL, i);
@@ -4596,6 +4732,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftIntType() {
         {
             softint i = 1;
             assertEq(1, i);
@@ -4694,6 +4833,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftFloatType() {
         {
             softfloat i = 1;
             assertEq(1.0, i);
@@ -4790,6 +4932,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftNumberType() {
         {
             softnumber i = 1;
             assertEq(1n, i);
@@ -4888,6 +5033,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftBinaryType() {
         {
             softbinary b = "1";
             assertEq(<31>, b);
@@ -5007,6 +5155,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftBoolType() {
         {
             softbool i = 1;
             assertEq(True, i);
@@ -5105,6 +5256,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftStringType() {
         {
             softstring i = 1;
             assertEq("1", i);
@@ -5203,6 +5357,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftDateType() {
         {
             softdate i = 1;
             assertEq(1970-01-01T00:00:01, i);
@@ -5301,6 +5458,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testSoftListType() {
         {
             softlist i = 1;
             assertEq((1,), i);
@@ -5331,6 +5491,9 @@ class TypeTest inherits QUnit::Test {
             assertEq((), i);
         }
 
+    }
+
+    testNullableSoftIntType() {
         {
             *softint i = 1;
             assertEq(1, i);
@@ -5414,6 +5577,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftFloatType() {
         {
             *softfloat i = 1;
             assertEq(1.0, i);
@@ -5495,6 +5661,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftNumberType() {
         {
             *softnumber i = 1;
             assertEq(1n, i);
@@ -5578,6 +5747,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftBoolType() {
         {
             *softbool i = 1;
             assertEq(True, i);
@@ -5661,6 +5833,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftStringType() {
         {
             *softstring i = 1;
             assertEq("1", i);
@@ -5744,6 +5919,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftDateType() {
         {
             *softdate i = 1;
             assertEq(1970-01-01T00:00:01, i);
@@ -5827,6 +6005,9 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testNullableSoftListType() {
         {
             *softlist i = 1;
             assertEq((1,), i);
@@ -5856,7 +6037,9 @@ class TypeTest inherits QUnit::Test {
             i = NOTHING;
             assertEq(NOTHING, i);
         }
+
     }
+
 
     issue2651() {
         assertEq("hash<string, bool>", (map {$1: True}, keys {}).fullType());

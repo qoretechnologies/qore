@@ -313,6 +313,12 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Allow environment variable to override optimization level for debugging/testing
+    const char* opt_override = getenv("QORE_AOT_OPT_LEVEL");
+    if (opt_override) {
+        opt_level = atoi(opt_override);
+    }
+
     if (verbose) {
         if (is_split_module) {
             printf("Source: %s (split module directory)\n", source_file);

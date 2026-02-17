@@ -36,6 +36,7 @@
 #include <qore/Qore.h>
 
 #include <sys/stat.h>
+#include <set>
 #include <unordered_set>
 
 #include "qore/intern/qore_program_private.h"
@@ -56,6 +57,12 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/ScopedObjectCallNode.h"
+#include <qore/QoreNumberNode.h>
+#include <qore/BinaryNode.h>
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -223,7 +230,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledFunc>& compiled_funcs,
-        int& total_funcs, int& compiled_count, int& failed_count) {
+        int& total_funcs, int& compiled_count, int& failed_count,
+        size_t& total_ir_insts_all,
+        std::set<std::string>* compiled_keys = nullptr) {
+    // Track compiled variant keys to skip duplicates from iterator yielding
+    // the same variant twice (committed + pending)
+    std::set<std::string> local_keys;
+    if (!compiled_keys) {
+        compiled_keys = &local_keys;
+    }
+
     // Walk functions
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
@@ -244,22 +260,21 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             const char* fname = func->getName();
             // Generate unique key including parameter types to distinguish overloads
             std::string variant_key = getVariantKey(fname, variant);
+            // Skip duplicate variant keys (iterator may yield committed + pending)
+            if (!compiled_keys->insert(variant_key).second) {
+                continue;
+            }
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
             int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error);
 
             if (rc == 0 && ir_func) {
-                // Skip if another variant with the same LLVM function name was already compiled.
-                // Overloaded variants share the same function name but only the first can be
-                // lowered into a single LLVM function; re-lowering would corrupt debug info.
+                // Use variant key as LLVM symbol name to distinguish overloaded variants
+                ir_func->name = variant_key;
+
+                // Skip if another variant with the same LLVM function name was already compiled
                 llvm::Function* existing = module.getFunction(ir_func->name);
                 if (existing && !existing->empty()) {
-                    printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
-                        variant_key.c_str(), ir_func->name.c_str());
-                    if (getenv("QORE_AOT_DEBUG")) {
-                        fprintf(stderr, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
-                            variant_key.c_str(), ir_func->name.c_str());
-                    }
                     delete ir_func;
                     continue;
                 }
@@ -279,6 +294,22 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
                     QoreIRPrinter::print(*ir_func, std::cerr);
                     fprintf(stderr, "=================\n");
+                }
+                // Count total IR instructions and warn for large functions
+                size_t total_ir_insts = 0;
+                for (const auto& block : ir_func->blocks) {
+                    total_ir_insts += block->instructions.size();
+                }
+                total_ir_insts_all += total_ir_insts;
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr, "AOT: lowering function '%s' (blocks=%zu, insts=%zu)\n",
+                        variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
+                }
+                if (total_ir_insts > 5000) {
+                    fprintf(stderr, "warning: function '%s' has %zu IR instructions; "
+                        "LLVM compilation may take a long time; consider breaking this "
+                        "function into smaller functions\n",
+                        variant_key.c_str(), total_ir_insts);
                 }
                 if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                     AOTCompiledFunc cf;
@@ -321,6 +352,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             continue;
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
+        // Use namespace-qualified class path for unique LLVM symbol names
+        const char* class_path = qc->getPath();
         const char* class_name = qc->getName();
 
         // Helper lambda for method iteration
@@ -340,23 +373,24 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 }
 
                 ++total_funcs;
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                std::string method_name = std::string(class_path) + "::" + meth->getName();
                 // Generate unique key including parameter types to distinguish overloads
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
+                // Skip duplicate variant keys (iterator may yield committed + pending)
+                if (!compiled_keys->insert(variant_key).second) {
+                    continue;
+                }
                 QoreIRFunction* ir_func = nullptr;
                 std::string lower_error;
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
+                    // Use variant key as LLVM symbol name to distinguish overloaded variants
+                    ir_func->name = variant_key;
+
                     // Skip if another variant with the same LLVM function name was already compiled
                     llvm::Function* existing = module.getFunction(ir_func->name);
                     if (existing && !existing->empty()) {
-                        printd(2, "AOT: skipping duplicate variant '%s' (function '%s' already compiled)\n",
-                            variant_key.c_str(), ir_func->name.c_str());
-                        if (getenv("QORE_AOT_DEBUG")) {
-                            fprintf(stderr, "AOT: skipping duplicate method variant '%s' (function '%s' already compiled)\n",
-                                variant_key.c_str(), ir_func->name.c_str());
-                        }
                         delete ir_func;
                         continue;
                     }
@@ -371,6 +405,22 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     lowerer.setAOTMode(&slots);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     std::string llvm_error;
+                    // Count total IR instructions and warn for large functions
+                    size_t total_ir_insts = 0;
+                    for (const auto& block : ir_func->blocks) {
+                        total_ir_insts += block->instructions.size();
+                    }
+                    total_ir_insts_all += total_ir_insts;
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: lowering method '%s' (blocks=%zu, insts=%zu)\n",
+                            variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
+                    }
+                    if (total_ir_insts > 5000) {
+                        fprintf(stderr, "warning: method '%s' has %zu IR instructions; "
+                            "LLVM compilation may take a long time; consider breaking this "
+                            "method into smaller methods\n",
+                            variant_key.c_str(), total_ir_insts);
+                    }
                     if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                         AOTCompiledFunc cf;
                         cf.name = variant_key;  // Use variant key instead of plain name
@@ -425,7 +475,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (child_ns) {
             compileNamespaceFunctions(qore_ns_private::get(*child_ns), pgm, ctx, module,
                 di_builder, di_cu,
-                compiled_funcs, total_funcs, compiled_count, failed_count);
+                compiled_funcs, total_funcs, compiled_count, failed_count,
+                total_ir_insts_all, compiled_keys);
         }
     }
 }
@@ -795,6 +846,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     int total_funcs = 0;
     int compiled_count = 0;
     int failed_count = 0;
+    size_t total_ir_insts_all = 0;  // Track total IR instructions across all functions
 
     // Create shared debug info for all functions in this module
     llvm::DIBuilder di_builder(*module);
@@ -812,7 +864,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
-        compiled_funcs, total_funcs, compiled_count, failed_count);
+        compiled_funcs, total_funcs, compiled_count, failed_count, total_ir_insts_all);
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -854,6 +906,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
                 // Classify locals as IR-only vs AST-visible for optimization
                 ir_func->computeIROnlyLocals();
+
+                // Count toplevel IR instructions
+                for (const auto& block : ir_func->blocks) {
+                    total_ir_insts_all += block->instructions.size();
+                }
 
                 // Build slot map for AOT pointer indirection
                 AOTSlotMap slots;
@@ -909,6 +966,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     printf("AOT compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
         compiled_count, total_funcs + 1, failed_count,
         total_funcs + 1 - compiled_count - failed_count);
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: total_funcs=%d compiled=%d failed=%d has_unsupported=%d\n",
+            total_funcs + 1, compiled_count, failed_count,
+            total_funcs + 1 - compiled_count - failed_count);
+    }
 
     // Use the program's actual parse options (includes directives like %modern)
     parse_options = pgm->getParseOptions64();
@@ -997,6 +1059,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
     di_builder.finalize();
 
     // Verify the complete module
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: verifying LLVM module...\n");
+    }
     std::string verify_error;
     llvm::raw_string_ostream verify_os(verify_error);
     if (llvm::verifyModule(*module, &verify_os)) {
@@ -1012,8 +1077,15 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     // Step 4: Emit object file
     std::string obj_path = output_path + ".o";
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: emitting object file (O%d, total IR insts: %zu)...\n",
+            opt_level, total_ir_insts_all);
+    }
     if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
         return false;
+    }
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: object file emitted\n");
     }
     printd(2, "AOT: emitted object file: %s (O%d)\n", obj_path.c_str(), opt_level);
 
@@ -1929,6 +2001,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     int total_funcs = 0;
     int compiled_count = 0;
     int failed_count = 0;
+    size_t total_ir_insts_all = 0;
 
     // Create shared debug info for all functions in this module
     llvm::DIBuilder di_builder(*module);
@@ -1968,7 +2041,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
         found_any = true;
         compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
-            compiled_funcs, total_funcs, compiled_count, failed_count);
+            compiled_funcs, total_funcs, compiled_count, failed_count, total_ir_insts_all);
     }
     if (!found_any) {
         error = "no module namespaces found after parsing (expected at least '" + mod_info.name + "')";
@@ -2251,6 +2324,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         int total_funcs = 0;
         int compiled_count = 0;
         int failed_count = 0;
+        size_t total_ir_insts_all = 0;
 
         // Create shared debug info for all functions in this module
         llvm::DIBuilder di_builder(*module);
@@ -2291,7 +2365,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
             found_any = true;
             compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
-                compiled_funcs, total_funcs, compiled_count, failed_count);
+                compiled_funcs, total_funcs, compiled_count, failed_count, total_ir_insts_all);
         }
         if (!found_any) {
             error = "no module namespaces found after parsing (expected at least '" + mod_name + "')";
@@ -3393,9 +3467,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         return id;
     }
 
-    // SelfVarrefNode: self variable reference
-    if (dynamic_cast<const SelfVarrefNode*>(node)) {
+    // SelfVarrefNode: self variable reference (e.g., self.member)
+    if (auto* svn = dynamic_cast<const SelfVarrefNode*>(node)) {
         id.kind = AOTExprKind::SELF_VARREF;
+        if (svn->str) {
+            id.ref1 = svn->str;
+        }
         return id;
     }
 
@@ -3415,9 +3492,58 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         // Global variables fall through to GENERIC_EVAL for now
     }
 
+    // QoreNumberNode: number literal constant
+    if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
+        id.kind = AOTExprKind::CONST_NUMBER;
+        QoreString str;
+        num->toString(str);
+        id.ref1 = str.c_str();
+        return id;
+    }
+
+    // BinaryNode: binary literal constant
+    if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
+        id.kind = AOTExprKind::CONST_BINARY;
+        // Hex-encode the binary data
+        std::string hex;
+        const unsigned char* data = static_cast<const unsigned char*>(bin->getPtr());
+        size_t len = bin->size();
+        hex.reserve(len * 2);
+        for (size_t i = 0; i < len; ++i) {
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", data[i]);
+            hex.append(buf);
+        }
+        id.ref1 = std::move(hex);
+        return id;
+    }
+
+    // ScopedObjectCallNode: scoped new object (new ClassName::SubClass())
+    // Note: must check BEFORE NewObjectCallNode since ScopedObjectCallNode
+    // does not inherit from NewObjectCallNode
+    if (auto* sc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        id.kind = AOTExprKind::SCOPED_NEW_OBJECT;
+        if (sc->oc) {
+            id.ref1 = sc->oc->getName();
+        }
+        return id;
+    }
+
+    // StaticClassVarRefNode: static class variable reference
+    if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        id.kind = AOTExprKind::STATIC_VARREF;
+        id.ref1 = sv->qc.getName();
+        id.ref2 = sv->str;
+        return id;
+    }
+
     // Unsupported expression type — function needs source fallback
     id.kind = AOTExprKind::GENERIC_EVAL;
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: unsupported expression type '%s' (node type %d) for slot serialization\n",
+            node->getTypeName(), node->getType());
+    }
     return id;
 }
 

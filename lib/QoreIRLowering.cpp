@@ -5653,12 +5653,7 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
     const QoreSingleExpressionOperatorNode<>* cast_node = cast
         ? static_cast<const QoreSingleExpressionOperatorNode<>*>(cast)
         : static_cast<const QoreSingleExpressionOperatorNode<>*>(parse_cast);
-    // NOTE: Do NOT lower the inner expression separately here.  Cast opcodes
-    // delegate to AST via evalExprNode() which evaluates the full cast
-    // expression (including the inner expression) in one pass.  If we also
-    // lower the inner expression to IR instructions, side-effecting
-    // sub-expressions (e.g. "remove body{key}") would fire twice: once from
-    // the IR instruction and once from the AST delegation.
+
     QoreIROpcode opcode = QoreIROpcode::CastAny;
     if (cast) {
         if (dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
@@ -5672,8 +5667,22 @@ QoreIRValue QoreIRLowering::lowerCast(const QoreValue& expr, std::string& error)
             opcode = QoreIROpcode::CastObject;
         }
     }
+
+    // Pre-evaluate the inner expression as operand[0].  The cast runtime helpers
+    // perform only the type check/coercion on the pre-evaluated value, avoiding
+    // double-evaluation of side-effecting sub-expressions.
+    QoreIRValue inner = lowerExpression(cast_node->getExp(), error);
+    if (!inner.isValid()) {
+        return QoreIRValue();
+    }
     std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(opcode, expr, operands, cast_node->loc, error);
+    operands.push_back(inner);
+
+    // Use lowerExprOpOrInvoke for instruction creation (handles try/catch properly),
+    // but undo the ast_delegate_count increment since cast opcodes are now native.
+    auto result = lowerExprOpOrInvoke(opcode, expr, operands, cast_node->loc, error);
+    --ast_delegate_count;
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {

@@ -63,6 +63,7 @@
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/QoreCastOperatorNode.h>
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -613,6 +614,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_closure(const QoreClosureParseNode*
         result = result.refSelf();
     }
     return toBits(result);
+}
+
+// --- Cast helpers ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner(uint64_t cast_expr_bits, uint64_t inner_bits,
+        ExceptionSink* xsink) {
+    QoreValue cast_expr = fromBits(cast_expr_bits);
+    QoreValue inner = fromBits(inner_bits);
+
+    if (!cast_expr.hasNode()) {
+        if (xsink) {
+            xsink->raiseException("IR-CAST-ERROR", "missing cast expression node");
+        }
+        return toBits(QoreValue());
+    }
+
+    auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(cast_expr.getInternalNode());
+    if (!cast_node) {
+        if (xsink) {
+            xsink->raiseException("IR-CAST-ERROR", "cast expression is not a resolved cast operator");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreValue result = cast_node->castValue(inner, xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t inner_bits, ExceptionSink* xsink) {
+    return qore_rt_cast_with_inner(ctx->exprs[slot], inner_bits, xsink);
 }
 
 // --- Call reference creation helper ---

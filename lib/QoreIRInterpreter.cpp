@@ -352,10 +352,6 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
         case QoreIROpcode::HashMap:
         case QoreIROpcode::HashMapSelectAny:
         case QoreIROpcode::HashMapSelect:
-        case QoreIROpcode::CastList:
-        case QoreIROpcode::CastHash:
-        case QoreIROpcode::CastObject:
-        case QoreIROpcode::CastEnum:
             return evalExprNode(expr, xsink);
         case QoreIROpcode::InvokeSimError: {
             if (xsink) {
@@ -363,19 +359,15 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
             }
             return QoreValue();
         }
-        case QoreIROpcode::CastAny: {
-            if (expr.hasNode()) {
-                auto* parse_cast = dynamic_cast<const QoreParseCastOperatorNode*>(expr.getInternalNode());
-                if (parse_cast) {
-                    if (xsink) {
-                        xsink->raiseException("IR-INTERPRETER-ERROR",
-                            "cast opcode requires parse initialization");
-                    }
-                    return QoreValue();
-                }
-            }
-            return evalExprNode(expr, xsink);
-        }
+        // Cast opcodes are handled natively in the main execution loop
+        // using operand[0] — they should not reach evalExpr
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::CastAny:
+            assert(false);
+            return QoreValue();
         default:
             // LValue opcodes (StoreLValue, AddAssignLValue, ShlAssignLValue, etc.)
             // and any other opcodes not explicitly handled above
@@ -1052,6 +1044,21 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     list_val.getTypeName());
             }
             return QoreValue();
+        }
+
+        // Cast opcodes: native cast with pre-evaluated inner value (operand[0])
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:
+        case QoreIROpcode::CastAny: {
+            QoreValue inner = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(inv->expr.getInternalNode());
+            if (cast_node) {
+                return cast_node->castValue(inner, xsink);
+            }
+            // Fallback for unresolved CastAny
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
         // Everything else (LoadLValue, expression ops, etc.)
@@ -4377,11 +4384,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::PushAny:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
-        case QoreIROpcode::CastAny:
-            case QoreIROpcode::CastList:
-            case QoreIROpcode::CastHash:
-            case QoreIROpcode::CastObject:
-            case QoreIROpcode::CastEnum:
             case QoreIROpcode::InvokeSimError: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
@@ -4394,9 +4396,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 // Invalidate caches for opcodes that modify variables via AST.
-                // Cast opcodes also need invalidation because their inner
-                // expression (evaluated via AST delegation) may contain
-                // side-effecting operations (e.g. "remove body{key}").
                 switch (inst->opcode) {
                     case QoreIROpcode::ExtractAny:
                     case QoreIROpcode::ExtractList:
@@ -4419,11 +4418,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     case QoreIROpcode::PopAny:
                     case QoreIROpcode::PushAny:
                     case QoreIROpcode::ListAssignAny:
-                    case QoreIROpcode::CastAny:
-                    case QoreIROpcode::CastList:
-                    case QoreIROpcode::CastHash:
-                    case QoreIROpcode::CastObject:
-                    case QoreIROpcode::CastEnum:
                         cleanupStoredValues(locals, nullptr);
                         cleanupStoredValues(globals, nullptr);
                         cleanupStoredValues(threadlocals, nullptr);
@@ -4432,6 +4426,39 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     default:
                         break;
                 }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+        // Cast opcodes: native cast with pre-evaluated inner value (operand[0])
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                QoreValue inner = getIRValue(values, inst->operands[0]);
+                auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
+                    expr_inst->expr.getInternalNode());
+                QoreValue res;
+                if (cast_node) {
+                    res = cast_node->castValue(inner, xsink);
+                } else {
+                    // Fallback for unresolved CastAny (QoreParseCastOperatorNode)
+                    res = evalExprNode(expr_inst->expr, xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                // Cast opcodes are now native — no cache invalidation needed
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(inst->result.id);

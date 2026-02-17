@@ -581,6 +581,16 @@ uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
 uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,
     int nargs, ExceptionSink* xsink);
 
+//! Cast operation with pre-evaluated inner value.
+//! cast_expr_bits is the NaN-boxed cast operator AST node (QoreCastOperatorNode*).
+//! inner_bits is the NaN-boxed pre-evaluated inner value to cast.
+//! Returns the NaN-boxed cast result; sets xsink on RUNTIME-CAST-ERROR.
+uint64_t qore_rt_cast_with_inner(uint64_t cast_expr_bits, uint64_t inner_bits, ExceptionSink* xsink);
+
+//! AOT variant: resolve cast expression from context slot, then delegate to qore_rt_cast_with_inner
+uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, int32_t slot, uint64_t inner_bits,
+    ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

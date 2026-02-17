@@ -1509,29 +1509,30 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(static_cast<uint8_t>(expr.kind));
             switch (expr.kind) {
                 case AOTExprKind::FUNC_CALL:
-                    // ref1 = function name
+                case AOTExprKind::NEW_OBJECT:
+                case AOTExprKind::SCOPED_NEW_OBJECT:
+                case AOTExprKind::RUNTIME_CONST_REF:
+                case AOTExprKind::LOCAL_VARREF:
+                case AOTExprKind::CONST_NUMBER:
+                case AOTExprKind::CONST_BINARY:
+                    // ref1 = name/value/index
                     writer.writeStringRef(expr.ref1.c_str());
                     break;
                 case AOTExprKind::SELF_METHOD_CALL:
                 case AOTExprKind::STATIC_METHOD_CALL:
-                    // ref1 = class path, ref2 = method name
+                case AOTExprKind::STATIC_VARREF:
+                    // ref1 = class path, ref2 = method/var name
                     writer.writeStringRef(expr.ref1.c_str());
                     writer.writeStringRef(expr.ref2.c_str());
                     break;
-                case AOTExprKind::NEW_OBJECT:
-                    // ref1 = class name
-                    writer.writeStringRef(expr.ref1.c_str());
-                    break;
-                case AOTExprKind::RUNTIME_CONST_REF:
-                    // ref1 = constant name
-                    writer.writeStringRef(expr.ref1.c_str());
-                    break;
                 case AOTExprKind::SELF_VARREF:
-                    // no additional data
-                    break;
-                case AOTExprKind::LOCAL_VARREF:
-                    // ref1 = local slot index (as string)
+                    // ref1 = member name
                     writer.writeStringRef(expr.ref1.c_str());
+                    break;
+                case AOTExprKind::CLOSURE_CREATE:
+                case AOTExprKind::CALL_REF:
+                case AOTExprKind::OBJ_METHOD_REF:
+                    // no additional data
                     break;
                 case AOTExprKind::GENERIC_EVAL:
                 default:

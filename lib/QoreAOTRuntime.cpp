@@ -51,6 +51,11 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
+#include <qore/QoreNumberNode.h>
+#include <qore/BinaryNode.h>
 
 #include <cassert>
 #include <cstring>
@@ -125,12 +130,117 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             return toBitsNB(QoreValue(smcn));
         }
 
-        case AOTExprKind::NEW_OBJECT:
-        case AOTExprKind::SELF_VARREF:
+        case AOTExprKind::SELF_METHOD_CALL: {
+            if (!ref2 || !*ref2) {
+                return 0;
+            }
+            // Look up class, then find method
+            const QoreClass* qc = nullptr;
+            if (ref1 && *ref1) {
+                const qore_ns_private* found_ns = nullptr;
+                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
+            }
+            if (!qc) {
+                printd(0, "AOT v2: cannot resolve class '%s' for self method '%s'\n",
+                    ref1 ? ref1 : "(null)", ref2);
+                return 0;
+            }
+            const QoreMethod* m = qc->findMethod(ref2);
+            if (!m) {
+                m = qc->findStaticMethod(ref2);
+            }
+            if (!m) {
+                printd(0, "AOT v2: cannot find method '%s::%s'\n", ref1, ref2);
+                return 0;
+            }
+            SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(ref2), nullptr, m,
+                m->getClass(), qore_class_private::get(*m->getClass()));
+            return toBitsNB(QoreValue(sfcn));
+        }
+
+        case AOTExprKind::NEW_OBJECT: {
+            if (!ref1 || !*ref1) {
+                return 0;
+            }
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                *pp->RootNS, ref1, found_ns);
+            if (!qc) {
+                printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
+                return 0;
+            }
+            NewObjectCallNode* nocn = new NewObjectCallNode(qc, nullptr);
+            return toBitsNB(QoreValue(nocn));
+        }
+
+        case AOTExprKind::SCOPED_NEW_OBJECT: {
+            if (!ref1 || !*ref1) {
+                return 0;
+            }
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                *pp->RootNS, ref1, found_ns);
+            if (!qc) {
+                printd(0, "AOT v2: cannot resolve class '%s' for scoped new object\n", ref1);
+                return 0;
+            }
+            ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, nullptr);
+            return toBitsNB(QoreValue(socn));
+        }
+
+        case AOTExprKind::SELF_VARREF: {
+            if (!ref1 || !*ref1) {
+                return 0;
+            }
+            SelfVarrefNode* svn = new SelfVarrefNode(&loc_builtin, strdup(ref1));
+            return toBitsNB(QoreValue(svn));
+        }
+
+        case AOTExprKind::CONST_NUMBER: {
+            if (!ref1 || !*ref1) {
+                return 0;
+            }
+            QoreNumberNode* num = new QoreNumberNode(ref1);
+            return toBitsNB(QoreValue(num));
+        }
+
+        case AOTExprKind::CONST_BINARY: {
+            if (!ref1) {
+                return 0;
+            }
+            // Decode hex-encoded binary data
+            size_t hex_len = strlen(ref1);
+            size_t bin_len = hex_len / 2;
+            SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+            if (bin_len > 0) {
+                bin->preallocate(bin_len);
+                unsigned char* dst = static_cast<unsigned char*>(
+                    const_cast<void*>(bin->getPtr()));
+                for (size_t i = 0; i < bin_len; ++i) {
+                    unsigned int byte;
+                    sscanf(ref1 + i * 2, "%2x", &byte);
+                    dst[i] = static_cast<unsigned char>(byte);
+                }
+            }
+            return toBitsNB(QoreValue(bin.release()));
+        }
+
+        case AOTExprKind::CLOSURE_CREATE:
+            // Closures require the full AST context — they can't be symbolically
+            // resolved from just a name. Mark as resolvable so the function doesn't
+            // get flagged as unsupported; the CreateClosure opcode delegates to AST
+            // at runtime and will use the expr slot which stores the original
+            // QoreClosureParseNode from the parsed source.
+            // Return 0 to indicate no resolution needed — the slot will be filled
+            // from the re-parsed source at runtime via buildContextForVariant().
+            return 0;
+
+        case AOTExprKind::CALL_REF:
+        case AOTExprKind::OBJ_METHOD_REF:
+        case AOTExprKind::STATIC_VARREF:
         case AOTExprKind::RUNTIME_CONST_REF:
-        case AOTExprKind::SELF_METHOD_CALL:
-            // These need more complex resolution; function needs source fallback
-            printd(1, "AOT v2: expression kind %d not yet fully implemented\n", (int)kind);
+            // These need the full AST context for proper resolution
+            printd(1, "AOT v2: expression kind %d requires source fallback\n", (int)kind);
             return 0;
 
         case AOTExprKind::GENERIC_EVAL:
@@ -274,21 +384,24 @@ static QoreAOTContext* buildContextFromSlotMap(
 
         switch (kind) {
             case AOTExprKind::FUNC_CALL:
+            case AOTExprKind::NEW_OBJECT:
+            case AOTExprKind::SCOPED_NEW_OBJECT:
+            case AOTExprKind::RUNTIME_CONST_REF:
+            case AOTExprKind::LOCAL_VARREF:
+            case AOTExprKind::CONST_NUMBER:
+            case AOTExprKind::CONST_BINARY:
+            case AOTExprKind::SELF_VARREF:
                 ref1 = reader.readStringRef(ptr);
                 break;
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_METHOD_CALL:
+            case AOTExprKind::STATIC_VARREF:
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
                 break;
-            case AOTExprKind::NEW_OBJECT:
-            case AOTExprKind::RUNTIME_CONST_REF:
-                ref1 = reader.readStringRef(ptr);
-                break;
-            case AOTExprKind::LOCAL_VARREF:
-                ref1 = reader.readStringRef(ptr);
-                break;
-            case AOTExprKind::SELF_VARREF:
+            case AOTExprKind::CLOSURE_CREATE:
+            case AOTExprKind::CALL_REF:
+            case AOTExprKind::OBJ_METHOD_REF:
             case AOTExprKind::GENERIC_EVAL:
             default:
                 break;
@@ -507,16 +620,20 @@ static void registerAOTFunctionsFromSlotMaps(
                 switch (static_cast<AOTExprKind>(kind)) {
                     case AOTExprKind::FUNC_CALL:
                     case AOTExprKind::NEW_OBJECT:
+                    case AOTExprKind::SCOPED_NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
                     case AOTExprKind::LOCAL_VARREF:
+                    case AOTExprKind::CONST_NUMBER:
+                    case AOTExprKind::CONST_BINARY:
+                    case AOTExprKind::SELF_VARREF:
                         reader.readStringRef(ptr);
                         break;
                     case AOTExprKind::SELF_METHOD_CALL:
                     case AOTExprKind::STATIC_METHOD_CALL:
+                    case AOTExprKind::STATIC_VARREF:
                         reader.readStringRef(ptr);
                         reader.readStringRef(ptr);
                         break;
-                    case AOTExprKind::SELF_VARREF:
                     default:
                         break;
                 }
@@ -556,13 +673,17 @@ static void registerAOTFunctionsFromSlotMaps(
                 switch (static_cast<AOTExprKind>(kind)) {
                     case AOTExprKind::FUNC_CALL:
                     case AOTExprKind::NEW_OBJECT:
+                    case AOTExprKind::SCOPED_NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
                     case AOTExprKind::LOCAL_VARREF:
+                    case AOTExprKind::CONST_NUMBER:
+                    case AOTExprKind::CONST_BINARY:
+                    case AOTExprKind::SELF_VARREF:
                         reader.readStringRef(ptr); break;
                     case AOTExprKind::SELF_METHOD_CALL:
                     case AOTExprKind::STATIC_METHOD_CALL:
+                    case AOTExprKind::STATIC_VARREF:
                         reader.readStringRef(ptr); reader.readStringRef(ptr); break;
-                    case AOTExprKind::SELF_VARREF:
                     default: break;
                 }
             }
@@ -587,10 +708,10 @@ static void registerAOTFunctionsFromSlotMaps(
             fname_str = fname_str.substr(0, paren);
         }
 
-        size_t sep = fname_str.find("::");
+        size_t sep = fname_str.rfind("::");
 
         if (sep != std::string::npos) {
-            // Method: ClassName::methodName
+            // Method: Namespace::ClassName::methodName — use last :: as class/method separator
             std::string class_name = fname_str.substr(0, sep);
             std::string method_name = fname_str.substr(sep + 2);
 
@@ -1130,16 +1251,20 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                     switch (static_cast<AOTExprKind>(kind)) {
                                         case AOTExprKind::FUNC_CALL:
                                         case AOTExprKind::NEW_OBJECT:
+                                        case AOTExprKind::SCOPED_NEW_OBJECT:
                                         case AOTExprKind::RUNTIME_CONST_REF:
                                         case AOTExprKind::LOCAL_VARREF:
+                                        case AOTExprKind::CONST_NUMBER:
+                                        case AOTExprKind::CONST_BINARY:
+                                        case AOTExprKind::SELF_VARREF:
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
                                         case AOTExprKind::SELF_METHOD_CALL:
                                         case AOTExprKind::STATIC_METHOD_CALL:
+                                        case AOTExprKind::STATIC_VARREF:
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
-                                        case AOTExprKind::SELF_VARREF:
                                         default: break;
                                     }
                                 }

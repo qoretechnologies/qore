@@ -1697,6 +1697,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             output_path = compile_module_mode ? "module.qmod" : "a.out";
          }
 
+         // Allow environment variable to override optimization level for debugging/testing
+         const char* opt_override = getenv("QORE_AOT_OPT_LEVEL");
+         if (opt_override) {
+            aot_opt_level = atoi(opt_override);
+         }
+
          std::string error;
          if (is_split_module) {
             // Compile split module directory
