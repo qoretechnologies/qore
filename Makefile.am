@@ -82,6 +82,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/ShipStationRestClient.qm \
 	qlib/ShippoRestClient.qm \
 	qlib/SquareRestClient.qm \
+	qlib/SquarespaceRestClient.qm \
 	qlib/Cin7CoreRestClient.qm \
 	qlib/UnleashedRestClient.qm \
 	qlib/FilePoller.qm \
@@ -153,6 +154,7 @@ DOX_SPLIT_MODULES = \
     qlib/ShipStationDataProvider \
     qlib/ShippoDataProvider \
     qlib/SquareDataProvider \
+    qlib/SquarespaceDataProvider \
     qlib/Cin7CoreDataProvider \
     qlib/UnleashedDataProvider \
     qlib/SwaggerDataProvider \
@@ -226,6 +228,7 @@ ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 ShipStationDataProvider_modverdir = $(modverdir)/ShipStationDataProvider
 ShippoDataProvider_modverdir = $(modverdir)/ShippoDataProvider
 SquareDataProvider_modverdir = $(modverdir)/SquareDataProvider
+SquarespaceDataProvider_modverdir = $(modverdir)/SquarespaceDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
 UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
@@ -283,6 +286,7 @@ dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestData
 dist_ShipStationDataProvider_modver_DATA = $(wildcard qlib/ShipStationDataProvider/*.q[cm]) $(wildcard qlib/ShipStationDataProvider/*.svg)
 dist_ShippoDataProvider_modver_DATA = $(wildcard qlib/ShippoDataProvider/*.q[cm]) $(wildcard qlib/ShippoDataProvider/*.svg)
 dist_SquareDataProvider_modver_DATA = $(wildcard qlib/SquareDataProvider/*.q[cm]) $(wildcard qlib/SquareDataProvider/*.svg)
+dist_SquarespaceDataProvider_modver_DATA = $(wildcard qlib/SquarespaceDataProvider/*.q[cm]) $(wildcard qlib/SquarespaceDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
 dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*.q[cm]) $(wildcard qlib/UnleashedDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
@@ -1233,6 +1237,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/FreshBooksDataProvider/freshbooks-logo.svg \
 	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/SquareDataProvider/square-logo.svg \
+	qlib/SquarespaceDataProvider/squarespace-logo.svg \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
