@@ -318,11 +318,31 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
+    // Build a name-based map of locals for body local reuse (toplevel path)
+    std::unordered_map<std::string, LocalVar*> local_name_map;
+    if (!uvb) {
+        for (int i = 0; i < num_locals; ++i) {
+            if (ctx->locals[i]) {
+                local_name_map[ctx->locals[i]->getName()] = ctx->locals[i];
+            }
+        }
+    }
+
     // Read body locals
     for (int i = 0; i < num_body_locals; ++i) {
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
         uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+
+        // For toplevel, reuse LocalVar* from ctx->locals[] if same name exists
+        if (!uvb && blname) {
+            auto it = local_name_map.find(blname);
+            if (it != local_name_map.end()) {
+                ctx->all_body_locals.push_back(it->second);
+                (void)bl_closure;
+                continue;
+            }
+        }
 
         std::string type_error;
         QoreAOTTypeResolver type_resolver(pgm);
@@ -342,6 +362,14 @@ static QoreAOTContext* buildContextFromSlotMap(
     printd(2, "AOT v2: built context from slot map for '%s' "
         "(locals=%d, globals=%d, exprs=%d, body_locals=%d, unsupported=%d)\n",
         name, num_locals, num_globals, num_exprs, num_body_locals, has_unsupported);
+
+    // If any expression slots have unsupported types (e.g., closures), skip AOT
+    // registration for this function — it will fall through to JIT at runtime
+    if (has_unsupported) {
+        printd(2, "AOT v2: skipping '%s' due to unsupported expression slots\n", name);
+        delete ctx;
+        return nullptr;
+    }
 
     return ctx;
 }
@@ -570,9 +598,13 @@ static void registerAOTFunctionsFromSlotMaps(
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                 *pp->RootNS, class_name.c_str());
             if (qc) {
-                const QoreMethod* m = qc->findMethod(method_name.c_str());
+                // Use parseFindLocalMethod/parseFindLocalStaticMethod instead of
+                // findMethod/findStaticMethod — the latter checks committedEmpty()
+                // which returns true for deserialized (pending) variants
+                qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+                const QoreMethod* m = qcp->parseFindLocalMethod(method_name.c_str());
                 if (!m) {
-                    m = qc->findStaticMethod(method_name.c_str());
+                    m = qcp->parseFindLocalStaticMethod(method_name.c_str());
                 }
                 if (m) {
                     MethodFunctionBase* mfb = qore_method_private::get(*m)->getFunction();

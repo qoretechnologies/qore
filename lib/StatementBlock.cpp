@@ -714,6 +714,9 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     }
     const LVList* lv_list = getLVList();
     if (!lv_list) {
+        // v2 path: no parse() was called, so lvars was never created.
+        // Create an LVList from the AOT context locals so doTopLevelInstantiation() works.
+        lvars = new LVList(ctx->locals, ctx->num_locals);
         return;
     }
     // Update the LVList entries from the AOT context
