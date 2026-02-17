@@ -65,7 +65,7 @@ module DataProvider {
             "desc": "Built-in Qore data pipeline processors for filtering, transforming, "
                 "and manipulating records in data pipelines",
             "logo": QoreApp::QoreLogo,
-            "logo_file_name": "qore-q-logo.svg",
+            "logo_file_name": "Qore-Q-square.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (AppGroup::DataTransformation,),
         });

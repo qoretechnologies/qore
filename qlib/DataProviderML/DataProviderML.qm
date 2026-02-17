@@ -51,7 +51,7 @@ module DataProviderML {
                 "revenue with seasonal patterns), regression (estimate prices from features), "
                 "and dimensionality reduction (compress 50 fields to 3 key values).",
             "logo": MLApp::MLLogo,
-            "logo_file_name": "qore-q-logo.svg",
+            "logo_file_name": "Qore-Q-square.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (AppGroup::Analytics,),
         });

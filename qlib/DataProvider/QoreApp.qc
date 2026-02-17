@@ -30,6 +30,6 @@ public namespace QoreApp {
     public const AppName = "Qore";
 
     #! The Qore Q logo SVG data
-    public const QoreLogo = File::readTextFile(get_script_dir() + "/qore-q-logo.svg");
+    public const QoreLogo = File::readTextFile(get_script_dir() + "/Qore-Q-square.svg");
 }
 }
