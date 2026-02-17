@@ -889,6 +889,8 @@ public class DataProviderActionCatalog {
                 DataProviderActionCatalog::doInit(h);
             }
         }
+        # initialize all pending actions to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.value.iterator()), (remove initactionmap).pairIterator();
         return appcache.values();
     }
 
@@ -907,6 +909,8 @@ public class DataProviderActionCatalog {
         if (*hash<auto> h = remove initmap{app}) {
             DataProviderActionCatalog::doInit(h);
         }
+        # initialize any pending actions for the app to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -931,6 +935,8 @@ public class DataProviderActionCatalog {
         if (*hash<auto> h = remove initmap{app}) {
             DataProviderActionCatalog::doInit(h);
         }
+        # initialize any pending actions for the app to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -950,6 +956,13 @@ public class DataProviderActionCatalog {
         # initialize any matching pending apps
         map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap,
             regex($1, regex_pattern, regex_options);
+        # initialize pending actions for matching apps to ensure supports_* flags are set
+        foreach string appname in (keys initactionmap) {
+            if (appcache{appname} && (regex(appname, regex_pattern, regex_options)
+                    || regex(appcache{appname}.desc, regex_pattern, regex_options))) {
+                map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+            }
+        }
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -974,9 +987,29 @@ public class DataProviderActionCatalog {
             # initialize any matching pending apps
             map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap, ($1.upr().find(substr) >= 0);
 
+            # initialize pending actions for matching apps to ensure supports_* flags are set
+            foreach string appname in (keys initactionmap) {
+                if (appcache{appname} && ((appname.upr().find(substr) >= 0)
+                        || (appcache{appname}.desc.upr().find(substr) >= 0))) {
+                    map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+                }
+            }
+
             return map $1, appcache.values(),
                 ($1.name.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
         }
+
+        # case-sensitive path: initialize any matching pending apps
+        map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap, ($1.find(substr) >= 0);
+
+        # initialize pending actions for matching apps to ensure supports_* flags are set
+        foreach string appname in (keys initactionmap) {
+            if (appcache{appname} && ((appname.find(substr) >= 0)
+                    || (appcache{appname}.desc.find(substr) >= 0))) {
+                map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+            }
+        }
+
         return map $1, appcache.values(), ($1.name.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
     }
 
