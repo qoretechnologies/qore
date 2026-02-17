@@ -2031,6 +2031,40 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
     }
 }
 
+// --- Fast call parameter instantiation helper ---
+
+//! Instantiate parameter locals from NaN-boxed args with default argument evaluation
+/** \return 0 on success, -1 on error (already-instantiated params are cleaned up on error,
+    but caller must handle selfid cleanup and return value)
+*/
+static int instantiateFastCallParams(const UserSignature* sig, unsigned num_params, int nargs,
+        const uint64_t* args, ExceptionSink* xsink) {
+    const arg_vec_t& defaultArgList = sig->getDefaultArgList();
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i < (unsigned)nargs) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            sig->lv[i]->instantiate(val);
+        } else if (i < defaultArgList.size() && defaultArgList[i]) {
+            // Evaluate default argument expression
+            QoreValue val = defaultArgList[i].eval(xsink);
+            if (*xsink) {
+                // Uninstantiate already-instantiated params in reverse
+                for (int j = (int)i - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
+            }
+            sig->lv[i]->instantiate(val);
+        } else {
+            sig->lv[i]->instantiate(QoreValue());
+        }
+    }
+    return 0;
+}
+
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
@@ -2067,16 +2101,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
 
     // Instantiate parameter locals directly from NaN-boxed args
-    for (unsigned i = 0; i < num_params; ++i) {
-        if (i < (unsigned)nargs) {
-            QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
-                val.refSelf();
-            }
-            sig->lv[i]->instantiate(val);
-        } else {
-            sig->lv[i]->instantiate(QoreValue());
-        }
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        return toBits(QoreValue());
     }
 
     // Build argv for excess arguments (varargs)
@@ -2151,16 +2177,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     }
 
     // Instantiate parameter locals directly from NaN-boxed args
-    for (unsigned i = 0; i < num_params; ++i) {
-        if (i < (unsigned)nargs) {
-            QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
-                val.refSelf();
-            }
-            sig->lv[i]->instantiate(val);
-        } else {
-            sig->lv[i]->instantiate(QoreValue());
-        }
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        return toBits(QoreValue());
     }
 
     // Build argv for excess arguments (varargs)
@@ -2302,16 +2320,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     }
 
     // Instantiate parameter locals directly from NaN-boxed args
-    for (unsigned i = 0; i < num_params; ++i) {
-        if (i < (unsigned)nargs) {
-            QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
-                val.refSelf();
-            }
-            sig->lv[i]->instantiate(val);
-        } else {
-            sig->lv[i]->instantiate(QoreValue());
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (sig->selfid) {
+            sig->selfid->uninstantiate(xsink);
         }
+        return toBits(QoreValue());
     }
 
     // Build argv for excess arguments (varargs)
@@ -2807,16 +2820,12 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     // Instantiate parameter locals directly from NaN-boxed args
-    for (unsigned i = 0; i < num_params; ++i) {
-        if (i < (unsigned)nargs) {
-            QoreValue val = fromBits(args[i]);
-            if (val.hasNode()) {
-                val.refSelf();
-            }
-            sig->lv[i]->instantiate(val);
-        } else {
-            sig->lv[i]->instantiate(QoreValue());
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (sig->selfid) {
+            sig->selfid->uninstantiate(xsink);
         }
+        result = toBits(QoreValue());
+        return true;
     }
 
     // Build argv for excess arguments (varargs)

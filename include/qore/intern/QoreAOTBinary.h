@@ -37,6 +37,7 @@
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class QoreValue;
@@ -48,7 +49,17 @@ class qore_ns_private;
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x514F5244;
 
 //! Current binary format version
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 1;
+/** Version history:
+    - v1: Initial format (Qore 2.0 - 2.2)
+    - v2: Added max_opcode_id and qore_version fields for backwards compatibility (Qore 2.3+)
+*/
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 2;
+
+//! On-disk header size for version 1 (28 bytes)
+constexpr uint32_t QORE_AOT_HEADER_SIZE_V1 = 28;
+
+//! On-disk header size for version 2 (36 bytes)
+constexpr uint32_t QORE_AOT_HEADER_SIZE_V2 = 36;
 
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
@@ -70,6 +81,7 @@ enum class QoreAOTSectionType : uint16_t {
     TOPLEVEL      = 12,
     FUNC_SOURCES  = 13,
     DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
+    REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
 };
 
 //! Value type tags for serialized constant values
@@ -86,6 +98,10 @@ enum class QoreAOTValueTag : uint8_t {
     VT_HASH       = 9,
     VT_NUMBER     = 10,
     VT_BINARY     = 11,
+    //! Marks a default parameter value that is a complex expression (e.g. function call)
+    //! and cannot be serialized as a constant value. Deserialized as boolean True
+    //! to mark the parameter as optional in the function signature.
+    VT_OPAQUE_DEFAULT = 12,
 };
 
 //! Section header in the binary format
@@ -97,14 +113,29 @@ struct QoreAOTSectionHeader {
 };
 
 //! Binary file header
+/** The on-disk layout is version-dependent:
+    - Version 1: 28 bytes (fields through label_length)
+    - Version 2+: 36 bytes (adds max_opcode_id, qore_version, reserved2)
+
+    The reader uses version-dependent header sizes; the in-memory struct
+    always has all fields (v2 fields default to 0 for v1 binaries).
+*/
 struct QoreAOTBinaryHeader {
-    uint32_t magic;           //!< QORE_AOT_BINARY_MAGIC
-    uint16_t version;         //!< QORE_AOT_BINARY_VERSION
-    uint16_t flags;           //!< QORE_AOT_FLAG_*
-    int64_t parse_options;    //!< parse options used during compilation
-    uint32_t section_count;   //!< number of sections
-    uint32_t label_offset;    //!< offset into string pool for source label
-    uint32_t label_length;    //!< length of source label
+    // --- Version 1 fields (28 bytes on disk) ---
+    uint32_t magic;              //!< QORE_AOT_BINARY_MAGIC
+    uint16_t version;            //!< QORE_AOT_BINARY_VERSION
+    uint16_t flags;              //!< QORE_AOT_FLAG_*
+    int64_t parse_options;       //!< parse options used during compilation
+    uint32_t section_count;      //!< number of sections
+    uint32_t label_offset;       //!< offset into string pool for source label
+    uint32_t label_length;       //!< length of source label
+
+    // --- Version 2 fields (8 additional bytes on disk) ---
+    uint16_t max_opcode_id;      //!< maximum IR opcode ID that this binary may use
+    uint8_t qore_version_major;  //!< Qore version major that compiled this binary
+    uint8_t qore_version_minor;  //!< Qore version minor
+    uint16_t qore_version_patch; //!< Qore version patch
+    uint16_t reserved2;          //!< reserved for future use
 };
 
 //! String pool with deduplication for efficient string storage
@@ -466,7 +497,8 @@ private:
     @return true on success, false if serialization failed
 */
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
-    const char* module_name = nullptr);
+    const char* module_name = nullptr,
+    const std::unordered_set<std::string>* keep_modules = nullptr);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded
@@ -489,6 +521,38 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
     @return true on success, false on failure
 */
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
+
+//! Serialize reexported module names into the REEXPORT_MODULES binary section
+/** Writes the list of modules that should be reexported when this module is imported.
+    When a compiled module is loaded as a binary module, the reexport mechanism from
+    \%requires(reexport) must be preserved so that dependency namespaces (especially
+    system classes from binary modules) are made available to importing programs.
+
+    @param writer the binary writer to write to
+    @param reexport_modules vector of module names to reexport
+*/
+void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std::string>& reexport_modules);
+
+//! Read reexported module names from binary metadata
+/** Reads the REEXPORT_MODULES section from serialized binary metadata.
+
+    @param data pointer to the binary metadata blob
+    @param size size of the binary metadata blob
+    @param reexport_modules receives the list of reexported module names
+    @param error receives error message on failure
+    @return true on success, false on failure
+*/
+bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules, std::string& error);
+
+/** Read fallback source from a v2 AOT binary metadata blob without full deserialization.
+    @param data pointer to the metadata blob
+    @param size size of the metadata blob
+    @param source receives the fallback source text (empty if not present)
+    @param source_len receives the fallback source length
+    @param error receives error message on failure
+    @return true on success, false on failure
+*/
+bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len, std::string& error);
 
 // ---- Slot Map Serialization (Phase 5) ----
 
@@ -599,6 +663,10 @@ class QoreAOTBinaryDeserializer {
     const char* fallback_source = nullptr;       //!< full source text for fallback parsing
     size_t fallback_source_len = 0;              //!< length of fallback source text
     std::vector<std::string> fallback_func_names; //!< names of functions needing source fallback
+
+    // Classes that already existed in the program (from module loading)
+    // — skip methods/members for these since they're already committed
+    std::unordered_set<uint32_t> preexisting_classes;
 
     // Pending base class info for two-pass class resolution
     struct PendingBaseClass {

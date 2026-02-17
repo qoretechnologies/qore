@@ -302,8 +302,9 @@ extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* 
 class QoreAOT {
 public:
     //! Compile a parsed program to a standalone executable
-    /** @param pgm parsed QoreProgram (must have been parsed successfully)
-        @param source_text original source text to embed in the binary
+    /** The binary uses serialized metadata (no embedded source).
+        @param pgm parsed QoreProgram (must have been parsed successfully)
+        @param source_text original source text (used for fallback source serialization)
         @param source_len length of source text
         @param label source label (filename)
         @param output_path path for the output executable
@@ -322,11 +323,11 @@ public:
                        std::string& error,
                        int opt_level = 2,
                        const char* target_triple = nullptr,
-                       bool static_link = false,
-                       bool strip_source = false);
+                       bool static_link = false);
 
     //! Compile a .qm user module to a native shared library (.so) binary module
-    /** @param source_text original module source text to embed
+    /** The binary uses serialized metadata (no embedded source).
+        @param source_text original module source text (used for fallback source serialization)
         @param source_len length of source text
         @param label source label (filename)
         @param output_path path for the output shared library
@@ -342,13 +343,14 @@ public:
                               int64_t parse_options,
                               std::string& error,
                               int opt_level = 2,
-                              const char* target_triple = nullptr,
-                              bool strip_source = false);
+                              const char* target_triple = nullptr);
 
     //! Compile a split (separated) .qm user module directory to a native shared library
     /** Supports modules where code is spread across multiple files:
         - A main .qm file: {dir}/{basename}.qm
         - Multiple .qc and .ql component files (auto-discovered)
+
+        The binary uses serialized metadata (no embedded source).
 
         @param dir_path path to the module directory
         @param output_path path for the output shared library
@@ -356,7 +358,6 @@ public:
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
-        @param strip_source strip source code from binary (IP protection)
         @return true on success, false on failure
     */
     static bool compileSeparatedModule(const char* dir_path,
@@ -364,8 +365,7 @@ public:
                                        int64_t parse_options,
                                        std::string& error,
                                        int opt_level = 2,
-                                       const char* target_triple = nullptr,
-                                       bool strip_source = false);
+                                       const char* target_triple = nullptr);
 
     //! Print supported LLVM target architectures to stdout
     static void printSupportedTargets();

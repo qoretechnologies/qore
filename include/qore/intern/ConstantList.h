@@ -271,6 +271,11 @@ public:
     DLLLOCAL cnemap_t::iterator parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue val,
             const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public);
 
+    //! Add a pre-created ConstantEntry (takes ownership)
+    DLLLOCAL void addEntry(const char* name, ConstantEntry* ce) {
+        cnemap.insert(cnemap_t::value_type(name, ce));
+    }
+
     DLLLOCAL ConstantEntry* findEntry(const char* name);
 
     DLLLOCAL const ConstantEntry* findEntry(const char* name) const;

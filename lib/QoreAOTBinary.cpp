@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreIR.h"
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreLibIntern.h"
@@ -189,9 +190,8 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     QoreAOTBinaryHeader header = in_header;
     header.section_count = static_cast<uint32_t>(sections.size());
 
-    // Calculate total output size:
-    //   header + section directory + string pool + data area
-    uint32_t header_size = sizeof(QoreAOTBinaryHeader);
+    // Calculate on-disk header size based on version
+    uint32_t header_size = (header.version >= 2) ? QORE_AOT_HEADER_SIZE_V2 : QORE_AOT_HEADER_SIZE_V1;
     uint32_t section_dir_size = static_cast<uint32_t>(sections.size() * sizeof(QoreAOTSectionHeader));
     uint32_t string_pool_size = strings.size();
     uint32_t data_size = static_cast<uint32_t>(buffer.size());
@@ -201,6 +201,9 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     output.reserve(total);
 
     // Write header
+    auto writeU8LE = [&](uint8_t v) {
+        output.push_back(v);
+    };
     auto writeU16LE = [&](uint16_t v) {
         output.push_back(static_cast<uint8_t>(v & 0xFF));
         output.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
@@ -219,20 +222,23 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
         }
     };
 
-    // Magic
+    // Version 1 fields (28 bytes)
     writeU32LE(header.magic);
-    // Version
     writeU16LE(header.version);
-    // Flags
     writeU16LE(header.flags);
-    // Parse options
     writeI64LE(header.parse_options);
-    // Section count
     writeU32LE(header.section_count);
-    // Label offset
     writeU32LE(header.label_offset);
-    // Label length
     writeU32LE(header.label_length);
+
+    // Version 2 extension fields (8 bytes)
+    if (header.version >= 2) {
+        writeU16LE(header.max_opcode_id);
+        writeU8LE(header.qore_version_major);
+        writeU8LE(header.qore_version_minor);
+        writeU16LE(header.qore_version_patch);
+        writeU16LE(header.reserved2);
+    }
 
     // Write section directory
     for (auto& sec : sections) {
@@ -259,21 +265,16 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     data = in_data;
     total_size = in_size;
 
-    // Minimum size check: header
-    if (in_size < sizeof(QoreAOTBinaryHeader)) {
+    // Need at least 6 bytes to read magic + version
+    if (in_size < 6) {
         error = "binary too small for header";
         return false;
     }
 
-    // Read header
+    // Read magic and version first to determine header size
     const uint8_t* ptr = data;
     header.magic = readU32(ptr);
     header.version = readU16(ptr);
-    header.flags = readU16(ptr);
-    header.parse_options = readI64(ptr);
-    header.section_count = readU32(ptr);
-    header.label_offset = readU32(ptr);
-    header.label_length = readU32(ptr);
 
     // Validate magic
     if (header.magic != QORE_AOT_BINARY_MAGIC) {
@@ -281,16 +282,64 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Validate version
-    if (header.version > QORE_AOT_BINARY_VERSION) {
-        error = "unsupported binary version " + std::to_string(header.version)
-              + " (max supported: " + std::to_string(QORE_AOT_BINARY_VERSION) + ")";
+    // Validate version and determine on-disk header size
+    uint32_t header_size;
+    if (header.version == 1) {
+        header_size = QORE_AOT_HEADER_SIZE_V1;
+    } else if (header.version <= QORE_AOT_BINARY_VERSION) {
+        header_size = QORE_AOT_HEADER_SIZE_V2;
+    } else {
+        error = "unsupported binary format version " + std::to_string(header.version)
+              + " (max supported: " + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
+              + "; please update your Qore installation";
+        return false;
+    }
+
+    // Check full header fits
+    if (in_size < header_size) {
+        error = "binary too small for version " + std::to_string(header.version) + " header";
+        return false;
+    }
+
+    // Read remaining v1 header fields
+    header.flags = readU16(ptr);
+    header.parse_options = readI64(ptr);
+    header.section_count = readU32(ptr);
+    header.label_offset = readU32(ptr);
+    header.label_length = readU32(ptr);
+
+    // Read v2 extension fields (or set defaults for v1)
+    if (header.version >= 2) {
+        header.max_opcode_id = readU16(ptr);
+        header.qore_version_major = readU8(ptr);
+        header.qore_version_minor = readU8(ptr);
+        header.qore_version_patch = readU16(ptr);
+        header.reserved2 = readU16(ptr);
+    } else {
+        // v1 binary: no opcode compatibility info available
+        header.max_opcode_id = 0;
+        header.qore_version_major = 0;
+        header.qore_version_minor = 0;
+        header.qore_version_patch = 0;
+        header.reserved2 = 0;
+    }
+
+    // Validate opcode compatibility (v2+ binaries only)
+    if (header.version >= 2 && header.max_opcode_id > QORE_IR_MAX_OPCODE) {
+        error = "binary was compiled with Qore "
+              + std::to_string(header.qore_version_major) + "."
+              + std::to_string(header.qore_version_minor) + "."
+              + std::to_string(header.qore_version_patch)
+              + " (max opcode ID " + std::to_string(header.max_opcode_id) + ")"
+              + " but this runtime only supports up to opcode ID "
+              + std::to_string(QORE_IR_MAX_OPCODE)
+              + "; please update your Qore installation";
         return false;
     }
 
     // Read section directory
     uint32_t section_dir_size = header.section_count * sizeof(QoreAOTSectionHeader);
-    uint32_t needed = sizeof(QoreAOTBinaryHeader) + section_dir_size;
+    uint32_t needed = header_size + section_dir_size;
     if (in_size < needed) {
         error = "binary too small for section directory";
         return false;
@@ -510,6 +559,13 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             }
             return QoreValue(hash.release());
         }
+
+        case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
+            // Complex expression default (e.g. function call) that couldn't be
+            // serialized. Return boolean True as a placeholder to mark the parameter
+            // as optional in the function signature. The actual default is evaluated
+            // by the compiled function code at runtime.
+            return QoreValue(true);
 
         default:
             error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
@@ -785,13 +841,23 @@ struct AOTSerializeState {
     @param current_module the module being compiled (nullptr means include all items)
     @return true if the item should be skipped, false otherwise
 */
-static inline bool shouldSkipReexportedItem(const char* item_module, const char* current_module) {
+static inline bool shouldSkipReexportedItem(const char* item_module, const char* current_module,
+        const std::unordered_set<std::string>* keep_modules = nullptr) {
     // If no current module specified, include all items (non-strip-source mode)
     if (!current_module) {
         return false;
     }
+    // If item has no module name, it matches the current module (or is script-local)
+    if (!item_module) {
+        return false;
+    }
+    // If item's module is in the keep set, don't skip it (e.g., local modules that
+    // can't be loaded by name at runtime)
+    if (keep_modules && keep_modules->count(item_module)) {
+        return false;
+    }
     // If item has a module and it differs from current module, skip it
-    return item_module && strcmp(item_module, current_module) != 0;
+    return strcmp(item_module, current_module) != 0;
 }
 
 //! Recursively collect all user-defined items from the namespace tree
@@ -802,7 +868,7 @@ static inline bool shouldSkipReexportedItem(const char* item_module, const char*
            module are collected (items from reexported dependencies are filtered out)
 */
 static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t parent_idx,
-        const char* current_module) {
+        const char* current_module, const std::unordered_set<std::string>* keep_modules = nullptr) {
     uint32_t ns_idx = static_cast<uint32_t>(state.namespaces.size());
     state.namespaces.push_back({ns, parent_idx});
 
@@ -818,8 +884,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 printd(5, "AOT serialize class '%s': module='%s' current_module='%s' skip=%d\n",
                     cls->getName(), class_module ? class_module : "n/a",
                     current_module ? current_module : "n/a",
-                    shouldSkipReexportedItem(class_module, current_module));
-                if (shouldSkipReexportedItem(class_module, current_module)) {
+                    shouldSkipReexportedItem(class_module, current_module, keep_modules));
+                if (shouldSkipReexportedItem(class_module, current_module, keep_modules)) {
                     continue;
                 }
 
@@ -849,7 +915,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (!hd->isSystem()) {
                 // Filter out hashdecls from reexported dependencies
                 const char* hd_module = typed_hash_decl_private::get(*hd)->getModuleName();
-                if (shouldSkipReexportedItem(hd_module, current_module)) {
+                if (shouldSkipReexportedItem(hd_module, current_module, keep_modules)) {
                     continue;
                 }
                 state.hashdecls.push_back({hd, ns_idx});
@@ -865,7 +931,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (!ed->isSystem()) {
                 // Filter out enums from reexported dependencies
                 const char* ed_module = qore_enum_decl_private::get(*ed)->getModuleName();
-                if (shouldSkipReexportedItem(ed_module, current_module)) {
+                if (shouldSkipReexportedItem(ed_module, current_module, keep_modules)) {
                     continue;
                 }
                 state.enums.push_back({ed, ns_idx});
@@ -878,7 +944,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         if (ti.second->typeInfo) {
             // Filter out typedefs from reexported dependencies
             const char* td_module = ti.second->getModuleName();
-            if (shouldSkipReexportedItem(td_module, current_module)) {
+            if (shouldSkipReexportedItem(td_module, current_module, keep_modules)) {
                 continue;
             }
             state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
@@ -893,7 +959,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (!ce->isSystem()) {
                 // Filter out constants from reexported dependencies
                 const char* const_module = ce->getModuleName();
-                if (shouldSkipReexportedItem(const_module, current_module)) {
+                if (shouldSkipReexportedItem(const_module, current_module, keep_modules)) {
                     continue;
                 }
                 state.constants.push_back({ce, ns_idx});
@@ -907,7 +973,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         if (!var->isBuiltin()) {
             // Filter out globals from reexported dependencies
             const char* var_module = var->getModuleName();
-            if (shouldSkipReexportedItem(var_module, current_module)) {
+            if (shouldSkipReexportedItem(var_module, current_module, keep_modules)) {
                 continue;
             }
             state.globals.push_back({var, ns_idx});
@@ -921,7 +987,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         if (func && !entry->hasBuiltin()) {
             // Filter out functions from reexported dependencies
             const char* func_module = func->getModuleName();
-            if (shouldSkipReexportedItem(func_module, current_module)) {
+            if (shouldSkipReexportedItem(func_module, current_module, keep_modules)) {
                 continue;
             }
             state.functions.push_back({entry, func, ns_idx});
@@ -938,11 +1004,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             printd(5, "AOT serialize: checking namespace '%s' from module '%s' (current_module='%s') skip=%d\n",
                 child_ns->getName(), ns_module ? ns_module : "n/a",
                 current_module ? current_module : "n/a",
-                shouldSkipReexportedItem(ns_module, current_module));
-            if (shouldSkipReexportedItem(ns_module, current_module)) {
+                shouldSkipReexportedItem(ns_module, current_module, keep_modules));
+            if (shouldSkipReexportedItem(ns_module, current_module, keep_modules)) {
                 continue;
             }
-            collectItems(state, child_priv, ns_idx, current_module);
+            collectItems(state, child_priv, ns_idx, current_module, keep_modules);
         }
     }
 }
@@ -983,8 +1049,23 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         bool has_default = sig->hasDefaultArg(i);
         if (has_default && i < static_cast<uint32_t>(defaults.size())) {
             writer.writeU8(1);
-            // writeValue handles unsupported types by writing NOTHING
-            writer.writeValue(defaults[i]);
+            QoreValue dv = defaults[i];
+            // Check if the default value is a serializable constant type.
+            // AST expression nodes (function calls, variable refs, etc.) have types
+            // not in the switch list and would be serialized as VT_NOTHING, which
+            // would make the parameter appear required. Use VT_OPAQUE_DEFAULT instead
+            // to preserve the "has default" semantics.
+            qore_type_t dt = dv.getType();
+            if (dv.isNothing() || dv.isNull() || dt == NT_BOOLEAN || dt == NT_INT
+                    || dt == NT_FLOAT || dt == NT_STRING || dt == NT_DATE
+                    || dt == NT_NUMBER || dt == NT_BINARY || dt == NT_LIST
+                    || dt == NT_HASH) {
+                writer.writeValue(dv);
+            } else {
+                // Complex expression default (e.g. function call like getcwd())
+                // Write opaque marker so deserialization knows parameter is optional
+                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+            }
         } else {
             writer.writeU8(0);
         }
@@ -1121,8 +1202,10 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     writer.writeStringRef(ce->getName());
                     writer.writeStringRef(getTypePath(ce->typeInfo));
                     writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
-                    // writeValue handles unsupported types by writing NOTHING
-                    writer.writeValue(ce->val);
+                    // Use getReferencedValue() for the actual evaluated value
+                    QoreValue actual_val = ce->getReferencedValue();
+                    writer.writeValue(actual_val);
+                    actual_val.discard(nullptr);
                 }
             }
         }
@@ -1256,8 +1339,12 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         writer.writeU32(ci.ns_idx);
         writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
         writer.writeU8(ce->isPublic() ? 1 : 0);
-        // writeValue handles unsupported types by writing NOTHING
-        writer.writeValue(ce->val);
+        // Use getReferencedValue() to get the actual evaluated value.
+        // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
+        // just a reference to the constant's evaluated saved_val.
+        QoreValue actual_val = ce->getReferencedValue();
+        writer.writeValue(actual_val);
+        actual_val.discard(nullptr);
     }
 
     writer.endSection(sec_idx);
@@ -1688,6 +1775,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (flags & 0x0002) {
             priv->final = true;
         }
+        bool class_already_existed = false;
         int add_rv = ns_list[ns_idx]->classList.add(qc);
         if (add_rv != 0) {
             printd(2, "AOT deser: class '%s' already exists in namespace, using existing\n", name);
@@ -1695,6 +1783,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             QoreClass* existing = ns_list[ns_idx]->classList.find(name);
             qore_class_private::get(*qc)->deref(true, true);
             qc = existing;
+            class_already_existed = true;
+            preexisting_classes.insert(i);
         }
         class_list[i] = qc;
 
@@ -1714,12 +1804,19 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 bases.push_back(std::move(pbc));
             }
         }
+        // Skip pending data for classes that already existed (from loaded modules)
+        // — they already have their bases, members, etc. set up
+        if (class_already_existed) {
+            bases.clear();
+        }
         pending_bases.push_back(std::move(bases));
 
         // Read instance members (store for later resolution after hashdecls/enums)
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
         std::vector<PendingInstanceMember> instance_members;
-        instance_members.reserve(num_members);
+        if (!class_already_existed) {
+            instance_members.reserve(num_members);
+        }
         for (uint32_t j = 0; j < num_members; ++j) {
             const char* mname = reader.readStringRef(ptr);
             const char* mtype_path = reader.readStringRef(ptr);
@@ -1734,7 +1831,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 }
             }
 
-            if (mname && *mname) {
+            if (!class_already_existed && mname && *mname) {
                 PendingInstanceMember pim;
                 pim.name = mname;
                 pim.type_path = mtype_path ? mtype_path : "";
@@ -1748,12 +1845,14 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         // Read static members (store for later resolution)
         uint32_t num_static = QoreAOTBinaryReader::readU32(ptr);
         std::vector<PendingStaticMember> static_members;
-        static_members.reserve(num_static);
+        if (!class_already_existed) {
+            static_members.reserve(num_static);
+        }
         for (uint32_t j = 0; j < num_static; ++j) {
             const char* sm_name = reader.readStringRef(ptr);
             const char* sm_type_path = reader.readStringRef(ptr);
             uint8_t sm_access = QoreAOTBinaryReader::readU8(ptr);
-            if (sm_name && *sm_name) {
+            if (!class_already_existed && sm_name && *sm_name) {
                 PendingStaticMember psm;
                 psm.name = sm_name;
                 psm.type_path = sm_type_path ? sm_type_path : "";
@@ -1766,7 +1865,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         // Read class constants (store for later resolution after hashdecls/enums)
         uint32_t num_consts = QoreAOTBinaryReader::readU32(ptr);
         std::vector<PendingClassConstant> class_constants;
-        class_constants.reserve(num_consts);
+        if (!class_already_existed) {
+            class_constants.reserve(num_consts);
+        }
         for (uint32_t j = 0; j < num_consts; ++j) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
@@ -1777,7 +1878,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 return false;
             }
 
-            if (cname && *cname) {
+            if (!class_already_existed && cname && *cname) {
                 PendingClassConstant pcc;
                 pcc.name = cname;
                 pcc.type_path = ctype_path ? ctype_path : "";
@@ -1843,10 +1944,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             if (!pim.type_path.empty()) {
                 ti = type_resolver->resolve(pim.type_path.c_str(), error);
                 if (!error.empty()) {
-                    error = "cannot resolve type '" + pim.type_path + "' for instance member '" +
-                        pim.name + "' in class '" + std::string(qc->getName()) + "': " + error;
-                    pending_instance_members.clear();
-                    return false;
+                    printd(2, "AOT deser: cannot resolve type '%s' for instance member '%s' "
+                        "in class '%s': %s (falling back to auto)\n",
+                        pim.type_path.c_str(), pim.name.c_str(), qc->getName(), error.c_str());
+                    error.clear();
+                    ti = autoTypeInfo;
                 }
             }
 
@@ -1882,10 +1984,11 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             if (!psm.type_path.empty()) {
                 ti = type_resolver->resolve(psm.type_path.c_str(), error);
                 if (!error.empty()) {
-                    error = "cannot resolve type '" + psm.type_path + "' for static member '" +
-                        psm.name + "' in class '" + std::string(qc->getName()) + "': " + error;
-                    pending_static_members.clear();
-                    return false;
+                    printd(2, "AOT deser: cannot resolve type '%s' for static member '%s' "
+                        "in class '%s': %s (falling back to auto)\n",
+                        psm.type_path.c_str(), psm.name.c_str(), qc->getName(), error.c_str());
+                    error.clear();
+                    ti = autoTypeInfo;
                 }
             }
 
@@ -1922,10 +2025,11 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
             if (!pcc.type_path.empty()) {
                 ti = type_resolver->resolve(pcc.type_path.c_str(), error);
                 if (!error.empty()) {
-                    error = "cannot resolve type '" + pcc.type_path + "' for constant '" +
-                        pcc.name + "' in class '" + std::string(qc->getName()) + "': " + error;
-                    pending_class_constants.clear();
-                    return false;
+                    printd(2, "AOT deser: cannot resolve type '%s' for constant '%s' "
+                        "in class '%s': %s (falling back to auto)\n",
+                        pcc.type_path.c_str(), pcc.name.c_str(), qc->getName(), error.c_str());
+                    error.clear();
+                    ti = autoTypeInfo;
                 }
             }
 
@@ -1952,10 +2056,12 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
         for (auto& phm : entry.second) {
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
-                error = "cannot resolve type '" + phm.type_path + "' for member '" +
-                    phm.name + "' in hashdecl '" + std::string(hd->getName()) + "': " + error;
-                pending_hashdecl_members.clear();
-                return false;
+                // Fall back to auto type when the type can't be resolved
+                printd(2, "AOT deser: cannot resolve type '%s' for member '%s' in hashdecl '%s': %s "
+                    "(falling back to auto)\n",
+                    phm.type_path.c_str(), phm.name.c_str(), hd->getName(), error.c_str());
+                error.clear();
+                mti = autoTypeInfo;
             }
             hdp->addMember(phm.name.c_str(), mti, phm.default_val);
 
@@ -2213,6 +2319,10 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         // Add to namespace's enumList
         if (ns_list[ns_idx]->enumList.add(ed) != 0) {
             printd(2, "AOT: enum '%s' already exists in namespace\n", name);
+            // Remove any pending base type entry that points to the deleted enum
+            if (base_type_path && *base_type_path) {
+                pending_enum_base_types.pop_back();
+            }
             edp->deref();
             continue;
         }
@@ -2319,10 +2429,15 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
                 "' for constant '" + std::string(name) + "': " + error;
             return false;
         }
-        ns_list[ns_idx]->constant.add(name, val, ti,
+        // Create as user constant (not builtin) with proper pub flag.
+        // Using add() would mark the constant as builtin, which causes
+        // scanMergeCommittedNamespace to skip it (isUserPublic() returns false).
+        // Create the ConstantEntry directly with: pub = is_pub, init = true (value
+        // already resolved), builtin = false (user constant from AOT module).
+        ConstantEntry* ce = new ConstantEntry(&loc_builtin, name, val,
+            ti ? ti : val.getTypeInfo(), is_pub != 0, true, false,
             static_cast<ClassAccess>(access));
-
-        (void)is_pub;
+        ns_list[ns_idx]->constant.addEntry(name, ce);
     }
 
     return true;
@@ -2416,13 +2531,14 @@ static bool readAndSetupVariantSignature(
 
         const QoreTypeInfo* pti = type_resolver->resolve(ptype_path, error);
         if (!error.empty()) {
-            // Clean up already-read defaults
-            for (uint32_t k = 0; k < j; ++k) {
-                param_defaults[k].discard(nullptr);
-            }
-            error = "cannot resolve type '" + std::string(ptype_path ? ptype_path : "(null)") +
-                "' for parameter '" + param_names[j] + "': " + error;
-            return false;
+            // Fall back to auto type when the type can't be resolved (e.g., module-private
+            // types that were filtered from the metadata). The compiled code already has
+            // the type checks baked in, so this only affects variant matching.
+            printd(2, "AOT deser: cannot resolve type '%s' for parameter '%s': %s "
+                "(falling back to auto)\n",
+                ptype_path ? ptype_path : "(null)", param_names[j].c_str(), error.c_str());
+            error.clear();
+            pti = autoTypeInfo;
         }
         param_types[j] = pti;
 
@@ -2441,13 +2557,11 @@ static bool readAndSetupVariantSignature(
     // Resolve return type
     const QoreTypeInfo* ret_ti = type_resolver->resolve(ret_type_path, error);
     if (!error.empty()) {
-        // Clean up param defaults
-        for (auto& pd : param_defaults) {
-            pd.discard(nullptr);
-        }
-        error = "cannot resolve return type '" + std::string(ret_type_path ? ret_type_path : "(null)") +
-            "': " + error;
-        return false;
+        // Fall back to auto type when the return type can't be resolved
+        printd(2, "AOT deser: cannot resolve return type '%s': %s (falling back to auto)\n",
+            ret_type_path ? ret_type_path : "(null)", error.c_str());
+        error.clear();
+        ret_ti = autoTypeInfo;
     }
 
     // Set up the variant's signature from metadata
@@ -2583,6 +2697,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
         }
 
         QoreClass* qc = class_list[class_idx];
+        bool skip_class = preexisting_classes.count(class_idx) > 0;
 
         for (uint32_t v = 0; v < num_variants; ++v) {
             // Read method-specific fields: access + flags
@@ -2605,6 +2720,13 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 return false;
             }
 
+            // Skip methods for classes that already existed from module loading
+            // — they're already committed with all their methods
+            if (skip_class) {
+                delete umv;
+                continue;
+            }
+
             // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
             // method which checks signature.hasVarargs() directly
 
@@ -2612,7 +2734,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             qore_class_private::addUserMethod(*qc, method_name, umv, is_static != 0);
         }
 
-        printd(5, "AOT deser: created method '%s::%s' (%s) with %d variant(s)\n",
+        printd(5, "AOT deser: %s method '%s::%s' (%s) with %d variant(s)\n",
+            skip_class ? "skipped preexisting" : "created",
             qc->getName(), method_name, is_static ? "static" : "instance", num_variants);
     }
 
@@ -2654,13 +2777,15 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     return true;
 }
 
-bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns, const char* module_name) {
+bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
+        const char* module_name, const std::unordered_set<std::string>* keep_modules) {
     // Phase 1: Collect all user-defined items into indexed vectors
     // When module_name is provided, filter out items from reexported dependencies
+    // When keep_modules is provided, items from those modules are always included
     printd(5, "serializeNamespaceTree: module_name='%s' root_ns='%s'\n",
         module_name ? module_name : "n/a", root_ns->ns->getName());
     AOTSerializeState state;
-    collectItems(state, root_ns, UINT32_MAX, module_name);
+    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules);
 
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);
@@ -2719,6 +2844,97 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
             return false;
         }
         dependencies.push_back(dep_name);
+    }
+
+    return true;
+}
+
+void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std::string>& reexport_modules) {
+    if (reexport_modules.empty()) {
+        return;
+    }
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::REEXPORT_MODULES);
+
+    uint32_t count = static_cast<uint32_t>(reexport_modules.size());
+    writer.writeU32(count);
+
+    for (const auto& mod : reexport_modules) {
+        writer.writeStringRef(mod.c_str());
+    }
+
+    writer.endSection(sec_idx);
+}
+
+bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules,
+        std::string& error) {
+    // Open the binary to read the reexport modules section
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+
+    // Find REEXPORT_MODULES section
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::REEXPORT_MODULES);
+    if (!sec) {
+        // No reexport modules section - this is OK, just means no reexports
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid REEXPORT_MODULES section data";
+        return false;
+    }
+
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    // Sanity check: each entry needs at least 4 bytes (string ref), so count can't exceed section size
+    uint32_t max_entries = sec->size / 4;
+    if (count > max_entries) {
+        error = "reexport module count " + std::to_string(count) + " exceeds section capacity";
+        return false;
+    }
+    reexport_modules.reserve(count);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* mod_name = reader.readStringRef(ptr);
+        if (!mod_name) {
+            error = "invalid reexport module name at index " + std::to_string(i);
+            return false;
+        }
+        reexport_modules.push_back(mod_name);
+    }
+
+    return true;
+}
+
+bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,
+        std::string& error) {
+    source = nullptr;
+    source_len = 0;
+
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNC_SOURCES);
+    if (!sec) {
+        // No fallback sources section - this is OK
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid FUNC_SOURCES section data";
+        return false;
+    }
+
+    // Read the full source text reference (first item in FUNC_SOURCES section)
+    const char* src = reader.readStringRef(ptr);
+    if (src && *src) {
+        source = src;
+        source_len = strlen(src);
     }
 
     return true;

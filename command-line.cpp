@@ -134,9 +134,6 @@ static bool aot_static = false;
 // AOT module compilation mode
 static bool compile_module_mode = false;
 
-// AOT strip-source mode (binary metadata instead of embedded source)
-static bool aot_strip_source = false;
-
 // show supported target architectures
 static bool show_targets = false;
 
@@ -239,8 +236,6 @@ static const char helpstr[] =
    "                               BUILD_STATIC_LIBQORE=ON in CMake)\n"
    "      --compile-module         compile a .qm user module to a native\n"
    "                               shared library (.so) binary module\n"
-   "      --strip-source          strip source from AOT binary; embed\n"
-   "                               serialized metadata instead (IP protection)\n"
    "\n"
    " REPL OPTIONS:\n"
    "      --interactive            force interactive REPL mode\n"
@@ -1171,10 +1166,6 @@ static void set_compile_module(const char* arg) {
     compile_mode = true;
 }
 
-static void set_strip_source(const char* arg) {
-    aot_strip_source = true;
-}
-
 static void disable_gc(const char* arg) {
     qore_lib_options |= QLO_DISABLE_GARBAGE_COLLECTION;
 }
@@ -1290,7 +1281,6 @@ static struct opt_struct_s {
    { '\0', "show-targets",         ARG_NONE, set_show_targets },
    { '\0', "static",               ARG_NONE, set_aot_static },
    { '\0', "compile-module",       ARG_NONE, set_compile_module },
-   { '\0', "strip-source",        ARG_NONE, set_strip_source },
    // debugging options
    { 'b', "disable-signals",       ARG_NONE, disable_signals },
    { 'd', "debug",                 ARG_MAND, do_debug },
@@ -1711,35 +1701,29 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          if (is_split_module) {
             // Compile split module directory
             if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options, error,
-                     aot_opt_level, aot_target, aot_strip_source)) {
+                     aot_opt_level, aot_target)) {
                fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled split module (O%d%s): %s\n", aot_opt_level,
-                  aot_strip_source ? ", source-stripped" : "",
-                  output_path.c_str());
+               printf("compiled split module (O%d): %s\n", aot_opt_level, output_path.c_str());
             }
          } else if (compile_module_mode) {
             if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, parse_options, error,
-                     aot_opt_level, aot_target, aot_strip_source)) {
+                     aot_opt_level, aot_target)) {
                fprintf(stderr, "AOT module compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled module (O%d%s): %s\n", aot_opt_level,
-                  aot_strip_source ? ", source-stripped" : "",
-                  output_path.c_str());
+               printf("compiled module (O%d): %s\n", aot_opt_level, output_path.c_str());
             }
          } else {
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, parse_options, error,
-                     aot_opt_level, aot_target, aot_static, aot_strip_source)) {
+                     aot_opt_level, aot_target, aot_static)) {
                fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled (O%d%s): %s\n", aot_opt_level,
-                  aot_strip_source ? ", source-stripped" : "",
-                  output_path.c_str());
+               printf("compiled (O%d): %s\n", aot_opt_level, output_path.c_str());
             }
          }
          goto exit;

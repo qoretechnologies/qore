@@ -60,6 +60,11 @@
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+// Forward declaration
+static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
+    std::vector<std::string>* reexport_deps = nullptr,
+    std::unordered_set<std::string>* local_module_names = nullptr);
+
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
@@ -115,6 +120,7 @@ QoreAOTContext::~QoreAOTContext() {
     free(globals);
     free(exprs);
     free(call_targets);
+    free(stmts);
 }
 
 //! Descriptor for a function that was successfully compiled to LLVM IR
@@ -643,136 +649,8 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 }
 
 //! Generate the LLVM IR for main() and the function registration table
-static void generateMainAndTable(llvm::LLVMContext& ctx, llvm::Module& module,
-        const char* source, int source_len, const char* label,
-        int64_t parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs) {
-    // Types
-    auto* i8_type = llvm::Type::getInt8Ty(ctx);
-    auto* i32_type = llvm::Type::getInt32Ty(ctx);
-    auto* i64_type = llvm::Type::getInt64Ty(ctx);
-    auto* ptr_type = llvm::PointerType::get(ctx, 0);
-
-    // Embed source as a global constant
-    llvm::Constant* source_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(source, source_len), false);
-    auto* source_gv = new llvm::GlobalVariable(module,
-        source_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
-        source_data, "qore_aot_source");
-
-    // Embed label as a global constant
-    llvm::Constant* label_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(label), true);  // null-terminated
-    auto* label_gv = new llvm::GlobalVariable(module,
-        label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
-        label_data, "qore_aot_label");
-
-    // Build the function table: array of {i8*, i8*, i32, i32, i32, i32}
-    // QoreAOTFunc struct: { const char* name, AotFunctionPtr fn_ptr, int num_locals, int num_globals, int num_exprs, int num_stmts }
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type});
-
-    std::vector<llvm::Constant*> func_entries;
-    for (auto& cf : compiled_funcs) {
-        // Create global string for function name
-        llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
-        auto* name_gv = new llvm::GlobalVariable(module,
-            name_str->getType(), true, llvm::GlobalValue::PrivateLinkage,
-            name_str, "qore_aot_fname_" + cf.llvm_symbol);
-
-        // Get the compiled function
-        llvm::Function* fn = module.getFunction(cf.llvm_symbol);
-        if (!fn) {
-            // Function was compiled but might have a different symbol name
-            printd(1, "AOT: warning: compiled function '%s' not found as symbol '%s' in module\n",
-                cf.name.c_str(), cf.llvm_symbol.c_str());
-            continue;
-        }
-
-        llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
-            name_gv,
-            fn,
-            llvm::ConstantInt::get(i32_type, cf.num_locals),
-            llvm::ConstantInt::get(i32_type, cf.num_globals),
-            llvm::ConstantInt::get(i32_type, cf.num_exprs),
-            llvm::ConstantInt::get(i32_type, cf.num_stmts)
-        });
-        func_entries.push_back(entry);
-    }
-
-    // Create the function table global
-    llvm::Constant* func_table_init;
-    llvm::GlobalVariable* func_table_gv;
-    int num_funcs = (int)func_entries.size();
-
-    if (num_funcs > 0) {
-        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
-        func_table_init = llvm::ConstantArray::get(table_type, func_entries);
-        func_table_gv = new llvm::GlobalVariable(module,
-            table_type, true, llvm::GlobalValue::PrivateLinkage,
-            func_table_init, "qore_aot_funcs");
-    } else {
-        func_table_gv = nullptr;
-    }
-
-    // Declare qore_aot_run
-    auto* aot_run_type = llvm::FunctionType::get(i32_type, {
-        i32_type,       // argc
-        ptr_type,       // argv
-        ptr_type,       // source
-        i32_type,       // source_len
-        ptr_type,       // label
-        i64_type,       // parse_options
-        ptr_type,       // functions
-        i32_type        // num_functions
-    }, false);
-    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run", aot_run_type);
-
-    // Generate main()
-    auto* main_type = llvm::FunctionType::get(i32_type, {i32_type, ptr_type}, false);
-    auto* main_fn = llvm::Function::Create(main_type, llvm::Function::ExternalLinkage, "main", module);
-
-    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", main_fn);
-    llvm::IRBuilder<> builder(entry_bb);
-
-    auto arg_it = main_fn->arg_begin();
-    llvm::Value* argc_val = &*arg_it++;
-    llvm::Value* argv_val = &*arg_it;
-
-    // GEP to get pointers to source and label
-    llvm::Value* src_ptr = builder.CreateInBoundsGEP(
-        source_data->getType(), source_gv,
-        {builder.getInt64(0), builder.getInt64(0)});
-    llvm::Value* lbl_ptr = builder.CreateInBoundsGEP(
-        label_data->getType(), label_gv,
-        {builder.getInt64(0), builder.getInt64(0)});
-
-    llvm::Value* funcs_ptr;
-    if (func_table_gv) {
-        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
-        funcs_ptr = builder.CreateBitCast(
-            builder.CreateInBoundsGEP(table_type, func_table_gv,
-                {builder.getInt64(0), builder.getInt64(0)}),
-            ptr_type);
-    } else {
-        funcs_ptr = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
-    }
-
-    llvm::Value* rc = builder.CreateCall(aot_run_fn, {
-        argc_val,
-        argv_val,
-        src_ptr,
-        builder.getInt32(source_len),
-        lbl_ptr,
-        builder.getInt64(parse_options),
-        funcs_ptr,
-        builder.getInt32(num_funcs)
-    });
-
-    builder.CreateRet(rc);
-}
-
-//! Generate main() and function table for source-stripped AOT binary.
-/** Embeds serialized metadata blob instead of source text, and calls
-    qore_aot_run_v2() from main().
+//! Generate main() and function table for AOT binary.
+/** Embeds serialized metadata blob and calls qore_aot_run_v2() from main().
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
@@ -902,8 +780,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       std::string& error,
                       int opt_level,
                       const char* target_triple,
-                      bool static_link,
-                      bool strip_source) {
+                      bool static_link) {
     // Initialize LLVM targets (needed for object emission)
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -1036,9 +913,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // Use the program's actual parse options (includes directives like %modern)
     parse_options = pgm->getParseOptions64();
 
-    // Step 3: Generate main() and function registration table
-    if (strip_source) {
-        // Build serialized metadata blob
+    // Step 3: Build serialized metadata and generate main() + function registration table
+    {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
@@ -1046,9 +922,43 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
         hdr.parse_options = parse_options;
         hdr.label_offset = writer.strings.add(label);
+        // v2 fields: opcode compatibility and Qore version
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
 
-        // Serialize namespace tree
-        if (!serializeNamespaceTree(writer, root_ns)) {
+        // Serialize dependencies from the parsed program's feature lists.
+        // This captures ALL module dependencies including those from %include'd files,
+        // which extractAllDependencies() would miss since it only scans raw source text.
+        std::unordered_set<std::string> local_module_names;
+        std::vector<std::string> all_deps;
+        {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            // featureList contains builtin module names, userFeatureList contains user module names
+            for (const auto& feat : pp->featureList) {
+                if (feat != "qore") {
+                    all_deps.push_back(feat);
+                }
+            }
+            for (const auto& feat : pp->userFeatureList) {
+                if (feat != "qore") {
+                    all_deps.push_back(feat);
+                }
+            }
+            // Also scan raw source for local module paths (./foo, ../foo) since these
+            // can't be loaded by name at runtime and need to be kept in metadata
+            extractAllDependencies(source_text, source_len, nullptr, &local_module_names);
+        }
+        serializeDependencies(writer, all_deps);
+
+        // Serialize namespace tree - filter out module-originated items to avoid
+        // deserializing private/internal module types that can't be resolved;
+        // dependencies are loaded at runtime so their items will be available.
+        // Items from local modules (relative paths like ./MyModule.qm) are kept
+        // since they can't be loaded by name at runtime.
+        if (!serializeNamespaceTree(writer, root_ns, "",
+                local_module_names.empty() ? nullptr : &local_module_names)) {
             error = "failed to serialize namespace tree";
             return false;
         }
@@ -1061,6 +971,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_locals = cf.num_locals;
             fws.num_globals = cf.num_globals;
             fws.num_exprs = cf.num_exprs;
+            fws.num_stmts = cf.num_stmts;
             fws.slot_ids = cf.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -1077,12 +988,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
 
-        printf("AOT: metadata blob: %d bytes (source-stripped)\n", (int)metadata.size());
+        printf("AOT: metadata blob: %d bytes\n", (int)metadata.size());
 
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
-    } else {
-        generateMainAndTable(ctx, *module, source_text, source_len, label,
-            parse_options, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -1128,8 +1036,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
 //! Extract ALL module dependencies from source (including reexport)
 /** For strip-source mode, we need to serialize all dependencies so they can be loaded
     at runtime before deserializing the namespace tree.
+    Also extracts which deps have (reexport) flag.
 */
-static std::vector<std::string> extractAllDependencies(const char* source, int source_len) {
+static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
+        std::vector<std::string>* reexport_deps,
+        std::unordered_set<std::string>* local_module_names) {
     std::vector<std::string> deps;
     const char* p = source;
     const char* end = source + source_len;
@@ -1175,8 +1086,10 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
             while (p < end && (*p == ' ' || *p == '\t')) {
                 ++p;
             }
-            // Skip optional (reexport) - but still include the module!
+            // Check for optional (reexport) flag
+            bool is_reexport = false;
             if (p + 10 <= end && strncmp(p, "(reexport)", 10) == 0) {
+                is_reexport = true;
                 p += 10;
                 while (p < end && (*p == ' ' || *p == '\t')) {
                     ++p;
@@ -1189,10 +1102,34 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
                 ++p;
             }
             if (p > name_start) {
-                std::string dep_name(name_start, p - name_start);
+                std::string raw_path(name_start, p - name_start);
+                // Check if this is a local module (relative path starting with ./ or ../)
+                bool is_local = (raw_path.size() >= 2 && raw_path[0] == '.'
+                    && (raw_path[1] == '/' || raw_path[1] == '.'));
+                // Convert file paths (e.g. "../../../../qlib/QUnit.qm") to module names
+                // by extracting the basename and removing the .qm extension
+                std::string dep_name = raw_path;
+                {
+                    size_t slash_pos = dep_name.rfind('/');
+                    if (slash_pos != std::string::npos) {
+                        dep_name = dep_name.substr(slash_pos + 1);
+                    }
+                    // Remove .qm extension if present
+                    if (dep_name.size() > 3 && dep_name.compare(dep_name.size() - 3, 3, ".qm") == 0) {
+                        dep_name = dep_name.substr(0, dep_name.size() - 3);
+                    }
+                }
                 // Skip "qore" as it's always available
                 if (dep_name != "qore") {
+                    // Track local module names (items from these modules are kept in metadata
+                    // since they can't be loaded by name at runtime)
+                    if (is_local && local_module_names) {
+                        local_module_names->insert(dep_name);
+                    }
                     deps.push_back(dep_name);
+                    if (is_reexport && reexport_deps) {
+                        reexport_deps->push_back(dep_name);
+                    }
                 }
             }
         }
@@ -1671,244 +1608,8 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
     builder.CreateRetVoid();
 }
 
-//! Generate LLVM IR for binary module ABI symbols and init/ns_init/delete functions
-static void generateModuleABI(llvm::LLVMContext& ctx, llvm::Module& module,
-        const char* source, int source_len, const char* label,
-        int64_t parse_options, const QoreAOTModuleInfo& mod_info,
-        const std::vector<AOTCompiledFunc>& compiled_funcs) {
-    auto* i8_type = llvm::Type::getInt8Ty(ctx);
-    auto* i32_type = llvm::Type::getInt32Ty(ctx);
-    auto* i64_type = llvm::Type::getInt64Ty(ctx);
-    auto* ptr_type = llvm::PointerType::get(ctx, 0);
-    auto* void_type = llvm::Type::getVoidTy(ctx);
-
-    // Helper to create a global exported C string
-    auto createExportedString = [&](const std::string& name, const std::string& value) {
-        auto* str_data = llvm::ConstantDataArray::getString(ctx, value, true);
-        auto* gv = new llvm::GlobalVariable(module, str_data->getType(), true,
-            llvm::GlobalValue::ExternalLinkage, str_data, name);
-        gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
-        return gv;
-    };
-
-    // Module descriptor globals (exported symbols for dlsym)
-    createExportedString("qore_module_name", mod_info.name);
-    createExportedString("qore_module_version", mod_info.version);
-    createExportedString("qore_module_description", mod_info.desc);
-    createExportedString("qore_module_author", mod_info.author);
-    createExportedString("qore_module_url", mod_info.url.empty() ? "" : mod_info.url);
-    createExportedString("qore_module_license_str", mod_info.license);
-
-    // Module API version (exported int globals)
-    auto createExportedInt = [&](const std::string& name, int value) {
-        auto* gv = new llvm::GlobalVariable(module, i32_type, true,
-            llvm::GlobalValue::ExternalLinkage,
-            llvm::ConstantInt::get(i32_type, value), name);
-        gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
-        return gv;
-    };
-    createExportedInt("qore_module_api_major", QORE_MODULE_API_MAJOR);
-    createExportedInt("qore_module_api_minor", QORE_MODULE_API_MINOR);
-
-    // License enum
-    auto* license_gv = new llvm::GlobalVariable(module, i32_type, true,
-        llvm::GlobalValue::ExternalLinkage,
-        llvm::ConstantInt::get(i32_type, getLicenseEnum(mod_info.license)), "qore_module_license");
-    license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
-
-    // Export module dependencies as null-terminated array of C strings
-    // The module manager uses this to load dependencies before calling init
-    if (!mod_info.dependencies.empty()) {
-        std::vector<llvm::GlobalVariable*> dep_string_gvs;
-        for (const auto& dep : mod_info.dependencies) {
-            auto* dep_str = llvm::ConstantDataArray::getString(ctx, dep, true);
-            auto* dep_gv = new llvm::GlobalVariable(module, dep_str->getType(), true,
-                llvm::GlobalValue::PrivateLinkage, dep_str,
-                "qore_aot_dep_" + dep);
-            dep_string_gvs.push_back(dep_gv);
-        }
-        // Create array of pointers to dependency strings, plus null terminator
-        std::vector<llvm::Constant*> dep_ptrs;
-        for (auto* gv : dep_string_gvs) {
-            dep_ptrs.push_back(llvm::ConstantExpr::getPointerCast(gv, ptr_type));
-        }
-        dep_ptrs.push_back(llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
-        auto* dep_array = llvm::ConstantArray::get(
-            llvm::ArrayType::get(ptr_type, dep_ptrs.size()), dep_ptrs);
-        auto* deps_gv = new llvm::GlobalVariable(module, dep_array->getType(), true,
-            llvm::GlobalValue::ExternalLinkage, dep_array, "qore_module_dependencies");
-        deps_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
-    }
-
-    // Embed source as a private global constant
-    llvm::Constant* source_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(source, source_len), false);
-    auto* source_gv = new llvm::GlobalVariable(module,
-        source_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
-        source_data, "qore_aot_mod_source");
-
-    // Embed label as a private global constant
-    llvm::Constant* label_data = llvm::ConstantDataArray::getString(ctx,
-        llvm::StringRef(label), true);
-    auto* label_gv = new llvm::GlobalVariable(module,
-        label_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
-        label_data, "qore_aot_mod_label");
-
-    // Embed module name as a private global constant
-    llvm::Constant* modname_data = llvm::ConstantDataArray::getString(ctx,
-        mod_info.name, true);
-    auto* modname_gv = new llvm::GlobalVariable(module,
-        modname_data->getType(), true, llvm::GlobalValue::PrivateLinkage,
-        modname_data, "qore_aot_mod_name");
-
-    // Build function table (same format as executable AOT)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type});
-    std::vector<llvm::Constant*> func_entries;
-    for (auto& cf : compiled_funcs) {
-        llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
-        auto* name_gv = new llvm::GlobalVariable(module,
-            name_str->getType(), true, llvm::GlobalValue::PrivateLinkage,
-            name_str, "qore_aot_mfname_" + cf.llvm_symbol);
-        llvm::Function* fn = module.getFunction(cf.llvm_symbol);
-        if (!fn) {
-            continue;
-        }
-        llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
-            name_gv, fn,
-            llvm::ConstantInt::get(i32_type, cf.num_locals),
-            llvm::ConstantInt::get(i32_type, cf.num_globals),
-            llvm::ConstantInt::get(i32_type, cf.num_exprs),
-            llvm::ConstantInt::get(i32_type, cf.num_stmts)
-        });
-        func_entries.push_back(entry);
-    }
-
-    int num_funcs = (int)func_entries.size();
-    llvm::GlobalVariable* func_table_gv = nullptr;
-    if (num_funcs > 0) {
-        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
-        auto* func_table_init = llvm::ConstantArray::get(table_type, func_entries);
-        func_table_gv = new llvm::GlobalVariable(module,
-            table_type, true, llvm::GlobalValue::PrivateLinkage,
-            func_table_init, "qore_aot_mod_funcs");
-    }
-
-    // Declare qore_aot_module_init: QoreStringNode* (source, source_len, label, parse_options, mod_name, funcs, num_funcs)
-    auto* init_ret_type = ptr_type;  // QoreStringNode*
-    auto* aot_mod_init_type = llvm::FunctionType::get(init_ret_type, {
-        ptr_type, i32_type, ptr_type, i64_type, ptr_type, ptr_type, i32_type
-    }, false);
-    auto aot_mod_init_fn = module.getOrInsertFunction("qore_aot_module_init", aot_mod_init_type);
-
-    // Declare qore_aot_module_ns_init: void (root_ns, qore_ns)
-    auto* aot_mod_ns_init_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-    auto aot_mod_ns_init_fn = module.getOrInsertFunction("qore_aot_module_ns_init", aot_mod_ns_init_type);
-
-    // Declare qore_aot_module_delete: void ()
-    auto* aot_mod_del_type = llvm::FunctionType::get(void_type, {}, false);
-    auto aot_mod_del_fn = module.getOrInsertFunction("qore_aot_module_delete", aot_mod_del_type);
-
-    // Create internal implementation function for module init
-    llvm::Function* init_impl_fn;
-    {
-        auto* fn_type = llvm::FunctionType::get(ptr_type, {}, false);
-        init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
-            "__qore_aot_module_init_impl", module);
-
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", init_impl_fn);
-        llvm::IRBuilder<> builder(entry_bb);
-
-        llvm::Value* src_ptr = builder.CreateInBoundsGEP(
-            source_data->getType(), source_gv,
-            {builder.getInt64(0), builder.getInt64(0)});
-        llvm::Value* lbl_ptr = builder.CreateInBoundsGEP(
-            label_data->getType(), label_gv,
-            {builder.getInt64(0), builder.getInt64(0)});
-        llvm::Value* name_ptr = builder.CreateInBoundsGEP(
-            modname_data->getType(), modname_gv,
-            {builder.getInt64(0), builder.getInt64(0)});
-
-        llvm::Value* funcs_ptr;
-        if (func_table_gv) {
-            auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
-            funcs_ptr = builder.CreateBitCast(
-                builder.CreateInBoundsGEP(table_type, func_table_gv,
-                    {builder.getInt64(0), builder.getInt64(0)}),
-                ptr_type);
-        } else {
-            funcs_ptr = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
-        }
-
-        llvm::Value* result = builder.CreateCall(aot_mod_init_fn, {
-            src_ptr,
-            builder.getInt32(source_len),
-            lbl_ptr,
-            builder.getInt64(parse_options),
-            name_ptr,
-            funcs_ptr,
-            builder.getInt32(num_funcs)
-        });
-        builder.CreateRet(result);
-    }
-
-    // Create internal implementation function for ns_init
-    llvm::Function* ns_init_impl_fn;
-    {
-        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-        ns_init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
-            "__qore_aot_module_ns_init_impl", module);
-
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", ns_init_impl_fn);
-        llvm::IRBuilder<> builder(entry_bb);
-
-        auto arg_it = ns_init_impl_fn->arg_begin();
-        llvm::Value* root_ns_val = &*arg_it++;
-        llvm::Value* qore_ns_val = &*arg_it;
-
-        builder.CreateCall(aot_mod_ns_init_fn, {root_ns_val, qore_ns_val});
-        builder.CreateRetVoid();
-    }
-
-    // Create internal implementation function for delete
-    llvm::Function* del_impl_fn;
-    {
-        auto* fn_type = llvm::FunctionType::get(void_type, {}, false);
-        del_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
-            "__qore_aot_module_delete_impl", module);
-
-        auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", del_impl_fn);
-        llvm::IRBuilder<> builder(entry_bb);
-
-        builder.CreateCall(aot_mod_del_fn, {});
-        builder.CreateRetVoid();
-    }
-
-    // Export global function pointer variables (as binary modules expect)
-    // qore_module_init: qore_module_init_t (function pointer)
-    {
-        new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
-    }
-
-    // qore_module_ns_init: qore_module_ns_init_t (function pointer)
-    {
-        new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
-    }
-
-    // qore_module_delete: qore_module_delete_t (function pointer)
-    {
-        new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
-    }
-
-    // Generate API 2.0 module descriptor function
-    emitModuleDescFunction(ctx, module, init_impl_fn, ns_init_impl_fn, del_impl_fn, mod_info);
-}
-
-//! Generate LLVM IR for source-stripped binary module ABI symbols
-/** Like generateModuleABI but embeds metadata blob instead of source text,
-    and calls qore_aot_module_init_v2 instead of qore_aot_module_init.
+//! Generate LLVM IR for binary module ABI symbols
+/** Embeds serialized metadata blob and calls qore_aot_module_init_v2.
 */
 static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
@@ -2161,8 +1862,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
                              int64_t parse_options,
                              std::string& error,
                              int opt_level,
-                             const char* target_triple,
-                             bool strip_source) {
+                             const char* target_triple) {
     // Step 1: Parse module metadata from source
     QoreAOTModuleInfo mod_info;
     if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
@@ -2279,8 +1979,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         compiled_count, total_funcs, failed_count,
         total_funcs - compiled_count - failed_count);
 
-    // Step 4: Generate module ABI (instead of main + table)
-    if (strip_source) {
+    // Step 4: Generate module ABI with serialized metadata
+    {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
@@ -2288,11 +1988,18 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.flags = QORE_AOT_FLAG_IS_MODULE;
         hdr.parse_options = mod_po;
         hdr.label_offset = writer.strings.add(label);
+        // v2 fields: opcode compatibility and Qore version
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
         // at runtime before deserializing the namespace tree
-        std::vector<std::string> all_deps = extractAllDependencies(source_text, source_len);
+        std::vector<std::string> reexport_mods;
+        std::vector<std::string> all_deps = extractAllDependencies(source_text, source_len, &reexport_mods);
         serializeDependencies(writer, all_deps);
+        serializeReexportModules(writer, reexport_mods);
 
         // Pass module name to filter out items from reexported dependencies
         if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
@@ -2307,6 +2014,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_locals = cf.num_locals;
             fws.num_globals = cf.num_globals;
             fws.num_exprs = cf.num_exprs;
+            fws.num_stmts = cf.num_stmts;
             fws.slot_ids = cf.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -2320,12 +2028,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
 
-        printf("AOT: module metadata blob: %d bytes (source-stripped)\n", (int)metadata.size());
+        printf("AOT: module metadata blob: %d bytes\n", (int)metadata.size());
 
         generateModuleABIV2(ctx, *module, metadata, label, mod_po, mod_info, compiled_funcs);
-    } else {
-        generateModuleABI(ctx, *module, source_text, source_len, label,
-            mod_po, mod_info, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -2369,8 +2074,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                                      int64_t parse_options,
                                      std::string& error,
                                      int opt_level,
-                                     const char* target_triple,
-                                     bool strip_source) {
+                                     const char* target_triple) {
     // Step 1: Extract module name from directory basename (handle trailing slash)
     std::string dir_str(dir_path);
     // Remove trailing slashes
@@ -2442,6 +2146,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         return false;
     }
 
+    // Set script path so get_script_dir() works during parse time
+    // (e.g., DataProvider/QoreApp.qc uses get_script_dir() to load SVG data)
+    qpgm->setScriptPath(qm_path.c_str());
+
     // Step 6: Parse with QoreUserModuleDefContextHelper for proper module context
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
@@ -2502,9 +2210,15 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 }
 
                 // Add this file's source to combined source for embedding
+                // Insert file boundary marker so the AOT runtime can split the combined
+                // source into separate parsePending() calls (one per file segment).
+                // This is critical because the parser creates a fresh scanner per
+                // parsePending() call, resetting line tracking to 1 — without this,
+                // content after the module block gets start_line=0 in BCA nodes.
                 if (!combined_source.empty() && combined_source.back() != '\n') {
                     combined_source += '\n';
                 }
+                combined_source += "# __AOT_FILE_BREAK__\n";
                 combined_source += file_source;
             }
         }
@@ -2587,8 +2301,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         printf("AOT split module compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
             compiled_count, total_funcs, failed_count, total_funcs - compiled_count - failed_count);
 
-        // Step 10: Generate module ABI
-        if (strip_source) {
+        // Step 10: Generate module ABI with serialized metadata
+        {
             QoreAOTBinaryWriter writer;
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
@@ -2596,12 +2310,19 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
             hdr.parse_options = mod_po;
             hdr.label_offset = writer.strings.add(qm_path.c_str());
+            // v2 fields: opcode compatibility and Qore version
+            hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+            hdr.qore_version_major = QORE_VERSION_MAJOR;
+            hdr.qore_version_minor = QORE_VERSION_MINOR;
+            hdr.qore_version_patch = QORE_VERSION_PATCH;
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
             // at runtime before deserializing the namespace tree
+            std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(combined_source.c_str(),
-                static_cast<int>(combined_source.size()));
+                static_cast<int>(combined_source.size()), &reexport_mods);
             serializeDependencies(writer, all_deps);
+            serializeReexportModules(writer, reexport_mods);
 
             // Pass module name to filter out items from reexported dependencies
             if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
@@ -2616,6 +2337,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_locals = cf.num_locals;
                 fws.num_globals = cf.num_globals;
                 fws.num_exprs = cf.num_exprs;
+                fws.num_stmts = cf.num_stmts;
                 fws.slot_ids = cf.slot_ids;
                 func_slots.push_back(std::move(fws));
             }
@@ -2629,13 +2351,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 return false;
             }
 
-            printf("AOT: split module metadata blob: %d bytes (source-stripped)\n", (int)metadata.size());
+            printf("AOT: split module metadata blob: %d bytes\n", (int)metadata.size());
 
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
-        } else {
-            // Embed combined source (main .qm + all .qc/.ql files) for building namespace at runtime
-            generateModuleABI(ctx, *module, combined_source.c_str(), (int)combined_source.size(),
-                qm_path.c_str(), mod_po, mod_info, compiled_funcs);
         }
 
         // Finalize shared debug info after all functions are lowered

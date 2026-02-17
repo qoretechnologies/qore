@@ -443,6 +443,15 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! Load a module into a program without acquiring the module manager mutex
+    /** This is equivalent to what QoreAbstractModule::reexport() does internally.
+        Must only be called from within a module loading context where the mutex is
+        already held (e.g., from within module_ns_init callbacks).
+    */
+    DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
+        loadModuleIntern(xsink, xsink, name, pgm);
+    }
+
     //! find a module by name without locking; the caller must hold the mutex
     DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
         module_map_t::iterator i = map.find(name);
@@ -682,7 +691,10 @@ public:
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s': %s calling module_delete: %p\n", name.c_str(),
             filename.c_str(), module_delete);
+        // Set the module context name so module_delete() can identify which module is being unloaded
+        const char* old_ctx_name = set_module_context_name(name.c_str());
         module_delete();
+        set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be
         // destroyed when exit() is called
     }

@@ -65,370 +65,424 @@ class NewComplexHashNode;
 class NewComplexListNode;
 class VarRefNewObjectNode;
 
+/** IR opcode identifiers.
+
+    IMPORTANT: Opcode IDs are explicitly numbered for binary compatibility.
+    When adding new opcodes:
+    - Always assign the next available ID after the current maximum
+    - Never reuse or reassign an existing ID
+    - Never insert opcodes in the middle of the enum
+    - Update QORE_IR_MAX_OPCODE after adding new opcodes
+    When removing opcodes:
+    - Leave the ID as a gap (comment it out but preserve the number)
+    - The runtime should handle unknown opcodes gracefully
+*/
 enum class QoreIROpcode : uint16_t {
-    ConstInt,
-    ConstFloat,
-    ConstBool,
-    ConstNothing,
-    ConstNull,
-    ConstString,
-    ConstDate,
-    MakeList,
-    MakeHash,
-    CreateEmptyList,    // Create empty list for functional operator results
-    CreateSizedList,    // Create list with pre-allocated capacity (for typed map loops)
-    ListAppend,         // Append value to list (for map/select loops)
-    ListSize,           // Get list element count (returns native i64)
-    ListGetInt,         // Get int element from list by index (returns native i64)
-    ListGetFloat,       // Get float element from list by index (returns native double)
-    ListGetValue,       // Get any element from list by index (returns nanboxed QoreValue)
-    ListSetInt,         // Set int element in list by index (for pre-sized typed map output)
-    ListSetFloat,       // Set float element in list by index
-    ListSetValue,       // Set any element in list by index
+    // Constants (0-6)
+    ConstInt            = 0,
+    ConstFloat          = 1,
+    ConstBool           = 2,
+    ConstNothing        = 3,
+    ConstNull           = 4,
+    ConstString         = 5,
+    ConstDate           = 6,
 
-    AddInt,
-    AddFloat,
-    AddAny,
-    AddString,                          // Typed string concatenation (no runtime type checks)
-    StringConcat,                       // Multi-string concatenation (a + b + c + d in one pass)
-    SubInt,
-    SubFloat,
-    SubAny,
-    MulInt,
-    MulFloat,
-    MulAny,
-    DivInt,
-    DivFloat,
-    DivAny,
-    ModInt,
-    ModAny,
-    AndInt,
-    AndAny,
-    OrInt,
-    OrAny,
-    XorInt,
-    XorAny,
-    ShlInt,
-    ShlAny,
-    ShrInt,
-    ShrAny,
-    ShlAssignInt,
-    ShlAssignAny,
-    ShrAssignInt,
-    ShrAssignAny,
-    AddAssignInt,
-    AddAssignFloat,
-    AddAssignAny,
-    SubAssignInt,
-    SubAssignFloat,
-    SubAssignAny,
-    MulAssignInt,
-    MulAssignFloat,
-    MulAssignAny,
-    DivAssignInt,
-    DivAssignFloat,
-    DivAssignAny,
-    ModAssignInt,
-    ModAssignAny,
-    AndAssignInt,
-    AndAssignAny,
-    OrAssignInt,
-    OrAssignAny,
-    XorAssignInt,
-    XorAssignAny,
-    LoadLValue,
-    StoreLValue,
-    PreIncLValue,
-    PreDecLValue,
-    PostIncLValue,
-    PostDecLValue,
-    AddAssignLValue,
-    SubAssignLValue,
-    MulAssignLValue,
-    DivAssignLValue,
-    ModAssignLValue,
-    AndAssignLValue,
-    OrAssignLValue,
-    XorAssignLValue,
-    ShlAssignLValue,
-    ShrAssignLValue,
-    ShiftLValue,
-    UnshiftLValue,
-    PopAny,
-    PushAny,
-    SpliceLValue,
-    ExtractAny,
-    ExtractList,
-    ExtractString,
-    ExtractBinary,
-    RemoveAny,
-    RemoveList,
-    RemoveHash,
-    RemoveObject,
-    RemoveString,
-    RemoveBinary,
-    KeysAny,
-    KeysList,
-    KeysHash,
-    RegexMatchAny,
-    RegexMatchBool,
-    RegexNMatchBool,
-    RegexExtractAny,
-    RegexExtractList,
-    RegexSubstAny,
-    RegexSubstString,
-    InstanceOfBool,
-    TrimAny,
-    TrimString,
-    ChompAny,
-    ChompString,
-    TransliterateAny,
-    TransliterateString,
-    BackgroundInt,
-    ListAssignAny,
-    ExistsAny,
-    ExistsBool,
-    ElementsAny,
-    ElementsInt,
-    DotEvalAny,
-    DotEvalInt,
-    DotEvalFloat,
-    DotEvalString,
-    DotEvalDate,
-    DotEvalList,
-    DotEvalHash,
-    DotEvalObject,
-    MapSelectList,
-    HashMap,
-    HashMapSelect,
-    Foreach,
-    IteratorCreate,     // Create iterator from list/iterable
-    IteratorNext,       // Advance iterator, branch if done, store value
-    OnBlockExit,
-    ScopeEnter,
-    ScopeExit,
-    ThreadExit,
-    Debug,
-    Assert,
-    Context,
-    Summarize,
+    // List/Hash construction (7-18)
+    MakeList            = 7,
+    MakeHash            = 8,
+    CreateEmptyList     = 9,    // Create empty list for functional operator results
+    CreateSizedList     = 10,   // Create list with pre-allocated capacity (for typed map loops)
+    ListAppend          = 11,   // Append value to list (for map/select loops)
+    ListSize            = 12,   // Get list element count (returns native i64)
+    ListGetInt          = 13,   // Get int element from list by index (returns native i64)
+    ListGetFloat        = 14,   // Get float element from list by index (returns native double)
+    ListGetValue        = 15,   // Get any element from list by index (returns nanboxed QoreValue)
+    ListSetInt          = 16,   // Set int element in list by index (for pre-sized typed map output)
+    ListSetFloat        = 17,   // Set float element in list by index
+    ListSetValue        = 18,   // Set any element in list by index
 
-    EqInt,
-    EqFloat,
-    EqString,
-    EqAny,
-    NeInt,
-    NeFloat,
-    NeString,
-    NeAny,
-    EqHard,
-    NeHard,
-    LtInt,
-    LtFloat,
-    LtString,
-    LtAny,
-    LeInt,
-    LeFloat,
-    LeString,
-    LeAny,
-    GtInt,
-    GtFloat,
-    GtString,
-    GtAny,
-    GeInt,
-    GeFloat,
-    GeString,
-    GeAny,
-    CmpInt,
-    CmpFloat,
-    CmpString,
-    CmpAny,
+    // Arithmetic (19-44)
+    AddInt              = 19,
+    AddFloat            = 20,
+    AddAny              = 21,
+    AddString           = 22,   // Typed string concatenation (no runtime type checks)
+    StringConcat        = 23,   // Multi-string concatenation (a + b + c + d in one pass)
+    SubInt              = 24,
+    SubFloat            = 25,
+    SubAny              = 26,
+    MulInt              = 27,
+    MulFloat            = 28,
+    MulAny              = 29,
+    DivInt              = 30,
+    DivFloat            = 31,
+    DivAny              = 32,
+    ModInt              = 33,
+    ModAny              = 34,
+    AndInt              = 35,
+    AndAny              = 36,
+    OrInt               = 37,
+    OrAny               = 38,
+    XorInt              = 39,
+    XorAny              = 40,
+    ShlInt              = 41,
+    ShlAny              = 42,
+    ShrInt              = 43,
+    ShrAny              = 44,
 
-    ToBool,
-    Not,
-    IsNullOrNothing,
-    Phi,
-    UnaryPlusAny,
-    UnaryMinusInt,
-    UnaryMinusFloat,
-    UnaryMinusAny,
-    FoldlAny,
-    FoldlInt,
-    FoldlFloat,
-    FoldrAny,
-    FoldrInt,
-    FoldrFloat,
+    // Compound assignment (45-68)
+    ShlAssignInt        = 45,
+    ShlAssignAny        = 46,
+    ShrAssignInt        = 47,
+    ShrAssignAny        = 48,
+    AddAssignInt        = 49,
+    AddAssignFloat      = 50,
+    AddAssignAny        = 51,
+    SubAssignInt        = 52,
+    SubAssignFloat      = 53,
+    SubAssignAny        = 54,
+    MulAssignInt        = 55,
+    MulAssignFloat      = 56,
+    MulAssignAny        = 57,
+    DivAssignInt        = 58,
+    DivAssignFloat      = 59,
+    DivAssignAny        = 60,
+    ModAssignInt        = 61,
+    ModAssignAny        = 62,
+    AndAssignInt        = 63,
+    AndAssignAny        = 64,
+    OrAssignInt         = 65,
+    OrAssignAny         = 66,
+    XorAssignInt        = 67,
+    XorAssignAny        = 68,
+
+    // LValue operations (69-89)
+    LoadLValue          = 69,
+    StoreLValue         = 70,
+    PreIncLValue        = 71,
+    PreDecLValue        = 72,
+    PostIncLValue       = 73,
+    PostDecLValue       = 74,
+    AddAssignLValue     = 75,
+    SubAssignLValue     = 76,
+    MulAssignLValue     = 77,
+    DivAssignLValue     = 78,
+    ModAssignLValue     = 79,
+    AndAssignLValue     = 80,
+    OrAssignLValue      = 81,
+    XorAssignLValue     = 82,
+    ShlAssignLValue     = 83,
+    ShrAssignLValue     = 84,
+    ShiftLValue         = 85,
+    UnshiftLValue       = 86,
+    PopAny              = 87,
+    PushAny             = 88,
+    SpliceLValue        = 89,
+
+    // Extract/Remove (90-99)
+    ExtractAny          = 90,
+    ExtractList         = 91,
+    ExtractString       = 92,
+    ExtractBinary       = 93,
+    RemoveAny           = 94,
+    RemoveList          = 95,
+    RemoveHash          = 96,
+    RemoveObject        = 97,
+    RemoveString        = 98,
+    RemoveBinary        = 99,
+
+    // Collection utilities (100-122)
+    KeysAny             = 100,
+    KeysList            = 101,
+    KeysHash            = 102,
+    RegexMatchAny       = 103,
+    RegexMatchBool      = 104,
+    RegexNMatchBool     = 105,
+    RegexExtractAny     = 106,
+    RegexExtractList    = 107,
+    RegexSubstAny       = 108,
+    RegexSubstString    = 109,
+    InstanceOfBool      = 110,
+    TrimAny             = 111,
+    TrimString          = 112,
+    ChompAny            = 113,
+    ChompString         = 114,
+    TransliterateAny    = 115,
+    TransliterateString = 116,
+    BackgroundInt        = 117,
+    ListAssignAny       = 118,
+    ExistsAny           = 119,
+    ExistsBool          = 120,
+    ElementsAny         = 121,
+    ElementsInt         = 122,
+
+    // Dot-eval (123-130)
+    DotEvalAny          = 123,
+    DotEvalInt          = 124,
+    DotEvalFloat        = 125,
+    DotEvalString       = 126,
+    DotEvalDate         = 127,
+    DotEvalList         = 128,
+    DotEvalHash         = 129,
+    DotEvalObject       = 130,
+
+    // Iterators and control (131-144)
+    MapSelectList       = 131,
+    HashMap             = 132,
+    HashMapSelect       = 133,
+    Foreach             = 134,
+    IteratorCreate      = 135,  // Create iterator from list/iterable
+    IteratorNext        = 136,  // Advance iterator, branch if done, store value
+    OnBlockExit         = 137,
+    ScopeEnter          = 138,
+    ScopeExit           = 139,
+    ThreadExit          = 140,
+    Debug               = 141,
+    Assert              = 142,
+    Context             = 143,
+    Summarize           = 144,
+
+    // Comparisons (145-174)
+    EqInt               = 145,
+    EqFloat             = 146,
+    EqString            = 147,
+    EqAny               = 148,
+    NeInt               = 149,
+    NeFloat             = 150,
+    NeString            = 151,
+    NeAny               = 152,
+    EqHard              = 153,
+    NeHard              = 154,
+    LtInt               = 155,
+    LtFloat             = 156,
+    LtString            = 157,
+    LtAny               = 158,
+    LeInt               = 159,
+    LeFloat             = 160,
+    LeString            = 161,
+    LeAny               = 162,
+    GtInt               = 163,
+    GtFloat             = 164,
+    GtString            = 165,
+    GtAny               = 166,
+    GeInt               = 167,
+    GeFloat             = 168,
+    GeString            = 169,
+    GeAny               = 170,
+    CmpInt              = 171,
+    CmpFloat            = 172,
+    CmpString           = 173,
+    CmpAny              = 174,
+
+    // Type coercion and logic (175-182)
+    ToBool              = 175,
+    Not                 = 176,
+    IsNullOrNothing     = 177,
+    Phi                 = 178,
+    UnaryPlusAny        = 179,
+    UnaryMinusInt       = 180,
+    UnaryMinusFloat     = 181,
+    UnaryMinusAny       = 182,
+
+    // Fold operations (183-208)
+    FoldlAny            = 183,
+    FoldlInt            = 184,
+    FoldlFloat          = 185,
+    FoldrAny            = 186,
+    FoldrInt            = 187,
+    FoldrFloat          = 188,
     // Optimized fold operations (native LLVM loops)
-    FoldlSumInt,        // foldl $1 + $2, list, init
-    FoldlSumFloat,
-    FoldlProdInt,       // foldl $1 * $2, list, init
-    FoldlProdFloat,
-    FoldlDiffInt,       // foldl $1 - $2, list, init
-    FoldlDiffFloat,
-    FoldlMinInt,        // foldl min($1, $2), list, init
-    FoldlMinFloat,
-    FoldlMaxInt,        // foldl max($1, $2), list, init
-    FoldlMaxFloat,
+    FoldlSumInt         = 189,  // foldl $1 + $2, list, init
+    FoldlSumFloat       = 190,
+    FoldlProdInt        = 191,  // foldl $1 * $2, list, init
+    FoldlProdFloat      = 192,
+    FoldlDiffInt        = 193,  // foldl $1 - $2, list, init
+    FoldlDiffFloat      = 194,
+    FoldlMinInt         = 195,  // foldl min($1, $2), list, init
+    FoldlMinFloat       = 196,
+    FoldlMaxInt         = 197,  // foldl max($1, $2), list, init
+    FoldlMaxFloat       = 198,
     // Optimized foldr operations (native LLVM loops)
-    FoldrSumInt,        // foldr $1 + $2, list
-    FoldrSumFloat,
-    FoldrProdInt,       // foldr $1 * $2, list
-    FoldrProdFloat,
-    FoldrDiffInt,       // foldr $1 - $2, list (reverse iteration)
-    FoldrDiffFloat,
-    FoldrMinInt,        // foldr min($1, $2), list
-    FoldrMinFloat,
-    FoldrMaxInt,        // foldr max($1, $2), list
-    FoldrMaxFloat,
-    MapAny,
-    MapInt,
-    MapFloat,
+    FoldrSumInt         = 199,  // foldr $1 + $2, list
+    FoldrSumFloat       = 200,
+    FoldrProdInt        = 201,  // foldr $1 * $2, list
+    FoldrProdFloat      = 202,
+    FoldrDiffInt        = 203,  // foldr $1 - $2, list (reverse iteration)
+    FoldrDiffFloat      = 204,
+    FoldrMinInt         = 205,  // foldr min($1, $2), list
+    FoldrMinFloat       = 206,
+    FoldrMaxInt         = 207,  // foldr max($1, $2), list
+    FoldrMaxFloat       = 208,
+
+    // Map operations (209-222)
+    MapAny              = 209,
+    MapInt              = 210,
+    MapFloat            = 211,
     // Optimized map operations (native LLVM loops)
-    MapScaleInt,        // map $1 * const, list
-    MapScaleFloat,
-    MapOffsetInt,       // map $1 + const, list
-    MapOffsetFloat,
-    MapSquareInt,       // map $1 * $1, list
-    MapSquareFloat,
+    MapScaleInt         = 212,  // map $1 * const, list
+    MapScaleFloat       = 213,
+    MapOffsetInt        = 214,  // map $1 + const, list
+    MapOffsetFloat      = 215,
+    MapSquareInt        = 216,  // map $1 * $1, list
+    MapSquareFloat      = 217,
     // Fully specialized hash-key map operations (single C++ runtime call)
-    MapHashKeyValue,    // map $1.key, list<hash> → list<auto>
-    MapHashKeyInt,      // map $1.key, list<hash> → list<int> (int values)
-    MapHashKeyOffsetInt,// map ($1.key + N), list<hash> → list<int>
-    MapHashKeyScaleInt, // map ($1.key * N), list<hash> → list<int>
-    HashMapTwoKeys,     // map {$1.k1: $1.k2}, list<hash> → hash<auto>
-    SelectAny,
-    SelectInt,
-    SelectFloat,
+    MapHashKeyValue     = 218,  // map $1.key, list<hash> -> list<auto>
+    MapHashKeyInt       = 219,  // map $1.key, list<hash> -> list<int> (int values)
+    MapHashKeyOffsetInt = 220,  // map ($1.key + N), list<hash> -> list<int>
+    MapHashKeyScaleInt  = 221,  // map ($1.key * N), list<hash> -> list<int>
+    HashMapTwoKeys      = 222,  // map {$1.k1: $1.k2}, list<hash> -> hash<auto>
+
+    // Select operations (223-241)
+    SelectAny           = 223,
+    SelectInt           = 224,
+    SelectFloat         = 225,
     // Optimized select operations (native LLVM loops)
-    SelectPositiveInt,  // select $1 > 0, list
-    SelectPositiveFloat,
-    SelectNonZeroInt,   // select $1 != 0, list
-    SelectNonZeroFloat,
+    SelectPositiveInt   = 226,  // select $1 > 0, list
+    SelectPositiveFloat = 227,
+    SelectNonZeroInt    = 228,  // select $1 != 0, list
+    SelectNonZeroFloat  = 229,
     // Fused map+select operations (single-pass, no intermediate list)
-    FusedMapSelectScalePositiveInt,     // (map $1 * c, (select list, $1 > 0))
-    FusedMapSelectScalePositiveFloat,
-    FusedMapSelectOffsetPositiveInt,    // (map $1 + c, (select list, $1 > 0))
-    FusedMapSelectOffsetPositiveFloat,
-    FusedMapSelectSquarePositiveInt,    // (map $1 * $1, (select list, $1 > 0))
-    FusedMapSelectSquarePositiveFloat,
+    FusedMapSelectScalePositiveInt      = 230,  // (map $1 * c, (select list, $1 > 0))
+    FusedMapSelectScalePositiveFloat    = 231,
+    FusedMapSelectOffsetPositiveInt     = 232,  // (map $1 + c, (select list, $1 > 0))
+    FusedMapSelectOffsetPositiveFloat   = 233,
+    FusedMapSelectSquarePositiveInt     = 234,  // (map $1 * $1, (select list, $1 > 0))
+    FusedMapSelectSquarePositiveFloat   = 235,
     // Fused map+foldl operations (single-pass, no intermediate list)
-    FusedMapFoldlSumScaleInt,           // foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
-    FusedMapFoldlSumScaleFloat,
-    FusedMapFoldlSumSquareInt,          // foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
-    FusedMapFoldlSumSquareFloat,
-    FusedMapFoldlProdScaleInt,          // foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
-    FusedMapFoldlProdScaleFloat,
-    MapSelectAny,
-    HashMapAny,
-    HashMapSelectAny,
-    RangeAny,
-    RangeInt,
-    RangeFloat,
-    RangeDate,
-    RangeSliceAny,
-    RangeSliceInt,
-    RangeSliceFloat,
-    CastAny,
-    CastList,
-    CastHash,
-    CastObject,
-    CastEnum,
+    FusedMapFoldlSumScaleInt            = 236,  // foldl $1 + $2, (map $1 * c, list)
+    FusedMapFoldlSumScaleFloat          = 237,
+    FusedMapFoldlSumSquareInt           = 238,  // foldl $1 + $2, (map $1 * $1, list)
+    FusedMapFoldlSumSquareFloat         = 239,
+    FusedMapFoldlProdScaleInt           = 240,  // foldl $1 * $2, (map $1 * c, list)
+    FusedMapFoldlProdScaleFloat         = 241,
 
-    Br,
-    BrIf,
-    SwitchInt,     // Integer switch with LLVM switch instruction
-    SwitchString,  // String switch with hash-table lookup
-    Return,
-    ReturnNothing,
+    // AST-delegated functional operators (242-244)
+    MapSelectAny        = 242,
+    HashMapAny          = 243,
+    HashMapSelectAny    = 244,
 
-    LoadLocal,
-    StoreLocal,
-    UninstantiateLocal,  // Uninstantiate a local variable at block scope exit
-    LoadArg,
-    LoadClosure,
-    StoreClosure,
-    LoadGlobal,
-    StoreGlobal,
-    LoadThreadLocal,
-    StoreThreadLocal,
+    // Range operations (245-251)
+    RangeAny            = 245,
+    RangeInt            = 246,
+    RangeFloat          = 247,
+    RangeDate           = 248,
+    RangeSliceAny       = 249,
+    RangeSliceInt       = 250,
+    RangeSliceFloat     = 251,
 
-    // Implicit argument opcodes for closures
-    LoadImplicitArg,    // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
-    LoadImplicitArgv,   // Load entire $argv list
-    LoadImplicitElement,// Load $# (current element index in map/select)
+    // Cast operations (252-256)
+    CastAny             = 252,
+    CastList            = 253,
+    CastHash            = 254,
+    CastObject          = 255,
+    CastEnum            = 256,
+
+    // Control flow (257-262)
+    Br                  = 257,
+    BrIf                = 258,
+    SwitchInt           = 259,  // Integer switch with LLVM switch instruction
+    SwitchString        = 260,  // String switch with hash-table lookup
+    Return              = 261,
+    ReturnNothing       = 262,
+
+    // Variable access (263-272)
+    LoadLocal           = 263,
+    StoreLocal          = 264,
+    UninstantiateLocal  = 265,  // Uninstantiate a local variable at block scope exit
+    LoadArg             = 266,
+    LoadClosure         = 267,
+    StoreClosure        = 268,
+    LoadGlobal          = 269,
+    StoreGlobal         = 270,
+    LoadThreadLocal     = 271,
+    StoreThreadLocal    = 272,
+
+    // Implicit argument opcodes (273-280)
+    LoadImplicitArg     = 273,  // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
+    LoadImplicitArgv    = 274,  // Load entire $argv list
+    LoadImplicitElement = 275,  // Load $# (current element index in map/select)
     // Context setup/teardown for functional operators (map, select, foldl, etc.)
-    PushImplicitArg,    // Push value as $1, result = old context for restoration
-    SetImplicitArgv,    // Set list directly as implicit args (for foldl $1/$2), result = old context
-    PopImplicitArg,     // Restore previous $1 context (operand = old context)
-    PushImplicitElement,// Push index as $#, result = old element for restoration
-    PopImplicitElement, // Restore previous $# context (operand = old element)
+    PushImplicitArg     = 276,  // Push value as $1, result = old context for restoration
+    SetImplicitArgv     = 277,  // Set list directly as implicit args (for foldl $1/$2)
+    PopImplicitArg      = 278,  // Restore previous $1 context (operand = old context)
+    PushImplicitElement = 279,  // Push index as $#, result = old element for restoration
+    PopImplicitElement  = 280,  // Restore previous $# context (operand = old element)
 
-    // Hash key access
-    HashKeyAccess,      // Load hash.key - direct hash member access without AST delegation
-    HashKeyAccessInt,   // Load hash.key as native int64 (known int value type)
+    // Direct access opcodes (281-284)
+    HashKeyAccess       = 281,  // Load hash.key - direct hash member access
+    HashKeyAccessInt    = 282,  // Load hash.key as native int64 (known int value type)
+    LoadSelfMember      = 283,  // Load self.member_name - accesses current object's member
+    LoadStaticVar       = 284,  // Load static class variable - accesses QoreVarInfo directly
 
-    // Self member access
-    LoadSelfMember,     // Load self.member_name - accesses current object's member
+    // Object instantiation (285)
+    NewObject           = 285,  // Create new object - calls QoreClass::execConstructor directly
 
-    // Static class variable access
-    LoadStaticVar,      // Load static class variable - accesses QoreVarInfo directly
+    // Constant and closure creation (286-290)
+    LoadConstant        = 286,  // Load runtime constant - accesses ConstantEntry::saved_val
+    CreateClosure       = 287,  // Create closure/lambda
+    CreateCallRef       = 288,  // Create call reference - function/static method references
+    CreateMethodRef     = 289,  // Create method reference - object method references
+    CreateParseRef      = 290,  // Create parse reference - \var lvalue references
 
-    // Object instantiation
-    NewObject,          // Create new object - calls QoreClass::execConstructor directly
+    // Typed container construction (291-294)
+    NewHashDecl         = 291,  // Create new hashdecl instance
+    NewComplexHash      = 292,  // Create new typed hash
+    NewComplexList      = 293,  // Create new typed list
+    VrnConstruct        = 294,  // Construct value for VarRefNewObjectNode (non-object types)
 
-    // Constant and closure creation
-    LoadConstant,       // Load runtime constant - accesses ConstantEntry::saved_val
-    CreateClosure,      // Create closure/lambda - instantiates QoreClosureNode or QoreObjectClosureNode
-    CreateCallRef,      // Create call reference - function/static method references
-    CreateMethodRef,    // Create method reference - object method references
-    CreateParseRef,     // Create parse reference - \var lvalue references
+    // Hash building (295)
+    HashSetKeyValue     = 295,  // Set key-value pair in hash (for hash map loops)
 
-    // Typed container construction
-    NewHashDecl,        // Create new hashdecl instance
-    NewComplexHash,     // Create new typed hash
-    NewComplexList,     // Create new typed list
-    VrnConstruct,       // Construct value for VarRefNewObjectNode (non-object types)
+    // Reverse iteration (296)
+    IteratorCreateReverse = 296, // Create reverse iterator from list/iterable (for foldr)
 
-    // Hash building
-    HashSetKeyValue,    // Set key-value pair in hash (for hash map loops)
+    // Function/method calls (297-308)
+    Call                = 297,
+    CallDirect          = 298,  // Direct function call - resolved at parse time
+    CallIndirect        = 299,
+    CallMethod          = 300,
+    CallMethodDirect    = 301,  // Direct method call - no dispatch needed
+    InvokeMethodDirect  = 302,  // Direct method call with exception handling
+    CallStatic          = 303,
+    CallStaticDirect    = 304,  // Direct static method call - pre-evaluated args
+    DotEvalMethodDirect = 305,  // Direct dot-eval method call - pre-evaluated base+args
+    InvokeDotEvalMethodDirect = 306, // Direct dot-eval with exception handling
+    CallClosureDirect   = 307,  // Direct closure/callref call
+    Invoke              = 308,
 
-    // Reverse iteration
-    IteratorCreateReverse, // Create reverse iterator from list/iterable (for foldr)
+    // Type guards (309-313)
+    GuardInt            = 309,
+    GetObjectClass      = 310,  // Get runtime class pointer from object value
+    GuardFloat          = 311,
+    GuardType           = 312,
+    GuardNotNothing     = 313,
 
-    Call,
-    CallDirect,         // Direct function call - resolved at parse time (no AST round-trip)
-    CallIndirect,
-    CallMethod,
-    CallMethodDirect,   // Direct method call - no dispatch needed (final class/method)
-    InvokeMethodDirect, // Direct method call with exception handling (final class in try/catch)
-    CallStatic,
-    CallStaticDirect,       // Direct static method call - pre-evaluated args (no AST round-trip)
-    DotEvalMethodDirect,    // Direct dot-eval method call - pre-evaluated base+args
-    InvokeDotEvalMethodDirect, // Direct dot-eval method call with exception handling (try/catch)
-    CallClosureDirect,      // Direct closure/callref call - operands[0]=callref, rest=args
-    Invoke,
+    // Exception handling (314-319)
+    LandingPad          = 314,
+    CatchException      = 315,
+    CatchCleanup        = 316,
+    Rethrow             = 317,
+    Throw               = 318,
+    InvokeSimError      = 319,
 
-    GuardInt,
-    GetObjectClass,         // Get runtime class pointer from object value (for devirtualization)
-    GuardFloat,
-    GuardType,
-    GuardNotNothing,
+    // Reference management (320-322)
+    Incref              = 320,
+    Decref              = 321,
+    DecrefNoThrow       = 322,
 
-    LandingPad,
-    CatchException,
-    CatchCleanup,
-    Rethrow,
-    Throw,
-    InvokeSimError,
+    // Regex switch (323)
+    SwitchRegexMatch    = 323,  // Test switch regex case: (switch_val, regex_case_ptr) -> bool
 
-    Incref,
-    Decref,
-    DecrefNoThrow,
+    // Native list push (324)
+    ListPush            = 324,  // Native list push: (list, value) -> list (in-place push)
 
-    SwitchRegexMatch,   // Test switch regex case: (switch_val, regex_case_ptr) -> bool
-
-    ListPush,           // Native list push: (list, value) -> list (in-place push, auto-vivify NOTHING)
+    // NOTE: When adding new opcodes, assign the next sequential ID (325, 326, ...)
+    // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
+
+//! Maximum opcode ID supported by this build (derived from the last enum value)
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListPush);
+static_assert(QORE_IR_MAX_OPCODE == 324, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
 inline bool isUnaryInvokeOpcode(QoreIROpcode op) {

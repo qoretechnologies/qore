@@ -1727,6 +1727,12 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // take info hash immediately, if any
     ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
 
+    // Save and restore the try-module count so that any parsing triggered by the
+    // binary module's init function (e.g., AOT modules re-parsing embedded source)
+    // does not corrupt the caller's scanner state.  This matches the pattern used
+    // by loadUserModuleFromPath() and loadSeparatedModule().
+    QoreParseCountContextHelper pcch;
+
     // get module name
     if (mod_info.name.empty()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': no feature name "

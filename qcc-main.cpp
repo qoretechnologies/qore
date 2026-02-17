@@ -55,7 +55,6 @@ static const char* output_path = nullptr;
 static int opt_level = 3;
 static const char* target_triple = nullptr;
 static bool static_link = false;
-static bool strip_source = false;
 static bool module_mode = false;
 static bool verbose = false;
 static bool show_help = false;
@@ -70,7 +69,6 @@ static void print_usage(const char* prog) {
     printf("  -o, --output=FILE      Output file path (default: input name without extension)\n");
     printf("  -O, --opt-level=N      Optimization level 0-3 (default: 3)\n");
     printf("  -m, --module           Compile as module (.qm -> .qmod)\n");
-    printf("  -s, --strip-source     Strip source code from binary (IP protection)\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -83,7 +81,6 @@ static void print_usage(const char* prog) {
     printf("  %s -o myapp script.q           # Compile to 'myapp' executable\n", prog);
     printf("  %s -m MyModule.qm              # Compile single-file module to 'MyModule.qmod'\n", prog);
     printf("  %s -m qlib/DataProvider        # Compile split module directory\n", prog);
-    printf("  %s -O3 -s script.q             # Max optimization, strip source\n", prog);
     printf("  %s -S -o myapp script.q        # Static link (no libqore.so dependency)\n", prog);
     printf("\n");
     printf("Notes:\n");
@@ -102,7 +99,6 @@ static struct option long_options[] = {
     {"output",       required_argument, nullptr, 'o'},
     {"opt-level",    required_argument, nullptr, 'O'},
     {"module",       no_argument,       nullptr, 'm'},
-    {"strip-source", no_argument,       nullptr, 's'},
     {"static",       no_argument,       nullptr, 'S'},
     {"target",       required_argument, nullptr, 't'},
     {"show-targets", no_argument,       nullptr, 'T'},
@@ -114,7 +110,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:msSt:TvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mSt:TvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -128,9 +124,6 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'm':
                 module_mode = true;
-                break;
-            case 's':
-                strip_source = true;
                 break;
             case 'S':
                 static_link = true;
@@ -244,6 +237,18 @@ int main(int argc, char** argv) {
 
     const char* source_file = argv[optind];
 
+    // Resolve to absolute path so compiled executables can resolve relative %requires
+    // paths even when run from a different working directory
+    std::string abs_source_file;
+    {
+        char* resolved = realpath(source_file, nullptr);
+        if (resolved) {
+            abs_source_file = resolved;
+            free(resolved);
+            source_file = abs_source_file.c_str();
+        }
+    }
+
     // Check for multiple source files (not supported)
     if (optind + 1 < argc) {
         fprintf(stderr, "error: multiple source files not supported (got '%s' after '%s')\n",
@@ -317,9 +322,6 @@ int main(int argc, char** argv) {
         printf("Output: %s\n", output.c_str());
         printf("Mode: %s\n", is_split_module ? "split module" : (module_mode ? "module" : "executable"));
         printf("Optimization: O%d\n", opt_level);
-        if (strip_source) {
-            printf("Source stripping: enabled\n");
-        }
         if (static_link) {
             printf("Static linking: enabled\n");
         }
@@ -342,13 +344,11 @@ int main(int argc, char** argv) {
                 PO_DEFAULT,
                 error,
                 opt_level,
-                target_triple,
-                strip_source)) {
+                target_triple)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled split module (O%d%s)\n", output.c_str(), opt_level,
-                strip_source ? ", source-stripped" : "");
+            printf("%s: compiled split module (O%d)\n", output.c_str(), opt_level);
         }
     } else if (module_mode) {
         // Compile single-file module
@@ -359,13 +359,11 @@ int main(int argc, char** argv) {
                 PO_DEFAULT,
                 error,
                 opt_level,
-                target_triple,
-                strip_source)) {
+                target_triple)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled module (O%d%s)\n", output.c_str(), opt_level,
-                strip_source ? ", source-stripped" : "");
+            printf("%s: compiled module (O%d)\n", output.c_str(), opt_level);
         }
     } else {
         // Create program and parse
@@ -388,13 +386,11 @@ int main(int argc, char** argv) {
                     error,
                     opt_level,
                     target_triple,
-                    static_link,
-                    strip_source)) {
+                    static_link)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
             } else {
-                printf("%s: compiled (O%d%s%s)\n", output.c_str(), opt_level,
-                    strip_source ? ", source-stripped" : "",
+                printf("%s: compiled (O%d%s)\n", output.c_str(), opt_level,
                     static_link ? ", static" : "");
             }
         }

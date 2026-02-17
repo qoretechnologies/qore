@@ -480,6 +480,7 @@ static void registerAOTFunctionsFromSlotMaps(
                     case AOTExprKind::FUNC_CALL:
                     case AOTExprKind::NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
+                    case AOTExprKind::LOCAL_VARREF:
                         reader.readStringRef(ptr);
                         break;
                     case AOTExprKind::SELF_METHOD_CALL:
@@ -487,6 +488,7 @@ static void registerAOTFunctionsFromSlotMaps(
                         reader.readStringRef(ptr);
                         reader.readStringRef(ptr);
                         break;
+                    case AOTExprKind::SELF_VARREF:
                     default:
                         break;
                 }
@@ -509,6 +511,7 @@ static void registerAOTFunctionsFromSlotMaps(
             uint16_t nl = QoreAOTBinaryReader::readU16(ptr);
             uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
             uint16_t ne = QoreAOTBinaryReader::readU16(ptr);
+            QoreAOTBinaryReader::readU16(ptr); // num_stmts
             uint16_t nbl = QoreAOTBinaryReader::readU16(ptr);
             QoreAOTBinaryReader::readU8(ptr);
             QoreAOTBinaryReader::readU8(ptr);
@@ -526,10 +529,12 @@ static void registerAOTFunctionsFromSlotMaps(
                     case AOTExprKind::FUNC_CALL:
                     case AOTExprKind::NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
+                    case AOTExprKind::LOCAL_VARREF:
                         reader.readStringRef(ptr); break;
                     case AOTExprKind::SELF_METHOD_CALL:
                     case AOTExprKind::STATIC_METHOD_CALL:
                         reader.readStringRef(ptr); reader.readStringRef(ptr); break;
+                    case AOTExprKind::SELF_VARREF:
                     default: break;
                 }
             }
@@ -772,6 +777,12 @@ extern "C" DLLEXPORT int qore_aot_run(
         // Set JIT execution mode so functions without pre-compiled code will JIT on demand
         qpgm->setExecMode(QEM_JIT);
 
+        // Set script path from the label so %requires with relative paths resolve
+        // correctly (label is the absolute path to the original source file)
+        if (label) {
+            qpgm->setScriptPath(label);
+        }
+
         // Parse the embedded source
         QoreString src_str(source, source_len);
         qpgm->parse(src_str.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
@@ -928,6 +939,25 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             (long long)parse_options, (long long)PO_MODERN,
             (int)((parse_options & PO_MODERN) == PO_MODERN));
 
+        // Load module dependencies before deserialization so that module classes,
+        // functions, etc. are available when resolving base classes and types
+        {
+            std::vector<std::string> deps;
+            std::string dep_error;
+            if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+                printd(2, "AOT v2: loading %d dependencies\n", (int)deps.size());
+                for (const std::string& dep : deps) {
+                    printd(2, "AOT v2: loading dependency '%s'\n", dep.c_str());
+                    int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), *qpgm);
+                    if (dep_rc < 0 || xsink.isException()) {
+                        printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
+                            dep.c_str(), dep_rc);
+                        xsink.clear();
+                    }
+                }
+            }
+        }
+
         // Deserialize namespace tree from metadata (replaces source parsing)
         // Must set the parse context so UserVariantBase constructor can
         // call parse_get_parse_options() which reads thread-local current_pgm
@@ -948,27 +978,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             }
         }
 
-        // If any functions need source fallback, parse the fallback source
-        // to get a full AST for IR re-lowering
-        QoreProgram* fallback_pgm = nullptr;
-        if (deserializer.hasFallbackSource()) {
-            ExceptionSink wsink;
-            fallback_pgm = new QoreProgram(parse_options);
-            fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
-                QP_WARN_DEFAULT);
-            if (wsink.isException()) {
-                wsink.handleWarnings();
-            }
-            if (xsink.isException()) {
-                fprintf(stderr, "AOT: fallback source parse error\n");
-                xsink.handleExceptions();
-                fallback_pgm->waitForTerminationAndDeref(nullptr);
-                qore_cleanup();
-                return 2;
-            }
-        }
-
         // Register pre-compiled function pointers
+        QoreProgram* fallback_pgm = nullptr;
         if (num_functions > 0 && functions) {
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             const QoreAOTFunc* toplevel_func = nullptr;
@@ -994,14 +1005,40 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered);
             printd(2, "AOT v2: after slot map registration: %d registered\n", registered);
 
-            // For functions that needed source fallback, use the fallback
-            // program's namespace tree with IR re-lowering
-            if (fallback_pgm) {
-                int fallback_registered = 0;
-                registerAOTFunctionsInNamespace(
-                    qore_ns_private::get(*qore_program_private::get(*fallback_pgm)->RootNS),
-                    fallback_pgm, func_map, fallback_registered);
-                registered += fallback_registered;
+            // Only parse fallback source if needed and available.
+            // Module functions that weren't compiled are available from runtime module loading,
+            // so fallback source is only needed for test-local functions that failed compilation.
+            // Make fallback parsing failure non-fatal since module functions are still available.
+            if (deserializer.hasFallbackSource()) {
+                ExceptionSink wsink;
+                // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
+                // full source may have top-level statements before %exec-class directive;
+                // the original parser processes directives sequentially but AOT bakes all
+                // parse options (including %exec-class) upfront
+                fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
+                // Set script path so %requires with relative paths resolve correctly
+                fallback_pgm->setScriptPath(label);
+                fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+                    QP_WARN_DEFAULT);
+                if (wsink.isException()) {
+                    wsink.handleWarnings();
+                }
+                if (xsink.isException()) {
+                    // Fallback source parsing failed (e.g., module class conflicts).
+                    // This is non-fatal: module functions are available from runtime module
+                    // loading, only test-local functions that failed compilation are lost.
+                    printd(2, "AOT v2: fallback source parse failed (non-fatal), "
+                        "module functions available from runtime loading\n");
+                    xsink.clear();
+                    fallback_pgm->waitForTerminationAndDeref(nullptr);
+                    fallback_pgm = nullptr;
+                } else {
+                    int fallback_registered = 0;
+                    registerAOTFunctionsInNamespace(
+                        qore_ns_private::get(*qore_program_private::get(*fallback_pgm)->RootNS),
+                        fallback_pgm, func_map, fallback_registered);
+                    registered += fallback_registered;
+                }
             }
 
             // Register the _toplevel function from slot maps
@@ -1062,6 +1099,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                         case AOTExprKind::FUNC_CALL:
                                         case AOTExprKind::NEW_OBJECT:
                                         case AOTExprKind::RUNTIME_CONST_REF:
+                                        case AOTExprKind::LOCAL_VARREF:
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
                                         case AOTExprKind::SELF_METHOD_CALL:
@@ -1069,6 +1107,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
+                                        case AOTExprKind::SELF_VARREF:
                                         default: break;
                                     }
                                 }
@@ -1175,7 +1214,28 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
 // ---- AOT Module Runtime Functions ----
 
-//! Global state for the AOT-compiled module (set in init, used in ns_init/delete)
+//! Per-module state for AOT-compiled modules
+struct AotModuleState {
+    QoreProgram* pgm = nullptr;
+    const QoreAOTFunc* funcs = nullptr;
+    int num_funcs = 0;
+    //! Modules that should be reexported (from %requires(reexport) directives)
+    std::vector<std::string> reexport_deps;
+};
+
+//! Map from module name to per-module state
+/** Multiple AOT modules can be loaded simultaneously.  Each module's init creates a
+    QoreProgram and stores it here keyed by module name.  The ns_init function uses
+    get_module_context()->getName() to find the correct program for the module being
+    imported.
+
+    Thread safety: Access is serialized by QoreModuleManager's module loading mutex.
+    All accesses (qore_aot_module_init, qore_aot_module_ns_init, qore_aot_module_delete)
+    occur under the module manager lock, so no additional synchronization is needed.
+*/
+static std::unordered_map<std::string, AotModuleState> aot_module_map;
+
+//! Current module being initialized (valid only during qore_aot_module_init / _init_v2)
 static QoreProgram* aot_module_pgm = nullptr;
 static std::string aot_module_name;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
@@ -1187,9 +1247,11 @@ static int aot_module_num_funcs = 0;
     NOTE: Properly skips \%requires inside block comments and line comments.
     \param source the source text
     \param source_len length of source
+    \param reexport_deps if non-null, receives names of deps with (reexport) flag
     \return vector of dependency module names
 */
-static std::vector<std::string> extractDependencies(const char* source, int source_len) {
+static std::vector<std::string> extractDependencies(const char* source, int source_len,
+        std::vector<std::string>* reexport_deps = nullptr) {
     std::vector<std::string> deps;
     const char* p = source;
     const char* end = source + source_len;
@@ -1235,8 +1297,10 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
             while (p < end && (*p == ' ' || *p == '\t')) {
                 ++p;
             }
-            // Skip optional (reexport)
+            // Check for optional (reexport) flag
+            bool is_reexport = false;
             if (p + 10 <= end && strncmp(p, "(reexport)", 10) == 0) {
+                is_reexport = true;
                 p += 10;
                 while (p < end && (*p == ' ' || *p == '\t')) {
                     ++p;
@@ -1253,6 +1317,9 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
                 // Skip "qore" as it's always available
                 if (dep_name != "qore") {
                     deps.push_back(dep_name);
+                    if (is_reexport && reexport_deps) {
+                        reexport_deps->push_back(dep_name);
+                    }
                 }
             }
         }
@@ -1288,7 +1355,8 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
     - If the module fails to load, KEEP the fallback code (typically %define directives)
       so that conditional compilation works correctly
 */
-static std::string stripRequiresDirectives(const char* source, int source_len) {
+static std::string stripRequiresDirectives(const char* source, int source_len,
+        QoreProgram* target_pgm = nullptr) {
     std::string result;
     result.reserve(source_len);
 
@@ -1334,7 +1402,8 @@ static std::string stripRequiresDirectives(const char* source, int source_len) {
             bool loaded = false;
             if (!mod_name.empty()) {
                 ExceptionSink xsink;
-                int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), aot_module_pgm);
+                QoreProgram* load_target = target_pgm ? target_pgm : aot_module_pgm;
+                int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), load_target);
                 loaded = (rc >= 0 && !xsink);
                 xsink.clear();
             }
@@ -1398,22 +1467,29 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     ExceptionSink xsink;
     ExceptionSink wsink;
 
-    // Create a QoreProgram for the module with the embedded parse options
-    aot_module_pgm = new QoreProgram(parse_options);
-    aot_module_name = mod_name;
-    aot_module_funcs = functions;
-    aot_module_num_funcs = num_functions;
+    // Use a local variable for the program being created.  Loading dependencies
+    // via runTimeLoadModule() can trigger nested calls to qore_aot_module_init()
+    // for other AOT modules, which would overwrite the global aot_module_pgm.
+    QoreProgram* local_pgm = new QoreProgram(parse_options);
 
     // Set JIT execution mode so functions without pre-compiled code will JIT on demand
-    aot_module_pgm->setExecMode(QEM_JIT);
+    local_pgm->setExecMode(QEM_JIT);
+
+    // Set script path from the label so get_script_dir() returns the module's source
+    // directory during parsing.  This is needed for modules that read files at parse time
+    // (e.g., DataProvider loads qore-q-logo.svg via get_script_dir() + filename).
+    if (label) {
+        local_pgm->setScriptPath(label);
+    }
 
     // Extract dependencies from source and load/import their namespaces
     // Note: The init function is now called with the module manager lock unlocked
     // (via ModuleLoadMapHelper), so we can safely load dependencies here.
-    std::vector<std::string> deps = extractDependencies(source, source_len);
+    std::vector<std::string> reexport_deps;
+    std::vector<std::string> deps = extractDependencies(source, source_len, &reexport_deps);
     for (const std::string& dep : deps) {
         // Try to load the module (it may already be loaded, which is fine)
-        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), aot_module_pgm);
+        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
             // Circular dependency or other issue - clear error and continue
             // The types might be resolved later when the requiring script is parsed
@@ -1425,18 +1501,55 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
     // the "module Name" declaration, and calling it twice triggers an assertion.
-    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, aot_module_pgm, xsink);
+    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink);
     {
         // Strip %requires directives from embedded source to avoid deadlock.
         // The module manager holds a lock when calling this init function, and
         // parsing %requires would try to acquire the same lock.
         // Note: We've already imported the dependency namespaces above.
-        std::string stripped_src = stripRequiresDirectives(source, source_len);
+        std::string stripped_src = stripRequiresDirectives(source, source_len, local_pgm);
 
         printd(2, "AOT module '%s': source_len=%d stripped_len=%d deps=%d\n",
             mod_name, source_len, (int)stripped_src.size(), (int)deps.size());
 
-        aot_module_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        // Split combined source at file boundary markers and parse each segment
+        // separately with parsePending().  Split modules (directory-based) embed
+        // "# __AOT_FILE_BREAK__\n" between the main .qm source and each .qc file.
+        // Each parsePending() call creates a fresh scanner with line numbers starting
+        // from 1, which is critical for correct BCANode location tracking.
+        const char* marker = "# __AOT_FILE_BREAK__\n";
+        const size_t marker_len = strlen(marker);
+        std::vector<std::string> segments;
+        {
+            size_t pos = 0;
+            size_t found;
+            while ((found = stripped_src.find(marker, pos)) != std::string::npos) {
+                segments.push_back(stripped_src.substr(pos, found - pos));
+                pos = found + marker_len;
+            }
+            // Last segment (or entire source if no markers found)
+            segments.push_back(stripped_src.substr(pos));
+        }
+
+        if (segments.size() > 1) {
+            // Split module: parse each segment separately
+            printd(2, "AOT module '%s': %d source segments\n", mod_name, (int)segments.size());
+            for (size_t i = 0; i < segments.size(); ++i) {
+                if (segments[i].empty()) {
+                    continue;
+                }
+                local_pgm->parsePending(segments[i].c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+                if (xsink.isException()) {
+                    break;
+                }
+            }
+            if (!xsink.isException()) {
+                local_pgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+            }
+        } else {
+            // Single-file module: parse as one blob
+            local_pgm->parse(stripped_src.c_str(), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        }
 
         mod_ctx.close();
     }
@@ -1465,14 +1578,13 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             err->concat(ex_arg.get<const QoreStringNode>()->c_str());
         }
         xsink.clear();
-        aot_module_pgm->waitForTerminationAndDeref(nullptr);
-        aot_module_pgm = nullptr;
+        local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
 
     // Run module init closure if present (registers factories, etc.)
     if (mod_ctx.hasInit()) {
-        if (mod_ctx.init(*aot_module_pgm, xsink)) {
+        if (mod_ctx.init(*local_pgm, xsink)) {
             QoreStringNode* err = new QoreStringNode("AOT module init closure error");
             if (xsink.isException()) {
                 QoreValue ex_desc = xsink.getExceptionDesc();
@@ -1482,8 +1594,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 }
                 xsink.clear();
             }
-            aot_module_pgm->waitForTerminationAndDeref(nullptr);
-            aot_module_pgm = nullptr;
+            local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
     }
@@ -1497,28 +1608,63 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             }
         }
 
-        qore_program_private* pp = qore_program_private::get(*aot_module_pgm);
+        qore_program_private* pp = qore_program_private::get(*local_pgm);
         int registered = 0;
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-        registerAOTFunctionsInNamespace(root_ns, aot_module_pgm, func_map, registered);
+        registerAOTFunctionsInNamespace(root_ns, local_pgm, func_map, registered);
 
         printd(1, "AOT module '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
     }
 
+    // Store per-module state so ns_init can find the correct program.
+    // Also update the global for the fallback path in ns_init (for modules
+    // that call ns_init during their own init before being stored in the map).
+    aot_module_pgm = local_pgm;
+    aot_module_name = mod_name;
+    aot_module_funcs = functions;
+    aot_module_num_funcs = num_functions;
+    aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
+
     return nullptr;  // success
 }
 
 extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns) {
-    if (!aot_module_pgm) {
-        printd(5, "AOT module ns_init: no program!\n");
+    // Look up the correct module program from the per-module map.
+    // When QoreBuiltinModule::addToProgramImpl calls module_ns_init, it has set up
+    // QoreModuleContextHelper with the module's name. We use get_module_context() to
+    // find which module's namespace to merge.
+    const char* mod_name = nullptr;
+    QoreProgram* mod_pgm = nullptr;
+    const std::vector<std::string>* reexport_deps = nullptr;
+
+    QoreModuleContext* ctx = get_module_context();
+    if (ctx) {
+        mod_name = ctx->getName();
+        auto it = aot_module_map.find(mod_name);
+        if (it != aot_module_map.end()) {
+            mod_pgm = it->second.pgm;
+            reexport_deps = &it->second.reexport_deps;
+        }
+    }
+
+    // Fall back to the current module being initialized (for the module's own registration)
+    if (!mod_pgm) {
+        mod_pgm = aot_module_pgm;
+        if (!mod_name) {
+            mod_name = aot_module_name.c_str();
+        }
+    }
+
+    if (!mod_pgm) {
+        printd(5, "AOT module ns_init: no program for '%s'!\n", mod_name ? mod_name : "(unknown)");
         return;
     }
 
     // Get the module program's root namespace
-    RootQoreNamespace* mod_root = aot_module_pgm->getRootNS();
+    RootQoreNamespace* mod_root = mod_pgm->getRootNS();
     if (!mod_root) {
-        printd(5, "AOT module ns_init: no root namespace!\n");
+        printd(5, "AOT module ns_init '%s': no root namespace!\n", mod_name ? mod_name : "(unknown)");
         return;
     }
 
@@ -1539,49 +1685,97 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
         return;
     }
 
-    printd(5, "AOT module ns_init '%s': starting merge\n", aot_module_name.c_str());
+    // Load reexported dependencies into the target program BEFORE namespace merge.
+    // When a source module has %requires(reexport) logger_bin, the reexport() mechanism
+    // loads logger_bin directly into importing programs. For AOT binary modules, we must
+    // replicate this behavior because scanMergeCommittedNamespace only copies user-public
+    // items — system classes from binary modules (e.g., LoggerLevel from logger_bin)
+    // are NOT user-public and would be skipped by the namespace merge.
+    if (reexport_deps && !reexport_deps->empty()) {
+        for (const std::string& dep : *reexport_deps) {
+            if (!qore_program_private::get(*tpgm)->hasFeature(dep.c_str())) {
+                printd(5, "AOT module ns_init '%s': loading reexported dep '%s' into target program\n",
+                    mod_name, dep.c_str());
+                // Use QMM.loadModuleForReexport() (like QoreAbstractModule::reexport()
+                // uses QMM.loadModuleIntern()) instead of MM.runTimeLoadModule() which
+                // would try to acquire the module manager mutex that is already held by
+                // parseLoadModule/runTimeLoadModule
+                QMM.loadModuleForReexport(xsink, dep.c_str(), tpgm);
+                if (xsink) {
+                    printd(0, "AOT module ns_init '%s': WARNING - failed to load reexported dep '%s'\n",
+                        mod_name, dep.c_str());
+                    xsink.clear();
+                }
+            }
+        }
+    }
 
-    QoreModuleContext qmc(aot_module_name.c_str(), qore_root_ns_private::get(*target_root), xsink);
-    printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': starting merge\n", mod_name);
+
+    QoreModuleContext qmc(mod_name, qore_root_ns_private::get(*target_root), xsink);
+    printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", mod_name);
     qore_root_ns_private::scanMergeCommittedNamespace(*target_root, *mod_root, qmc);
-    printd(5, "AOT module ns_init '%s': scanMergeCommittedNamespace done\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': scanMergeCommittedNamespace done\n", mod_name);
 
     if (qmc.hasError()) {
-        printd(5, "AOT module ns_init '%s': error during namespace scan/merge\n",
-            aot_module_name.c_str());
+        printd(5, "AOT module ns_init '%s': error during namespace scan/merge\n", mod_name);
         qmc.rollback();
         return;
     }
 
-    printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", mod_name);
     qore_root_ns_private::copyMergeCommittedNamespace(*target_root, *mod_root);
-    printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", mod_name);
 
     // Rebuild indexes so the merged items can be found during name resolution
     // This is needed because copyMergeCommittedNamespace adds items directly without
     // going through the module commit mechanism that normally rebuilds indexes
-    printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", mod_name);
     qore_root_ns_private::get(*target_root)->rebuildAllIndexes();
 
     // Check for exceptions during merge operations
     if (xsink) {
         const QoreValue err = xsink.getExceptionErr();
         const char* err_str = (err.getType() == NT_STRING) ? err.get<const QoreStringNode>()->c_str() : "(unknown)";
-        fprintf(stderr, "AOT module ns_init '%s': WARNING - exception during namespace merge: %s\n",
-            aot_module_name.c_str(), err_str);
+        printd(0, "AOT module ns_init '%s': WARNING - exception during namespace merge: %s\n",
+            mod_name, err_str);
     }
 
-    printd(5, "AOT module ns_init '%s': merge complete\n", aot_module_name.c_str());
+    printd(5, "AOT module ns_init '%s': merge complete\n", mod_name);
 }
 
 extern "C" DLLEXPORT void qore_aot_module_delete() {
-    if (aot_module_pgm) {
-        aot_module_pgm->waitForTerminationAndDeref(nullptr);
+    // Use the module context name to clean up only the module being unloaded
+    // (set by QoreBuiltinModule::~QoreBuiltinModule via QoreModuleNameContextHelper)
+    const char* mod_name = get_module_context_name();
+    if (mod_name) {
+        auto it = aot_module_map.find(mod_name);
+        if (it != aot_module_map.end()) {
+            if (it->second.pgm) {
+                it->second.pgm->waitForTerminationAndDeref(nullptr);
+            }
+            aot_module_map.erase(it);
+        }
+        // Clear per-module state if it matches the module being deleted
+        if (aot_module_name == mod_name) {
+            aot_module_pgm = nullptr;
+            aot_module_name.clear();
+            aot_module_funcs = nullptr;
+            aot_module_num_funcs = 0;
+        }
+    } else {
+        // Fallback: no module context — clean up all (shutdown path)
+        for (auto& entry : aot_module_map) {
+            if (entry.second.pgm) {
+                entry.second.pgm->waitForTerminationAndDeref(nullptr);
+            }
+        }
+        aot_module_map.clear();
         aot_module_pgm = nullptr;
+        aot_module_name.clear();
+        aot_module_funcs = nullptr;
+        aot_module_num_funcs = 0;
     }
-    aot_module_name.clear();
-    aot_module_funcs = nullptr;
-    aot_module_num_funcs = 0;
 }
 
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
@@ -1593,14 +1787,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 ) {
     ExceptionSink xsink;
 
-    // Create a QoreProgram for the module
-    aot_module_pgm = new QoreProgram(parse_options);
-    aot_module_name = mod_name;
-    aot_module_funcs = functions;
-    aot_module_num_funcs = num_functions;
+    // Use a local variable for the program being created (see qore_aot_module_init
+    // for explanation of nested init overwrite issue)
+    QoreProgram* local_pgm = new QoreProgram(parse_options);
 
     // Set JIT execution mode
-    aot_module_pgm->setExecMode(QEM_JIT);
+    local_pgm->setExecMode(QEM_JIT);
 
     // Load dependencies from serialized metadata BEFORE deserializing namespace tree.
     // Dependencies must be loaded first because deserialization may need to resolve
@@ -1610,16 +1802,24 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
         QoreStringNode* err = new QoreStringNode("AOT module dependency read error: ");
         err->concat(dep_error.c_str());
-        aot_module_pgm->waitForTerminationAndDeref(nullptr);
-        aot_module_pgm = nullptr;
+        local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
+    }
+
+    // Read reexported module names from metadata
+    std::vector<std::string> reexport_deps;
+    std::string reexport_error;
+    if (!readReexportModules(metadata, static_cast<uint32_t>(metadata_len), reexport_deps, reexport_error)) {
+        printd(0, "AOT module v2 '%s': WARNING - failed to read reexport modules: %s\n",
+            mod_name, reexport_error.c_str());
+        // Non-fatal — continue without reexport info
     }
 
     // Load each dependency module into this program.
     // runTimeLoadModule will call addToProgram which imports the namespace.
     for (const std::string& dep : deps) {
         printd(5, "AOT module v2 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
-        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), aot_module_pgm);
+        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
             // Circular dependency or other issue - clear error and continue
             // The types might be resolved later when the requiring script is parsed
@@ -1630,30 +1830,21 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     printd(5, "AOT module v2 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
 
-    // Deserialize namespace tree from metadata (replaces source parsing)
+    // Deserialize namespace tree from metadata (replaces source parsing).
+    // The metadata contains complete class/namespace structure.  Functions that were
+    // successfully compiled to native code will be registered below.  Functions that
+    // couldn't be compiled are present as stubs in the metadata.
+    // Note: Modules should be compiled with source-first QORE_MODULE_DIR so that all
+    // dependency classes/methods are complete during metadata serialization.
     printd(5, "AOT module v2 '%s': starting namespace deserialization\n", mod_name);
     QoreAOTBinaryDeserializer deserializer;
     std::string deser_error;
-    if (!deserializer.deserializeIntoProgram(aot_module_pgm,
+    if (!deserializer.deserializeIntoProgram(local_pgm,
             metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
         QoreStringNode* err = new QoreStringNode("AOT module metadata deserialization error: ");
         err->concat(deser_error.c_str());
-        aot_module_pgm->waitForTerminationAndDeref(nullptr);
-        aot_module_pgm = nullptr;
+        local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
-    }
-
-    // For strip-source (v2) modules, we don't support fallback source parsing.
-    // The fallback source contains the full module source which cannot be incrementally
-    // parsed after the namespace tree has been deserialized. If functions couldn't be
-    // fully compiled (due to unsupported expressions), they will not be available at runtime.
-    // Users should ensure all functions compile successfully for strip-source modules.
-    if (deserializer.hasFallbackSource()) {
-        // Log a warning but continue - the module will work, just without fallback functions
-        size_t fb_len = deserializer.getFallbackSourceLen();
-        printd(0, "AOT v2 module '%s': WARNING - %zu bytes of fallback source ignored; "
-            "some functions may not be available\n",
-            mod_name, fb_len);
     }
 
     // Register pre-compiled AOT functions
@@ -1665,14 +1856,22 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             }
         }
 
-        qore_program_private* pp = qore_program_private::get(*aot_module_pgm);
+        qore_program_private* pp = qore_program_private::get(*local_pgm);
         int registered = 0;
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-        registerAOTFunctionsInNamespace(root_ns, aot_module_pgm, func_map, registered);
+        registerAOTFunctionsInNamespace(root_ns, local_pgm, func_map, registered);
 
         printd(1, "AOT module v2 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
     }
+
+    // Store per-module state so ns_init can find the correct program.
+    // Also update the global for the fallback path in ns_init.
+    aot_module_pgm = local_pgm;
+    aot_module_name = mod_name;
+    aot_module_funcs = functions;
+    aot_module_num_funcs = num_functions;
+    aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
 
     return nullptr;  // success
 }

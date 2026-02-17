@@ -5836,7 +5836,7 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
             break;
     }
     if (xsink) {
-        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue unary opcode");
+        xsink->raiseException("IR-INTERPRETER-ERROR", "unsupported lvalue unary opcode: %d", (int)op);
     }
     return QoreValue();
 }
