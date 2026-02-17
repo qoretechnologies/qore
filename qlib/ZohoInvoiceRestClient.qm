@@ -596,35 +596,29 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         # update the URL and OAuth2 URLs immediately if necessary
         if (update_options) {
-            hash<auto> updates;
-
-            # Fix URL if needed
-            if (url != DefaultConnectionUrl) {
-                updates.url = DefaultConnectionUrl;
-            }
-
-            # Fix OAuth2 URLs to match current subdomain/domain
+            # Build correct URLs from subdomain and domain options instead of hardcoded defaults
             string subdomain = opts.subdomain ?? ZohoInvoiceRestClient::DefaultSubdomain;
             string domain = opts.domain ?? ZohoInvoiceRestClient::DefaultDomain;
+            string correct_url = sprintf("zohoinvoice://www.zohoapis%s", domain);
             string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
             string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
-
+            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+            # will believe that no changes are necessary
+            hash<auto> updates;
+            if (url != correct_url) {
+                updates.url = correct_url;
+            }
             if (opts.oauth2_auth_url != correct_auth_url) {
                 updates.oauth2_auth_url = correct_auth_url;
             }
             if (opts.oauth2_token_url != correct_token_url) {
                 updates.oauth2_token_url = correct_token_url;
             }
-
             # Fix ping_path if it has a leading slash (would bypass base path /invoice/v3)
             if (opts.ping_path =~ /^\//) {
                 updates.ping_path = opts.ping_path[1..];
             }
-
-            # Apply updates if any
             if (updates) {
-                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
-                # believe that no changes are necessary
                 doUpdateOptions(self, updates);
             }
         }

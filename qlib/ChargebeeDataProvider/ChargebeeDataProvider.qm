@@ -1,0 +1,726 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ChargebeeDataProvider module definition
+
+/*  ChargebeeDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) ChargebeeRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module ChargebeeDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Chargebee subscription billing and revenue management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ChargebeeDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ChargebeeDataProvider::AppName,
+            "display_name": "Chargebee",
+            "short_desc": "Chargebee subscription billing and revenue management platform",
+            "desc": "Chargebee is a subscription billing and revenue management platform that helps businesses "
+                "automate recurring billing, manage subscriptions, and handle invoicing. This integration enables "
+                "managing customers, subscriptions, invoices, coupons, promotional credits, and receiving "
+                "real-time event notifications via webhooks.\n\n"
+                "**Features:**\n"
+                "- Customer management (create, update, delete)\n"
+                "- Subscription lifecycle management (create, update, cancel)\n"
+                "- Invoice management (create, update, collect payments, refunds)\n"
+                "- Coupon management (create, update, delete)\n"
+                "- Promotional credit management (add, deduct, set)\n"
+                "- Transaction retrieval\n"
+                "- Real-time webhooks for customers, subscriptions, invoices, and events",
+            "scheme": "chargebee",
+            "logo": ChargebeeLogo,
+            "logo_file_name": "chargebee-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp, DataProvider::AppGroup::Payments),
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # Find Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/customers",
+            "action": "find-customers",
+            "groups": "Customers",
+            "display_name": "Find Customers",
+            "short_desc": "Find and search customers",
+            "desc": "Retrieve a list of customers from Chargebee with optional filtering by status, email, "
+                "first name, and last name.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ChargebeeCustomersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CustomerList", new ChargebeeCustomerDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by customer status",
+                    "desc": "Filter customers by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active", "desc": "Active"},
+                    ),
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "desc": "Filter customers by their email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Filter by first name",
+                    "desc": "Filter customers by their first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Filter by last name",
+                    "desc": "Filter customers by their last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            },
+        });
+
+        # Get Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a single customer by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee customer.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Create Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/create-customer",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in Chargebee with contact and billing information.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeCreateCustomerDataProvider::ProviderInfo,
+        });
+
+        # Update Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/update-customer",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer in Chargebee. You can modify contact details, billing "
+                "information, and other customer attributes.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeUpdateCustomerDataProvider::ProviderInfo,
+        });
+
+        # Delete Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/delete-customer",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer from Chargebee. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeDeleteCustomerDataProvider::ProviderInfo,
+        });
+
+        # ========== SUBSCRIPTION ACTIONS ==========
+
+        # Find Subscriptions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/subscriptions",
+            "action": "find-subscriptions",
+            "groups": "Subscriptions",
+            "display_name": "Find Subscriptions",
+            "short_desc": "Find and search subscriptions",
+            "desc": "Retrieve a list of subscriptions from Chargebee with optional filtering by status "
+                "and customer.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ChargebeeSubscriptionsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SubscriptionList", new ChargebeeSubscriptionDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by subscription status",
+                    "desc": "Filter subscriptions by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "future", "desc": "Future"},
+                        <AllowedValueInfo>{"value": "in_trial", "desc": "In Trial"},
+                        <AllowedValueInfo>{"value": "active", "desc": "Active"},
+                        <AllowedValueInfo>{"value": "non_renewing", "desc": "Non-Renewing"},
+                        <AllowedValueInfo>{"value": "paused", "desc": "Paused"},
+                        <AllowedValueInfo>{"value": "cancelled", "desc": "Cancelled"},
+                        <AllowedValueInfo>{"value": "transferred", "desc": "Transferred"},
+                    ),
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Filter by customer",
+                    "desc": "Filter subscriptions by the customer they belong to",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # Get Subscription
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/subscriptions",
+            "action": "get-subscription",
+            "groups": "Subscriptions",
+            "display_name": "Get Subscription",
+            "short_desc": "Get a single subscription by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee subscription.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Subscription ID",
+                    "short_desc": "The subscription ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "subscriptions",
+                },
+            },
+        });
+
+        # Create Subscription
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/create-subscription",
+            "action": "create-subscription",
+            "groups": "Subscriptions",
+            "display_name": "Create Subscription",
+            "short_desc": "Create a new subscription",
+            "desc": "Create a new subscription in Chargebee for a customer with a specified plan.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeCreateSubscriptionDataProvider::ProviderInfo,
+        });
+
+        # Update Subscription
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/update-subscription",
+            "action": "update-subscription",
+            "groups": "Subscriptions",
+            "display_name": "Update Subscription",
+            "short_desc": "Update an existing subscription",
+            "desc": "Update an existing subscription in Chargebee. You can modify the plan, billing cycle, "
+                "add-ons, and other subscription details.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeUpdateSubscriptionDataProvider::ProviderInfo,
+        });
+
+        # Delete Subscription
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/delete-subscription",
+            "action": "delete-subscription",
+            "groups": "Subscriptions",
+            "display_name": "Delete Subscription",
+            "short_desc": "Delete a subscription",
+            "desc": "Delete a subscription from Chargebee. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeDeleteSubscriptionDataProvider::ProviderInfo,
+        });
+
+        # ========== INVOICE ACTIONS ==========
+
+        # Find Invoices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/invoices",
+            "action": "find-invoices",
+            "groups": "Invoices",
+            "display_name": "Find Invoices",
+            "short_desc": "Find and search invoices",
+            "desc": "Retrieve a list of invoices from Chargebee with optional filtering by status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ChargebeeInvoicesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InvoiceList", new ChargebeeInvoiceDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by invoice status",
+                    "desc": "Filter invoices by their status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "paid", "desc": "Paid"},
+                        <AllowedValueInfo>{"value": "posted", "desc": "Posted"},
+                        <AllowedValueInfo>{"value": "payment_due", "desc": "Payment Due"},
+                        <AllowedValueInfo>{"value": "not_paid", "desc": "Not Paid"},
+                        <AllowedValueInfo>{"value": "voided", "desc": "Voided"},
+                        <AllowedValueInfo>{"value": "pending", "desc": "Pending"},
+                    ),
+                },
+            },
+        });
+
+        # Get Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/invoices",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get Invoice",
+            "short_desc": "Get a single invoice by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee invoice.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "invoices",
+                },
+            },
+        });
+
+        # Create Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/create-invoice",
+            "action": "create-invoice",
+            "groups": "Invoices",
+            "display_name": "Create Invoice",
+            "short_desc": "Create a new invoice",
+            "desc": "Create a new invoice in Chargebee for a customer.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeCreateInvoiceDataProvider::ProviderInfo,
+        });
+
+        # Update Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/update-invoice",
+            "action": "update-invoice",
+            "groups": "Invoices",
+            "display_name": "Update Invoice",
+            "short_desc": "Update an existing invoice",
+            "desc": "Update an existing invoice in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeUpdateInvoiceDataProvider::ProviderInfo,
+        });
+
+        # Delete Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/delete-invoice",
+            "action": "delete-invoice",
+            "groups": "Invoices",
+            "display_name": "Delete Invoice",
+            "short_desc": "Delete an invoice",
+            "desc": "Delete an invoice from Chargebee. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeDeleteInvoiceDataProvider::ProviderInfo,
+        });
+
+        # Collect Invoice Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/collect-invoice-payment",
+            "action": "collect-invoice-payment",
+            "groups": "Invoices",
+            "display_name": "Collect Invoice Payment",
+            "short_desc": "Collect payment for an invoice",
+            "desc": "Collect payment for an outstanding invoice using the customer's payment method on file.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeCollectInvoicePaymentDataProvider::ProviderInfo,
+        });
+
+        # Record Invoice Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/record-invoice-payment",
+            "action": "record-invoice-payment",
+            "groups": "Invoices",
+            "display_name": "Record Invoice Payment",
+            "short_desc": "Record a payment for an invoice",
+            "desc": "Record an offline payment for an invoice in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeRecordInvoicePaymentDataProvider::ProviderInfo,
+        });
+
+        # Refund Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/refund-invoice",
+            "action": "refund-invoice",
+            "groups": "Invoices",
+            "display_name": "Refund Invoice",
+            "short_desc": "Refund an invoice",
+            "desc": "Process a refund for a paid invoice in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeRefundInvoiceDataProvider::ProviderInfo,
+        });
+
+        # Get Invoice Link
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/get-invoice-link",
+            "action": "get-invoice-link",
+            "groups": "Invoices",
+            "display_name": "Get Invoice Link",
+            "short_desc": "Get a download link for an invoice",
+            "desc": "Retrieve a download link for a Chargebee invoice PDF.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeGetInvoiceLinkDataProvider::ProviderInfo,
+        });
+
+        # ========== COUPON ACTIONS ==========
+
+        # Find Coupons
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/coupons",
+            "action": "find-coupons",
+            "groups": "Coupons",
+            "display_name": "Find Coupons",
+            "short_desc": "Find and search coupons",
+            "desc": "Retrieve a list of coupons from Chargebee.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ChargebeeCouponsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CouponList", new ChargebeeCouponDataType(), True);
+            },
+        });
+
+        # Get Coupon
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/coupons",
+            "action": "get-coupon",
+            "groups": "Coupons",
+            "display_name": "Get Coupon",
+            "short_desc": "Get a single coupon by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee coupon.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Coupon ID",
+                    "short_desc": "The coupon ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "coupons",
+                },
+            },
+        });
+
+        # Create Coupon
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/create-coupon",
+            "action": "create-coupon",
+            "groups": "Coupons",
+            "display_name": "Create Coupon",
+            "short_desc": "Create a new coupon",
+            "desc": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeCreateCouponDataProvider::ProviderInfo,
+        });
+
+        # Update Coupon
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/update-coupon",
+            "action": "update-coupon",
+            "groups": "Coupons",
+            "display_name": "Update Coupon",
+            "short_desc": "Update an existing coupon",
+            "desc": "Update an existing coupon in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeUpdateCouponDataProvider::ProviderInfo,
+        });
+
+        # Delete Coupon
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/delete-coupon",
+            "action": "delete-coupon",
+            "groups": "Coupons",
+            "display_name": "Delete Coupon",
+            "short_desc": "Delete a coupon",
+            "desc": "Delete a coupon from Chargebee. This action cannot be undone.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeDeleteCouponDataProvider::ProviderInfo,
+        });
+
+        # ========== PROMOTIONAL CREDIT ACTIONS ==========
+
+        # Find Promotional Credits
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/promotional-credits",
+            "action": "find-promotional-credits",
+            "groups": "Promotional Credits",
+            "display_name": "Find Promotional Credits",
+            "short_desc": "Find and search promotional credits",
+            "desc": "Retrieve a list of promotional credits from Chargebee.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": ChargebeePromotionalCreditsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("PromotionalCreditList", new ChargebeePromotionalCreditDataType(), True);
+            },
+        });
+
+        # Get Promotional Credit
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/promotional-credits",
+            "action": "get-promotional-credit",
+            "groups": "Promotional Credits",
+            "display_name": "Get Promotional Credit",
+            "short_desc": "Get a single promotional credit by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee promotional credit.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Promotional Credit ID",
+                    "short_desc": "The promotional credit ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Add Promotional Credit
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/add-promotional-credit",
+            "action": "add-promotional-credit",
+            "groups": "Promotional Credits",
+            "display_name": "Add Promotional Credit",
+            "short_desc": "Add promotional credits to a customer",
+            "desc": "Add promotional credits to a customer's account in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeAddPromotionalCreditDataProvider::ProviderInfo,
+        });
+
+        # Deduct Promotional Credit
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/deduct-promotional-credit",
+            "action": "deduct-promotional-credit",
+            "groups": "Promotional Credits",
+            "display_name": "Deduct Promotional Credit",
+            "short_desc": "Deduct promotional credits from a customer",
+            "desc": "Deduct promotional credits from a customer's account in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeDeductPromotionalCreditDataProvider::ProviderInfo,
+        });
+
+        # Set Promotional Credit
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/set-promotional-credit",
+            "action": "set-promotional-credit",
+            "groups": "Promotional Credits",
+            "display_name": "Set Promotional Credit",
+            "short_desc": "Set promotional credit balance for a customer",
+            "desc": "Set the promotional credit balance for a customer's account in Chargebee.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeSetPromotionalCreditDataProvider::ProviderInfo,
+        });
+
+        # ========== TRANSACTION ACTIONS ==========
+
+        # Get Transaction
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/get-transaction",
+            "action": "get-transaction",
+            "groups": "Transactions",
+            "display_name": "Get Transaction",
+            "short_desc": "Get a transaction by ID",
+            "desc": "Retrieve detailed information about a specific Chargebee transaction.",
+            "action_code": DPAT_API,
+            "data_provider_info": ChargebeeGetTransactionDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # Watch Customers Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/events/watch-customers",
+            "action": EVENT_WATCH_CUSTOMERS,
+            "groups": "Triggers",
+            "display_name": "Customer Created",
+            "short_desc": "Trigger when a customer is created",
+            "desc": "Fires when a new customer is created in Chargebee. Provides customer event details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_CUSTOMERS,
+            "data_provider_info": ChargebeeWatchCustomersEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ChargebeeEventDataType(); },
+        });
+
+        # Watch Events Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/events/watch-events",
+            "action": EVENT_WATCH_EVENTS,
+            "groups": "Triggers",
+            "display_name": "Any Event (Instant)",
+            "short_desc": "Trigger on any Chargebee event",
+            "desc": "Fires on any event in Chargebee. Provides full event details for all event types.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_EVENTS,
+            "data_provider_info": ChargebeeWatchEventsEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ChargebeeEventDataType(); },
+        });
+
+        # Watch Invoices Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/events/watch-invoices",
+            "action": EVENT_WATCH_INVOICES,
+            "groups": "Triggers",
+            "display_name": "Invoice Generated",
+            "short_desc": "Trigger when an invoice is generated",
+            "desc": "Fires when a new invoice is generated in Chargebee. Provides invoice event details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_INVOICES,
+            "data_provider_info": ChargebeeWatchInvoicesEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ChargebeeEventDataType(); },
+        });
+
+        # Watch Subscriptions Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ChargebeeDataProvider::AppName,
+            "path": "/events/watch-subscriptions",
+            "action": EVENT_WATCH_SUBSCRIPTIONS,
+            "groups": "Triggers",
+            "display_name": "Subscription Created",
+            "short_desc": "Trigger when a subscription is created",
+            "desc": "Fires when a new subscription is created in Chargebee. Provides subscription event details.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_SUBSCRIPTIONS,
+            "data_provider_info": ChargebeeWatchSubscriptionsEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new ChargebeeEventDataType(); },
+        });
+    };
+}
+
+/** @mainpage ChargebeeDataProvider Module
+
+    @tableofcontents
+
+    @section chargebeedataproviderintro ChargebeeDataProvider Introduction
+
+    The %ChargebeeDataProvider module provides a data provider API for Chargebee subscription
+    billing and revenue management services through the Chargebee REST API.
+
+    Chargebee is a subscription billing and revenue management platform that automates recurring
+    billing, manages subscriptions, handles invoicing, and supports coupon and promotional credit
+    management for SaaS and subscription-based businesses.
+
+    To use this module, use \c "%requires ChargebeeDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ChargebeeDataProvider namespace.
+
+    The main classes are:
+    - @ref ChargebeeDataProvider::ChargebeeDataProvider "ChargebeeDataProvider":
+      the root data provider for Chargebee with child providers for customers, subscriptions,
+      invoices, coupons, promotional credits, and more
+
+    @par Authentication:
+    Chargebee uses API Key authentication. You need an API Key which can be obtained from the
+    Chargebee web interface under Settings > Configure Chargebee > API Keys. The API key is used
+    as the username with HTTP Basic Authentication (password is left empty).
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ChargebeeDataProvider
+
+ChargebeeDataProvider chargebee({"site": "your-site", "api_key": ENV.CHARGEBEE_API_KEY});
+
+# List customers
+map printf("Customer: %s %s (Email: %s)\n", $1.first_name, $1.last_name, $1.email),
+    chargebee.getChildProvider("customers").searchRecords({"status": "active"});
+
+# Create a subscription
+hash<auto> result = chargebee.getChildProvider("create-subscription").doRequest({
+    "customer_id": "cust_123",
+    "plan_id": "premium-monthly",
+});
+printf("Created subscription: %s\n", result.id);
+    @endcode
+
+    @section chargebeedataproviderrelnotes Release Notes
+
+    @subsection chargebeedataproviderv1_0 ChargebeeDataProvider v1.0
+    - the initial version of the %ChargebeeDataProvider module
+*/
+
+#! Contains all public definitions in the ChargebeeDataProvider module
+public namespace ChargebeeDataProvider {
+}
