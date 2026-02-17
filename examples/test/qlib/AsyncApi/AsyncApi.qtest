@@ -402,7 +402,8 @@ public class AsyncApiTest inherits QUnit::Test {
         try {
             client.connect();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err =~ /SOCKET|HTTP|SSL/) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 testSkip(sprintf("Network unavailable: %s", ex.desc));
             }
             rethrow;
@@ -454,7 +455,8 @@ public class AsyncApiTest inherits QUnit::Test {
 
                 anyPassed = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err =~ /SOCKET|HTTP|SSL/) {
+                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                     printf("SKIP: Network error fetching %s: %s\n", schemaInfo.name, ex.desc);
                     continue;
                 }

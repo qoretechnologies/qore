@@ -12,6 +12,9 @@ SUBDIRS = lib modules/astparser modules/reflection modules/logger_bin modules/li
 if COND_MONGODB
 SUBDIRS += modules/mongodb
 endif
+if COND_EIGEN3
+SUBDIRS += modules/ml
+endif
 
 AM_CPPFLAGS = -I$(top_srcdir)/include
 
@@ -44,8 +47,10 @@ DOX_SRC_SPLIT_MODULES = \
     qlib/ConnectionProvider \
     qlib/DpqlWebSocket \
     qlib/DataProvider \
+    qlib/DataProviderML \
     qlib/DbDataProvider \
     qlib/ElasticSearchDataProvider \
+    qlib/QdrantDataProvider \
     qlib/EmpathicBuildingDataProvider \
     qlib/GeneratorDataProvider \
     qlib/FileLocationHandler \
@@ -183,6 +188,7 @@ FreshBooksDataProvider_modverdir = $(modverdir)/FreshBooksDataProvider
 LinearDataProvider_modverdir = $(modverdir)/LinearDataProvider
 WaveDataProvider_modverdir = $(modverdir)/WaveDataProvider
 ElasticSearchDataProvider_modverdir = $(modverdir)/ElasticSearchDataProvider
+QdrantDataProvider_modverdir = $(modverdir)/QdrantDataProvider
 EmpathicBuildingDataProvider_modverdir = $(modverdir)/EmpathicBuildingDataProvider
 GeneratorDataProvider_modverdir = $(modverdir)/GeneratorDataProvider
 FileLocationHandler_modverdir = $(modverdir)/FileLocationHandler
@@ -239,12 +245,13 @@ dist_ConnectionProvider_modver_DATA = $(wildcard qlib/ConnectionProvider/*.q[cm]
 dist_CsvUtil_modver_DATA = $(wildcard qlib/CsvUtil/*.q[cm])
 dist_DataProvider_modver_DATA = $(wildcard qlib/DataProvider/*.q[cm]) $(wildcard qlib/DataProvider/*.svg)
 dist_EdifactUtil_modver_DATA = $(wildcard qlib/EdifactUtil/*.q[cm])
-dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm])
+dist_DbDataProvider_modver_DATA = $(wildcard qlib/DbDataProvider/*.q[cm]) $(wildcard qlib/DbDataProvider/*.svg)
 dist_DiscordDataProvider_modver_DATA = $(wildcard qlib/DiscordDataProvider/*.q[cm])
 dist_FreshBooksDataProvider_modver_DATA = $(wildcard qlib/FreshBooksDataProvider/*.q[cm]) $(wildcard qlib/FreshBooksDataProvider/*.svg)
 dist_LinearDataProvider_modver_DATA = $(wildcard qlib/LinearDataProvider/*.q[cm])
 dist_WaveDataProvider_modver_DATA = $(wildcard qlib/WaveDataProvider/*.q[cm])
 dist_ElasticSearchDataProvider_modver_DATA = $(wildcard qlib/ElasticSearchDataProvider/*.q[cm])
+dist_QdrantDataProvider_modver_DATA = $(wildcard qlib/QdrantDataProvider/*.q[cm])
 dist_EmpathicBuildingDataProvider_modver_DATA = $(wildcard qlib/EmpathicBuildingDataProvider/*.q[cm])
 dist_GeneratorDataProvider_modver_DATA = $(wildcard qlib/GeneratorDataProvider/*.q[cm])
 dist_FileDataProvider_modver_DATA = $(wildcard qlib/FileDataProvider/*.q[cm])
@@ -1221,6 +1228,12 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/CdsRestDataProvider/dynamics-logo.svg \
 	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
+	qlib/DbDataProvider/pgsql-logo.svg \
+	qlib/DbDataProvider/mysql-logo.svg \
+	qlib/DbDataProvider/oracle-logo.svg \
+	qlib/DbDataProvider/freetds-logo.svg \
+	qlib/DbDataProvider/sqlite3-logo.svg \
+	qlib/DbDataProvider/odbc-logo.svg \
 	qlib/DiscordDataProvider/discord-logo.svg \
 	qlib/FreshBooksDataProvider/freshbooks-logo.svg \
 	qlib/LinearDataProvider/linear-logo.svg \
@@ -1228,6 +1241,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \
+	qlib/QdrantDataProvider/qdrant-logo.svg \
 	qlib/EmpathicBuildingDataProvider/Haltian-EmpathicBuilding.svg \
 	qlib/GeneratorDataProvider/generator-logo.svg \
 	qlib/FileDataProvider/file-logo-white.svg \
@@ -1364,7 +1378,7 @@ doxygen/qlib/Doxyfile.SqlUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/SqlUtil:doxygen/qlib/SqlUtil.qm -tUtil.tag=../../Util/html -tDataProvider.tag=../../DataProvider/html -X=doxygen/ -E=SqlUtil-Full.svg $< $@
 
 doxygen/qlib/Doxyfile.DbDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
-	$(QDX) -M=qlib/DbDataProvider:doxygen/qlib/DbDataProvider.qm -tDataProvider.tag=../../DataProvider/html -tSqlUtil.tag=../../SqlUtil/html $< $@
+	$(QDX) -M=qlib/DbDataProvider:doxygen/qlib/DbDataProvider.qm -tDataProvider.tag=../../DataProvider/html -tSqlUtil.tag=../../SqlUtil/html -tConnectionProvider.tag=../../ConnectionProvider/html $< $@
 
 doxygen/qlib/Doxyfile.GoogleDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/GoogleDataProvider:doxygen/qlib/GoogleDataProvider.qm -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -tGoogleRestClient.tag=../../GoogleRestClient/html $< $@
@@ -1435,6 +1449,10 @@ doxygen/qlib/Doxyfile.FsUtil: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 # to provide the graphic file
 doxygen/qlib/Doxyfile.ElasticSearchDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
 	$(QDX) -M=qlib/ElasticSearchDataProvider:doxygen/qlib/ElasticSearchDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=elastic-logo.svg $< $@
+
+# to provide the graphic file
+doxygen/qlib/Doxyfile.QdrantDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)
+	$(QDX) -M=qlib/QdrantDataProvider:doxygen/qlib/QdrantDataProvider -tDataProvider.tag=../../DataProvider/html -tRestClient.tag=../../RestClient/html -X=doxygen/ -E=qdrant-logo.svg $< $@
 
 # to provide the graphic file
 doxygen/qlib/Doxyfile.GeneratorDataProvider: doxygen/qlib/Doxyfile.tmpl $(QDX_DEP)

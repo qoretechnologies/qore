@@ -83,6 +83,9 @@ lib/ql_thread.cpp
 lib/ql_time.cpp
 lib/ql_type.cpp
 
+# Generated SCU files for modules
+modules/*/src/*_scu.cpp
+
 # Bison & Flex
 lib/parser.cpp
 lib/parser.hpp
@@ -118,8 +121,9 @@ docs
 doxygen/lang/*.dox
 doxygen/qlib/*.qm
 Doxyfile
-!modules/astparser/docs/
-!modules/astparser/docs/mainpage.dox.tmpl
+!modules/*/docs/
+!modules/*/docs/mainpage.dox.tmpl
+modules/*/docs/mainpage.dox
 Doxyfile.???*
 *.tag
 

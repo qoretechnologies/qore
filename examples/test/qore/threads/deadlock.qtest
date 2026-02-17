@@ -346,6 +346,9 @@ class DeadlockTest inherits QUnit::Test {
         rw1.writeUnlock();
         rw1.readLock();
         assertThrows('LOCK-ERROR', "RWLock::writeUnlock", sub () {rw1.writeUnlock();});
+        # read-to-write lock upgrade must be detected as LOCK-ERROR, not THREAD-DEADLOCK
+        assertThrows('LOCK-ERROR', "read lock.*read-to-write lock upgrades are not supported",
+            sub () {rw1.writeLock();});
 
         rw1.readUnlock();
 

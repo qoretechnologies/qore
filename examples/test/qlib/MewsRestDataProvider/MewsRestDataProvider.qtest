@@ -87,7 +87,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # Handle connection/protocol errors
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR") {
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }
@@ -150,7 +150,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # Handle connection/protocol errors
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR") {
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }

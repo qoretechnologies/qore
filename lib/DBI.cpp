@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -864,4 +864,108 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
     }
 
     return h.release();
+}
+
+QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
+    // "type" key is required
+    QoreValue type_val = h->getKeyValue("type");
+    if (type_val.isNullOrNothing() || (type_val.getType() == NT_STRING
+        && !type_val.get<const QoreStringNode>()->size())) {
+        xsink->raiseException("MAKE-DATASOURCE-STRING-ERROR",
+            "missing or empty 'type' key in datasource configuration hash");
+        return nullptr;
+    }
+    if (type_val.getType() != NT_STRING) {
+        xsink->raiseException("MAKE-DATASOURCE-STRING-ERROR",
+            "'type' key must be a string; got type '%s'", type_val.getTypeName());
+        return nullptr;
+    }
+
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(type_val.get<const QoreStringNode>()->c_str()));
+    str->concat(':');
+
+    // user
+    QoreValue user_val = h->getKeyValue("user");
+    if (!user_val.isNullOrNothing() && user_val.getType() == NT_STRING
+        && user_val.get<const QoreStringNode>()->size()) {
+        str->concat(user_val.get<const QoreStringNode>()->c_str());
+    }
+
+    // password
+    QoreValue pass_val = h->getKeyValue("pass");
+    if (!pass_val.isNullOrNothing() && pass_val.getType() == NT_STRING
+        && pass_val.get<const QoreStringNode>()->size()) {
+        str->concat('/');
+        str->concat(pass_val.get<const QoreStringNode>()->c_str());
+    }
+
+    // '@' is always present
+    str->concat('@');
+
+    // db
+    QoreValue db_val = h->getKeyValue("db");
+    if (!db_val.isNullOrNothing() && db_val.getType() == NT_STRING
+        && db_val.get<const QoreStringNode>()->size()) {
+        str->concat(db_val.get<const QoreStringNode>()->c_str());
+    }
+
+    // charset
+    QoreValue charset_val = h->getKeyValue("charset");
+    if (!charset_val.isNullOrNothing() && charset_val.getType() == NT_STRING
+        && charset_val.get<const QoreStringNode>()->size()) {
+        str->sprintf("(%s)", charset_val.get<const QoreStringNode>()->c_str());
+    }
+
+    // host
+    bool has_host = false;
+    QoreValue host_val = h->getKeyValue("host");
+    if (!host_val.isNullOrNothing() && host_val.getType() == NT_STRING
+        && host_val.get<const QoreStringNode>()->size()) {
+        str->sprintf("%%%s", host_val.get<const QoreStringNode>()->c_str());
+        has_host = true;
+    }
+
+    // port (only emitted if host is also present, since the parser expects %host:port)
+    if (has_host) {
+        QoreValue port_val = h->getKeyValue("port");
+        if (!port_val.isNullOrNothing()) {
+            int64 port = port_val.getAsBigInt();
+            if (port) {
+                str->sprintf(":%lld", port);
+            }
+        }
+    }
+
+    // options
+    QoreValue opts_val = h->getKeyValue("options");
+    if (!opts_val.isNullOrNothing() && opts_val.getType() == NT_HASH) {
+        const QoreHashNode* opts = opts_val.get<const QoreHashNode>();
+        bool has_options = false;
+        ConstHashIterator hi(*opts);
+        while (hi.next()) {
+            QoreValue v = hi.get();
+            if (v.isNullOrNothing() || (v.getType() == NT_BOOLEAN && !v.getAsBool())) {
+                continue;
+            }
+
+            if (has_options) {
+                str->concat(',');
+            } else {
+                str->concat('{');
+                has_options = true;
+            }
+            str->concat(hi.getKey());
+            if (v.getType() == NT_BOOLEAN && v.getAsBool()) {
+                continue;
+            }
+
+            QoreStringValueHelper sv(v);
+            str->sprintf("=%s", sv->c_str());
+        }
+        if (has_options) {
+            str->concat('}');
+        }
+    }
+
+    return str.release();
 }

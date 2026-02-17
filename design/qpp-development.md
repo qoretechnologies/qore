@@ -180,10 +180,31 @@ Common domain flags for the `qclass` declaration:
 
 ### Namespace
 
-Use `ns=Qore` to place the class in the Qore namespace:
+The `ns=` attribute in the `qclass` declaration controls the namespace path used for documentation
+and the value returned by `Class::getPathName()` in the reflection API.
+
+For classes directly in the `Qore` namespace:
 ```cpp
 qclass ClassName [dom=NETWORK; arg=ClassNamePriv* priv; ns=Qore];
 ```
+
+For classes in a sub-namespace of `Qore`, use the **full path** including `Qore::`:
+```cpp
+qclass ClassName [arg=ClassNamePriv* priv; ns=Qore::ML; flags=final];
+```
+
+**Important:** The `ns=` value must match the full namespace path as registered in the module's
+`ns_init` function. If the `QoreNamespace` is created with `"Qore::ML"` and added to `qns`, then
+`ns=` must be `Qore::ML` (not just `ML`). A mismatch causes `getPathName()` to return an
+incomplete path, which breaks tools like `qjar` (JNI bytecode generation) that rely on absolute
+namespace paths for class resolution.
+
+Examples from existing modules:
+- Core classes: `ns=Qore` (e.g., `Socket`, `File`)
+- Thread classes: `ns=Qore::Thread` (e.g., `Mutex`, `Queue`)
+- SQL classes: `ns=Qore::SQL` (e.g., `Datasource`, `SQLStatement`)
+- Reflection classes: `ns=Qore::Reflection` (e.g., `Class`, `Method`)
+- ML classes: `ns=Qore::ML` (e.g., `IsolationForest`, `DBSCAN`)
 
 ### Enum Declarations
 
@@ -325,6 +346,63 @@ nothing ClassName::setCallback(*code<nothing(string)> callback) {
 - Parameter types support all complex types: `hash<K,V>`, `list<T>`, `softlist<T>`, etc.
 - Varargs are supported: `code<int(string, ...)>` for closures accepting variable arguments
 - Type checking happens at parse time; incompatible closures will cause parse errors
+
+## Conditional Compilation (`#ifdef`) in QPP Files
+
+The QPP processor **strips `#ifdef`/`#endif` blocks that wrap entire function or class declarations**.
+This means you cannot conditionally compile away entire QPP functions or classes.
+
+### What does NOT work
+
+```cpp
+// WRONG: qpp strips the #ifdef, so the function is always generated
+#ifdef HAVE_FEATURE
+string ClassName::optionalMethod() {
+    return do_something();
+}
+#endif
+```
+
+### Correct pattern: always define the API, use `#ifdef` inside the body
+
+To maintain a consistent API surface regardless of compile-time features, always define the
+function/class and use `#ifdef` inside the body to throw `MISSING-FEATURE-ERROR` when the
+feature is unavailable:
+
+```cpp
+string ClassName::optionalMethod() {
+#ifdef HAVE_FEATURE
+    return do_something();
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR",
+        "this method requires feature X; check Capabilities before calling");
+    return QoreValue();
+#endif
+}
+```
+
+This pattern is used throughout the codebase:
+- `ql_crypto.qpp`: OpenSSL feature checks with `missing_openssl_feature()`
+- `QC_OnnxModel.qpp`: ONNX Runtime availability check
+
+### Stub classes for conditional features
+
+When a class depends on a conditional library, provide a stub private data class in the header
+so the class is always registered. Use `#ifdef` inside constructors to throw
+`MISSING-FEATURE-ERROR`:
+
+```cpp
+// In QC_FeatureClass.h
+#ifdef HAVE_FEATURE
+class QoreFeatureClass : public AbstractPrivateData {
+    // full implementation
+};
+#else
+class QoreFeatureClass : public AbstractPrivateData {
+    // stub - methods return nullptr / empty values
+};
+#endif
+```
 
 ## Class Creation Checklist
 

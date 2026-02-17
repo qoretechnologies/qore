@@ -3,8 +3,9 @@
 
 %modern
 %allow-debugger
+%no-debugging
 
-%requires qore >= 1.0
+%requires qore >= 2.0
 %requires HttpServer
 %requires DebugProgramControl
 %requires DebugHandler
@@ -23,7 +24,7 @@ class WebSocketDebugProgramControlHost inherits WebSocketDebugProgramControl {
 
 class DebugWrapper {
     private {
-        hash opts = (
+        hash<auto> opts = (
             'help': 'h,help',
             'verbose': 'v,verbose:+',
             'run': 'r,run',
@@ -46,8 +47,8 @@ class DebugWrapper {
         #    qore-dbg -v --listen xxx xxx     #the second xxx is program name
         # GetOpt does not support such a parse function
         #
-        list dargs;
-        hash opt;
+        list<auto> dargs;
+        hash<auto> opt;
         *string fileName;
         g.split(cast<list<string>>(ARGV), \dargs, \fileName, \ARGV);
 
@@ -63,6 +64,7 @@ class DebugWrapper {
         }
 
         logger = new Logger();
+        logger.addAppender(new LoggerAppenderStdErr("stderr", new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n")));
         if (opt.verbose > 1) {
             logger.setLevel("DEBUG");
         } else if (opt.verbose) {
@@ -96,7 +98,7 @@ class DebugWrapper {
                 }
             } else {
                 int port = mServer.addListener(0).port;
-                logger.debug("debug server listening on port %d", port);
+                stdout.printf("debug server listening on port %d\n", port);
             }
 
             if (exists fileName) {
@@ -104,10 +106,21 @@ class DebugWrapper {
                 logger.info("run program");
                 background pgm.run();
             }
+            # signal handler for graceful shutdown
+            code sig_handler = sub (int sig) {
+                dpc.shutdown();
+                dpc.waitForTerminationAndClear();
+                mServer.stop();
+                # remove signal handlers so their closures release references
+                # to dpc/mServer before program shutdown
+                remove_signal_handler(SIGINT);
+                remove_signal_handler(SIGTERM);
+            };
+            set_signal_handler(SIGINT, sig_handler);
+            set_signal_handler(SIGTERM, sig_handler);
             # background or http server uses own thread, loop
         } catch (hash<ExceptionInfo> ex) {
             stderr.printf("%s\n", get_exception_string(ex));
-            #stderr.printf("%s: %s\n", ex.err, ex.desc);
             exit(-1);
         }
     }

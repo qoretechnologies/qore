@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that computes running statistics (count, sum, avg, min, max, stddev, variance) per window
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreRunningStatsProcessor inherits AbstractAnalyticsProcessor {
     public {

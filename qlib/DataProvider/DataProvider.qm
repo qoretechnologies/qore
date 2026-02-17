@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.4.0";
+    version = "3.3.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -311,6 +311,212 @@ module DataProvider {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreAnomalyDetectionProcessor::ConstructorOptions{"threshold",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register percentile action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/percentile",
+            "action": "percentile",
+            "display_name": "Calculate Data Distribution",
+            "short_desc": "Computes median, quartiles, and spread of values",
+            "desc": "Analyzes the distribution of numeric values in each window by computing "
+                "percentiles (median, quartiles, and custom values), interquartile range, "
+                "skewness (whether the data leans left or right), and kurtosis (whether "
+                "values cluster tightly or spread out). For example, for transaction amounts "
+                "it can show that 50%% are under $100, 90%% are under $500, and the spread "
+                "between the 25th and 75th percentile is $200.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QorePercentileProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QorePercentileProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QorePercentileProcessor::ConstructorOptions{"percentiles",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register correlation action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/correlation",
+            "action": "correlation",
+            "display_name": "Find Related Fields",
+            "short_desc": "Measures how strongly fields move together",
+            "desc": "Computes the Pearson correlation coefficient between all pairs of "
+                "configured numeric fields to measure how strongly they move together. "
+                "Values range from -1.0 (perfect inverse relationship) to 1.0 (perfect "
+                "direct relationship), with 0.0 meaning no linear relationship. For example, "
+                "it can show that temperature and ice cream sales are strongly correlated "
+                "(0.92) while humidity and sales are weakly correlated (-0.15).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProvider::QoreCorrelationProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreCorrelationProcessor::ConstructorOptions, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register cross-correlation action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/cross-correlation",
+            "action": "cross-correlation",
+            "display_name": "Find Delayed Relationships",
+            "short_desc": "Discovers if changes in one field predict changes in another",
+            "desc": "Computes time-lagged cross-correlation between two fields to discover "
+                "whether changes in one field predict changes in another after a delay. "
+                "For example, it can show that a spike in marketing spend correlates with "
+                "increased revenue 3 periods later (lag = 3, correlation = 0.85).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProvider::QoreCrossCorrelationProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreCrossCorrelationProcessor::ConstructorOptions{
+                    "field_x", "field_y", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreCrossCorrelationProcessor::ConstructorOptions{"max_lag",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register histogram action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/histogram",
+            "action": "histogram",
+            "display_name": "Count Value Ranges",
+            "short_desc": "Groups values into ranges and counts how many fall in each",
+            "desc": "Creates a frequency distribution by dividing the range of values into "
+                "bins and counting how many values fall in each bin. Supports uniform "
+                "(equal-width) and quantile (equal-count) binning. For example, for response "
+                "times it can show that 80%% of requests complete in 0-100ms, 15%% in "
+                "100-200ms, and 5%% take over 200ms.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreHistogramProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreHistogramProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreHistogramProcessor::ConstructorOptions{"n_bins", "bin_method"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register rate-of-change action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/rate-of-change",
+            "action": "rate-of-change",
+            "display_name": "Measure Speed of Change",
+            "short_desc": "Tracks how fast values are changing and accelerating",
+            "desc": "Computes the rate of change (first derivative), acceleration (second "
+                "derivative), and percentage change for each record relative to its "
+                "sliding window history. For example, it can show that revenue is growing "
+                "at $1,000/period and accelerating (the growth rate is itself increasing).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreRateOfChangeProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRateOfChangeProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRateOfChangeProcessor::ConstructorOptions{"smoothing",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register ewma-control-chart action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/ewma-control-chart",
+            "action": "ewma-control-chart",
+            "display_name": "Monitor Process Stability",
+            "short_desc": "Detects when values drift outside normal operating range",
+            "desc": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) "
+                "control chart to detect when values drift outside the normal operating range. "
+                "The EWMA smooths out noise while detecting sustained shifts. Each record is "
+                "classified as normal, upper violation, or lower violation. For example, it "
+                "can detect when a server's average response time gradually drifts upward "
+                "beyond its normal range.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreEWMAControlChartProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEWMAControlChartProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEWMAControlChartProcessor::ConstructorOptions{
+                    "lambda", "sigma_multiplier", "target",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register seasonality-detection action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QoreApp::AppName,
+            "path": "/seasonality-detection",
+            "action": "seasonality-detection",
+            "display_name": "Detect Repeating Patterns",
+            "short_desc": "Finds cyclical patterns in data automatically",
+            "desc": "Detects repeating cyclical patterns in the data using autocorrelation "
+                "analysis. It automatically identifies the dominant period without requiring "
+                "the user to specify it upfront. For example, it can discover that sales data "
+                "has a weekly pattern (period = 7) with a correlation of 0.85, or that a "
+                "temperature sensor shows both daily (period = 24) and yearly patterns.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_ANALYTICS,
+            "cls": "DataProvider::QoreSeasonalityDetectionProcessor",
+            "groups": ("Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSeasonalityDetectionProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSeasonalityDetectionProcessor::ConstructorOptions{
+                    "max_period", "min_correlation",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -771,8 +977,8 @@ if (errors) {
 
     @section dataprovider_relnotes Release Notes
 
-    @subsection dataprovider_v3_4 DataProvider v3.4
-    - added streaming analytics pipeline processors for real-time data analysis:
+    @subsection dataprovider_v3_3 DataProvider v3.3
+    - added 11 streaming analytics and statistical pipeline processors:
       - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
         (count, sum, avg, min, max, stddev, variance) over windows of records
       - @ref DataProvider::QoreMovingAverageProcessor "moving-average": compute simple and exponential
@@ -781,6 +987,20 @@ if (errors) {
         analysis (slope, intercept, r-squared, direction) over windows
       - @ref DataProvider::QoreAnomalyDetectionProcessor "anomaly-detection": z-score based anomaly
         detection per record
+      - @ref DataProvider::QorePercentileProcessor "percentile": compute percentiles
+        (P25, P50/median, P75, P90, P95, P99), IQR, skewness, and kurtosis over windows
+      - @ref DataProvider::QoreCorrelationProcessor "correlation": compute Pearson correlation
+        matrix between all pairs of configured numeric fields
+      - @ref DataProvider::QoreCrossCorrelationProcessor "cross-correlation": compute time-lagged
+        cross-correlation between two fields to discover delayed relationships
+      - @ref DataProvider::QoreHistogramProcessor "histogram": compute frequency distributions
+        with configurable uniform or quantile binning
+      - @ref DataProvider::QoreRateOfChangeProcessor "rate-of-change": compute first derivative
+        (rate of change), second derivative (acceleration), and percentage change per record
+      - @ref DataProvider::QoreEWMAControlChartProcessor "ewma-control-chart": EWMA statistical
+        process control with upper and lower control limits for drift detection
+      - @ref DataProvider::QoreSeasonalityDetectionProcessor "seasonality-detection":
+        autocorrelation-based detection of repeating cyclical patterns
     - added the @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" abstract base
       class for building streaming analytics processors with window and record emission modes
     - added the @ref DPC_ANALYTICS processor capability constant for analytics processors
@@ -788,15 +1008,19 @@ if (errors) {
       @ref DataProvider::StatisticsEventInfo "StatisticsEventInfo",
       @ref DataProvider::MovingAverageEventInfo "MovingAverageEventInfo",
       @ref DataProvider::TrendEventInfo "TrendEventInfo",
-      @ref DataProvider::AnomalyEventInfo "AnomalyEventInfo"
+      @ref DataProvider::AnomalyEventInfo "AnomalyEventInfo",
+      @ref DataProvider::PercentileEventInfo "PercentileEventInfo",
+      @ref DataProvider::CorrelationEventInfo "CorrelationEventInfo",
+      @ref DataProvider::CrossCorrelationEventInfo "CrossCorrelationEventInfo",
+      @ref DataProvider::HistogramEventInfo "HistogramEventInfo",
+      @ref DataProvider::RateOfChangeEventInfo "RateOfChangeEventInfo",
+      @ref DataProvider::EWMAControlChartEventInfo "EWMAControlChartEventInfo",
+      @ref DataProvider::SeasonalityDetectionEventInfo "SeasonalityDetectionEventInfo"
     - added @ref DataProvider::QoreGroupByProcessor "group-by": group records by field values and
       compute aggregate functions (count, sum, avg, min, max, first, last) per group
-    - added 4 new analytics actions to the Qore app in the "Analytics" group
-    - added 1 new aggregation action to the Qore app in the "Aggregation" group
-    - updated @ref DataProvider::QoreProcessorsDataProvider "qore-processors" factory with 5 new
-      processor children (4 analytics + 1 aggregation)
-
-    @subsection dataprovider_v3_3 DataProvider v3.3
+    - added 11 new analytics/aggregation actions to the Qore app in the "Analytics" group
+    - updated @ref DataProvider::QoreProcessorsDataProvider "qore-processors" factory with 12 new
+      processor children (11 analytics + 1 aggregation)
     - added the built-in "Qore" app with pipeline processor actions for filtering, transforming, and
       manipulating records in data pipelines:
       - @ref DataProvider::QoreFilterRecordsProcessor "filter-records": filter records by DPQL expression
@@ -854,6 +1078,14 @@ if (errors) {
       @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
       @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
     - added methods to return data provider types in the context of option dataprovider_message_support
+    - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
+      @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously
+      defined only in child hashdecls and are now shared across all option types
+    - @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo": added @c connection_options and @c auto_url
+      fields to support per-app connection option overrides for connection creation forms
+    - moved @c ConnectionOptionInfo from the @c ConnectionProvider module to the @c DataProvider module to
+      resolve circular dependency; the hashdecl remains in the @c ConnectionProvider namespace for backward
+      compatibility
 
     @subsection dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields

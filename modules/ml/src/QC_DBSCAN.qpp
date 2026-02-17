@@ -1,0 +1,159 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DBSCAN.qpp
+
+    Qore ml module - DBSCAN class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_DBSCAN.h"
+
+extern const TypedHashDecl* hashdeclDBSCANResult;
+
+//! The DBSCAN class implements density-based spatial clustering
+/** DBSCAN finds clusters of arbitrary shape by identifying dense regions in the data.
+    Points that don't belong to any cluster are classified as noise.
+
+    @par Example:
+    @code{.py}
+DBSCAN db({"epsilon": 0.5, "min_points": 5, "metric": "euclidean"});
+list<hash<DBSCANResult>> results = db.cluster(data_records);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass DBSCAN [arg=QoreDBSCAN* dbscan; ns=Qore::ML; flags=final];
+
+//! Creates a DBSCAN instance with the given options
+/** @param options a hash with the following keys:
+    - \c epsilon (float, required): maximum distance between neighbors
+    - \c min_points (int, default 5): minimum points to form a dense region
+    - \c metric (string, default "euclidean"): distance metric ("euclidean", "manhattan", "cosine")
+
+    @throw ML-DBSCAN-ERROR invalid option values
+*/
+DBSCAN::constructor(hash<auto> options) {
+    double epsilon = 0.0;
+    int64 min_points = 5;
+    const char* metric = "euclidean";
+
+    QoreValue v = options->getKeyValue("epsilon");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-DBSCAN-ERROR",
+            "required option 'epsilon' not provided");
+        return;
+    }
+    epsilon = v.getAsFloat();
+
+    v = options->getKeyValue("min_points");
+    if (!v.isNullOrNothing()) {
+        min_points = v.getAsBigInt();
+    }
+
+    v = options->getKeyValue("metric");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        metric = v.get<const QoreStringNode>()->c_str();
+    }
+
+    if (epsilon <= 0.0) {
+        xsink->raiseException("ML-DBSCAN-ERROR",
+            "epsilon must be > 0; got %f", epsilon);
+        return;
+    }
+    if (min_points < 1) {
+        xsink->raiseException("ML-DBSCAN-ERROR",
+            "min_points must be >= 1; got " QLLD, min_points);
+        return;
+    }
+
+    if (strcmp(metric, "euclidean") != 0 && strcmp(metric, "manhattan") != 0
+        && strcmp(metric, "cosine") != 0) {
+        xsink->raiseException("ML-DBSCAN-ERROR",
+            "metric must be 'euclidean', 'manhattan', or 'cosine'; got '%s'", metric);
+        return;
+    }
+
+    self->setPrivate(CID_DBSCAN,
+        new QoreDBSCAN(epsilon, static_cast<int>(min_points), metric));
+}
+
+//! Creates a copy of the DBSCAN instance
+/** @throw COPY-ERROR DBSCAN objects cannot be copied
+*/
+DBSCAN::copy() {
+    xsink->raiseException("COPY-ERROR", "DBSCAN objects cannot be copied");
+}
+
+//! Clusters a list of hash records
+/** @param data a list of hashes with numeric fields
+    @return a list of @ref DBSCANResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<DBSCANResult>> results = db.cluster(data_records);
+for (int i = 0; i < results.size(); ++i) {
+    printf("point %d: cluster=%d is_core=%y neighbors=%d\n",
+        i, results[i].cluster, results[i].is_core, results[i].neighbor_count);
+}
+    @endcode
+
+    @throw ML-DBSCAN-ERROR no data provided
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<DBSCANResult>> DBSCAN::cluster(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dbscan->cluster(matrix, xsink);
+}
+
+//! Clusters a numeric matrix
+/** @param matrix a list of lists of numeric values
+    @return a list of @ref DBSCANResult hashes
+
+    @throw ML-DBSCAN-ERROR no data provided
+    @throw ML-DATA-ERROR data format errors
+*/
+list<hash<DBSCANResult>> DBSCAN::clusterMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dbscan->cluster(mat, xsink);
+}
+
+//! Returns the configured epsilon value
+/** @return the epsilon value
+*/
+float DBSCAN::getEpsilon() [flags=CONSTANT] {
+    return dbscan->getEpsilon();
+}
+
+//! Returns the configured min_points value
+/** @return the min_points value
+*/
+int DBSCAN::getMinPoints() [flags=CONSTANT] {
+    return dbscan->getMinPoints();
+}

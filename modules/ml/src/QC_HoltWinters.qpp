@@ -1,0 +1,226 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HoltWinters.qpp
+
+    Qore ml module - HoltWinters class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_HoltWinters.h"
+
+extern const TypedHashDecl* hashdeclHoltWintersResult;
+
+//! The HoltWinters class implements triple exponential smoothing for forecasting
+/** Holt-Winters decomposes time series data into level, trend, and seasonal components,
+    supporting both additive and multiplicative seasonality with optional damped trend.
+
+    @par Example:
+    @code{.py}
+HoltWinters hw({"period": 12, "alpha": 0.3, "beta": 0.1, "gamma": 0.3});
+hw.fit(historical_monthly_values);
+list<float> next_year = hw.forecast(12);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass HoltWinters [arg=QoreHoltWinters* hw; ns=Qore::ML; flags=final];
+
+//! Creates a HoltWinters instance with the given options
+/** @param options a hash with the following keys:
+    - \c period (int, required): seasonal period length
+    - \c alpha (float, default 0.2): level smoothing factor (0 < alpha < 1)
+    - \c beta (float, default 0.1): trend smoothing factor (0 < beta < 1)
+    - \c gamma (float, default 0.3): seasonal smoothing factor (0 < gamma < 1)
+    - \c seasonal_type (string, default "additive"): "additive" or "multiplicative"
+    - \c damped (bool, default False): use damped trend
+    - \c phi (float, default 0.9): damping factor when \c damped is True (0 < phi < 1);
+      ignored when \c damped is False
+
+    @throw ML-HOLTWINTERS-ERROR invalid option values
+*/
+HoltWinters::constructor(hash<auto> options) {
+    int64 period = 0;
+    double alpha = 0.2;
+    double beta = 0.1;
+    double gamma = 0.3;
+    const char* seasonal_type = "additive";
+    bool damped = false;
+    double phi = 0.9;
+
+    QoreValue v = options->getKeyValue("period");
+    if (v.isNullOrNothing()) {
+        xsink->raiseException("ML-HOLTWINTERS-ERROR",
+            "required option 'period' not provided");
+        return;
+    }
+    period = v.getAsBigInt();
+
+    v = options->getKeyValue("alpha");
+    if (!v.isNullOrNothing()) {
+        alpha = v.getAsFloat();
+    }
+    v = options->getKeyValue("beta");
+    if (!v.isNullOrNothing()) {
+        beta = v.getAsFloat();
+    }
+    v = options->getKeyValue("gamma");
+    if (!v.isNullOrNothing()) {
+        gamma = v.getAsFloat();
+    }
+    v = options->getKeyValue("seasonal_type");
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        seasonal_type = v.get<const QoreStringNode>()->c_str();
+    }
+    v = options->getKeyValue("damped");
+    if (!v.isNullOrNothing()) {
+        damped = v.getAsBool();
+    }
+    v = options->getKeyValue("phi");
+    if (!v.isNullOrNothing()) {
+        phi = v.getAsFloat();
+    }
+
+    if (period < 2) {
+        xsink->raiseException("ML-HOLTWINTERS-ERROR",
+            "period must be >= 2; got " QLLD, period);
+        return;
+    }
+
+    if (strcmp(seasonal_type, "additive") != 0 && strcmp(seasonal_type, "multiplicative") != 0) {
+        xsink->raiseException("ML-HOLTWINTERS-ERROR",
+            "seasonal_type must be 'additive' or 'multiplicative'; got '%s'", seasonal_type);
+        return;
+    }
+
+    if (damped) {
+        if (phi <= 0.0 || phi >= 1.0) {
+            xsink->raiseException("ML-HOLTWINTERS-ERROR",
+                "phi must be in (0, 1) when damped is True; got %f", phi);
+            return;
+        }
+    } else {
+        phi = 1.0;  // no damping: phi=1 reduces to standard Holt-Winters
+    }
+
+    self->setPrivate(CID_HOLTWINTERS,
+        new QoreHoltWinters(static_cast<int>(period), alpha, beta, gamma,
+            seasonal_type, damped, phi));
+}
+
+//! Creates a copy of the HoltWinters instance
+/** @throw COPY-ERROR HoltWinters objects cannot be copied
+*/
+HoltWinters::copy() {
+    xsink->raiseException("COPY-ERROR", "HoltWinters objects cannot be copied");
+}
+
+//! Initializes the model from historical data
+/** @param series a list of float values (>= 2 * period values required)
+
+    @par Example:
+    @code{.py}
+hw.fit(monthly_sales_data);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR not enough data (< 2 * period values)
+*/
+nothing HoltWinters::fit(list<auto> series) {
+    VectorXd vec = qoreListToVector(series, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    hw->fit(vec, xsink);
+}
+
+//! Processes one new observation and returns the current state
+/** @param value the new observation value
+    @return a @ref HoltWintersResult hash with the one-step-ahead forecast and current
+    level, trend, and seasonal components
+
+    @par Example:
+    @code{.py}
+hash<HoltWintersResult> result = hw.update(new_value);
+printf("Next forecast: %.2f\n", result.forecast);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+hash<HoltWintersResult> HoltWinters::update(float value) {
+    return hw->update(value, xsink);
+}
+
+//! Forecasts N steps ahead
+/** @param steps number of steps to forecast (>= 1)
+    @return a list of forecasted float values
+
+    @par Example:
+    @code{.py}
+list<float> next_12 = hw.forecast(12);
+    @endcode
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted or steps < 1
+*/
+list<float> HoltWinters::forecast(int steps) {
+    return hw->forecast(steps, xsink);
+}
+
+//! Returns the configured seasonal period
+/** @return the period value
+*/
+int HoltWinters::getPeriod() [flags=CONSTANT] {
+    return hw->getPeriod();
+}
+
+//! Returns True if the model has been fitted
+/** @return True if fit() has been called successfully
+*/
+bool HoltWinters::isFitted() [flags=CONSTANT] {
+    return hw->isFitted();
+}
+
+//! Returns the current level component
+/** @return the current level value
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+float HoltWinters::getLevel() {
+    return hw->getLevel(xsink);
+}
+
+//! Returns the current trend component
+/** @return the current trend value
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+float HoltWinters::getTrend() {
+    return hw->getTrend(xsink);
+}
+
+//! Returns the current seasonal factors
+/** @return a list of seasonal factors (one per period position)
+
+    @throw ML-HOLTWINTERS-ERROR model not fitted
+*/
+list<float> HoltWinters::getSeasonal() {
+    return hw->getSeasonal(xsink);
+}

@@ -1,0 +1,394 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore QdrantDataProvider module definition
+
+/*  QdrantDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+%requires(reexport) RestClient
+
+module QdrantDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Qdrant vector database instances";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the connection schemes
+        ConnectionSchemeCache::registerScheme("qdrantrest", QdrantRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("qdrantrests", QdrantRestConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new QdrantDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": QdrantDataProvider::AppName,
+            "display_name": "Qdrant Vector Database",
+            "short_desc": "Qdrant vector database for similarity search and RAG",
+            "desc": "Qdrant vector database providing similarity search, hybrid search, "
+                "and vector CRUD operations for AI/ML and RAG pipelines",
+            "scheme": "qdrantrest",
+            "logo": QdrantLogo,
+            "logo_file_name": "qdrant-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases, DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/search/query",
+            "action": "query-points",
+            "display_name": "Query Points",
+            "short_desc": "Query points using vector similarity search",
+            "desc": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/upsert",
+            "action": "upsert-points",
+            "display_name": "Upsert Points",
+            "short_desc": "Insert or update points in a collection",
+            "desc": "Insert or update points with vectors and optional payloads in a Qdrant collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/collections/create",
+            "action": "create-collection",
+            "display_name": "Create Collection",
+            "short_desc": "Create a new Qdrant collection",
+            "desc": "Create a new vector collection with configurable vector parameters and distance metrics",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/collections/list",
+            "action": "list-collections",
+            "display_name": "List Collections",
+            "short_desc": "List all Qdrant collections",
+            "desc": "Retrieve a list of all collections in the Qdrant instance",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/count",
+            "action": "count-points",
+            "display_name": "Count Points",
+            "short_desc": "Count points in a collection",
+            "desc": "Count the number of points in a Qdrant collection, optionally with a filter",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/service/health",
+            "action": "health-check",
+            "display_name": "Health Check",
+            "short_desc": "Check Qdrant server health",
+            "desc": "Check the health status of the Qdrant server",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/delete",
+            "action": "delete-points",
+            "display_name": "Delete Points",
+            "short_desc": "Delete points from a collection",
+            "desc": "Delete points from a Qdrant collection by point IDs or by filter conditions",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/get",
+            "action": "get-points",
+            "display_name": "Get Points",
+            "short_desc": "Get specific points by ID",
+            "desc": "Retrieve specific points from a Qdrant collection by their IDs, including vectors "
+                "and payloads",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/scroll",
+            "action": "scroll-points",
+            "display_name": "Scroll Points",
+            "short_desc": "Scroll through points in a collection",
+            "desc": "Iterate through all points in a Qdrant collection using scroll-based pagination "
+                "with optional filtering",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/collections/get",
+            "action": "get-collection",
+            "display_name": "Get Collection",
+            "short_desc": "Get collection info",
+            "desc": "Retrieve detailed information about a specific Qdrant collection, including its "
+                "configuration and status",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/collections/delete",
+            "action": "delete-collection",
+            "display_name": "Delete Collection",
+            "short_desc": "Delete a Qdrant collection",
+            "desc": "Delete a collection and all its data from the Qdrant instance",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/collections/exists",
+            "action": "collection-exists",
+            "display_name": "Collection Exists",
+            "short_desc": "Check if a collection exists",
+            "desc": "Check whether a specific collection exists in the Qdrant instance",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/search/query-batch",
+            "action": "query-batch-points",
+            "display_name": "Query Batch Points",
+            "short_desc": "Perform batch vector similarity searches",
+            "desc": "Execute multiple vector similarity search queries in a single batch request "
+                "against a Qdrant collection",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/search/query-groups",
+            "action": "query-groups-points",
+            "display_name": "Query Grouped Points",
+            "short_desc": "Perform grouped vector similarity search",
+            "desc": "Execute a vector similarity search on a Qdrant collection with results grouped "
+                "by a specified payload field",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/aliases/list-all",
+            "action": "list-all-aliases",
+            "display_name": "List All Aliases",
+            "short_desc": "List all collection aliases",
+            "desc": "Retrieve a list of all aliases and their associated collections in the Qdrant "
+                "instance",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/aliases/update",
+            "action": "update-aliases",
+            "display_name": "Update Aliases",
+            "short_desc": "Update collection aliases",
+            "desc": "Create, rename, or delete collection aliases in the Qdrant instance",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/set-payload",
+            "action": "set-payload",
+            "display_name": "Set Payload",
+            "short_desc": "Set payload on points",
+            "desc": "Set or update payload key-value pairs on points in a Qdrant collection by point "
+                "IDs or filter conditions",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/service/liveness",
+            "action": "liveness-check",
+            "display_name": "Liveness Check",
+            "short_desc": "Check Qdrant server liveness",
+            "desc": "Check if the Qdrant server is alive and responsive",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/points/batch-update",
+            "action": "batch-update-points",
+            "display_name": "Batch Update Points",
+            "short_desc": "Apply multiple point operations in a single batch",
+            "desc": "Execute a batch of heterogeneous point operations (upsert, delete, set/overwrite/"
+                "delete/clear payload, update/delete vectors) in a single request for high-performance "
+                "bulk updates",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/tables",
+            "action": "search-points",
+            "display_name": "Search Points",
+            "short_desc": "Search points with record streaming",
+            "desc": "Vector similarity search on a Qdrant collection returning results as a "
+                "record stream for efficient pipeline processing",
+            "action_code": DPAT_FIND,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": QdrantDataProvider::AppName,
+            "path": "/tables",
+            "action": "create-point",
+            "display_name": "Create/Upsert Point",
+            "short_desc": "Create or upsert a point in a collection",
+            "desc": "Create or upsert a point with a vector and optional payload in a Qdrant collection",
+            "action_code": DPAT_CREATE,
+        });
+    };
+}
+
+/** @mainpage QdrantDataProvider Module
+
+    @tableofcontents
+
+    @section qdrantdataproviderintro Introduction to the QdrantDataProvider Module
+
+    @htmlonly
+    <div class="image">
+      <img src="qdrant-logo.svg" alt="Qdrant Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
+    The %QdrantDataProvider module provides a \c dataproviderintro "data provider" API for Qdrant vector database
+    instances.  It provides a comprehensive API for collection management, point operations (vector CRUD), similarity
+    search, and cluster administration.
+
+    This data provider provides Qdrant API access to:
+    - collections: <b><tt>collections/{@ref QdrantDataProvider::QdrantCollectionsListDataProvider "list",
+      @ref QdrantDataProvider::QdrantCollectionsCreateDataProvider "create",
+      @ref QdrantDataProvider::QdrantCollectionsGetDataProvider "get",
+      @ref QdrantDataProvider::QdrantCollectionsUpdateDataProvider "update",
+      @ref QdrantDataProvider::QdrantCollectionsDeleteDataProvider "delete",
+      @ref QdrantDataProvider::QdrantCollectionsExistsDataProvider "exists",
+      @ref QdrantDataProvider::QdrantCollectionsCreateIndexDataProvider "create-index",
+      @ref QdrantDataProvider::QdrantCollectionsDeleteIndexDataProvider "delete-index"}</tt></b>
+    - points: <b><tt>points/{@ref QdrantDataProvider::QdrantPointsUpsertDataProvider "upsert",
+      @ref QdrantDataProvider::QdrantPointsGetDataProvider "get",
+      @ref QdrantDataProvider::QdrantPointsDeleteDataProvider "delete",
+      @ref QdrantDataProvider::QdrantPointsScrollDataProvider "scroll",
+      @ref QdrantDataProvider::QdrantPointsCountDataProvider "count",
+      @ref QdrantDataProvider::QdrantPointsSetPayloadDataProvider "set-payload",
+      @ref QdrantDataProvider::QdrantPointsOverwritePayloadDataProvider "overwrite-payload",
+      @ref QdrantDataProvider::QdrantPointsDeletePayloadDataProvider "delete-payload",
+      @ref QdrantDataProvider::QdrantPointsClearPayloadDataProvider "clear-payload"}</tt></b>
+    - search: <b><tt>search/{@ref QdrantDataProvider::QdrantSearchQueryDataProvider "query",
+      @ref QdrantDataProvider::QdrantSearchQueryBatchDataProvider "query-batch",
+      @ref QdrantDataProvider::QdrantSearchQueryGroupsDataProvider "query-groups"}</tt></b>
+    - aliases: <b><tt>aliases/{@ref QdrantDataProvider::QdrantAliasesListAllDataProvider "list-all",
+      @ref QdrantDataProvider::QdrantAliasesListCollectionDataProvider "list-collection",
+      @ref QdrantDataProvider::QdrantAliasesUpdateDataProvider "update"}</tt></b>
+    - snapshots: <b><tt>snapshots/{@ref QdrantDataProvider::QdrantSnapshotsListCollectionDataProvider "list-collection",
+      @ref QdrantDataProvider::QdrantSnapshotsCreateCollectionDataProvider "create-collection",
+      @ref QdrantDataProvider::QdrantSnapshotsDeleteCollectionDataProvider "delete-collection",
+      @ref QdrantDataProvider::QdrantSnapshotsRecoverDataProvider "recover",
+      @ref QdrantDataProvider::QdrantSnapshotsListStorageDataProvider "list-storage",
+      @ref QdrantDataProvider::QdrantSnapshotsCreateStorageDataProvider "create-storage",
+      @ref QdrantDataProvider::QdrantSnapshotsDeleteStorageDataProvider "delete-storage"}</tt></b>
+    - cluster: <b><tt>cluster/{@ref QdrantDataProvider::QdrantClusterInfoDataProvider "info",
+      @ref QdrantDataProvider::QdrantClusterRecoverDataProvider "recover",
+      @ref QdrantDataProvider::QdrantClusterRemovePeerDataProvider "remove-peer",
+      @ref QdrantDataProvider::QdrantClusterCollectionInfoDataProvider "collection-info",
+      @ref QdrantDataProvider::QdrantClusterUpdateCollectionDataProvider "update-collection",
+      @ref QdrantDataProvider::QdrantClusterCreateShardKeyDataProvider "create-shard-key",
+      @ref QdrantDataProvider::QdrantClusterDeleteShardKeyDataProvider "delete-shard-key"}</tt></b>
+    - service: <b><tt>service/{@ref QdrantDataProvider::QdrantServiceHealthDataProvider "health",
+      @ref QdrantDataProvider::QdrantServiceLivenessDataProvider "liveness",
+      @ref QdrantDataProvider::QdrantServiceReadinessDataProvider "readiness",
+      @ref QdrantDataProvider::QdrantServiceTelemetryDataProvider "telemetry",
+      @ref QdrantDataProvider::QdrantServiceMetricsDataProvider "metrics",
+      @ref QdrantDataProvider::QdrantServiceIssuesDataProvider "issues"}</tt></b>
+    - tables: <b><tt>tables/{collection-name}</tt></b> — record-based access to Qdrant collections providing
+      DPAT_FIND vector similarity search with record streaming (see
+      @ref QdrantDataProvider::QdrantCollectionTableDataProvider)
+
+    @section qdrantdataprovider_factory Qdrant Data Provider Factory
+
+    The name of the Qdrant data provider factory is <b><tt>qdrant</tt></b>.
+
+    @section qdrantdataprovider_examples Qdrant Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: List All Collections
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/collections/list'
+    @endverbatim
+
+    @par API Example: Create a Collection
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/collections/create' \
+      collection=my-collection,'vectors={size=384,distance=Cosine}'
+    @endverbatim
+
+    @par API Example: Upsert Points
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/points/upsert' \
+      collection=my-collection,'points=[{id=1,vector=[0.1,0.2,0.3],payload={text="hello"}}]'
+    @endverbatim
+
+    @par API Example: Query Points (Vector Search)
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/search/query' \
+      collection=my-collection,'query=[0.1,0.2,0.3]',limit=10
+    @endverbatim
+
+    @par API Example: Delete a Collection
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/collections/delete' collection=my-collection
+    @endverbatim
+
+    @par API Example: Health Check
+    @verbatim qdp 'qdrant{url=http://localhost:6333}/service/health'
+    @endverbatim
+
+    @section qdrantdataprovider_relnotes Release Notes
+
+    @subsection qdrantdataprovider_v1_0 QdrantDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the QdrantDataProvider module
+public namespace QdrantDataProvider {
+#! Qdrant logo
+public const QdrantLogo = File::readTextFile(get_script_dir() + "/qdrant-logo.svg");
+}

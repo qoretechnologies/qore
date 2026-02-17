@@ -26,7 +26,7 @@
 public namespace DataProvider {
 
 #! Parsed aggregate specification for the group-by processor
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl GroupByAggSpec {
     #! Output field name for the aggregate result
@@ -64,7 +64,7 @@ public hashdecl GroupByAggSpec {
     });
     @endcode
 
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 public class QoreGroupByProcessor inherits AbstractDataProvider {
     public {

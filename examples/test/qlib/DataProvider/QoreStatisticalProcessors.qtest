@@ -1,0 +1,788 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class QoreStatisticalProcessorsTest
+
+#! Simple sink processor for collecting pipeline output
+class TestSinkProcessor inherits DataProvider::AbstractDataProcessor {
+    public {
+        list<auto> results;
+    }
+
+    private submitImpl(code enqueue, auto _data) {
+        push results, _data;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+class QoreStatisticalProcessorsTest inherits QUnit::Test {
+    constructor() : Test("QoreStatisticalProcessorsTest", "1.0") {
+        # Percentile tests
+        addTestCase("percentile - basic window", \percentileBasicWindow());
+        addTestCase("percentile - median correctness", \percentileMedian());
+        addTestCase("percentile - custom percentiles", \percentileCustom());
+        addTestCase("percentile - IQR correctness", \percentileIQR());
+        addTestCase("percentile - skewness symmetric", \percentileSkewSymmetric());
+        addTestCase("percentile - skewness right-skewed", \percentileSkewRight());
+        addTestCase("percentile - kurtosis", \percentileKurtosis());
+        addTestCase("percentile - single value", \percentileSingleValue());
+        addTestCase("percentile - capabilities", \percentileCapabilities());
+
+        # Correlation tests
+        addTestCase("correlation - perfect positive", \correlationPerfectPositive());
+        addTestCase("correlation - perfect negative", \correlationPerfectNegative());
+        addTestCase("correlation - no correlation", \correlationNone());
+        addTestCase("correlation - matrix symmetry", \correlationSymmetry());
+        addTestCase("correlation - too few fields", \correlationTooFewFields());
+        addTestCase("correlation - flush partial", \correlationFlushPartial());
+        addTestCase("correlation - flush single record", \correlationFlushSingleRecord());
+        addTestCase("correlation - capabilities", \correlationCapabilities());
+
+        # Cross-correlation tests
+        addTestCase("cross-correlation - known delay", \crossCorrKnownDelay());
+        addTestCase("cross-correlation - no correlation", \crossCorrNone());
+        addTestCase("cross-correlation - max_lag respected", \crossCorrMaxLag());
+        addTestCase("cross-correlation - same fields error", \crossCorrSameFields());
+        addTestCase("cross-correlation - capabilities", \crossCorrCapabilities());
+
+        # Histogram tests
+        addTestCase("histogram - uniform binning", \histogramUniform());
+        addTestCase("histogram - quantile binning", \histogramQuantile());
+        addTestCase("histogram - custom bins", \histogramCustomBins());
+        addTestCase("histogram - frequencies sum to 1", \histogramFreqSum());
+        addTestCase("histogram - all identical values", \histogramIdentical());
+        addTestCase("histogram - capabilities", \histogramCapabilities());
+
+        # Rate of change tests
+        addTestCase("rate-of-change - constant rate", \rocConstantRate());
+        addTestCase("rate-of-change - zero change", \rocZeroChange());
+        addTestCase("rate-of-change - acceleration", \rocAcceleration());
+        addTestCase("rate-of-change - percent change", \rocPercentChange());
+        addTestCase("rate-of-change - no smoothing", \rocNoSmoothing());
+        addTestCase("rate-of-change - capabilities", \rocCapabilities());
+
+        # EWMA Control Chart tests
+        addTestCase("ewma - stable process", \ewmaStable());
+        addTestCase("ewma - upper violation", \ewmaUpperViolation());
+        addTestCase("ewma - lower violation", \ewmaLowerViolation());
+        addTestCase("ewma - custom lambda", \ewmaCustomLambda());
+        addTestCase("ewma - invalid lambda", \ewmaInvalidLambda());
+        addTestCase("ewma - capabilities", \ewmaCapabilities());
+
+        # Seasonality Detection tests
+        addTestCase("seasonality - periodic signal", \seasonalityPeriodic());
+        addTestCase("seasonality - no seasonality", \seasonalityNone());
+        addTestCase("seasonality - min_correlation filter", \seasonalityMinCorrelation());
+        addTestCase("seasonality - capabilities", \seasonalityCapabilities());
+
+        # Integration tests
+        addTestCase("integration - navigation children", \integrationChildren());
+        addTestCase("integration - action registration", \integrationActions());
+        addTestCase("integration - pipeline percentile", \integrationPipeline());
+
+        set_return_value(main());
+    }
+
+    # --- Percentile Tests ---
+
+    percentileBasicWindow() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq("percentile", result.event_type);
+        assertEq("val", result.field);
+        assertEq(5, result.window_size);
+        assertEq(1, result.window_count);
+        assertEq(5, result.count);
+        assertEq(10.0, result.min_val);
+        assertEq(50.0, result.max_val);
+    }
+
+    percentileMedian() {
+        # odd count: median is middle value
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (50.0, 10.0, 30.0, 20.0, 40.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(30.0, result.percentiles.p50);
+
+        # even count: median is average of two middle values
+        QorePercentileProcessor proc2({"fields": "val", "window_size": 4});
+        list<float> values2 = (10.0, 20.0, 30.0, 40.0);
+        *auto result2;
+        foreach float v in (values2) {
+            result2 = proc2.processRecord({"val": v});
+        }
+        assertEq(True, abs(result2.percentiles.p50 - 25.0) < 0.01);
+    }
+
+    percentileCustom() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 100, "percentiles": "10,50,90"});
+        *auto result;
+        for (int i = 1; i <= 100; ++i) {
+            result = proc.processRecord({"val": float(i)});
+        }
+        assertEq(True, exists result);
+        assertEq(True, result.percentiles.hasKey("p10"));
+        assertEq(True, result.percentiles.hasKey("p50"));
+        assertEq(True, result.percentiles.hasKey("p90"));
+        # p50 of 1..100 should be ~50.5
+        assertEq(True, abs(result.percentiles.p50 - 50.5) < 0.1);
+    }
+
+    percentileIQR() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        # p25=20, p75=40, IQR=20
+        assertEq(20.0, result.iqr);
+    }
+
+    percentileSkewSymmetric() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        # symmetric data: skewness should be ~0
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, abs(result.skewness) < 0.01);
+    }
+
+    percentileSkewRight() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 6});
+        # right-skewed data: most values small, one large
+        list<float> values = (1.0, 2.0, 3.0, 4.0, 5.0, 100.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, result.skewness > 0.5);
+    }
+
+    percentileKurtosis() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        # uniform-like data: excess kurtosis should be negative (platykurtic)
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, result.kurtosis < 0.0);
+    }
+
+    percentileSingleValue() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 1});
+        *auto result = proc.processRecord({"val": 42.0});
+        assertEq(True, exists result);
+        assertEq(42.0, result.percentiles.p50);
+        assertEq(0.0, result.iqr);
+        assertEq(42.0, result.min_val);
+        assertEq(42.0, result.max_val);
+    }
+
+    percentileCapabilities() {
+        QorePercentileProcessor proc({"fields": "val", "window_size": 5});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    # --- Correlation Tests ---
+
+    correlationPerfectPositive() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 5});
+        list<hash<auto>> records = (
+            {"x": 1.0, "y": 2.0},
+            {"x": 2.0, "y": 4.0},
+            {"x": 3.0, "y": 6.0},
+            {"x": 4.0, "y": 8.0},
+            {"x": 5.0, "y": 10.0},
+        );
+        *auto result;
+        foreach hash<auto> rec in (records) {
+            result = proc.processRecord(rec);
+        }
+        assertEq(True, exists result);
+        assertEq("correlation", result.event_type);
+        assertEq(True, abs(result.correlations.x_y - 1.0) < 0.0001);
+    }
+
+    correlationPerfectNegative() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 5});
+        list<hash<auto>> records = (
+            {"x": 1.0, "y": 10.0},
+            {"x": 2.0, "y": 8.0},
+            {"x": 3.0, "y": 6.0},
+            {"x": 4.0, "y": 4.0},
+            {"x": 5.0, "y": 2.0},
+        );
+        *auto result;
+        foreach hash<auto> rec in (records) {
+            result = proc.processRecord(rec);
+        }
+        assertEq(True, abs(result.correlations.x_y - (-1.0)) < 0.0001);
+    }
+
+    correlationNone() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 4});
+        # construct data where x and y are uncorrelated
+        list<hash<auto>> records = (
+            {"x": 1.0, "y": 5.0},
+            {"x": 2.0, "y": 3.0},
+            {"x": 3.0, "y": 5.0},
+            {"x": 4.0, "y": 3.0},
+        );
+        *auto result;
+        foreach hash<auto> rec in (records) {
+            result = proc.processRecord(rec);
+        }
+        # should be close to 0
+        assertEq(True, abs(result.correlations.x_y) < 0.5);
+    }
+
+    correlationSymmetry() {
+        QoreCorrelationProcessor proc({"fields": "a,b,c", "window_size": 5});
+        *auto result;
+        for (int i = 0; i < 5; ++i) {
+            result = proc.processRecord({
+                "a": float(i),
+                "b": float(i * 2),
+                "c": float(5 - i),
+            });
+        }
+        assertEq(True, exists result);
+        # matrix should be symmetric
+        assertEq(True, abs(result.matrix.a.b - result.matrix.b.a) < 0.0001);
+        assertEq(True, abs(result.matrix.a.c - result.matrix.c.a) < 0.0001);
+        # diagonal should be 1.0
+        assertEq(True, abs(result.matrix.a.a - 1.0) < 0.0001);
+        assertEq(True, abs(result.matrix.b.b - 1.0) < 0.0001);
+    }
+
+    correlationTooFewFields() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreCorrelationProcessor({"fields": "x", "window_size": 5});
+        });
+    }
+
+    correlationFlushPartial() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 10});
+        proc.processRecord({"x": 1.0, "y": 2.0});
+        proc.processRecord({"x": 2.0, "y": 4.0});
+        proc.processRecord({"x": 3.0, "y": 6.0});
+        *list<auto> flushed = proc.flushRecords();
+        assertEq(True, exists flushed);
+        assertEq(1, flushed.size());
+        assertEq(True, abs(flushed[0].correlations.x_y - 1.0) < 0.0001);
+    }
+
+    correlationFlushSingleRecord() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 10});
+        proc.processRecord({"x": 1.0, "y": 2.0});
+        # single record: < 2 needed for correlation, should silently discard
+        *list<auto> flushed = proc.flushRecords();
+        assertEq(True, !exists flushed);
+    }
+
+    correlationCapabilities() {
+        QoreCorrelationProcessor proc({"fields": "x,y", "window_size": 5});
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    # --- Cross-Correlation Tests ---
+
+    crossCorrKnownDelay() {
+        QoreCrossCorrelationProcessor proc({
+            "field_x": "x",
+            "field_y": "y",
+            "window_size": 20,
+            "max_lag": 5,
+        });
+        # create signal where y = x shifted by 3 periods
+        list<float> x_data;
+        for (int i = 0; i < 20; ++i) {
+            push x_data, sin(2.0 * 3.14159265 * i / 7.0);
+        }
+        *auto result;
+        for (int i = 0; i < 20; ++i) {
+            float y_val = i >= 3 ? x_data[i - 3] : 0.0;
+            result = proc.processRecord({"x": x_data[i], "y": y_val});
+        }
+        assertEq(True, exists result);
+        assertEq("cross-correlation", result.event_type);
+        # best lag should be around 3 (y is delayed by 3)
+        assertEq(True, abs(result.best_lag) >= 2 && abs(result.best_lag) <= 4);
+    }
+
+    crossCorrNone() {
+        QoreCrossCorrelationProcessor proc({
+            "field_x": "x",
+            "field_y": "y",
+            "window_size": 10,
+        });
+        # alternating uncorrelated values
+        *auto result;
+        for (int i = 0; i < 10; ++i) {
+            result = proc.processRecord({"x": float(i % 2), "y": float((i + 1) % 2)});
+        }
+        assertEq(True, exists result);
+        # correlations should be bounded
+        assertEq(True, abs(result.best_correlation) <= 1.0);
+    }
+
+    crossCorrMaxLag() {
+        QoreCrossCorrelationProcessor proc({
+            "field_x": "x",
+            "field_y": "y",
+            "window_size": 20,
+            "max_lag": 2,
+        });
+        *auto result;
+        for (int i = 0; i < 20; ++i) {
+            result = proc.processRecord({"x": float(i), "y": float(i)});
+        }
+        assertEq(True, exists result);
+        assertEq(2, result.max_lag);
+        # should have lags -2, -1, 0, 1, 2 = 5 entries
+        assertEq(5, result.lag_correlations.size());
+    }
+
+    crossCorrSameFields() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreCrossCorrelationProcessor({
+                "field_x": "x",
+                "field_y": "x",
+                "window_size": 10,
+            });
+        });
+    }
+
+    crossCorrCapabilities() {
+        QoreCrossCorrelationProcessor proc({
+            "field_x": "x",
+            "field_y": "y",
+            "window_size": 10,
+        });
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    # --- Histogram Tests ---
+
+    histogramUniform() {
+        QoreHistogramProcessor proc({"fields": "val", "window_size": 10, "n_bins": 5});
+        # values 1..10 in 5 bins of width 1.8: [1-2.8), [2.8-4.6), [4.6-6.4), [6.4-8.2), [8.2-10]
+        *auto result;
+        for (int i = 1; i <= 10; ++i) {
+            result = proc.processRecord({"val": float(i)});
+        }
+        assertEq(True, exists result);
+        hash<auto> result0 = result;
+        assertEq("histogram", result0.event_type);
+        assertEq(5, result0.bin_counts.lsize());
+        assertEq(6, result0.bin_edges.lsize());  # N+1 edges
+        assertEq(10, result0.count);
+        # total counts should sum to 10
+        int total = 0;
+        foreach int c in (result0.bin_counts) {
+            total += c;
+        }
+        assertEq(10, total);
+    }
+
+    histogramQuantile() {
+        QoreHistogramProcessor proc({
+            "fields": "val",
+            "window_size": 10,
+            "n_bins": 5,
+            "bin_method": "quantile",
+        });
+        *auto result;
+        for (int i = 1; i <= 10; ++i) {
+            result = proc.processRecord({"val": float(i)});
+        }
+        assertEq(True, exists result);
+        assertEq(5, result.bin_counts.lsize());
+        # total counts should sum to 10
+        int total = 0;
+        foreach int c in (result.bin_counts) {
+            total += c;
+        }
+        assertEq(10, total);
+    }
+
+    histogramCustomBins() {
+        QoreHistogramProcessor proc({"fields": "val", "window_size": 4, "n_bins": 2});
+        list<float> values = (1.0, 2.0, 3.0, 4.0);
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq(2, result.bin_counts.lsize());
+        assertEq(3, result.bin_edges.lsize());
+    }
+
+    histogramFreqSum() {
+        QoreHistogramProcessor proc({"fields": "val", "window_size": 20, "n_bins": 4});
+        *auto result;
+        for (int i = 0; i < 20; ++i) {
+            result = proc.processRecord({"val": float(i)});
+        }
+        assertEq(True, exists result);
+        float freq_sum = 0.0;
+        foreach float f in (result.bin_frequencies) {
+            freq_sum += f;
+        }
+        assertEq(True, abs(freq_sum - 1.0) < 0.0001);
+    }
+
+    histogramIdentical() {
+        QoreHistogramProcessor proc({"fields": "val", "window_size": 5, "n_bins": 3});
+        *auto result;
+        for (int i = 0; i < 5; ++i) {
+            result = proc.processRecord({"val": 42.0});
+        }
+        assertEq(True, exists result);
+        # all values in one bin
+        assertEq(1, result.bin_counts.lsize());
+        assertEq(5, result.bin_counts[0]);
+    }
+
+    histogramCapabilities() {
+        QoreHistogramProcessor proc({"fields": "val", "window_size": 5});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    # --- Rate of Change Tests ---
+
+    rocConstantRate() {
+        QoreRateOfChangeProcessor proc({
+            "fields": "val", "window_size": 10, "smoothing": False,
+        });
+        # linear increase: 10, 20, 30, 40, 50
+        list<float> values = (10.0, 20.0, 30.0, 40.0, 50.0);
+        list<auto> events;
+        foreach float v in (values) {
+            *auto result = proc.processRecord({"val": v});
+            if (exists result) {
+                push events, result;
+            }
+        }
+        assertEq(5, events.size());
+        # first record: no previous, rate=0
+        assertEq(0.0, events[0].rate_of_change);
+        # subsequent records: constant rate of 10
+        for (int i = 1; i < events.size(); ++i) {
+            assertEq(True, abs(events[i].rate_of_change - 10.0) < 0.01);
+        }
+    }
+
+    rocZeroChange() {
+        QoreRateOfChangeProcessor proc({
+            "fields": "val", "window_size": 5, "smoothing": False,
+        });
+        # record-mode: collect per-record events
+        *auto last_result;
+        for (int i = 0; i < 5; ++i) {
+            *auto r = proc.processRecord({"val": 42.0});
+            if (exists r) {
+                last_result = r;
+            }
+        }
+        assertEq(True, exists last_result);
+        assertEq(True, abs(last_result.rate_of_change) < 0.01);
+    }
+
+    rocAcceleration() {
+        QoreRateOfChangeProcessor proc({
+            "fields": "val", "window_size": 10, "smoothing": False,
+        });
+        # quadratic: 1, 4, 9, 16, 25 -> rates: 0, 3, 5, 7, 9 -> accel: 0, 0, 2, 2, 2
+        list<float> values = (1.0, 4.0, 9.0, 16.0, 25.0);
+        list<auto> events;
+        foreach float v in (values) {
+            *auto result = proc.processRecord({"val": v});
+            if (exists result) {
+                push events, result;
+            }
+        }
+        # after the 3rd record, acceleration should be ~2
+        assertEq(True, abs(events[3].acceleration - 2.0) < 0.01);
+        assertEq(True, abs(events[4].acceleration - 2.0) < 0.01);
+    }
+
+    rocPercentChange() {
+        QoreRateOfChangeProcessor proc({
+            "fields": "val", "window_size": 5, "smoothing": False,
+        });
+        proc.processRecord({"val": 100.0});
+        *auto r2 = proc.processRecord({"val": 150.0});
+        # rate=50, prev=100, pct=50%
+        assertEq(True, abs(r2.percent_change - 50.0) < 0.01);
+    }
+
+    rocNoSmoothing() {
+        QoreRateOfChangeProcessor proc({
+            "fields": "val", "window_size": 5, "smoothing": False,
+        });
+        proc.processRecord({"val": 10.0});
+        *auto r2 = proc.processRecord({"val": 20.0});
+        # without smoothing, rate is simple difference: 20 - 10 = 10
+        assertEq(10.0, r2.rate_of_change);
+    }
+
+    rocCapabilities() {
+        QoreRateOfChangeProcessor proc({"fields": "val", "window_size": 5});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    # --- EWMA Control Chart Tests ---
+
+    ewmaStable() {
+        QoreEWMAControlChartProcessor proc({
+            "fields": "val", "window_size": 20, "lambda": 0.2, "sigma_multiplier": 3.0,
+        });
+        # stable process: all values around 10
+        # skip first few records while control limits establish
+        for (int i = 0; i < 20; ++i) {
+            *auto result = proc.processRecord({"val": 10.0 + (i % 2 == 0 ? 0.1 : -0.1)});
+            # after enough history, should be normal
+            if (exists result && i >= 5) {
+                assertEq("normal", result.signal);
+                assertEq(False, result.out_of_control);
+            }
+        }
+    }
+
+    ewmaUpperViolation() {
+        QoreEWMAControlChartProcessor proc({
+            "fields": "val", "window_size": 10, "lambda": 0.2, "sigma_multiplier": 3.0,
+        });
+        # establish baseline
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"val": 10.0 + (i % 2 == 0 ? 0.1 : -0.1)});
+        }
+        # introduce a large upward shift
+        *auto result = proc.processRecord({"val": 100.0});
+        assertEq(True, exists result);
+        assertEq("upper_violation", result.signal);
+        assertEq(True, result.out_of_control);
+        assertEq(True, result.ewma > result.ucl);
+    }
+
+    ewmaLowerViolation() {
+        QoreEWMAControlChartProcessor proc({
+            "fields": "val", "window_size": 10, "lambda": 0.2, "sigma_multiplier": 3.0,
+        });
+        # establish baseline around 100
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({"val": 100.0 + (i % 2 == 0 ? 1.0 : -1.0)});
+        }
+        # introduce a large downward shift
+        *auto result = proc.processRecord({"val": -100.0});
+        assertEq(True, exists result);
+        assertEq("lower_violation", result.signal);
+        assertEq(True, result.out_of_control);
+        assertEq(True, result.ewma < result.lcl);
+    }
+
+    ewmaCustomLambda() {
+        # lambda=1.0 should make EWMA equal to current value
+        QoreEWMAControlChartProcessor proc({
+            "fields": "val", "window_size": 5, "lambda": 1.0,
+        });
+        proc.processRecord({"val": 10.0});
+        *auto r2 = proc.processRecord({"val": 50.0});
+        # with lambda=1.0: ewma = 1.0 * 50 + 0.0 * prev = 50.0
+        assertEq(True, abs(r2.ewma - 50.0) < 0.01);
+    }
+
+    ewmaInvalidLambda() {
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreEWMAControlChartProcessor({
+                "fields": "val", "window_size": 5, "lambda": 0.0,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new QoreEWMAControlChartProcessor({
+                "fields": "val", "window_size": 5, "lambda": 1.5,
+            });
+        });
+    }
+
+    ewmaCapabilities() {
+        QoreEWMAControlChartProcessor proc({"fields": "val", "window_size": 5});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    # --- Seasonality Detection Tests ---
+
+    seasonalityPeriodic() {
+        QoreSeasonalityDetectionProcessor proc({
+            "fields": "val", "window_size": 42,
+        });
+        # sin wave with period 7
+        list<float> values;
+        for (int i = 0; i < 42; ++i) {
+            push values, sin(2.0 * 3.14159265 * i / 7.0);
+        }
+        *auto result;
+        foreach float v in (values) {
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        assertEq(True, result.has_seasonality);
+        assertEq(7, result.dominant_period);
+        assertEq(True, result.dominant_correlation > 0.5);
+    }
+
+    seasonalityNone() {
+        QoreSeasonalityDetectionProcessor proc({
+            "fields": "val", "window_size": 30, "min_correlation": 0.5,
+        });
+        # constant data: no seasonality
+        *auto result;
+        for (int i = 0; i < 30; ++i) {
+            result = proc.processRecord({"val": 42.0});
+        }
+        assertEq(True, exists result);
+        # constant data should not show periodicity
+        assertEq(False, result.has_seasonality);
+    }
+
+    seasonalityMinCorrelation() {
+        QoreSeasonalityDetectionProcessor proc({
+            "fields": "val", "window_size": 42, "min_correlation": 0.99,
+        });
+        # sin wave with some noise — high min_correlation should filter it out
+        *auto result;
+        for (int i = 0; i < 42; ++i) {
+            float v = sin(2.0 * 3.14159265 * i / 7.0) + float(i % 3) * 0.1;
+            result = proc.processRecord({"val": v});
+        }
+        assertEq(True, exists result);
+        # with very high threshold, weak patterns should be filtered
+        assertEq(True, result.periods.lsize() <= 1);
+    }
+
+    seasonalityCapabilities() {
+        QoreSeasonalityDetectionProcessor proc({"fields": "val", "window_size": 30});
+        assertEq(DPC_ANALYTICS, proc.getProcessorCapabilities());
+    }
+
+    # --- Integration Tests ---
+
+    integrationChildren() {
+        AbstractDataProvider root = DataProvider::getFactoryObject("qore-processors");
+        *list<string> children = root.getChildProviderNames();
+        assertEq(True, exists children);
+        # 11 original + 7 new = 18
+        assertEq(18, children.size());
+
+        list<string> new_children = (
+            "percentile", "correlation", "cross-correlation",
+            "histogram", "rate-of-change", "ewma-control-chart",
+            "seasonality-detection",
+        );
+        foreach string name in (new_children) {
+            assertEq(True, children.contains(name),
+                sprintf("child %y should be listed", name));
+        }
+    }
+
+    integrationActions() {
+        *hash<string, hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionHash("Qore");
+        assertEq(True, exists actions);
+
+        # check new analytics actions
+        list<string> analytics_actions = (
+            "percentile", "histogram", "rate-of-change",
+            "ewma-control-chart", "seasonality-detection",
+        );
+        foreach string action_name in (analytics_actions) {
+            assertEq(True, actions.hasKey(action_name),
+                sprintf("action %y should exist", action_name));
+            assertEq(DPAT_PIPELINE_PROCESSOR, actions{action_name}.action_code);
+            assertEq(DPC_ANALYTICS, actions{action_name}.processor_capabilities,
+                sprintf("action %y should have DPC_ANALYTICS capability", action_name));
+        }
+
+        # check aggregate actions
+        list<string> agg_actions = ("correlation", "cross-correlation");
+        foreach string action_name in (agg_actions) {
+            assertEq(True, actions.hasKey(action_name),
+                sprintf("action %y should exist", action_name));
+            assertEq(DPC_AGGREGATE, actions{action_name}.processor_capabilities,
+                sprintf("action %y should have DPC_AGGREGATE capability", action_name));
+        }
+
+        # total should be 11 original + 7 new = 18
+        assertEq(18, actions.size());
+    }
+
+    integrationPipeline() {
+        # pipeline: source -> percentile -> sink
+        QorePercentileProcessor pct({"fields": "val", "window_size": 5});
+        TestSinkProcessor sink();
+
+        DataProviderPipeline pipeline();
+        pipeline.append(pct);
+        pipeline.append(sink);
+
+        list<hash<auto>> input = (
+            {"val": 1.0},
+            {"val": 2.0},
+            {"val": 3.0},
+            {"val": 4.0},
+            {"val": 5.0},
+        );
+
+        foreach hash<auto> rec in (input) {
+            pipeline.submit(rec);
+        }
+        pipeline.waitDone();
+
+        assertEq(1, sink.results.size());
+        assertEq("percentile", sink.results[0].event_type);
+        assertEq(3.0, sink.results[0].percentiles.p50);
+    }
+}

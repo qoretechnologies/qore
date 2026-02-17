@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ConnectionSchemeCache.qc module for data access and introspection
 
-/** ConnectionSchemeCache.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** ConnectionSchemeCache.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,24 +26,6 @@
 
 #! Contains all public definitions in the ConnectionProvider module
 public namespace ConnectionProvider {
-#! Connection option information
-public hashdecl ConnectionOptionInfo inherits DataProvider::BaseOptionInfo {
-    #! Option value type
-    string type;
-
-    #! Should the option be preselected in UIs?
-    bool preselected = False;
-
-    #! Do environment variable substitution on the value?
-    bool subst_env_vars = False;
-
-    #! Modifier for the "file-as-string" type; can a freeform location option be returned?
-    bool freeform = False;
-
-    #! Ignore types for backwards compatibility when an option changes type
-    *hash<string, bool> ignore_types;
-}
-
 #! Connection provider information
 public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
     #! Connection scheme set; scheme -> True
@@ -109,6 +91,8 @@ public class ConnectionSchemeCache {
 
             "cin7core": "Cin7CoreRestClient",
 
+            "db": "DbDataProvider",
+
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
@@ -122,6 +106,9 @@ public class ConnectionSchemeCache {
             "esrests": "ElasticSearchDataProvider",
 
             "freshbooks": "FreshBooksRestClient",
+
+            "qdrantrest": "QdrantDataProvider",
+            "qdrantrests": "QdrantDataProvider",
 
             "gcal": "GoogleRestClient",
             "gmail": "GoogleRestClient",

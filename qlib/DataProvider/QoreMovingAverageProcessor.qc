@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that computes simple moving average (SMA) and exponential moving average (EMA) per record
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
     public {
