@@ -445,7 +445,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq("Qore", app.name);
         assertEq("Qore", app.display_name);
         assertEq(True, app.logo.val());
-        assertEq("qore-q-logo.svg", app.logo_file_name);
+        assertEq("Qore-Q-square.svg", app.logo_file_name);
         assertEq(MimeTypeSvg, app.logo_mime_type);
     }
 

@@ -2779,6 +2779,196 @@ public class DataProviderTest inherits QUnit::Test {
             DataProviderActionCatalog::deregisterDynamicApp(app);
         }
 
+        # Test that getApp() initializes pending actions and sets supports_* flags
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test lazy init",
+                "short_desc": "test lazy init app",
+                "desc": "test lazy init description",
+                "groups": ("Test",),
+                "logo": "<svg></svg>",
+                "logo_file_name": "test.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # register action lazily via registerPendingAppAction
+            DataProviderActionCatalog::registerPendingAppAction(app, "lazy-processor", sub () {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": app,
+                    "path": "/lazy",
+                    "action": "lazy-processor",
+                    "display_name": "Lazy Processor",
+                    "short_desc": "lazy processor for test",
+                    "desc": "lazy processor for test",
+                    "action_code": DPAT_PIPELINE_PROCESSOR,
+                    "processor_capabilities": DPC_TRANSFORM,
+                });
+            });
+
+            # verify getApp() initializes lazy actions and sets supports_pipeline_processors
+            *hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getApp(app);
+            assertTrue(app_info.supports_pipeline_processors);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
+        # Test that getAppEx() initializes pending actions and sets supports_* flags
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test lazy init ex",
+                "short_desc": "test lazy init ex app",
+                "desc": "test lazy init ex description",
+                "groups": ("Test",),
+                "logo": "<svg></svg>",
+                "logo_file_name": "test.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # register action lazily
+            DataProviderActionCatalog::registerPendingAppAction(app, "lazy-api", sub () {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": app,
+                    "path": "/lazy-api",
+                    "action": "lazy-api",
+                    "display_name": "Lazy API",
+                    "short_desc": "lazy API action for test",
+                    "desc": "lazy API action for test",
+                    "action_code": DPAT_API,
+                });
+            });
+
+            # verify getAppEx() initializes lazy actions and sets supports_apis
+            hash<DataProviderAppInfo> app_info = DataProviderActionCatalog::getAppEx(app);
+            assertTrue(app_info.supports_apis);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
+        # Test that getAllApps() initializes pending actions and sets supports_* flags
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test lazy init all",
+                "short_desc": "test lazy init all app",
+                "desc": "test lazy init all description",
+                "groups": ("Test",),
+                "logo": "<svg></svg>",
+                "logo_file_name": "test.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # register action lazily
+            DataProviderActionCatalog::registerPendingAppAction(app, "lazy-event", sub () {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": app,
+                    "path": "/lazy-event",
+                    "action": "lazy-event",
+                    "display_name": "Lazy Event",
+                    "short_desc": "lazy event action for test",
+                    "desc": "lazy event action for test",
+                    "action_code": DPAT_EVENT,
+                });
+            });
+
+            # verify getAllApps() initializes lazy actions and sets supports_events
+            *list<hash<DataProviderAppInfo>> all_apps = DataProviderActionCatalog::getAllApps();
+            *hash<DataProviderAppInfo> found = (map $1, all_apps, $1.name == app)[0];
+            assertTrue(found.val());
+            assertTrue(found.supports_events);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
+        # Test that searchAppRegex() initializes pending actions and sets supports_* flags
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test lazy search regex",
+                "short_desc": "test lazy search regex app",
+                "desc": "test lazy search regex description",
+                "groups": ("Test",),
+                "logo": "<svg></svg>",
+                "logo_file_name": "test.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # register action lazily
+            DataProviderActionCatalog::registerPendingAppAction(app, "lazy-find", sub () {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": app,
+                    "path": "/lazy-find",
+                    "action": "lazy-find",
+                    "display_name": "Lazy Find",
+                    "short_desc": "lazy find action for test",
+                    "desc": "lazy find action for test",
+                    "action_code": DPAT_FIND,
+                });
+            });
+
+            # verify searchAppRegex() initializes lazy actions and sets supports_find
+            *list<hash<DataProviderAppInfo>> results = DataProviderActionCatalog::searchAppRegex(app);
+            assertEq(1, results.size());
+            assertTrue(results[0].supports_find);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
+        # Test that searchAppSubstr() initializes pending actions and sets supports_* flags
+        {
+            string app = get_random_string();
+            hash<DataProviderAppInfo> my_app = <DataProviderAppInfo>{
+                "name": app,
+                "display_name": "test lazy search substr",
+                "short_desc": "test lazy search substr app",
+                "desc": "test lazy search substr description",
+                "groups": ("Test",),
+                "logo": "<svg></svg>",
+                "logo_file_name": "test.svg",
+                "logo_mime_type": MimeTypeSvg,
+                "dynamic": True,
+            };
+            DataProviderActionCatalog::registerApp(my_app);
+
+            # register action lazily
+            DataProviderActionCatalog::registerPendingAppAction(app, "lazy-create", sub () {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": app,
+                    "path": "/lazy-create",
+                    "action": "lazy-create",
+                    "display_name": "Lazy Create",
+                    "short_desc": "lazy create action for test",
+                    "desc": "lazy create action for test",
+                    "action_code": DPAT_CREATE,
+                });
+            });
+
+            # verify searchAppSubstr() initializes lazy actions and sets supports_create
+            *list<hash<DataProviderAppInfo>> results = DataProviderActionCatalog::searchAppSubstr(app);
+            assertEq(1, results.size());
+            assertTrue(results[0].supports_create);
+
+            # clean up
+            DataProviderActionCatalog::deregisterDynamicApp(app);
+        }
+
         # Test DataProviderInfo and DataProviderSummaryInfo pipeline fields
         {
             TestPipelineDataProvider dp("T");
