@@ -74,6 +74,9 @@ public class DataProvider {
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
 
+            # provided by the cairo module
+            "cairo": "CairoDataProvider",
+
             "cdsrest": "CdsRestDataProvider",
             "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
