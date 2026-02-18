@@ -1501,7 +1501,7 @@ set(QORE_QM_METADATA_DEPENDS qore astparser)
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(
-        COMMAND ${_qore_exe} -ne "%requires json"
+        COMMAND ${_qore_exe} -l json -ne ""
         RESULT_VARIABLE _qore_json_rc
         OUTPUT_QUIET ERROR_QUIET
     )

@@ -130,7 +130,6 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
-                        ${QORE_QM_METADATA_DEPENDS}
                     COMMENT "Extracting metadata from ${_qm_file}"
                     VERBATIM
                 )
@@ -140,7 +139,6 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
-                        ${QORE_QM_METADATA_DEPENDS}
                     COMMENT "Extracting metadata from ${_qm_file}"
                     VERBATIM
                 )
@@ -149,6 +147,10 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
         endforeach()
         add_custom_target(${_module_name}-qm-metadata ALL
             DEPENDS ${_qm_meta_files})
+        if(QORE_QM_METADATA_DEPENDS)
+            add_dependencies(${_module_name}-qm-metadata
+                ${QORE_QM_METADATA_DEPENDS})
+        endif()
         install(FILES ${_qm_meta_files}
                 DESTINATION ${QORE_METADATA_DIR}/${_module_name})
     endif()
@@ -513,12 +515,19 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED QORE_QM_METADATA_SUBDIR)
         set(_um_qm_meta_files "")
+        # use module-specific subdirectory to avoid collisions when
+        # different modules contain .qc files with the same basename
+        set(_um_meta_dir ${CMAKE_CURRENT_BINARY_DIR}/qm-metadata/${f})
+        file(MAKE_DIRECTORY ${_um_meta_dir})
         foreach(_src_file ${_mod_targets})
             get_filename_component(_src_ext ${_src_file} EXT)
             if("${_src_ext}" STREQUAL ".qm" OR "${_src_ext}" STREQUAL ".qc")
+                # resolve relative paths to absolute
+                if(NOT IS_ABSOLUTE "${_src_file}")
+                    set(_src_file "${CMAKE_SOURCE_DIR}/${_src_file}")
+                endif()
                 get_filename_component(_src_name ${_src_file} NAME)
-                set(_meta_out
-                    ${CMAKE_CURRENT_BINARY_DIR}/${_src_name}.meta.json)
+                set(_meta_out ${_um_meta_dir}/${_src_name}.meta.json)
                 if(DEFINED QORE_QM_METADATA_ENV)
                     add_custom_command(OUTPUT ${_meta_out}
                         COMMAND ${CMAKE_COMMAND} -E env
@@ -526,7 +535,6 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                             ${QORE_QM_METADATA_EXECUTABLE}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
-                            ${QORE_QM_METADATA_DEPENDS}
                         COMMENT "Extracting metadata from ${_src_name}"
                         VERBATIM
                     )
@@ -535,7 +543,6 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                         COMMAND ${QORE_QM_METADATA_EXECUTABLE}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
-                            ${QORE_QM_METADATA_DEPENDS}
                         COMMENT "Extracting metadata from ${_src_name}"
                         VERBATIM
                     )
@@ -546,6 +553,10 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         if(_um_qm_meta_files)
             add_custom_target(qm-metadata-${f} ALL
                 DEPENDS ${_um_qm_meta_files})
+            if(QORE_QM_METADATA_DEPENDS)
+                add_dependencies(qm-metadata-${f}
+                    ${QORE_QM_METADATA_DEPENDS})
+            endif()
             install(FILES ${_um_qm_meta_files}
                     DESTINATION
                         ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR})
@@ -663,6 +674,10 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED _external_module_name)
         set(_ext_qm_meta_files "")
+        # use module-specific subdirectory to avoid collisions when
+        # different modules contain .qc files with the same basename
+        set(_ext_meta_dir ${CMAKE_CURRENT_BINARY_DIR}/qm-metadata/${f})
+        file(MAKE_DIRECTORY ${_ext_meta_dir})
         foreach(_src_file ${_mod_targets})
             get_filename_component(_src_ext ${_src_file} EXT)
             if("${_src_ext}" STREQUAL ".qm" OR "${_src_ext}" STREQUAL ".qc")
@@ -671,8 +686,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                     set(_src_file "${CMAKE_SOURCE_DIR}/${_src_file}")
                 endif()
                 get_filename_component(_src_name ${_src_file} NAME)
-                set(_meta_out
-                    ${CMAKE_CURRENT_BINARY_DIR}/${_src_name}.meta.json)
+                set(_meta_out ${_ext_meta_dir}/${_src_name}.meta.json)
                 add_custom_command(OUTPUT ${_meta_out}
                     COMMAND ${QORE_QM_METADATA_EXECUTABLE}
                         ${_src_file} ${_meta_out}

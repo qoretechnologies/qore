@@ -104,7 +104,7 @@ endif()
 # downstream builds skip metadata extraction instead of failing
 if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
     execute_process(
-        COMMAND ${QORE_EXECUTABLE} -ne "%requires json"
+        COMMAND ${QORE_EXECUTABLE} -l json -ne ""
         RESULT_VARIABLE _qore_json_result
         OUTPUT_QUIET ERROR_QUIET
     )
