@@ -80,6 +80,7 @@ public class DataProvider {
             "cairo": "CairoDataProvider",
 
             "cdsrest": "CdsRestDataProvider",
+            "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
@@ -103,6 +104,10 @@ public class DataProvider {
             "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+
+            # provided by the imagemagick module
+            "imagemagick": "ImageMagickDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the jni module

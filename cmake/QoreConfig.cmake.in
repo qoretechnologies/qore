@@ -55,6 +55,13 @@ endif()
 set(QORE_API_VERSION @MODULE_API_MAJOR@.@MODULE_API_MINOR@)
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE @CMAKE_INSTALL_FULL_DATADIR@/qore/Doxyfile.in)
 
+# metadata directory for .meta.json files (API documentation metadata)
+if(DEFINED QORE_METADATA_DIR_OVERRIDE)
+    set(QORE_METADATA_DIR ${QORE_METADATA_DIR_OVERRIDE})
+else()
+    set(QORE_METADATA_DIR @CMAKE_INSTALL_FULL_DATADIR@/qore/metadata)
+endif()
+
 # allow the qore executable to be overridden (for example, when cross-compiling)
 if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     if(NOT DEFINED QORE_EXECUTABLE)
@@ -66,6 +73,7 @@ if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
         set(QORE_QPP_EXECUTABLE "@CMAKE_BINARY_DIR@/qpp${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
     set(QORE_QDX_EXECUTABLE "@CMAKE_SOURCE_DIR@/doxygen/qdx")
+    set(QORE_QM_METADATA_EXECUTABLE "@CMAKE_SOURCE_DIR@/bin/qore-extract-qm-metadata")
     if(DEFINED QJAR_EXECUTABLE)
         set(QORE_QJAR_EXECUTABLE ${QJAR_EXECUTABLE})
     else()
@@ -82,12 +90,29 @@ else()
         set(QORE_QPP_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qpp${CMAKE_EXECUTABLE_SUFFIX})
     endif()
     set(QORE_QDX_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qdx)
+    set(QORE_QM_METADATA_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qore-extract-qm-metadata)
     # allow the qjar executable to be overridden
     if(DEFINED QJAR_EXECUTABLE)
         set(QORE_QJAR_EXECUTABLE ${QJAR_EXECUTABLE})
     else()
         set(QORE_QJAR_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qjar)
     endif()
+endif()
+
+# verify that qore-extract-qm-metadata can run (requires the json binary module);
+# if the json module is not installed, unset QORE_QM_METADATA_EXECUTABLE so that
+# downstream builds skip metadata extraction instead of failing
+if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
+    execute_process(
+        COMMAND ${QORE_EXECUTABLE} -l json -ne ""
+        RESULT_VARIABLE _qore_json_result
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT _qore_json_result EQUAL 0)
+        message(STATUS "Qore json module not available; QM metadata extraction disabled")
+        unset(QORE_QM_METADATA_EXECUTABLE)
+    endif()
+    unset(_qore_json_result)
 endif()
 
 # warning: the same prefix for current qore is used if there is no

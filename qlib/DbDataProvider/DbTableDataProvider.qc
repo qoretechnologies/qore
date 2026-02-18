@@ -468,7 +468,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
         DbOperationTransactionHelper db(table);
+        # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
+        int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
+            ?? AbstractTable::UpsertAuto;
         BulkUpsertOperation bulk(table, upsert_options + {
+            "upsert_strategy": strategy,
             "info_log": sub (string fmt, ...) {
                 logArgs(LoggerLevel::LevelInfo, fmt, argv);
             },

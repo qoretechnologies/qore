@@ -82,6 +82,13 @@ public class QppDocIndex {
             hash<auto> meta = parse_json(content);
             QppDocIndex::indexMetadata(meta, \index);
         }
+        # recurse into subdirectories (per-module metadata layout)
+        list<string> subdirs = d.listDirs();
+        foreach string subdir in (subdirs) {
+            hash<string, hash<auto>> sub_index =
+                QppDocIndex::buildFromDirectory(dir_path + "/" + subdir);
+            index += sub_index;
+        }
         return index;
     }
 

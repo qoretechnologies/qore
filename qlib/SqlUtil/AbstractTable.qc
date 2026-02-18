@@ -7325,6 +7325,21 @@ string sql = table.getAlignSqlString(table2);
     #! returns @ref True "True" if the underlying DB driver supports bulk DML operations
     abstract bool hasArrayBind();
 
+    #! transforms bind arguments for bulk DML operations
+    /** Override in subclasses to apply driver-specific transformations to bind values
+        before they are passed to a prepared statement for bulk execution.
+
+        The default implementation returns the hash values unchanged.
+
+        @param data the hash of column data (column name → values; lists for array columns, scalars for constants)
+        @return the transformed bind arguments as a flat list
+
+        @since %Qore 2.1
+    */
+    list<auto> transformBulkBindArgs(hash<auto> data) {
+        return data.values();
+    }
+
     #! returns the table options for this driver
     /** override in subclasses to return driver-specific options
     */

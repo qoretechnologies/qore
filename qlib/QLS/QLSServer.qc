@@ -623,8 +623,9 @@ public class QLSServer {
             return env_dir;
         }
         # derive from module path: UserModuleDir is <datadir>/qore-modules/
+        # strip trailing slash(es) before dirname() to get correct parent
         hash<auto> info = get_qore_library_info();
-        string datadir = dirname(info.UserModuleDir);
+        string datadir = dirname(regex_subst(info.UserModuleDir, "/+$", ""));
         string metadir = datadir + "/qore/metadata";
         if (is_dir(metadir)) {
             return metadir;

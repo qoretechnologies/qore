@@ -67,6 +67,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/DebugHandler.qm \
 	qlib/Diff.qm \
 	qlib/CdsRestClient.qm \
+	qlib/ChargebeeRestClient.qm \
 	qlib/DiscordRestClient.qm \
 	qlib/DiscordWebSocketClient.qm \
 	qlib/FreshBooksRestClient.qm \
@@ -155,6 +156,7 @@ DOX_SPLIT_MODULES = \
     qlib/ShipStationDataProvider \
     qlib/ShippoDataProvider \
     qlib/SquareDataProvider \
+    qlib/ChargebeeDataProvider \
     qlib/SquarespaceDataProvider \
     qlib/BigMLDataProvider \
     qlib/Cin7CoreDataProvider \
@@ -230,6 +232,7 @@ ServiceNowRestDataProvider_modverdir = $(modverdir)/ServiceNowRestDataProvider
 ShipStationDataProvider_modverdir = $(modverdir)/ShipStationDataProvider
 ShippoDataProvider_modverdir = $(modverdir)/ShippoDataProvider
 SquareDataProvider_modverdir = $(modverdir)/SquareDataProvider
+ChargebeeDataProvider_modverdir = $(modverdir)/ChargebeeDataProvider
 SquarespaceDataProvider_modverdir = $(modverdir)/SquarespaceDataProvider
 BigMLDataProvider_modverdir = $(modverdir)/BigMLDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
@@ -289,6 +292,7 @@ dist_ServiceNowRestDataProvider_modver_DATA = $(wildcard qlib/ServiceNowRestData
 dist_ShipStationDataProvider_modver_DATA = $(wildcard qlib/ShipStationDataProvider/*.q[cm]) $(wildcard qlib/ShipStationDataProvider/*.svg)
 dist_ShippoDataProvider_modver_DATA = $(wildcard qlib/ShippoDataProvider/*.q[cm]) $(wildcard qlib/ShippoDataProvider/*.svg)
 dist_SquareDataProvider_modver_DATA = $(wildcard qlib/SquareDataProvider/*.q[cm]) $(wildcard qlib/SquareDataProvider/*.svg)
+dist_ChargebeeDataProvider_modver_DATA = $(wildcard qlib/ChargebeeDataProvider/*.q[cm]) $(wildcard qlib/ChargebeeDataProvider/*.svg)
 dist_SquarespaceDataProvider_modver_DATA = $(wildcard qlib/SquarespaceDataProvider/*.q[cm]) $(wildcard qlib/SquarespaceDataProvider/*.svg)
 dist_BigMLDataProvider_modver_DATA = $(wildcard qlib/BigMLDataProvider/*.q[cm]) $(wildcard qlib/BigMLDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
@@ -1228,6 +1232,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	doxygen/modules/Doxyfile.in \
 	doxygen/modules/Doxyfile.cmake.in \
 	doxygen/lib/Doxyfile.in \
+	qlib/ChargebeeDataProvider/chargebee-logo.svg \
 	qlib/CdsRestDataProvider/dynamics-logo.svg \
 	qlib/CdsRestDataProvider/business-central-logo.svg \
 	qlib/DbDataProvider/db-logo.svg \
@@ -1650,7 +1655,7 @@ endif
 
 bin_PROGRAMS = qore
 # qr
-dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen bin/qfmt bin/qls
+dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen bin/qfmt bin/qls bin/qore-extract-qm-metadata
 if COND_SINGLE_COMPILATION_UNIT
 qore_SOURCES = qore-single-compilation-unit.cpp
 #qr_SOURCES = qr-single-compilation-unit.cpp

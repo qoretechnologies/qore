@@ -1003,7 +1003,7 @@ if (errors) {
         autocorrelation-based detection of repeating cyclical patterns
     - added the @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" abstract base
       class for building streaming analytics processors with window and record emission modes
-    - added the @ref DPC_ANALYTICS processor capability constant for analytics processors
+    - added the @ref DataProvider::DPC_ANALYTICS "DPC_ANALYTICS" processor capability constant for analytics processors
     - added analytics event hashdecls: @ref DataProvider::AnalyticsEventInfo "AnalyticsEventInfo",
       @ref DataProvider::StatisticsEventInfo "StatisticsEventInfo",
       @ref DataProvider::MovingAverageEventInfo "MovingAverageEventInfo",
@@ -1040,8 +1040,8 @@ if (errors) {
     - made @ref DataProvider::AbstractDataProcessor::submitImpl() "submitImpl()" and
       @ref DataProvider::AbstractDataProcessor::supportsBulkApiImpl() "supportsBulkApiImpl()" non-abstract
       with bidirectional defaults bridging to the new return-based API
-    - added processor capability constants (@ref DPC_TRANSFORM, @ref DPC_FILTER, @ref DPC_EXPAND,
-      @ref DPC_AGGREGATE, @ref DPC_SINK) and
+    - added processor capability constants (@ref DataProvider::DPC_TRANSFORM "DPC_TRANSFORM", @ref DataProvider::DPC_FILTER "DPC_FILTER", @ref DataProvider::DPC_EXPAND "DPC_EXPAND",
+      @ref DataProvider::DPC_AGGREGATE "DPC_AGGREGATE", @ref DataProvider::DPC_SINK "DPC_SINK") and
       @ref DataProvider::AbstractDataProcessor::getProcessorCapabilities() "getProcessorCapabilities()"
     - added utility methods @ref DataProvider::AbstractDataProcessor::hashListToRecords() "hashListToRecords()"
       and @ref DataProvider::AbstractDataProcessor::recordsToHashList() "recordsToHashList()"
@@ -1068,7 +1068,7 @@ if (errors) {
       @ref DataProvider::DataProviderSummaryInfo "DataProviderSummaryInfo" and
       @ref DataProvider::DataProviderInfo "DataProviderInfo"
     - added \c pipeline_processor_options to @ref DataProvider::DataProviderInfo "DataProviderInfo"
-    - added @ref DPAT_PIPELINE_PROCESSOR action type code for pipeline processor actions
+    - added @ref DataProvider::DPAT_PIPELINE_PROCESSOR "DPAT_PIPELINE_PROCESSOR" action type code for pipeline processor actions
     - added \c supports_pipeline_processors to
       @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"
     - added \c processor_capabilities to
