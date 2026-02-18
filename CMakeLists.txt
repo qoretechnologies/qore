@@ -1489,12 +1489,35 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # and then sorted alphabetically inside the groups
 
 # metadata extraction for qlib modules (uses build-tree qore + astparser)
+# QM metadata extraction requires the json binary module (via QoreApiMetadata).
+# On a fresh build json will not be installed yet; re-run cmake after
+# installing the json module to enable QM metadata extraction.
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
     "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_QM_METADATA_DEPENDS qore astparser)
+find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
+if(_qore_exe)
+    execute_process(
+        COMMAND ${_qore_exe} -ne "%requires json"
+        RESULT_VARIABLE _qore_json_rc
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(_qore_json_rc EQUAL 0)
+        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+        message(STATUS "json module available; QM metadata extraction enabled")
+    else()
+        message(STATUS "json module not available; QM metadata extraction disabled"
+            " (re-run cmake after installing json)")
+    endif()
+    unset(_qore_json_rc)
+else()
+    message(STATUS "qore not installed; QM metadata extraction disabled"
+        " (re-run cmake after installing qore and json)")
+endif()
+unset(_qore_exe)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")

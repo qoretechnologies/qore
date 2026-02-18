@@ -99,6 +99,22 @@ else()
     endif()
 endif()
 
+# verify that qore-extract-qm-metadata can run (requires the json binary module);
+# if the json module is not installed, unset QORE_QM_METADATA_EXECUTABLE so that
+# downstream builds skip metadata extraction instead of failing
+if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
+    execute_process(
+        COMMAND ${QORE_EXECUTABLE} -ne "%requires json"
+        RESULT_VARIABLE _qore_json_result
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT _qore_json_result EQUAL 0)
+        message(STATUS "Qore json module not available; QM metadata extraction disabled")
+        unset(QORE_QM_METADATA_EXECUTABLE)
+    endif()
+    unset(_qore_json_result)
+endif()
+
 # warning: the same prefix for current qore is used if there is no
 # CMAKE_INSTALL_PREFIX given
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

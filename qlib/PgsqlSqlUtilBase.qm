@@ -161,7 +161,8 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
-    - \c hasArrayBind() now returns \c True when the underlying driver supports it (pgsql driver v3.3+)
+    - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
+      at runtime to detect driver support (requires pgsql driver v3.3+)
     - added UNNEST-based bulk insert SQL generation in \c insertIntern(): when bulk data (hash-of-lists)
       is passed, generates <tt>INSERT INTO ... SELECT ... FROM unnest(...)</tt> instead of row-by-row
       inserts, with element-level type casts to avoid binary array OID conflicts
@@ -2041,9 +2042,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return addTriggerFunctionUnlocked(tfname, src, trigger);
     }
 
-    #! returns @ref True "True" because the pgsql driver supports array binds / bulk DML operations via UNNEST
+    #! returns @ref True "True" if the pgsql driver supports array binds / bulk DML operations via UNNEST
+    /** Array bind support requires pgsql driver v3.3+ which reports the
+        @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
+    */
     bool hasArrayBind() {
-        return True;
+        return (cast<Datasource>(ds).getCapabilities() & DBI_CAP_HAS_ARRAY_BIND) != 0;
     }
 
     #! Returns the PostgreSQL array cast type suffix for a given column
@@ -2107,8 +2111,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
         }
 
-        if (!is_bulk) {
-            # delegate to base class for single-row inserts
+        if (!is_bulk || !hasArrayBind()) {
+            # delegate to base class for single-row inserts or when driver lacks array bind support
             return AbstractTable::insertIntern(row, \sql, opt, \args);
         }
 
@@ -2269,8 +2273,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! Returns a closure for performing bulk upsert operations using UNNEST + ON CONFLICT
     code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
             *hash<auto> opt) {
-        if (!hasAtomicUpsert()) {
+        if (!hasAtomicUpsert() || !hasArrayBind()) {
             # fall back to default row-by-row closure for old PostgreSQL versions
+            # or when the driver does not support array binding
             return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
         }
 
