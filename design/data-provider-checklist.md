@@ -69,6 +69,10 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 ### DPAT_API Actions
 - [ ] Provider has `"supports_request": True` in `ProviderInfo`
 - [ ] Provider implements `doRequestImpl()`
+- [ ] **Action has `options` populated** via `DataProviderActionCatalog::getActionOptionFromFields()` (without this, the action shows no form fields and is unusable)
+- [ ] **Action has `output_type` set** to the response type (e.g., `MyDataProvider::ResponseType`)
+- [ ] Required/core fields passed with `{"preselected": True, "required": True}`; remaining fields added separately as optional
+- [ ] Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns the value, not a hash — causes `OPTION-ERROR` at module load)
 - [ ] `getRequestTypeWithDataImpl()` validates dynamic fields (if applicable)
 - [ ] ISO timestamp fields use `DateType`, not `SoftStringType`
 - [ ] Required fields match API documentation
@@ -97,7 +101,30 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
-## 5. Option Allowed Values
+## 5. Action Options and Output Types (CRITICAL)
+
+**Action `options` and `output_type` are the primary user interface** — they determine what users see in the action form and what output fields are available for mapping. An action without `options` appears in the catalog but shows an empty, unusable form. An action without `output_type` gives users no visibility into the response.
+
+### options
+- [ ] **Every action has `options` populated** — no exceptions
+- [ ] Options generated via `DataProviderActionCatalog::getActionOptionFromFields()` from request type fields (keeps options in sync with request types)
+- [ ] Preferred: use `ClassName::Fields{"key1", "key2"}` (class constant) instead of `instance.getFields(){"key1", "key2"}`
+- [ ] Core/required fields passed with `{"preselected": True, "required": True}`
+- [ ] Remaining fields added as optional (no extra flags)
+- [ ] Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns a value, not a hash)
+
+### output_type
+- [ ] **Every action has `output_type` set** — preferably via `DataProviderClassName::ResponseType` (class-level static member)
+- [ ] Response type accurately reflects all fields returned by `doRequestImpl()`
+
+### example_value on Request Type Fields
+- [ ] Key numeric fields have `example_value` (e.g., width: `612.0`, height: `792.0` for document dimensions)
+- [ ] Key text fields have `example_value` (e.g., text: `"Hello, World!"`)
+- [ ] Example values are realistic and representative of typical usage
+
+---
+
+## 6. Option Allowed Values
 
 **Every option with a finite set of allowed values MUST declare them explicitly using `allowed_values`** - this enables dropdown generation in the UI. Describing allowed values in text descriptions provides a poor UX because the UI cannot parse free-text descriptions into dropdown options.
 
@@ -131,7 +158,7 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
-## 6. ref_data for ID Fields
+## 7. ref_data for ID Fields
 
 - [ ] Options ending in `_id`, `Id`, or `ID` have `ref_data` attribute (exception: `organization_id` which comes from connection)
 - [ ] `getSupportedReferenceData()` returns all `ref_data` types used in actions
@@ -139,17 +166,20 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
-## 7. Type Safety
+## 8. Type Safety
 
 - [ ] Structured data uses custom `HashDataType` classes, not generic `hash`
 - [ ] Lists specify element types where known
 - [ ] Required fields use non-optional types (`StringType` not `*string`)
 - [ ] Optional fields use optional types (`*string`, `*int`)
 - [ ] Event provider constructor options are optional (values come from context)
+- [ ] Request type classes declare `const Fields` in a `public {}` block (enables `ClassName::Fields` in action registration)
+- [ ] Type classes are declared **inside** the `public namespace ModuleName { ... }` block (not outside it — class constants are unresolvable from `.qm` if outside)
+- [ ] Data provider classes declare `static ... ResponseType()` and `static ... RequestType()` in `public {}` blocks
 
 ---
 
-## 8. Event/Observable Providers
+## 9. Event/Observable Providers
 
 ### Implementation
 - [ ] `getEventTypesImpl()` returns `hash<string, hash<DataProviderMessageInfo>>`
@@ -172,7 +202,7 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
-## 9. Dynamic Options (if applicable)
+## 10. Dynamic Options (if applicable)
 
 - [ ] Action has `"data_dependent_options": True`
 - [ ] Structural determinate option has `"structural_determinate": True` and `"on_change": ("refetch",)`
@@ -182,7 +212,7 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
-## 10. API Coverage
+## 11. API Coverage
 
 For each major resource (identified by having a list action), verify CRUD coverage:
 
@@ -195,7 +225,7 @@ For each major resource (identified by having a list action), verify CRUD covera
 
 ---
 
-## 11. Option Preselection
+## 12. Option Preselection
 
 The UI uses `preselected: True` on action options to determine which fields to show upfront in the form. Without preselection, actions with no required options show an empty form, and users must manually discover available options.
 
@@ -233,7 +263,7 @@ The UI uses `preselected: True` on action options to determine which fields to s
 
 ---
 
-## 12. Naming Consistency
+## 13. Naming Consistency
 
 - [ ] Action names follow `verb-noun` pattern (create-invoice, list-contacts)
 - [ ] Consistent verbs: create, get, update, delete, list, email, search
@@ -242,7 +272,7 @@ The UI uses `preselected: True` on action options to determine which fields to s
 
 ---
 
-## 13. Integration Tests
+## 14. Integration Tests
 
 - [ ] Tests exist in `examples/test/qlib/{ModuleName}/`
 - [ ] Tests verify data persistence (not just 200 OK)
@@ -254,7 +284,7 @@ The UI uses `preselected: True` on action options to determine which fields to s
 
 ---
 
-## 14. Build System and Documentation
+## 15. Build System and Documentation
 
 ### Build Registration (MANDATORY - grep for module name in both files)
 - [ ] `CMakeLists.txt` has `qore_user_module()` entry for REST client module
