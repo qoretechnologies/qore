@@ -334,10 +334,13 @@ public namespace TableMapper {
             bool has_returning;
 
             #! "returning" arguments for sequences
-            list ret_args = ();
+            list<auto> ret_args = ();
 
             #! extra arguments for sequence output binds
-            list out_args = ();
+            list<auto> out_args = ();
+
+            #! sequence bind arguments for prepared statement reuse (sequence names for nextval(%v))
+            list<auto> seq_bind_args = ();
 
             #! "unstable input" option for non-optimized inserts/upserts (~33% performance reduction in insert/upsert speed)
             bool unstable_input = False;
@@ -672,16 +675,23 @@ InboundTableMapper mapper(table, DbMapper);
                     # when executing for the first time on stable input data, get an AbstractSQLStatement for the SQL used to insert
                     if (!stmt) {
                         string sql;
+                        # save sequence bind args (sequence names) for prepared statement reuse
+                        seq_bind_args = map h{$1}.arg, ret_args;
                         out_args = map Type::Number, ret_args;
                         rh = table.insert(h, \sql, ("returning": getReturning()));
                         stmt = table.getDatasource().getSQLStatement();
                         stmt.prepare(sql);
                     } else {
-                        # remove sequences
+                        # remove sequence columns from data hash (their bind values are constant)
                         map remove h.$1, ret_args;
-                        # execute the SQLStatement on the args
-                        stmt.execArgs(h.values() + out_args);
+                        # execute with: sequence names + data values + output type placeholders
+                        stmt.execArgs(seq_bind_args + h.values() + out_args);
                         rh = stmt.getOutput();
+                        # unwrap single-row RETURNING output (values come back as single-element lists)
+                        if (rh) {
+                            rh = map {$1.key: $1.value.typeCode() == NT_LIST
+                                ? $1.value[0] : $1.value}, rh.pairIterator();
+                        }
                     }
                 }
                 if (rh)
@@ -1164,28 +1174,41 @@ on_error table_mapper.rollback();
 
             try {
                 if (upsert) {
-                    if (!upsert_code)
-                        upsert_code = table.getUpsertClosure(hbuf);
+                    if (!upsert_code) {
+                        if (insert_block > 1) {
+                            upsert_code = table.getBulkUpsertClosure(hbuf);
+                        } else {
+                            upsert_code = table.getUpsertClosure(hbuf);
+                        }
+                    }
                     upsert_code(hbuf);
                 } else {
                     # when executing for the first time on stable input data, get an SQLStatement for the SQL used to insert
                     if (!stmt) {
                         string sql;
                         # update sequences to a single value for the insert
-                        if (ret_args && hbuf{ret_args[0]}.typeCode() == NT_LIST)
+                        if (ret_args && hbuf{ret_args[0]}.typeCode() == NT_LIST) {
                             map hbuf.$1 = hbuf.$1[0], ret_args;
+                        }
+                        # save sequence bind args (sequence names) for prepared statement reuse
+                        seq_bind_args = map hbuf{$1}.arg, ret_args;
                         out_args = map Type::Number, ret_args;
                         rh = table.insert(hbuf, \sql, ("returning": getReturning()));
                         # create the statement for future inserts
                         stmt = table.getDatasource().getSQLStatement();
                         stmt.prepare(sql);
                     } else {
-                        # remove sequences
+                        # remove sequence columns from data hash (their bind values are constant)
                         map remove hbuf.$1, ret_args;
-                        # execute the SQLStatement on the args
-                        stmt.execArgs(hbuf.values() + out_args);
+                        # execute with: sequence names + data values + output type placeholders
+                        stmt.execArgs(seq_bind_args + hbuf.values() + out_args);
                         # get sequence values
                         rh = stmt.getOutput();
+                        # unwrap single-row RETURNING output (values come back as single-element lists)
+                        if (rh) {
+                            rh = map {$1.key: $1.value.typeCode() == NT_LIST
+                                ? $1.value[0] : $1.value}, rh.pairIterator();
+                        }
                     }
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -1197,7 +1220,7 @@ on_error table_mapper.rollback();
             }
 
             # get return value
-            hash rv = hbuf + rh;
+            hash<auto!> rv = hbuf + rh;
             if (exists hbuf_size) {
                 # clear buffer but keep hash keys - non-const mapper
                 map hbuf.$1 = (), keys hbuf, hbuf.$1.typeCode() == NT_LIST;
