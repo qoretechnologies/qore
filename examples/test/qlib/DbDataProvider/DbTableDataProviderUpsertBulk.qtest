@@ -1,0 +1,249 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/BulkSqlUtil
+%requires ../../../../qlib/DbDataProvider
+%requires ../../../../qlib/Schema.qm
+
+%exec-class DbTableDataProviderUpsertBulkTest
+
+const TestTableName = "dp_upsert_bulk_test";
+
+#! Schema for the test table
+class TestSchema inherits AbstractSchema {
+    public {
+        const SchemaName = "DpUpsertBulkTestSchema";
+        const SchemaVersion = "1.0";
+
+        const T_Test = {
+            "columns": {
+                "id": c_number(15, True, "PK column"),
+                "name": c_varchar(200, True, "name column"),
+                "value": c_number(15, True, "value column"),
+            },
+            "primary_key": {"name": "pk_" + TestTableName, "columns": "id"},
+        };
+
+        const Tables = {
+            TestTableName: T_Test,
+        };
+    }
+
+    constructor(AbstractDatasource ds, *string dts, *string its) : AbstractSchema(ds, dts, its) {
+    }
+
+    private string getNameImpl() {
+        return SchemaName;
+    }
+
+    private string getVersionImpl() {
+        return SchemaVersion;
+    }
+
+    private *hash<auto> getTablesImpl() {
+        return Tables;
+    }
+}
+
+class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("DbTableDataProviderUpsertBulk", "1.0", \ARGV, MyOpts) {
+        addTestCase("upsertRecordsBulk default strategy", \testUpsertBulkDefaultStrategy());
+        addTestCase("upsertRecordsBulk explicit strategy", \testUpsertBulkExplicitStrategy());
+        addTestCase("upsertRecordsBulk insert then upsert", \testUpsertBulkInsertThenUpsert());
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
+    }
+
+    private Datasource getDatasource() {
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL ?? "";
+        if (!connstr) {
+            throw "SKIP", "no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL";
+        }
+        Datasource ds(connstr);
+        ds.open();
+        return ds;
+    }
+
+    #! Test that upsertRecordsBulk works with the default strategy (no explicit upsert_strategy)
+    /** This was broken: the default string "UpsertAuto" was passed to BulkUpsertOperation
+        which expected an integer constant.
+    */
+    private testUpsertBulkDefaultStrategy() {
+        Datasource ds;
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SKIP") {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        Table t(ds, TestTableName);
+        AbstractTable at = t.getTable();
+        on_success at.commit();
+        on_error at.rollback();
+        at.del({});
+
+        # Get the data provider for the table
+        DbTableDataProvider provider(at);
+
+        # Insert records via upsertRecordsBulk with NO explicit upsert_strategy
+        list<hash<auto>> recs = (
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+            {"id": 3, "name": "carol", "value": 300},
+        );
+
+        # This should not throw — the default "UpsertAuto" string must be mapped to the
+        # integer constant AbstractTable::UpsertAuto
+        *list<string> result = provider.upsertRecordsBulk(recs);
+        assertTrue(exists result, "upsertRecordsBulk should return results");
+        assertEq(3, result.size(), "should have 3 upsert results");
+
+        # Verify records exist
+        list<auto> rows = at.selectRows({"orderby": "id"});
+        assertEq(3, rows.size(), "should have 3 rows");
+        assertEq("alice", rows[0].name);
+        assertEq("bob", rows[1].name);
+        assertEq("carol", rows[2].name);
+    }
+
+    #! Test that upsertRecordsBulk works with an explicit string strategy
+    private testUpsertBulkExplicitStrategy() {
+        Datasource ds;
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SKIP") {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        Table t(ds, TestTableName);
+        AbstractTable at = t.getTable();
+        on_success at.commit();
+        on_error at.rollback();
+        at.del({});
+
+        DbTableDataProvider provider(at);
+
+        list<hash<auto>> recs = (
+            {"id": 1, "name": "dave", "value": 400},
+            {"id": 2, "name": "eve", "value": 500},
+        );
+
+        # Explicit UpsertInsertFirst strategy as string
+        *list<string> result = provider.upsertRecordsBulk(recs, {"upsert_strategy": "UpsertInsertFirst"});
+        assertTrue(exists result, "upsertRecordsBulk with explicit strategy should return results");
+        assertEq(2, result.size(), "should have 2 upsert results");
+
+        list<auto> rows = at.selectRows({"orderby": "id"});
+        assertEq(2, rows.size(), "should have 2 rows");
+        assertEq("dave", rows[0].name);
+        assertEq("eve", rows[1].name);
+    }
+
+    #! Test insert then upsert: records are inserted first, then upserted with updated values
+    private testUpsertBulkInsertThenUpsert() {
+        Datasource ds;
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SKIP") {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        Table t(ds, TestTableName);
+        AbstractTable at = t.getTable();
+        on_success at.commit();
+        on_error at.rollback();
+        at.del({});
+
+        DbTableDataProvider provider(at);
+
+        # First: insert records
+        list<hash<auto>> initial_recs = (
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+        );
+        provider.upsertRecordsBulk(initial_recs);
+
+        # Second: upsert with updated values and a new record
+        list<hash<auto>> updated_recs = (
+            {"id": 1, "name": "alice-updated", "value": 150},
+            {"id": 2, "name": "bob-updated", "value": 250},
+            {"id": 3, "name": "carol", "value": 300},
+        );
+        *list<string> result = provider.upsertRecordsBulk(updated_recs);
+        assertEq(3, result.size(), "should have 3 upsert results");
+
+        # Verify the upserted state
+        list<auto> rows = at.selectRows({"orderby": "id"});
+        assertEq(3, rows.size(), "should have 3 rows after upsert");
+        assertEq("alice-updated", rows[0].name, "alice should be updated");
+        assertEq(150, rows[0].value, "alice value should be updated");
+        assertEq("bob-updated", rows[1].name, "bob should be updated");
+        assertEq(250, rows[1].value, "bob value should be updated");
+        assertEq("carol", rows[2].name, "carol should be inserted");
+        assertEq(300, rows[2].value, "carol value should be correct");
+    }
+}

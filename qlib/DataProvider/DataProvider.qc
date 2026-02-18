@@ -78,6 +78,7 @@ public class DataProvider {
             "cairo": "CairoDataProvider",
 
             "cdsrest": "CdsRestDataProvider",
+            "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",

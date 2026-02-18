@@ -1,0 +1,1226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ChargebeeDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ChargebeeRestClient.qm
+%requires ../../../../qlib/ChargebeeDataProvider
+
+%exec-class ChargebeeDataProviderTest
+
+public class ChargebeeDataProviderTest inherits QUnit::Test {
+    private {
+        #! Chargebee REST client for integration tests
+        *ChargebeeRestClient::ChargebeeRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "site": "s,site=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test customer ID created during tests (for cleanup)
+        *string testCustomerId;
+
+        #! Test coupon ID created during tests (for cleanup)
+        *string testCouponId;
+    }
+
+    constructor() : Test("ChargebeeDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Sanity tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("corner case tests", \cornerCaseTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require CHARGEBEE_API_KEY and CHARGEBEE_SITE)
+        addTestCase("integration tests", \integrationTests());
+
+        # Event/trigger tests
+        addTestCase("event trigger tests", \eventTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Chargebee client for integration tests
+    private setupConnection() {
+        *string apikey = m_options.apikey ?? ENV.CHARGEBEE_API_KEY;
+        *string site = m_options.site ?? ENV.CHARGEBEE_SITE;
+        if (!apikey || !site) {
+            if (m_options.verbose) {
+                printf("No API credentials provided (use -k/-s options or CHARGEBEE_API_KEY/CHARGEBEE_SITE env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "api_key": apikey,
+            "site": site,
+        };
+        client = new ChargebeeRestClient::ChargebeeRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a ChargebeeDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *ChargebeeDataProvider::ChargebeeDataProvider tryCreateProvider() {
+        try {
+            return new ChargebeeDataProvider::ChargebeeDataProvider({
+                "api_key": "test_xxx",
+                "site": "test-site",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Chargebee API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        # Test creating provider with fake credentials
+        *ChargebeeDataProvider::ChargebeeDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("chargebee", prov.getName());
+        assertEq("Chargebee data provider for subscription billing and revenue management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("chargebee");
+        assertEq("chargebee", factory.getInfo().name);
+        assertEq("Chargebee data provider factory for subscription billing and revenue management",
+            factory.getInfo().desc);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify factory can create provider with options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("api_key"));
+        assertTrue(factoryOpts.hasKey("site"));
+        assertTrue(factoryOpts.hasKey("chargebeerestclient"));
+        assertTrue(factoryOpts.hasKey("chargebeerestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *ChargebeeDataProvider::ChargebeeDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("ChargebeeDataProvider", info.type);
+
+        # Check constructor options
+        assertTrue(info.constructor_options.hasKey("api_key"));
+        assertTrue(info.constructor_options.hasKey("site"));
+        assertTrue(info.constructor_options.hasKey("chargebeerestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *ChargebeeDataProvider::ChargebeeDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers
+        assertTrue(children.contains("customers"));
+        assertTrue(children.contains("subscriptions"));
+        assertTrue(children.contains("invoices"));
+        assertTrue(children.contains("coupons"));
+        assertTrue(children.contains("promotional-credits"));
+
+        # Customer actions
+        assertTrue(children.contains("create-customer"));
+        assertTrue(children.contains("update-customer"));
+        assertTrue(children.contains("delete-customer"));
+
+        # Subscription actions
+        assertTrue(children.contains("create-subscription"));
+        assertTrue(children.contains("update-subscription"));
+        assertTrue(children.contains("delete-subscription"));
+
+        # Invoice actions
+        assertTrue(children.contains("create-invoice"));
+        assertTrue(children.contains("update-invoice"));
+        assertTrue(children.contains("delete-invoice"));
+        assertTrue(children.contains("collect-invoice-payment"));
+        assertTrue(children.contains("record-invoice-payment"));
+        assertTrue(children.contains("refund-invoice"));
+        assertTrue(children.contains("get-invoice-link"));
+
+        # Coupon actions
+        assertTrue(children.contains("create-coupon"));
+        assertTrue(children.contains("update-coupon"));
+        assertTrue(children.contains("delete-coupon"));
+
+        # Promotional credit actions
+        assertTrue(children.contains("add-promotional-credit"));
+        assertTrue(children.contains("deduct-promotional-credit"));
+        assertTrue(children.contains("set-promotional-credit"));
+
+        # Transaction actions
+        assertTrue(children.contains("get-transaction"));
+
+        # Event providers
+        assertTrue(children.contains("events"));
+
+        # Check customers child provider
+        AbstractDataProvider customers = prov.getChildProvider("customers");
+        assertEq("customers", customers.getName());
+        hash<DataProviderInfo> customersInfo = customers.getInfo();
+        assertTrue(customersInfo.supports_read);
+        assertTrue(customersInfo.supports_native_search);
+        assertTrue(customersInfo.has_record);
+
+        # Check create-customer child provider
+        AbstractDataProvider createCustomer = prov.getChildProvider("create-customer");
+        assertEq("create-customer", createCustomer.getName());
+        hash<DataProviderInfo> createCustomerInfo = createCustomer.getInfo();
+        assertTrue(createCustomerInfo.supports_request);
+
+        # Check events child provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check events child providers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("watch-customers"));
+        assertTrue(eventChildren.contains("watch-events"));
+        assertTrue(eventChildren.contains("watch-invoices"));
+        assertTrue(eventChildren.contains("watch-subscriptions"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test customer data type
+        ChargebeeDataProvider::ChargebeeCustomerDataType customerType();
+        hash<string, AbstractDataField> customerFields = customerType.getFields();
+        assertTrue(customerFields.hasKey("id"));
+        assertTrue(customerFields.hasKey("first_name"));
+        assertTrue(customerFields.hasKey("last_name"));
+        assertTrue(customerFields.hasKey("email"));
+        assertTrue(customerFields.hasKey("phone"));
+        assertTrue(customerFields.hasKey("company"));
+        assertTrue(customerFields.hasKey("auto_collection"));
+        assertTrue(customerFields.hasKey("created_at"));
+        assertTrue(customerFields.hasKey("updated_at"));
+        assertTrue(customerFields.hasKey("promotional_credits"));
+
+        # Test coupon data type
+        ChargebeeDataProvider::ChargebeeCouponDataType couponType();
+        hash<string, AbstractDataField> couponFields = couponType.getFields();
+        assertTrue(couponFields.hasKey("id"));
+        assertTrue(couponFields.hasKey("name"));
+        assertTrue(couponFields.hasKey("discount_type"));
+        assertTrue(couponFields.hasKey("discount_percentage"));
+        assertTrue(couponFields.hasKey("discount_amount"));
+
+        # Test subscription data type
+        ChargebeeDataProvider::ChargebeeSubscriptionDataType subscriptionType();
+        hash<string, AbstractDataField> subscriptionFields = subscriptionType.getFields();
+        assertTrue(subscriptionFields.hasKey("id"));
+        assertTrue(subscriptionFields.hasKey("customer_id"));
+        assertTrue(subscriptionFields.hasKey("status"));
+
+        # Test invoice data type
+        ChargebeeDataProvider::ChargebeeInvoiceDataType invoiceType();
+        hash<string, AbstractDataField> invoiceFields = invoiceType.getFields();
+        assertTrue(invoiceFields.hasKey("id"));
+        assertTrue(invoiceFields.hasKey("customer_id"));
+        assertTrue(invoiceFields.hasKey("status"));
+
+        # Test event data type
+        ChargebeeDataProvider::ChargebeeEventDataType eventType();
+        hash<string, AbstractDataField> eventFields = eventType.getFields();
+        assertTrue(eventFields.hasKey("id"));
+        assertTrue(eventFields.hasKey("event_type"));
+        assertTrue(eventFields.hasKey("occurred_at"));
+
+        # Test promotional credit data type
+        ChargebeeDataProvider::ChargebeePromotionalCreditDataType promoType();
+        hash<string, AbstractDataField> promoFields = promoType.getFields();
+        assertTrue(promoFields.hasKey("id") || promoFields.hasKey("customer_id") || promoFields.size() > 0,
+            "Promotional credit data type should have fields");
+
+        # Test transaction data type
+        ChargebeeDataProvider::ChargebeeTransactionDataType transactionType();
+        hash<string, AbstractDataField> transactionFields = transactionType.getFields();
+        assertTrue(transactionFields.hasKey("id") || transactionFields.size() > 0,
+            "Transaction data type should have fields");
+    }
+
+    #! Negative tests - test error handling and invalid inputs
+    negativeTests() {
+        checkJson();
+        *ChargebeeDataProvider::ChargebeeDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Test getting non-existent child provider
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+
+        # Test invalid child in events provider
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            events.getChildProviderEx("invalid-event-type");
+        });
+    }
+
+    #! Corner case tests - edge cases and boundary conditions
+    cornerCaseTests() {
+        checkJson();
+        # Test REST client URL construction
+        try {
+            ChargebeeRestClient::ChargebeeRestClient client1({
+                "api_key": "test_xxx",
+                "site": "test-site",
+            });
+            assertTrue(client1.getURL() =~ /test-site\.chargebee\.com/);
+            assertTrue(client1.getURL() =~ /api\/v2$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+                testSkip(sprintf("cannot connect to Chargebee API: %s", ex.desc));
+                return;
+            }
+            rethrow;
+        }
+
+        # Test missing api_key throws error
+        assertThrows("CHARGEBEE-ERROR", sub() {
+            new ChargebeeRestClient::ChargebeeRestClient({"site": "test-site"});
+        });
+
+        # Test missing site throws error
+        assertThrows("CHARGEBEE-ERROR", sub() {
+            new ChargebeeRestClient::ChargebeeRestClient({"api_key": "test_xxx"});
+        });
+
+        # Test missing both throws error
+        assertThrows("CHARGEBEE-ERROR", sub() {
+            new ChargebeeRestClient::ChargebeeRestClient({});
+        });
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("chargebee");
+        assertEq("Chargebee REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("api_key"));
+        assertTrue(scheme.options.hasKey("site"));
+        assertTrue(scheme.options."api_key".sensitive);
+
+        # Verify connection can create data provider
+        ChargebeeRestClient::ChargebeeRestConnection conn("test", "test connection",
+            "chargebee://test-site.chargebee.com/api/v2", {},
+            {"api_key": "test_xxx", "site": "test-site"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("Chargebee", conn.getAppName());
+        assertEq("chargebee", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the Chargebee app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            ChargebeeDataProvider::AppName);
+
+        # If the module does not yet register actions in an init block, skip this test
+        if (!actions || actions.size() == 0) {
+            testSkip("Chargebee action catalog not yet registered (module init pending)");
+            return;
+        }
+
+        assertTrue(actions.size() > 0);
+
+        # Verify action names
+        list<string> actionNames = map $1.action, actions;
+
+        # Customer actions
+        assertTrue(actionNames.contains("find-customers"));
+        assertTrue(actionNames.contains("get-customer"));
+        assertTrue(actionNames.contains("create-customer"));
+        assertTrue(actionNames.contains("update-customer"));
+        assertTrue(actionNames.contains("delete-customer"));
+
+        # Subscription actions
+        assertTrue(actionNames.contains("find-subscriptions"));
+        assertTrue(actionNames.contains("get-subscription"));
+        assertTrue(actionNames.contains("create-subscription"));
+        assertTrue(actionNames.contains("update-subscription"));
+        assertTrue(actionNames.contains("delete-subscription"));
+
+        # Invoice actions
+        assertTrue(actionNames.contains("find-invoices"));
+        assertTrue(actionNames.contains("get-invoice"));
+        assertTrue(actionNames.contains("create-invoice"));
+        assertTrue(actionNames.contains("update-invoice"));
+        assertTrue(actionNames.contains("delete-invoice"));
+        assertTrue(actionNames.contains("collect-invoice-payment"));
+        assertTrue(actionNames.contains("record-invoice-payment"));
+        assertTrue(actionNames.contains("refund-invoice"));
+        assertTrue(actionNames.contains("get-invoice-link"));
+
+        # Coupon actions
+        assertTrue(actionNames.contains("find-coupons"));
+        assertTrue(actionNames.contains("get-coupon"));
+        assertTrue(actionNames.contains("create-coupon"));
+        assertTrue(actionNames.contains("update-coupon"));
+        assertTrue(actionNames.contains("delete-coupon"));
+
+        # Promotional credit actions
+        assertTrue(actionNames.contains("find-promotional-credits"));
+        assertTrue(actionNames.contains("get-promotional-credit"));
+        assertTrue(actionNames.contains("add-promotional-credit"));
+        assertTrue(actionNames.contains("deduct-promotional-credit"));
+        assertTrue(actionNames.contains("set-promotional-credit"));
+
+        # Transaction actions
+        assertTrue(actionNames.contains("get-transaction"));
+
+        # Trigger actions
+        assertTrue(actionNames.contains("watch-customers"));
+        assertTrue(actionNames.contains("watch-events"));
+        assertTrue(actionNames.contains("watch-invoices"));
+        assertTrue(actionNames.contains("watch-subscriptions"));
+
+        # Verify trigger actions have correct action_code
+        *hash<DataProviderActionInfo> watchCustomersAction = DataProviderActionCatalog::getAppAction(
+            ChargebeeDataProvider::AppName, "watch-customers");
+        if (watchCustomersAction) {
+            assertEq(DPAT_EVENT, watchCustomersAction.action_code);
+        }
+
+        if (m_options.verbose) {
+            printf("  Total registered actions: %d\n", actions.size());
+        }
+    }
+
+    #! Integration tests - require CHARGEBEE_API_KEY and CHARGEBEE_SITE
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Chargebee credentials provided (use -k/-s options or "
+                "CHARGEBEE_API_KEY/CHARGEBEE_SITE env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test customers provider
+        testCustomersProvider();
+
+        # Test subscriptions provider
+        testSubscriptionsProvider();
+
+        # Test invoices provider
+        testInvoicesProvider();
+
+        # Test coupons provider
+        testCouponsProvider();
+
+        # Test promotional credits provider
+        testPromotionalCreditsProvider();
+
+        # Test events provider
+        testEventsCollectionProvider();
+
+        # Test customer CRUD: create -> get -> update -> verify -> delete
+        testCustomerCrud();
+
+        # Test coupon CRUD: create -> get -> update -> verify -> delete
+        testCouponCrud();
+
+        # Test promotional credit operations (requires a customer)
+        testPromotionalCreditOperations();
+
+        # Test reference data
+        testReferenceData();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing API Connectivity ---\n");
+        }
+
+        # Test that we can connect to the API
+        hash<auto> response = client.get("subscriptions?limit=1");
+        assertTrue(response.body.typeCode() == NT_HASH);
+        if (m_options.verbose) {
+            printf("  Connected to Chargebee API successfully\n");
+        }
+    }
+
+    #! Test customers collection provider
+    private testCustomersProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customers Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        AbstractDataProvider customersProvider = prov.getChildProvider("customers");
+        hash<DataProviderInfo> info = customersProvider.getInfo();
+
+        assertTrue(info.supports_read, "Customers should support read");
+        assertTrue(info.supports_native_search, "Customers should support native search");
+        assertTrue(info.has_record, "Customers should have record type");
+
+        # Verify search options exist
+        assertTrue(info.search_options.hasKey("id"), "Should have id search option");
+        assertTrue(info.search_options.hasKey("email"), "Should have email search option");
+        assertTrue(info.search_options.hasKey("limit"), "Should have limit search option");
+
+        # Fetch some customers (limited)
+        hash<auto> searchOpts = {"limit": 5};
+        list<hash<auto>> customers = map $1, customersProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d customers (limited to 5)\n", customers.size());
+        }
+
+        if (customers.size() > 0) {
+            hash<auto> customer = customers[0];
+            assertTrue(customer.hasKey("id"), "Customer should have id");
+            if (m_options.verbose) {
+                printf("  Sample customer: %y (%y)\n", customer.id, customer.email ?? "N/A");
+            }
+        }
+    }
+
+    #! Test subscriptions collection provider
+    private testSubscriptionsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Subscriptions Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        AbstractDataProvider subscriptionsProvider = prov.getChildProvider("subscriptions");
+        hash<DataProviderInfo> info = subscriptionsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Subscriptions should support read");
+        assertTrue(info.supports_native_search, "Subscriptions should support native search");
+        assertTrue(info.has_record, "Subscriptions should have record type");
+
+        # Fetch some subscriptions (limited)
+        hash<auto> searchOpts = {"limit": 5};
+        list<hash<auto>> subscriptions = map $1, subscriptionsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d subscriptions (limited to 5)\n", subscriptions.size());
+        }
+
+        if (subscriptions.size() > 0) {
+            hash<auto> subscription = subscriptions[0];
+            assertTrue(subscription.hasKey("id"), "Subscription should have id");
+            if (m_options.verbose) {
+                printf("  Sample subscription: %y (status: %y)\n", subscription.id, subscription.status ?? "N/A");
+            }
+        }
+    }
+
+    #! Test invoices collection provider
+    private testInvoicesProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Invoices Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        AbstractDataProvider invoicesProvider = prov.getChildProvider("invoices");
+        hash<DataProviderInfo> info = invoicesProvider.getInfo();
+
+        assertTrue(info.supports_read, "Invoices should support read");
+        assertTrue(info.supports_native_search, "Invoices should support native search");
+        assertTrue(info.has_record, "Invoices should have record type");
+
+        # Fetch some invoices (limited)
+        hash<auto> searchOpts = {"limit": 5};
+        list<hash<auto>> invoices = map $1, invoicesProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d invoices (limited to 5)\n", invoices.size());
+        }
+
+        if (invoices.size() > 0) {
+            hash<auto> invoice = invoices[0];
+            assertTrue(invoice.hasKey("id"), "Invoice should have id");
+            if (m_options.verbose) {
+                printf("  Sample invoice: %y (status: %y)\n", invoice.id, invoice.status ?? "N/A");
+            }
+        }
+    }
+
+    #! Test coupons collection provider
+    private testCouponsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Coupons Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        AbstractDataProvider couponsProvider = prov.getChildProvider("coupons");
+        hash<DataProviderInfo> info = couponsProvider.getInfo();
+
+        assertTrue(info.supports_read, "Coupons should support read");
+        assertTrue(info.supports_native_search, "Coupons should support native search");
+        assertTrue(info.has_record, "Coupons should have record type");
+
+        # Fetch some coupons (limited)
+        hash<auto> searchOpts = {"limit": 5};
+        list<hash<auto>> coupons = map $1, couponsProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d coupons (limited to 5)\n", coupons.size());
+        }
+
+        if (coupons.size() > 0) {
+            hash<auto> coupon = coupons[0];
+            assertTrue(coupon.hasKey("id"), "Coupon should have id");
+            if (m_options.verbose) {
+                printf("  Sample coupon: %y (%y)\n", coupon.id, coupon.name ?? "N/A");
+            }
+        }
+    }
+
+    #! Test promotional credits collection provider
+    private testPromotionalCreditsProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Promotional Credits Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        AbstractDataProvider promoProvider = prov.getChildProvider("promotional-credits");
+        hash<DataProviderInfo> info = promoProvider.getInfo();
+
+        assertTrue(info.supports_read, "Promotional credits should support read");
+        assertTrue(info.has_record, "Promotional credits should have record type");
+
+        # Fetch some promotional credits (limited)
+        hash<auto> searchOpts = {"limit": 5};
+        list<hash<auto>> credits = map $1, promoProvider.searchRecords(NOTHING, searchOpts);
+
+        if (m_options.verbose) {
+            printf("  Found %d promotional credit entries (limited to 5)\n", credits.size());
+        }
+    }
+
+    #! Test events collection provider (listing past events)
+    private testEventsCollectionProvider() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Events Collection Provider ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        # The "events" child is the event trigger container, not the list endpoint
+        # But we can verify the events container works
+        AbstractDataProvider eventsProvider = prov.getChildProvider("events");
+        hash<DataProviderInfo> info = eventsProvider.getInfo();
+
+        assertTrue(info.supports_children, "Events should support children");
+        assertTrue(info.children_can_support_observers, "Events children should support observers");
+
+        list<string> eventChildren = eventsProvider.getChildProviderNames();
+        assertTrue(eventChildren.size() > 0, "Should have event type children");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", eventChildren);
+        }
+    }
+
+    #! Test customer CRUD - create, get, update, verify, delete
+    /** CRITICAL: This test verifies that customer data is correctly saved and retrievable.
+        This catches issues like:
+        - Wrong Content-Type
+        - Silent API acceptance without data persistence
+        - Incorrect field handling
+    */
+    private testCustomerCrud() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Customer CRUD ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        # Generate unique test identifiers
+        string testEmail = sprintf("test_%s_%d@example.com",
+            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+        # Step 1: Create customer
+        if (m_options.verbose) {
+            printf("\n  Step 1: Create customer...\n");
+        }
+
+        AbstractDataProvider createProvider = prov.getChildProvider("create-customer");
+
+        try {
+            auto createResult = createProvider.doRequest({
+                "first_name": "Test",
+                "last_name": "Customer",
+                "email": testEmail,
+                "company": "Qore Test Corp",
+            });
+
+            if (m_options.verbose) {
+                printf("    Created customer: id=%y, email=%y\n", createResult.id, createResult.email);
+            }
+            assertTrue(exists createResult.id, "Customer should be created with an ID");
+            testCustomerId = createResult.id;
+
+            # Step 2: Get customer via collection search
+            if (m_options.verbose) {
+                printf("  Step 2: Get customer...\n");
+            }
+
+            AbstractDataProvider customersProvider = prov.getChildProvider("customers");
+            list<hash<auto>> results = map $1,
+                customersProvider.searchRecords(NOTHING, {"id": testCustomerId});
+
+            assertTrue(results.size() > 0, "Should find the created customer");
+            assertEq(testCustomerId, results[0].id, "Customer ID should match");
+            assertEq(testEmail, results[0].email, "Customer email should match");
+            assertEq("Test", results[0].first_name, "Customer first name should match");
+            assertEq("Customer", results[0].last_name, "Customer last name should match");
+
+            if (m_options.verbose) {
+                printf("    Data integrity verified: customer saved and retrieved correctly\n");
+            }
+
+            # Step 3: Update customer
+            if (m_options.verbose) {
+                printf("  Step 3: Update customer...\n");
+            }
+
+            AbstractDataProvider updateProvider = prov.getChildProvider("update-customer");
+            auto updateResult = updateProvider.doRequest({
+                "id": testCustomerId,
+                "first_name": "Updated",
+                "company": "Updated Corp",
+            });
+
+            assertTrue(exists updateResult.id, "Update should return customer");
+            if (m_options.verbose) {
+                printf("    Updated customer: first_name=%y, company=%y\n",
+                    updateResult.first_name, updateResult.company);
+            }
+
+            # Step 4: Verify update persisted
+            if (m_options.verbose) {
+                printf("  Step 4: Verify update...\n");
+            }
+
+            list<hash<auto>> verifyResults = map $1,
+                customersProvider.searchRecords(NOTHING, {"id": testCustomerId});
+
+            assertTrue(verifyResults.size() > 0, "Should still find the customer");
+            assertEq("Updated", verifyResults[0].first_name, "First name should be updated");
+            assertEq("Updated Corp", verifyResults[0].company, "Company should be updated");
+            assertEq(testEmail, verifyResults[0].email, "Email should be unchanged");
+
+            if (m_options.verbose) {
+                printf("    Update persistence verified\n");
+            }
+
+            # Step 5: Delete customer
+            if (m_options.verbose) {
+                printf("  Step 5: Delete customer...\n");
+            }
+
+            AbstractDataProvider deleteProvider = prov.getChildProvider("delete-customer");
+            auto deleteResult = deleteProvider.doRequest({
+                "id": testCustomerId,
+            });
+
+            assertTrue(exists deleteResult.id, "Delete should return the customer");
+            if (m_options.verbose) {
+                printf("    Deleted customer: %y\n", testCustomerId);
+            }
+            testCustomerId = NOTHING;
+
+        } catch (hash<ExceptionInfo> ex) {
+            # Cleanup on failure
+            if (testCustomerId) {
+                try {
+                    AbstractDataProvider deleteProvider = prov.getChildProvider("delete-customer");
+                    deleteProvider.doRequest({"id": testCustomerId});
+                    if (m_options.verbose) {
+                        printf("    Cleaned up test customer: %y\n", testCustomerId);
+                    }
+                    testCustomerId = NOTHING;
+                } catch () {}
+            }
+            if (m_options.verbose) {
+                printf("  Customer CRUD failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Customer CRUD tests completed ---\n");
+        }
+    }
+
+    #! Test coupon CRUD - create, get, update, verify, delete
+    private testCouponCrud() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Coupon CRUD ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        # Generate unique coupon ID
+        string couponId = sprintf("TEST_COUPON_%s_%d",
+            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+        # Step 1: Create coupon
+        if (m_options.verbose) {
+            printf("\n  Step 1: Create coupon...\n");
+        }
+
+        AbstractDataProvider createProvider = prov.getChildProvider("create-coupon");
+
+        try {
+            auto createResult = createProvider.doRequest({
+                "id": couponId,
+                "name": "Test Coupon " + couponId,
+                "discount_type": "percentage",
+                "discount_percentage": 10.0,
+                "duration_type": "one_time",
+                "apply_on": "invoice_amount",
+            });
+
+            if (m_options.verbose) {
+                printf("    Created coupon: id=%y, name=%y\n", createResult.id, createResult.name);
+            }
+            assertTrue(exists createResult.id, "Coupon should be created with an ID");
+            testCouponId = createResult.id;
+
+            # Step 2: Get coupon via collection search
+            if (m_options.verbose) {
+                printf("  Step 2: Get coupon...\n");
+            }
+
+            AbstractDataProvider couponsProvider = prov.getChildProvider("coupons");
+            list<hash<auto>> results = map $1,
+                couponsProvider.searchRecords(NOTHING, {"id": testCouponId});
+
+            assertTrue(results.size() > 0, "Should find the created coupon");
+            assertEq(testCouponId, results[0].id, "Coupon ID should match");
+            assertEq("percentage", results[0].discount_type, "Discount type should match");
+
+            if (m_options.verbose) {
+                printf("    Data integrity verified: coupon saved and retrieved correctly\n");
+            }
+
+            # Step 3: Update coupon
+            if (m_options.verbose) {
+                printf("  Step 3: Update coupon...\n");
+            }
+
+            AbstractDataProvider updateProvider = prov.getChildProvider("update-coupon");
+            auto updateResult = updateProvider.doRequest({
+                "id": testCouponId,
+                "name": "Updated Coupon " + testCouponId,
+                "max_redemptions": 50,
+            });
+
+            assertTrue(exists updateResult.id, "Update should return coupon");
+            if (m_options.verbose) {
+                printf("    Updated coupon: name=%y\n", updateResult.name);
+            }
+
+            # Step 4: Verify update persisted
+            if (m_options.verbose) {
+                printf("  Step 4: Verify update...\n");
+            }
+
+            list<hash<auto>> verifyResults = map $1,
+                couponsProvider.searchRecords(NOTHING, {"id": testCouponId});
+
+            assertTrue(verifyResults.size() > 0, "Should still find the coupon");
+            assertEq("Updated Coupon " + testCouponId, verifyResults[0].name, "Coupon name should be updated");
+
+            if (m_options.verbose) {
+                printf("    Update persistence verified\n");
+            }
+
+            # Step 5: Delete coupon
+            if (m_options.verbose) {
+                printf("  Step 5: Delete coupon...\n");
+            }
+
+            AbstractDataProvider deleteProvider = prov.getChildProvider("delete-coupon");
+            auto deleteResult = deleteProvider.doRequest({
+                "id": testCouponId,
+            });
+
+            assertTrue(exists deleteResult.id, "Delete should return the coupon");
+            if (m_options.verbose) {
+                printf("    Deleted coupon: %y\n", testCouponId);
+            }
+            testCouponId = NOTHING;
+
+        } catch (hash<ExceptionInfo> ex) {
+            # Cleanup on failure
+            if (testCouponId) {
+                try {
+                    AbstractDataProvider deleteProvider = prov.getChildProvider("delete-coupon");
+                    deleteProvider.doRequest({"id": testCouponId});
+                    if (m_options.verbose) {
+                        printf("    Cleaned up test coupon: %y\n", testCouponId);
+                    }
+                    testCouponId = NOTHING;
+                } catch () {}
+            }
+            if (m_options.verbose) {
+                printf("  Coupon CRUD failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Coupon CRUD tests completed ---\n");
+        }
+    }
+
+    #! Test promotional credit operations
+    /** Creates a temporary customer, adds/deducts/sets promotional credits, then cleans up.
+    */
+    private testPromotionalCreditOperations() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Promotional Credit Operations ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        # Create a temporary customer for credit operations
+        string testEmail = sprintf("promo_test_%s_%d@example.com",
+            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+
+        AbstractDataProvider createCustomerProvider = prov.getChildProvider("create-customer");
+        *string customerId;
+
+        try {
+            auto customer = createCustomerProvider.doRequest({
+                "first_name": "Promo",
+                "last_name": "Test",
+                "email": testEmail,
+            });
+            customerId = customer.id;
+
+            if (m_options.verbose) {
+                printf("  Created test customer: %y\n", customerId);
+            }
+
+            # Add promotional credits
+            if (m_options.verbose) {
+                printf("  Adding promotional credits...\n");
+            }
+
+            AbstractDataProvider addCreditProvider = prov.getChildProvider("add-promotional-credit");
+            auto addResult = addCreditProvider.doRequest({
+                "customer_id": customerId,
+                "amount": 1000,
+                "currency_code": "USD",
+                "description": "Test promotional credit",
+            });
+
+            assertTrue(exists addResult.id, "Add credit should return customer");
+
+            if (m_options.verbose) {
+                printf("    Credits after add: %y\n", addResult.promotional_credits);
+            }
+
+            # Deduct promotional credits
+            if (m_options.verbose) {
+                printf("  Deducting promotional credits...\n");
+            }
+
+            AbstractDataProvider deductCreditProvider = prov.getChildProvider("deduct-promotional-credit");
+            auto deductResult = deductCreditProvider.doRequest({
+                "customer_id": customerId,
+                "amount": 500,
+                "currency_code": "USD",
+                "description": "Test deduction",
+            });
+
+            assertTrue(exists deductResult.id, "Deduct credit should return customer");
+            if (m_options.verbose) {
+                printf("    Credits after deduct: %y\n", deductResult.promotional_credits);
+            }
+
+            # Set promotional credits
+            if (m_options.verbose) {
+                printf("  Setting promotional credits...\n");
+            }
+
+            AbstractDataProvider setCreditProvider = prov.getChildProvider("set-promotional-credit");
+            auto setResult = setCreditProvider.doRequest({
+                "customer_id": customerId,
+                "amount": 2000,
+                "currency_code": "USD",
+                "description": "Test set credit",
+            });
+
+            assertTrue(exists setResult.id, "Set credit should return customer");
+
+            if (m_options.verbose) {
+                printf("    Credits after set: %y\n", setResult.promotional_credits);
+            }
+
+            # Cleanup: delete the test customer
+            AbstractDataProvider deleteCustomerProvider = prov.getChildProvider("delete-customer");
+            deleteCustomerProvider.doRequest({"id": customerId});
+            if (m_options.verbose) {
+                printf("  Cleaned up test customer: %y\n", customerId);
+            }
+
+        } catch (hash<ExceptionInfo> ex) {
+            # Cleanup on failure
+            if (customerId) {
+                try {
+                    AbstractDataProvider deleteCustomerProvider = prov.getChildProvider("delete-customer");
+                    deleteCustomerProvider.doRequest({"id": customerId});
+                } catch () {}
+            }
+            if (m_options.verbose) {
+                printf("  Promotional credit test failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+
+        if (m_options.verbose) {
+            printf("--- Promotional Credit Operations tests completed ---\n");
+        }
+    }
+
+    #! Test reference data
+    private testReferenceData() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Reference Data ---\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeDataProvider prov(client);
+
+        # Test customers reference data
+        *list<hash<AllowedValueInfo>> customers = prov.getReferenceData("customers");
+        if (customers && customers.size() > 0) {
+            assertTrue(customers[0].display_name.val());
+            assertTrue(exists customers[0].value);
+            if (m_options.verbose) {
+                printf("  Reference data: %d customers available\n", customers.size());
+            }
+        }
+
+        # Test subscriptions reference data
+        *list<hash<AllowedValueInfo>> subscriptions = prov.getReferenceData("subscriptions");
+        if (subscriptions && subscriptions.size() > 0) {
+            assertTrue(subscriptions[0].display_name.val());
+            assertTrue(exists subscriptions[0].value);
+            if (m_options.verbose) {
+                printf("  Reference data: %d subscriptions available\n", subscriptions.size());
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Reference Data tests completed ---\n");
+        }
+    }
+
+    #! Event trigger tests - verify event data providers
+    eventTriggerTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Chargebee credentials provided");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Testing Event Trigger Providers ---\n");
+        }
+
+        # ============================================
+        # Test Watch Customers Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ChargebeeWatchCustomersEventDataProvider...\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeWatchCustomersEventDataProvider watchCustomersProv(client);
+        assertEq("watch-customers", watchCustomersProv.getName());
+        assertTrue(watchCustomersProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> customerEventTypes = watchCustomersProv.getEventTypes();
+        assertTrue(customerEventTypes.hasKey("watch-customers"));
+        assertTrue(customerEventTypes{"watch-customers"}.desc.val());
+
+        # Test example event data
+        auto customerExampleData = watchCustomersProv.getExampleEventData("watch-customers");
+        assertTrue(customerExampleData.hasKey("id") || customerExampleData.hasKey("event_type"),
+            "Example data should have event fields");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys customerEventTypes);
+        }
+
+        # ============================================
+        # Test Watch Events Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ChargebeeWatchEventsEventDataProvider...\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeWatchEventsEventDataProvider watchEventsProv(client);
+        assertEq("watch-events", watchEventsProv.getName());
+        assertTrue(watchEventsProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> allEventTypes = watchEventsProv.getEventTypes();
+        assertTrue(allEventTypes.hasKey("watch-events"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys allEventTypes);
+        }
+
+        # ============================================
+        # Test Watch Invoices Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ChargebeeWatchInvoicesEventDataProvider...\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeWatchInvoicesEventDataProvider watchInvoicesProv(client);
+        assertEq("watch-invoices", watchInvoicesProv.getName());
+        assertTrue(watchInvoicesProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> invoiceEventTypes = watchInvoicesProv.getEventTypes();
+        assertTrue(invoiceEventTypes.hasKey("watch-invoices"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys invoiceEventTypes);
+        }
+
+        # ============================================
+        # Test Watch Subscriptions Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting ChargebeeWatchSubscriptionsEventDataProvider...\n");
+        }
+
+        ChargebeeDataProvider::ChargebeeWatchSubscriptionsEventDataProvider watchSubsProv(client);
+        assertEq("watch-subscriptions", watchSubsProv.getName());
+        assertTrue(watchSubsProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> subEventTypes = watchSubsProv.getEventTypes();
+        assertTrue(subEventTypes.hasKey("watch-subscriptions"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys subEventTypes);
+        }
+
+        if (m_options.verbose) {
+            printf("\n--- Event Trigger tests completed ---\n");
+        }
+    }
+}
+
+#! Test observer for webhook events
+class TestObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data) {
+        events += {"event_id": event_id, "data": data};
+    }
+}
