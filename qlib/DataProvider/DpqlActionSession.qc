@@ -492,7 +492,8 @@ public class DpqlActionSession {
 
         string connection;
         object conn;
-        if (app.scheme.val()) {
+        # pipeline processors with cls don't need a connection — they get credentials via constructor options
+        if (app.scheme.val() && !(action.cls && action.action_code == DPAT_PIPELINE_PROCESSOR)) {
             connection = options.connection;
             if (!connection) {
                 throw "CONTEXT-ERROR", sprintf("app %y action %y: missing required option %y", app.name,
@@ -531,7 +532,11 @@ public class DpqlActionSession {
 
         AbstractDataProvider prov;
         try {
-            if (conn) {
+            # pipeline processors with cls are always instantiated directly, even if the app has a scheme,
+            # because they need constructor options (model ID, input fields, etc.) passed directly
+            if (action.cls && action.action_code == DPAT_PIPELINE_PROCESSOR) {
+                prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
+            } else if (conn) {
                 prov = conn.getDataProvider(action.subtype);
             } else if (action.cls) {
                 prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);

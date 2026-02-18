@@ -1,0 +1,360 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BigMLDataProvider.qm module for BigML data pipeline processors
+
+/*  BigMLDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) BigMLRestClient
+
+module BigMLDataProvider {
+    version = "1.0.0";
+    desc = "user module providing BigML data pipeline processors for ML predictions, "
+        "anomaly detection, clustering, and topic modeling via the BigML API";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the BigML data provider factory
+        DataProvider::registerFactory(new BigMLDataProviderFactory());
+
+        # register the BigML app
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BigMLApp::AppName,
+            "display_name": "BigML",
+            "short_desc": "Machine learning platform for predictions, anomaly detection, "
+                "clustering, and topic modeling",
+            "desc": "BigML provides a cloud-based machine learning platform with scalable, "
+                "automated ML capabilities. Use BigML pipeline processors to enrich your "
+                "data with predictions from trained models, anomaly scores from anomaly "
+                "detectors, cluster assignments, and topic distributions — all via the "
+                "BigML REST API.",
+            "scheme": "bigml",
+            "logo": BigMLApp::BigMLLogo,
+            "logo_file_name": "bigml-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (AppGroup::AiLlm, AppGroup::Analytics),
+        });
+
+        # register predict action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/predict",
+            "action": "predict",
+            "display_name": "Get Prediction",
+            "short_desc": "Get a prediction from a BigML model for each record",
+            "desc": "Sends each record in the pipeline to the BigML prediction API using a "
+                "trained model, ensemble, or deepnet. Each record is enriched with the "
+                "prediction result and confidence score. For example, a model trained on "
+                "housing data can predict property prices from features like square footage "
+                "and location.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLPredictionProcessor",
+            "groups": ("Predictions",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLPredictionProcessor::ConstructorOptions{
+                    "token", "username", "model", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register anomaly-score action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/anomaly-score",
+            "action": "anomaly-score",
+            "display_name": "Score for Anomalies",
+            "short_desc": "Score records for anomalies using a BigML anomaly detector",
+            "desc": "Sends each record to the BigML anomaly score API using a trained anomaly "
+                "detector. Each record is enriched with an anomaly score (0.0 = normal, "
+                "1.0 = highly anomalous) and an is_anomaly flag based on the configured "
+                "threshold.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLAnomalyScoreProcessor",
+            "groups": ("Anomaly Detection",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLAnomalyScoreProcessor::ConstructorOptions{
+                    "token", "username", "anomaly", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                {"threshold": BigMLAnomalyScoreProcessor::ConstructorOptions.threshold}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register centroid action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/centroid",
+            "action": "centroid",
+            "display_name": "Assign to Cluster",
+            "short_desc": "Assign records to clusters using a BigML cluster model",
+            "desc": "Sends each record to the BigML centroid API using a trained cluster model. "
+                "Each record is enriched with the cluster name, cluster ID, and distance to "
+                "the cluster center.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLCentroidProcessor",
+            "groups": ("Clustering",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLCentroidProcessor::ConstructorOptions{
+                    "token", "username", "cluster", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register topic-distribution action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/topic-distribution",
+            "action": "topic-distribution",
+            "display_name": "Get Topic Distribution",
+            "short_desc": "Get topic distributions from a BigML topic model",
+            "desc": "Sends each record to the BigML topic distribution API using a trained "
+                "topic model. Each record is enriched with a list of topic probabilities.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLTopicDistributionProcessor",
+            "groups": ("Topic Modeling",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLTopicDistributionProcessor::ConstructorOptions{
+                    "token", "username", "topicmodel", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register batch-predict action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/batch-predict",
+            "action": "batch-predict",
+            "display_name": "Batch Prediction",
+            "short_desc": "Create batch predictions for multiple records",
+            "desc": "Accumulates records in a window and sends them as a batch to BigML for "
+                "prediction. More efficient than per-record predictions for large volumes. "
+                "Creates a temporary source and dataset in BigML, runs the batch prediction, "
+                "and emits enriched records.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "BigMLDataProvider::BigMLBatchPredictionProcessor",
+            "groups": ("Predictions",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchPredictionProcessor::ConstructorOptions{
+                    "token", "username", "model", "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchPredictionProcessor::ConstructorOptions{
+                    "poll_interval_ms", "timeout_ms",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register batch-anomaly-score action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/batch-anomaly-score",
+            "action": "batch-anomaly-score",
+            "display_name": "Batch Anomaly Score",
+            "short_desc": "Create batch anomaly scores for multiple records",
+            "desc": "Accumulates records in a window and sends them as a batch to BigML for "
+                "anomaly scoring. More efficient than per-record scoring for large volumes.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "BigMLDataProvider::BigMLBatchAnomalyScoreProcessor",
+            "groups": ("Anomaly Detection",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchAnomalyScoreProcessor::ConstructorOptions{
+                    "token", "username", "anomaly", "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchAnomalyScoreProcessor::ConstructorOptions{
+                    "threshold", "poll_interval_ms", "timeout_ms",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register batch-centroid action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/batch-centroid",
+            "action": "batch-centroid",
+            "display_name": "Batch Cluster Assignment",
+            "short_desc": "Create batch centroid assignments for multiple records",
+            "desc": "Accumulates records in a window and sends them as a batch to BigML for "
+                "cluster assignment. More efficient than per-record assignment for large volumes.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "BigMLDataProvider::BigMLBatchCentroidProcessor",
+            "groups": ("Clustering",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchCentroidProcessor::ConstructorOptions{
+                    "token", "username", "cluster", "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchCentroidProcessor::ConstructorOptions{
+                    "poll_interval_ms", "timeout_ms",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage BigMLDataProvider Module
+
+    @tableofcontents
+
+    @section bigmldataproviderintro BigMLDataProvider Module Introduction
+
+    The %BigMLDataProvider module provides data pipeline processors that connect to the
+    BigML cloud machine learning platform for predictions, anomaly detection, clustering,
+    and topic modeling.
+
+    These processors send data to BigML's REST API and return enriched records:
+    - <b>Predictions</b>: Use trained models, ensembles, or deepnets to predict target values
+    - <b>Anomaly Detection</b>: Score records for unusual patterns using anomaly detectors
+    - <b>Clustering</b>: Assign records to clusters discovered by cluster models
+    - <b>Topic Modeling</b>: Get topic probability distributions for text data
+
+    Both per-record and batch processing modes are available.
+
+    @section bigmldataprovider_relnotes Release Notes
+
+    @subsection bigmldataprovider_v1_0 BigMLDataProvider v1.0
+    - initial release with 4 per-record processors and 3 batch processors
+*/
+
+#! Contains all public definitions in the BigMLDataProvider module
+public namespace BigMLDataProvider {
+    #! Contains constants for the BigML data pipeline processors app
+    public namespace BigMLApp {
+        #! The application name — must match the TS app name exactly
+        public const AppName = "BigMl";
+        #! Logo SVG data
+        public const BigMLLogo = File::readTextFile(get_script_dir() + "/bigml-logo.svg");
+    }
+
+    #! BigML prediction event hashdecl
+    /** @since %BigMLDataProvider 1.0
+    */
+    public hashdecl BigMLPredictionEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-predict";
+        #! The prediction result; the type depends on the model's objective field
+        auto prediction;
+        #! The confidence score for the prediction (0.0 to 1.0)
+        float confidence;
+        #! The name of the objective field that was predicted
+        string objective_field;
+        #! The BigML resource ID of the prediction
+        string resource;
+        #! The original input values sent to the model
+        hash<auto> record_values;
+    }
+
+    #! BigML anomaly score event hashdecl
+    /** @since %BigMLDataProvider 1.0
+    */
+    public hashdecl BigMLAnomalyScoreEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-anomaly-score";
+        #! The anomaly score from 0.0 (normal) to 1.0 (highly anomalous)
+        float anomaly_score;
+        #! True if the anomaly score met or exceeded the configured threshold
+        bool is_anomaly;
+        #! The BigML resource ID of the anomaly score
+        string resource;
+        #! The original input values sent to the anomaly detector
+        hash<auto> record_values;
+    }
+
+    #! BigML centroid event hashdecl
+    /** @since %BigMLDataProvider 1.0
+    */
+    public hashdecl BigMLCentroidEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-centroid";
+        #! The name of the cluster this record was assigned to
+        string centroid_name;
+        #! The internal ID of the centroid
+        string centroid_id;
+        #! The distance from the record to the centroid center
+        float distance;
+        #! The BigML resource ID of the centroid
+        string resource;
+        #! The original input values sent to the cluster model
+        hash<auto> record_values;
+    }
+
+    #! BigML topic distribution event hashdecl
+    /** @since %BigMLDataProvider 1.0
+    */
+    public hashdecl BigMLTopicDistributionEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-topic-distribution";
+        #! The topic probability distribution; each entry contains topic name and probability
+        list<auto> topic_distribution;
+        #! The BigML resource ID of the topic distribution
+        string resource;
+        #! The original input values sent to the topic model
+        hash<auto> record_values;
+    }
+}

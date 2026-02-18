@@ -71,6 +71,8 @@ public class DataProvider {
 
             "bcrest": "CdsRestDataProvider",
 
+            "bigml": "BigMLDataProvider",
+
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
 

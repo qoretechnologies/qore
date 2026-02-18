@@ -79,6 +79,8 @@ public class ConnectionSchemeCache {
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 
+            "bigml": "BigMLRestClient",
+
             # provided by the jni module
             "bltcp": "BusyLightDataProvider",
             "blssl": "BusyLightDataProvider",

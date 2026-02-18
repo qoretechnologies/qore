@@ -1,0 +1,600 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BigMLDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/BigMLRestClient.qm
+%requires ../../../../qlib/BigMLDataProvider
+
+%exec-class BigMLDataProviderTest
+
+public class BigMLDataProviderTest inherits QUnit::Test {
+    private {
+        #! BigML REST client for integration tests
+        *BigMLRestClient::BigMLRestClient client;
+
+        #! BigML API key
+        *string api_key;
+
+        #! BigML username
+        *string bigml_username;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "username": "u,username=s",
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("BigMLDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("processor capabilities tests", \processorCapabilitiesTests());
+        addTestCase("constructor validation tests", \constructorValidationTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("output type tests", \outputTypeTests());
+
+        # Integration tests (require BIGML_API_KEY and BIGML_USERNAME)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the BigML client for integration tests
+    private setupConnection() {
+        api_key = m_options.token ?? ENV.BIGML_API_KEY;
+        bigml_username = m_options.username ?? ENV.BIGML_USERNAME;
+        if (!api_key || !bigml_username) {
+            if (m_options.verbose) {
+                printf("No BigML credentials provided (use -t and -u options or BIGML_API_KEY "
+                    "and BIGML_USERNAME env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "token": api_key,
+            "username": bigml_username,
+        };
+        client = new BigMLRestClient::BigMLRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    # ===================== Sanity Tests =====================
+
+    sanityTests() {
+        checkJson();
+        # Test creating root provider
+        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        assertEq("bigml", prov.getName());
+        assertTrue(prov.getDesc().val());
+    }
+
+    # ===================== Factory Tests =====================
+
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("bigml");
+        assertEq("bigml", factory.getInfo().name);
+    }
+
+    # ===================== Metadata Tests =====================
+
+    metadataTests() {
+        checkJson();
+        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_pipeline_processors);
+        assertEq("BigMLProcessorsDataProvider", info.type);
+    }
+
+    # ===================== Child Provider Tests =====================
+
+    childProviderTests() {
+        checkJson();
+        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        list<string> children = prov.getChildProviderNames();
+
+        # Per-record processors
+        assertTrue(children.contains("predict"));
+        assertTrue(children.contains("anomaly-score"));
+        assertTrue(children.contains("centroid"));
+        assertTrue(children.contains("topic-distribution"));
+
+        # Batch processors
+        assertTrue(children.contains("batch-predict"));
+        assertTrue(children.contains("batch-anomaly-score"));
+        assertTrue(children.contains("batch-centroid"));
+
+        assertEq(7, children.lsize());
+
+        # Check that each child can be retrieved
+        foreach string name in (children) {
+            *AbstractDataProvider child = prov.getChildProvider(name);
+            assertTrue(exists child, sprintf("child '%s' should exist", name));
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.supports_pipeline_processor,
+                sprintf("child '%s' should support pipeline processor", name));
+        }
+
+        # Test non-existent child
+        assertThrows("INVALID-CHILD-PROVIDER", sub() {
+            prov.getChildProviderEx("nonexistent");
+        });
+    }
+
+    # ===================== Processor Capabilities Tests =====================
+
+    processorCapabilitiesTests() {
+        checkJson();
+
+        # Per-record processors should be DPC_TRANSFORM
+        BigMLDataProvider::BigMLPredictionProcessor predict();
+        assertEq(DPC_TRANSFORM, predict.getProcessorCapabilities());
+        hash<DataProviderInfo> predictInfo = predict.getInfo();
+        assertEq("BigMLPredictionProcessor", predictInfo.type);
+        assertTrue(predictInfo.supports_pipeline_processor);
+
+        BigMLDataProvider::BigMLAnomalyScoreProcessor anomaly();
+        assertEq(DPC_TRANSFORM, anomaly.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLCentroidProcessor centroid();
+        assertEq(DPC_TRANSFORM, centroid.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLTopicDistributionProcessor topic();
+        assertEq(DPC_TRANSFORM, topic.getProcessorCapabilities());
+
+        # Batch processors should be DPC_AGGREGATE
+        BigMLDataProvider::BigMLBatchPredictionProcessor batchPredict();
+        assertEq(DPC_AGGREGATE, batchPredict.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLBatchAnomalyScoreProcessor batchAnomaly();
+        assertEq(DPC_AGGREGATE, batchAnomaly.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
+        assertEq(DPC_AGGREGATE, batchCentroid.getProcessorCapabilities());
+    }
+
+    # ===================== Constructor Validation Tests =====================
+
+    constructorValidationTests() {
+        checkJson();
+
+        # Predict: missing required model option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLPredictionProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Predict: missing required input_fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLPredictionProcessor({
+                "model": "model/abc123",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Predict: empty input_fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLPredictionProcessor({
+                "model": "model/abc123",
+                "input_fields": " , ",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Anomaly: missing required anomaly option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLAnomalyScoreProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Centroid: missing required cluster option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLCentroidProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Topic distribution: missing required topicmodel option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLTopicDistributionProcessor({
+                "input_fields": "text",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Batch predict: window_size too small
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLBatchPredictionProcessor({
+                "model": "model/abc123",
+                "input_fields": "x,y",
+                "window_size": 1,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Batch anomaly: window_size too small
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLBatchAnomalyScoreProcessor({
+                "anomaly": "anomaly/abc123",
+                "input_fields": "x,y",
+                "window_size": 1,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Batch centroid: window_size too small
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLBatchCentroidProcessor({
+                "cluster": "cluster/abc123",
+                "input_fields": "x,y",
+                "window_size": 1,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Not-configured processors should throw on processRecord
+        BigMLDataProvider::BigMLPredictionProcessor unconfigured();
+        assertThrows("PROCESSOR-ERROR", sub() {
+            unconfigured.processRecord({"x": 1.0});
+        });
+    }
+
+    # ===================== Connection Tests =====================
+
+    connectionTests() {
+        checkJson();
+        # Verify connection scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("bigml");
+        assertEq("BigML REST Connection", scheme.display_name);
+        assertTrue(scheme.options.hasKey("token"));
+        assertTrue(scheme.options."token".sensitive);
+        assertTrue(scheme.options.hasKey("username"));
+
+        # Verify connection can create data provider
+        BigMLRestClient::BigMLRestConnection conn("test", "test connection",
+            "bigml://bigml.io", {},
+            {"token": "x", "username": "x"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("BigMl", conn.getAppName());
+        assertEq("bigml", conn.getType());
+    }
+
+    # ===================== Action Catalog Tests =====================
+
+    actionCatalogTests() {
+        checkJson();
+        # Get all actions for the BigML app
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            BigMLDataProvider::BigMLApp::AppName);
+        assertTrue(actions.size() > 0);
+
+        list<string> actionNames = map $1.action, actions;
+
+        # Per-record processor actions
+        assertTrue(actionNames.contains("predict"));
+        assertTrue(actionNames.contains("anomaly-score"));
+        assertTrue(actionNames.contains("centroid"));
+        assertTrue(actionNames.contains("topic-distribution"));
+
+        # Batch processor actions
+        assertTrue(actionNames.contains("batch-predict"));
+        assertTrue(actionNames.contains("batch-anomaly-score"));
+        assertTrue(actionNames.contains("batch-centroid"));
+
+        assertEq(7, actions.size());
+
+        # Verify predict action details
+        *hash<DataProviderActionInfo> predictAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "predict");
+        assertTrue(exists predictAction, "predict action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, predictAction.action_code);
+        assertEq(DPC_TRANSFORM, predictAction.processor_capabilities);
+        assertTrue(predictAction.options.hasKey("model"), "predict should have model option");
+        assertTrue(predictAction.options.hasKey("input_fields"),
+            "predict should have input_fields option");
+
+        # Verify anomaly-score action details
+        *hash<DataProviderActionInfo> anomalyAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "anomaly-score");
+        assertTrue(exists anomalyAction, "anomaly-score action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, anomalyAction.action_code);
+        assertEq(DPC_TRANSFORM, anomalyAction.processor_capabilities);
+        assertTrue(anomalyAction.options.hasKey("anomaly"), "anomaly-score should have anomaly option");
+        assertTrue(anomalyAction.options.hasKey("threshold"),
+            "anomaly-score should have threshold option");
+
+        # Verify centroid action details
+        *hash<DataProviderActionInfo> centroidAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "centroid");
+        assertTrue(exists centroidAction, "centroid action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, centroidAction.action_code);
+        assertEq(DPC_TRANSFORM, centroidAction.processor_capabilities);
+        assertTrue(centroidAction.options.hasKey("cluster"), "centroid should have cluster option");
+
+        # Verify topic-distribution action details
+        *hash<DataProviderActionInfo> topicAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "topic-distribution");
+        assertTrue(exists topicAction, "topic-distribution action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, topicAction.action_code);
+        assertEq(DPC_TRANSFORM, topicAction.processor_capabilities);
+        assertTrue(topicAction.options.hasKey("topicmodel"),
+            "topic-distribution should have topicmodel option");
+
+        # Verify batch-predict action details
+        *hash<DataProviderActionInfo> batchPredictAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "batch-predict");
+        assertTrue(exists batchPredictAction, "batch-predict action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, batchPredictAction.action_code);
+        assertEq(DPC_AGGREGATE, batchPredictAction.processor_capabilities);
+        assertTrue(batchPredictAction.options.hasKey("model"),
+            "batch-predict should have model option");
+        assertTrue(batchPredictAction.options.hasKey("window_size"),
+            "batch-predict should have window_size option");
+        assertTrue(batchPredictAction.options.hasKey("poll_interval_ms"),
+            "batch-predict should have poll_interval_ms option");
+        assertTrue(batchPredictAction.options.hasKey("timeout_ms"),
+            "batch-predict should have timeout_ms option");
+
+        # Verify batch-anomaly-score action details
+        *hash<DataProviderActionInfo> batchAnomalyAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "batch-anomaly-score");
+        assertTrue(exists batchAnomalyAction, "batch-anomaly-score action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, batchAnomalyAction.action_code);
+        assertEq(DPC_AGGREGATE, batchAnomalyAction.processor_capabilities);
+
+        # Verify batch-centroid action details
+        *hash<DataProviderActionInfo> batchCentroidAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "batch-centroid");
+        assertTrue(exists batchCentroidAction, "batch-centroid action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, batchCentroidAction.action_code);
+        assertEq(DPC_AGGREGATE, batchCentroidAction.processor_capabilities);
+    }
+
+    # ===================== Output Type Tests =====================
+
+    outputTypeTests() {
+        checkJson();
+
+        # All processors should have output types
+        BigMLDataProvider::BigMLPredictionProcessor predict();
+        assertTrue(exists predict.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLAnomalyScoreProcessor anomaly();
+        assertTrue(exists anomaly.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLCentroidProcessor centroid();
+        assertTrue(exists centroid.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLTopicDistributionProcessor topic();
+        assertTrue(exists topic.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLBatchPredictionProcessor batchPredict();
+        assertTrue(exists batchPredict.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLBatchAnomalyScoreProcessor batchAnomaly();
+        assertTrue(exists batchAnomaly.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
+        assertTrue(exists batchCentroid.getPipelineProcessorOutputType());
+    }
+
+    # ===================== Integration Tests =====================
+
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No BigML credentials provided (use -t/-u options or "
+                "BIGML_API_KEY/BIGML_USERNAME env vars)");
+            return;
+        }
+
+        # Test API connectivity
+        testApiConnectivity();
+
+        # Test prediction processor
+        testPredictionProcessor();
+    }
+
+    #! Test API connectivity
+    private testApiConnectivity() {
+        if (m_options.verbose) {
+            printf("\n--- Testing BigML API Connectivity ---\n");
+        }
+
+        try {
+            hash<auto> response = client.get("project");
+            assertTrue(response.body.typeCode() == NT_HASH || response.body.typeCode() == NT_LIST);
+            if (m_options.verbose) {
+                printf("  Connected to BigML API successfully\n");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  API connectivity test failed: %s: %s\n", ex.err, ex.desc);
+            }
+            rethrow;
+        }
+    }
+
+    #! Test prediction processor with real API
+    private testPredictionProcessor() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Prediction Processor ---\n");
+        }
+
+        # List available models to find one to test with
+        hash<auto> response = client.get("model?limit=1");
+        if (response.body.typeCode() != NT_HASH || response.body.objects.typeCode() != NT_LIST
+                || !response.body.objects.lsize()) {
+            if (m_options.verbose) {
+                printf("  No models found in BigML account; skipping prediction test\n");
+            }
+            return;
+        }
+
+        hash<auto> model_summary = response.body.objects[0];
+        string modelId = model_summary.resource;
+        if (m_options.verbose) {
+            printf("  Found model: %s\n", modelId);
+        }
+
+        # Fetch full model to get fields
+        hash<auto> model_detail = client.get(modelId);
+        hash<auto> model = model_detail.body;
+        *list<string> input_field_ids = model.input_fields;
+        *hash<auto> model_fields = model.model.fields;
+        if (!input_field_ids || !model_fields) {
+            if (m_options.verbose) {
+                printf("  Model has no input fields; skipping prediction test\n");
+            }
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("  Input fields: %y\n", input_field_ids);
+            foreach string fid in (input_field_ids) {
+                printf("    %s: %s (%s)\n", fid, model_fields{fid}.name, model_fields{fid}.optype);
+            }
+        }
+
+        # Build input record with sample numeric values for each input field
+        hash<auto> input_record;
+        list<string> field_names;
+        foreach string fid in (input_field_ids) {
+            # Use the field name from the model as the record key
+            string fname = model_fields{fid}.name ?? fid;
+            field_names += fname;
+            # Use a sample value based on optype
+            switch (model_fields{fid}.optype) {
+                case "numeric":
+                    input_record{fname} = 50.0;
+                    break;
+                case "categorical":
+                    input_record{fname} = "test";
+                    break;
+                default:
+                    input_record{fname} = "test";
+                    break;
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("  Input record: %y\n", input_record);
+        }
+
+        # Create and run prediction processor
+        BigMLPredictionProcessor proc({
+            "token": api_key,
+            "username": bigml_username,
+            "model": modelId,
+            "input_fields": field_names.join(","),
+        });
+
+        try {
+            auto result = proc.processRecord(input_record);
+            if (m_options.verbose) {
+                printf("  Prediction result: %y\n", result);
+            }
+
+            assertEq("bigml-predict", result.event_type);
+            assertTrue(exists result.prediction);
+            assertTrue(result.resource.typeCode() == NT_STRING);
+            assertTrue(result.resource.val());
+            assertEq(NT_HASH, result.record_values.typeCode());
+
+            if (m_options.verbose) {
+                printf("  Prediction: %y (confidence: %y, objective: %s)\n",
+                    result.prediction, result.confidence, result.objective_field);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Handle BigML free tier rate limiting (402 Payment Required)
+            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" || ex.err == "BIGML-API-ERROR") {
+                if (m_options.verbose) {
+                    printf("  Prediction API call limited (expected on free tier): %s\n", ex.desc);
+                }
+                testSkip("BigML API rate limited (free tier)");
+            } else {
+                rethrow;
+            }
+        }
+
+        if (m_options.verbose) {
+            printf("--- Prediction Processor tests completed ---\n");
+        }
+    }
+}

@@ -1,0 +1,401 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BigMLRestClient.qm Qore user module for calling BigML REST API services
+
+/*  BigMLRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module BigMLRestClient {
+    version = "1.0";
+    desc = "User module for calling BigML machine learning REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("bigml", BigMLRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage BigMLRestClient Module
+
+    @tableofcontents
+
+    @section bigmlrestclientintro BigMLRestClient Introduction
+
+    The %BigMLRestClient module provides an API for calling BigML's machine learning REST API
+    services.
+
+    To use this module, use \c "%requires BigMLRestClient" in your code.
+
+    All the public symbols in the module are defined in the BigMLRestClient namespace.
+
+    The main classes are:
+    - @ref BigMLRestClient::BigMLRestClient "BigMLRestClient":
+      this class provides the REST client API for communication with the BigML API;
+      it handles authentication via API key and username
+    - @ref BigMLRestClient::BigMLRestConnection "BigMLRestConnection":
+      provides a connection object to BigML services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires BigMLRestClient
+
+BigMLRestClient bigml({
+    "token": ENV.BIGML_API_KEY,
+    "username": ENV.BIGML_USERNAME,
+});
+hash<auto> result = bigml.get("/andromeda/project");
+printf("Projects: %N\n", result.body);
+    @endcode
+
+    @section bigmlrestclientrelnotes Release Notes
+
+    @subsection bigmlrestclientv1_0 BigMLRestClient v1.0
+    - the initial version of the %BigMLRestClient module
+*/
+
+#! the BigMLRestClient namespace contains all the objects in the BigMLRestClient module
+public namespace BigMLRestClient {
+
+#! This class provides the REST client API for communication with BigML servers
+/** BigML uses a REST API with API key and username authentication:
+    - API key is passed as both a query parameter (\c api_key) and a header (\c Api-Token)
+    - Username is passed as a query parameter (\c username)
+
+    @par API Information:
+    - Base URL: https://bigml.io/andromeda
+    - JSON format only
+    - API docs: https://bigml.com/api/
+
+    @par Authentication:
+    Both API key and username are required for all API requests.
+    These can be obtained from the BigML dashboard:
+    1. Go to https://bigml.com/account/apikey
+    2. Copy your API key and username
+*/
+public class BigMLRestClient inherits RestClient::RestClient {
+    public {
+        #! BigML API base URL
+        const DefaultApiUrl = "https://bigml.io/andromeda";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default BigML ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default BigML ping path
+        const DefaultPingPath = "project";
+
+        #! Default BigML ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultApiUrl,
+        };
+    }
+
+    private {
+        #! The BigML API key
+        string api_key;
+
+        #! The BigML username
+        string bigml_username;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+BigMLRestClient bigml({
+    "token": "your_api_key",
+    "username": "your_username",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c token: (required) the BigML API key
+        - \c username: (required) the BigML username
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw BIGML-AUTH-ERROR missing required authentication credentials
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(BigMLRestClient::getOptions(opts), do_not_connect) {
+        if (!opts.token) {
+            throw "BIGML-AUTH-ERROR", "missing required 'token' option (BigML API key)";
+        }
+        if (!opts.username) {
+            throw "BIGML-AUTH-ERROR", "missing required 'username' option";
+        }
+        api_key = opts.token;
+        bigml_username = opts.username;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! returns options for @ref BigMLRestClient::BigMLRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Set Api-Token header for authentication
+        if (opts.token) {
+            rv.headers{"Api-Token"} = opts.token;
+        }
+
+        # Remove credentials from options passed to RestClient
+        remove rv.token;
+        remove rv.username;
+
+        return rv;
+    }
+
+    #! Overrides the GET method to inject auth query parameters
+    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return RestClient::get(addAuthParams(path), body, \info, hdr);
+    }
+
+    #! Overrides the POST method to inject auth query parameters
+    hash<auto> post(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return RestClient::post(addAuthParams(path), body, \info, hdr);
+    }
+
+    #! Overrides the PUT method to inject auth query parameters
+    hash<auto> put(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return RestClient::put(addAuthParams(path), body, \info, hdr);
+    }
+
+    #! Overrides the DEL method to inject auth query parameters
+    hash<auto> del(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return RestClient::del(addAuthParams(path), body, \info, hdr);
+    }
+
+    #! Adds authentication query parameters to the URL path
+    private string addAuthParams(string path) {
+        string separator = (path =~ /\?/) ? "&" : "?";
+        return sprintf("%s%susername=%s&api_key=%s", path, separator,
+            encode_url(bigml_username, True), encode_url(api_key, True));
+    }
+}
+
+#! Class for BigML REST connections; returns @ref BigMLRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c token: (required) the BigML API key
+    - \c username: (required) the BigML username
+
+    @see @ref BigMLRestClient::BigMLRestClient::constructor() for more information on the above options
+*/
+public class BigMLRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default BigML API URL
+        const DefaultConnectionUrl = "bigml://bigml.io/andromeda";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "BigML REST Connection",
+            "short_desc": "A connection to the BigML machine learning API",
+            "desc": "A connection to the BigML REST API for machine learning predictions, anomaly "
+                "detection, clustering, and topic modeling.\n\n"
+                "BigML provides a cloud-based machine learning platform with support for supervised "
+                "and unsupervised learning algorithms.\n\n"
+                "**Features:**\n"
+                "- Create predictions from trained models\n"
+                "- Detect anomalies using anomaly detectors\n"
+                "- Assign data to clusters\n"
+                "- Analyze topics in text data\n"
+                "- Batch processing for large datasets\n\n"
+                "**Authentication:**\n"
+                "BigML uses API key and username authentication. Both credentials are required.",
+            "cls": Class::forName("BigMLRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "bigml": True,
+            },
+            "base_scheme_map": {
+                "https": "bigml",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigMLRestClient::DefaultData,
+                },
+                "token": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Your BigML account API key",
+                    "type": "string",
+                    "desc": "Your BigML API key used for API authentication.\n\n"
+                        "**To obtain your API key:**\n"
+                        "1. Go to https://bigml.com/account/apikey\n"
+                        "2. Copy your API key\n\n"
+                        "**Note:** Both API key and username are required for authentication.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "username": <ConnectionOptionInfo>{
+                    "display_name": "Username",
+                    "short_desc": "The username or email associated with your BigML account",
+                    "type": "string",
+                    "desc": "Your BigML username used for API authentication.\n\n"
+                        "This is the username you use to log in to BigML.",
+                    "preselected": True,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigMLRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigMLRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": BigMLRestClient::DefaultPingPath,
+                },
+            },
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Get Your API Credentials",
+                    "intent": "info",
+                    "content": "To connect to BigML, you need both an API key and your username:\n\n"
+                        "1. Go to https://bigml.com/account/apikey\n"
+                        "2. Copy your **API key**\n"
+                        "3. Use the same **username** you use to log in to BigML\n\n"
+                        "Keep your credentials secure and never share them publicly.",
+                },
+            ),
+            "required_options": "token,username",
+        };
+    }
+
+    #! creates the BigMLRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the BigMLRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(BigMLRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref BigMLRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": DefaultConnectionUrl,
+        };
+    }
+
+    #! returns \c "bigml"
+    string getType() {
+        return "bigml";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "BigMl";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the BigMLDataProvider and creates the data provider
+        # object dynamically
+        load_module("BigMLDataProvider");
+        return create_object("BigMLDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+    }
+
+    #! returns a @ref BigMLRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref BigMLRestClient object
+    */
+    private BigMLRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BigMLRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

@@ -783,7 +783,7 @@ public class DataProviderActionCatalog {
         if (!app) {
             throw "ACTION-ERROR", sprintf("Application %y not registered (action %y)", action.app, action);
         }
-        if (app.scheme && exists action.cls) {
+        if (app.scheme && exists action.cls && action.action_code != DPAT_PIPELINE_PROCESSOR) {
             throw "ACTION-ERROR", sprintf("Application %y has scheme %y and action has cls %y; it is not allowed to "
                 "provide an action class when the application has a scheme", action.app, app.scheme, action.cls);
         }
