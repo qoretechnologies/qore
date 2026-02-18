@@ -2217,7 +2217,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns the first record matching the DPQL search expression
-    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+    /** @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
@@ -2279,7 +2279,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns a single record matching the DPQL search expression
-    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+    /** @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
@@ -2371,7 +2371,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns an iterator for zero or more records matching the DPQL search expression
     /** @param block_size the number of records in a read block; must be a positive number
-        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @return a bulk record interface object that will return the records in bulk format
@@ -2443,7 +2443,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns an iterator for zero or more records matching the DPQL search expression
-    /** @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+    /** @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @throw INVALID-OPERATION the data provider does not support reading
@@ -2591,7 +2591,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Updates zero or more records matching the DPQL search expression
     /** @param set the hash of field data to set
-        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @return the number of records updated
@@ -2676,7 +2676,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Deletes zero or more records matching the DPQL search expression
     /**
-        @param dpql_where the DPQL search expression string (e.g. \c '@name == "John"')
+        @param dpql_where the DPQL search expression string (e.g. \c '\@name == "John"')
         @param search_options the search options; will be processed by validateSearchOptions()
 
         @return the number of records deleted

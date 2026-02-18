@@ -371,9 +371,10 @@ public:
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
 
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
-    /** @param stream_id the completed stream ID
-        @param stream the stream info (may be nullptr if stream was reset before completion)
-        @param xsink exception sink for error reporting
+    /** Callback arguments:
+        - \c stream_id: the completed stream ID
+        - \c stream: the stream info (may be nullptr if stream was reset before completion)
+        - \c xsink: exception sink for error reporting
     */
     using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
         ExceptionSink* xsink)>;

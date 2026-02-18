@@ -1646,7 +1646,7 @@ endif
 
 bin_PROGRAMS = qore
 # qr
-dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen bin/qfmt bin/qls
+dist_bin_SCRIPTS = doxygen/qdx bin/qdp bin/qget doxygen/qjar bin/rest bin/sfrest bin/saprest bin/sqlutil bin/schema-reverse bin/qdbg bin/qdbg-server bin/qdbg-remote bin/qdbg-vsc-adapter bin/qore-openapi3-gen bin/qore-asyncapi-gen bin/qfmt bin/qls bin/qore-extract-qm-metadata
 if COND_SINGLE_COMPILATION_UNIT
 qore_SOURCES = qore-single-compilation-unit.cpp
 #qr_SOURCES = qr-single-compilation-unit.cpp

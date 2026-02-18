@@ -265,6 +265,14 @@ class PipelineQueue {
         #! Data flushed confirmation
         bool data_flushed;
 
+        #! Flag indicating the processing thread is actively processing a record
+        /** This is set to True when a record is dequeued and cleared when processing
+            (including fan-out to child queues) is complete. Used by waitDone() to
+            avoid returning prematurely while the processing thread is still submitting
+            records to child queues.
+        */
+        bool processing = False;
+
         #! Parent object
         DataProviderPipeline parent;
     }
@@ -356,11 +364,15 @@ class PipelineQueue {
         runIntern();
     }
 
-    #! Wait for the queue to be empty, then wait for all terminating pipelines to be empty
+    #! Wait for the queue to be empty and idle, then wait for all terminating pipelines to be empty
     /** @note Called in the pipeline lock
+
+        Waits until both the queue is empty AND the processing thread is not actively processing
+        a record. This prevents returning prematurely when the processing thread has dequeued
+        the last record but is still submitting it to child queues during fan-out.
     */
     waitDone() {
-        while (!parent.stopping() && queue) {
+        while (!parent.stopping() && (queue || processing)) {
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
@@ -409,12 +421,17 @@ class PipelineQueue {
             }
 
             auto qdata = shift queue;
+            processing = True;
             if (queue_waiting) {
                 cond.broadcast();
             }
 
             if (parent.aborting()) {
-                # discard data;
+                # discard data
+                processing = False;
+                if (queue_waiting) {
+                    cond.broadcast();
+                }
                 continue;
             }
 
@@ -492,6 +509,12 @@ class PipelineQueue {
                     mc.recordError(id.toString());
                 }
                 parent.reportError(self, ex);
+            }
+
+            # Mark processing complete and wake waitDone() if waiting
+            processing = False;
+            if (queue_waiting) {
+                cond.broadcast();
             }
         }
     }
