@@ -2010,7 +2010,7 @@ string doxygen_output = proc.process();
                     string line = lines[i];
                     if ((node.kind == QoreCodeFormat::ADK_Function && line.find(name + "(") >= 0)
                         || (node.kind != QoreCodeFormat::ADK_Function && line.find(name) >= 0)) {
-                        return i + 1;
+                        return i;
                     }
                 }
             }
@@ -2087,15 +2087,26 @@ string doxygen_output = proc.process();
         private list<string> collectBlockDoc(int end_line) {
             list<string> result = ();
             int line = end_line;
+            # Track @verbatim nesting: scanning backward, @endverbatim increments
+            # and @verbatim decrements; /** inside a verbatim block is example code
+            int verbatim_depth = 0;
             while (line >= 0) {
-                result = (lines[line],) + result;
-                if (isBlockCommentStart(lines[line])) {
-                    return result;
+                string cur = lines[line];
+                result = (cur,) + result;
+                if (cur =~ /@endverbatim/) {
+                    ++verbatim_depth;
+                } else if (cur =~ /@verbatim/) {
+                    --verbatim_depth;
                 }
-                # Stop at non-doc block comment start (/* without **) to prevent
-                # scanning past non-doc comments like /* FIXME ... */
-                if (lines[line] =~ /\/\*/) {
-                    return ();
+                if (verbatim_depth == 0) {
+                    if (isBlockCommentStart(cur)) {
+                        return result;
+                    }
+                    # Stop at non-doc block comment start (/* without **) to prevent
+                    # scanning past non-doc comments like /* FIXME ... */
+                    if (cur =~ /\/\*/) {
+                        return ();
+                    }
                 }
                 line--;
             }
