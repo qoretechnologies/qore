@@ -509,6 +509,10 @@
             "named": false
           },
           {
+            "type": "union",
+            "named": false
+          },
+          {
             "type": "variable_name",
             "named": true
           }
@@ -3146,6 +3150,14 @@
         },
         {
           "type": "relative_date",
+          "named": true
+        },
+        {
+          "type": "special_float",
+          "named": true
+        },
+        {
+          "type": "time",
           "named": true
         }
       ]
@@ -6007,6 +6019,10 @@
           "named": true
         },
         {
+          "type": "string",
+          "named": true
+        },
+        {
           "type": "ternary_expression",
           "named": true
         },
@@ -6699,11 +6715,11 @@
   },
   {
     "type": "binary",
-    "named": true
+    "named": false
   },
   {
     "type": "binary",
-    "named": false
+    "named": true
   },
   {
     "type": "bool",
@@ -6947,11 +6963,11 @@
   },
   {
     "type": "number",
-    "named": false
+    "named": true
   },
   {
     "type": "number",
-    "named": true
+    "named": false
   },
   {
     "type": "object",
@@ -7094,6 +7110,10 @@
     "named": false
   },
   {
+    "type": "special_float",
+    "named": true
+  },
+  {
     "type": "splice",
     "named": false
   },
@@ -7132,6 +7152,10 @@
   {
     "type": "throw",
     "named": false
+  },
+  {
+    "type": "time",
+    "named": true
   },
   {
     "type": "timeout",
