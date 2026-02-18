@@ -377,10 +377,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         } else if (auto* binary = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
                             // map, select, foldl, foldr operators use implicit arguments
                             // ($1, $#) set up during operator evaluation — their child
-                            // expressions must NOT be pre-evaluated outside that context
+                            // expressions must NOT be pre-evaluated outside that context.
+                            //
+                            // Skip pre-evaluation for:
+                            // - Map/select/foldl operators: use implicit context ($1, $#)
+                            //   that is only valid inside the operator's body.
+                            // - Lvalue operators (assignments, +=, -=, etc.): have their own
+                            //   lowering in lowerExpression() that properly creates Invoke
+                            //   instructions for sub-expressions; pre-evaluating here would
+                            //   create an Invoke that re-evaluates the full expression via AST.
                             if (!dynamic_cast<const QoreMapOperatorNode*>(node)
                                 && !dynamic_cast<const QoreSelectOperatorNode*>(node)
-                                && !dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
+                                && !dynamic_cast<const QoreFoldlOperatorNode*>(node)
+                                && !dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)
+                                && !dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
                                 QoreIRValue left = lowerExpression(binary->getLeft(), error);
                                 if (!left.isValid()) {
                                     return false;
@@ -2916,6 +2926,12 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
         }
         return true;
     }
+    // If the type is known and explicitly allows NOTHING, don't generate a speculative
+    // guard based on profiling.  NOTHING is a valid value for such types, and a guard
+    // deopt would re-execute the entire function, causing double side effects.
+    if (type) {
+        return false;
+    }
     if (!expr) {
         return false;
     }
@@ -3091,17 +3107,19 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     bool force_int = dynamic_cast<const QoreIntPlusEqualsOperatorNode*>(node) != nullptr;
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store creates O(n) copies:
+    // Force lvalue path for types where load-compute-store produces wrong types or O(n) copies:
     // - Objects: object + hash = hash (not object), needs in-place member merge
     // - Lists: list + element copies the entire list, making loops O(n^2)
     // - Hashes: hash + hash copies the entire hash
+    // - Binary: binary + string = string (not binary), needs in-place append
     // Using AddAssignLValue goes through QorePlusEqualsOperatorNode which does
     // proper in-place modification via lvalue semantics.
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getUniqueReturnClass(ti) != nullptr
                 || QoreTypeInfo::isListType(ti)
-                || QoreTypeInfo::isHashType(ti)) {
+                || QoreTypeInfo::isHashType(ti)
+                || QoreTypeInfo::getBaseType(ti) == NT_BINARY) {
             left_var = nullptr;  // Force lvalue path
         }
     }

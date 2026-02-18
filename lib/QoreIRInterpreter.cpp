@@ -1061,6 +1061,49 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
+        // CallClosureDirect: call closure/callref with pre-evaluated operands
+        // Without this, CallClosureDirect falls through to AST eval which ignores
+        // the pre-evaluated callee and args from lowerCallReference()
+        case QoreIROpcode::CallClosureDirect: {
+            if (!inv->operands.empty()) {
+                QoreValue ref_val = getIRValue(values, inv->operands[0]);
+                if (!ref_val.hasNode()) {
+                    if (xsink) {
+                        xsink->raiseException("CALL-REFERENCE-ERROR",
+                            "cannot call a NOTHING value as a closure/call reference");
+                    }
+                    return QoreValue();
+                }
+                ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
+                    const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
+                if (!callref) {
+                    if (xsink) {
+                        xsink->raiseException("CALL-REFERENCE-ERROR",
+                            "value is not a call reference or closure");
+                    }
+                    return QoreValue();
+                }
+                int nargs = static_cast<int>(inv->operands.size()) - 1;
+                QoreListNode* arg_list = nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr;
+                if (arg_list) {
+                    for (int i = 0; i < nargs; ++i) {
+                        QoreValue val = getIRValue(values, inv->operands[i + 1]);
+                        if (val.hasNode()) {
+                            val.refSelf();
+                        }
+                        arg_list->push(val, xsink);
+                    }
+                }
+                // execValue borrows args (const QoreListNode*) — does NOT take ownership
+                QoreValue result = callref->execValue(arg_list, xsink);
+                if (arg_list) {
+                    arg_list->deref(xsink);
+                }
+                return result;
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
