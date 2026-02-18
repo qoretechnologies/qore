@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file PgsqlSqlUtilBase.qm Qore user module for working with PostgreSQL SQL data
 
-/*  PgsqlSqlUtilBase.qm Copyright (C) 2013 - 2024 Qore Technologies, s.r.o.
+/*  PgsqlSqlUtilBase.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,7 +36,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.8";
+    version = "1.9";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -159,6 +159,19 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
+    - \c hasArrayBind() now returns \c True when the underlying driver supports it (pgsql driver v3.3+)
+    - added UNNEST-based bulk insert SQL generation in \c insertIntern(): when bulk data (hash-of-lists)
+      is passed, generates <tt>INSERT INTO ... SELECT ... FROM unnest(...)</tt> instead of row-by-row
+      inserts, with element-level type casts to avoid binary array OID conflicts
+    - added UNNEST-based bulk upsert via overridden \c getBulkUpsertClosure(): generates
+      <tt>INSERT ... SELECT ... FROM unnest(...) ON CONFLICT ... DO UPDATE</tt> for atomic upserts,
+      with automatic deduplication of duplicate primary key values within batches
+    - added \c PgsqlTable::copyInsert() method for maximum-throughput bulk inserts using the PostgreSQL
+      COPY protocol
+    - added \c PgsqlTable::doReturningImpl() override that correctly returns all rows for bulk RETURNING
+      results (base class only returns the first row)
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -2028,9 +2041,366 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return addTriggerFunctionUnlocked(tfname, src, trigger);
     }
 
-    #! returns @ref False "False" because the pgsql driver does not support array binds / bulk DML operations
+    #! returns @ref True "True" because the pgsql driver supports array binds / bulk DML operations via UNNEST
     bool hasArrayBind() {
-        return False;
+        return True;
+    }
+
+    #! Returns the PostgreSQL array cast type suffix for a given column
+    /** @param col the column object
+        @return the PostgreSQL type name suitable for array casting (e.g., "bigint[]", "text[]")
+    */
+    #! Unwraps driver-specific bind hashes from list elements for UNNEST array binding
+    /** Bind hashes (e.g., from pgsql_bind()) have the format {^pgtype^: oid, ^value^: val}.
+        The UNNEST SQL uses explicit ::type[] casts, so only the raw values are needed.
+        @param l the list potentially containing bind hash elements
+        @return the list with bind hash elements replaced by their raw values
+    */
+    private list<auto> unwrapBindHashes(list<auto> l) {
+        return map ($1.typeCode() == NT_HASH && $1.hasKey("^value^") ? $1."^value^" : $1), l;
+    }
+
+    #! Deduplicates a hash-of-lists by primary key columns, keeping the last occurrence of each key
+    /** PostgreSQL's ON CONFLICT DO UPDATE cannot handle duplicate PK values in the same batch.
+        This method removes earlier rows with the same PK, keeping only the last occurrence.
+
+        @param h hash-of-lists where each key is a column name and each value is a list of row values
+        @param pk_cols list of primary key column names
+        @return deduplicated hash-of-lists
+    */
+    private hash<auto> deduplicateByPk(hash<auto> h, list<string> pk_cols) {
+        int nrows = h.firstValue().size();
+        if (nrows <= 1) {
+            return h;
+        }
+        # build a map of PK composite key string → last row index
+        hash<string, int> last_idx;
+        for (int i = 0; i < nrows; ++i) {
+            string key = "";
+            foreach string kcol in (pk_cols) {
+                key += "|" + (h{kcol}[i].val() ? string(h{kcol}[i]) : "NULL");
+            }
+            last_idx{key} = i;
+        }
+        # if no duplicates, return as-is
+        if (last_idx.size() == nrows) {
+            return h;
+        }
+        # build deduplicated result preserving order of last occurrences
+        list<int> keep = sort(last_idx.values());
+        hash<auto> result;
+        foreach string col in (keys h) {
+            result{col} = map h{col}[$1], keep;
+        }
+        return result;
+    }
+
+    #! Overrides the default insertIntern to generate UNNEST-based SQL for bulk inserts
+    private *hash<auto> insertIntern(hash<auto> row, *reference<string> sql, *hash<auto> opt,
+            *reference<softlist<auto>> args) {
+        # check if this is a bulk insert (any value is a list)
+        bool is_bulk = False;
+        foreach auto v in (row.iterator()) {
+            if (v.typeCode() == NT_LIST) {
+                is_bulk = True;
+                break;
+            }
+        }
+
+        if (!is_bulk) {
+            # delegate to base class for single-row inserts
+            return AbstractTable::insertIntern(row, \sql, opt, \args);
+        }
+
+        # check data callback options if any
+        validateOptionsIntern("OPTION-ERROR", getInsertOptions(), \opt);
+
+        # ensure columns are loaded
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+
+            getColumnsUnlocked();
+        }
+
+        # separate insert operator columns from regular columns
+        hash<auto> regular_cols;
+        hash<auto> iop_cols;
+        *hash<auto> im;
+
+        foreach hash<auto> i in (row.pairIterator()) {
+            auto v = i.value;
+            # for lists, check the first element for iop
+            auto check_v = v.typeCode() == NT_LIST ? v[0] : v;
+            if (check_v."_iop".typeCode() == NT_STRING) {
+                if (!exists im) {
+                    im = getInsertOperatorMap();
+                }
+                string iop = check_v."_iop";
+                *hash<auto> cmd = im{iop};
+                if (!cmd) {
+                    throw "INSERT-OPERATOR-ERROR", sprintf("%s: unknown insert operator %y: expecting one of: %y",
+                        getDesc(), iop, im.keys());
+                }
+                iop_cols{i.key} = check_v;
+            } else {
+                if (!columns.hasKey(i.key)) {
+                    throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)",
+                        getDesc(), i.key, columns.keys());
+                }
+                regular_cols{i.key} = v;
+            }
+        }
+
+        # build UNNEST SQL
+        # scalar_binds: bind values for scalar %v placeholders in SELECT (iop args, constant values)
+        # array_binds: bind values for UNNEST %v placeholders in FROM clause (list values)
+        # these must be separate because SELECT %v's appear before UNNEST %v's in the SQL
+        list<string> all_col_names = ();
+        list<string> select_exprs = ();
+        list<auto> scalar_binds = ();
+        list<auto> array_binds = ();
+        list<string> unnest_args = ();
+        int unnest_col_idx = 0;
+
+        foreach hash<auto> i in (row.pairIterator()) {
+            all_col_names += getColumnSqlName(i.key);
+
+            if (iop_cols.hasKey(i.key)) {
+                # insert operator: generate scalar expression
+                hash<auto> iop_val = iop_cols{i.key};
+                string iop = iop_val."_iop";
+                hash<auto> cmd = im{iop};
+                auto arg = iop_val.arg;
+                if (cmd.code) {
+                    arg = cmd.code(i.key, arg);
+                }
+                if (cmd.immediate) {
+                    if (arg =~ /[^a-z\._0-9]/i) {
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y "
+                            "which contains illegal characters", getDesc(), iop, arg);
+                    }
+                    select_exprs += arg;
+                } else {
+                    string ph = cmd.placeholder ?? "%v";
+                    select_exprs += ph;
+                    scalar_binds += arg;
+                }
+            } else if (i.value.typeCode() == NT_LIST) {
+                # regular column with list data: generate UNNEST argument
+                *AbstractColumn col = columns{i.key};
+                # no ::type[] cast on the array bind; instead cast individual elements in SELECT
+                # to avoid binary array OID conflicts with PostgreSQL's array-level casting
+                unnest_args += "%v";
+                select_exprs += sprintf("u.c%d::%s", unnest_col_idx, col.getNativeTypeString());
+                # unwrap bind hashes (e.g. from pgsql_bind()) since UNNEST uses native array encoding
+                # use push to add the list as a single element (not concatenate)
+                push array_binds, unwrapBindHashes(i.value);
+                ++unnest_col_idx;
+            } else {
+                # constant value (e.g. bind hash from cval): use scalar expression in SELECT
+                select_exprs += "%v";
+                push scalar_binds, i.value;
+            }
+        }
+
+        sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
+            getSqlName(),
+            (foldl $1 + "," + $2, all_col_names),
+            (foldl $1 + "," + $2, select_exprs),
+            (foldl $1 + "," + $2, unnest_args),
+            (foldl $1 + "," + $2, (map sprintf("c%d", $1), range(unnest_col_idx))));
+
+        # combine bind values: scalar %v's in SELECT come before UNNEST %v's in FROM
+        args = scalar_binds + array_binds;
+
+        if (opt.returning) {
+            return doReturningImpl(opt, \sql, args);
+        }
+
+        execData(opt, sql, args);
+    }
+
+    #! Overrides the default doReturningImpl to return all rows for bulk operations
+    private *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {
+        list<auto> l = ();
+        foreach auto v in (opt.returning) {
+            hash<auto> rh;
+            switch (v.typeCode()) {
+                case NT_STRING: rh.key = v; break;
+                case NT_HASH: rh = v; break;
+                default: throw "RETURNING-ERROR", sprintf("got type %y in \"returning\" option; expected "
+                    "\"string\" or \"hash\"", v.type());
+            }
+            if (!rh.key.val() || rh.key.typeCode() != NT_STRING) {
+                throw "RETURNING-ERROR", sprintf("got %y for \"returning\" option key value instead of name of "
+                    "output column", rh.key.type());
+            }
+            *PgsqlColumn c = columns{rh.key};
+            if (!c) {
+                throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" clause (valid "
+                    "columns: %y)", name, rh.key, columns.keys());
+            }
+            l += rh.key;
+            args += rh.type ?* c.qore_type ?* Type::String;
+        }
+        sql += sprintf(" returning %s", (foldl $1 + "," + $2, l));
+
+        *hash<auto> h = execData(opt, sql, args);
+        if (!h) {
+            return h;
+        }
+        # check if any value is already a list (bulk result)
+        bool has_list = False;
+        foreach auto v in (h.iterator()) {
+            if (v.value.typeCode() == NT_LIST) {
+                has_list = True;
+                break;
+            }
+        }
+        if (has_list) {
+            # bulk result: return hash-of-lists as-is
+            return h;
+        }
+        # single row result: wrap in lists for consistency with base class
+        return map {$1.key: $1.value[0]}, h.pairIterator();
+    }
+
+    #! Returns a closure for performing bulk upsert operations using UNNEST + ON CONFLICT
+    code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
+            *hash<auto> opt) {
+        if (!hasAtomicUpsert()) {
+            # fall back to default row-by-row closure for old PostgreSQL versions
+            return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
+        }
+
+        switch (upsert_strategy) {
+            case UpsertSelectFirst:
+            case UpsertUpdateOnly:
+                # fall back to default row-by-row closure
+                return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
+        }
+
+        # check upsert options
+        validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
+
+        # ensure columns are loaded
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+
+            getColumnsUnlocked();
+        }
+
+        hash<auto> upsert_row;
+        if (opt.upsert_columns) {
+            hash<auto> uch = map {$1: True}, opt.upsert_columns;
+            if (*hash<auto> invalid_cols = (uch - keys example_row)) {
+                throw "UPSERT-ERROR", sprintf("%s: 'upsert_columns' contains the following columns not referenced "
+                    "in the row data: %y", getDesc(), keys invalid_cols);
+            }
+            upsert_row = map {$1: NOTHING}, opt.upsert_columns;
+        } else {
+            upsert_row = example_row;
+        }
+
+        Columns cols = checkUpsertRow(upsert_row, \upsert_strategy);
+
+        # build list of columns, UNNEST aliases, and element-level cast expressions
+        list<string> all_col_names = ();
+        list<string> unnest_placeholders = ();
+        list<string> unnest_aliases = ();
+        list<string> select_exprs = ();
+        int unnest_idx = 0;
+
+        foreach string k in (keys example_row) {
+            all_col_names += getColumnSqlName(k);
+            *AbstractColumn col = columns{k};
+            if (!col) {
+                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)",
+                    getDesc(), k, columns.keys());
+            }
+            # no ::type[] cast on the array bind; instead cast individual elements in SELECT
+            # to avoid binary array OID conflicts with PostgreSQL's array-level casting
+            unnest_placeholders += "%v";
+            string alias = sprintf("c%d", unnest_idx);
+            unnest_aliases += alias;
+            select_exprs += sprintf("u.%s::%s", alias, col.getNativeTypeString());
+            ++unnest_idx;
+        }
+
+        string sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s)",
+            getSqlName(),
+            (foldl $1 + "," + $2, all_col_names),
+            (foldl $1 + "," + $2, select_exprs),
+            (foldl $1 + "," + $2, unnest_placeholders),
+            (foldl $1 + "," + $2, unnest_aliases));
+
+        if (upsert_strategy != UpsertInsertOnly) {
+            # build ON CONFLICT ... DO UPDATE SET
+            sql += sprintf(" on conflict(%s) do update set ",
+                (foldl $1 + "," + $2, getColumnSqlNames(cols.keys())));
+
+            # get columns to update (non-pk columns)
+            list<string> upd_exprs = ();
+            *hash<string, bool> suh = map {$1: True}, opt.omit_update;
+            foreach string k in (keys example_row) {
+                if (!cols.hasKey(k) && !suh{k}) {
+                    upd_exprs += sprintf("%s = EXCLUDED.%s", getColumnSqlName(k), getColumnSqlName(k));
+                }
+            }
+
+            if (!upd_exprs) {
+                # only PK columns present: fall back to DO NOTHING
+                sql = sprintf("insert into %s (%s) select %s from unnest(%s) as u(%s) on conflict(%s) do nothing",
+                    getSqlName(),
+                    (foldl $1 + "," + $2, all_col_names),
+                    (foldl $1 + "," + $2, select_exprs),
+                    (foldl $1 + "," + $2, unnest_placeholders),
+                    (foldl $1 + "," + $2, unnest_aliases),
+                    (foldl $1 + "," + $2, getColumnSqlNames(cols.keys())));
+            } else {
+                sql += (foldl $1 + ", " + $2, upd_exprs);
+            }
+        } else {
+            sql += sprintf(" on conflict(%s) do nothing",
+                (foldl $1 + "," + $2, getColumnSqlNames(cols.keys())));
+        }
+
+        # use a prepared statement for efficiency
+        *SQLStatement stmt;
+
+        # ON CONFLICT DO UPDATE cannot handle duplicate PK values in the same batch;
+        # capture PK column names for deduplication in the closure
+        bool needs_dedup = (upsert_strategy != UpsertInsertOnly);
+        list<string> pk_cols = cols.keys();
+
+        return int sub (hash<auto> h) {
+            if (!stmt) {
+                stmt = new SQLStatement(ds);
+                stmt.prepare(sql);
+            }
+            # deduplicate rows by PK columns if using DO UPDATE
+            if (needs_dedup) {
+                h = deduplicateByPk(h, pk_cols);
+            }
+            # unwrap bind hashes (e.g. from pgsql_bind()) since UNNEST uses native array encoding
+            stmt.execArgs(map ($1.typeCode() == NT_LIST ? unwrapBindHashes($1) : $1), h.values());
+            return UR_Verified;
+        };
+    }
+
+    #! Performs a high-performance bulk insert using the PostgreSQL COPY protocol
+    /** @param data a hash of column name to list of values; each list must have the same number of elements
+        @return the number of rows copied
+
+        @throw DBI:PGSQL:COPY-ERROR if an error occurs during the COPY operation
+    */
+    int copyInsert(hash<auto> data) {
+        string sql = sprintf("COPY %s (%s) FROM STDIN",
+            getSqlName(),
+            (foldl $1 + "," + $2, getColumnSqlNames(data.keys())));
+        return ds.exec(sql, data);
     }
 
     #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
@@ -2788,32 +3158,6 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private copyImpl(AbstractTable old) {
         if (triggerFunctions)
             triggerFunctions = triggerFunctions.copy();
-    }
-
-    private *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {
-        list<auto> l = ();
-        foreach auto v in (opt.returning) {
-            hash<auto> rh;
-            switch (v.typeCode()) {
-                case NT_STRING: rh.key = v; break;
-                case NT_HASH: rh = v; break;
-                default: throw "RETURNING-ERROR", sprintf("got type %y in \"returning\" option; expected "
-                    "\"string\" or \"hash\"", v.type());
-            }
-            if (!rh.key.val() || rh.key.typeCode() != NT_STRING)
-                throw "RETURNING-ERROR", sprintf("got %y for \"returning\" option key value instead of name of "
-                    "output column", rh.key.type());
-            *PgsqlColumn c = columns{rh.key};
-            if (!c)
-                throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" clause (valid "
-                    "columns: %y)", name, rh.key, columns.keys());
-            l += rh.key;
-            args += rh.type ?* c.qore_type ?* Type::String;
-        }
-        sql += sprintf(" returning %s", (foldl $1 + "," + $2, l));
-
-        *hash<auto> h = execData(opt, sql, args);
-        return h ? map {$1.key: $1.value[0]}, h.pairIterator() : h;
     }
 
     private list<auto> getGroupOrderByListUnlocked(hash<QueryInfo> info, string key, list<auto> coll) {
