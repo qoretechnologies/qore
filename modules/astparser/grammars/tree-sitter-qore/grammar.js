@@ -425,18 +425,19 @@ module.exports = grammar({
     variable_declarator: $ => choice(
       seq(
         field('name', $.variable_name),
-        optional(seq(choice('=', '+='), field('value', $._expression))),
+        optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
       ),
       // Object construction: identifier(args) or just identifier
       // Also: hash member init: hash sd.type = 'event'
       seq(
         field('name', $.identifier),
         optional(choice(
-          seq(choice('=', '+='), field('value', $._expression)),
+          seq(choice('=', '+=', ':='), field('value', $._expression)),
           $.argument_list,  // Constructor arguments
           // Hash member init via dot notation: hash sd.member = value
           // Also supports dynamic member: hash rv.(expr) = value
-          seq(repeat1(seq('.', choice($.identifier, seq('(', $._expression, ')')))), '=', field('value', $._expression)),
+          // Also supports string keys: hash res."DAV:href" = value
+          seq(repeat1(seq('.', choice($.identifier, $.string, seq('(', $._expression, ')')))), '=', field('value', $._expression)),
         )),
       ),
     ),
@@ -893,11 +894,13 @@ module.exports = grammar({
 
     // Type keywords that can also be used as variable names or cast functions.
     // All simple type keywords are included so they can appear in expression context.
+    // 'union' is included because it is not a reserved word in Qore.
     _type_keyword: $ => choice(
       'string', 'int', 'float', 'number', 'bool', 'binary', 'date',
       'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
       'softstring', 'softdate', 'softlist', 'timeout',
       'object', 'code', 'reference', 'nothing', 'any', 'auto', 'data',
+      'union',
     ),
 
     argument_list: $ => seq(
@@ -1056,7 +1059,9 @@ module.exports = grammar({
       $.null,
       $.nothing,
       $.date,
+      $.time,
       $.binary,
+      $.special_float,
     ),
 
     integer: $ => token(choice(
@@ -1097,6 +1102,20 @@ module.exports = grammar({
         'Z',                                          // UTC timezone
       )),
     )),
+
+    // Standalone time literal: HH:MM:SS with optional fractional seconds and timezone
+    // e.g., 10:20:30, 10:20:30Z, 10:20:30.123+01:00
+    time: $ => token(seq(
+      /[0-9]{1,2}:[0-9]{2}:[0-9]{2}/,
+      optional(/\.[0-9]+/),
+      optional(choice(
+        /[+-][0-9]{2}(:?[0-9]{2})?/,
+        'Z',
+      )),
+    )),
+
+    // IEEE 754 special float constants
+    special_float: $ => token(choice('@inf@', '@nan@')),
 
     binary: $ => token(/<[0-9a-fA-F]*>/),
 

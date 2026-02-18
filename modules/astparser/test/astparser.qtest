@@ -475,6 +475,11 @@ sub test() {
         addTestCase("Default param - softtype", \testDefaultParamSofttype());
         addTestCase("Default param - list default", \testDefaultParamListDefault());
         addTestCase("Literal kinds", \testLiteralKinds());
+        addTestCase("Weak reference assignment operator", \testWeakRefAssignment());
+        addTestCase("Standalone time literal", \testTimeLiteral());
+        addTestCase("Special float literals", \testSpecialFloatLiterals());
+        addTestCase("Union as variable name", \testUnionAsVariableName());
+        addTestCase("String key in variable dot notation", \testStringKeyDotNotation());
         addTestCase("Hash kind - curly vs parens", \testHashKind());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols detailed", \testScopeSymbolsDetailed());
@@ -2551,6 +2556,130 @@ class Used {}
         *hash<auto> decl3 = findChildByType(stmts[3], "variable_declarator");
         *hash<auto> val3 = findChildByField(decl3, "value");
         assertEq("NULL", getLeafText(val3), "NULL text");
+    }
+
+    testWeakRefAssignment() {
+        # Test := (weak reference assignment) operator in variable declarations
+        string code = "%modern
+class Test {
+    hash<string, int> data;
+    foo() {
+        int rv := data{\"key\"};
+        *int rv2 := data{\"key2\"};
+    }
+}
+
+hash<string, int> h = {\"a\": 1};
+int rv := h{\"a\"};
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for := operator");
+        assertTrue(exists tree, ":= operator parsed successfully");
+    }
+
+    testTimeLiteral() {
+        # Test standalone time literals (without date part)
+        string code = "%modern
+hash<auto> h = {
+    \"time1\": 10:20:30Z,
+    \"time2\": 10:20:30,
+    \"time3\": 10:20:30.123,
+    \"time4\": 10:20:30+01:00,
+};
+auto t = 23:59:59Z;
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for time literals");
+        assertTrue(exists tree, "time literals parsed successfully");
+
+        # Verify the time node appears in the tree
+        list<auto> nodes = tree.getNodesInfo();
+        *hash<auto> root = nodes[0];
+        assertTrue(exists root, "root node exists");
+    }
+
+    testSpecialFloatLiterals() {
+        # Test @inf@, -@inf@, @nan@ special float constants
+        string code = "%modern
+sub test() {
+    auto a = @inf@;
+    auto b = -@inf@;
+    auto c = @nan@;
+    float d = @inf@;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for special float literals");
+        assertTrue(exists tree, "special float literals parsed successfully");
+
+        list<auto> nodes = tree.getNodesInfo();
+        *hash<auto> fn = findFunctionNode(nodes);
+        assertTrue(exists(fn), "function node found");
+
+        *hash<auto> block = findChildByType(fn, "block");
+        list<auto> stmts = findAllChildrenByType(block, "local_variable_declaration");
+        assertEq(4, stmts.size(), "4 local variable declarations for special floats");
+
+        # Verify @inf@ literal
+        *hash<auto> decl0 = findChildByType(stmts[0], "variable_declarator");
+        *hash<auto> val0 = findChildByField(decl0, "value");
+        assertEq("@inf@", getLeafText(val0), "@inf@ text");
+
+        # Verify @nan@ literal
+        *hash<auto> decl2 = findChildByType(stmts[2], "variable_declarator");
+        *hash<auto> val2 = findChildByField(decl2, "value");
+        assertEq("@nan@", getLeafText(val2), "@nan@ text");
+    }
+
+    testUnionAsVariableName() {
+        # Test that 'union' can be used as a variable name (not a reserved word)
+        string code = "%modern
+class Test {
+    list<auto> union = ();
+
+    foo() {
+        hash<auto> typeinfo = {};
+        union += typeinfo;
+        if (union) {
+            printf(\"ok\\n\");
+        }
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for union as variable name");
+        assertTrue(exists tree, "union as variable parsed successfully");
+
+        # Also test union as member access
+        string code2 = "%modern
+sub test() {
+    hash<auto> st = {};
+    if (st.union) {
+        hash<auto> u = st.union;
+    }
+}
+";
+        AstParser parser2();
+        *AstTree tree2 = parser2.parseString(code2);
+        assertEq(0, parser2.getErrorCount(), "no parse errors for st.union member access");
+    }
+
+    testStringKeyDotNotation() {
+        # Test string keys in variable dot-notation initialization
+        string code = "%modern
+sub test(string href) {
+    hash res.\"DAV:href\" = href;
+    hash res2.\"another-key\" = \"value\";
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for string key dot notation");
+        assertTrue(exists tree, "string key dot notation parsed successfully");
     }
 
     testHashKind() {
