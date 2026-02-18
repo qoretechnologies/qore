@@ -572,7 +572,130 @@ enum class AOTExprKind : uint8_t {
     OBJ_METHOD_REF     = 12,  //!< Object method reference: ref1=method_name
     STATIC_VARREF      = 13,  //!< Static class variable: ref1=class_name, ref2=var_name
     SCOPED_NEW_OBJECT  = 14,  //!< Scoped new object: ref1=class_name
+    EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
+};
+
+//! Node kinds for recursive expression tree serialization (EXPR_TREE blobs)
+/** Each node in the tree blob has: kind (u8), metadata (variable), num_children (u16), children (recursive).
+    Metadata format varies by kind. Strings are u16-length-prefixed.
+*/
+enum class AOTExprNodeKind : uint8_t {
+    // Leaf constants (0 children)
+    EN_NOTHING       = 0,   //!< QoreValue nothing
+    EN_NULL          = 1,   //!< QoreValue null
+    EN_INT           = 2,   //!< i64 value
+    EN_FLOAT         = 3,   //!< f64 value
+    EN_STRING        = 4,   //!< u16 len + bytes
+    EN_BOOL          = 5,   //!< u8 (0/1)
+    EN_NUMBER        = 6,   //!< u16 len + bytes (string repr)
+    EN_BINARY        = 7,   //!< u32 len + bytes
+
+    // Leaf references (0 children)
+    EN_LOCAL_VAR     = 10,  //!< u16 slot_index
+    EN_GLOBAL_VAR    = 11,  //!< u16 name_len + bytes
+    EN_SELF_REF      = 12,  //!< u16 name_len + bytes (member name)
+    EN_STATIC_VAR    = 13,  //!< u16 class_len + bytes + u16 var_len + bytes
+    EN_CONST_REF     = 14,  //!< u16 name_len + bytes (fully qualified)
+
+    // Call nodes (children = args)
+    EN_FUNC_CALL     = 20,  //!< u16 name_len + bytes; children = args
+    EN_SELF_CALL     = 21,  //!< u16 class_len + bytes + u16 method_len + bytes; children = args
+    EN_STATIC_CALL   = 22,  //!< u16 class_len + bytes + u16 method_len + bytes; children = args
+    EN_DOT_EVAL      = 23,  //!< u16 method_len + bytes; children[0] = target, [1..] = args
+    EN_NEW           = 24,  //!< u16 class_len + bytes; children = args
+    EN_CALLREF_CALL  = 25,  //!< no metadata; children[0] = callref, [1..] = args
+    EN_SCOPED_NEW    = 26,  //!< u16 class_len + bytes; children = args
+
+    // Access operators (children = operands)
+    EN_HASH_DEREF    = 30,  //!< children = [target, key_expr]
+    EN_SQUARE_BRKT   = 31,  //!< children = [target, index_expr]
+
+    // Unary operators (1 child = operand)
+    EN_KEYS          = 40,  //!< no metadata
+    EN_ELEMENTS      = 41,  //!< no metadata
+    EN_EXISTS        = 42,  //!< no metadata
+    EN_DELETE        = 43,  //!< no metadata
+    EN_REMOVE        = 44,  //!< no metadata
+    EN_BACKGROUND    = 45,  //!< no metadata
+    EN_TYPEOF        = 46,  //!< no metadata
+    EN_TRIM          = 47,  //!< no metadata
+    EN_CHOMP         = 48,  //!< no metadata
+    EN_POP           = 49,  //!< no metadata
+    EN_INSTANCEOF    = 50,  //!< u16 type_path_len + bytes
+    EN_UNARY_MINUS   = 51,  //!< no metadata
+    EN_UNARY_PLUS    = 52,  //!< no metadata
+    EN_LOG_NOT       = 53,  //!< no metadata
+    EN_BIT_NOT       = 54,  //!< no metadata
+    EN_SHIFT         = 55,  //!< no metadata (shift list)
+
+    // Binary operators (2 children = [left, right])
+    EN_PUSH          = 60,  //!< no metadata
+    EN_UNSHIFT       = 61,  //!< no metadata
+    EN_LIST_ASSIGN   = 62,  //!< no metadata
+    EN_PLUS          = 63,  //!< no metadata
+    EN_MINUS         = 64,  //!< no metadata
+    EN_MULTIPLY      = 65,  //!< no metadata
+    EN_DIVIDE        = 66,  //!< no metadata
+    EN_MODULO        = 67,  //!< no metadata
+    EN_SHIFT_LEFT    = 68,  //!< no metadata
+    EN_SHIFT_RIGHT   = 69,  //!< no metadata
+    EN_BIT_AND       = 70,  //!< no metadata
+    EN_BIT_OR        = 71,  //!< no metadata
+    EN_BIT_XOR       = 72,  //!< no metadata
+    EN_LOG_CMP       = 73,  //!< no metadata (<=>)
+    EN_LOG_AND       = 74,  //!< no metadata (&&)
+    EN_LOG_OR        = 75,  //!< no metadata (||)
+    EN_LOG_EQ        = 76,  //!< no metadata (==)
+    EN_LOG_NE        = 77,  //!< no metadata (!=)
+    EN_LOG_AEQ       = 78,  //!< no metadata (===)
+    EN_LOG_ANE       = 79,  //!< no metadata (!==)
+    EN_LOG_LT        = 80,  //!< no metadata (<)
+    EN_LOG_GT        = 81,  //!< no metadata (>)
+    EN_LOG_LE        = 82,  //!< no metadata (<=)
+    EN_LOG_GE        = 83,  //!< no metadata (>=)
+    EN_NULL_COAL     = 84,  //!< no metadata (??)
+    EN_VAL_COAL      = 85,  //!< no metadata (?*)
+    EN_QUESTION      = 86,  //!< 3 children: [cond, true_expr, false_expr]
+    EN_RANGE         = 87,  //!< 3 children: [start, stop, step]
+
+    // Regex operators (1 child = operand)
+    EN_REGEX_MATCH   = 90,  //!< u16 pattern_len + bytes + i64 options
+    EN_REGEX_NMATCH  = 91,  //!< u16 pattern_len + bytes + i64 options
+    EN_REGEX_EXTRACT = 92,  //!< u16 pattern_len + bytes + i64 options
+    EN_REGEX_SUBST   = 93,  //!< u16 pat_len + bytes + u16 repl_len + bytes + i64 options + u8 global
+    EN_TRANSLIT      = 94,  //!< u16 src_len + bytes + u16 tgt_len + bytes
+
+    // Special nodes
+    EN_OBJ_METH_REF  = 100, //!< u16 method_len + bytes; 1 child = target expr
+    EN_SELF_METH_REF = 101, //!< u16 method_len + bytes; 0 children
+    EN_CLOSURE       = 102, //!< cannot serialize — signals failure
+    EN_FUNC_REF      = 103, //!< u16 name_len + bytes; 0 children (function reference)
+
+    // Assignment (2 children = [lvalue, rvalue])
+    EN_ASSIGN        = 110, //!< no metadata
+    EN_PLUS_EQ       = 111, //!< no metadata
+    EN_MINUS_EQ      = 112, //!< no metadata
+    EN_MULTIPLY_EQ   = 113, //!< no metadata
+    EN_DIVIDE_EQ     = 114, //!< no metadata
+    EN_MODULO_EQ     = 115, //!< no metadata
+    EN_AND_EQ        = 116, //!< no metadata
+    EN_OR_EQ         = 117, //!< no metadata
+    EN_XOR_EQ        = 118, //!< no metadata
+    EN_SHL_EQ        = 119, //!< no metadata
+    EN_SHR_EQ        = 120, //!< no metadata
+    EN_PRE_INC       = 121, //!< 1 child (lvalue)
+    EN_PRE_DEC       = 122, //!< 1 child (lvalue)
+    EN_POST_INC      = 123, //!< 1 child (lvalue)
+    EN_POST_DEC      = 124, //!< 1 child (lvalue)
+
+    // Multi-child
+    EN_EXTRACT       = 130, //!< 2-4 children: [lvalue, offset, [length, [new_val]]]
+    EN_SPLICE        = 131, //!< 2-4 children: same as extract
+    EN_PARSE_LIST    = 132, //!< N children (internal arg list)
+
+    // Cast
+    EN_CAST          = 140, //!< u16 type_path_len + bytes; 1 child
 };
 
 //! Identity for a local variable slot

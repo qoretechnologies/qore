@@ -71,7 +71,7 @@ struct QoreAOTContext {
     int num_globals = 0;
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
-    StatementBlock** stmts = nullptr;   //!< OnBlockExit statement blocks
+    const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers
     int num_stmts = 0;
 
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
@@ -103,7 +103,7 @@ struct QoreAOTContext {
                 calloc(num_exprs, sizeof(QoreAOTCallTarget)));
         }
         if (num_stmts > 0) {
-            stmts = static_cast<StatementBlock**>(calloc(num_stmts, sizeof(StatementBlock*)));
+            stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
         }
     }
 };
@@ -386,5 +386,17 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
     @return heap-allocated context (caller takes ownership), or nullptr on mismatch
 */
 QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts);
+
+class AbstractStatement;
+class StatementBlock;
+
+//! Collect statement pointers for AOT stmt_slots by walking the AST in depth-first order.
+/** Collects OnBlockExitStatement handler code blocks and reference ForEachStatement pointers
+    in the same order that buildAOTSlotMap() processes them in the IR.
+    @param block the statement block to walk
+    @param stmts output vector of statement pointers
+*/
+void collectStmtSlotStatements(const StatementBlock* block,
+        std::vector<const AbstractStatement*>& stmts);
 
 #endif

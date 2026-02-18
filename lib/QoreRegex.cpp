@@ -91,6 +91,7 @@ void QoreRegex::parseRT(const char* pattern, ExceptionSink* xsink) {
 
 void QoreRegex::parse(q_get_loc_t get_loc) {
     ExceptionSink xsink;
+    savePattern();
     parseRT(str, &xsink);
     delete str;
     str = nullptr;

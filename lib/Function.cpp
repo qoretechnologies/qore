@@ -50,6 +50,7 @@
 #include "qore/intern/TryStatement.h"
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/DebugStatement.h"
+#include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FunctionCallNode.h"
 
@@ -2256,6 +2257,62 @@ void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar
     // Recurse into child statements
     for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
         collectStatementLocals(*it, locals);
+    }
+}
+
+// Forward declaration for mutual recursion with collectStmtSlotFromStatement
+void collectStmtSlotStatements(const StatementBlock* block,
+        std::vector<const AbstractStatement*>& stmts);
+
+// helper: collect stmt_slot statements (OnBlockExit handler code + reference Foreach)
+// from a single statement, in depth-first order matching IR lowering
+static void collectStmtSlotFromStatement(const AbstractStatement* stmt,
+        std::vector<const AbstractStatement*>& stmts) {
+    if (!stmt) {
+        return;
+    }
+    if (auto* obe = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+        stmts.push_back(obe->getCode());
+    } else if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+        collectStmtSlotStatements(block, stmts);
+    } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        collectStmtSlotStatements(if_stmt->getIfCode(), stmts);
+        collectStmtSlotStatements(if_stmt->getElseCode(), stmts);
+    } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+        collectStmtSlotStatements(for_stmt->getCode(), stmts);
+    } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+        collectStmtSlotStatements(while_stmt->getCode(), stmts);
+    } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+        collectStmtSlotStatements(try_stmt->getTryBlock(), stmts);
+        collectStmtSlotStatements(try_stmt->getCatchBlock(), stmts);
+    } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+        const CaseNode* cn = sw_stmt->getCases();
+        while (cn) {
+            collectStmtSlotStatements(cn->code, stmts);
+            cn = cn->next;
+        }
+    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+        if (foreach_stmt->isRef()) {
+            // Reference foreach: the whole ForEachStatement is a stmt_slot
+            stmts.push_back(foreach_stmt);
+        } else {
+            // Non-reference foreach: recurse into body for nested OBE handlers
+            collectStmtSlotStatements(foreach_stmt->getCode(), stmts);
+        }
+    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+        if (StatementBlock* block = debug_stmt->getBlock()) {
+            collectStmtSlotStatements(block, stmts);
+        }
+    }
+}
+
+void collectStmtSlotStatements(const StatementBlock* block,
+        std::vector<const AbstractStatement*>& stmts) {
+    if (!block) {
+        return;
+    }
+    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
+        collectStmtSlotFromStatement(*it, stmts);
     }
 }
 

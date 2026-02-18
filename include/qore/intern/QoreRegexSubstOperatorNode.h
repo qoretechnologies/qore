@@ -56,6 +56,11 @@ public:
         return true;
     }
 
+    //! Returns the regex substitution object (for AOT serialization)
+    DLLLOCAL QoreRegexSubst* getRegexSubst() const {
+        return const_cast<QoreRegexSubst*>(*regex);
+    }
+
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
         ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)

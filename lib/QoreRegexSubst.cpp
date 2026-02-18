@@ -111,6 +111,7 @@ int QoreRegexSubst::parseRT(const char* pstr, ExceptionSink* xsink) {
 int QoreRegexSubst::parse() {
     //printd(5, "QoreRegexSubst() this=%p: str='%s', divider=%d\n", this, str->c_str(), divider);
     ExceptionSink xsink;
+    savePattern();
     parseRT(str, &xsink);
     if (xsink.isEvent()) {
         qore_program_private::addParseException(getProgram(), xsink);

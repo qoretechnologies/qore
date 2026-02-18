@@ -102,6 +102,11 @@ public:
     DLLLOCAL const QoreValue& getExp() const {
         return exp;
     }
+
+    //! Returns the method name (for AOT serialization)
+    DLLLOCAL const std::string& getMethodName() const {
+        return method;
+    }
 };
 
 class ParseSelfMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {
@@ -131,6 +136,11 @@ public:
 
     DLLLOCAL ParseSelfMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* m)
             : AbstractParseObjectMethodReferenceNode(loc), meth(m) {
+    }
+
+    //! Returns the method name (for AOT serialization)
+    DLLLOCAL const std::string& getMethodName() const {
+        return method;
     }
 };
 

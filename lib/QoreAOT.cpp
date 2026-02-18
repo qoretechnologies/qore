@@ -61,6 +61,81 @@
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreKeysOperatorNode.h"
+#include "qore/intern/QoreElementsOperatorNode.h"
+#include "qore/intern/QoreExistsOperatorNode.h"
+#include "qore/intern/QoreDeleteOperatorNode.h"
+#include "qore/intern/QoreRemoveOperatorNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/QoreTrimOperatorNode.h"
+#include "qore/intern/QoreChompOperatorNode.h"
+#include "qore/intern/QorePushOperatorNode.h"
+#include "qore/intern/QorePopOperatorNode.h"
+#include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreShiftOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
+#include "qore/intern/QoreExtractOperatorNode.h"
+#include "qore/intern/QoreSpliceOperatorNode.h"
+#include "qore/intern/ObjectMethodReferenceNode.h"
+#include "qore/intern/ConstantList.h"
+#include "qore/intern/QoreRegexMatchOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
+#include "qore/intern/QoreRegexSubstOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QoreTransliterationOperatorNode.h"
+#include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/QoreAssignmentOperatorNode.h"
+#include "qore/intern/QorePlusEqualsOperatorNode.h"
+#include "qore/intern/QoreMinusEqualsOperatorNode.h"
+#include "qore/intern/QorePlusOperatorNode.h"
+#include "qore/intern/QoreMinusOperatorNode.h"
+#include "qore/intern/QoreMultiplicationOperatorNode.h"
+#include "qore/intern/QoreDivisionOperatorNode.h"
+#include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreLogicalAndOperatorNode.h"
+#include "qore/intern/QoreLogicalOrOperatorNode.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreLogicalNotOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreRangeOperatorNode.h"
+#include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreShiftLeftOperatorNode.h"
+#include "qore/intern/QoreShiftRightOperatorNode.h"
+#include "qore/intern/QoreBinaryAndOperatorNode.h"
+#include "qore/intern/QoreBinaryOrOperatorNode.h"
+#include "qore/intern/QoreBinaryXorOperatorNode.h"
+#include "qore/intern/QorePreIncrementOperatorNode.h"
+#include "qore/intern/QorePreDecrementOperatorNode.h"
+#include "qore/intern/QorePostIncrementOperatorNode.h"
+#include "qore/intern/QorePostDecrementOperatorNode.h"
+#include "qore/intern/QoreMultiplyEqualsOperatorNode.h"
+#include "qore/intern/QoreDivideEqualsOperatorNode.h"
+#include "qore/intern/QoreModuloEqualsOperatorNode.h"
+#include "qore/intern/QoreAndEqualsOperatorNode.h"
+#include "qore/intern/QoreOrEqualsOperatorNode.h"
+#include "qore/intern/QoreXorEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreRegex.h"
+#include "qore/intern/QoreRegexSubst.h"
+#include "qore/intern/QoreTransliteration.h"
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
@@ -88,10 +163,33 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 #include <llvm/TargetParser/Triple.h>
 
 #include <cstdlib>
+#include <dlfcn.h>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
+
+//! Auto-detect the directory containing the loaded libqore using dladdr().
+/** Falls back to QORE_LIBDIR env var, then compiled-in QORE_LIBDIR.
+    @return directory path (without trailing slash)
+*/
+static std::string getLibqoreDir() {
+    const char* env = getenv("QORE_LIBDIR");
+    if (env) {
+        return env;
+    }
+    // Use dladdr() to find where the loaded libqore.so lives
+    Dl_info info;
+    // Use a known symbol from libqore
+    if (dladdr(reinterpret_cast<void*>(&qore_aot_run), &info) && info.dli_fname) {
+        std::string path(info.dli_fname);
+        size_t pos = path.rfind('/');
+        if (pos != std::string::npos) {
+            return path.substr(0, pos);
+        }
+    }
+    return QORE_LIBDIR;
+}
 
 //! Generate a unique variant key that includes parameter types to distinguish overloads
 /** Format: "name(type1,type2,...)" - uses type paths for parameter types
@@ -140,6 +238,27 @@ struct AOTCompiledFunc {
     int num_stmts = 0;              //!< number of statement slots in AOT context (OnBlockExit)
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
 };
+
+//! Report AOT compilation statistics
+static void reportAOTCompileStats(const char* label, int compiled_count, int total_funcs,
+        int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs) {
+    int unsupported_count = 0;
+    for (auto& cf : compiled_funcs) {
+        if (cf.slot_ids.has_unsupported_exprs) {
+            ++unsupported_count;
+        }
+    }
+    printf("AOT %s: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
+        label, compiled_count, total_funcs, failed_count,
+        total_funcs - compiled_count - failed_count);
+    if (unsupported_count > 0) {
+        printf("AOT: %d/%d functions fully serialized, %d need source fallback\n",
+            compiled_count - unsupported_count, compiled_count, unsupported_count);
+    } else {
+        printf("AOT: all %d functions fully serialized (no source fallback needed)\n",
+            compiled_count);
+    }
+}
 
 //! Try to lower a user function variant to IR
 /** @param uvb the user variant base
@@ -589,14 +708,12 @@ static AOTLinkConfig loadAOTLinkConfig() {
     if (env_conf) {
         conf_path = env_conf;
     } else {
-        const char* env_libdir = getenv("QORE_LIBDIR");
-        if (env_libdir) {
-            // Development builds: config is in the build directory (same as QORE_LIBDIR)
-            conf_path = std::string(env_libdir) + "/aot-link.conf";
-        }
-        if (conf_path.empty() || !std::ifstream(conf_path).good()) {
-            // Installed builds: config is in QORE_LIBDIR/qore/
-            conf_path = std::string(QORE_LIBDIR) + "/qore/aot-link.conf";
+        // Try auto-detected libqore directory first (covers both dev and installed)
+        std::string libdir = getLibqoreDir();
+        conf_path = libdir + "/aot-link.conf";
+        if (!std::ifstream(conf_path).good()) {
+            // Installed builds: config is in LIBDIR/qore/
+            conf_path = libdir + "/qore/aot-link.conf";
         }
     }
 
@@ -652,14 +769,8 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
     // Load CMake-generated link configuration
     AOTLinkConfig config = loadAOTLinkConfig();
 
-    // Determine library directory
-    std::string libqore_dir;
-    const char* qore_prefix = getenv("QORE_LIBDIR");
-    if (qore_prefix) {
-        libqore_dir = qore_prefix;
-    } else {
-        libqore_dir = QORE_LIBDIR;
-    }
+    // Determine library directory (auto-detect from loaded libqore.so)
+    std::string libqore_dir = getLibqoreDir();
 
     std::string cmd;
     if (static_link) {
@@ -963,14 +1074,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Report compilation stats
-    printf("AOT compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
-        compiled_count, total_funcs + 1, failed_count,
-        total_funcs + 1 - compiled_count - failed_count);
-    if (getenv("QORE_AOT_DEBUG")) {
-        fprintf(stderr, "AOT: total_funcs=%d compiled=%d failed=%d has_unsupported=%d\n",
-            total_funcs + 1, compiled_count, failed_count,
-            total_funcs + 1 - compiled_count - failed_count);
-    }
+    reportAOTCompileStats("compilation", compiled_count, total_funcs + 1,
+        failed_count, compiled_funcs);
 
     // Use the program's actual parse options (includes directives like %modern)
     parse_options = pgm->getParseOptions64();
@@ -1904,13 +2009,8 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
 
     AOTLinkConfig config = loadAOTLinkConfig();
 
-    std::string libqore_dir;
-    const char* qore_prefix = getenv("QORE_LIBDIR");
-    if (qore_prefix) {
-        libqore_dir = qore_prefix;
-    } else {
-        libqore_dir = QORE_LIBDIR;
-    }
+    // Determine library directory (auto-detect from loaded libqore.so)
+    std::string libqore_dir = getLibqoreDir();
 
     std::string cmd = config.cxx + " -shared -o " + so_path + " " + obj_path
         + " -L" + libqore_dir + " -lqore"
@@ -2048,9 +2148,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         return false;
     }
 
-    printf("AOT module compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
-        compiled_count, total_funcs, failed_count,
-        total_funcs - compiled_count - failed_count);
+    reportAOTCompileStats("module compilation", compiled_count, total_funcs,
+        failed_count, compiled_funcs);
 
     // Step 4: Generate module ABI with serialized metadata
     {
@@ -2372,8 +2471,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
-        printf("AOT split module compilation: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
-            compiled_count, total_funcs, failed_count, total_funcs - compiled_count - failed_count);
+        reportAOTCompileStats("split module compilation", compiled_count, total_funcs,
+            failed_count, compiled_funcs);
 
         // Step 10: Generate module ABI with serialized metadata
         {
@@ -2712,6 +2811,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getStmtSlot(reinterpret_cast<const void*>(code));
                     break;
                 }
+                case QoreIROpcode::Foreach: {
+                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
+                    slots.getStmtSlot(reinterpret_cast<const void*>(fi->stmt));
+                    break;
+                }
                 default:
                     break;
             }
@@ -3015,6 +3119,14 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
                     const void* key = reinterpret_cast<const void*>(code);
+                    if (seen_stmts.insert(key).second) {
+                        ++stmt_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Foreach: {
+                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(fi->stmt);
                     if (seen_stmts.insert(key).second) {
                         ++stmt_count;
                     }
@@ -3386,6 +3498,14 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::Foreach: {
+                    auto* fi = static_cast<QoreIRForeachInstruction*>(inst.get());
+                    const void* key = reinterpret_cast<const void*>(fi->stmt);
+                    if (seen_stmts.insert(key).second) {
+                        ctx->stmts[stmt_idx++] = fi->stmt;
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -3402,6 +3522,802 @@ static std::string getSlotTypePath(const QoreTypeInfo* ti) {
     }
     return QoreTypeInfo::getPath(ti);
 }
+
+// ---- Expression Tree Serializer ----
+
+//! Serializes an AST expression tree into a compact binary blob for AOT EXPR_TREE slots
+class ExprTreeSerializer {
+    std::vector<uint8_t> buf;
+    const AOTSlotMap& slots;
+    bool debug;
+    bool failed = false;
+
+    void writeU8(uint8_t v) {
+        buf.push_back(v);
+    }
+
+    void writeU16(uint16_t v) {
+        buf.push_back(v & 0xFF);
+        buf.push_back((v >> 8) & 0xFF);
+    }
+
+    void writeU32(uint32_t v) {
+        buf.push_back(v & 0xFF);
+        buf.push_back((v >> 8) & 0xFF);
+        buf.push_back((v >> 16) & 0xFF);
+        buf.push_back((v >> 24) & 0xFF);
+    }
+
+    void writeI64(int64_t v) {
+        uint64_t u;
+        memcpy(&u, &v, sizeof(u));
+        for (int i = 0; i < 8; ++i) {
+            buf.push_back(u & 0xFF);
+            u >>= 8;
+        }
+    }
+
+    void writeF64(double v) {
+        uint64_t u;
+        memcpy(&u, &v, sizeof(u));
+        for (int i = 0; i < 8; ++i) {
+            buf.push_back(u & 0xFF);
+            u >>= 8;
+        }
+    }
+
+    void writeStr(const char* s, size_t len) {
+        if (len > 0xFFFF) {
+            failed = true;
+            return;
+        }
+        writeU16(static_cast<uint16_t>(len));
+        if (len > 0 && s) {
+            buf.insert(buf.end(), reinterpret_cast<const uint8_t*>(s),
+                reinterpret_cast<const uint8_t*>(s) + len);
+        }
+    }
+
+    void writeStr(const char* s) {
+        writeStr(s, s ? strlen(s) : 0);
+    }
+
+    void writeStr(const std::string& s) {
+        writeStr(s.c_str(), s.size());
+    }
+
+    //! Write kind byte and serialize children for a unary operator
+    bool serializeUnary(AOTExprNodeKind kind, QoreValue operand) {
+        writeU8(static_cast<uint8_t>(kind));
+        writeU16(1); // 1 child
+        return serializeValue(operand);
+    }
+
+    //! Write kind byte and serialize children for a binary operator
+    bool serializeBinary(AOTExprNodeKind kind, QoreValue left, QoreValue right) {
+        writeU8(static_cast<uint8_t>(kind));
+        writeU16(2); // 2 children
+        if (!serializeValue(left)) {
+            return false;
+        }
+        return serializeValue(right);
+    }
+
+    //! Serialize a QoreParseListNode or QoreListNode as argument children
+    bool serializeArgs(const QoreParseListNode* pln, const QoreListNode* ln, uint16_t& count) {
+        count = 0;
+        if (pln) {
+            count = static_cast<uint16_t>(pln->size());
+            for (size_t i = 0; i < pln->size(); ++i) {
+                if (!serializeValue(pln->get(i))) {
+                    return false;
+                }
+            }
+        } else if (ln) {
+            count = static_cast<uint16_t>(ln->size());
+            for (size_t i = 0; i < ln->size(); ++i) {
+                if (!serializeValue(ln->retrieveEntry(i))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    //! Serialize a FunctionCallBase's arguments
+    bool serializeCallArgs(const FunctionCallBase* fcb, uint16_t& count) {
+        return serializeArgs(fcb->getParseArgs(), fcb->getArgs(), count);
+    }
+
+    //! Serialize a single node
+    bool serializeNode(const AbstractQoreNode* node) {
+        if (!node) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NOTHING));
+            writeU16(0);
+            return true;
+        }
+
+        // ---- Leaf constants ----
+
+        // String constant
+        if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STRING));
+            writeStr(str->c_str(), str->size());
+            writeU16(0);
+            return true;
+        }
+
+        // Number constant
+        if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
+            QoreString s;
+            num->toString(s);
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NUMBER));
+            writeStr(s.c_str(), s.size());
+            writeU16(0);
+            return true;
+        }
+
+        // Binary constant
+        if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_BINARY));
+            uint32_t len = static_cast<uint32_t>(bin->size());
+            writeU32(len);
+            const uint8_t* data = static_cast<const uint8_t*>(bin->getPtr());
+            buf.insert(buf.end(), data, data + len);
+            writeU16(0);
+            return true;
+        }
+
+        // ---- Variable references ----
+
+        // VarRefNode: local, global, closure
+        if (auto* vr = dynamic_cast<const VarRefNode*>(node)) {
+            qore_var_t vtype = vr->getType();
+            if (vtype == VT_LOCAL || vtype == VT_LOCAL_TS || vtype == VT_CLOSURE) {
+                const void* lv_ptr = reinterpret_cast<const void*>(vr->ref.id);
+                auto it = slots.local_slots.find(lv_ptr);
+                if (it != slots.local_slots.end()) {
+                    writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_LOCAL_VAR));
+                    writeU16(static_cast<uint16_t>(it->second));
+                    writeU16(0);
+                    return true;
+                }
+                if (debug) {
+                    fprintf(stderr, "EXPR_TREE: local var '%s' not found in slot map\n", vr->getName());
+                }
+                return false;
+            }
+            if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_GLOBAL_VAR));
+                writeStr(vr->getName());
+                writeU16(0);
+                return true;
+            }
+            if (debug) {
+                fprintf(stderr, "EXPR_TREE: unsupported var type %d for '%s'\n", (int)vtype, vr->getName());
+            }
+            return false;
+        }
+
+        // SelfVarrefNode: self.member
+        if (auto* sv = dynamic_cast<const SelfVarrefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_REF));
+            writeStr(sv->str ? sv->str : "");
+            writeU16(0);
+            return true;
+        }
+
+        // StaticClassVarRefNode: ClassName::var
+        if (auto* scv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_VAR));
+            writeStr(scv->qc.getName());
+            writeStr(scv->str);
+            writeU16(0);
+            return true;
+        }
+
+        // RuntimeConstantRefNode
+        if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
+            writeStr(rcr->getConstantEntry()->getName());
+            writeU16(0);
+            return true;
+        }
+
+        // ---- Call nodes ----
+
+        // FunctionCallNode: function call with args
+        if (auto* fc = dynamic_cast<const FunctionCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_CALL));
+            writeStr(fc->getName());
+            // Count and serialize args
+            size_t count_pos = buf.size();
+            writeU16(0); // placeholder for num_children
+            uint16_t arg_count = 0;
+            if (!serializeCallArgs(fc, arg_count)) {
+                return false;
+            }
+            // Patch child count
+            buf[count_pos] = arg_count & 0xFF;
+            buf[count_pos + 1] = (arg_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // SelfFunctionCallNode: self method call
+        if (auto* sfc = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_CALL));
+            const QoreMethod* method = sfc->getMethod();
+            if (method) {
+                const QoreClass* qc = method->getClass();
+                writeStr(qc ? qc->getName() : "");
+            } else {
+                writeStr("");
+            }
+            writeStr(sfc->getName());
+            // Args
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t arg_count = 0;
+            if (!serializeCallArgs(sfc, arg_count)) {
+                return false;
+            }
+            buf[count_pos] = arg_count & 0xFF;
+            buf[count_pos + 1] = (arg_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // StaticMethodCallNode: static method call
+        if (auto* smc = dynamic_cast<const StaticMethodCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_CALL));
+            const QoreMethod* method = smc->getMethod();
+            if (method) {
+                const QoreClass* qc = method->getClass();
+                writeStr(qc ? qc->getName() : "");
+            } else {
+                writeStr("");
+            }
+            writeStr(smc->getName());
+            // Args
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t arg_count = 0;
+            if (!serializeCallArgs(smc, arg_count)) {
+                return false;
+            }
+            buf[count_pos] = arg_count & 0xFF;
+            buf[count_pos + 1] = (arg_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // QoreDotEvalOperatorNode: obj.method(args)
+        if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_DOT_EVAL));
+            MethodCallNode* mc = de->getMethodCall();
+            writeStr(mc ? mc->getName() : "");
+            // children[0] = target expression, [1..] = args
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t child_count = 1;
+            if (!serializeValue(de->getExpression())) {
+                return false;
+            }
+            if (mc) {
+                uint16_t arg_count = 0;
+                if (!serializeCallArgs(mc, arg_count)) {
+                    return false;
+                }
+                child_count += arg_count;
+            }
+            buf[count_pos] = child_count & 0xFF;
+            buf[count_pos + 1] = (child_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // NewObjectCallNode: new ClassName(args)
+        if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NEW));
+            const QoreClass* qc = no->getClass();
+            writeStr(qc ? qc->getName() : "");
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t arg_count = 0;
+            if (!serializeCallArgs(no, arg_count)) {
+                return false;
+            }
+            buf[count_pos] = arg_count & 0xFF;
+            buf[count_pos + 1] = (arg_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // ScopedObjectCallNode: new Namespace::ClassName(args)
+        if (auto* so = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SCOPED_NEW));
+            writeStr(so->oc ? so->oc->getName() : "");
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t arg_count = 0;
+            if (!serializeCallArgs(so, arg_count)) {
+                return false;
+            }
+            buf[count_pos] = arg_count & 0xFF;
+            buf[count_pos + 1] = (arg_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // CallReferenceCallNode: callref(args)
+        if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL));
+            size_t count_pos = buf.size();
+            writeU16(0);
+            uint16_t child_count = 1;
+            // First child: the call reference expression
+            if (!serializeValue(crc->getExp())) {
+                return false;
+            }
+            // Remaining children: args
+            uint16_t arg_count = 0;
+            if (!serializeArgs(crc->getParseArgs(), crc->getArgs(), arg_count)) {
+                return false;
+            }
+            child_count += arg_count;
+            buf[count_pos] = child_count & 0xFF;
+            buf[count_pos + 1] = (child_count >> 8) & 0xFF;
+            return true;
+        }
+
+        // ---- Access operators ----
+
+        // QoreHashObjectDereferenceOperatorNode: hash.key or hash{key}
+        if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_HASH_DEREF, hd->getLeft(), hd->getRight());
+        }
+
+        // QoreSquareBracketsOperatorNode: list[idx]
+        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_SQUARE_BRKT, sb->getLeft(), sb->getRight());
+        }
+
+        // ---- Unary operators ----
+
+        if (auto* op = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_KEYS, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreElementsOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_ELEMENTS, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreExistsOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_EXISTS, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_DELETE, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_REMOVE, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreBackgroundOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_BACKGROUND, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreTrimOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_TRIM, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreChompOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_CHOMP, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePopOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POP, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_SHIFT, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_UNARY_MINUS, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreUnaryPlusOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_UNARY_PLUS, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalNotOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_LOG_NOT, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryNotOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_BIT_NOT, op->getExp());
+        }
+
+        // instanceof: unary + type path
+        if (auto* op = dynamic_cast<const QoreInstanceOfOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_INSTANCEOF));
+            // Get type path from the resolved type info
+            const QoreTypeInfo* ti = op->getInstanceTypeInfo();
+            if (ti) {
+                writeStr(QoreTypeInfo::getPath(ti));
+            } else {
+                writeStr("");
+            }
+            writeU16(1);
+            return serializeValue(op->getExp());
+        }
+
+        // cast<type>(expr) - abstract class with multiple concrete subclasses, skip for now
+        if (dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            if (debug) {
+                fprintf(stderr, "EXPR_TREE: cast operator not yet supported\n");
+            }
+            return false;
+        }
+
+        // typeof: needs special handling — check if it exists
+        // typeof is actually just elements in disguise for some nodes, skip for now
+
+        // ---- Pre/post increment/decrement ----
+        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_PRE_INC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_PRE_DEC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POST_DEC, op->getExp());
+        }
+
+        // ---- Binary operators ----
+
+        if (auto* op = dynamic_cast<const QorePushOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_PUSH, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_UNSHIFT, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreListAssignmentOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LIST_ASSIGN, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QorePlusOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_PLUS, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MINUS, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MULTIPLY, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreDivisionOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_DIVIDE, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreModuloOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MODULO, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreShiftLeftOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_SHIFT_LEFT, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreShiftRightOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_SHIFT_RIGHT, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryAndOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_BIT_AND, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryOrOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_BIT_OR, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryXorOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_BIT_XOR, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_CMP, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalAndOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_AND, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_OR, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_NE, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalAbsoluteEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_AEQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_ANE, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_LT, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_GT, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_LE, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_GE, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_NULL_COAL, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_VAL_COAL, op->getLeft(), op->getRight());
+        }
+
+        // Assignment operators
+        if (auto* op = dynamic_cast<const QoreAssignmentOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_ASSIGN, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QorePlusEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_PLUS_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreMinusEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MINUS_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MULTIPLY_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreDivideEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_DIVIDE_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreModuloEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MODULO_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreAndEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_AND_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreOrEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_OR_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreXorEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_XOR_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreShiftLeftEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_SHL_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreShiftRightEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_SHR_EQ, op->getLeft(), op->getRight());
+        }
+
+        // Ternary: question mark (? :)
+        if (auto* op = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_QUESTION));
+            writeU16(3);
+            if (!serializeValue(op->get(0))) {
+                return false;
+            }
+            if (!serializeValue(op->get(1))) {
+                return false;
+            }
+            return serializeValue(op->get(2));
+        }
+
+        // Range operator (binary: start..stop)
+        if (auto* op = dynamic_cast<const QoreRangeOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_RANGE, op->getLeft(), op->getRight());
+        }
+
+        // ---- Regex operators ----
+        // Pattern strings are preserved in pattern_cache via savePattern() for AOT serialization.
+
+        if (auto* op = dynamic_cast<const QoreRegexMatchOperatorNode*>(node)) {
+            if (dynamic_cast<const QoreRegexExtractOperatorNode*>(node)) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_REGEX_EXTRACT));
+            } else if (dynamic_cast<const QoreRegexNMatchOperatorNode*>(node)) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_REGEX_NMATCH));
+            } else {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_REGEX_MATCH));
+            }
+            QoreRegex* re = op->getRegex();
+            const char* pattern = re->getPatternCStr();
+            if (!pattern) {
+                if (debug) {
+                    fprintf(stderr, "EXPR_TREE: regex pattern string not available\n");
+                }
+                return false;
+            }
+            writeStr(pattern);
+            writeI64(re->getOptions());
+            writeU16(1);
+            return serializeValue(op->getExp());
+        }
+
+        if (auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_REGEX_SUBST));
+            QoreRegexSubst* rs = op->getRegexSubst();
+            const char* pattern = rs->getPatternCStr();
+            if (!pattern) {
+                if (debug) {
+                    fprintf(stderr, "EXPR_TREE: regex subst pattern string not available\n");
+                }
+                return false;
+            }
+            writeStr(pattern);
+            const QoreString* newstr = rs->getNewStr();
+            writeStr(newstr ? newstr->c_str() : "", newstr ? newstr->size() : 0);
+            writeI64(rs->getOptions());
+            writeU8(rs->isGlobal() ? 1 : 0);
+            writeU16(1);
+            return serializeValue(op->getExp());
+        }
+
+        if (auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_TRANSLIT));
+            QoreTransliteration* tr = op->getTransliteration();
+            if (!tr) {
+                return false;
+            }
+            const QoreString& src = tr->getSource();
+            const QoreString& tgt = tr->getTarget();
+            writeStr(src.c_str(), src.size());
+            writeStr(tgt.c_str(), tgt.size());
+            writeU16(1);
+            return serializeValue(op->getExp());
+        }
+
+        // ---- Special nodes ----
+
+        // Method reference: \obj.method()
+        if (auto* mr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_OBJ_METH_REF));
+            writeStr(mr->getMethodName().c_str(), mr->getMethodName().size());
+            writeU16(1);
+            return serializeValue(mr->getExp());
+        }
+
+        // Self method reference: \method()
+        if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_METH_REF));
+            writeStr(smr->getMethodName().c_str(), smr->getMethodName().size());
+            writeU16(0);
+            return true;
+        }
+
+        // Extract operator: extract list, offset[, length[, replacement]]
+        if (auto* op = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_EXTRACT));
+            uint16_t child_count = 2; // always have lvalue + offset
+            if (!op->getLength().isNothing()) {
+                child_count++;
+            }
+            if (!op->getNewValue().isNothing()) {
+                child_count++;
+            }
+            writeU16(child_count);
+            if (!serializeValue(op->getLValue())) {
+                return false;
+            }
+            if (!serializeValue(op->getOffset())) {
+                return false;
+            }
+            if (!op->getLength().isNothing()) {
+                if (!serializeValue(op->getLength())) {
+                    return false;
+                }
+            }
+            if (!op->getNewValue().isNothing()) {
+                if (!serializeValue(op->getNewValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Splice operator: splice list, offset[, length[, replacement]]
+        if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SPLICE));
+            uint16_t child_count = 2;
+            if (!op->getLength().isNothing()) {
+                child_count++;
+            }
+            if (!op->getNewValue().isNothing()) {
+                child_count++;
+            }
+            writeU16(child_count);
+            if (!serializeValue(op->getLValue())) {
+                return false;
+            }
+            if (!serializeValue(op->getOffset())) {
+                return false;
+            }
+            if (!op->getLength().isNothing()) {
+                if (!serializeValue(op->getLength())) {
+                    return false;
+                }
+            }
+            if (!op->getNewValue().isNothing()) {
+                if (!serializeValue(op->getNewValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // QoreParseListNode (used internally for arg lists)
+        if (auto* pln = dynamic_cast<const QoreParseListNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_PARSE_LIST));
+            uint16_t count = static_cast<uint16_t>(pln->size());
+            writeU16(count);
+            for (size_t i = 0; i < pln->size(); ++i) {
+                if (!serializeValue(pln->get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Closure — cannot be serialized
+        if (dynamic_cast<const QoreClosureParseNode*>(node)) {
+            if (debug) {
+                fprintf(stderr, "EXPR_TREE: closure cannot be serialized\n");
+            }
+            return false;
+        }
+
+        // Unsupported node type
+        if (debug) {
+            fprintf(stderr, "EXPR_TREE: unsupported node type '%s' (type %d)\n",
+                node->getTypeName(), node->getType());
+        }
+        return false;
+    }
+
+public:
+    ExprTreeSerializer(const AOTSlotMap& s) : slots(s), debug(getenv("QORE_AOT_DEBUG") != nullptr) {
+    }
+
+    //! Serialize a QoreValue (scalar or node) into a binary blob
+    bool serializeValue(QoreValue v) {
+        if (!v.hasNode()) {
+            if (v.isNothing()) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NOTHING));
+                writeU16(0);
+                return true;
+            }
+            if (v.isNull()) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NULL));
+                writeU16(0);
+                return true;
+            }
+            qore_type_t t = v.getType();
+            if (t == NT_INT) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_INT));
+                writeI64(v.getAsBigInt());
+                writeU16(0);
+                return true;
+            }
+            if (t == NT_FLOAT) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FLOAT));
+                writeF64(v.getAsFloat());
+                writeU16(0);
+                return true;
+            }
+            if (t == NT_BOOLEAN) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_BOOL));
+                writeU8(v.getAsBool() ? 1 : 0);
+                writeU16(0);
+                return true;
+            }
+            return false;
+        }
+        return serializeNode(v.getInternalNode());
+    }
+
+    //! Try to serialize a QoreValue expression tree, returning the blob data
+    /** @return true if successful, false if the tree contains unsupported nodes
+    */
+    bool serialize(QoreValue v) {
+        buf.clear();
+        failed = false;
+        if (!serializeValue(v)) {
+            return false;
+        }
+        return !failed;
+    }
+
+    //! Get the serialized buffer data
+    std::string getBuffer() const {
+        return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
+    }
+};
 
 //! Classify an expression QoreValue for slot map serialization
 /** Checks the AST node type and extracts identity info for supported types.
@@ -3537,6 +4453,20 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         return id;
     }
 
+    // Try recursive expression tree serialization before falling back to GENERIC_EVAL
+    {
+        ExprTreeSerializer serializer(slots);
+        if (serializer.serialize(v)) {
+            id.kind = AOTExprKind::EXPR_TREE;
+            id.ref1 = serializer.getBuffer();
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: serialized EXPR_TREE for '%s' (node type %d, %zu bytes)\n",
+                    node->getTypeName(), node->getType(), id.ref1.size());
+            }
+            return id;
+        }
+    }
+
     // Unsupported expression type — function needs source fallback
     id.kind = AOTExprKind::GENERIC_EVAL;
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
@@ -3632,12 +4562,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         out.body_locals.push_back(std::move(blid));
     }
 
-    // If this function has on_exit/on_success/on_error blocks (stmt_slots),
-    // it requires source fallback since StatementBlock* cannot be symbolically
-    // resolved at runtime without re-lowering from source
-    if (!slots.stmt_slots.empty()) {
-        out.has_unsupported_exprs = true;
-    }
+    // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
+    // runtime in buildContextFromSlotMap(), so they no longer require source fallback.
 }
 
 void QoreAOT::printSupportedTargets() {

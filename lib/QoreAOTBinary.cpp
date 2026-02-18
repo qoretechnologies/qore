@@ -1534,6 +1534,13 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 case AOTExprKind::OBJ_METHOD_REF:
                     // no additional data
                     break;
+                case AOTExprKind::EXPR_TREE: {
+                    // ref1 contains binary tree blob — write inline with length prefix
+                    uint32_t blob_size = static_cast<uint32_t>(expr.ref1.size());
+                    writer.writeU32(blob_size);
+                    writer.writeBytes(expr.ref1.data(), blob_size);
+                    break;
+                }
                 case AOTExprKind::GENERIC_EVAL:
                 default:
                     // no additional data — function needs source fallback

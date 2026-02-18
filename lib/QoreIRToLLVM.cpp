@@ -7212,17 +7212,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Statement operations ===
         case QoreIROpcode::Foreach: {
             const auto* sinst = static_cast<const QoreIRForeachInstruction*>(inst);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(sinst->stmt));
-            llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, stmt_as_ptr, xsink_arg});
-            values[inst->result.id] = result;
+            if (aot_mode) {
+                // AOT mode: use slot index via qore_rt_exec_foreach_aot()
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getStmtSlot(
+                        reinterpret_cast<const void*>(sinst->stmt));
+                auto helper = module.getOrInsertFunction("qore_rt_exec_foreach_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                llvm::Value* result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                values[inst->result.id] = result;
+            } else {
+                // JIT mode: embed raw ForEachStatement* pointer
+                llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                        static_cast<int>(inst->opcode));
+                llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(sinst->stmt));
+                llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
+                        llvm::FunctionType::get(i64_type,
+                            {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+                llvm::Value* result = builder->CreateCall(helper,
+                        {opcode_val, stmt_as_ptr, xsink_arg});
+                values[inst->result.id] = result;
+            }
             nanboxed_values.insert(inst->result.id);
             // Foreach-reference executes through the AST path and can modify
             // any local variable; reload all local allocas after execution.

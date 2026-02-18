@@ -62,6 +62,7 @@
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/ForEachStatement.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
 
@@ -2526,7 +2527,16 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type) {
     assert(ctx && idx >= 0 && idx < ctx->num_stmts);
-    qore_rt_push_on_block_exit(type, ctx->stmts[idx]);
+    qore_rt_push_on_block_exit(type, const_cast<StatementBlock*>(
+        static_cast<const StatementBlock*>(ctx->stmts[idx])));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_stmts);
+    const ForEachStatement* stmt = static_cast<const ForEachStatement*>(ctx->stmts[idx]);
+    QoreValue return_value;
+    QoreIRInterpreter::execStatement(QoreIROpcode::Foreach, stmt, return_value, xsink);
+    return toBits(return_value);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

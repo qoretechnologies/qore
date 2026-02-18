@@ -75,6 +75,12 @@ public:
         return const_cast<QoreRegexSubst*>(this);
     }
 
+    //! Returns the replacement string (for AOT serialization)
+    DLLLOCAL const QoreString* getNewStr() const { return newstr; }
+
+    //! Returns the global flag (for AOT serialization)
+    DLLLOCAL bool isGlobal() const { return global; }
+
 protected:
 private:
     bool global = false;

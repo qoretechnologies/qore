@@ -291,6 +291,9 @@ struct QoreAOTContext;
 //! Register an on_block_exit handler via AOT context slot
 void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type);
 
+//! Execute a reference foreach statement via AOT context stmt slot
+uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 // --- Guard type helper ---
 
 //! Check if value matches the given type; returns 1 if match, 0 otherwise

@@ -48,6 +48,11 @@ public:
         return true;
     }
 
+    //! Returns the transliteration object (for AOT serialization)
+    DLLLOCAL QoreTransliteration* getTransliteration() const {
+        return const_cast<QoreTransliteration*>(*regex);
+    }
+
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
         ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)

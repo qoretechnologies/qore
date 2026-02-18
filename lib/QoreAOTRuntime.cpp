@@ -54,6 +54,82 @@
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreKeysOperatorNode.h"
+#include "qore/intern/QoreElementsOperatorNode.h"
+#include "qore/intern/QoreExistsOperatorNode.h"
+#include "qore/intern/QoreDeleteOperatorNode.h"
+#include "qore/intern/QoreRemoveOperatorNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/QoreTrimOperatorNode.h"
+#include "qore/intern/QoreChompOperatorNode.h"
+#include "qore/intern/QorePushOperatorNode.h"
+#include "qore/intern/QorePopOperatorNode.h"
+#include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreShiftOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
+#include "qore/intern/QoreExtractOperatorNode.h"
+#include "qore/intern/QoreSpliceOperatorNode.h"
+#include "qore/intern/ObjectMethodReferenceNode.h"
+#include "qore/intern/ConstantList.h"
+#include "qore/intern/QoreRegexMatchOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
+#include "qore/intern/QoreRegexSubstOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QoreTransliterationOperatorNode.h"
+#include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreAssignmentOperatorNode.h"
+#include "qore/intern/QorePlusEqualsOperatorNode.h"
+#include "qore/intern/QoreMinusEqualsOperatorNode.h"
+#include "qore/intern/QorePlusOperatorNode.h"
+#include "qore/intern/QoreMinusOperatorNode.h"
+#include "qore/intern/QoreMultiplicationOperatorNode.h"
+#include "qore/intern/QoreDivisionOperatorNode.h"
+#include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreLogicalAndOperatorNode.h"
+#include "qore/intern/QoreLogicalOrOperatorNode.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreLogicalNotOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreRangeOperatorNode.h"
+#include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreShiftLeftOperatorNode.h"
+#include "qore/intern/QoreShiftRightOperatorNode.h"
+#include "qore/intern/QoreBinaryAndOperatorNode.h"
+#include "qore/intern/QoreBinaryOrOperatorNode.h"
+#include "qore/intern/QoreBinaryXorOperatorNode.h"
+#include "qore/intern/QorePreIncrementOperatorNode.h"
+#include "qore/intern/QorePreDecrementOperatorNode.h"
+#include "qore/intern/QorePostIncrementOperatorNode.h"
+#include "qore/intern/QorePostDecrementOperatorNode.h"
+#include "qore/intern/QoreMultiplyEqualsOperatorNode.h"
+#include "qore/intern/QoreDivideEqualsOperatorNode.h"
+#include "qore/intern/QoreModuloEqualsOperatorNode.h"
+#include "qore/intern/QoreAndEqualsOperatorNode.h"
+#include "qore/intern/QoreOrEqualsOperatorNode.h"
+#include "qore/intern/QoreXorEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreRegex.h"
+#include "qore/intern/QoreRegexSubst.h"
+#include "qore/intern/QoreTransliteration.h"
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
@@ -64,6 +140,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+// collectStmtSlotStatements() declared in QoreAOT.h, defined in Function.cpp
 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
@@ -243,12 +320,960 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             printd(1, "AOT v2: expression kind %d requires source fallback\n", (int)kind);
             return 0;
 
+        case AOTExprKind::EXPR_TREE:
+            // Handled inline in buildContextFromSlotMap
+            return 0;
+
         case AOTExprKind::GENERIC_EVAL:
         default:
             // Unsupported — function needs source fallback
             return 0;
     }
 }
+
+// ---- Expression Tree Deserializer ----
+
+//! Deserializes an AOT EXPR_TREE binary blob back into AST nodes
+class ExprTreeDeserializer {
+    const uint8_t* ptr;
+    const uint8_t* end;
+    QoreProgram* pgm;
+    QoreAOTContext* ctx;
+    bool debug;
+    bool failed = false;
+
+    uint8_t readU8() {
+        if (ptr >= end) {
+            return 0;
+        }
+        return *ptr++;
+    }
+
+    uint16_t readU16() {
+        if (ptr + 2 > end) {
+            return 0;
+        }
+        uint16_t v = ptr[0] | (static_cast<uint16_t>(ptr[1]) << 8);
+        ptr += 2;
+        return v;
+    }
+
+    uint32_t readU32() {
+        if (ptr + 4 > end) {
+            return 0;
+        }
+        uint32_t v = ptr[0] | (static_cast<uint32_t>(ptr[1]) << 8)
+            | (static_cast<uint32_t>(ptr[2]) << 16) | (static_cast<uint32_t>(ptr[3]) << 24);
+        ptr += 4;
+        return v;
+    }
+
+    int64_t readI64() {
+        if (ptr + 8 > end) {
+            return 0;
+        }
+        uint64_t v = 0;
+        for (int i = 0; i < 8; ++i) {
+            v |= static_cast<uint64_t>(ptr[i]) << (i * 8);
+        }
+        ptr += 8;
+        int64_t r;
+        memcpy(&r, &v, sizeof(r));
+        return r;
+    }
+
+    double readF64() {
+        if (ptr + 8 > end) {
+            return 0.0;
+        }
+        uint64_t v = 0;
+        for (int i = 0; i < 8; ++i) {
+            v |= static_cast<uint64_t>(ptr[i]) << (i * 8);
+        }
+        ptr += 8;
+        double r;
+        memcpy(&r, &v, sizeof(r));
+        return r;
+    }
+
+    std::string readStr() {
+        uint16_t len = readU16();
+        if (len == 0 || ptr + len > end) {
+            if (len > 0) {
+                failed = true;
+                ptr = end; // mark exhausted
+            }
+            return {};
+        }
+        std::string s(reinterpret_cast<const char*>(ptr), len);
+        ptr += len;
+        return s;
+    }
+
+    //! Mark deserialization as failed and return nothing
+    QoreValue fail() {
+        failed = true;
+        return QoreValue();
+    }
+
+    //! Resolve a class by name using the program's namespace tree
+    const QoreClass* resolveClass(const std::string& name) {
+        if (name.empty()) {
+            return nullptr;
+        }
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        const qore_ns_private* found_ns = nullptr;
+        return qore_root_ns_private::runtimeFindClass(*pp->RootNS, name.c_str(), found_ns);
+    }
+
+    //! Deserialize a single QoreValue from the blob
+    /** Returns QoreValue(). On error (corrupted data), returns nothing.
+    */
+    QoreValue deserializeValue() {
+        if (ptr >= end) {
+            return QoreValue();
+        }
+
+        AOTExprNodeKind kind = static_cast<AOTExprNodeKind>(readU8());
+
+        switch (kind) {
+            // ---- Leaf constants ----
+
+            case AOTExprNodeKind::EN_NOTHING: {
+                readU16(); // num_children (0)
+                return QoreValue();
+            }
+
+            case AOTExprNodeKind::EN_NULL: {
+                readU16();
+                return QoreValue(null());
+            }
+
+            case AOTExprNodeKind::EN_INT: {
+                int64_t v = readI64();
+                readU16();
+                return QoreValue(v);
+            }
+
+            case AOTExprNodeKind::EN_FLOAT: {
+                double v = readF64();
+                readU16();
+                return QoreValue(v);
+            }
+
+            case AOTExprNodeKind::EN_BOOL: {
+                uint8_t v = readU8();
+                readU16();
+                return QoreValue((bool)v);
+            }
+
+            case AOTExprNodeKind::EN_STRING: {
+                std::string s = readStr();
+                readU16();
+                return QoreValue(new QoreStringNode(s));
+            }
+
+            case AOTExprNodeKind::EN_NUMBER: {
+                std::string s = readStr();
+                readU16();
+                return QoreValue(new QoreNumberNode(s.c_str()));
+            }
+
+            case AOTExprNodeKind::EN_BINARY: {
+                uint32_t len = readU32();
+                SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+                if (len > 0 && ptr + len <= end) {
+                    bin->append(ptr, len);
+                    ptr += len;
+                }
+                readU16();
+                return QoreValue(bin.release());
+            }
+
+            // ---- Variable references ----
+
+            case AOTExprNodeKind::EN_LOCAL_VAR: {
+                uint16_t slot = readU16();
+                readU16(); // num_children
+                if (slot < ctx->num_locals && ctx->locals[slot]) {
+                    LocalVar* lv = ctx->locals[slot];
+                    return QoreValue(new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false));
+                }
+                printd(0, "AOT EXPR_TREE: invalid local slot %d\n", slot);
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_GLOBAL_VAR: {
+                std::string name = readStr();
+                readU16();
+                if (!name.empty()) {
+                    qore_program_private* pp = qore_program_private::get(*pgm);
+                    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+                    Var* v = root_ns->var_list.runtimeFindVar(name.c_str());
+                    if (v) {
+                        return QoreValue(new GlobalVarRefNode(&loc_builtin, strdup(name.c_str()), v));
+                    }
+                    printd(0, "AOT EXPR_TREE: cannot resolve global var '%s'\n", name.c_str());
+                }
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_SELF_REF: {
+                std::string name = readStr();
+                readU16();
+                return QoreValue(new SelfVarrefNode(&loc_builtin, strdup(name.c_str())));
+            }
+
+            case AOTExprNodeKind::EN_STATIC_VAR: {
+                std::string class_name = readStr();
+                std::string var_name = readStr();
+                readU16();
+                const QoreClass* qc = resolveClass(class_name);
+                if (qc) {
+                    const QoreExternalStaticMember* m = qc->findLocalStaticMember(var_name.c_str());
+                    if (m) {
+                        // QoreExternalStaticMember is the public API facade for QoreVarInfo
+                        // (same cast pattern used in QoreReflection.cpp)
+                        QoreVarInfo* vi = const_cast<QoreVarInfo*>(
+                            reinterpret_cast<const QoreVarInfo*>(m));
+                        return QoreValue(new StaticClassVarRefNode(&loc_builtin, strdup(var_name.c_str()),
+                            *qc, *vi));
+                    }
+                }
+                printd(0, "AOT EXPR_TREE: cannot resolve static var %s::%s\n",
+                    class_name.c_str(), var_name.c_str());
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_CONST_REF: {
+                std::string name = readStr();
+                readU16();
+                if (!name.empty()) {
+                    qore_program_private* pp = qore_program_private::get(*pgm);
+                    const qore_ns_private* cns = nullptr;
+                    const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
+                        *pp->RootNS, name.c_str(), cns);
+                    if (ce) {
+                        // Return the constant's value directly; RuntimeConstantRefNode
+                        // requires saved_val which is only set during parse-time
+                        // delayed evaluation, not in AOT v2 metadata deserialization
+                        return ce->getReferencedValue();
+                    }
+                    printd(0, "AOT EXPR_TREE: cannot resolve constant '%s'\n", name.c_str());
+                }
+                return fail();
+            }
+
+            // ---- Call nodes ----
+
+            case AOTExprNodeKind::EN_FUNC_CALL: {
+                std::string name = readStr();
+                uint16_t num_children = readU16();
+                // Deserialize args
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    pln = new QoreParseListNode(&loc_builtin);
+                    for (uint16_t i = 0; i < num_children && !failed; ++i) {
+                        pln->add(deserializeValue(), &loc_builtin);
+                    }
+                }
+                if (failed) {
+                    return QoreValue();
+                }
+                // Look up function
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                    *pp->RootNS, name.c_str());
+                if (!fe) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve function '%s'\n", name.c_str());
+                    return fail();
+                }
+                return QoreValue(new FunctionCallNode(&loc_builtin, fe, pln.release()));
+            }
+
+            case AOTExprNodeKind::EN_SELF_CALL: {
+                std::string class_name = readStr();
+                std::string method_name = readStr();
+                uint16_t num_children = readU16();
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    pln = new QoreParseListNode(&loc_builtin);
+                    for (uint16_t i = 0; i < num_children && !failed; ++i) {
+                        pln->add(deserializeValue(), &loc_builtin);
+                    }
+                }
+                if (failed) {
+                    return QoreValue();
+                }
+                const QoreClass* qc = resolveClass(class_name);
+                if (!qc) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for self call '%s'\n",
+                        class_name.c_str(), method_name.c_str());
+                    return fail();
+                }
+                const QoreMethod* m = qc->findMethod(method_name.c_str());
+                if (!m) {
+                    m = qc->findStaticMethod(method_name.c_str());
+                }
+                if (!m) {
+                    printd(0, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
+                        class_name.c_str(), method_name.c_str());
+                    return fail();
+                }
+                SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin,
+                    strdup(method_name.c_str()), pln.release(), m,
+                    m->getClass(), qore_class_private::get(*m->getClass()));
+                return QoreValue(sfcn);
+            }
+
+            case AOTExprNodeKind::EN_STATIC_CALL: {
+                std::string class_name = readStr();
+                std::string method_name = readStr();
+                uint16_t num_children = readU16();
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    pln = new QoreParseListNode(&loc_builtin);
+                    for (uint16_t i = 0; i < num_children && !failed; ++i) {
+                        pln->add(deserializeValue(), &loc_builtin);
+                    }
+                }
+                if (failed) {
+                    return QoreValue();
+                }
+                const QoreClass* qc = resolveClass(class_name);
+                if (!qc) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for static call '%s'\n",
+                        class_name.c_str(), method_name.c_str());
+                    return fail();
+                }
+                const QoreMethod* m = qc->findStaticMethod(method_name.c_str());
+                if (!m) {
+                    printd(0, "AOT EXPR_TREE: cannot find static method '%s::%s'\n",
+                        class_name.c_str(), method_name.c_str());
+                    return fail();
+                }
+                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln.release());
+                return QoreValue(smcn);
+            }
+
+            case AOTExprNodeKind::EN_DOT_EVAL: {
+                std::string method_name = readStr();
+                uint16_t num_children = readU16();
+                // First child = target expression
+                QoreValue target;
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    target = deserializeValue();
+                    // Remaining children = method args
+                    if (num_children > 1) {
+                        pln = new QoreParseListNode(&loc_builtin);
+                        for (uint16_t i = 1; i < num_children && !failed; ++i) {
+                            pln->add(deserializeValue(), &loc_builtin);
+                        }
+                    }
+                }
+                if (failed) {
+                    target.discard(nullptr);
+                    return QoreValue();
+                }
+                MethodCallNode* mc = new MethodCallNode(&loc_builtin,
+                    strdup(method_name.c_str()), pln.release());
+                return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
+            }
+
+            case AOTExprNodeKind::EN_NEW: {
+                std::string class_name = readStr();
+                uint16_t num_children = readU16();
+                ReferenceHolder<QoreListNode> args_list(nullptr, nullptr);
+                if (num_children > 0) {
+                    args_list = new QoreListNode(autoTypeInfo);
+                    for (uint16_t i = 0; i < num_children && !failed; ++i) {
+                        QoreValue v = deserializeValue();
+                        args_list->push(v, nullptr);
+                    }
+                }
+                if (failed) {
+                    return QoreValue();
+                }
+                const QoreClass* qc = resolveClass(class_name);
+                if (!qc) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for new\n",
+                        class_name.c_str());
+                    return fail();
+                }
+                return QoreValue(new NewObjectCallNode(qc, args_list.release()));
+            }
+
+            case AOTExprNodeKind::EN_SCOPED_NEW: {
+                std::string class_name = readStr();
+                uint16_t num_children = readU16();
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    pln = new QoreParseListNode(&loc_builtin);
+                    for (uint16_t i = 0; i < num_children && !failed; ++i) {
+                        pln->add(deserializeValue(), &loc_builtin);
+                    }
+                }
+                if (failed) {
+                    return QoreValue();
+                }
+                const QoreClass* qc = resolveClass(class_name);
+                if (!qc) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for scoped new\n",
+                        class_name.c_str());
+                    return fail();
+                }
+                return QoreValue(new ScopedObjectCallNode(&loc_builtin, qc, pln.release()));
+            }
+
+            case AOTExprNodeKind::EN_CALLREF_CALL: {
+                uint16_t num_children = readU16();
+                QoreValue callref_expr;
+                SimpleRefHolder<QoreParseListNode> pln;
+                if (num_children > 0) {
+                    callref_expr = deserializeValue();
+                    if (num_children > 1) {
+                        pln = new QoreParseListNode(&loc_builtin);
+                        for (uint16_t i = 1; i < num_children && !failed; ++i) {
+                            pln->add(deserializeValue(), &loc_builtin);
+                        }
+                    }
+                }
+                if (failed) {
+                    callref_expr.discard(nullptr);
+                    return QoreValue();
+                }
+                return QoreValue(new CallReferenceCallNode(&loc_builtin, callref_expr, pln.release()));
+            }
+
+            // ---- Access operators ----
+
+            case AOTExprNodeKind::EN_HASH_DEREF: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                return QoreValue(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right));
+            }
+
+            case AOTExprNodeKind::EN_SQUARE_BRKT: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                return QoreValue(new QoreSquareBracketsOperatorNode(&loc_builtin, left, right));
+            }
+
+            // ---- Unary operators ----
+
+            case AOTExprNodeKind::EN_KEYS:
+            case AOTExprNodeKind::EN_ELEMENTS:
+            case AOTExprNodeKind::EN_EXISTS:
+            case AOTExprNodeKind::EN_DELETE:
+            case AOTExprNodeKind::EN_REMOVE:
+            case AOTExprNodeKind::EN_BACKGROUND:
+            case AOTExprNodeKind::EN_TRIM:
+            case AOTExprNodeKind::EN_CHOMP:
+            case AOTExprNodeKind::EN_POP:
+            case AOTExprNodeKind::EN_SHIFT:
+            case AOTExprNodeKind::EN_UNARY_MINUS:
+            case AOTExprNodeKind::EN_UNARY_PLUS:
+            case AOTExprNodeKind::EN_LOG_NOT:
+            case AOTExprNodeKind::EN_BIT_NOT: {
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                // Skip any extra children
+                for (uint16_t i = 1; i < num_children; ++i) {
+                    deserializeValue().discard(nullptr);
+                }
+                switch (kind) {
+                    case AOTExprNodeKind::EN_KEYS:
+                        return QoreValue(new QoreKeysOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_ELEMENTS:
+                        return QoreValue(new QoreElementsOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_EXISTS:
+                        return QoreValue(new QoreExistsOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_DELETE:
+                        return QoreValue(new QoreDeleteOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_REMOVE:
+                        return QoreValue(new QoreRemoveOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_BACKGROUND:
+                        return QoreValue(new QoreBackgroundOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_TRIM:
+                        return QoreValue(new QoreTrimOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_CHOMP:
+                        return QoreValue(new QoreChompOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_POP:
+                        return QoreValue(new QorePopOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_SHIFT:
+                        return QoreValue(new QoreShiftOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_UNARY_MINUS:
+                        return QoreValue(new QoreUnaryMinusOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_UNARY_PLUS:
+                        return QoreValue(new QoreUnaryPlusOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_LOG_NOT:
+                        return QoreValue(new QoreLogicalNotOperatorNode(&loc_builtin, operand));
+                    case AOTExprNodeKind::EN_BIT_NOT:
+                        return QoreValue(new QoreBinaryNotOperatorNode(&loc_builtin, operand));
+                    default:
+                        break;
+                }
+                return QoreValue();
+            }
+
+            case AOTExprNodeKind::EN_INSTANCEOF: {
+                std::string type_path = readStr();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                // Resolve type
+                if (!type_path.empty()) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(type_path.c_str(), type_error);
+                    if (ti) {
+                        return QoreValue(new QoreInstanceOfOperatorNode(&loc_builtin, operand, ti));
+                    }
+                    printd(0, "AOT EXPR_TREE: cannot resolve type '%s' for instanceof\n",
+                        type_path.c_str());
+                }
+                operand.discard(nullptr);
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_CAST: {
+                // Cast operator is abstract with multiple concrete subclasses;
+                // not currently serialized, but read data to advance pointer
+                std::string type_path = readStr();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                printd(0, "AOT EXPR_TREE: cast deserialization not yet supported (type '%s')\n",
+                    type_path.c_str());
+                operand.discard(nullptr);
+                return fail();
+            }
+
+            // Pre/post increment/decrement
+            case AOTExprNodeKind::EN_PRE_INC: {
+                uint16_t n = readU16();
+                QoreValue op;
+                if (n >= 1) {
+                    op = deserializeValue();
+                }
+                return QoreValue(new QorePreIncrementOperatorNode(&loc_builtin, op));
+            }
+            case AOTExprNodeKind::EN_PRE_DEC: {
+                uint16_t n = readU16();
+                QoreValue op;
+                if (n >= 1) {
+                    op = deserializeValue();
+                }
+                return QoreValue(new QorePreDecrementOperatorNode(&loc_builtin, op));
+            }
+            case AOTExprNodeKind::EN_POST_INC: {
+                uint16_t n = readU16();
+                QoreValue op;
+                if (n >= 1) {
+                    op = deserializeValue();
+                }
+                return QoreValue(new QorePostIncrementOperatorNode(&loc_builtin, op));
+            }
+            case AOTExprNodeKind::EN_POST_DEC: {
+                uint16_t n = readU16();
+                QoreValue op;
+                if (n >= 1) {
+                    op = deserializeValue();
+                }
+                return QoreValue(new QorePostDecrementOperatorNode(&loc_builtin, op));
+            }
+
+            // ---- Binary operators ----
+
+            case AOTExprNodeKind::EN_PUSH:
+            case AOTExprNodeKind::EN_UNSHIFT:
+            case AOTExprNodeKind::EN_LIST_ASSIGN:
+            case AOTExprNodeKind::EN_PLUS:
+            case AOTExprNodeKind::EN_MINUS:
+            case AOTExprNodeKind::EN_MULTIPLY:
+            case AOTExprNodeKind::EN_DIVIDE:
+            case AOTExprNodeKind::EN_MODULO:
+            case AOTExprNodeKind::EN_SHIFT_LEFT:
+            case AOTExprNodeKind::EN_SHIFT_RIGHT:
+            case AOTExprNodeKind::EN_BIT_AND:
+            case AOTExprNodeKind::EN_BIT_OR:
+            case AOTExprNodeKind::EN_BIT_XOR:
+            case AOTExprNodeKind::EN_LOG_CMP:
+            case AOTExprNodeKind::EN_LOG_AND:
+            case AOTExprNodeKind::EN_LOG_OR:
+            case AOTExprNodeKind::EN_LOG_EQ:
+            case AOTExprNodeKind::EN_LOG_NE:
+            case AOTExprNodeKind::EN_LOG_AEQ:
+            case AOTExprNodeKind::EN_LOG_ANE:
+            case AOTExprNodeKind::EN_LOG_LT:
+            case AOTExprNodeKind::EN_LOG_GT:
+            case AOTExprNodeKind::EN_LOG_LE:
+            case AOTExprNodeKind::EN_LOG_GE:
+            case AOTExprNodeKind::EN_NULL_COAL:
+            case AOTExprNodeKind::EN_VAL_COAL:
+            case AOTExprNodeKind::EN_ASSIGN:
+            case AOTExprNodeKind::EN_PLUS_EQ:
+            case AOTExprNodeKind::EN_MINUS_EQ:
+            case AOTExprNodeKind::EN_MULTIPLY_EQ:
+            case AOTExprNodeKind::EN_DIVIDE_EQ:
+            case AOTExprNodeKind::EN_MODULO_EQ:
+            case AOTExprNodeKind::EN_AND_EQ:
+            case AOTExprNodeKind::EN_OR_EQ:
+            case AOTExprNodeKind::EN_XOR_EQ:
+            case AOTExprNodeKind::EN_SHL_EQ:
+            case AOTExprNodeKind::EN_SHR_EQ: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                switch (kind) {
+                    case AOTExprNodeKind::EN_PUSH:
+                        return QoreValue(new QorePushOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_UNSHIFT:
+                        return QoreValue(new QoreUnshiftOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LIST_ASSIGN:
+                        return QoreValue(new QoreListAssignmentOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_PLUS:
+                        return QoreValue(new QorePlusOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MINUS:
+                        return QoreValue(new QoreMinusOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MULTIPLY:
+                        return QoreValue(new QoreMultiplicationOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_DIVIDE:
+                        return QoreValue(new QoreDivisionOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MODULO:
+                        return QoreValue(new QoreModuloOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_SHIFT_LEFT:
+                        return QoreValue(new QoreShiftLeftOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_SHIFT_RIGHT:
+                        return QoreValue(new QoreShiftRightOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_BIT_AND:
+                        return QoreValue(new QoreBinaryAndOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_BIT_OR:
+                        return QoreValue(new QoreBinaryOrOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_BIT_XOR:
+                        return QoreValue(new QoreBinaryXorOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_CMP:
+                        return QoreValue(new QoreLogicalComparisonOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_AND:
+                        return QoreValue(new QoreLogicalAndOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_OR:
+                        return QoreValue(new QoreLogicalOrOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_EQ:
+                        return QoreValue(new QoreLogicalEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_NE:
+                        return QoreValue(new QoreLogicalNotEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_AEQ:
+                        return QoreValue(new QoreLogicalAbsoluteEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_ANE:
+                        return QoreValue(new QoreLogicalAbsoluteNotEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_LT:
+                        return QoreValue(new QoreLogicalLessThanOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_GT:
+                        return QoreValue(new QoreLogicalGreaterThanOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_LE:
+                        return QoreValue(new QoreLogicalLessThanOrEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_LOG_GE:
+                        return QoreValue(new QoreLogicalGreaterThanOrEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_NULL_COAL:
+                        return QoreValue(new QoreNullCoalescingOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_VAL_COAL:
+                        return QoreValue(new QoreValueCoalescingOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_ASSIGN:
+                        return QoreValue(new QoreAssignmentOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_PLUS_EQ:
+                        return QoreValue(new QorePlusEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MINUS_EQ:
+                        return QoreValue(new QoreMinusEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MULTIPLY_EQ:
+                        return QoreValue(new QoreMultiplyEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_DIVIDE_EQ:
+                        return QoreValue(new QoreDivideEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_MODULO_EQ:
+                        return QoreValue(new QoreModuloEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_AND_EQ:
+                        return QoreValue(new QoreAndEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_OR_EQ:
+                        return QoreValue(new QoreOrEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_XOR_EQ:
+                        return QoreValue(new QoreXorEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_SHL_EQ:
+                        return QoreValue(new QoreShiftLeftEqualsOperatorNode(&loc_builtin, left, right));
+                    case AOTExprNodeKind::EN_SHR_EQ:
+                        return QoreValue(new QoreShiftRightEqualsOperatorNode(&loc_builtin, left, right));
+                    default:
+                        break;
+                }
+                left.discard(nullptr);
+                right.discard(nullptr);
+                return QoreValue();
+            }
+
+            // Ternary: question mark (? :)
+            case AOTExprNodeKind::EN_QUESTION: {
+                uint16_t num_children = readU16();
+                QoreValue cond, true_expr, false_expr;
+                if (num_children >= 1) {
+                    cond = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    true_expr = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    false_expr = deserializeValue();
+                }
+                return QoreValue(new QoreQuestionMarkOperatorNode(&loc_builtin,
+                    cond, true_expr, false_expr));
+            }
+
+            // Range operator (binary: start..stop)
+            case AOTExprNodeKind::EN_RANGE: {
+                uint16_t num_children = readU16();
+                QoreValue left, right;
+                if (num_children >= 1) {
+                    left = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    right = deserializeValue();
+                }
+                return QoreValue(new QoreRangeOperatorNode(&loc_builtin, left, right));
+            }
+
+            // ---- Regex operators ----
+
+            case AOTExprNodeKind::EN_REGEX_MATCH:
+            case AOTExprNodeKind::EN_REGEX_EXTRACT: {
+                std::string pattern = readStr();
+                int64_t options = readI64();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                if (failed) {
+                    operand.discard(nullptr);
+                    return QoreValue();
+                }
+                ExceptionSink xsink;
+                QoreRegex* re = new QoreRegex(pattern.c_str(), options, &xsink);
+                if (xsink) {
+                    printd(0, "AOT EXPR_TREE: regex compile error for pattern '%s'\n",
+                        pattern.c_str());
+                    operand.discard(nullptr);
+                    return fail();
+                }
+                if (kind == AOTExprNodeKind::EN_REGEX_EXTRACT) {
+                    return QoreValue(new QoreRegexExtractOperatorNode(&loc_builtin, operand, re));
+                }
+                return QoreValue(new QoreRegexMatchOperatorNode(&loc_builtin, operand, re));
+            }
+
+            case AOTExprNodeKind::EN_REGEX_NMATCH: {
+                std::string pattern = readStr();
+                int64_t options = readI64();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                if (failed) {
+                    operand.discard(nullptr);
+                    return QoreValue();
+                }
+                ExceptionSink xsink;
+                QoreRegex* re = new QoreRegex(pattern.c_str(), options, &xsink);
+                if (xsink) {
+                    operand.discard(nullptr);
+                    return fail();
+                }
+                return QoreValue(new QoreRegexNMatchOperatorNode(&loc_builtin, operand, re));
+            }
+
+            case AOTExprNodeKind::EN_REGEX_SUBST: {
+                std::string pattern = readStr();
+                std::string replacement = readStr();
+                int64_t options = readI64();
+                uint8_t global = readU8();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                if (failed) {
+                    operand.discard(nullptr);
+                    return QoreValue();
+                }
+                ExceptionSink xsink;
+                QoreRegexSubst* rs = new QoreRegexSubst(pattern.c_str(), options, &xsink);
+                if (xsink) {
+                    printd(0, "AOT EXPR_TREE: regex subst compile error for pattern '%s'\n",
+                        pattern.c_str());
+                    operand.discard(nullptr);
+                    return fail();
+                }
+                if (global) {
+                    rs->setGlobal();
+                }
+                // Set replacement string
+                for (char c : replacement) {
+                    rs->concatTarget(c);
+                }
+                return QoreValue(new QoreRegexSubstOperatorNode(&loc_builtin, operand, rs));
+            }
+
+            case AOTExprNodeKind::EN_TRANSLIT: {
+                std::string source = readStr();
+                std::string target = readStr();
+                uint16_t num_children = readU16();
+                QoreValue operand;
+                if (num_children >= 1) {
+                    operand = deserializeValue();
+                }
+                QoreTransliteration* tr = new QoreTransliteration(&loc_builtin);
+                for (char c : source) {
+                    tr->concatSource(c);
+                }
+                tr->finishSource();
+                for (char c : target) {
+                    tr->concatTarget(c);
+                }
+                tr->finishTarget();
+                return QoreValue(new QoreTransliterationOperatorNode(&loc_builtin, operand, tr));
+            }
+
+            // ---- Special nodes ----
+
+            case AOTExprNodeKind::EN_OBJ_METH_REF: {
+                std::string method_name = readStr();
+                uint16_t num_children = readU16();
+                QoreValue target;
+                if (num_children >= 1) {
+                    target = deserializeValue();
+                }
+                return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin,
+                    target, strdup(method_name.c_str())));
+            }
+
+            case AOTExprNodeKind::EN_SELF_METH_REF: {
+                std::string method_name = readStr();
+                readU16(); // 0 children
+                return QoreValue(new ParseSelfMethodReferenceNode(&loc_builtin,
+                    strdup(method_name.c_str())));
+            }
+
+            case AOTExprNodeKind::EN_EXTRACT: {
+                uint16_t num_children = readU16();
+                QoreValue lvalue, offset, length, new_val;
+                if (num_children >= 1) {
+                    lvalue = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    offset = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    length = deserializeValue();
+                }
+                if (num_children >= 4) {
+                    new_val = deserializeValue();
+                }
+                return QoreValue(new QoreExtractOperatorNode(&loc_builtin,
+                    lvalue, offset, length, new_val));
+            }
+
+            case AOTExprNodeKind::EN_SPLICE: {
+                uint16_t num_children = readU16();
+                QoreValue lvalue, offset, length, new_val;
+                if (num_children >= 1) {
+                    lvalue = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    offset = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    length = deserializeValue();
+                }
+                if (num_children >= 4) {
+                    new_val = deserializeValue();
+                }
+                return QoreValue(new QoreSpliceOperatorNode(&loc_builtin,
+                    lvalue, offset, length, new_val));
+            }
+
+            case AOTExprNodeKind::EN_PARSE_LIST: {
+                uint16_t count = readU16();
+                QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+                for (uint16_t i = 0; i < count; ++i) {
+                    pln->add(deserializeValue(), &loc_builtin);
+                }
+                return QoreValue(pln);
+            }
+
+            case AOTExprNodeKind::EN_FUNC_REF: {
+                std::string name = readStr();
+                readU16(); // 0 children
+                // Look up function and create a reference
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                    *pp->RootNS, name.c_str());
+                if (fe) {
+                    // FunctionCallNode without args acts as reference when resolved
+                    return QoreValue(new FunctionCallNode(&loc_builtin, fe, (QoreListNode*)nullptr, pgm));
+                }
+                printd(0, "AOT EXPR_TREE: cannot resolve function ref '%s'\n", name.c_str());
+                return fail();
+            }
+
+            case AOTExprNodeKind::EN_CLOSURE:
+                // Cannot deserialize closures
+                printd(0, "AOT EXPR_TREE: closure deserialization not supported\n");
+                return fail();
+
+            default:
+                printd(0, "AOT EXPR_TREE: unknown node kind %d\n", (int)kind);
+                return fail();
+        }
+    }
+
+public:
+    ExprTreeDeserializer(const uint8_t* data, uint32_t size, QoreProgram* p, QoreAOTContext* c)
+        : ptr(data), end(data + size), pgm(p), ctx(c),
+          debug(getenv("QORE_AOT_DEBUG") != nullptr) {
+    }
+
+    //! Deserialize an expression tree from the blob and return NaN-boxed bits
+    uint64_t deserialize() {
+        QoreValue v = deserializeValue();
+        if (failed) {
+            v.discard(nullptr);
+            return 0;
+        }
+        return toBitsNB(v);
+    }
+};
 
 //! Build QoreAOTContext from deserialized slot map identities (no IR re-lowering needed)
 /** Resolves local/global/expression slot identities by looking up objects
@@ -399,6 +1424,23 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::EXPR_TREE: {
+                // Read inline blob: u32 length + raw bytes
+                uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                const uint8_t* blob_data = ptr;
+                ptr += blob_size;
+                // Deserialize the expression tree
+                ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
+                uint64_t bits = deser.deserialize();
+                if (bits) {
+                    ctx->exprs[i] = bits;
+                } else {
+                    printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
+                        i, name);
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::CLOSURE_CREATE:
             case AOTExprKind::CALL_REF:
             case AOTExprKind::OBJ_METHOD_REF:
@@ -472,9 +1514,35 @@ static QoreAOTContext* buildContextFromSlotMap(
         (void)bl_closure;
     }
 
+    // Resolve stmt_slots from the function's AST (on_block_exit handlers + reference foreach)
+    if (num_stmts > 0 && uvb) {
+        std::vector<const AbstractStatement*> stmt_list;
+        collectStmtSlotStatements(uvb->getStatementBlock(), stmt_list);
+        // Deduplicate in order (matching buildAOTSlotMap's getStmtSlot() semantics)
+        std::vector<const AbstractStatement*> unique_stmts;
+        std::unordered_set<const void*> seen;
+        for (const AbstractStatement* s : stmt_list) {
+            if (seen.insert(reinterpret_cast<const void*>(s)).second) {
+                unique_stmts.push_back(s);
+            }
+        }
+        if (static_cast<int>(unique_stmts.size()) == num_stmts) {
+            for (int i = 0; i < num_stmts; ++i) {
+                ctx->stmts[i] = unique_stmts[i];
+            }
+        } else {
+            printd(0, "AOT v2: stmt_slots count mismatch for '%s': expected %d, found %d from AST\n",
+                name, num_stmts, (int)unique_stmts.size());
+            has_unsupported = true;
+        }
+    } else if (num_stmts > 0 && !uvb) {
+        // Toplevel with on_block_exit/foreach — not supported in slot map path
+        has_unsupported = true;
+    }
+
     printd(2, "AOT v2: built context from slot map for '%s' "
-        "(locals=%d, globals=%d, exprs=%d, body_locals=%d, unsupported=%d)\n",
-        name, num_locals, num_globals, num_exprs, num_body_locals, has_unsupported);
+        "(locals=%d, globals=%d, exprs=%d, stmts=%d, body_locals=%d, unsupported=%d)\n",
+        name, num_locals, num_globals, num_exprs, num_stmts, num_body_locals, has_unsupported);
 
     // If any expression slots have unsupported types (e.g., closures), skip AOT
     // registration for this function — it will fall through to JIT at runtime
@@ -684,6 +1752,11 @@ static void registerAOTFunctionsFromSlotMaps(
                     case AOTExprKind::STATIC_METHOD_CALL:
                     case AOTExprKind::STATIC_VARREF:
                         reader.readStringRef(ptr); reader.readStringRef(ptr); break;
+                    case AOTExprKind::EXPR_TREE: {
+                        uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                        ptr += blob_size;
+                        break;
+                    }
                     default: break;
                 }
             }
@@ -1265,6 +2338,11 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
+                                        case AOTExprKind::EXPR_TREE: {
+                                            uint32_t blob_size = QoreAOTBinaryReader::readU32(sm_ptr);
+                                            sm_ptr += blob_size;
+                                            break;
+                                        }
                                         default: break;
                                     }
                                 }
