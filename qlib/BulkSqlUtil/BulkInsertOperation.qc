@@ -212,7 +212,7 @@ inserter.setRowCode(rowcode);
             } else {
                 # execute the statement on the args
                 if (table.hasArrayBind()) {
-                    stmt.execArgs((hbuf + cval + static_ret_expr).values());
+                    stmt.execArgs(table.transformBulkBindArgs(hbuf + cval + static_ret_expr));
                     rh = stmt.getOutput();
                 } else {
                     softlist args = (hbuf + cval + static_ret_expr).values();

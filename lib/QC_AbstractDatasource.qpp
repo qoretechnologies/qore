@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -477,4 +477,26 @@ auto AbstractDatasource::getOption(string[doc] opt) [flags=RET_VALUE_ONLY] {
 */
 string AbstractDatasource::getDriverRealName() {
     return self->evalMethod("getDriverName", nullptr, xsink);
+}
+
+//! Returns an integer bitfield of DBI driver capabilities
+/** @return an integer bitfield of DBI driver capabilities; see @ref dbi_capabilities for the meaning of each bit
+
+    @par Example:
+    @code{.py}
+int caps = db.getCapabilities();
+if (!(caps & DBI_CAP_TRANSACTION_MANAGEMENT))
+    throw "DATASOURCE-ERROR", sprintf("DBI driver %y does not support transaction management", db.getDriverName());
+    @endcode
+
+    @note
+    - this is reimplemented as @ref Qore::SQL::Datasource::getCapabilities() "Datasource::getCapabilities()" and
+      @ref Qore::SQL::DatasourcePool::getCapabilities() "DatasourcePool::getCapabilities()"
+    - this method was added as a non-abstract method in %Qore 2.3 to avoid breaking existing subclasses of
+      AbstractDatasource
+
+    @since %Qore 2.3
+*/
+int AbstractDatasource::getCapabilities() [flags=CONSTANT] {
+    return 0;
 }

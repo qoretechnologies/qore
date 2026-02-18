@@ -87,6 +87,8 @@ public class ConnectionSchemeCache {
             "cdsrests": "CdsRestClient",
             "dynamics": "CdsRestClient",
 
+            "chargebee": "ChargebeeRestClient",
+
             "cin7core": "Cin7CoreRestClient",
 
             "db": "DbDataProvider",

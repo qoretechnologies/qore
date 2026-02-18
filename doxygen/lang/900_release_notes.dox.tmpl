@@ -799,6 +799,21 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref chargebeerestclientintro "ChargebeeRestClient" module
+      - new module providing a REST client for Chargebee's subscription billing API
+      - supports HTTP Basic Authentication with API Key as username
+      - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+    - @ref chargebeedataproviderintro "ChargebeeDataProvider" module
+      - new module providing a data provider API for Chargebee subscription billing and revenue management
+      - customer management (create, read, update, delete, search)
+      - subscription management (create, read, update, delete, search)
+      - invoice management (create, read, update, delete, collect payment, record payment, refund)
+      - coupon management (create, read, update, delete, search)
+      - promotional credit management (add, deduct, set, search)
+      - transaction retrieval
+      - webhook-based event triggers for customers, subscriptions, invoices, and all events
+      - action catalog integration with 30 actions and 4 triggers
+      - connection support with \c chargebee:// URL scheme
     - @ref cin7corerestclientintro "Cin7CoreRestClient" module
       - new module providing a REST client for Cin7Core (DEAR Inventory) API
       - supports Account ID and API Key authentication via headers
