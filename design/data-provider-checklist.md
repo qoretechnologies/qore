@@ -195,7 +195,45 @@ For each major resource (identified by having a list action), verify CRUD covera
 
 ---
 
-## 11. Naming Consistency
+## 11. Option Preselection
+
+The UI uses `preselected: True` on action options to determine which fields to show upfront in the form. Without preselection, actions with no required options show an empty form, and users must manually discover available options.
+
+### Rules
+- [ ] Actions with **no required options** have at least 2-3 commonly-used options marked `"preselected": True`
+- [ ] Actions with required options have those required options marked `"preselected": True`
+- [ ] Key optional options that are commonly used are also preselected (e.g., `status`, `limit`, `name`)
+- [ ] Metadata, advanced, and system fields are NOT preselected (`meta_data`, `resource_version`, `channel`)
+
+### What to Preselect
+- All required options
+- ID/lookup fields (`id`, `customer_id`)
+- Common filter fields (`status`, `limit`, date ranges)
+- Fields that define the core purpose of the action (`amount`, `name`, `email`)
+
+### Example (correct)
+```qore
+"id": <ActionOptionInfo>{
+    "display_name": "Invoice ID",
+    "type": AbstractDataProviderTypeMap."string",
+    "required": True,
+    "preselected": True,   # Shown upfront
+},
+"status": <ActionOptionInfo>{
+    "display_name": "Status",
+    "type": AbstractDataProviderTypeMap."string",
+    "preselected": True,   # Common filter, shown upfront
+},
+"meta_data": <ActionOptionInfo>{
+    "display_name": "Metadata",
+    "type": AbstractDataProviderTypeMap."hash",
+    # No preselected - advanced option, hidden by default
+},
+```
+
+---
+
+## 12. Naming Consistency
 
 - [ ] Action names follow `verb-noun` pattern (create-invoice, list-contacts)
 - [ ] Consistent verbs: create, get, update, delete, list, email, search
@@ -204,7 +242,7 @@ For each major resource (identified by having a list action), verify CRUD covera
 
 ---
 
-## 12. Integration Tests
+## 13. Integration Tests
 
 - [ ] Tests exist in `examples/test/qlib/{ModuleName}/`
 - [ ] Tests verify data persistence (not just 200 OK)
@@ -216,7 +254,7 @@ For each major resource (identified by having a list action), verify CRUD covera
 
 ---
 
-## 13. Build System and Documentation
+## 14. Build System and Documentation
 
 ### Build Registration (MANDATORY - grep for module name in both files)
 - [ ] `CMakeLists.txt` has `qore_user_module()` entry for REST client module
