@@ -307,6 +307,7 @@ set(QORE_BIN_FILES
     bin/qore-asyncapi-gen
     bin/qfmt
     bin/qls
+    bin/qore-extract-qm-metadata
 )
 
 set(QORE_DOX_TMPL_SRC
@@ -587,8 +588,8 @@ qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC
 
 add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
 
-# install qpp metadata files
-install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+# install qpp metadata files into per-module subdirectory
+install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata/core)
 add_custom_target(BISON_GENERATED_FILES DEPENDS ${BISON_qoreparser_OUTPUTS})
 add_custom_target(FLEX_GENERATED_FILES DEPENDS ${FLEX_qorescanner_OUTPUTS})
 
@@ -1486,6 +1487,14 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # ---
 # modules here are divided to groups in the order of dependence
 # and then sorted alphabetically inside the groups
+
+# metadata extraction for qlib modules (uses build-tree qore + astparser)
+set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
+set(QORE_QM_METADATA_SUBDIR core-qlib)
+set(QORE_QM_METADATA_ENV
+    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
+    "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
+set(QORE_QM_METADATA_DEPENDS qore astparser)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")
