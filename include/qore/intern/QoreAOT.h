@@ -323,7 +323,8 @@ public:
                        std::string& error,
                        int opt_level = 2,
                        const char* target_triple = nullptr,
-                       bool static_link = false);
+                       bool static_link = false,
+                       bool include_source = false);
 
     //! Compile a .qm user module to a native shared library (.so) binary module
     /** The binary uses serialized metadata (no embedded source).
@@ -343,7 +344,8 @@ public:
                               int64_t parse_options,
                               std::string& error,
                               int opt_level = 2,
-                              const char* target_triple = nullptr);
+                              const char* target_triple = nullptr,
+                              bool include_source = false);
 
     //! Compile a split (separated) .qm user module directory to a native shared library
     /** Supports modules where code is spread across multiple files:
@@ -365,7 +367,8 @@ public:
                                        int64_t parse_options,
                                        std::string& error,
                                        int opt_level = 2,
-                                       const char* target_triple = nullptr);
+                                       const char* target_triple = nullptr,
+                                       bool include_source = false);
 
     //! Print supported LLVM target architectures to stdout
     static void printSupportedTargets();

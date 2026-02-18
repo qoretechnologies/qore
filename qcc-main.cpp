@@ -56,6 +56,7 @@ static int opt_level = 3;
 static const char* target_triple = nullptr;
 static bool static_link = false;
 static bool module_mode = false;
+static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
@@ -72,6 +73,8 @@ static void print_usage(const char* prog) {
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
+    printf("      --include-source   Include source text for runtime fallback\n");
+    printf("      --strip-source     Strip source text (default)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -96,16 +99,18 @@ static void print_version() {
 }
 
 static struct option long_options[] = {
-    {"output",       required_argument, nullptr, 'o'},
-    {"opt-level",    required_argument, nullptr, 'O'},
-    {"module",       no_argument,       nullptr, 'm'},
-    {"static",       no_argument,       nullptr, 'S'},
-    {"target",       required_argument, nullptr, 't'},
-    {"show-targets", no_argument,       nullptr, 'T'},
-    {"verbose",      no_argument,       nullptr, 'v'},
-    {"help",         no_argument,       nullptr, 'h'},
-    {"version",      no_argument,       nullptr, 'V'},
-    {nullptr,        0,                 nullptr, 0}
+    {"output",         required_argument, nullptr, 'o'},
+    {"opt-level",      required_argument, nullptr, 'O'},
+    {"module",         no_argument,       nullptr, 'm'},
+    {"static",         no_argument,       nullptr, 'S'},
+    {"target",         required_argument, nullptr, 't'},
+    {"show-targets",   no_argument,       nullptr, 'T'},
+    {"include-source", no_argument,       nullptr, 'I'},
+    {"strip-source",   no_argument,       nullptr, 'P'},
+    {"verbose",        no_argument,       nullptr, 'v'},
+    {"help",           no_argument,       nullptr, 'h'},
+    {"version",        no_argument,       nullptr, 'V'},
+    {nullptr,          0,                 nullptr, 0}
 };
 
 static int parse_options_cmdline(int argc, char** argv) {
@@ -133,6 +138,13 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'T':
                 show_targets = true;
+                break;
+            case 'I':
+                include_source = true;
+                break;
+            case 'P':
+                // strip-source is the default; this is a no-op for backward compatibility
+                include_source = false;
                 break;
             case 'v':
                 verbose = true;
@@ -350,11 +362,13 @@ int main(int argc, char** argv) {
                 PO_DEFAULT,
                 error,
                 opt_level,
-                target_triple)) {
+                target_triple,
+                include_source)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled split module (O%d)\n", output.c_str(), opt_level);
+            printf("%s: compiled split module (O%d%s)\n", output.c_str(), opt_level,
+                include_source ? "" : ", source-stripped");
         }
     } else if (module_mode) {
         // Compile single-file module
@@ -365,11 +379,13 @@ int main(int argc, char** argv) {
                 PO_DEFAULT,
                 error,
                 opt_level,
-                target_triple)) {
+                target_triple,
+                include_source)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled module (O%d)\n", output.c_str(), opt_level);
+            printf("%s: compiled module (O%d%s)\n", output.c_str(), opt_level,
+                include_source ? "" : ", source-stripped");
         }
     } else {
         // Create program and parse
@@ -392,12 +408,14 @@ int main(int argc, char** argv) {
                     error,
                     opt_level,
                     target_triple,
-                    static_link)) {
+                    static_link,
+                    include_source)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
             } else {
-                printf("%s: compiled (O%d%s)\n", output.c_str(), opt_level,
-                    static_link ? ", static" : "");
+                printf("%s: compiled (O%d%s%s)\n", output.c_str(), opt_level,
+                    static_link ? ", static" : "",
+                    include_source ? "" : ", source-stripped");
             }
         }
 

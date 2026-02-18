@@ -214,14 +214,20 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
-    # Run single test.
+    # Run single test with timeout (default 300s = 5 minutes).
+    TEST_TIMEOUT=${TEST_TIMEOUT:-300}
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        eval timeout $TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
     else
-        $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        timeout $TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+    fi
+    test_exit=$?
+
+    if [ $test_exit -eq 124 ]; then
+        echo "TIMEOUT: test exceeded ${TEST_TIMEOUT}s limit"
     fi
 
-    if [ $? -eq 0 ]; then
+    if [ $test_exit -eq 0 ]; then
         PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
     else
         FAILED_TEST_COUNT=`expr $FAILED_TEST_COUNT + 1`

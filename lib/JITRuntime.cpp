@@ -3029,6 +3029,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t bas
     return toBits(qore_class_private::evalPseudoMethod(qc, method, variant, base, *arg_list, rc, xsink));
 }
 
+// Fallback for unresolved EXPR_TREE method calls: use the pre-evaluated args
+// from LLVM with a name-based runtime method dispatch
+static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+
+    // For objects, use name-based method lookup
+    if (base.getType() == NT_OBJECT) {
+        QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
+        const qore_class_private* class_ctx = runtime_get_class();
+        RuntimeConfig& rc = rc_get_current_ref();
+        return toBits(qore_class_private::get(*o->getClass())->evalMethod(o, method_name,
+            *arg_list, class_ctx, rc, xsink));
+    }
+
+    // For non-objects, use pseudo-class lookup
+    return toBits(pseudo_classes_eval(base, method_name, *arg_list, xsink));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
@@ -3041,6 +3063,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext*
         return toBits(QoreValue());
     }
     auto* m = dot_eval->getMethodCall();
+    // If method is not resolved (e.g., EXPR_TREE deserialized node), fall back to
+    // name-based runtime dispatch with the pre-evaluated args from LLVM
+    if (!m->getMethod()) {
+        QoreValue base = fromBits(base_bits);
+        return dot_eval_fallback_with_args(base, m->getName(), args, nargs, xsink);
+    }
     return m->isPseudo()
         ? qore_rt_dot_eval_pseudo_method_direct(base_bits, m->getMethod(), m->getClass(), m->getVariant(),
             args, nargs, xsink)
@@ -3059,6 +3087,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTC
         return toBits(QoreValue());
     }
     auto* m = dot_eval->getMethodCall();
+    // If method is not resolved (e.g., EXPR_TREE deserialized node), fall back to
+    // name-based runtime dispatch with the pre-evaluated args from LLVM
+    if (!m->getMethod()) {
+        QoreValue base = fromBits(base_bits);
+        return dot_eval_fallback_with_args(base, m->getName(), args, nargs, xsink);
+    }
     return qore_rt_dot_eval_pseudo_method_direct(base_bits, m->getMethod(), m->getClass(), m->getVariant(),
         args, nargs, xsink);
 }

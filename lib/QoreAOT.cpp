@@ -946,7 +946,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       std::string& error,
                       int opt_level,
                       const char* target_triple,
-                      bool static_link) {
+                      bool static_link,
+                      bool include_source) {
     // Initialize LLVM targets (needed for object emission)
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -1148,8 +1149,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
         serializeSlotMaps(writer, func_slots);
 
-        // Serialize fallback sources (only if any functions need source fallback)
-        serializeFallbackSources(writer, func_slots, source_text, source_len);
+        // Serialize fallback sources only if --include-source was specified
+        if (include_source) {
+            serializeFallbackSources(writer, func_slots, source_text, source_len);
+        }
 
         // Finalize metadata blob
         std::vector<uint8_t> metadata;
@@ -2038,7 +2041,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
                              int64_t parse_options,
                              std::string& error,
                              int opt_level,
-                             const char* target_triple) {
+                             const char* target_triple,
+                             bool include_source) {
     // Step 1: Parse module metadata from source
     QoreAOTModuleInfo mod_info;
     if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
@@ -2195,7 +2199,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             func_slots.push_back(std::move(fws));
         }
         serializeSlotMaps(writer, func_slots);
-        serializeFallbackSources(writer, func_slots, source_text, source_len);
+        if (include_source) {
+            serializeFallbackSources(writer, func_slots, source_text, source_len);
+        }
 
         std::vector<uint8_t> metadata;
         hdr.section_count = 0;
@@ -2250,7 +2256,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                                      int64_t parse_options,
                                      std::string& error,
                                      int opt_level,
-                                     const char* target_triple) {
+                                     const char* target_triple,
+                                     bool include_source) {
     // Step 1: Extract module name from directory basename (handle trailing slash)
     std::string dir_str(dir_path);
     // Remove trailing slashes
@@ -2519,7 +2526,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 func_slots.push_back(std::move(fws));
             }
             serializeSlotMaps(writer, func_slots);
-            serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+            if (include_source) {
+                serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+            }
 
             std::vector<uint8_t> metadata;
             hdr.section_count = 0;

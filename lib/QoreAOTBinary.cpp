@@ -1564,26 +1564,21 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const char* source_text, int source_len) {
-    // Check if any functions need source fallback
-    bool needs_fallback = false;
+    // Collect functions that need source fallback:
+    // - functions with unsupported expressions (need AST evaluation)
+    // - functions with stmt_slots (on_exit/on_success/on_error handlers need AST execution)
     std::vector<const AOTCompiledFuncWithSlots*> fallback_funcs;
     for (auto& func : funcs) {
-        if (func.slot_ids.has_unsupported_exprs) {
-            needs_fallback = true;
+        if (func.slot_ids.has_unsupported_exprs || func.num_stmts > 0) {
             fallback_funcs.push_back(&func);
         }
     }
 
-    if (!needs_fallback) {
-        return;  // no FUNC_SOURCES section needed
-    }
-
+    // Always write the FUNC_SOURCES section when called (caller controls whether
+    // to include source via --include-source flag)
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::FUNC_SOURCES);
 
     // Store the full source text for re-parsing fallback functions
-    // (individual function source extraction would require AST location
-    // tracking which is complex; the full source is sufficient since only
-    // functions with unsupported expressions will use it)
     writer.writeStringRef(source_text, static_cast<size_t>(source_len));
 
     // Write list of function names that need source fallback

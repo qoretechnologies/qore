@@ -1475,6 +1475,25 @@ static QoreAOTContext* buildContextFromSlotMap(
     printd(2, "AOT v2: '%s' sig=%p sig->lv.size()=%d\n", name,
         (void*)sig, sig ? (int)sig->lv.size() : -1);
 
+    // For user function variants, collect all statement locals from the AST
+    // so we can reuse the same LocalVar* that the compiled code expects.
+    // This is critical: JIT code uses pointer identity to find locals on the
+    // thread-local variable stack (ThreadLocalVariableData::find()).
+    std::vector<LocalVar*> stmt_locals;
+    if (uvb) {
+        StatementBlock* statements = uvb->getStatementBlock();
+        if (statements) {
+            collectAllStatementLocals(statements, stmt_locals);
+        }
+    }
+    // Build name→LocalVar* map for body local resolution
+    std::unordered_map<std::string, LocalVar*> stmt_local_map;
+    for (LocalVar* slv : stmt_locals) {
+        if (slv && slv->getName()) {
+            stmt_local_map[slv->getName()] = slv;
+        }
+    }
+
     // Read and resolve local slot identities
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
@@ -1499,18 +1518,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                 lv = sig->lv[param_idx];
             }
         } else {
-            // Body local — create a new LocalVar
-            // Resolve type
-            std::string type_error;
-            QoreAOTTypeResolver type_resolver(pgm);
-            const QoreTypeInfo* ti = nullptr;
-            if (ltype && *ltype) {
-                ti = type_resolver.resolve(ltype, type_error);
-                if (!type_error.empty()) {
-                    type_error.clear();
+            // Body local — try to find the actual LocalVar* from the function's AST
+            // first, then fall back to creating a new one (toplevel case)
+            if (lname && *lname && !stmt_local_map.empty()) {
+                auto it = stmt_local_map.find(lname);
+                if (it != stmt_local_map.end()) {
+                    lv = it->second;
                 }
             }
-            lv = pp->createLocalVar(lname ? lname : "", ti);
+            if (!lv) {
+                // Toplevel or not found in AST — create a new LocalVar
+                std::string type_error;
+                QoreAOTTypeResolver type_resolver(pgm);
+                const QoreTypeInfo* ti = nullptr;
+                if (ltype && *ltype) {
+                    ti = type_resolver.resolve(ltype, type_error);
+                    if (!type_error.empty()) {
+                        type_error.clear();
+                    }
+                }
+                lv = pp->createLocalVar(lname ? lname : "", ti);
+            }
         }
 
         if (lv) {
@@ -1524,15 +1552,19 @@ static QoreAOTContext* buildContextFromSlotMap(
     }
 
     // Read and resolve global slot identities
-    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    // Use qore_root_ns_private::runtimeFindGlobalVar() which searches via the varmap index
+    // across all namespaces — not just the root namespace's local vmap.
+    // This is needed for builtin globals like Qore::ARGV, Qore::QORE_ARGV, Qore::ENV
+    // which live in the Qore sub-namespace.
     for (int i = 0; i < num_globals; ++i) {
         const char* gname = reader.readStringRef(ptr);
         const char* gtype = reader.readStringRef(ptr);
         uint8_t is_tl = QoreAOTBinaryReader::readU8(ptr);
 
         if (gname && *gname) {
-            // Look up global variable by name in the namespace tree
-            Var* v = root_ns->var_list.runtimeFindVar(gname);
+            // Look up global variable by name across all namespaces
+            const qore_ns_private* vns = nullptr;
+            Var* v = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, gname, vns);
             if (v) {
                 ctx->globals[i] = v;
             } else {
@@ -1617,66 +1649,86 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
-    // Build a name-based map of locals for body local reuse (toplevel path)
-    std::unordered_map<std::string, LocalVar*> local_name_map;
-    if (!uvb) {
+    // For user function variants, use the statement locals we already collected from the AST.
+    // These are the same LocalVar* that the compiled code expects, preserving pointer identity.
+    // For toplevel functions (no uvb), create new LocalVars and build a name map for reuse.
+    if (uvb && !stmt_locals.empty()) {
+        // Use the pre-collected statement locals directly as body locals
+        // Skip the serialized body local entries (just advance the pointer)
+        for (int i = 0; i < num_body_locals; ++i) {
+            reader.readStringRef(ptr);  // name
+            reader.readStringRef(ptr);  // type
+            QoreAOTBinaryReader::readU8(ptr);  // closure flag
+        }
+        ctx->all_body_locals = stmt_locals;
+    } else {
+        // Toplevel path — create new LocalVars, reuse from ctx->locals[] where possible
+        std::unordered_map<std::string, LocalVar*> local_name_map;
         for (int i = 0; i < num_locals; ++i) {
             if (ctx->locals[i]) {
                 local_name_map[ctx->locals[i]->getName()] = ctx->locals[i];
             }
         }
-    }
 
-    // Read body locals
-    for (int i = 0; i < num_body_locals; ++i) {
-        const char* blname = reader.readStringRef(ptr);
-        const char* bltype = reader.readStringRef(ptr);
-        uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+        // Read body locals
+        for (int i = 0; i < num_body_locals; ++i) {
+            const char* blname = reader.readStringRef(ptr);
+            const char* bltype = reader.readStringRef(ptr);
+            uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
 
-        // For toplevel, reuse LocalVar* from ctx->locals[] if same name exists
-        if (!uvb && blname) {
-            auto it = local_name_map.find(blname);
-            if (it != local_name_map.end()) {
-                ctx->all_body_locals.push_back(it->second);
-                (void)bl_closure;
-                continue;
+            // Reuse LocalVar* from ctx->locals[] if same name exists
+            if (blname) {
+                auto it = local_name_map.find(blname);
+                if (it != local_name_map.end()) {
+                    ctx->all_body_locals.push_back(it->second);
+                    (void)bl_closure;
+                    continue;
+                }
             }
-        }
 
-        std::string type_error;
-        QoreAOTTypeResolver type_resolver(pgm);
-        const QoreTypeInfo* ti = nullptr;
-        if (bltype && *bltype) {
-            ti = type_resolver.resolve(bltype, type_error);
-            if (!type_error.empty()) {
-                type_error.clear();
+            std::string type_error;
+            QoreAOTTypeResolver type_resolver(pgm);
+            const QoreTypeInfo* ti = nullptr;
+            if (bltype && *bltype) {
+                ti = type_resolver.resolve(bltype, type_error);
+                if (!type_error.empty()) {
+                    type_error.clear();
+                }
             }
-        }
 
-        LocalVar* lv = pp->createLocalVar(blname ? blname : "", ti);
-        ctx->all_body_locals.push_back(lv);
-        (void)bl_closure;
+            LocalVar* lv = pp->createLocalVar(blname ? blname : "", ti);
+            ctx->all_body_locals.push_back(lv);
+            (void)bl_closure;
+        }
     }
 
     // Resolve stmt_slots from the function's AST (on_block_exit handlers + reference foreach)
     if (num_stmts > 0 && uvb) {
-        std::vector<const AbstractStatement*> stmt_list;
-        collectStmtSlotStatements(uvb->getStatementBlock(), stmt_list);
-        // Deduplicate in order (matching buildAOTSlotMap's getStmtSlot() semantics)
-        std::vector<const AbstractStatement*> unique_stmts;
-        std::unordered_set<const void*> seen;
-        for (const AbstractStatement* s : stmt_list) {
-            if (seen.insert(reinterpret_cast<const void*>(s)).second) {
-                unique_stmts.push_back(s);
+        StatementBlock* sb = uvb->getStatementBlock();
+        if (sb) {
+            std::vector<const AbstractStatement*> stmt_list;
+            collectStmtSlotStatements(sb, stmt_list);
+            // Deduplicate in order (matching buildAOTSlotMap's getStmtSlot() semantics)
+            std::vector<const AbstractStatement*> unique_stmts;
+            std::unordered_set<const void*> seen;
+            for (const AbstractStatement* s : stmt_list) {
+                if (seen.insert(reinterpret_cast<const void*>(s)).second) {
+                    unique_stmts.push_back(s);
+                }
             }
-        }
-        if (static_cast<int>(unique_stmts.size()) == num_stmts) {
-            for (int i = 0; i < num_stmts; ++i) {
-                ctx->stmts[i] = unique_stmts[i];
+            if (static_cast<int>(unique_stmts.size()) == num_stmts) {
+                for (int i = 0; i < num_stmts; ++i) {
+                    ctx->stmts[i] = unique_stmts[i];
+                }
+            } else {
+                printd(0, "AOT v2: stmt_slots count mismatch for '%s': expected %d, found %d from AST\n",
+                    name, num_stmts, (int)unique_stmts.size());
+                has_unsupported = true;
             }
         } else {
-            printd(0, "AOT v2: stmt_slots count mismatch for '%s': expected %d, found %d from AST\n",
-                name, num_stmts, (int)unique_stmts.size());
+            // Variant has no statement block (deserialized without body) — cannot resolve
+            // stmt_slots. Must fall through to fallback path for consistent LocalVar* pointers.
+            printd(2, "AOT v2: '%s' has stmt_slots but no statement block, needs fallback\n", name);
             has_unsupported = true;
         }
     } else if (num_stmts > 0 && !uvb) {
@@ -1778,7 +1830,7 @@ static void registerAOTFunctionsFromSlotMaps(
         const QoreAOTBinaryReader& reader,
         qore_ns_private* root_ns,
         QoreProgram* pgm,
-        const std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
+        std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
         int& registered) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
@@ -1983,13 +2035,15 @@ static void registerAOTFunctionsFromSlotMaps(
         if (ctx && uvb) {
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
+            // Remove from func_map so fallback path won't re-register with wrong LocalVar*
+            func_map.erase(func_name);
             printd(2, "AOT v2: registered '%s' from slot map\n", func_name);
         } else if (ctx) {
             // Toplevel or unresolved — handled separately
             delete ctx;
             printd(2, "AOT v2: built context for '%s' but no variant found\n", func_name);
         } else {
-            printd(0, "AOT v2: failed to build slot map context for '%s'\n", func_name);
+            printd(2, "AOT v2: failed to build slot map context for '%s'\n", func_name);
         }
     }
 }
@@ -2104,6 +2158,225 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             registerAOTFunctionsInNamespace(qore_ns_private::get(*child_ns), pgm, func_map, registered);
+        }
+    }
+}
+
+//! Build contexts from fallback AST variants but register on main program's variants.
+/** Used in V2 mode when slot map registration fails (e.g., functions with stmt_slots
+    that can't be resolved without full AST). Walks the fallback namespace to find
+    variants with bodies, builds contexts via IR re-lowering, then registers the
+    compiled function pointer + context on the main program's matching variant.
+*/
+static void registerFallbackFunctionsOnMainVariants(
+        qore_ns_private* fallback_ns,
+        qore_ns_private* main_ns,
+        QoreProgram* main_pgm,
+        const std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
+        int& registered) {
+    // Helper lambda: find UserVariantBase in a namespace's function by name
+    auto findMainVariant = [&](const char* fname) -> UserVariantBase* {
+        for (auto fi = main_ns->func_list.begin(), fe2 = main_ns->func_list.end();
+                fi != fe2; ++fi) {
+            FunctionEntry* fe_entry = fi->second;
+            QoreFunction* func = fe_entry->getFunction();
+            if (func && strcmp(fname, func->getName()) == 0) {
+                QoreFunctionIterator vi(*func);
+                while (vi.next()) {
+                    UserVariantBase* uvb = const_cast<UserVariantBase*>(
+                        dynamic_cast<const UserVariantBase*>(vi.getVariant()));
+                    if (uvb) {
+                        return uvb;
+                    }
+                }
+            }
+        }
+        return nullptr;
+    };
+
+    // Walk functions in fallback namespace
+    for (auto i = fallback_ns->func_list.begin(), e = fallback_ns->func_list.end(); i != e; ++i) {
+        FunctionEntry* fe = i->second;
+        QoreFunction* func = fe->getFunction();
+        if (!func) {
+            continue;
+        }
+
+        QoreFunctionIterator vit(*func);
+        while (vit.next()) {
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            UserVariantBase* fb_uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+            if (!fb_uvb || !fb_uvb->hasBody()) {
+                continue;
+            }
+
+            const char* fname = func->getName();
+            std::string variant_key = getVariantKey(fname, variant);
+            auto it = func_map.find(variant_key);
+            if (it == func_map.end()) {
+                continue;
+            }
+
+            const QoreAOTFunc* aot_func = it->second;
+            // Build context from fallback variant's AST (gives consistent LocalVar*)
+            QoreAOTContext* ctx = buildContextForVariant(fb_uvb, fname, main_pgm, *aot_func);
+            if (!ctx) {
+                printd(1, "AOT v2: failed to build fallback context for '%s'\n", variant_key.c_str());
+                continue;
+            }
+
+            // Find matching variant in MAIN program and register there
+            UserVariantBase* main_uvb = findMainVariant(fname);
+            if (main_uvb) {
+                // Swap main variant's parameter LocalVar* with fallback's so the calling
+                // convention instantiates fallback LocalVar* on the thread-local stack.
+                // This ensures the compiled AOT code AND on_exit/on_success/on_error handler
+                // AST bodies (which reference fallback LocalVar*) both find the same variables.
+                UserSignature* main_sig = main_uvb->getUserSignature();
+                UserSignature* fb_sig = fb_uvb->getUserSignature();
+                if (main_sig && fb_sig && main_sig->lv.size() == fb_sig->lv.size()) {
+                    for (size_t pi = 0; pi < main_sig->lv.size(); ++pi) {
+                        main_sig->lv[pi] = fb_sig->lv[pi];
+                    }
+                    main_sig->argvid = fb_sig->argvid;
+                    main_sig->selfid = fb_sig->selfid;
+                }
+                main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                ++registered;
+                printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
+                    variant_key.c_str());
+            } else {
+                // No main variant found — register on fallback variant
+                // This happens when the function was defined only in fallback source
+                fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                ++registered;
+                printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
+                    variant_key.c_str());
+            }
+        }
+    }
+
+    // Walk classes in fallback namespace
+    ClassListIterator cli(fallback_ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        const char* class_name = qc->getName();
+
+        if (qcp->sys) {
+            continue;
+        }
+
+        auto processMethod = [&](QoreMethod* meth) {
+            if (!meth->isUser()) {
+                return;
+            }
+            qore_method_private* mp = qore_method_private::get(*meth);
+            MethodFunctionBase* mfb = mp->getFunction();
+
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                UserVariantBase* fb_uvb =
+                    const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+                if (!fb_uvb || !fb_uvb->hasBody()) {
+                    continue;
+                }
+
+                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                std::string variant_key = getVariantKey(method_name.c_str(), variant);
+                auto it = func_map.find(variant_key);
+                if (it == func_map.end()) {
+                    continue;
+                }
+
+                const QoreAOTFunc* aot_func = it->second;
+                QoreAOTContext* ctx = buildContextForVariant(fb_uvb, method_name.c_str(),
+                    main_pgm, *aot_func);
+                if (!ctx) {
+                    printd(1, "AOT v2: failed to build fallback context for '%s'\n",
+                        variant_key.c_str());
+                    continue;
+                }
+
+                // Find matching method variant in MAIN program
+                qore_program_private* main_pp = qore_program_private::get(*main_pgm);
+                const QoreClass* main_qc = qore_root_ns_private::runtimeFindClass(
+                    *main_pp->RootNS, class_name);
+                UserVariantBase* main_uvb = nullptr;
+                if (main_qc) {
+                    qore_class_private* main_qcp = qore_class_private::get(
+                        *const_cast<QoreClass*>(main_qc));
+                    const QoreMethod* main_m = main_qcp->parseFindLocalMethod(meth->getName());
+                    if (!main_m) {
+                        main_m = main_qcp->parseFindLocalStaticMethod(meth->getName());
+                    }
+                    if (main_m) {
+                        MethodFunctionBase* main_mfb =
+                            qore_method_private::get(*main_m)->getFunction();
+                        QoreFunctionIterator mvi(*main_mfb);
+                        while (mvi.next()) {
+                            main_uvb = const_cast<UserVariantBase*>(
+                                dynamic_cast<const UserVariantBase*>(mvi.getVariant()));
+                            if (main_uvb) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (main_uvb) {
+                    // Swap parameter LocalVar* (same pattern as functions above)
+                    UserSignature* main_sig = main_uvb->getUserSignature();
+                    UserSignature* fb_sig = fb_uvb->getUserSignature();
+                    if (main_sig && fb_sig && main_sig->lv.size() == fb_sig->lv.size()) {
+                        for (size_t pi = 0; pi < main_sig->lv.size(); ++pi) {
+                            main_sig->lv[pi] = fb_sig->lv[pi];
+                        }
+                        main_sig->argvid = fb_sig->argvid;
+                        main_sig->selfid = fb_sig->selfid;
+                    }
+                    main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    ++registered;
+                    printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
+                        variant_key.c_str());
+                } else {
+                    fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    ++registered;
+                    printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
+                        variant_key.c_str());
+                }
+            }
+        };
+
+        for (auto mi = qcp->hm.begin(), me = qcp->hm.end(); mi != me; ++mi) {
+            processMethod(mi->second);
+        }
+        for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi) {
+            processMethod(mi->second);
+        }
+    }
+
+    // Walk child namespaces recursively
+    for (auto ni = fallback_ns->nsl.nsmap.begin(), ne = fallback_ns->nsl.nsmap.end();
+            ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (child_ns) {
+            // Find matching child namespace in main program
+            auto main_ni = main_ns->nsl.nsmap.find(ni->first);
+            if (main_ni != main_ns->nsl.nsmap.end() && main_ni->second) {
+                registerFallbackFunctionsOnMainVariants(
+                    qore_ns_private::get(*child_ns),
+                    qore_ns_private::get(*main_ni->second),
+                    main_pgm, func_map, registered);
+            } else {
+                // No matching main namespace — register on fallback variants
+                registerAOTFunctionsInNamespace(
+                    qore_ns_private::get(*child_ns), main_pgm, func_map, registered);
+            }
         }
     }
 }
@@ -2373,12 +2646,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 "toplevel=%p\n", (int)func_map.size(), (void*)toplevel_func);
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered);
-            printd(2, "AOT v2: after slot map registration: %d registered\n", registered);
+            printd(2, "AOT v2: after slot map registration: %d registered, %d remaining\n",
+                registered, (int)func_map.size());
 
-            // Only parse fallback source if needed and available.
-            // Module functions that weren't compiled are available from runtime module loading,
-            // so fallback source is only needed for test-local functions that failed compilation.
-            // Make fallback parsing failure non-fatal since module functions are still available.
+            // Parse fallback source if available.
+            // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
+            // (2) _toplevel fallback if slot map registration failed,
+            // (3) any functions that failed slot map registration.
             if (deserializer.hasFallbackSource()) {
                 ExceptionSink wsink;
                 // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
@@ -2403,11 +2677,19 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     fallback_pgm->waitForTerminationAndDeref(nullptr);
                     fallback_pgm = nullptr;
                 } else {
-                    int fallback_registered = 0;
-                    registerAOTFunctionsInNamespace(
-                        qore_ns_private::get(*qore_program_private::get(*fallback_pgm)->RootNS),
-                        fallback_pgm, func_map, fallback_registered);
-                    registered += fallback_registered;
+                    // Register remaining functions from fallback via IR re-lowering.
+                    // Build contexts from fallback AST but register on main program's variants
+                    // for consistent LocalVar* pointer identity with the thread-local stack.
+                    if (!func_map.empty()) {
+                        int fallback_registered = 0;
+                        qore_ns_private* fallback_root_ns = qore_ns_private::get(
+                            *qore_program_private::get(*fallback_pgm)->RootNS);
+                        qore_ns_private* main_root_ns = qore_ns_private::get(*pp->RootNS);
+                        registerFallbackFunctionsOnMainVariants(
+                            fallback_root_ns, main_root_ns, *qpgm, func_map,
+                            fallback_registered);
+                        registered += fallback_registered;
+                    }
                 }
             }
 

@@ -164,8 +164,9 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.out);
         }
 
-        # Compile (set QORE_LIBDIR so the AOT linker finds the correct libqore)
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+        # Compile with --include-source for full source fallback (set QORE_LIBDIR so the AOT
+        # linker finds the correct libqore)
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
@@ -193,8 +194,8 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.out);
         }
 
-        # Compile
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+        # Compile with --include-source for full source fallback
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
@@ -731,7 +732,7 @@ printf(\"sum: %d\\n\", sum);
             hash<auto> result = compileWithFlags(code, (sprintf("--opt-level=%d", level),));
             assertTrue(result.compiled, sprintf("O%d: compilation succeeded", level));
             # Verify output message includes opt level
-            assertTrue(result.compile_out.regex(sprintf("compiled \\(O%d\\)", level)),
+            assertTrue(result.compile_out.regex(sprintf("compiled \\(O%d", level)),
                 sprintf("O%d: output shows opt level", level));
             assertEq(interp_out, result.run_out,
                 sprintf("O%d: output matches interpreter", level));
@@ -920,7 +921,7 @@ public namespace AOTTestMod {
         hash<auto> result = compileModuleFile(qm_path, qmod_path);
 
         assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
-        assertTrue(result.compile_out.regex("compiled module \\(O2\\)"),
+        assertTrue(result.compile_out.regex("compiled module \\(O2"),
             "compile output shows module compilation: " + result.compile_out);
         assertTrue(result.compile_out.regex("3/3 functions pre-compiled"),
             "all module functions pre-compiled: " + result.compile_out);
@@ -1023,7 +1024,7 @@ public namespace AOTOptMod {
             hash<auto> result = compileModuleFile(qm_path, qmod_path,
                 (sprintf("--opt-level=%d", level),));
             assertTrue(result.compiled, sprintf("module O%d compiled: %s", level, result.compile_out));
-            assertTrue(result.compile_out.regex(sprintf("compiled module \\(O%d\\)", level)),
+            assertTrue(result.compile_out.regex(sprintf("compiled module \\(O%d", level)),
                 sprintf("O%d: shows correct opt level: %s", level, result.compile_out));
         }
     }
@@ -1190,7 +1191,7 @@ public namespace AOTSplitTest {
         hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
 
         assertTrue(result.compiled, "split module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("compiled split module \\(O2\\)"),
+        assertTrue(result.compile_out.regex("compiled split module \\(O2"),
             "compile output shows split module compilation: " + result.compile_out);
 
         # Test script that uses all parts of the split module
@@ -1572,13 +1573,13 @@ exit(0);
         }
         assertTrue(strip_paths.compiled, "strip-source compiled: " + strip_paths.compile_out);
 
-        # Also compile WITHOUT strip-source for comparison
+        # Also compile WITH --include-source for comparison
         hash<auto> paths = writeTempScript(code);
         on_exit {
             unlink(paths.src);
             unlink(paths.out);
         }
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
         backquote(compile_cmd);
 
@@ -1588,9 +1589,9 @@ exit(0);
         string strip_strings = backquote(sprintf("strings %s 2>&1", strip_paths.out_path));
         string normal_strings = backquote(sprintf("strings %s 2>&1", paths.out));
 
-        # The non-stripped binary should contain the source declaration
+        # The --include-source binary should contain the source declaration
         assertTrue(normal_strings.regex("int sub add_unique_marker_12345"),
-            "non-stripped binary contains source function declaration");
+            "include-source binary contains source function declaration");
 
         # The stripped binary should NOT contain the source declaration
         assertFalse(strip_strings.regex("int sub add_unique_marker_12345"),
