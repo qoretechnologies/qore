@@ -107,6 +107,9 @@ public class Http2ClientConnection {
 
         #! True when a thread is actively driving to ready
         bool driving = False;
+
+        #! Notifier to wake blocked poll when new requests are submitted (sync mode)
+        EventNotifier poll_notifier();
     }
 
     #! Creates a new HTTP/2 client connection
@@ -284,6 +287,9 @@ public class Http2ClientConnection {
         # Wake controller if in async mode to ensure the I/O thread processes the request
         if (controller_ref) {
             controller_ref.wake();
+        } else {
+            # Sync mode: wake any thread blocked in drivePoll()'s Socket::poll()
+            poll_notifier.notify();
         }
 
         return stream_id;
@@ -448,7 +454,14 @@ public class Http2ClientConnection {
 
             # Wait for socket to be ready
             int poll_timeout = min(int(remaining), 1000);
-            Socket::poll(cast<list<hash<SocketPollInfo>>>((poll_info,)), poll_timeout);
+            Socket::poll(cast<list<hash<SocketPollInfo>>>((
+                poll_info,
+                <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": poll_notifier,
+                },
+            )), poll_timeout);
+            poll_notifier.acknowledge();
             handlePollResult();
         }
 
@@ -503,7 +516,14 @@ public class Http2ClientConnection {
             return True;
         }
 
-        Socket::poll(cast<list<hash<SocketPollInfo>>>((poll_info,)), poll_timeout_ms);
+        Socket::poll(cast<list<hash<SocketPollInfo>>>((
+            poll_info,
+            <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": poll_notifier,
+            },
+        )), poll_timeout_ms);
+        poll_notifier.acknowledge();
         handlePollResult();
         return True;
     }

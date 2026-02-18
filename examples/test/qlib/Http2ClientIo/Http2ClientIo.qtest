@@ -880,9 +880,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         # Wait for all to complete
-        int remaining = counter.waitForZero(30s);
-        if (remaining > 0) {
-            fail(sprintf("controller mode: %d requests did not complete within timeout", remaining));
+        if (counter.waitForZero(30s)) {
+            fail(sprintf("controller mode: %d requests did not complete within timeout",
+                counter.getCount()));
         }
 
         # All should have completed (success or error)

@@ -2283,23 +2283,27 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
         sql += sprintf(" returning %s", (foldl $1 + "," + $2, l));
 
+        # detect bulk operations: check if any bind arg is a typed array bind hash or a list
+        bool is_bulk = False;
+        foreach auto arg in (args) {
+            if (arg.typeCode() == NT_HASH && arg.hasKey("^pgtype^")) {
+                is_bulk = True;
+                break;
+            }
+        }
+
+        # exec() returns a hash-of-lists for RETURNING queries
         *hash<auto> h = execData(opt, sql, args);
         if (!h) {
             return h;
         }
-        # check if any value is already a list (bulk result)
-        bool has_list = False;
-        foreach auto v in (h.iterator()) {
-            if (v.value.typeCode() == NT_LIST) {
-                has_list = True;
-                break;
-            }
-        }
-        if (has_list) {
-            # bulk result: return hash-of-lists as-is
+
+        if (is_bulk) {
+            # bulk operation: return hash-of-lists directly (all RETURNING rows)
             return h;
         }
-        # single row result: wrap in lists for consistency with base class
+
+        # single-row operation: unwrap (driver returns {col: [val]} for RETURNING)
         return map {$1.key: $1.value[0]}, h.pairIterator();
     }
 
