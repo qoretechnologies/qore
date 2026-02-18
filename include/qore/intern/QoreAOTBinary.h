@@ -695,7 +695,21 @@ enum class AOTExprNodeKind : uint8_t {
     EN_PARSE_LIST    = 132, //!< N children (internal arg list)
 
     // Cast
-    EN_CAST          = 140, //!< u16 type_path_len + bytes; 1 child
+    EN_CAST          = 140, //!< u16 type_path_len + bytes + u8 or_nothing; 1 child
+
+    // Literal collections
+    EN_LIST          = 150, //!< N children (list elements)
+    EN_HASH          = 151, //!< u16 num_keys; for each: u16 key_len + bytes, then 1 child (value)
+
+    // Implicit arguments ($1, $2, $#)
+    EN_IMPLICIT_ARG  = 152, //!< i16 offset (-1 = $argv, 0 = $1, 1 = $2, ...); 0 children
+    EN_IMPLICIT_ELEM = 153, //!< $# (implicit element index); 0 children
+
+    // Reference to lvalue (\var)
+    EN_REF_TO_LVALUE = 154, //!< 1 child (lvalue expression)
+
+    // Square brackets range (x[m..n])
+    EN_SQ_BRKT_RANGE = 155, //!< 3 children: [target, start, end]
 };
 
 //! Identity for a local variable slot

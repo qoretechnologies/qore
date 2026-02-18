@@ -127,6 +127,10 @@
 #include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
 #include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreImplicitArgumentNode.h"
+#include "qore/intern/QoreImplicitElementNode.h"
+#include "qore/intern/ParseReferenceNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -198,6 +202,12 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             const QoreMethod* m = qc->findStaticMethod(ref2);
+            // Fall back to parse-time lookup for not-yet-initialized classes
+            if (!m) {
+                qore_class_private* qcp = qore_class_private::get(
+                    *const_cast<QoreClass*>(qc));
+                m = qcp->parseFindLocalStaticMethod(ref2);
+            }
             if (!m) {
                 printd(0, "AOT v2: cannot find static method '%s::%s'\n", ref1, ref2);
                 return 0;
@@ -225,6 +235,15 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const QoreMethod* m = qc->findMethod(ref2);
             if (!m) {
                 m = qc->findStaticMethod(ref2);
+            }
+            // Fall back to parse-time lookup for not-yet-initialized classes
+            if (!m) {
+                qore_class_private* qcp = qore_class_private::get(
+                    *const_cast<QoreClass*>(qc));
+                m = qcp->parseFindLocalMethod(ref2);
+                if (!m) {
+                    m = qcp->parseFindLocalStaticMethod(ref2);
+                }
             }
             if (!m) {
                 printd(0, "AOT v2: cannot find method '%s::%s'\n", ref1, ref2);
@@ -611,9 +630,19 @@ class ExprTreeDeserializer {
                         class_name.c_str(), method_name.c_str());
                     return fail();
                 }
+                // Try runtime findMethod first (works for initialized classes)
                 const QoreMethod* m = qc->findMethod(method_name.c_str());
                 if (!m) {
                     m = qc->findStaticMethod(method_name.c_str());
+                }
+                // Fall back to parse-time lookup for not-yet-initialized classes
+                if (!m) {
+                    qore_class_private* qcp = qore_class_private::get(
+                        *const_cast<QoreClass*>(qc));
+                    m = qcp->parseFindLocalMethod(method_name.c_str());
+                    if (!m) {
+                        m = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                    }
                 }
                 if (!m) {
                     printd(0, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
@@ -647,6 +676,12 @@ class ExprTreeDeserializer {
                     return fail();
                 }
                 const QoreMethod* m = qc->findStaticMethod(method_name.c_str());
+                // Fall back to parse-time lookup for not-yet-initialized classes
+                if (!m) {
+                    qore_class_private* qcp = qore_class_private::get(
+                        *const_cast<QoreClass*>(qc));
+                    m = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                }
                 if (!m) {
                     printd(0, "AOT EXPR_TREE: cannot find static method '%s::%s'\n",
                         class_name.c_str(), method_name.c_str());
@@ -855,18 +890,47 @@ class ExprTreeDeserializer {
             }
 
             case AOTExprNodeKind::EN_CAST: {
-                // Cast operator is abstract with multiple concrete subclasses;
-                // not currently serialized, but read data to advance pointer
                 std::string type_path = readStr();
+                uint8_t or_nothing = readU8();
                 uint16_t num_children = readU16();
                 QoreValue operand;
                 if (num_children >= 1) {
                     operand = deserializeValue();
                 }
-                printd(0, "AOT EXPR_TREE: cast deserialization not yet supported (type '%s')\n",
-                    type_path.c_str());
-                operand.discard(nullptr);
-                return fail();
+                // Resolve the target type from the type path
+                std::string type_error;
+                QoreAOTTypeResolver type_resolver(pgm);
+                const QoreTypeInfo* ti = type_resolver.resolve(type_path.c_str(), type_error);
+                if (!ti) {
+                    printd(0, "AOT EXPR_TREE: cannot resolve cast type '%s': %s\n",
+                        type_path.c_str(), type_error.c_str());
+                    operand.discard(nullptr);
+                    return fail();
+                }
+                // Determine which concrete cast subclass to create
+                const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(ti);
+                if (qc) {
+                    return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, qc, operand,
+                        or_nothing != 0));
+                }
+                const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+                if (hd) {
+                    return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, hd, operand,
+                        or_nothing != 0));
+                }
+                // Complex hash or list types
+                qore_type_t bt = QoreTypeInfo::getBaseType(ti);
+                if (bt == NT_HASH) {
+                    return QoreValue(new QoreComplexHashCastOperatorNode(&loc_builtin, ti, operand,
+                        or_nothing != 0));
+                }
+                if (bt == NT_LIST) {
+                    return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, ti, operand,
+                        or_nothing != 0));
+                }
+                // Fallback — try as class cast with null class (for basic types)
+                return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, operand,
+                    or_nothing != 0));
             }
 
             // Pre/post increment/decrement
@@ -1127,18 +1191,36 @@ class ExprTreeDeserializer {
                     operand.discard(nullptr);
                     return QoreValue();
                 }
+                // Use the default constructor which creates both str and newstr
+                // (the runtime constructor doesn't create newstr, causing null deref
+                // in concatTarget)
+                QoreRegexSubst* rs = new QoreRegexSubst();
+                // Set regex options from serialized data before compiling
+                if (options & PCRE2_CASELESS) {
+                    rs->setCaseInsensitive();
+                }
+                if (options & PCRE2_DOTALL) {
+                    rs->setDotAll();
+                }
+                if (options & PCRE2_EXTENDED) {
+                    rs->setExtended();
+                }
+                if (options & PCRE2_MULTILINE) {
+                    rs->setMultiline();
+                }
+                // Compile pattern
                 ExceptionSink xsink;
-                QoreRegexSubst* rs = new QoreRegexSubst(pattern.c_str(), options, &xsink);
-                if (xsink) {
+                if (rs->parseRT(pattern.c_str(), &xsink)) {
                     printd(0, "AOT EXPR_TREE: regex subst compile error for pattern '%s'\n",
                         pattern.c_str());
+                    delete rs;
                     operand.discard(nullptr);
                     return fail();
                 }
                 if (global) {
                     rs->setGlobal();
                 }
-                // Set replacement string
+                // Set replacement string via concatTarget (newstr created by default ctor)
                 for (char c : replacement) {
                     rs->concatTarget(c);
                 }
@@ -1251,6 +1333,68 @@ class ExprTreeDeserializer {
                 // Cannot deserialize closures
                 printd(0, "AOT EXPR_TREE: closure deserialization not supported\n");
                 return fail();
+
+            case AOTExprNodeKind::EN_LIST: {
+                uint16_t count = readU16();
+                ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), nullptr);
+                for (uint16_t i = 0; i < count; ++i) {
+                    list->push(deserializeValue(), nullptr);
+                }
+                return QoreValue(list.release());
+            }
+
+            case AOTExprNodeKind::EN_HASH: {
+                uint16_t count = readU16();
+                ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), nullptr);
+                for (uint16_t i = 0; i < count; ++i) {
+                    std::string key = readStr();
+                    QoreValue val = deserializeValue();
+                    hash->setKeyValue(key.c_str(), val, nullptr);
+                }
+                return QoreValue(hash.release());
+            }
+
+            case AOTExprNodeKind::EN_IMPLICIT_ARG: {
+                int16_t offset;
+                uint16_t raw = readU16();
+                memcpy(&offset, &raw, sizeof(offset));
+                readU16(); // 0 children
+                // getOffset() returns internal offset (0 for $1, 1 for $2, -1 for $argv)
+                // Constructor expects public offset (1 for $1, 2 for $2, -1 for $argv)
+                // so add 1 to non-negative offsets
+                int ctor_offset = (offset >= 0) ? (offset + 1) : offset;
+                return QoreValue(new QoreImplicitArgumentNode(&loc_builtin, ctor_offset));
+            }
+
+            case AOTExprNodeKind::EN_IMPLICIT_ELEM: {
+                readU16(); // 0 children
+                return QoreValue(new QoreImplicitElementNode(&loc_builtin));
+            }
+
+            case AOTExprNodeKind::EN_REF_TO_LVALUE: {
+                uint16_t num_children = readU16();
+                QoreValue lv_exp;
+                if (num_children >= 1) {
+                    lv_exp = deserializeValue();
+                }
+                return QoreValue(new ParseReferenceNode(&loc_builtin, lv_exp));
+            }
+
+            case AOTExprNodeKind::EN_SQ_BRKT_RANGE: {
+                uint16_t num_children = readU16();
+                QoreValue target, start, end_val;
+                if (num_children >= 1) {
+                    target = deserializeValue();
+                }
+                if (num_children >= 2) {
+                    start = deserializeValue();
+                }
+                if (num_children >= 3) {
+                    end_val = deserializeValue();
+                }
+                return QoreValue(new QoreSquareBracketsRangeOperatorNode(&loc_builtin,
+                    target, start, end_val));
+            }
 
             default:
                 printd(0, "AOT EXPR_TREE: unknown node kind %d\n", (int)kind);

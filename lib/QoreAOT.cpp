@@ -133,6 +133,10 @@
 #include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
 #include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/QoreImplicitArgumentNode.h"
+#include "qore/intern/QoreImplicitElementNode.h"
+#include "qore/intern/ParseReferenceNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -3749,7 +3753,9 @@ class ExprTreeSerializer {
             const QoreMethod* method = sfc->getMethod();
             if (method) {
                 const QoreClass* qc = method->getClass();
-                writeStr(qc ? qc->getName() : "");
+                // Use getPath() for namespace-qualified name to avoid ambiguity
+                // (e.g., "Test" could match user class or QUnit::Test base class)
+                writeStr(qc ? qc->getPath() : "");
             } else {
                 writeStr("");
             }
@@ -3772,7 +3778,7 @@ class ExprTreeSerializer {
             const QoreMethod* method = smc->getMethod();
             if (method) {
                 const QoreClass* qc = method->getClass();
-                writeStr(qc ? qc->getName() : "");
+                writeStr(qc ? qc->getPath() : "");
             } else {
                 writeStr("");
             }
@@ -3936,12 +3942,14 @@ class ExprTreeSerializer {
             return serializeValue(op->getExp());
         }
 
-        // cast<type>(expr) - abstract class with multiple concrete subclasses, skip for now
-        if (dynamic_cast<const QoreCastOperatorNode*>(node)) {
-            if (debug) {
-                fprintf(stderr, "EXPR_TREE: cast operator not yet supported\n");
-            }
-            return false;
+        // cast<type>(expr)
+        if (auto* op = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CAST));
+            const QoreTypeInfo* ti = op->getCastTypeInfo();
+            writeStr(ti ? QoreTypeInfo::getPath(ti) : "");
+            writeU8(op->isOrNothing() ? 1 : 0);
+            writeU16(1);
+            return serializeValue(op->getExp());
         }
 
         // typeof: needs special handling — check if it exists
@@ -4244,6 +4252,70 @@ class ExprTreeSerializer {
             return true;
         }
 
+        // QoreListNode: runtime list literal (already parsed)
+        if (auto* ln = dynamic_cast<const QoreListNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_LIST));
+            uint16_t count = static_cast<uint16_t>(ln->size());
+            writeU16(count);
+            for (size_t i = 0; i < ln->size(); ++i) {
+                if (!serializeValue(ln->retrieveEntry(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // QoreHashNode: runtime hash literal (already parsed)
+        if (auto* hn = dynamic_cast<const QoreHashNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_HASH));
+            uint16_t count = static_cast<uint16_t>(hn->size());
+            writeU16(count);
+            ConstHashIterator hi(*hn);
+            while (hi.next()) {
+                writeStr(hi.getKey());
+                if (!serializeValue(hi.get())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // QoreImplicitArgumentNode: $1, $2, $argv
+        if (auto* ia = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_IMPLICIT_ARG));
+            int16_t offset = static_cast<int16_t>(ia->getOffset());
+            writeU16(static_cast<uint16_t>(offset));
+            writeU16(0); // 0 children
+            return true;
+        }
+
+        // QoreImplicitElementNode: $#
+        if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_IMPLICIT_ELEM));
+            writeU16(0); // 0 children
+            return true;
+        }
+
+        // ParseReferenceNode: \variable (reference to lvalue)
+        if (auto* pr = dynamic_cast<const ParseReferenceNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_REF_TO_LVALUE));
+            writeU16(1); // 1 child
+            return serializeValue(pr->getLVExp());
+        }
+
+        // QoreSquareBracketsRangeOperatorNode: x[m..n]
+        if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SQ_BRKT_RANGE));
+            writeU16(3); // 3 children: target, start, end
+            if (!serializeValue(sbr->get(0))) {
+                return false;
+            }
+            if (!serializeValue(sbr->get(1))) {
+                return false;
+            }
+            return serializeValue(sbr->get(2));
+        }
+
         // Closure — cannot be serialized
         if (dynamic_cast<const QoreClosureParseNode*>(node)) {
             if (debug) {
@@ -4354,7 +4426,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         if (method) {
             const QoreClass* qc = method->getClass();
             if (qc) {
-                id.ref1 = qc->getName();
+                id.ref1 = qc->getPath();
             }
         }
         id.ref2 = call->getName();
@@ -4368,7 +4440,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         if (method) {
             const QoreClass* qc = method->getClass();
             if (qc) {
-                id.ref1 = qc->getName();
+                id.ref1 = qc->getPath();
             }
         }
         id.ref2 = call->getName();

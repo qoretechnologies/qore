@@ -106,6 +106,14 @@ public:
     //! Returns the cast result with a new reference; caller owns the result.
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const = 0;
 
+    //! Returns the or_nothing flag for this cast operator (used for AOT serialization)
+    DLLLOCAL virtual bool isOrNothing() const = 0;
+
+    //! Returns the cast target type info (used for AOT serialization)
+    DLLLOCAL const QoreTypeInfo* getCastTypeInfo() const {
+        return getTypeInfo();
+    }
+
 protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         return 0;
@@ -136,6 +144,8 @@ public:
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
 
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
     const QoreClass* qc;
@@ -168,6 +178,8 @@ public:
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
 
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
     const TypedHashDecl* hd;
@@ -202,6 +214,8 @@ public:
 
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
 
+    DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
+
 protected:
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
@@ -233,6 +247,8 @@ public:
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
 
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
     const QoreTypeInfo* typeInfo;
@@ -266,6 +282,8 @@ public:
     DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
 
     DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
     const QoreEnumDecl* ed;
