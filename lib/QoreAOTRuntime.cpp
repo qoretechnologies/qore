@@ -140,6 +140,7 @@
 #include <cassert>
 #include <cstring>
 #include <string>
+#include <deque>
 #include <unordered_map>
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
@@ -1486,11 +1487,14 @@ static QoreAOTContext* buildContextFromSlotMap(
             collectAllStatementLocals(statements, stmt_locals);
         }
     }
-    // Build name→LocalVar* map for body local resolution
-    std::unordered_map<std::string, LocalVar*> stmt_local_map;
+    // Build name→LocalVar* deque map for body local resolution
+    // A deque is needed because nested scopes can have variables with the same name
+    // (e.g., 'i' in nested for loops). Both AOT serialization and collectAllStatementLocals()
+    // walk in the same depth-first order, so consuming front-to-back gives correct matches.
+    std::unordered_map<std::string, std::deque<LocalVar*>> stmt_local_deque;
     for (LocalVar* slv : stmt_locals) {
         if (slv && slv->getName()) {
-            stmt_local_map[slv->getName()] = slv;
+            stmt_local_deque[slv->getName()].push_back(slv);
         }
     }
 
@@ -1519,11 +1523,14 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
         } else {
             // Body local — try to find the actual LocalVar* from the function's AST
-            // first, then fall back to creating a new one (toplevel case)
-            if (lname && *lname && !stmt_local_map.empty()) {
-                auto it = stmt_local_map.find(lname);
-                if (it != stmt_local_map.end()) {
-                    lv = it->second;
+            // first, then fall back to creating a new one (toplevel case).
+            // Use pop_front() to consume in walk order, handling duplicate names
+            // from nested scopes correctly.
+            if (lname && *lname && !stmt_local_deque.empty()) {
+                auto it = stmt_local_deque.find(lname);
+                if (it != stmt_local_deque.end() && !it->second.empty()) {
+                    lv = it->second.front();
+                    it->second.pop_front();
                 }
             }
             if (!lv) {

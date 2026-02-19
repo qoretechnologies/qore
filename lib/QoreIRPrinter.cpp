@@ -366,6 +366,12 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DecrefNoThrow: return "decref.nothrow";
         case QoreIROpcode::ScopeEnter: return "scope.enter";
         case QoreIROpcode::ScopeExit: return "scope.exit";
+        case QoreIROpcode::RefForeachInit: return "ref.foreach.init";
+        case QoreIROpcode::RefForeachSize: return "ref.foreach.size";
+        case QoreIROpcode::RefForeachGetEntry: return "ref.foreach.get.entry";
+        case QoreIROpcode::RefForeachRecord: return "ref.foreach.record";
+        case QoreIROpcode::RefForeachFinalize: return "ref.foreach.finalize";
+        case QoreIROpcode::RefForeachCleanup: return "ref.foreach.cleanup";
     }
     return "unknown";
 }
@@ -672,6 +678,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if (iter->done_target) {
                         out << " done " << iter->done_target->name;
                     }
+                }
+            } else if (inst->opcode == QoreIROpcode::RefForeachInit) {
+                auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
+                if (rfi) {
+                    out << " <expr>";
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchInt) {
                 auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());

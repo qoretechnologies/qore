@@ -35,6 +35,7 @@
 #include <cstdint>
 
 class ExceptionSink;
+class QoreIRFunction;
 class UserVariantBase;
 
 // C ABI helpers called by JIT-generated code.
@@ -279,6 +280,9 @@ class StatementBlock;
 //! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
 void qore_rt_push_on_block_exit(int type, StatementBlock* code);
 
+//! Register an on_block_exit handler with compiled IR for native execution.
+void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code, const QoreIRFunction* handler_ir);
+
 //! Get current handler count (called at function entry to save base).
 int64_t qore_rt_get_on_block_exit_count();
 
@@ -361,6 +365,27 @@ void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t 
 
 //! Create a reverse iterator from a list/iterable (for foldr); returns opaque iterator pointer
 void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink);
+
+// --- Reference foreach helpers ---
+
+//! Initialize reference foreach state from a ParseReferenceNode expression.
+//! Returns an opaque state pointer (as uint64_t), or 0 on error.
+uint64_t qore_rt_ref_foreach_init(uint64_t parse_ref_bits, ExceptionSink* xsink);
+
+//! Get the iteration count for a reference foreach state.
+int64_t qore_rt_ref_foreach_size(uint64_t state_ptr);
+
+//! Get the element at the given index from the reference foreach state.
+uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, int64_t index, ExceptionSink* xsink);
+
+//! Record the modified loop variable value after body execution.
+void qore_rt_ref_foreach_record(uint64_t state_ptr, uint64_t value_bits, ExceptionSink* xsink);
+
+//! Finalize: optionally fill remaining elements (on break), write back to reference, and clean up.
+void qore_rt_ref_foreach_finalize(uint64_t state_ptr, int64_t fill_remaining, ExceptionSink* xsink);
+
+//! Clean up reference foreach state without write-back (exception/early-exit paths).
+void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, ExceptionSink* xsink);
 
 // --- Specialized access helpers (Phase 5b optimizations) ---
 

@@ -350,6 +350,26 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // iterator_next: (ptr, ptr, ptr) -> i64
     module.getOrInsertFunction("qore_rt_iterator_next",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+
+    // Reference foreach helpers
+    // ref_foreach_init: (i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_ref_foreach_init",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    // ref_foreach_size: (i64) -> i64
+    module.getOrInsertFunction("qore_rt_ref_foreach_size",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    // ref_foreach_get_entry: (i64, i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_ref_foreach_get_entry",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+    // ref_foreach_record: (i64, i64, ptr) -> void
+    module.getOrInsertFunction("qore_rt_ref_foreach_record",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+    // ref_foreach_finalize: (i64, i64, ptr) -> void
+    module.getOrInsertFunction("qore_rt_ref_foreach_finalize",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+    // ref_foreach_cleanup: (i64, ptr) -> void
+    module.getOrInsertFunction("qore_rt_ref_foreach_cleanup",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 }
 
 llvm::FunctionCallee QoreIRToLLVM::getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft) {
@@ -3772,6 +3792,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
 
+            } else if (inv->invoke_opcode == QoreIROpcode::RefForeachInit) {
+                // RefForeachInit invoke: initialize reference foreach state
+                llvm::Value* parse_ref_bits_val;
+                if (aot_mode) {
+                    // AOT: use expression slot for the ParseReferenceNode
+                    QoreValue expr_val = inv->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto aot_helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type}, false));
+                    llvm::Value* ref_val = builder->CreateCall(aot_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    parse_ref_bits_val = ref_val;
+                } else {
+                    // JIT: pass the ParseReferenceNode QoreValue bits directly
+                    QoreValue expr_val = inv->expr;
+                    uint64_t bits;
+                    std::memcpy(&bits, &expr_val, sizeof(bits));
+                    parse_ref_bits_val = llvm::ConstantInt::get(i64_type, bits);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_init",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {parse_ref_bits_val, xsink_arg});
+                // State handle is not nanboxed — handled specially below
+
+            } else if (inv->invoke_opcode == QoreIROpcode::RefForeachGetEntry) {
+                // RefForeachGetEntry invoke: get element at index from reference foreach state
+                // operands: state, index
+                auto* state_val = getVal(inv->operands[0].id, error);
+                if (!state_val) { return false; }
+                auto* index_val = getVal(inv->operands[1].id, error);
+                if (!index_val) { return false; }
+                auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {state_val, index_val, xsink_arg});
+                // Result is nanboxed — handled by common tail below
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
@@ -3798,8 +3857,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            // RefForeachInit returns an opaque state handle — not a nanboxed QoreValue
+            if (inv->invoke_opcode != QoreIROpcode::RefForeachInit) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
 
             // Check for exception and branch accordingly
             auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
@@ -7313,7 +7375,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {ptr_type, i32_type, llvm::Type::getInt32Ty(ctx)}, false));
                 builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), type_val});
+            } else if (sinst->handler_ir) {
+                // Compiled handler: pass handler_ir pointer for IR interpreter execution
+                llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(code));
+                llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
+                llvm::Value* handler_ir_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
+                llvm::Value* handler_ir_as_ptr = builder->CreateIntToPtr(handler_ir_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_ir",
+                        llvm::FunctionType::get(void_type,
+                            {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+                builder->CreateCall(helper, {type_val, code_as_ptr, handler_ir_as_ptr});
             } else {
+                // AST fallback
                 llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(code));
                 llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
@@ -7588,6 +7663,117 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             llvm::Value* is_done = builder->CreateICmpNE(done_flag, llvm::ConstantInt::get(i64_type, 0));
             builder->CreateCondBr(is_done, done_it->second, cont_it->second);
+            return true;
+        }
+
+        // === Reference foreach operations ===
+        case QoreIROpcode::RefForeachInit: {
+            const auto* rfi = static_cast<const QoreIRRefForeachInitInstruction*>(inst);
+            llvm::Value* parse_ref_bits_val;
+            if (aot_mode) {
+                // AOT: use expression slot for the ParseReferenceNode
+                QoreValue expr_val = rfi->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                // Evaluate the ParseReferenceNode via AOT to get a runtime reference
+                llvm::Value* ref_val = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                parse_ref_bits_val = ref_val;
+            } else {
+                // JIT: pass the ParseReferenceNode QoreValue bits directly as a constant
+                QoreValue expr_val = rfi->expr;
+                uint64_t bits;
+                std::memcpy(&bits, &expr_val, sizeof(bits));
+                parse_ref_bits_val = llvm::ConstantInt::get(i64_type, bits);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_init",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {parse_ref_bits_val, xsink_arg});
+            values[inst->result.id] = result;
+            // State handle is an opaque uint64_t, not nanboxed
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::RefForeachSize: {
+            // Get the state handle operand
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {state_val});
+            values[inst->result.id] = result;
+            // Result is a plain int64, not nanboxed
+            return true;
+        }
+        case QoreIROpcode::RefForeachGetEntry: {
+            // operands: state, index
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto* index_val = getVal(inst->operands[1].id, error);
+            if (!index_val) { return false; }
+            // Ensure index is i64 (it may be a typed int that needs unboxing)
+            if (index_val->getType() != i64_type) {
+                error = "RefForeachGetEntry: index must be i64";
+                return false;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {state_val, index_val, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::RefForeachRecord: {
+            // operands: state, value
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto* value_val = getVal(inst->operands[1].id, error);
+            if (!value_val) { return false; }
+            // Box the value if needed — it must be a nanboxed QoreValue
+            llvm::Value* value_boxed;
+            if (nanboxed_values.count(inst->operands[1].id)) {
+                value_boxed = value_val;
+            } else if (value_val->getType() == i64_type) {
+                value_boxed = boxIntInline(value_val);
+            } else if (value_val->getType() == double_type) {
+                value_boxed = boxFloat(value_val);
+            } else if (value_val->getType() == llvm::Type::getInt1Ty(ctx)) {
+                value_boxed = boxBool(value_val);
+            } else {
+                error = "RefForeachRecord: unsupported value type";
+                return false;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_record",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {state_val, value_boxed, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::RefForeachFinalize: {
+            // operands: state, fill_remaining
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto* fill_val = getVal(inst->operands[1].id, error);
+            if (!fill_val) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_finalize",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {state_val, fill_val, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::RefForeachCleanup: {
+            // operands: state
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_cleanup",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {state_val, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 

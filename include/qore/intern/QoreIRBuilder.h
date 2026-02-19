@@ -228,6 +228,16 @@ public:
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
+    QoreIRRefForeachInitInstruction* createRefForeachInit(const QoreValue& parse_ref_expr,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRefForeachSize(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRefForeachGetEntry(QoreIRValue state, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRefForeachRecord(QoreIRValue state, QoreIRValue value,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRefForeachFinalize(QoreIRValue state, QoreIRValue fill_remaining,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createRefForeachCleanup(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
     QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);

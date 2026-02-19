@@ -32,6 +32,7 @@ class AOTSmokeTest inherits QUnit::Test {
         # Phase 7b: pointer indirection tests
         addTestCase("AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
         addTestCase("AOT local variable scoping", \testLocalVariableScoping());
+        addTestCase("AOT nested duplicate local names", \testNestedDuplicateLocalNames());
         addTestCase("AOT lvalue operations", \testLvalueOps());
         addTestCase("AOT multiple user functions", \testMultipleUserFunctions());
         addTestCase("AOT method calls", \testMethodCalls());
@@ -471,6 +472,66 @@ printf(\"result=%d\\n\", compute(3, 4, 5));
         assertTrue(result.all_precompiled, "local scoping: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "local variable scoping output matches interpreter");
+    }
+
+    testNestedDuplicateLocalNames() {
+        # Test that nested scopes with duplicate variable names (e.g., 'x' in nested blocks,
+        # 'tmp' in if/else branches) resolve correctly under AOT — previously caused assertion
+        # failures due to name collisions in stmt_local_map overwriting earlier LocalVar* pointers
+        string code = "%modern
+int sub nested_blocks() {
+    int result = 0;
+    {
+        int x = 10;
+        result += x;
+    }
+    {
+        int x = 20;
+        result += x;
+    }
+    {
+        int x = 30;
+        result += x;
+    }
+    return result;
+}
+
+int sub nested_if_scopes(int val) {
+    int r = 0;
+    if (val > 0) {
+        int tmp = val * 2;
+        r += tmp;
+    } else {
+        int tmp = val * 3;
+        r += tmp;
+    }
+    return r;
+}
+
+int sub deeply_nested() {
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        {
+            int v = i * 10;
+            sum += v;
+        }
+        {
+            int v = i * 100;
+            sum += v;
+        }
+    }
+    return sum;
+}
+
+printf(\"%d\\n\", nested_blocks());
+printf(\"%d\\n\", nested_if_scopes(5));
+printf(\"%d\\n\", nested_if_scopes(-3));
+printf(\"%d\\n\", deeply_nested());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "nested dup names: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "nested duplicate local names output matches interpreter");
     }
 
     testLvalueOps() {

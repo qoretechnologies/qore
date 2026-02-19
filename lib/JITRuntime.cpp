@@ -2472,12 +2472,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
 struct JITOnBlockExitHandler {
     obe_type_e type;
     StatementBlock* code;
+    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
 };
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code});
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr});
+}
+
+extern "C" DLLEXPORT void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code,
+        const QoreIRFunction* handler_ir) {
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, handler_ir});
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
@@ -2498,7 +2504,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
     for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
         obe_type_e type = jit_obe_handlers[i].type;
         if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-            if (jit_obe_handlers[i].code) {
+            if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir) {
                 // Instantiate exception for on_error blocks as an implicit arg
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -2509,8 +2515,17 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
                         argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                     }
                 }
-                QoreValue rv;
-                jit_obe_handlers[i].code->exec(rv, &obe_xsink);
+                if (jit_obe_handlers[i].handler_ir) {
+                    // Execute compiled handler via IR interpreter
+                    QoreValue rv;
+                    QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink);
+                    rv.discard(nullptr);
+                } else {
+                    // AST fallback
+                    QoreValue rv;
+                    jit_obe_handlers[i].code->exec(rv, &obe_xsink);
+                    rv.discard(nullptr);
+                }
                 if (type == OBE_Error) {
                     if (qore_es_private::get(obe_xsink)->rethrown) {
                         if (xsink) {
@@ -2525,7 +2540,6 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
                         obe_xsink.clear();
                     }
                 }
-                rv.discard(nullptr);
             }
         }
     }
@@ -2810,6 +2824,154 @@ extern "C" DLLEXPORT int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out
     // Store current value and continue
     *out_value = toBits(val.takeReferencedValue());
     return 0;
+}
+
+// --- Reference foreach helpers ---
+
+// Opaque state for reference foreach iteration
+struct RefForeachState {
+    ReferenceNode* vr = nullptr;      // runtime reference (one ref owned)
+    QoreValue tlist;                   // original value (one ref owned)
+    QoreListNode* l_tlist = nullptr;   // pointer to list in tlist (borrowed, not owned)
+    QoreValue ln;                      // result accumulator (one ref owned)
+};
+
+// Initialize reference foreach state from a ParseReferenceNode expression.
+// Returns an opaque state pointer (as uint64_t), or 0 on error.
+extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_init(uint64_t parse_ref_bits, ExceptionSink* xsink) {
+    QoreValue parse_ref = fromBits(parse_ref_bits);
+    ParseReferenceNode* r = parse_ref.get<ParseReferenceNode>();
+    if (!r) {
+        xsink->raiseException("FOREACH-ERROR", "reference foreach: expected a reference expression");
+        return 0;
+    }
+
+    auto* state = new RefForeachState();
+
+    // Evaluate ParseReferenceNode to get runtime ReferenceNode
+    state->vr = r->evalToRef(xsink);
+    if (*xsink) {
+        delete state;
+        return 0;
+    }
+
+    // Get the current value of the lvalue expression
+    state->tlist = state->vr->eval(xsink);
+    if (*xsink) {
+        state->vr->deref(xsink);
+        delete state;
+        return 0;
+    }
+
+    state->l_tlist = (state->tlist.getType() == NT_LIST)
+        ? state->tlist.get<QoreListNode>() : nullptr;
+
+    // Create result accumulator
+    if (state->l_tlist) {
+        state->ln = new QoreListNode(autoTypeInfo);
+    }
+
+    return reinterpret_cast<uint64_t>(state);
+}
+
+// Get the iteration count for a reference foreach state.
+// Returns 0 for NOTHING/empty, list size for lists, 1 for scalars.
+extern "C" DLLEXPORT int64_t qore_rt_ref_foreach_size(uint64_t state_ptr) {
+    auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    if (!state) {
+        return 0;
+    }
+    if (state->l_tlist) {
+        return state->l_tlist->empty() ? 0 : static_cast<int64_t>(state->l_tlist->size());
+    }
+    return state->tlist.isNothing() ? 0 : 1;
+}
+
+// Get the element at the given index from the reference foreach state.
+// Returns a referenced value suitable for assignment to the loop variable.
+extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, int64_t index,
+        ExceptionSink* xsink) {
+    auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    QoreValue entry;
+    if (state->l_tlist) {
+        entry = state->l_tlist->getReferencedEntry(static_cast<size_t>(index));
+    } else {
+        // Scalar: return the value (first and only iteration)
+        entry = state->tlist.refSelf();
+    }
+    return toBits(entry);
+}
+
+// Record the modified loop variable value after body execution.
+extern "C" DLLEXPORT void qore_rt_ref_foreach_record(uint64_t state_ptr, uint64_t value_bits,
+        ExceptionSink* xsink) {
+    auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    QoreValue value = fromBits(value_bits);
+    if (state->l_tlist) {
+        state->ln.get<QoreListNode>()->push(value.refSelf(), nullptr);
+    } else {
+        state->ln.discard(nullptr);
+        state->ln = value.refSelf();
+    }
+}
+
+// Finalize: optionally fill remaining elements (on break), write back to reference, and clean up.
+// If *xsink is set (exception path), does cleanup without write-back.
+// fill_remaining: 1 = fill remaining elements from original (break case), 0 = write back as-is
+extern "C" DLLEXPORT void qore_rt_ref_foreach_finalize(uint64_t state_ptr, int64_t fill_remaining,
+        ExceptionSink* xsink) {
+    auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    if (!state) {
+        return;
+    }
+
+    if (*xsink) {
+        // Exception path: clean up without write-back
+        state->ln.discard(xsink);
+        state->tlist.discard(xsink);
+        state->vr->deref(xsink);
+        delete state;
+        return;
+    }
+
+    // Fill remaining elements if result list is shorter than original (break case)
+    if (fill_remaining && state->l_tlist && state->ln.getType() == NT_LIST) {
+        QoreListNode* result = state->ln.get<QoreListNode>();
+        size_t result_size = result->size();
+        size_t orig_size = state->l_tlist->size();
+        for (size_t i = result_size; i < orig_size; ++i) {
+            result->push(state->l_tlist->getReferencedEntry(i), nullptr);
+        }
+    }
+
+    // Write the value back to the lvalue reference
+    {
+        LValueHelper val(*state->vr, xsink);
+        if (val) {
+            QoreValue result = state->ln;
+            state->ln = QoreValue();  // prevent double-free
+            val.assign(result);
+        } else {
+            state->ln.discard(xsink);
+            state->ln = QoreValue();
+        }
+    }
+
+    state->tlist.discard(xsink);
+    state->vr->deref(xsink);
+    delete state;
+}
+
+// Clean up reference foreach state without write-back (exception/early-exit paths).
+extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, ExceptionSink* xsink) {
+    auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
+    if (!state) {
+        return;
+    }
+    state->ln.discard(xsink);
+    state->tlist.discard(xsink);
+    state->vr->deref(xsink);
+    delete state;
 }
 
 // --- Direct dot-eval method call (pre-evaluated base + args) ---

@@ -229,16 +229,23 @@ private:
      */
     void emitScopeExits(size_t target_depth, bool is_error = false);
 
-    //! Emit block cleanup instructions (ScopeExit + UninstantiateLocal) from innermost to target depth
-    /** Used by return/break/continue to properly unwind both on_exit handlers and
-     *  block-scoped local variables in the correct interleaved order matching AST mode.
-     *  Within a single block, scope exits fire before lvars cleanup (on_exit runs first,
-     *  then LVListInstantiator destructor).  Across blocks, inner blocks clean up before
-     *  outer blocks.
+    //! Flags for emitBlockCleanups controlling cleanup behavior
+    enum CleanupFlags : unsigned {
+        CF_NONE = 0,
+        CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
+        CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break)
+    };
+
+    //! Emit block cleanup instructions (ScopeExit + UninstantiateLocal + RefForeach)
+    //! from innermost to target depth
+    /** Used by return/break/continue to properly unwind on_exit handlers, block-scoped
+     *  local variables, and reference foreach state in the correct interleaved order
+     *  matching AST mode.
      *  @param target_depth the cleanup_stack depth to unwind to
      *  @param is_error true if exiting due to an exception
+     *  @param flags combination of CleanupFlags
      */
-    void emitBlockCleanups(size_t target_depth, bool is_error = false);
+    void emitBlockCleanups(size_t target_depth, bool is_error = false, unsigned flags = CF_NONE);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -251,19 +258,25 @@ private:
     //! Stack of active scope IDs for tracking nested on_exit handlers
     std::vector<uint32_t> scope_stack;
 
-    //! Entry in the block cleanup stack for interleaved cleanup of on_exit handlers
-    //! and block-scoped local variables on break/continue/return
+    //! Entry in the block cleanup stack for interleaved cleanup of on_exit handlers,
+    //! block-scoped local variables, and reference foreach state on break/continue/return
     struct BlockCleanupEntry {
-        enum Type { Scope, Lvars };
+        enum Type { Scope, Lvars, RefForeachRecord, RefForeach };
         Type type;
-        uint32_t scope_id = 0;         //!< scope ID for Scope entries
-        const LVList* lvars = nullptr;  //!< local variables for Lvars entries
-        const QoreProgramLocation* loc = nullptr; //!< location for UninstantiateLocal
+        uint32_t scope_id = 0;                    //!< scope ID for Scope entries
+        const LVList* lvars = nullptr;             //!< local variables for Lvars entries
+        const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
+        QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
+        QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord
+        QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
     };
-    //! Unified cleanup stack tracking both scope exits and block-scoped locals
-    /** Entries are pushed in nesting order: lvars first, then scope for each block.
-     *  This ensures correct reverse ordering on cleanup: scope exit fires before
-     *  lvars cleanup (matching AST mode's on_exit-before-LVListInstantiator ordering).
+    //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
+    /** Entries are pushed in nesting order. Reverse iteration gives correct cleanup ordering.
+     *  For reference foreach, the ordering is:
+     *    RefForeach (state) → Scope (try scope) → RefForeachRecord (state, var, $#)
+     *  On break, all three are processed (fill remaining + write back).
+     *  On return, all three are processed (write back without fill remaining).
+     *  On continue, only body inner entries above RefForeachRecord are processed.
      */
     std::vector<BlockCleanupEntry> cleanup_stack;
 

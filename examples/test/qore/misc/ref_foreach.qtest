@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%requires QUnit
+
+%exec-class RefForeachTest
+
+class RefForeachTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RefForeach", "1.0") {
+        addTestCase("basic list modification", \testBasicListMod());
+        addTestCase("scalar modification", \testScalarMod());
+        addTestCase("empty list", \testEmptyList());
+        addTestCase("nothing reference", \testNothingRef());
+        addTestCase("single element list", \testSingleElement());
+        addTestCase("break with remaining fill", \testBreakFill());
+        addTestCase("continue in body", \testContinue());
+        addTestCase("return from body", \testReturnFromBody());
+        addTestCase("nested ref foreach", \testNestedRefForeach());
+        addTestCase("exception in body", \testExceptionInBody());
+        addTestCase("exception safety on init", \testExceptionSafetyInit());
+        addTestCase("implicit element $#", \testImplicitElement());
+        addTestCase("type preservation", \testTypePreservation());
+        addTestCase("on_exit in body", \testOnExitInBody());
+        set_return_value(main());
+    }
+
+    testBasicListMod() {
+        list<auto> l = (1, 2, 3, 4, 5);
+        foreach auto v in (\l) {
+            v *= 2;
+        }
+        assertEq((2, 4, 6, 8, 10), l);
+    }
+
+    testScalarMod() {
+        int x = 10;
+        foreach auto v in (\x) {
+            v += 5;
+        }
+        assertEq(15, x);
+    }
+
+    testEmptyList() {
+        list<auto> l = ();
+        foreach auto v in (\l) {
+            v = "should not happen";
+        }
+        assertEq((), l);
+    }
+
+    testNothingRef() {
+        auto x;
+        # NOTHING reference - loop body should not execute
+        bool executed = False;
+        foreach auto v in (\x) {
+            v = "set";
+            executed = True;
+        }
+        assertEq(False, executed);
+    }
+
+    testSingleElement() {
+        list<auto> l = (42,);
+        foreach auto v in (\l) {
+            v = v + 8;
+        }
+        assertEq((50,), l);
+    }
+
+    testBreakFill() {
+        # Break should fill remaining elements from original
+        list<auto> l = (1, 2, 3, 4, 5);
+        foreach auto v in (\l) {
+            if (v == 3) {
+                v = 30;
+                break;
+            }
+            v *= 10;
+        }
+        # Elements 0,1 modified, element 2 modified then break, elements 3,4 from original
+        assertEq((10, 20, 30, 4, 5), l);
+    }
+
+    testContinue() {
+        list<auto> l = (1, 2, 3, 4, 5);
+        foreach auto v in (\l) {
+            if (v % 2 == 0) {
+                continue;
+            }
+            v *= 100;
+        }
+        # Odd elements multiplied by 100, even elements unchanged (continue still records)
+        assertEq((100, 2, 300, 4, 500), l);
+    }
+
+    auto doReturnFromBody() {
+        list<auto> l = (1, 2, 3, 4, 5);
+        foreach auto v in (\l) {
+            v *= 10;
+            if (v == 30) {
+                return l;
+            }
+        }
+        return l;
+    }
+
+    testReturnFromBody() {
+        auto result = doReturnFromBody();
+        # Return happens before write-back, so l still has original value
+        assertEq((1, 2, 3, 4, 5), result);
+    }
+
+    testNestedRefForeach() {
+        list<auto> outer = (1, 2, 3);
+        list<auto> inner = (10, 20, 30);
+        foreach auto ov in (\outer) {
+            foreach auto iv in (\inner) {
+                iv += ov;
+            }
+            ov = ov * 100;
+        }
+        assertEq((100, 200, 300), outer);
+        # Inner list modified 3 times: +1, +2, +3 = +6
+        assertEq((16, 26, 36), inner);
+    }
+
+    testExceptionInBody() {
+        list<auto> l = (1, 2, 3, 4, 5);
+        list<auto> orig = l;  # save original
+        try {
+            foreach auto v in (\l) {
+                if (v == 3) {
+                    throw "TEST-ERROR", "test exception";
+                }
+                v *= 10;
+            }
+            assertEq(True, False, "should not reach here");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TEST-ERROR", ex.err);
+        }
+        # Exception path: no write-back, original list preserved
+        assertEq(orig, l);
+    }
+
+    testExceptionSafetyInit() {
+        # This tests that RefForeachState is cleaned up properly on exception
+        # during init (though in practice ParseReferenceNode::evalToRef rarely throws)
+        # Just verify the loop works after an exception in a previous ref foreach
+        list<auto> l = (1, 2);
+        try {
+            foreach auto v in (\l) {
+                v *= 10;
+                throw "TEST-ERROR", "cleanup test";
+            }
+        } catch () {
+            # ignore
+        }
+        # Now do a normal ref foreach - should work fine
+        list<auto> l2 = (10, 20);
+        foreach auto v in (\l2) {
+            v += 5;
+        }
+        assertEq((15, 25), l2);
+    }
+
+    testImplicitElement() {
+        list<auto> l = ("a", "b", "c");
+        list<int> indices = ();
+        foreach auto v in (\l) {
+            indices += $#;
+            v = v + sprintf("_%d", $#);
+        }
+        assertEq((0, 1, 2), indices);
+        assertEq(("a_0", "b_1", "c_2"), l);
+    }
+
+    testTypePreservation() {
+        # Test that different types are preserved through ref foreach
+        list<auto> l = (1, "hello", 3.14, True, NOTHING, (1, 2));
+        list<auto> orig = l;
+        foreach auto v in (\l) {
+            assertEq(orig[$#], v);
+        }
+        assertEq(6, l.size());
+        assertEq(1, l[0]);
+        assertEq("hello", l[1]);
+        assertEq(3.14, l[2]);
+        assertEq(True, l[3]);
+        assertEq(NOTHING, l[4]);
+        assertEq((1, 2), l[5]);
+    }
+
+    testOnExitInBody() {
+        list<auto> l = (1, 2, 3);
+        int exit_count = 0;
+        foreach auto v in (\l) {
+            on_exit ++exit_count;
+            v *= 10;
+        }
+        assertEq(3, exit_count);
+        assertEq((10, 20, 30), l);
+    }
+}

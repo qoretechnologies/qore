@@ -2747,6 +2747,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getExprSlot(bits);
                     break;
                 }
+                case QoreIROpcode::RefForeachInit: {
+                    auto* ri = static_cast<QoreIRRefForeachInitInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ri->expr, sizeof(bits));
+                    slots.getExprSlot(bits);
+                    break;
+                }
                 case QoreIROpcode::LoadConstant: {
                     auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
                     uint64_t bits;
@@ -3042,6 +3049,15 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &noi->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ++expr_count;
+                    }
+                    break;
+                }
+                case QoreIROpcode::RefForeachInit: {
+                    auto* ri = static_cast<QoreIRRefForeachInitInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ri->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
                     }
@@ -3420,6 +3436,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &noi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         noi->expr.ref();
+                        ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::RefForeachInit: {
+                    auto* ri = static_cast<QoreIRRefForeachInitInstruction*>(inst.get());
+                    uint64_t bits;
+                    memcpy(&bits, &ri->expr, sizeof(bits));
+                    if (seen_exprs.insert(bits).second) {
+                        ri->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
                     break;

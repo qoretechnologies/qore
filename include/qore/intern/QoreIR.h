@@ -475,13 +475,21 @@ enum class QoreIROpcode : uint16_t {
     // Native list push (324)
     ListPush            = 324,  // Native list push: (list, value) -> list (in-place push)
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (325, 326, ...)
+    // Reference foreach opcodes (325-330)
+    RefForeachInit      = 325,  // Init ref foreach state from ParseReferenceNode expr -> state handle
+    RefForeachSize      = 326,  // Get iteration count from state handle -> int64
+    RefForeachGetEntry  = 327,  // Get element at index: (state, index) -> value
+    RefForeachRecord    = 328,  // Record modified value: (state, value) -> void
+    RefForeachFinalize  = 329,  // Write back to reference and cleanup: (state) -> void
+    RefForeachCleanup   = 330,  // Cleanup without write-back: (state) -> void
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (331, 332, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListPush);
-static_assert(QORE_IR_MAX_OPCODE == 324, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::RefForeachCleanup);
+static_assert(QORE_IR_MAX_OPCODE == 330, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -1354,6 +1362,10 @@ public:
     }
 
     const OnBlockExitStatement* stmt = nullptr;
+    //! Compiled handler body (nullptr = AST fallback).
+    //! When set, the handler body can be executed via the IR interpreter
+    //! instead of delegating to StatementBlock::exec().
+    std::unique_ptr<QoreIRFunction> handler_ir;
 };
 
 //! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers
@@ -1463,6 +1475,22 @@ public:
     }
 
     const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
+};
+
+//! Reference foreach init instruction — stores the ParseReferenceNode expression
+//! for AOT serialization (expr slot). Result is an opaque state handle.
+class QoreIRRefForeachInitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRRefForeachInitInstruction(const QoreValue& parse_ref_expr)
+            : QoreIRInstruction(QoreIROpcode::RefForeachInit), expr(parse_ref_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRRefForeachInitInstruction() override {
+        expr.discard(nullptr);
+    }
+
+    QoreValue expr;  //!< ParseReferenceNode expression
 };
 
 class QoreIRBasicBlock {

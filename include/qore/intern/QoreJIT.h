@@ -120,6 +120,26 @@ public:
     //! JIT optimization level (0-3, default 2, overridable via QORE_JIT_OPT_LEVEL)
     static int getJITOptLevel();
 
+    //! Try to acquire the compilation mutex without blocking.
+    //! Returns true if the lock was acquired; caller MUST call releaseCompileLock() after compilation.
+    //! This prevents deadlocks when JIT compilation is triggered while Qore mutexes are held —
+    //! if the lock is contended, the function stays at IR tier and retries on next call.
+    bool tryAcquireCompileLock();
+
+    //! Release the compilation mutex after a successful tryAcquireCompileLock().
+    void releaseCompileLock();
+
+    //! Compile an IR function to native code, assuming compile_mutex is already held.
+    //! Use after tryAcquireCompileLock() returns true.
+    bool compileFunctionLocked(const QoreIRFunction& func, std::string& error,
+            void* deopt_counter = nullptr);
+
+    //! Batch-compile functions, assuming compile_mutex is already held.
+    //! Use after tryAcquireCompileLock() returns true.
+    bool compileFunctionBatchLocked(const QoreIRFunction& root_func, std::string& error,
+            void* root_deopt_counter,
+            const std::vector<BatchCallee>& callees);
+
 private:
     QoreJIT() = default;
     QoreJIT(const QoreJIT&) = delete;
@@ -143,6 +163,13 @@ private:
 
     //! JIT optimization level (-1 = not yet initialized)
     static int jit_opt_level;
+
+    //! Internal compilation logic (assumes compile_mutex is held)
+    bool compileFunctionInternal(const QoreIRFunction& func, std::string& error,
+            void* deopt_counter);
+    bool compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
+            void* root_deopt_counter,
+            const std::vector<BatchCallee>& callees);
 };
 
 #endif

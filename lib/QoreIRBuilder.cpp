@@ -875,6 +875,57 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue ite
     return inst;
 }
 
+QoreIRRefForeachInitInstruction* QoreIRBuilder::createRefForeachInit(const QoreValue& parse_ref_expr,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRRefForeachInitInstruction>(parse_ref_expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRefForeachSize(QoreIRValue state, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachSize);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(state);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRefForeachGetEntry(QoreIRValue state, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachGetEntry);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(state);
+    inst->operands.push_back(index);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRefForeachRecord(QoreIRValue state, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachRecord);
+    inst->loc = loc;
+    inst->operands.push_back(state);
+    inst->operands.push_back(value);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRefForeachFinalize(QoreIRValue state, QoreIRValue fill_remaining,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachFinalize);
+    inst->loc = loc;
+    inst->operands.push_back(state);
+    inst->operands.push_back(fill_remaining);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createRefForeachCleanup(QoreIRValue state, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachCleanup);
+    inst->loc = loc;
+    inst->operands.push_back(state);
+    return inst;
+}
+
 QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExitStatement* stmt,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt);

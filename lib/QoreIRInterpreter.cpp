@@ -70,6 +70,7 @@
 #include <qore/intern/typed_hash_decl_private.h>
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/QoreHashNodeIntern.h>
+#include <qore/intern/QoreObjectIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
 
 static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
@@ -1131,7 +1132,23 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 struct IROnBlockExitHandler {
     obe_type_e type;
     StatementBlock* code;
+    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
 };
+
+// Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
+// Returns true if execution encountered an error.
+static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink) {
+    if (handler.handler_ir) {
+        // Execute compiled handler via IR interpreter
+        QoreValue rv;
+        QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink);
+        rv.discard(nullptr);
+    } else if (handler.code) {
+        // AST fallback
+        QoreValue rv;
+        handler.code->exec(rv, obe_xsink);
+    }
+}
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
 // StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
@@ -1146,7 +1163,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     for (int i = (int)handlers.size() - 1; i >= 0; --i) {
         obe_type_e type = handlers[i].type;
         if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-            if (handlers[i].code) {
+            if (handlers[i].code || handlers[i].handler_ir) {
                 {
                     // Instantiate exception for on_error blocks as an implicit arg
                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
@@ -1158,8 +1175,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    QoreValue rv;
-                    nrc = handlers[i].code->exec(rv, &obe_xsink);
+                    executeHandlerBody(handlers[i], &obe_xsink);
                     if (type == OBE_Error) {
                         if (qore_es_private::get(obe_xsink)->rethrown) {
                             if (xsink) {
@@ -1248,7 +1264,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                     obe_type_e type = on_block_exit_handlers[i - 1].type;
                     if (type == OBE_Unconditional || (error && type == OBE_Error)) {
-                        if (on_block_exit_handlers[i - 1].code) {
+                        if (on_block_exit_handlers[i - 1].code || on_block_exit_handlers[i - 1].handler_ir) {
                             std::unique_ptr<SingleArgvContextHelper> argv_helper;
                             std::unique_ptr<CatchExceptionHelper> ex_helper;
                             if (type == OBE_Error && xsink) {
@@ -1259,8 +1275,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         except->makeExceptionObject(), xsink));
                                 }
                             }
-                            QoreValue rv;
-                            on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
+                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
                             if (type == OBE_Error) {
                                 if (qore_es_private::get(obe_xsink)->rethrown) {
                                     if (xsink) {
@@ -1277,9 +1292,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 on_block_exit_handlers.resize(scope_start);
-                // Invalidate caches after AST execution — must use cleanupStoredValues
-                // (not bare clear()) because storeValue() calls refSelf() on each cached
-                // entry; dropping them without discard() leaks references.
+                // Invalidate caches after handler execution (both AST and compiled handlers
+                // can modify locals via the thread-local variable stack)
                 cleanupStoredValues(locals, nullptr);
             }
         }
@@ -3353,6 +3367,110 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 break;
             }
+
+            // --- Reference foreach opcodes ---
+            case QoreIROpcode::RefForeachInit: {
+                auto* ref_init = static_cast<QoreIRRefForeachInitInstruction*>(inst);
+                uint64_t state = qore_rt_ref_foreach_init(toBits(ref_init->expr), xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, inst->result.id,
+                    QoreValue(static_cast<int64_t>(state)), xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefForeachSize: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                int64_t size = qore_rt_ref_foreach_size(
+                    static_cast<uint64_t>(state_val.getAsBigInt()));
+                setValueSlot(values, inst->result.id, QoreValue(size), xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefForeachGetEntry: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                QoreValue index_val = getIRValue(values, inst->operands[1]);
+                uint64_t entry = qore_rt_ref_foreach_get_entry(
+                    static_cast<uint64_t>(state_val.getAsBigInt()),
+                    index_val.getAsBigInt(), xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                QoreValue result = fromBits(entry);
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefForeachRecord: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                QoreValue value_val = getIRValue(values, inst->operands[1]);
+                qore_rt_ref_foreach_record(
+                    static_cast<uint64_t>(state_val.getAsBigInt()),
+                    toBits(value_val), xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefForeachFinalize: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                QoreValue fill_val = getIRValue(values, inst->operands[1]);
+                qore_rt_ref_foreach_finalize(
+                    static_cast<uint64_t>(state_val.getAsBigInt()),
+                    fill_val.getAsBigInt(), xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefForeachCleanup: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                qore_rt_ref_foreach_cleanup(
+                    static_cast<uint64_t>(state_val.getAsBigInt()), xsink);
+                ++ip;
+                break;
+            }
+
             case QoreIROpcode::OnBlockExit: {
                 auto* obe_inst = static_cast<QoreIROnBlockExitInstruction*>(inst);
                 if (!obe_inst->stmt) {
@@ -3371,7 +3489,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // Don't call exec() here - the AST's exec() calls advance_on_block_exit()
                 // which requires the thread on_block_exit stack to be set up by StatementBlock,
                 // but the IR interpreter doesn't go through StatementBlock::execIntern().
-                on_block_exit_handlers.push_back({obe_inst->stmt->getType(), obe_inst->stmt->getCode()});
+                on_block_exit_handlers.push_back({obe_inst->stmt->getType(),
+                    obe_inst->stmt->getCode(),
+                    obe_inst->handler_ir ? obe_inst->handler_ir.get() : nullptr});
                 ++ip;
                 break;
             }
@@ -3394,7 +3514,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
                             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-                                if (on_block_exit_handlers[i - 1].code) {
+                                if (on_block_exit_handlers[i - 1].code || on_block_exit_handlers[i - 1].handler_ir) {
                                     // Instantiate exception for on_error blocks as an implicit arg
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -3405,8 +3525,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    QoreValue rv;
-                                    int rc = on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
                                     if (type == OBE_Error) {
                                         if (qore_es_private::get(obe_xsink)->rethrown) {
                                             if (xsink) {
@@ -3427,12 +3546,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                         // Remove executed handlers
                         on_block_exit_handlers.resize(scope_start);
-                        // On-block-exit handlers execute through the AST path and can
-                        // modify any local variable on the thread-local stack.  Clear the
-                        // locals cache so subsequent LoadLocal re-reads from the runtime.
-                        // Must use cleanupStoredValues (not bare clear()) because
-                        // storeValue() calls refSelf() on each cached entry; dropping
-                        // them without discard() leaks references.
+                        // Handler execution (both AST and compiled IR) can modify any local
+                        // variable on the thread-local stack.  Clear the locals cache so
+                        // subsequent LoadLocal re-reads from the runtime.
                         cleanupStoredValues(locals, nullptr);
                     }
                 }
@@ -5977,55 +6093,387 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
     return QoreValue();
 }
 
+// Direct compound assignment helpers — avoid allocating temporary AST operator nodes
+static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    // values requiring dereferencing must be dereferenced outside the lock
+    SafeDerefHelper sdh(xsink);
+
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+    LValueHelper v(lvalue, xsink);
+    if (!v) {
+        return QoreValue();
+    }
+
+    qore_type_t vtype = v.getType();
+
+    if (vtype == NT_NOTHING) {
+        const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
+        } else if (QoreTypeInfo::isListType(typeInfo)) {
+            if (v.assign(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(typeInfo)),
+                    "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
+        } else if (right.isNothing()) {
+            return QoreValue();
+        } else if (QoreTypeInfo::isHashType(typeInfo)) {
+            if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
+                    "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
+        } else {
+            // assign rhs to lhs
+            if (v.assign(right.refSelf(), "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            return v.getReferencedValue();
+        }
+    }
+
+    if (vtype == NT_LIST) {
+        v.ensureUnique();
+        QoreListNode* l = v.getValue().get<QoreListNode>();
+        if (right.getType() == NT_LIST) {
+            l->merge(right.get<const QoreListNode>(), xsink);
+        } else {
+            l->push(right.refSelf(), xsink);
+        }
+    } else if (vtype == NT_HASH) {
+        if (right.getType() == NT_HASH) {
+            v.ensureUnique();
+            qore_hash_private::get(*v.getValue().get<QoreHashNode>())
+                ->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink);
+        } else if (right.getType() == NT_OBJECT) {
+            v.ensureUnique();
+            qore_object_private::get(*right.get<QoreObject>())->mergeDataToHash(
+                v.getValue().get<QoreHashNode>(), sdh, xsink);
+        }
+    } else if (vtype == NT_OBJECT) {
+        QoreObject* o = v.getValue().get<QoreObject>();
+        qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+    } else if (vtype == NT_STRING) {
+        if (!right.isNullOrNothing()) {
+            QoreStringValueHelper str(right);
+            v.ensureUnique();
+            QoreStringNode* vs = v.getValue().get<QoreStringNode>();
+            vs->concat(*str, xsink);
+        }
+    } else if (vtype == NT_NUMBER) {
+        v.plusEqualsNumber(right, "<+= operator>");
+    } else if (vtype == NT_FLOAT) {
+        v.plusEqualsFloat(right.getAsFloat());
+    } else if (vtype == NT_DATE) {
+        if (!right.isNullOrNothing()) {
+            DateTime date(right);
+            v.assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
+        }
+    } else if (vtype == NT_BINARY) {
+        if (!right.isNullOrNothing()) {
+            v.ensureUnique();
+            BinaryNode* b = v.getValue().get<BinaryNode>();
+            if (right.getType() == NT_BINARY) {
+                const BinaryNode* arg = right.get<const BinaryNode>();
+                b->append(arg);
+            } else {
+                QoreStringNodeValueHelper str(right);
+                if (str->strlen()) {
+                    b->append(str->getBuffer(), str->strlen());
+                }
+            }
+        }
+    } else {
+        // if the lvalue is a timeout, then convert any date/time value as if it were a timeout
+        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+            return v.plusEqualsBigInt(ms);
+        }
+        // do integer plus-equals
+        v.plusEqualsBigInt(right.getAsBigInt());
+    }
+
+    if (*xsink) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
+static QoreValue evalMinusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    LValueHelper v(lvalue, xsink);
+    if (!v) {
+        return QoreValue();
+    }
+
+    if (right.isNothing()) {
+        return v.getReferencedValue();
+    }
+
+    qore_type_t vtype = v.getType();
+
+    if (vtype == NT_NOTHING) {
+        const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        if (QoreTypeInfo::isHashType(typeInfo)) {
+            return QoreValue();
+        } else if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo))) {
+                return QoreValue();
+            }
+            vtype = v.getType();
+        } else {
+            if (right.getType() == NT_FLOAT) {
+                v.assign(-right.getAsFloat());
+            } else if (right.getType() == NT_NUMBER) {
+                const QoreNumberNode* num = right.get<const QoreNumberNode>();
+                v.assign(num->negate());
+            } else {
+                v.assign(-right.getAsBigInt());
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            return v.getReferencedValue();
+        }
+    }
+
+    if (vtype == NT_FLOAT) {
+        return v.minusEqualsFloat(right.getAsFloat());
+    } else if (vtype == NT_NUMBER) {
+        v.minusEqualsNumber(right, "<-= operator>");
+    } else if (vtype == NT_DATE) {
+        if (right.getType() == NT_DATE) {
+            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*right.get<const DateTimeNode>()));
+        } else {
+            DateTime date(right);
+            v.assign(v.getValue().get<DateTimeNode>()->subtractBy(date));
+        }
+    } else if (vtype == NT_HASH) {
+        if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
+            v.ensureUnique();
+            QoreHashNode* vh = v.getValue().get<QoreHashNode>();
+
+            const QoreListNode* nrl = (right.getType() == NT_LIST)
+                ? right.get<const QoreListNode>()
+                : nullptr;
+            if (nrl && nrl->size()) {
+                ConstListIterator li(nrl);
+                while (li.next()) {
+                    QoreStringValueHelper val(li.getValue());
+                    vh->removeKey(*val, xsink);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+            } else {
+                QoreStringValueHelper str(right);
+                vh->removeKey(*str, xsink);
+            }
+        }
+    } else if (vtype == NT_OBJECT) {
+        if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
+            QoreObject* o = v.getValue().get<QoreObject>();
+
+            const QoreListNode* nrl = (right.getType() == NT_LIST)
+                ? right.get<const QoreListNode>()
+                : nullptr;
+            if (nrl && nrl->size()) {
+                ConstListIterator li(nrl);
+                while (li.next()) {
+                    QoreStringValueHelper val(li.getValue());
+                    o->removeMember(*val, xsink);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+            } else {
+                QoreStringValueHelper str(right);
+                o->removeMember(*str, xsink);
+            }
+        }
+    } else {
+        // if the lvalue is a timeout, convert date/time value as timeout
+        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+            return v.minusEqualsBigInt(ms);
+        }
+        // do integer minus-equals
+        return v.minusEqualsBigInt(right.getAsBigInt());
+    }
+
+    if (*xsink) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
+static QoreValue evalMultiplyEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    LValueHelper v(lvalue, xsink);
+    if (!v) {
+        return QoreValue();
+    }
+
+    if (v.getType() == NT_NUMBER || right.getType() == NT_NUMBER) {
+        v.multiplyEqualsNumber(right, "<*= operator>");
+        if (!*xsink) {
+            return v.getReferencedValue();
+        }
+        return QoreValue();
+    }
+
+    if (v.getType() == NT_FLOAT || right.getType() == NT_FLOAT) {
+        return v.multiplyEqualsFloat(right.getAsFloat(), "<*= operator>");
+    }
+
+    int64 y = right.getAsBigInt();
+    if (!v.getAsBigInt() || !y) {
+        v.assign(0ll);
+        return 0ll;
+    }
+
+    return v.multiplyEqualsBigInt(y, "<*= operator>");
+}
+
+static QoreValue evalDivideEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    LValueHelper v(lvalue, xsink);
+    if (!v) {
+        return QoreValue();
+    }
+
+    if (right.getType() == NT_NUMBER || v.getType() == NT_NUMBER) {
+        if (right.getAsFloat() == 0.0) {
+            xsink->raiseException("DIVISION-BY-ZERO",
+                "division by zero in arbitrary-precision numeric expression");
+            return QoreValue();
+        }
+        v.divideEqualsNumber(right, "</= operator>");
+    } else if (right.getType() == NT_FLOAT || v.getType() == NT_FLOAT) {
+        double val = right.getAsFloat();
+        if (val == 0.0) {
+            xsink->raiseException("DIVISION-BY-ZERO", "division by zero in floating-point expression");
+            return QoreValue();
+        }
+        return v.divideEqualsFloat(val, "</= operator>");
+    } else {
+        int64 val = right.getAsBigInt();
+        if (!val) {
+            xsink->raiseException("DIVISION-BY-ZERO", "division by zero in integer expression");
+            return QoreValue();
+        }
+        return v.divideEqualsBigInt(val, "</= operator>");
+    }
+
+    if (*xsink) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
+static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    LValueHelper val(lvalue, xsink);
+    if (!val) {
+        return QoreValue();
+    }
+
+    // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
+    if (val.getType() == NT_NOTHING) {
+        const QoreTypeInfo* vti = val.getTypeInfo();
+        if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+            const QoreTypeInfo* lti = vti == autoTypeInfo
+                ? autoTypeInfo
+                : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+            if (val.assign(new QoreListNode(lti))) {
+                assert(*xsink);
+                return QoreValue();
+            }
+        }
+    }
+
+    // value is not a list, so throw exception
+    if (val.getType() != NT_LIST) {
+        xsink->raiseException("UNSHIFT-ERROR", "the lvalue argument to unshift is type \"%s\"; "
+            "expecting \"list\"", val.getTypeName());
+        return QoreValue();
+    }
+
+    val.ensureUnique();
+    QoreListNode* l = val.getValue().get<QoreListNode>();
+    l->insert(right.refSelf(), xsink);
+
+    if (*xsink) {
+        return QoreValue();
+    }
+    return l->refSelf();
+}
+
 QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& right,
         ExceptionSink* xsink) {
-    bool needs_deref = true;
-    QoreValue lvalue_ref = lvalue.refSelf();
     switch (op) {
-        case QoreIROpcode::AddAssignLValue: {
-            ValueHolder node(QoreValue(new QorePlusEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
-        case QoreIROpcode::SubAssignLValue: {
-            ValueHolder node(QoreValue(new QoreMinusEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
-        case QoreIROpcode::MulAssignLValue: {
-            ValueHolder node(QoreValue(new QoreMultiplyEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
-        case QoreIROpcode::DivAssignLValue: {
-            ValueHolder node(QoreValue(new QoreDivideEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::AddAssignLValue:
+            return evalPlusEquals(lvalue, right, xsink);
+        case QoreIROpcode::SubAssignLValue:
+            return evalMinusEquals(lvalue, right, xsink);
+        case QoreIROpcode::MulAssignLValue:
+            return evalMultiplyEquals(lvalue, right, xsink);
+        case QoreIROpcode::DivAssignLValue:
+            return evalDivideEquals(lvalue, right, xsink);
         case QoreIROpcode::ModAssignLValue: {
-            ValueHolder node(QoreValue(new QoreModuloEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            if (!val) {
+                v.assign(0ll, "<%= operator>");
+                return 0ll;
+            }
+            return v.modulaEqualsBigInt(val, "<%= operator>");
         }
         case QoreIROpcode::AndAssignLValue: {
-            ValueHolder node(QoreValue(new QoreAndEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            return v.andEqualsBigInt(val, "<&= operator>");
         }
         case QoreIROpcode::OrAssignLValue: {
-            ValueHolder node(QoreValue(new QoreOrEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            return v.orEqualsBigInt(val, "<|= operator>");
         }
         case QoreIROpcode::XorAssignLValue: {
-            ValueHolder node(QoreValue(new QoreXorEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            return v.xorEqualsBigInt(val, "<^= operator>");
         }
         case QoreIROpcode::ShlAssignLValue: {
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            return v.shiftLeftEqualsBigInt(val, "<<= operator>");
         }
         case QoreIROpcode::ShrAssignLValue: {
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
+            int64 val = right.getAsBigInt();
+            LValueHelper v(lvalue, xsink);
+            if (!v) {
+                return QoreValue();
+            }
+            return v.shiftRightEqualsBigInt(val, ">>= operator>");
         }
-        case QoreIROpcode::UnshiftLValue: {
-            ValueHolder node(QoreValue(new QoreUnshiftOperatorNode(get_runtime_location(), lvalue_ref, right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::UnshiftLValue:
+            return evalUnshift(lvalue, right, xsink);
         default:
             break;
     }

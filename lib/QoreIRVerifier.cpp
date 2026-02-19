@@ -346,6 +346,9 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::CatchException:
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::RefForeachInit:
+        case QoreIROpcode::RefForeachSize:
+        case QoreIROpcode::RefForeachGetEntry:
             return true;
         default:
             return false;
@@ -519,6 +522,9 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate:
+        case QoreIROpcode::RefForeachGetEntry:  // 2 operands: state, index
+        case QoreIROpcode::RefForeachRecord:    // 2 operands: state, value
+        case QoreIROpcode::RefForeachFinalize:  // 2 operands: state, fill_remaining
             return 2;
         // These *Any opcodes are used in delegate-to-AST mode with 0 operands
         case QoreIROpcode::MapSelectAny:
@@ -627,6 +633,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::NewComplexHash:     // Uses QoreIRNewComplexHashInstruction, no operands
         case QoreIROpcode::NewComplexList:     // Uses QoreIRNewComplexListInstruction, no operands
         case QoreIROpcode::VrnConstruct:       // Uses QoreIRVrnConstructInstruction, no operands
+        case QoreIROpcode::RefForeachInit:     // Uses QoreIRRefForeachInitInstruction with expr field, no operands
             return 0;
         case QoreIROpcode::HashKeyAccess:         // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::HashKeyAccessInt:      // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
@@ -634,6 +641,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::MapHashKeyInt:        // 1 operand: list (key stored in QoreIRMapHashKeyInstruction)
         case QoreIROpcode::HashMapTwoKeys:       // 1 operand: list (keys stored in QoreIRMapHashKeyInstruction)
         case QoreIROpcode::IteratorCreateReverse: // 1 operand: iterable
+        case QoreIROpcode::RefForeachSize:      // 1 operand: state
+        case QoreIROpcode::RefForeachCleanup:   // 1 operand: state
             return 1;
         case QoreIROpcode::HashSetKeyValue:    // 3 operands: hash, key, value
         case QoreIROpcode::ListSetInt:         // 3 operands: list, index, value
@@ -914,6 +923,12 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
                 if (!iter->done_target || !iter->continue_target) {
                     error = "iterator.next missing targets";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::RefForeachInit) {
+                auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
+                if (!rfi) {
+                    error = "ref.foreach.init instruction malformed";
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::Return

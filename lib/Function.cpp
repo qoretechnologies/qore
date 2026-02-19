@@ -2225,12 +2225,10 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
             cn = cn->next;
         }
     } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        // Only collect foreach locals for non-reference iteration (fully lowered to IR).
-        // Reference iteration falls back to AST which handles locals via LVListInstantiator.
-        if (!foreach_stmt->isRef()) {
-            collectBlockLocals(foreach_stmt->getLVList(), locals);
-            collectAllStatementLocals(foreach_stmt->getCode(), locals);
-        }
+        // Collect foreach locals for both reference and non-reference iteration.
+        // Both are now fully lowered to IR.
+        collectBlockLocals(foreach_stmt->getLVList(), locals);
+        collectAllStatementLocals(foreach_stmt->getCode(), locals);
     } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
         // Debug is now fully lowered to IR: expression form has no locals,
         // block form recurses into the statement block.
@@ -2581,6 +2579,18 @@ static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFuncti
 void UserVariantBase::attemptJITCompilation() const {
     assert(cached_ir);
 
+    // Try to acquire the JIT compile lock without blocking.
+    // This prevents deadlocks when JIT compilation is triggered while Qore mutexes
+    // (e.g., synchronized function gates) are held by the calling thread.
+    // If the lock is contended, the function stays at IR tier and retries on next call.
+    if (!QoreJIT::instance().tryAcquireCompileLock()) {
+        // Reset state to 0 so we can try again on next call
+        jit_compile_state.store(0, std::memory_order_release);
+        printd(3, "UserVariantBase::attemptJITCompilation() '%s' compile lock contended, deferring\n",
+            cached_ir->name.c_str());
+        return;
+    }
+
     std::string error;
     void* deopt_ptr = getDeoptCounterPtr();
 
@@ -2602,14 +2612,17 @@ void UserVariantBase::attemptJITCompilation() const {
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch compiling with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());
-        success = QoreJIT::instance().compileFunctionBatch(*cached_ir, error, deopt_ptr, callees);
+        success = QoreJIT::instance().compileFunctionBatchLocked(*cached_ir, error, deopt_ptr, callees);
     } else {
         // No eligible callees: single-function compilation
-        success = QoreJIT::instance().compileFunction(*cached_ir, error, deopt_ptr);
+        success = QoreJIT::instance().compileFunctionLocked(*cached_ir, error, deopt_ptr);
     }
+
+    QoreJIT::instance().releaseCompileLock();
 
     if (!success) {
         jit_compile_failed = true;
+        jit_compile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITCompilation() '%s' failed: %s\n",
             cached_ir->name.c_str(), error.c_str());
         return;
@@ -2618,10 +2631,14 @@ void UserVariantBase::attemptJITCompilation() const {
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
     if (!fn) {
         jit_compile_failed = true;
+        jit_compile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITCompilation() '%s' lookup failed\n", cached_ir->name.c_str());
         return;
     }
+    // Set cached_jit_fn BEFORE updating current_tier: the acquire/release on current_tier
+    // ensures cached_jit_fn is visible to threads that see TIER_JIT.
     cached_jit_fn = fn;
+    jit_compile_state.store(2, std::memory_order_relaxed);
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(3, "UserVariantBase::attemptJITCompilation() '%s' promoted to JIT tier\n", cached_ir->name.c_str());
 
@@ -2644,6 +2661,13 @@ void UserVariantBase::attemptJITCompilation() const {
 void UserVariantBase::attemptJITRecompilation() const {
     assert(cached_ir);
 
+    // Try to acquire the compile lock non-blocking
+    if (!QoreJIT::instance().tryAcquireCompileLock()) {
+        // Reset state to allow retry later
+        jit_recompile_state.store(0, std::memory_order_release);
+        return;
+    }
+
     // Demote to IR tier while recompiling
     cached_jit_fn = nullptr;
     current_tier.store(TIER_IR, std::memory_order_release);
@@ -2657,21 +2681,26 @@ void UserVariantBase::attemptJITRecompilation() const {
 
     // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
-    if (!QoreJIT::instance().compileFunction(*cached_ir, error,
+    if (!QoreJIT::instance().compileFunctionLocked(*cached_ir, error,
             const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
         cached_ir->name = orig_name;
+        QoreJIT::instance().releaseCompileLock();
+        jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
             orig_name.c_str(), error.c_str());
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
     cached_ir->name = orig_name;
+    QoreJIT::instance().releaseCompileLock();
     if (!fn) {
+        jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",
             orig_name.c_str());
         return;
     }
     cached_jit_fn = fn;
+    jit_recompile_state.store(2, std::memory_order_relaxed);
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(2, "UserVariantBase::attemptJITRecompilation() '%s' recompiled with profiled guards\n",
         orig_name.c_str());
@@ -2778,12 +2807,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         // Check if profiled guards triggered deopts; if so, attempt recompilation
-        // with updated type profiles (one-time, via std::call_once)
+        // with updated type profiles (one-time, non-blocking)
         uint32_t deopts = deopt_count.load(std::memory_order_relaxed);
         if (deopts >= 10 && cached_ir) {
-            std::call_once(jit_recompile_once, [this]() {
+            int expected = 0;
+            if (jit_recompile_state.compare_exchange_strong(expected, 1)) {
                 attemptJITRecompilation();
-            });
+            }
         }
 
         if (!*xsink) {
@@ -2899,15 +2929,17 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         if (cached_ir->osr_jit_requested && !jit_compile_failed) {
             cached_ir->osr_jit_requested = false;  // Reset flag
-            std::call_once(jit_compile_once, [this]() {
+            int expected = 0;
+            if (jit_compile_state.compare_exchange_strong(expected, 1)) {
                 printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                     cached_ir->name.c_str());
                 attemptJITCompilation();
-            });
+            }
         } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
-            std::call_once(jit_compile_once, [this]() {
+            int expected = 0;
+            if (jit_compile_state.compare_exchange_strong(expected, 1)) {
                 attemptJITCompilation();
-            });
+            }
         }
 
         if (!*xsink) {
@@ -2924,9 +2956,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // Check for JIT promotion (IR already cached from a previous call)
     if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
-        std::call_once(jit_compile_once, [this]() {
+        int expected = 0;
+        if (jit_compile_state.compare_exchange_strong(expected, 1)) {
             attemptJITCompilation();
-        });
+        }
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
 

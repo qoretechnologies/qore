@@ -140,6 +140,12 @@
 #include <qore/intern/ObjectMethodReferenceNode.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreClassIntern.h>
+#include <qore/intern/QoreIRVerifier.h>
+
+#include <atomic>
+
+// Forward declaration from Function.cpp - collects all locals from a statement tree
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 static bool isTerminatorOpcode(QoreIROpcode op) {
     switch (op) {
@@ -443,13 +449,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
-            // Emit ScopeExit for all active scopes before returning.
-            // Note: we do NOT emit UninstantiateLocal for block-scoped locals here
-            // because the pre-instantiated locals mechanism handles all local cleanup
+            // Emit block cleanups for all active scopes before returning.
+            // CF_SKIP_LVARS: pre-instantiated locals mechanism handles local cleanup
             // at function exit. The break/continue paths need explicit UninstantiateLocal
             // because execution continues after the loop, but on return the function
             // exits immediately and the caller handles cleanup.
-            emitScopeExits(0, false);
+            // Also handles RefForeach cleanup (record + finalize without fill remaining).
+            emitBlockCleanups(0, false, CF_SKIP_LVARS);
             // Emit CatchCleanup for all active catch scopes before returning
             for (int i = 0; i < catch_cleanup_depth; ++i) {
                 builder.createCatchCleanup(stmt->loc);
@@ -467,10 +473,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!lowered.isValid()) {
             return false;
         }
-        // Now emit ScopeExit for all active scopes (fires on_exit handlers).
-        // Same as ReturnNothing — no UninstantiateLocal, pre-instantiated locals
-        // mechanism handles cleanup at function exit.
-        emitScopeExits(0, false);
+        // Emit block cleanups for all active scopes (fires on_exit handlers).
+        // Same as ReturnNothing — CF_SKIP_LVARS, and handles RefForeach cleanup.
+        emitBlockCleanups(0, false, CF_SKIP_LVARS);
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -657,13 +662,233 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        // For reference iteration (foreach x in \list), fall back to AST execution
-        // due to complex semantics of modifying the list during iteration
+        // Reference iteration (foreach x in \list): natively compile with try/catch
+        // wrapping for exception safety.  The runtime helpers manage the opaque
+        // RefForeachState (init, get entry, record modified value, finalize/cleanup).
         if (foreach_stmt->isRef()) {
-            auto* inst = builder.createForeach(foreach_stmt, stmt->loc);
+            // Phase 0: Initialize ref foreach state from ParseReferenceNode
+            QoreValue list_expr = foreach_stmt->getList();
+            auto* init_inst = builder.createRefForeachInit(list_expr, stmt->loc);
             if (!exception_stack.empty()) {
-                inst->exception_target = exception_stack.back();
+                init_inst->exception_target = exception_stack.back();
             }
+            QoreIRValue state = init_inst->result;
+
+            // Check state != 0 (init failed → exception already set, skip loop)
+            QoreIRBasicBlock* check_size_block = createBlock("ref_foreach.check_size");
+            QoreIRBasicBlock* merge_block = createBlock("ref_foreach.merge");
+            if (!check_size_block || !merge_block) {
+                error = "IR builder failed to create blocks for ref foreach";
+                return false;
+            }
+            QoreIRValue zero = builder.createConstInt(0, stmt->loc)->result;
+            QoreIRValue state_ok = builder.createBinaryOp(QoreIROpcode::NeInt,
+                state, zero, stmt->loc)->result;
+            builder.createBranchIf(state_ok, check_size_block, merge_block);
+
+            // Phase 1: Check iteration count > 0
+            builder.setBlock(check_size_block);
+            QoreIRValue size = builder.createRefForeachSize(state, stmt->loc)->result;
+            QoreIRBasicBlock* cleanup_empty_block = createBlock("ref_foreach.cleanup_empty");
+            QoreIRBasicBlock* try_entry_block = createBlock("ref_foreach.try_entry");
+            if (!cleanup_empty_block || !try_entry_block) {
+                error = "IR builder failed to create blocks for ref foreach";
+                return false;
+            }
+            QoreIRValue size_gt_0 = builder.createBinaryOp(QoreIROpcode::GtInt,
+                size, zero, stmt->loc)->result;
+            builder.createBranchIf(size_gt_0, try_entry_block, cleanup_empty_block);
+
+            // Empty case: cleanup without write-back
+            builder.setBlock(cleanup_empty_block);
+            builder.createRefForeachCleanup(state, stmt->loc);
+            builder.createBranch(merge_block);
+
+            // Phase 2: Try/catch wrapped loop
+            builder.setBlock(try_entry_block);
+
+            // Push RefForeach entry to cleanup stack (for return path finalize)
+            BlockCleanupEntry ref_foreach_entry;
+            ref_foreach_entry.type = BlockCleanupEntry::RefForeach;
+            ref_foreach_entry.ref_foreach_state = state;
+            ref_foreach_entry.loc = stmt->loc;
+            cleanup_stack.push_back(ref_foreach_entry);
+
+            // Set up try scope for exception safety
+            uint32_t try_scope_id = ++scope_counter;
+            scope_stack.push_back(try_scope_id);
+            {
+                BlockCleanupEntry scope_entry;
+                scope_entry.type = BlockCleanupEntry::Scope;
+                scope_entry.scope_id = try_scope_id;
+                cleanup_stack.push_back(scope_entry);
+            }
+            builder.createScopeEnter(try_scope_id);
+
+            // Create loop structure blocks
+            QoreIRBasicBlock* preheader_block = createBlock("ref_foreach.preheader");
+            QoreIRBasicBlock* header_block = createBlock("ref_foreach.header");
+            QoreIRBasicBlock* body_block = createBlock("ref_foreach.body");
+            QoreIRBasicBlock* latch_block = createBlock("ref_foreach.latch");
+            QoreIRBasicBlock* break_handler_block = createBlock("ref_foreach.break_handler");
+            QoreIRBasicBlock* exit_normal_block = createBlock("ref_foreach.exit_normal");
+            QoreIRBasicBlock* catch_block = createBlock("ref_foreach.catch");
+            if (!preheader_block || !header_block || !body_block || !latch_block
+                    || !break_handler_block || !exit_normal_block || !catch_block) {
+                error = "IR builder failed to create blocks for ref foreach loop";
+                scope_stack.pop_back();
+                cleanup_stack.pop_back();  // Scope
+                cleanup_stack.pop_back();  // RefForeach
+                return false;
+            }
+            header_block->is_loop_header = true;
+
+            // Preheader: initialize index counter
+            builder.createBranch(preheader_block, stmt->loc);
+            builder.setBlock(preheader_block);
+            QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
+            builder.createBranch(header_block, stmt->loc);
+
+            // Header: PHI for index, compare with size
+            builder.setBlock(header_block);
+            auto* index_phi = builder.createPhi({}, stmt->loc);
+            QoreIRValue index_val = index_phi->result;
+            QoreIRValue cmp_val = builder.createBinaryOp(QoreIROpcode::LtInt,
+                index_val, size, stmt->loc)->result;
+            builder.createBranchIf(cmp_val, body_block, exit_normal_block);
+
+            // Body: get entry, assign to loop var, push $#, execute body
+            builder.setBlock(body_block);
+
+            // Push exception handler for body instructions
+            QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
+            guard_exception_target_override = catch_block;
+            exception_stack.push_back(catch_block);
+            size_t try_scope_depth = scope_stack.size() - 1;  // depth before try scope
+            exception_scope_depth_stack.push_back(try_scope_depth);
+
+            // Get entry and assign to loop variable
+            auto* get_entry_inst = builder.createRefForeachGetEntry(state, index_val, stmt->loc);
+            get_entry_inst->exception_target = catch_block;
+            QoreIRValue entry_val = get_entry_inst->result;
+
+            QoreValue var_expr = foreach_stmt->getVar();
+            if (var_expr && !var_expr.isNothing()) {
+                auto* store_inst = builder.createStoreLValue(var_expr, entry_val, stmt->loc);
+                store_inst->exception_target = catch_block;
+            }
+
+            // Push implicit element ($#) for the current iteration
+            QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
+
+            // Push RefForeachRecord entry to cleanup stack (for return path record)
+            BlockCleanupEntry record_entry;
+            record_entry.type = BlockCleanupEntry::RefForeachRecord;
+            record_entry.ref_foreach_state = state;
+            record_entry.old_implicit_element = old_element;
+            record_entry.var_expr = var_expr;
+            record_entry.loc = stmt->loc;
+            cleanup_stack.push_back(record_entry);
+
+            // Set up flow target: break → break_handler, continue → latch
+            // old_implicit_element is INVALID — the break_handler block handles $# pop
+            FlowTarget ft;
+            ft.break_target = break_handler_block;
+            ft.continue_target = latch_block;
+            ft.is_switch = false;
+            ft.catch_cleanup_depth = catch_cleanup_depth;
+            ft.cleanup_stack_depth = cleanup_stack.size();
+            flow_stack.push_back(ft);
+
+            // Lower the loop body
+            StatementBlock* body = foreach_stmt->getCode();
+            if (body) {
+                if (!lowerStatementBlock(body, error)) {
+                    flow_stack.pop_back();
+                    cleanup_stack.pop_back();  // RefForeachRecord
+                    exception_stack.pop_back();
+                    exception_scope_depth_stack.pop_back();
+                    guard_exception_target_override = prev_guard_override;
+                    scope_stack.pop_back();
+                    cleanup_stack.pop_back();  // Scope
+                    cleanup_stack.pop_back();  // RefForeach
+                    return false;
+                }
+            }
+            flow_stack.pop_back();
+
+            // Pop RefForeachRecord from cleanup stack (only needed during body lowering)
+            cleanup_stack.pop_back();
+
+            // Normal body exit falls through to latch block
+            if (!blockHasTerminator(builder.getBlock())) {
+                builder.createBranch(latch_block, stmt->loc);
+            }
+
+            // Latch: pop $#, read back modified var, record, increment, branch to header
+            builder.setBlock(latch_block);
+            builder.createPopImplicitElement(old_element, stmt->loc);
+            QoreIRValue modified = lowerExpression(var_expr, error);
+            if (!modified.isValid()) {
+                exception_stack.pop_back();
+                exception_scope_depth_stack.pop_back();
+                guard_exception_target_override = prev_guard_override;
+                scope_stack.pop_back();
+                cleanup_stack.pop_back();  // Scope
+                cleanup_stack.pop_back();  // RefForeach
+                return false;
+            }
+            builder.createRefForeachRecord(state, modified, stmt->loc);
+            QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
+            QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                index_val, one, stmt->loc)->result;
+            builder.createBranch(header_block, stmt->loc);
+
+            // Complete PHI node
+            index_phi->incoming.push_back({init_index, preheader_block});
+            index_phi->incoming.push_back({next_index, latch_block});
+            index_phi->operands.push_back(init_index);
+            index_phi->operands.push_back(next_index);
+
+            // Pop exception handler
+            exception_stack.pop_back();
+            exception_scope_depth_stack.pop_back();
+            guard_exception_target_override = prev_guard_override;
+
+            // Pop try scope and RefForeach from cleanup stack
+            scope_stack.pop_back();
+            cleanup_stack.pop_back();  // Scope
+            cleanup_stack.pop_back();  // RefForeach
+
+            // Break handler: pop $#, record, scope exit, finalize with fill remaining
+            builder.setBlock(break_handler_block);
+            builder.createPopImplicitElement(old_element, stmt->loc);
+            QoreIRValue break_modified = lowerExpression(var_expr, error);
+            if (!break_modified.isValid()) {
+                return false;
+            }
+            builder.createRefForeachRecord(state, break_modified, stmt->loc);
+            builder.createScopeExit(try_scope_id, false);
+            QoreIRValue fill_true = builder.createConstInt(1, stmt->loc)->result;
+            builder.createRefForeachFinalize(state, fill_true, stmt->loc);
+            builder.createBranch(merge_block);
+
+            // Exit normal: scope exit, finalize without fill remaining
+            builder.setBlock(exit_normal_block);
+            builder.createScopeExit(try_scope_id, false);
+            QoreIRValue fill_false = builder.createConstInt(0, stmt->loc)->result;
+            builder.createRefForeachFinalize(state, fill_false, stmt->loc);
+            builder.createBranch(merge_block);
+
+            // Catch: landing pad, cleanup without write-back, rethrow
+            builder.setBlock(catch_block);
+            builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+            builder.createRefForeachCleanup(state, stmt->loc);
+            builder.createRethrow(nullptr, stmt->loc);
+
+            // Move merge block to end (after invoke.cont blocks from body lowering)
+            builder.getFunction()->moveBlockToEnd(merge_block);
+            builder.setBlock(merge_block);
             return true;
         }
 
@@ -785,7 +1010,37 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+        auto* inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+        // Try to lower handler body as a separate IR function for native execution
+        StatementBlock* handler_code = on_block_exit_stmt->getCode();
+        if (handler_code) {
+            static std::atomic<uint64_t> handler_counter{0};
+            std::string handler_name = "on_block_exit_handler_"
+                + std::to_string(handler_counter.fetch_add(1));
+            auto handler_func = std::make_unique<QoreIRFunction>(handler_name);
+            // Collect handler's own body locals for pre-instantiation
+            collectAllStatementLocals(handler_code, handler_func->all_body_locals);
+            for (LocalVar* lv : handler_func->all_body_locals) {
+                handler_func->pre_instantiated_locals.insert(
+                    reinterpret_cast<const void*>(lv));
+            }
+            QoreIRBuilder handler_builder(handler_func.get());
+            auto* entry = handler_func->createBlock("entry");
+            handler_builder.setBlock(entry);
+            QoreIRLowering handler_lowering(handler_builder, parse_context);
+            std::string handler_error;
+            if (handler_lowering.lowerStatementBlock(handler_code, handler_error)) {
+                if (!blockHasTerminator(handler_builder.getBlock())) {
+                    handler_builder.createReturnNothing(stmt->loc);
+                }
+                std::string verify_error;
+                if (QoreIRVerifier::verify(*handler_func, verify_error)) {
+                    handler_func->computeIROnlyLocals();
+                    inst->handler_ir = std::move(handler_func);
+                }
+            }
+            // If lowering or verification failed, handler_ir remains nullptr (AST fallback)
+        }
         return true;
     }
     if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
@@ -1265,7 +1520,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // jumps directly to the catch block (bypassing normal ScopeExit).
         uint32_t try_scope_id = ++scope_counter;
         scope_stack.push_back(try_scope_id);
-        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Scope, try_scope_id, nullptr, nullptr});
+        {
+            BlockCleanupEntry scope_entry;
+            scope_entry.type = BlockCleanupEntry::Scope;
+            scope_entry.scope_id = try_scope_id;
+            cleanup_stack.push_back(scope_entry);
+        }
         builder.createScopeEnter(try_scope_id);
 
         if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
@@ -1391,7 +1651,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // lvars cleanup, matching AST mode where on_exit handlers run inside execIntern()
     // before LVListInstantiator destructor fires in execImpl().
     if (lvars) {
-        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Lvars, 0, lvars, block->loc});
+        BlockCleanupEntry lvars_entry;
+        lvars_entry.type = BlockCleanupEntry::Lvars;
+        lvars_entry.lvars = lvars;
+        lvars_entry.loc = block->loc;
+        cleanup_stack.push_back(lvars_entry);
     }
 
     // Check if this block has on_exit/on_success/on_error handlers
@@ -1402,7 +1666,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // Allocate a unique scope ID and emit ScopeEnter
         scope_id = ++scope_counter;
         scope_stack.push_back(scope_id);
-        cleanup_stack.push_back(BlockCleanupEntry{BlockCleanupEntry::Scope, scope_id, nullptr, nullptr});
+        {
+            BlockCleanupEntry scope_entry;
+            scope_entry.type = BlockCleanupEntry::Scope;
+            scope_entry.scope_id = scope_id;
+            cleanup_stack.push_back(scope_entry);
+        }
         builder.createScopeEnter(scope_id);
     }
 
@@ -1463,21 +1732,41 @@ void QoreIRLowering::emitScopeExits(size_t target_depth, bool is_error) {
     }
 }
 
-void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error) {
-    // Emit interleaved ScopeExit and UninstantiateLocal instructions from innermost
-    // to outermost block until we reach the target depth.  Within each block, entries
-    // were pushed as: lvars first, then scope.  Reverse iteration gives: scope exit
-    // first (fires on_exit handlers), then lvars cleanup (destroys block-scoped locals).
-    // This matches AST mode where on_exit runs inside execIntern() before
-    // LVListInstantiator destructor fires in execImpl().
+void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsigned flags) {
+    // Emit interleaved cleanup instructions from innermost to outermost block until
+    // we reach the target depth.  Handles: ScopeExit (on_exit handlers), Lvars
+    // (block-scoped locals), RefForeachRecord (pop $#, load var, record), and
+    // RefForeach (finalize/write-back).
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         const BlockCleanupEntry& entry = cleanup_stack[i - 1];
-        if (entry.type == BlockCleanupEntry::Scope) {
-            builder.createScopeExit(entry.scope_id, is_error);
-        } else {
-            assert(entry.lvars);
-            for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
-                builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
+        switch (entry.type) {
+            case BlockCleanupEntry::Scope:
+                builder.createScopeExit(entry.scope_id, is_error);
+                break;
+            case BlockCleanupEntry::Lvars:
+                if (!(flags & CF_SKIP_LVARS)) {
+                    assert(entry.lvars);
+                    for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
+                        builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
+                    }
+                }
+                break;
+            case BlockCleanupEntry::RefForeachRecord: {
+                // Pop implicit element ($#) and record modified loop variable value
+                builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                std::string err;
+                QoreIRValue modified = lowerExpression(entry.var_expr, err);
+                if (modified.isValid()) {
+                    builder.createRefForeachRecord(entry.ref_foreach_state, modified, entry.loc);
+                }
+                break;
+            }
+            case BlockCleanupEntry::RefForeach: {
+                // Finalize ref foreach: write back to reference (with or without fill remaining)
+                QoreIRValue fill = builder.createConstInt(
+                    (flags & CF_FILL_REMAINING) ? 1 : 0, entry.loc)->result;
+                builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc);
+                break;
             }
         }
     }

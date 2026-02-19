@@ -361,6 +361,33 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
 
+    return compileFunctionInternal(func, error, deopt_counter);
+}
+
+bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
+        void* deopt_counter) {
+    // Thread-safe initialization using std::call_once
+    std::call_once(init_flag, [this]() {
+        init_success = initialize(init_error);
+    });
+    if (!init_success) {
+        error = init_error;
+        return false;
+    }
+
+    // Check if already compiled (fast path)
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(func.name) != compiled_functions.end()) {
+            return true;
+        }
+    }
+
+    return compileFunctionInternal(func, error, deopt_counter);
+}
+
+bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
+        void* deopt_counter) {
     // Re-check cache under compile lock (another thread may have compiled this function)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -443,6 +470,35 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     // Serialize the entire compilation pipeline
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
 
+    return compileFunctionBatchInternal(root_func, error, root_deopt_counter, callees);
+}
+
+bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::string& error,
+        void* root_deopt_counter,
+        const std::vector<BatchCallee>& callees) {
+    // Thread-safe initialization using std::call_once
+    std::call_once(init_flag, [this]() {
+        init_success = initialize(init_error);
+    });
+    if (!init_success) {
+        error = init_error;
+        return false;
+    }
+
+    // Check if already compiled (fast path)
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (compiled_functions.find(root_func.name) != compiled_functions.end()) {
+            return true;
+        }
+    }
+
+    return compileFunctionBatchInternal(root_func, error, root_deopt_counter, callees);
+}
+
+bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
+        void* root_deopt_counter,
+        const std::vector<BatchCallee>& callees) {
     // Re-check cache under compile lock
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -544,7 +600,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
                 error.clear();
-                return compileFunction(root_func, error, root_deopt_counter);
+                return compileFunctionInternal(root_func, error, root_deopt_counter);
             }
         }
 
@@ -715,4 +771,12 @@ void QoreJIT::shutdown() {
         compiled_functions.clear();
     }
     init_success = false;
+}
+
+bool QoreJIT::tryAcquireCompileLock() {
+    return compile_mutex.try_lock();
+}
+
+void QoreJIT::releaseCompileLock() {
+    compile_mutex.unlock();
 }

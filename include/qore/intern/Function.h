@@ -650,14 +650,15 @@ protected:
     mutable AotFunctionPtr cached_aot_fn = nullptr;
     mutable QoreAOTContext* cached_aot_ctx = nullptr;
     mutable std::once_flag ir_lower_once;
-    mutable std::once_flag jit_compile_once;
+    //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
+    mutable std::atomic<int> jit_compile_state{0};
     mutable bool ir_lower_failed = false;
     mutable bool jit_compile_failed = false;
     bool is_closure = false;  //!< true for closure variants
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
     mutable std::atomic<uint32_t> deopt_count{0};
-    //! Flag to allow a single recompilation attempt after deopt
-    mutable std::once_flag jit_recompile_once;
+    //! JIT recompilation state: 0=not started, 1=submitted, 2=done
+    mutable std::atomic<int> jit_recompile_state{0};
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     mutable bool all_body_locals_ir_only = false;
 
@@ -721,6 +722,7 @@ public:
     //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
     DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
         cached_jit_fn = fn;
+        jit_compile_state.store(2, std::memory_order_relaxed);
         current_tier.store(TIER_JIT, std::memory_order_release);
     }
 
@@ -728,6 +730,7 @@ public:
     DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
         cached_aot_fn = fn;
         cached_aot_ctx = ctx;
+        jit_compile_state.store(2, std::memory_order_relaxed);
         current_tier.store(TIER_JIT, std::memory_order_release);
     }
 
