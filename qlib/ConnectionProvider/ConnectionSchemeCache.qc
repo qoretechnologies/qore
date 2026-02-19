@@ -193,6 +193,8 @@ public class ConnectionSchemeCache {
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 
+            "tableaures": "TableauRestClient",
+
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",
 

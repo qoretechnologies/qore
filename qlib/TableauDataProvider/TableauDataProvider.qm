@@ -1,0 +1,886 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TableauDataProvider module definition
+
+/*  TableauDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) TableauRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module TableauDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Tableau analytics and content management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new TableauDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TableauDataProvider::AppName,
+            "display_name": "Tableau",
+            "short_desc": "Tableau analytics and data visualization platform",
+            "desc": "Tableau is a visual analytics and business intelligence platform "
+                "for data exploration and dashboard creation.\n\n"
+                "This integration supports datasources, projects, users, extract refresh tasks, "
+                "and event triggers.",
+            "scheme": "tableaures",
+            "logo": TableauLogo,
+            "logo_file_name": "tableau-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Analytics,),
+        });
+
+        # ========== DATASOURCE ACTIONS ==========
+
+        # Search Datasources
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources",
+            "action": "search-datasources",
+            "groups": "Datasources",
+            "display_name": "Search Datasources",
+            "short_desc": "Search for datasources",
+            "desc": "Search for datasources in Tableau with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "Filter by datasource ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by datasource ID for single record lookup",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter datasources by name",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources",
+            "action": "get-datasource",
+            "groups": "Datasources",
+            "display_name": "Get a Datasource",
+            "short_desc": "Get a single datasource by ID",
+            "desc": "Retrieve a single datasource by ID from Tableau",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+            },
+        });
+
+        # Update a Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources/update",
+            "action": "update-datasource",
+            "groups": "Datasources",
+            "display_name": "Update a Datasource",
+            "short_desc": "Update an existing datasource",
+            "desc": "Update an existing datasource in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The new datasource name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new name of the datasource",
+                },
+                "project_id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "Move to a different project",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the project to move the datasource to",
+                    "ref_data": "projects",
+                },
+                "is_certified": <ActionOptionInfo>{
+                    "display_name": "Is Certified",
+                    "short_desc": "Whether the datasource is certified",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Whether the datasource is certified",
+                },
+                "certification_note": <ActionOptionInfo>{
+                    "display_name": "Certification Note",
+                    "short_desc": "The certification note",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A note about the datasource certification",
+                },
+            },
+        });
+
+        # Delete a Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources/delete",
+            "action": "delete-datasource",
+            "groups": "Datasources",
+            "display_name": "Delete a Datasource",
+            "short_desc": "Delete a datasource",
+            "desc": "Delete a datasource from Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+            },
+        });
+
+        # Download a Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources/download",
+            "action": "download-datasource",
+            "groups": "Datasources",
+            "display_name": "Download a Datasource",
+            "short_desc": "Download a datasource file",
+            "desc": "Download the datasource file content from Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource to download",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+            },
+        });
+
+        # Add Tag to Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources/add-tag",
+            "action": "add-tag-to-datasource",
+            "groups": "Datasources",
+            "display_name": "Add Tag to Datasource",
+            "short_desc": "Add a tag to a datasource",
+            "desc": "Add a tag to a datasource in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource to tag",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+                "tag_name": <ActionOptionInfo>{
+                    "display_name": "Tag Name",
+                    "short_desc": "The tag to add",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The name of the tag to add to the datasource",
+                },
+            },
+        });
+
+        # Delete Tag from Datasource
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/datasources/delete-tag",
+            "action": "delete-tag-from-datasource",
+            "groups": "Datasources",
+            "display_name": "Delete Tag from Datasource",
+            "short_desc": "Remove a tag from a datasource",
+            "desc": "Remove a tag from a datasource in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "datasource_id": <ActionOptionInfo>{
+                    "display_name": "Datasource ID",
+                    "short_desc": "The datasource to remove the tag from",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "datasources",
+                },
+                "tag_name": <ActionOptionInfo>{
+                    "display_name": "Tag Name",
+                    "short_desc": "The tag to remove",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The name of the tag to remove from the datasource",
+                },
+            },
+        });
+
+        # ========== PROJECT ACTIONS ==========
+
+        # Search Projects
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/projects",
+            "action": "search-projects",
+            "groups": "Projects",
+            "display_name": "Search Projects",
+            "short_desc": "Search for projects",
+            "desc": "Search for projects in Tableau with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "project_id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "Filter by project ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by project ID for single record lookup",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter projects by name",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create a Project
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/projects/create",
+            "action": "create-project",
+            "groups": "Projects",
+            "display_name": "Create a Project",
+            "short_desc": "Create a new project",
+            "desc": "Create a new project in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The project name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The name of the project to create",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The project description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A description of the project",
+                },
+                "parent_project_id": <ActionOptionInfo>{
+                    "display_name": "Parent Project ID",
+                    "short_desc": "The parent project ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the parent project, if creating a nested project",
+                    "ref_data": "projects",
+                },
+                "content_permissions": <ActionOptionInfo>{
+                    "display_name": "Content Permissions",
+                    "short_desc": "The content permissions mode",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                },
+            },
+        });
+
+        # Update a Project
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/projects/update",
+            "action": "update-project",
+            "groups": "Projects",
+            "display_name": "Update a Project",
+            "short_desc": "Update an existing project",
+            "desc": "Update an existing project in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "project_id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "The project to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "projects",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The new project name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new name of the project",
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The new project description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new description of the project",
+                },
+                "parent_project_id": <ActionOptionInfo>{
+                    "display_name": "Parent Project ID",
+                    "short_desc": "The new parent project ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new parent project ID for moving the project",
+                    "ref_data": "projects",
+                },
+                "content_permissions": <ActionOptionInfo>{
+                    "display_name": "Content Permissions",
+                    "short_desc": "The content permissions mode",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                },
+            },
+        });
+
+        # Delete a Project
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/projects/delete",
+            "action": "delete-project",
+            "groups": "Projects",
+            "display_name": "Delete a Project",
+            "short_desc": "Delete a project",
+            "desc": "Delete a project from Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "project_id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "The project to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "projects",
+                },
+            },
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # Search Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/users",
+            "action": "search-users",
+            "groups": "Users",
+            "display_name": "Search Users",
+            "short_desc": "Search for users",
+            "desc": "Search for users in Tableau with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Filter by user ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by user ID for single record lookup",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter users by name",
+                    "preselected": True,
+                },
+                "site_role": <ActionOptionInfo>{
+                    "display_name": "Site Role",
+                    "short_desc": "Filter by site role",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter users by siteRole (e.g., Creator, Explorer, Viewer, "
+                        "SiteAdministratorCreator)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/users",
+            "action": "get-user",
+            "groups": "Users",
+            "display_name": "Get a User",
+            "short_desc": "Get a single user by ID",
+            "desc": "Retrieve a single user by ID from Tableau",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # Create a User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/users/create",
+            "action": "create-user",
+            "groups": "Users",
+            "display_name": "Create a User",
+            "short_desc": "Create a new user",
+            "desc": "Create a new user in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Username",
+                    "short_desc": "The username",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The username for the new user",
+                },
+                "site_role": <ActionOptionInfo>{
+                    "display_name": "Site Role",
+                    "short_desc": "The site role for the user",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The site role: Creator, Explorer, ExplorerCanPublish, "
+                        "SiteAdministratorCreator, SiteAdministratorExplorer, Unlicensed, Viewer",
+                },
+                "auth_setting": <ActionOptionInfo>{
+                    "display_name": "Auth Setting",
+                    "short_desc": "The authentication setting",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The authentication setting for the user",
+                },
+            },
+        });
+
+        # Update a User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/users/update",
+            "action": "update-user",
+            "groups": "Users",
+            "display_name": "Update a User",
+            "short_desc": "Update an existing user",
+            "desc": "Update an existing user in Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "users",
+                },
+                "full_name": <ActionOptionInfo>{
+                    "display_name": "Full Name",
+                    "short_desc": "The user's full name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new full name of the user",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "The user's email address",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new email address of the user",
+                },
+                "site_role": <ActionOptionInfo>{
+                    "display_name": "Site Role",
+                    "short_desc": "The user's site role",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new site role for the user",
+                },
+                "auth_setting": <ActionOptionInfo>{
+                    "display_name": "Auth Setting",
+                    "short_desc": "The authentication setting",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The new authentication setting for the user",
+                },
+            },
+        });
+
+        # Delete a User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/users/delete",
+            "action": "delete-user",
+            "groups": "Users",
+            "display_name": "Delete a User",
+            "short_desc": "Delete a user",
+            "desc": "Delete a user from Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # ========== EXTRACT REFRESH TASK ACTIONS ==========
+
+        # List Extract Refresh Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/extract-refresh-tasks",
+            "action": "list-extract-refresh-tasks",
+            "groups": "Extract Refresh Tasks",
+            "display_name": "List Extract Refresh Tasks",
+            "short_desc": "List extract refresh tasks",
+            "desc": "List extract refresh tasks in Tableau with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Filter by task ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by task ID for single record lookup",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Extract Refresh Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/extract-refresh-tasks",
+            "action": "get-extract-refresh-task",
+            "groups": "Extract Refresh Tasks",
+            "display_name": "Get an Extract Refresh Task",
+            "short_desc": "Get a single extract refresh task by ID",
+            "desc": "Retrieve a single extract refresh task by ID from Tableau",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Delete an Extract Refresh Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/extract-refresh-tasks/delete",
+            "action": "delete-extract-refresh-task",
+            "groups": "Extract Refresh Tasks",
+            "display_name": "Delete an Extract Refresh Task",
+            "short_desc": "Delete an extract refresh task",
+            "desc": "Delete an extract refresh task from Tableau",
+            "action_code": DPAT_API,
+            "options": {
+                "task_id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== API CALL ACTION ==========
+
+        # Execute API Call
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "API",
+            "display_name": "Execute API Call",
+            "short_desc": "Make an arbitrary API call",
+            "desc": "Make an arbitrary API call to the Tableau REST API",
+            "action_code": DPAT_API,
+            "options": {
+                "method": <ActionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "The HTTP method",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
+                },
+                "path": <ActionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "The API path",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The relative API path (e.g. 'projects' or "
+                        "'datasources/DATASOURCE_ID')",
+                },
+                "body": <ActionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Optional request body",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Optional request body for POST and PUT requests",
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # Datasource Created (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_CREATED,
+            "action": EVENT_DATASOURCE_CREATED,
+            "groups": "Triggers",
+            "display_name": "Datasource Created",
+            "short_desc": "Trigger when a datasource is created",
+            "desc": "Fires when a new datasource is created in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Datasource Deleted (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_DELETED,
+            "action": EVENT_DATASOURCE_DELETED,
+            "groups": "Triggers",
+            "display_name": "Datasource Deleted",
+            "short_desc": "Trigger when a datasource is deleted",
+            "desc": "Fires when a datasource is deleted in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_DELETED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Datasource Updated (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_UPDATED,
+            "action": EVENT_DATASOURCE_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Datasource Updated",
+            "short_desc": "Trigger when a datasource is updated",
+            "desc": "Fires when a datasource is updated in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Datasource Refresh Started (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_REFRESH_STARTED,
+            "action": EVENT_DATASOURCE_REFRESH_STARTED,
+            "groups": "Triggers",
+            "display_name": "Datasource Refresh Started",
+            "short_desc": "Trigger when a datasource refresh starts",
+            "desc": "Fires when a datasource extract refresh starts in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_REFRESH_STARTED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Datasource Refresh Succeeded (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_REFRESH_SUCCEEDED,
+            "action": EVENT_DATASOURCE_REFRESH_SUCCEEDED,
+            "groups": "Triggers",
+            "display_name": "Datasource Refresh Succeeded",
+            "short_desc": "Trigger when a datasource refresh succeeds",
+            "desc": "Fires when a datasource extract refresh succeeds in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_REFRESH_SUCCEEDED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Datasource Refresh Failed (webhook)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_DATASOURCE_REFRESH_FAILED,
+            "action": EVENT_DATASOURCE_REFRESH_FAILED,
+            "groups": "Triggers",
+            "display_name": "Datasource Refresh Failed",
+            "short_desc": "Trigger when a datasource refresh fails",
+            "desc": "Fires when a datasource extract refresh fails in Tableau. "
+                "Uses webhooks to detect events.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DATASOURCE_REFRESH_FAILED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new events (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Datasources (polling)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_WATCH_DATASOURCES,
+            "action": EVENT_WATCH_DATASOURCES,
+            "groups": "Triggers",
+            "display_name": "Watch New Datasources",
+            "short_desc": "Trigger when a new datasource appears",
+            "desc": "Fires when new datasources are detected in Tableau. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_DATASOURCES,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Projects (polling)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/events/" + EVENT_WATCH_PROJECTS,
+            "action": EVENT_WATCH_PROJECTS,
+            "groups": "Triggers",
+            "display_name": "Watch New Projects",
+            "short_desc": "Trigger when a new project appears",
+            "desc": "Fires when new projects are detected in Tableau. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_PROJECTS,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+    };
+}
