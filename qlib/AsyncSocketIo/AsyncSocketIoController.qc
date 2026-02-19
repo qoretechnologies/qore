@@ -172,6 +172,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         /** Used to compute the event union when multiple operations share a socket
         */
         hash<string, int> key_events;
+
+        #! Reverse index: socket unique hash -> set of operation keys using that socket
+        /** Allows O(1) lookup of all keys sharing a socket, making computeEventUnion() O(k)
+            instead of O(N) where k is the number of operations per socket (typically 1).
+        */
+        hash<string, hash<string, bool>> sock_hash_to_keys;
     }
 
     #! Creates the object
@@ -1265,14 +1271,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param sock_hash the unique hash of the socket to compute the event union for
 
         @return the union of all event masks for operations on the given socket
+
+        @note Uses the reverse index sock_hash_to_keys for O(k) lookup where k is the
+        number of operations per socket (typically 1), avoiding the former O(N) full scan.
     */
     private int computeEventUnion(string sock_hash) {
         int result = 0;
-        foreach string k in (keys key_events) {
-            *Socket s = registered_sockets{k};
-            if (s && s.uniqueHash() == sock_hash) {
-                result |= key_events{k};
-            }
+        foreach string k in (keys sock_hash_to_keys{sock_hash}) {
+            result |= key_events{k};
         }
         return result;
     }
@@ -1310,6 +1316,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             # Remove registration for this key
             remove key_events{key};
             if (prev_sock) {
+                # Update reverse index
+                remove sock_hash_to_keys{prev_sock_hash}{key};
+                if (!sock_hash_to_keys{prev_sock_hash}) {
+                    remove sock_hash_to_keys{prev_sock_hash};
+                }
                 remove registered_sockets{key};
                 # Decrement reference count
                 int refcount = socket_refcounts{prev_sock_hash} ?? 0;
@@ -1351,11 +1362,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         key_events{key} = events;
 
         if (new_sock_hash == prev_sock_hash) {
-            # Same socket - recompute event union
+            # Same socket - recompute event union; reverse index already correct
             applyEventUnion(socket, new_sock_hash);
         } else {
             # Different socket or new registration
             if (prev_sock) {
+                # Remove key from previous socket's reverse index entry
+                remove sock_hash_to_keys{prev_sock_hash}{key};
+                if (!sock_hash_to_keys{prev_sock_hash}) {
+                    remove sock_hash_to_keys{prev_sock_hash};
+                }
                 # Decrement refcount for previous socket
                 int old_refcount = socket_refcounts{prev_sock_hash} ?? 0;
                 if (old_refcount <= 1) {
@@ -1375,6 +1391,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     applyEventUnion(prev_sock, prev_sock_hash);
                 }
             }
+            # Add key to new socket's reverse index entry
+            sock_hash_to_keys{new_sock_hash}{key} = True;
             # Add/update new socket
             registered_sockets{key} = socket;
             int new_refcount = socket_refcounts{new_sock_hash} ?? 0;
