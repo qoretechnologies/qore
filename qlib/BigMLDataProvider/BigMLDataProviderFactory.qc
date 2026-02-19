@@ -28,7 +28,7 @@ public namespace BigMLDataProvider {
 public class BigMLDataProviderFactory inherits DataProvider::AbstractDataProviderFactory {
     private {
         #! Data provider type info
-        static Class cls = new Class("BigMLProcessorsDataProvider");
+        static Class cls = new Class("BigMLDataProvider");
 
         #! Factory info
         const FactoryInfo = <DataProviderFactoryInfo>{
@@ -44,7 +44,7 @@ public class BigMLDataProviderFactory inherits DataProvider::AbstractDataProvide
 
     #! Returns static provider information
     private hash<DataProviderInfo> getProviderInfoImpl() {
-        return BigMLProcessorsDataProvider::ProviderInfo;
+        return BigMLDataProvider::ProviderInfo;
     }
 
     #! Returns the class for the data provider object

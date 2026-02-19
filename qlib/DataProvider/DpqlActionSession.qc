@@ -492,34 +492,39 @@ public class DpqlActionSession {
 
         string connection;
         object conn;
-        # pipeline processors with cls don't need a connection — they get credentials via constructor options
-        if (app.scheme.val() && !(action.cls && action.action_code == DPAT_PIPELINE_PROCESSOR)) {
+        if (app.scheme.val()) {
             connection = options.connection;
+            # pipeline processors can get credentials via the connection if available
+            bool is_pipeline_processor = action.cls && action.action_code == DPAT_PIPELINE_PROCESSOR;
             if (!connection) {
-                throw "CONTEXT-ERROR", sprintf("app %y action %y: missing required option %y", app.name,
-                    action.action, "connection");
-            }
-            remove options.connection;
-            try {
-                conn = call_function("get_connection", connection);
-            } catch (hash<ExceptionInfo> ex) {
-                rethrow "CONTEXT-ERROR", sprintf("unable to resolve connection %y: %s: %s", connection, ex.err,
-                    ex.desc);
-            }
-            hash<auto> scheme_info;
-            try {
-                scheme_info = call_function("ConnectionSchemeCache::getSchemeEx", app.scheme);
-            } catch (hash<ExceptionInfo> ex) {
-                rethrow "CONTEXT-ERROR", sprintf("ConnectionProvider module is required for scheme %y: %s: %s",
-                    app.scheme, ex.err, ex.desc);
-            }
-            if (!scheme_info.schemes{string scheme = conn.getType()}) {
-                throw "CONTEXT-ERROR", sprintf("app %y action %y: connection %y has scheme %y; expecting %y",
-                    app.name, action.action, connection, scheme, keys scheme_info.schemes);
-            }
-            if (!conn.hasDataProvider()) {
-                throw "CONTEXT-ERROR", sprintf("connection %y has no data provider but should be valid for "
-                    "app %y action %y", connection, app.name, action.action);
+                if (!is_pipeline_processor) {
+                    throw "CONTEXT-ERROR", sprintf("app %y action %y: missing required option %y", app.name,
+                        action.action, "connection");
+                }
+            } else {
+                remove options.connection;
+                try {
+                    conn = call_function("get_connection", connection);
+                } catch (hash<ExceptionInfo> ex) {
+                    rethrow "CONTEXT-ERROR", sprintf("unable to resolve connection %y: %s: %s", connection,
+                        ex.err, ex.desc);
+                }
+                hash<auto> scheme_info;
+                try {
+                    scheme_info = call_function("ConnectionSchemeCache::getSchemeEx", app.scheme);
+                } catch (hash<ExceptionInfo> ex) {
+                    rethrow "CONTEXT-ERROR", sprintf("ConnectionProvider module is required for scheme %y: "
+                        "%s: %s", app.scheme, ex.err, ex.desc);
+                }
+                if (!scheme_info.schemes{string scheme = conn.getType()}) {
+                    throw "CONTEXT-ERROR", sprintf("app %y action %y: connection %y has scheme %y; "
+                        "expecting %y", app.name, action.action, connection, scheme,
+                        keys scheme_info.schemes);
+                }
+                if (!conn.hasDataProvider()) {
+                    throw "CONTEXT-ERROR", sprintf("connection %y has no data provider but should be valid "
+                        "for app %y action %y", connection, app.name, action.action);
+                }
             }
         }
 
@@ -532,10 +537,14 @@ public class DpqlActionSession {
 
         AbstractDataProvider prov;
         try {
-            # pipeline processors with cls are always instantiated directly, even if the app has a scheme,
-            # because they need constructor options (model ID, input fields, etc.) passed directly
+            # pipeline processors with cls are instantiated directly with constructor options;
+            # the connection is passed as an extra constructor option for API-backed processors
             if (action.cls && action.action_code == DPAT_PIPELINE_PROCESSOR) {
-                prov = DataProviderActionCatalog::getDataProviderForAction(action, \options);
+                *hash<auto> extra;
+                if (conn) {
+                    extra.connection = conn;
+                }
+                prov = DataProviderActionCatalog::getDataProviderForAction(action, \options, extra);
             } else if (conn) {
                 prov = conn.getDataProvider(action.subtype);
             } else if (action.cls) {

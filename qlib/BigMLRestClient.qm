@@ -189,24 +189,10 @@ BigMLRestClient bigml({
         return rv;
     }
 
-    #! Overrides the GET method to inject auth query parameters
-    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        return RestClient::get(addAuthParams(path), body, \info, hdr);
-    }
-
-    #! Overrides the POST method to inject auth query parameters
-    hash<auto> post(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        return RestClient::post(addAuthParams(path), body, \info, hdr);
-    }
-
-    #! Overrides the PUT method to inject auth query parameters
-    hash<auto> put(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        return RestClient::put(addAuthParams(path), body, \info, hdr);
-    }
-
-    #! Overrides the DEL method to inject auth query parameters
-    hash<auto> del(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        return RestClient::del(addAuthParams(path), body, \info, hdr);
+    #! Overrides doRequest to inject auth query parameters on all requests including ping
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        return RestClient::doRequest(m, addAuthParams(path), body, \info, decode_errors, hdr);
     }
 
     #! Adds authentication query parameters to the URL path
@@ -391,6 +377,34 @@ public class BigMLRestConnection inherits RestClient::RestConnection {
     */
     private BigMLRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new BigMLRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Overrides async poll connect to inject BigML authentication
+    /** The async poll ping bypasses BigMLRestClient::doRequest(), so auth query params
+        and the Api-Token header must be injected directly into the poll operation options.
+    */
+    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        *string ping_path = opts.ping_path;
+        if (!real_opts.ping_method || !ping_path) {
+            return RestConnection::startPollConnect(logger);
+        }
+        # add auth query params to ping path for async polling
+        if (opts.token && opts.username) {
+            string separator = (ping_path =~ /\?/) ? "&" : "?";
+            ping_path = sprintf("%s%susername=%s&api_key=%s", ping_path, separator,
+                encode_url(opts.username, True), encode_url(opts.token, True));
+        }
+        hash<auto> new_opts = real_opts + {
+            "ping_path": ping_path,
+            "ping_headers": (real_opts.ping_headers ?? {}) + {
+                "Api-Token": opts.token,
+            },
+        };
+        BigMLRestClient client = getImpl(False);
+        if (logger) {
+            client.setLogger(logger);
+        }
+        return new RestPingPollOperation(self, client, new_opts);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

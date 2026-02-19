@@ -1218,7 +1218,7 @@ public class DataProviderActionCatalog {
         @return a data provider option for the given action and options
     */
     static AbstractDataProvider getDataProviderForAction(hash<DataProviderActionInfo> action,
-            *reference<hash<auto>> options) {
+            *reference<hash<auto>> options, *hash<auto> extra_constructor_opts) {
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -1228,7 +1228,7 @@ public class DataProviderActionCatalog {
         if (action.cls_mod) {
             load_module(action.cls_mod);
         }
-        hash<auto> constructor_opts;
+        hash<auto> constructor_opts = extra_constructor_opts ?? {};
         map constructor_opts{$1.key} = remove options{$1.key}, action.options.pairIterator(),
             $1.value.loc == "constructor" && options.hasKey($1.key);
         return Class::forName(action.cls).newObject(constructor_opts);

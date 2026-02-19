@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore BigMLProcessorsDataProvider class definition
+#! Qore BigMLDataProvider class definition
 
 /*  BigMLProcessorsDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
 
@@ -24,14 +24,15 @@
 
 #! Contains all public definitions in the BigMLDataProvider module
 public namespace BigMLDataProvider {
-#! Root data provider for BigML pipeline processors
-public class BigMLProcessorsDataProvider inherits DataProvider::AbstractDataProvider {
+#! Root data provider for BigML pipeline processors and TypeScript actions
+public class BigMLDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "BigMLProcessorsDataProvider",
+            "type": "BigMLDataProvider",
             "supports_children": True,
             "children_can_support_pipeline_processors": True,
+            "children_can_support_apis": True,
         };
 
         #! Child processor names
@@ -40,10 +41,24 @@ public class BigMLProcessorsDataProvider inherits DataProvider::AbstractDataProv
             "anomaly-score": "BigMLAnomalyScoreProcessor",
             "centroid": "BigMLCentroidProcessor",
             "topic-distribution": "BigMLTopicDistributionProcessor",
+            "train-and-predict": "BigMLTrainAndPredictProcessor",
             "batch-predict": "BigMLBatchPredictionProcessor",
             "batch-anomaly-score": "BigMLBatchAnomalyScoreProcessor",
             "batch-centroid": "BigMLBatchCentroidProcessor",
         };
+    }
+
+    private {
+        #! Dynamic child data providers registered by TypeScript actions
+        static hash<string, code> dynamic_children;
+
+        #! Connection for dynamic children
+        *AbstractConnection conn;
+    }
+
+    #! Creates the object with a connection
+    constructor(BigMLRestClient::BigMLRestConnection conn) {
+        self.conn = conn;
     }
 
     #! Creates the object
@@ -62,6 +77,14 @@ public class BigMLProcessorsDataProvider inherits DataProvider::AbstractDataProv
             "predictions, anomaly detection, clustering, and topic modeling via the BigML API";
     }
 
+    #! Registers a child data provider from TypeScript actions
+    /** @param name the child's name
+        @param generator code to generate the child; prototype: sub (string name, AbstractConnection conn) {}
+    */
+    static registerChild(string name, code generator) {
+        dynamic_children{name} = generator;
+    }
+
     #! Returns data provider static info
     hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
@@ -69,7 +92,11 @@ public class BigMLProcessorsDataProvider inherits DataProvider::AbstractDataProv
 
     #! Returns a list of child data provider names
     private *list<string> getChildProviderNamesImpl() {
-        return keys Children;
+        list<string> rv = keys Children;
+        if (conn && dynamic_children) {
+            rv += keys dynamic_children;
+        }
+        return rv;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -83,12 +110,20 @@ public class BigMLProcessorsDataProvider inherits DataProvider::AbstractDataProv
                 return new BigMLCentroidProcessor();
             case "topic-distribution":
                 return new BigMLTopicDistributionProcessor();
+            case "train-and-predict":
+                return new BigMLTrainAndPredictProcessor();
             case "batch-predict":
                 return new BigMLBatchPredictionProcessor();
             case "batch-anomaly-score":
                 return new BigMLBatchAnomalyScoreProcessor();
             case "batch-centroid":
                 return new BigMLBatchCentroidProcessor();
+        }
+        # Check dynamic children (TypeScript actions)
+        if (conn) {
+            if (*code gen = dynamic_children{name}) {
+                return gen(name, conn);
+            }
         }
     }
 }

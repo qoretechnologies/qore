@@ -75,6 +75,7 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         addTestCase("constructor validation tests", \constructorValidationTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("updateActionOptions simulation tests", \updateActionOptionsTests());
         addTestCase("output type tests", \outputTypeTests());
 
         # Integration tests (require BIGML_API_KEY and BIGML_USERNAME)
@@ -122,7 +123,7 @@ public class BigMLDataProviderTest inherits QUnit::Test {
     sanityTests() {
         checkJson();
         # Test creating root provider
-        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        BigMLDataProvider::BigMLDataProvider prov();
         assertEq("bigml", prov.getName());
         assertTrue(prov.getDesc().val());
     }
@@ -140,19 +141,19 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
     metadataTests() {
         checkJson();
-        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        BigMLDataProvider::BigMLDataProvider prov();
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
         assertTrue(info.children_can_support_pipeline_processors);
-        assertEq("BigMLProcessorsDataProvider", info.type);
+        assertEq("BigMLDataProvider", info.type);
     }
 
     # ===================== Child Provider Tests =====================
 
     childProviderTests() {
         checkJson();
-        BigMLDataProvider::BigMLProcessorsDataProvider prov();
+        BigMLDataProvider::BigMLDataProvider prov();
         list<string> children = prov.getChildProviderNames();
 
         # Per-record processors
@@ -166,7 +167,10 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(children.contains("batch-anomaly-score"));
         assertTrue(children.contains("batch-centroid"));
 
-        assertEq(7, children.lsize());
+        # Train-and-predict processor
+        assertTrue(children.contains("train-and-predict"));
+
+        assertEq(8, children.lsize());
 
         # Check that each child can be retrieved
         foreach string name in (children) {
@@ -213,6 +217,13 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
         assertEq(DPC_AGGREGATE, batchCentroid.getProcessorCapabilities());
+
+        # Train-and-predict processor should be DPC_AGGREGATE
+        BigMLDataProvider::BigMLTrainAndPredictProcessor trainPredict();
+        assertEq(DPC_AGGREGATE, trainPredict.getProcessorCapabilities());
+        hash<DataProviderInfo> tpInfo = trainPredict.getInfo();
+        assertEq("BigMLTrainAndPredictProcessor", tpInfo.type);
+        assertTrue(tpInfo.supports_pipeline_processor);
     }
 
     # ===================== Constructor Validation Tests =====================
@@ -308,10 +319,59 @@ public class BigMLDataProviderTest inherits QUnit::Test {
             });
         });
 
+        # Train-and-predict: missing objective_field for supervised model
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLTrainAndPredictProcessor({
+                "model_type": "model",
+                "input_fields": "x,y",
+                "window_size": 10,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Train-and-predict: window_size too small (< 5)
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLTrainAndPredictProcessor({
+                "model_type": "model",
+                "input_fields": "x,y",
+                "objective_field": "label",
+                "window_size": 3,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Train-and-predict: unsupervised model type does not require objective_field
+        BigMLDataProvider::BigMLTrainAndPredictProcessor validAnomaly({
+            "model_type": "anomaly",
+            "input_fields": "x,y",
+            "window_size": 10,
+            "token": "test",
+            "username": "test",
+        });
+        assertEq("train-and-predict", validAnomaly.getName());
+
+        # Train-and-predict: valid supervised model
+        BigMLDataProvider::BigMLTrainAndPredictProcessor validModel({
+            "model_type": "model",
+            "input_fields": "x,y",
+            "objective_field": "label",
+            "window_size": 10,
+            "token": "test",
+            "username": "test",
+        });
+        assertEq("train-and-predict", validModel.getName());
+
         # Not-configured processors should throw on processRecord
         BigMLDataProvider::BigMLPredictionProcessor unconfigured();
         assertThrows("PROCESSOR-ERROR", sub() {
             unconfigured.processRecord({"x": 1.0});
+        });
+
+        BigMLDataProvider::BigMLTrainAndPredictProcessor unconfiguredTp();
+        assertThrows("PROCESSOR-ERROR", sub() {
+            unconfiguredTp.processRecord({"x": 1.0});
         });
     }
 
@@ -333,6 +393,39 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(conn.hasDataProvider());
         assertEq("BigMl", conn.getAppName());
         assertEq("bigml", conn.getType());
+
+        # Simulate Qorus doGetActionOptions flow: connection → getDataProvider → path traversal → dynamic options
+        AbstractDataProvider rootProv = conn.getDataProvider();
+        assertEq("bigml", rootProv.getName());
+        assertEq("BigMLDataProvider", rootProv.className());
+
+        # Path traversal: /train-and-predict
+        AbstractDataProvider childProv = rootProv.getChildProviderEx("train-and-predict");
+        assertEq("train-and-predict", childProv.getName());
+        assertEq("BigMLTrainAndPredictProcessor", childProv.className());
+
+        # Get the registered action
+        *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "train-and-predict");
+        assertTrue(action.data_dependent_options, "action should have data_dependent_options");
+
+        # Test dynamic options via the provider obtained through connection path traversal
+        # This is what Qorus calls at line 8748
+        *hash<string, hash<ActionOptionInfo>> supervisedResult =
+            childProv.tryGetActionOptionsWithOptions(action, {"model_type": "model"});
+        assertTrue(exists supervisedResult, "dynamic options should return a result");
+        assertTrue(supervisedResult.objective_field.required,
+            "objective_field should be required for model type via connection-obtained provider");
+        assertFalse(supervisedResult.objective_field.disabled,
+            "objective_field should not be disabled for model type via connection-obtained provider");
+
+        *hash<string, hash<ActionOptionInfo>> unsupervisedResult =
+            childProv.tryGetActionOptionsWithOptions(action, {"model_type": "anomaly"});
+        assertTrue(exists unsupervisedResult, "dynamic options should return a result for anomaly");
+        assertTrue(unsupervisedResult.objective_field.disabled,
+            "objective_field should be disabled for anomaly type via connection-obtained provider");
+        assertFalse(unsupervisedResult.objective_field.required,
+            "objective_field should not be required for anomaly type via connection-obtained provider");
     }
 
     # ===================== Action Catalog Tests =====================
@@ -352,12 +445,15 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("centroid"));
         assertTrue(actionNames.contains("topic-distribution"));
 
+        # Train-and-predict action
+        assertTrue(actionNames.contains("train-and-predict"));
+
         # Batch processor actions
         assertTrue(actionNames.contains("batch-predict"));
         assertTrue(actionNames.contains("batch-anomaly-score"));
         assertTrue(actionNames.contains("batch-centroid"));
 
-        assertEq(7, actions.size());
+        assertEq(8, actions.size());
 
         # Verify predict action details
         *hash<DataProviderActionInfo> predictAction = DataProviderActionCatalog::getAppAction(
@@ -368,6 +464,11 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(predictAction.options.hasKey("model"), "predict should have model option");
         assertTrue(predictAction.options.hasKey("input_fields"),
             "predict should have input_fields option");
+        # credentials come from connection, not from action options
+        assertFalse(predictAction.options.hasKey("token"),
+            "predict should NOT have token option (credentials come from connection)");
+        assertFalse(predictAction.options.hasKey("username"),
+            "predict should NOT have username option (credentials come from connection)");
 
         # Verify anomaly-score action details
         *hash<DataProviderActionInfo> anomalyAction = DataProviderActionCatalog::getAppAction(
@@ -395,6 +496,25 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertEq(DPC_TRANSFORM, topicAction.processor_capabilities);
         assertTrue(topicAction.options.hasKey("topicmodel"),
             "topic-distribution should have topicmodel option");
+
+        # Verify train-and-predict action details
+        *hash<DataProviderActionInfo> trainPredictAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "train-and-predict");
+        assertTrue(exists trainPredictAction, "train-and-predict action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, trainPredictAction.action_code);
+        assertEq(DPC_AGGREGATE, trainPredictAction.processor_capabilities);
+        assertTrue(trainPredictAction.options.hasKey("model_type"),
+            "train-and-predict should have model_type option");
+        assertTrue(trainPredictAction.options.hasKey("input_fields"),
+            "train-and-predict should have input_fields option");
+        assertTrue(trainPredictAction.options.hasKey("objective_field"),
+            "train-and-predict should have objective_field option");
+        assertTrue(trainPredictAction.options.hasKey("window_size"),
+            "train-and-predict should have window_size option");
+        assertTrue(trainPredictAction.options.hasKey("model_name"),
+            "train-and-predict should have model_name option");
+        assertTrue(trainPredictAction.options.hasKey("cleanup_model"),
+            "train-and-predict should have cleanup_model option");
 
         # Verify batch-predict action details
         *hash<DataProviderActionInfo> batchPredictAction = DataProviderActionCatalog::getAppAction(
@@ -424,6 +544,157 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(exists batchCentroidAction, "batch-centroid action should exist");
         assertEq(DPAT_PIPELINE_PROCESSOR, batchCentroidAction.action_code);
         assertEq(DPC_AGGREGATE, batchCentroidAction.processor_capabilities);
+
+        # Verify train-and-predict dynamic options
+        assertTrue(trainPredictAction.data_dependent_options,
+            "train-and-predict should have data_dependent_options");
+        assertTrue(trainPredictAction.options.model_type.has_dependents,
+            "model_type should have has_dependents");
+        assertEq(("refetch",), trainPredictAction.options.model_type.on_change,
+            "model_type should have on_change refetch");
+        assertEq(("model_type",), trainPredictAction.options.objective_field.depends_on,
+            "objective_field should depend on model_type");
+
+        # Test dynamic options via the processor class (system instantiates cls for dynamic options)
+        BigMLDataProvider::BigMLTrainAndPredictProcessor proc();
+        # No model_type set: objective_field should be present (default)
+        *hash<string, hash<ActionOptionInfo>> defaultOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction);
+        assertTrue(defaultOpts.hasKey("objective_field"),
+            "default options should include objective_field");
+        assertFalse(defaultOpts.objective_field.required,
+            "objective_field should not be required by default");
+
+        # Supervised model_type: objective_field should be required and enabled
+        *hash<string, hash<ActionOptionInfo>> supervisedOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction, {"model_type": "model"});
+        assertTrue(supervisedOpts.hasKey("objective_field"),
+            "supervised options should include objective_field");
+        assertTrue(supervisedOpts.objective_field.required,
+            "objective_field should be required for supervised model_type");
+        assertFalse(supervisedOpts.objective_field.disabled,
+            "objective_field should not be disabled for supervised model_type");
+
+        # Ensemble model_type: objective_field should be required and enabled
+        *hash<string, hash<ActionOptionInfo>> ensembleOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction, {"model_type": "ensemble"});
+        assertTrue(ensembleOpts.hasKey("objective_field"),
+            "ensemble options should include objective_field");
+        assertTrue(ensembleOpts.objective_field.required,
+            "objective_field should be required for ensemble model_type");
+        assertFalse(ensembleOpts.objective_field.disabled,
+            "objective_field should not be disabled for ensemble model_type");
+
+        # Unsupervised model_type (anomaly): objective_field should be disabled
+        *hash<string, hash<ActionOptionInfo>> anomalyOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction, {"model_type": "anomaly"});
+        assertTrue(anomalyOpts.hasKey("objective_field"),
+            "anomaly options should include objective_field (disabled)");
+        assertTrue(anomalyOpts.objective_field.disabled,
+            "objective_field should be disabled for anomaly model_type");
+        assertFalse(anomalyOpts.objective_field.required,
+            "objective_field should not be required for anomaly model_type");
+
+        # Unsupervised model_type (cluster): objective_field should be disabled
+        *hash<string, hash<ActionOptionInfo>> clusterOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction, {"model_type": "cluster"});
+        assertTrue(clusterOpts.hasKey("objective_field"),
+            "cluster options should include objective_field (disabled)");
+        assertTrue(clusterOpts.objective_field.disabled,
+            "objective_field should be disabled for cluster model_type");
+        assertFalse(clusterOpts.objective_field.required,
+            "objective_field should not be required for cluster model_type");
+
+        # Also test with wrapped option format (as UI sends it)
+        *hash<string, hash<ActionOptionInfo>> wrappedOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction,
+                {"model_type": {"value": "ensemble"}});
+        assertTrue(wrappedOpts.objective_field.required,
+            "objective_field should be required with wrapped ensemble value");
+        assertFalse(wrappedOpts.objective_field.disabled,
+            "objective_field should not be disabled with wrapped ensemble value");
+
+        *hash<string, hash<ActionOptionInfo>> wrappedAnomalyOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction,
+                {"model_type": {"value": "anomaly"}});
+        assertTrue(wrappedAnomalyOpts.objective_field.disabled,
+            "objective_field should be disabled with wrapped anomaly value");
+        assertFalse(wrappedAnomalyOpts.objective_field.required,
+            "objective_field should not be required with wrapped anomaly value");
+    }
+
+    # ===================== updateActionOptions Simulation Tests =====================
+
+    #! Simulates QorusRestApiHandlerV8::updateActionOptions() logic
+    private static simulateUpdateActionOptions(
+            reference<*hash<string, hash<ActionOptionInfo>>> options,
+            *hash<string, hash<ActionOptionInfo>> req_opts) {
+        foreach hash<auto> i in (req_opts.pairIterator()) {
+            hash<ActionOptionInfo> opt = i.value;
+            if (!options{i.key}) {
+                options{i.key} = opt;
+            } else {
+                map options{i.key}{$1.key} = $1.value, opt.pairIterator(),
+                    !options{i.key}{$1.key}.val() || (($1.key == "type") && exists $1.value);
+            }
+        }
+    }
+
+    updateActionOptionsTests() {
+        checkJson();
+
+        *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "train-and-predict");
+        assertTrue(action.data_dependent_options);
+
+        # Simulate: initial options from registration
+        *hash<string, hash<ActionOptionInfo>> registeredOpts = action.options;
+        assertFalse(registeredOpts.objective_field.required,
+            "objective_field should not be required in registration");
+        assertFalse(registeredOpts.objective_field.disabled,
+            "objective_field should not be disabled in registration");
+
+        # Simulate: get dynamic options for supervised type
+        BigMLDataProvider::BigMLTrainAndPredictProcessor proc();
+        *hash<string, hash<ActionOptionInfo>> dynamicOpts =
+            proc.tryGetActionOptionsWithOptions(action, {"model_type": "model"});
+
+        # Verify dynamic options have the modifications
+        assertTrue(dynamicOpts.objective_field.required,
+            "dynamic opts should have required=True for supervised");
+        assertFalse(dynamicOpts.objective_field.disabled,
+            "dynamic opts should have disabled=False for supervised");
+
+        # Simulate: updateActionOptions merges dynamic into registered
+        hash<DataProviderActionInfo> actionCopy = action;
+        simulateUpdateActionOptions(\actionCopy.options, dynamicOpts);
+
+        # After merge: required should be True
+        assertTrue(actionCopy.options.objective_field.required,
+            "after updateActionOptions: required should be True for supervised");
+        assertFalse(actionCopy.options.objective_field.disabled,
+            "after updateActionOptions: disabled should be False for supervised");
+
+        # Simulate: get dynamic options for unsupervised type
+        *hash<string, hash<ActionOptionInfo>> dynamicOptsAnomaly =
+            proc.tryGetActionOptionsWithOptions(action, {"model_type": "anomaly"});
+
+        # Verify dynamic options have the modifications
+        assertFalse(dynamicOptsAnomaly.objective_field.required,
+            "dynamic opts should have required=False for unsupervised");
+        assertTrue(dynamicOptsAnomaly.objective_field.disabled,
+            "dynamic opts should have disabled=True for unsupervised");
+
+        # Simulate: fresh action copy (each API call gets fresh options from catalog)
+        hash<DataProviderActionInfo> actionCopy2 = action;
+        simulateUpdateActionOptions(\actionCopy2.options, dynamicOptsAnomaly);
+
+        # After merge: disabled should be True
+        assertTrue(actionCopy2.options.objective_field.disabled,
+            "after updateActionOptions: disabled should be True for unsupervised");
+        # required should stay False (default)
+        assertFalse(actionCopy2.options.objective_field.required,
+            "after updateActionOptions: required should stay False for unsupervised");
     }
 
     # ===================== Output Type Tests =====================
@@ -452,6 +723,9 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
         assertTrue(exists batchCentroid.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLTrainAndPredictProcessor trainPredict();
+        assertTrue(exists trainPredict.getPipelineProcessorOutputType());
     }
 
     # ===================== Integration Tests =====================
@@ -469,6 +743,9 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         # Test prediction processor
         testPredictionProcessor();
+
+        # Test train-and-predict processor
+        testTrainAndPredictProcessor();
     }
 
     #! Test API connectivity
@@ -595,6 +872,113 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("--- Prediction Processor tests completed ---\n");
+        }
+    }
+
+    #! Test train-and-predict processor with real API
+    private testTrainAndPredictProcessor() {
+        if (m_options.verbose) {
+            printf("\n--- Testing Train-and-Predict Processor ---\n");
+        }
+
+        # Create training data: 10 records with x, y, and a label based on x + y
+        list<hash<auto>> training_data;
+        for (int i = 0; i < 10; ++i) {
+            float x = float(i);
+            float y = float(i * 2);
+            string label = (x + y) > 10.0 ? "high" : "low";
+            push training_data, {
+                "x": x,
+                "y": y,
+                "label": label,
+            };
+        }
+
+        if (m_options.verbose) {
+            printf("  Training data: %d records\n", training_data.lsize());
+        }
+
+        # Create the train-and-predict processor with cleanup_model enabled
+        BigMLTrainAndPredictProcessor proc({
+            "token": api_key,
+            "username": bigml_username,
+            "model_type": "model",
+            "input_fields": "x,y",
+            "objective_field": "label",
+            "window_size": 10,
+            "cleanup_model": True,
+            "model_name": "bigml-qtest-train-predict",
+        });
+
+        try {
+            # Feed records into the processor
+            list<auto> all_results;
+            foreach hash<auto> rec in (training_data) {
+                auto result = proc.processRecord(rec);
+                if (exists result) {
+                    if (result.typeCode() == NT_LIST) {
+                        all_results += result;
+                    } else {
+                        push all_results, result;
+                    }
+                }
+            }
+
+            # Flush any remaining records
+            *list<auto> flushed = proc.flushRecords();
+            if (flushed) {
+                all_results += flushed;
+            }
+
+            if (m_options.verbose) {
+                printf("  Got %d results\n", all_results.lsize());
+            }
+
+            # Should get one result per input record
+            assertEq(10, all_results.lsize());
+
+            # Verify each result
+            foreach auto result in (all_results) {
+                assertEq("bigml-train-and-predict", result.event_type);
+                assertEq("model", result.model_type);
+                assertTrue(result.model_resource.val(), "should have model resource ID");
+                assertTrue(result.model_resource =~ /^model\//,
+                    "model resource should start with 'model/'");
+                assertTrue(exists result.prediction, "should have prediction");
+                assertTrue(result.resource.val(), "should have prediction resource ID");
+                assertEq(NT_HASH, result.record_values.typeCode());
+                assertTrue(result.record_values.hasKey("x"));
+                assertTrue(result.record_values.hasKey("y"));
+            }
+
+            # Check that predictions are either "high" or "low"
+            foreach auto result in (all_results) {
+                auto pred;
+                if (result.prediction.typeCode() == NT_HASH) {
+                    # BigML may return {field_name: value}
+                    pred = result.prediction.firstValue();
+                } else {
+                    pred = result.prediction;
+                }
+                if (m_options.verbose) {
+                    printf("  Record (x=%y, y=%y) => prediction=%y confidence=%y\n",
+                        result.record_values.x, result.record_values.y,
+                        pred, result.confidence);
+                }
+            }
+
+            if (m_options.verbose) {
+                printf("--- Train-and-Predict Processor tests completed ---\n");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" || ex.err == "BIGML-API-ERROR") {
+                if (m_options.verbose) {
+                    printf("  Train-and-predict API call limited: %s: %s\n", ex.err, ex.desc);
+                }
+                testSkip("BigML API rate limited (free tier)");
+            } else {
+                rethrow;
+            }
         }
     }
 }

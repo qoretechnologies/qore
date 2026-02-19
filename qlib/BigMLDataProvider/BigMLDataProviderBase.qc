@@ -42,6 +42,14 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(AutoHashType),
                 "desc": "Options for creating a BigMLRestClient object if one is not provided directly",
             },
+            "connection": <DataProviderOptionInfo>{
+                "display_name": "BigML Connection",
+                "short_desc": "A BigML REST connection object",
+                "type": AbstractDataProviderType::get(
+                    new Type("BigMLRestClient::BigMLRestConnection")),
+                "desc": "A BigMLRestConnection object; injected automatically by the framework "
+                    "for scheme-based apps",
+            },
             "token": <DataProviderOptionInfo>{
                 "display_name": "API Key",
                 "short_desc": "BigML API key",
@@ -90,6 +98,9 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
     constructor(*hash<auto> options) {
         if (options.bigmlrestclient) {
             rest = options.bigmlrestclient;
+        } else if (options.connection instanceof BigMLRestClient::BigMLRestConnection) {
+            conn = options.connection;
+            rest = conn.get(True);
         } else {
             hash<auto> client_opts = options.bigmlrestclient_options ?? {};
             if (options.token) {
@@ -114,7 +125,9 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Sets the logger for the data provider
     setLogger(*LoggerInterface logger) {
-        rest.setLogger(logger);
+        if (rest) {
+            rest.setLogger(logger);
+        }
     }
 
     #! Makes a POST request to the BigML API

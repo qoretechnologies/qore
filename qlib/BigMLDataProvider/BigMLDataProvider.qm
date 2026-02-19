@@ -76,7 +76,7 @@ module BigMLDataProvider {
             "groups": ("Predictions",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLPredictionProcessor::ConstructorOptions{
-                    "token", "username", "model", "input_fields",
+                    "model", "input_fields",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -102,7 +102,7 @@ module BigMLDataProvider {
             "groups": ("Anomaly Detection",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLAnomalyScoreProcessor::ConstructorOptions{
-                    "token", "username", "anomaly", "input_fields",
+                    "anomaly", "input_fields",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -131,7 +131,7 @@ module BigMLDataProvider {
             "groups": ("Clustering",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLCentroidProcessor::ConstructorOptions{
-                    "token", "username", "cluster", "input_fields",
+                    "cluster", "input_fields",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -155,10 +155,63 @@ module BigMLDataProvider {
             "groups": ("Topic Modeling",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLTopicDistributionProcessor::ConstructorOptions{
-                    "token", "username", "topicmodel", "input_fields",
+                    "topicmodel", "input_fields",
                 }, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register train-and-predict action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/train-and-predict",
+            "action": "train-and-predict",
+            "display_name": "Train Model & Predict",
+            "short_desc": "Train a model on pipeline data and predict in one step",
+            "desc": "Combines model training and prediction into a single pipeline step. "
+                "Buffers records, uploads them to BigML to create a training dataset, trains "
+                "a model of the selected type, then runs predictions on each record. Supports "
+                "decision tree, random forest, anomaly detection, and clustering. The trained "
+                "model is kept in your BigML account for future reuse with the predict action "
+                "unless 'Delete Model After Use' is enabled.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "BigMLDataProvider::BigMLTrainAndPredictProcessor",
+            "groups": ("Training",),
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLTrainAndPredictProcessor::ConstructorOptions{
+                    "model_type",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLTrainAndPredictProcessor::ConstructorOptions{
+                    "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLTrainAndPredictProcessor::ConstructorOptions{
+                    "objective_field",
+                }, {
+                    "preselected": True,
+                    "loc": "constructor",
+                    "depends_on": ("model_type",),
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLTrainAndPredictProcessor::ConstructorOptions{
+                    "model_name", "cleanup_model", "poll_interval_ms", "timeout_ms",
+                }, {
                     "loc": "constructor",
                 }
             ),
@@ -181,7 +234,7 @@ module BigMLDataProvider {
             "groups": ("Predictions",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLBatchPredictionProcessor::ConstructorOptions{
-                    "token", "username", "model", "input_fields", "window_size",
+                    "model", "input_fields", "window_size",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -211,7 +264,7 @@ module BigMLDataProvider {
             "groups": ("Anomaly Detection",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLBatchAnomalyScoreProcessor::ConstructorOptions{
-                    "token", "username", "anomaly", "input_fields", "window_size",
+                    "anomaly", "input_fields", "window_size",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -241,7 +294,7 @@ module BigMLDataProvider {
             "groups": ("Clustering",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigMLBatchCentroidProcessor::ConstructorOptions{
-                    "token", "username", "cluster", "input_fields", "window_size",
+                    "cluster", "input_fields", "window_size",
                 }, {
                     "preselected": True,
                     "required": True,
@@ -279,7 +332,7 @@ module BigMLDataProvider {
     @section bigmldataprovider_relnotes Release Notes
 
     @subsection bigmldataprovider_v1_0 BigMLDataProvider v1.0
-    - initial release with 4 per-record processors and 3 batch processors
+    - initial release with 4 per-record processors, 3 batch processors, and 1 train-and-predict processor
 */
 
 #! Contains all public definitions in the BigMLDataProvider module
@@ -355,6 +408,39 @@ public namespace BigMLDataProvider {
         #! The BigML resource ID of the topic distribution
         string resource;
         #! The original input values sent to the topic model
+        hash<auto> record_values;
+    }
+
+    #! BigML train-and-predict event hashdecl
+    /** Emitted by the train-and-predict processor; contains prediction results that vary
+        by model type along with the trained model's resource ID for potential reuse.
+
+        @since %BigMLDataProvider 1.0
+    */
+    public hashdecl BigMLTrainAndPredictEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-train-and-predict";
+        #! The model type that was trained (model, ensemble, anomaly, cluster)
+        string model_type;
+        #! The BigML resource ID of the trained model (can be reused with predict processor)
+        string model_resource;
+        #! The prediction result (for model/ensemble types)
+        auto prediction;
+        #! The confidence score for the prediction (for model/ensemble types)
+        *float confidence;
+        #! The name of the objective field (for model/ensemble types)
+        *string objective_field;
+        #! The anomaly score from 0.0 to 1.0 (for anomaly type)
+        *float anomaly_score;
+        #! The name of the assigned cluster (for cluster type)
+        *string centroid_name;
+        #! The internal ID of the assigned centroid (for cluster type)
+        *string centroid_id;
+        #! The distance from the record to the centroid (for cluster type)
+        *float distance;
+        #! The BigML resource ID of the individual prediction/score/centroid result
+        string resource;
+        #! The original input values used for prediction
         hash<auto> record_values;
     }
 }
