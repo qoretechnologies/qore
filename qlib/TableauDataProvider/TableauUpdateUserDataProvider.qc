@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Request type for updating a user
 public class TableauUpdateUserRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "user_id": {
                 "type": StringType,
@@ -35,30 +35,43 @@ public class TableauUpdateUserRequestDataType inherits HashDataType {
                 "short_desc": "The user ID to update",
                 "desc": "The unique identifier of the user to update",
                 "required": True,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "full_name": {
                 "type": StringOrNothingType,
                 "display_name": "Full Name",
                 "short_desc": "The user's full name",
                 "desc": "The new full name of the user",
+                "example_value": "John Smith",
             },
             "email": {
                 "type": StringOrNothingType,
                 "display_name": "Email",
                 "short_desc": "The user's email address",
                 "desc": "The new email address of the user",
+                "example_value": "jsmith@example.com",
             },
             "site_role": {
                 "type": StringOrNothingType,
                 "display_name": "Site Role",
                 "short_desc": "The user's site role",
                 "desc": "The new site role for the user",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
+                    <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
+                    <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
+                    <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
+                    <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
+                    <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
+                    <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
+                ),
             },
             "auth_setting": {
                 "type": StringOrNothingType,
                 "display_name": "Auth Setting",
                 "short_desc": "The authentication setting",
                 "desc": "The new authentication setting for the user",
+                "example_value": "ServerDefault",
             },
         };
     }
@@ -80,6 +93,9 @@ public class TableauUpdateUserDataProvider inherits TableauDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Response type for action registration
+        static TableauUserDataType ResponseType();
     }
 
     constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
@@ -98,7 +114,7 @@ public class TableauUpdateUserDataProvider inherits TableauDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new TableauUserDataType();
+        return ResponseType;
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

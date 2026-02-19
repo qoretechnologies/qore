@@ -165,6 +165,7 @@ module TableauDataProvider {
                     "desc": "A note about the datasource certification",
                 },
             },
+            "output_type": TableauUpdateDatasourceDataProvider::ResponseType,
         });
 
         # Delete a Datasource
@@ -187,6 +188,7 @@ module TableauDataProvider {
                     "ref_data": "datasources",
                 },
             },
+            "output_type": TableauDeleteDatasourceDataProvider::ResponseType,
         });
 
         # Download a Datasource
@@ -209,6 +211,7 @@ module TableauDataProvider {
                     "ref_data": "datasources",
                 },
             },
+            "output_type": TableauDownloadDatasourceDataProvider::ResponseType,
         });
 
         # Add Tag to Datasource
@@ -239,6 +242,7 @@ module TableauDataProvider {
                     "desc": "The name of the tag to add to the datasource",
                 },
             },
+            "output_type": TableauAddTagToDatasourceDataProvider::ResponseType,
         });
 
         # Delete Tag from Datasource
@@ -269,6 +273,7 @@ module TableauDataProvider {
                     "desc": "The name of the tag to remove from the datasource",
                 },
             },
+            "output_type": TableauDeleteTagFromDatasourceDataProvider::ResponseType,
         });
 
         # ========== PROJECT ACTIONS ==========
@@ -303,6 +308,28 @@ module TableauDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "desc": "Maximum number of results to return",
                     "preselected": True,
+                },
+            },
+        });
+
+        # Get a Project
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TableauDataProvider::AppName,
+            "path": "/projects",
+            "action": "get-project",
+            "groups": "Projects",
+            "display_name": "Get a Project",
+            "short_desc": "Get a single project by ID",
+            "desc": "Retrieve a single project by ID from Tableau",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "project_id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "The project ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "projects",
                 },
             },
         });
@@ -343,9 +370,15 @@ module TableauDataProvider {
                     "display_name": "Content Permissions",
                     "short_desc": "The content permissions mode",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                    "desc": "The content permissions mode for the project",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
+                        <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
+                        <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
+                    ),
                 },
             },
+            "output_type": TableauCreateProjectDataProvider::ResponseType,
         });
 
         # Update a Project
@@ -390,9 +423,15 @@ module TableauDataProvider {
                     "display_name": "Content Permissions",
                     "short_desc": "The content permissions mode",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                    "desc": "The content permissions mode for the project",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
+                        <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
+                        <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
+                    ),
                 },
             },
+            "output_type": TableauUpdateProjectDataProvider::ResponseType,
         });
 
         # Delete a Project
@@ -415,6 +454,7 @@ module TableauDataProvider {
                     "ref_data": "projects",
                 },
             },
+            "output_type": TableauDeleteProjectDataProvider::ResponseType,
         });
 
         # ========== USER ACTIONS ==========
@@ -447,8 +487,16 @@ module TableauDataProvider {
                     "display_name": "Site Role",
                     "short_desc": "Filter by site role",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter users by siteRole (e.g., Creator, Explorer, Viewer, "
-                        "SiteAdministratorCreator)",
+                    "desc": "Filter users by site role",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
+                        <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
+                        <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
+                        <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
+                        <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
+                    ),
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -507,8 +555,16 @@ module TableauDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
-                    "desc": "The site role: Creator, Explorer, ExplorerCanPublish, "
-                        "SiteAdministratorCreator, SiteAdministratorExplorer, Unlicensed, Viewer",
+                    "desc": "The site role for the user",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
+                        <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
+                        <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
+                        <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
+                        <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
+                    ),
                 },
                 "auth_setting": <ActionOptionInfo>{
                     "display_name": "Auth Setting",
@@ -517,6 +573,7 @@ module TableauDataProvider {
                     "desc": "The authentication setting for the user",
                 },
             },
+            "output_type": TableauCreateUserDataProvider::ResponseType,
         });
 
         # Update a User
@@ -555,6 +612,15 @@ module TableauDataProvider {
                     "short_desc": "The user's site role",
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "The new site role for the user",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
+                        <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
+                        <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
+                        <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
+                        <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
+                        <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
+                    ),
                 },
                 "auth_setting": <ActionOptionInfo>{
                     "display_name": "Auth Setting",
@@ -563,6 +629,7 @@ module TableauDataProvider {
                     "desc": "The new authentication setting for the user",
                 },
             },
+            "output_type": TableauUpdateUserDataProvider::ResponseType,
         });
 
         # Delete a User
@@ -585,6 +652,7 @@ module TableauDataProvider {
                     "ref_data": "users",
                 },
             },
+            "output_type": TableauDeleteUserDataProvider::ResponseType,
         });
 
         # ========== EXTRACT REFRESH TASK ACTIONS ==========
@@ -656,6 +724,7 @@ module TableauDataProvider {
                     "preselected": True,
                 },
             },
+            "output_type": TableauDeleteExtractRefreshTaskDataProvider::ResponseType,
         });
 
         # ========== API CALL ACTION ==========
@@ -677,7 +746,13 @@ module TableauDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
-                    "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
+                    "desc": "The HTTP method to use for the API call",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
+                        <AllowedValueInfo>{"value": "POST", "display_name": "POST"},
+                        <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
+                        <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
+                    ),
                 },
                 "path": <ActionOptionInfo>{
                     "display_name": "API Path",
@@ -695,6 +770,7 @@ module TableauDataProvider {
                     "desc": "Optional request body for POST and PUT requests",
                 },
             },
+            "output_type": TableauExecuteApiCallDataProvider::ResponseType,
         });
 
         # ========== EVENT TRIGGERS ==========
@@ -843,7 +919,7 @@ module TableauDataProvider {
             "path": "/events/" + EVENT_WATCH_DATASOURCES,
             "action": EVENT_WATCH_DATASOURCES,
             "groups": "Triggers",
-            "display_name": "Watch New Datasources",
+            "display_name": "New Datasource",
             "short_desc": "Trigger when a new datasource appears",
             "desc": "Fires when new datasources are detected in Tableau. "
                 "Uses polling to detect new records.",
@@ -866,7 +942,7 @@ module TableauDataProvider {
             "path": "/events/" + EVENT_WATCH_PROJECTS,
             "action": EVENT_WATCH_PROJECTS,
             "groups": "Triggers",
-            "display_name": "Watch New Projects",
+            "display_name": "New Project",
             "short_desc": "Trigger when a new project appears",
             "desc": "Fires when new projects are detected in Tableau. "
                 "Uses polling to detect new records.",

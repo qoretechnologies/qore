@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Request type for updating a project
 public class TableauUpdateProjectRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "project_id": {
                 "type": StringType,
@@ -35,30 +35,39 @@ public class TableauUpdateProjectRequestDataType inherits HashDataType {
                 "short_desc": "The project ID to update",
                 "desc": "The unique identifier of the project to update",
                 "required": True,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
                 "type": StringOrNothingType,
                 "display_name": "Name",
                 "short_desc": "The new project name",
                 "desc": "The new name of the project",
+                "example_value": "Marketing Analytics",
             },
             "description": {
                 "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The new project description",
                 "desc": "The new description of the project",
+                "example_value": "Updated dashboards for the marketing team",
             },
             "parent_project_id": {
                 "type": StringOrNothingType,
                 "display_name": "Parent Project ID",
                 "short_desc": "The new parent project ID",
                 "desc": "The new parent project ID for moving the project",
+                "example_value": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
             },
             "content_permissions": {
                 "type": StringOrNothingType,
                 "display_name": "Content Permissions",
                 "short_desc": "The content permissions mode",
-                "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                "desc": "The content permissions mode for the project",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
+                    <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
+                    <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
+                ),
             },
         };
     }
@@ -80,6 +89,9 @@ public class TableauUpdateProjectDataProvider inherits TableauDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Response type for action registration
+        static TableauProjectDataType ResponseType();
     }
 
     constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
@@ -98,12 +110,17 @@ public class TableauUpdateProjectDataProvider inherits TableauDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new TableauProjectDataType();
+        return ResponseType;
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string project_id = remove req.project_id;
-        return doPut("projects/" + project_id, {"project": req}).project;
+        hash<auto> body;
+        if (req.name) body.name = req.name;
+        if (req.description) body.description = req.description;
+        if (req.parent_project_id) body.parentProjectId = req.parent_project_id;
+        if (req.content_permissions) body.contentPermissions = req.content_permissions;
+        return doPut("projects/" + project_id, {"project": body}).project;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

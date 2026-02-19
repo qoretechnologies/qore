@@ -61,7 +61,7 @@ public class TableauWebhookEventDataType inherits HashDataType {
                 "desc": "The LUID of the site",
             },
             "created_at": {
-                "type": StringOrNothingType,
+                "type": DateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the event occurred",
                 "desc": "When the event occurred",

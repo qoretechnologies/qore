@@ -109,21 +109,20 @@ public class TableauProjectsDataProvider inherits TableauDataProviderBase {
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # If project_id provided, get single record
-        if (search_options.project_id) {
-            hash<auto> result = doGet("projects/" + search_options.project_id);
-            return new DefaultRecordIterator(new ListHashIterator((result.project,)),
-                where_cond, search_options);
-        }
-
         # Build query params
         hash<auto> params;
         if (search_options.name) {
             params.filter = "name:eq:" + search_options.name;
         }
 
+        # Tableau has no GET endpoint for a single project; must list and filter
         list<hash<auto>> all_records = fetchAllPages("projects", "projects.project",
             params, search_options.limit);
+
+        if (search_options.project_id) {
+            all_records = select all_records, ($1.id == search_options.project_id);
+        }
+
         return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
             search_options);
     }

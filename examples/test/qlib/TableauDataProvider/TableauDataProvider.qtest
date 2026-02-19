@@ -365,6 +365,41 @@ public class TableauDataProviderTest inherits QUnit::Test {
             assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
                 sprintf("%s event type should have a data type", triggerName));
         }
+
+        # Verify example event data for each trigger
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider triggerProvider = events.getChildProvider(triggerName);
+
+            # Get example event data
+            auto exampleData = triggerProvider.getExampleEventData(triggerName);
+            assertTrue(exampleData.val(),
+                sprintf("%s should return non-empty example data", triggerName));
+            assertTrue(exampleData instanceof hash,
+                sprintf("%s example data should be a hash", triggerName));
+
+            # Webhook triggers should have specific fields
+            if (triggerName =~ /^datasource-/) {
+                hash<auto> data = exampleData;
+                assertTrue(data.hasKey("resource"),
+                    sprintf("%s example should have 'resource' field", triggerName));
+                assertTrue(data.hasKey("event_type"),
+                    sprintf("%s example should have 'event_type' field", triggerName));
+                assertTrue(data.hasKey("resource_luid"),
+                    sprintf("%s example should have 'resource_luid' field", triggerName));
+            }
+
+            # Polling triggers should have resource-specific fields
+            if (triggerName == "watch-datasources") {
+                hash<auto> data = exampleData;
+                assertTrue(data.hasKey("name"),
+                    "watch-datasources example should have 'name' field");
+            }
+            if (triggerName == "watch-projects") {
+                hash<auto> data = exampleData;
+                assertTrue(data.hasKey("name"),
+                    "watch-projects example should have 'name' field");
+            }
+        }
     }
 
     #! Negative tests - test error handling and invalid inputs
@@ -483,7 +518,8 @@ public class TableauDataProviderTest inherits QUnit::Test {
             printf("Created project: %s (%s)\n", projectName, testProjectId);
         }
 
-        # Verify data persistence - retrieve the project
+        # Verify data persistence - retrieve the project (brief delay for API consistency)
+        sleep(2s);
         AbstractDataProvider projects = prov.getChildProvider("projects");
         AbstractDataProviderRecordIterator iter = projects.searchRecords(NOTHING, {
             "project_id": testProjectId,
@@ -511,7 +547,8 @@ public class TableauDataProviderTest inherits QUnit::Test {
 
         assertTrue(result.hasKey("id"), "Updated project should have 'id' field");
 
-        # Verify the update persisted
+        # Verify the update persisted (brief delay for API consistency)
+        sleep(2s);
         AbstractDataProvider projects = prov.getChildProvider("projects");
         AbstractDataProviderRecordIterator iter = projects.searchRecords(NOTHING, {
             "project_id": testProjectId,

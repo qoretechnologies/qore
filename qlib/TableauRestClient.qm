@@ -134,6 +134,9 @@ public class TableauRestClient inherits RestClient::RestClient {
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
+            # Tableau's ingress gateway requires Content-Length on POST requests;
+            # HTTP/2 may not send it, so force HTTP/1.1
+            "http_version": "1.1",
         };
     }
 
@@ -345,6 +348,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "short_desc": "Personal Access Token name",
                     "type": "string",
                     "desc": "The name of the Personal Access Token for authentication",
+                    "preselected": True,
                 },
                 "token_secret": <ConnectionOptionInfo>{
                     "display_name": "Token Secret",
@@ -352,6 +356,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "The secret value of the Personal Access Token",
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "content_url": <ConnectionOptionInfo>{
                     "display_name": "Site Name",

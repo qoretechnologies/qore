@@ -110,11 +110,8 @@ public class TableauExtractRefreshTasksDataProvider inherits TableauDataProvider
                 where_cond, search_options);
         }
 
-        # Build query params
-        hash<auto> params;
-
         list<hash<auto>> all_records = fetchAllPages("tasks/extractRefreshes", "tasks.task",
-            params, search_options.limit);
+            NOTHING, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
             search_options);
     }

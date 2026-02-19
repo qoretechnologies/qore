@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Request type for creating a project
 public class TableauCreateProjectRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "name": {
                 "type": StringType,
@@ -35,24 +35,32 @@ public class TableauCreateProjectRequestDataType inherits HashDataType {
                 "short_desc": "The name of the project",
                 "desc": "The name of the project to create",
                 "required": True,
+                "example_value": "Marketing Analytics",
             },
             "description": {
                 "type": StringOrNothingType,
                 "display_name": "Description",
                 "short_desc": "The project description",
                 "desc": "A description of the project",
+                "example_value": "Dashboards and reports for the marketing team",
             },
             "parent_project_id": {
                 "type": StringOrNothingType,
                 "display_name": "Parent Project ID",
                 "short_desc": "The parent project ID",
                 "desc": "The ID of the parent project, if creating a nested project",
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "content_permissions": {
                 "type": StringOrNothingType,
                 "display_name": "Content Permissions",
                 "short_desc": "The content permissions mode",
-                "desc": "ManagedByOwner, LockedToProject, or LockedToProjectWithoutNested",
+                "desc": "The content permissions mode for the project",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "ManagedByOwner", "display_name": "Managed By Owner"},
+                    <AllowedValueInfo>{"value": "LockedToProject", "display_name": "Locked To Project"},
+                    <AllowedValueInfo>{"value": "LockedToProjectWithoutNested", "display_name": "Locked To Project Without Nested"},
+                ),
             },
         };
     }
@@ -74,6 +82,9 @@ public class TableauCreateProjectDataProvider inherits TableauDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Response type for action registration
+        static TableauProjectDataType ResponseType();
     }
 
     constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
@@ -92,11 +103,15 @@ public class TableauCreateProjectDataProvider inherits TableauDataProviderBase {
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new TableauProjectDataType();
+        return ResponseType;
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doPost("projects", {"project": req}).project;
+        hash<auto> body = {"name": req.name};
+        if (req.description) body.description = req.description;
+        if (req.parent_project_id) body.parentProjectId = req.parent_project_id;
+        if (req.content_permissions) body.contentPermissions = req.content_permissions;
+        return doPost("projects", {"project": body}).project;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -62,8 +62,16 @@ public class TableauUsersDataProvider inherits TableauDataProviderBase {
                 "display_name": "Site Role",
                 "short_desc": "Filter by site role",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter users by siteRole (e.g., Creator, Explorer, Viewer, "
-                    "SiteAdministratorCreator)",
+                "desc": "Filter users by site role",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Creator", "display_name": "Creator"},
+                    <AllowedValueInfo>{"value": "Explorer", "display_name": "Explorer"},
+                    <AllowedValueInfo>{"value": "ExplorerCanPublish", "display_name": "Explorer (Can Publish)"},
+                    <AllowedValueInfo>{"value": "SiteAdministratorCreator", "display_name": "Site Administrator Creator"},
+                    <AllowedValueInfo>{"value": "SiteAdministratorExplorer", "display_name": "Site Administrator Explorer"},
+                    <AllowedValueInfo>{"value": "Unlicensed", "display_name": "Unlicensed"},
+                    <AllowedValueInfo>{"value": "Viewer", "display_name": "Viewer"},
+                ),
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

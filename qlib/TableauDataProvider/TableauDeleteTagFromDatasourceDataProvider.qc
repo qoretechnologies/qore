@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Request type for deleting a tag from a datasource
 public class TableauDeleteTagFromDatasourceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "datasource_id": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class TableauDeleteTagFromDatasourceRequestDataType inherits HashDataType
                 "short_desc": "The datasource to remove the tag from",
                 "desc": "The unique identifier of the datasource to remove a tag from",
                 "required": True,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "tag_name": {
                 "type": StringType,
@@ -42,6 +43,7 @@ public class TableauDeleteTagFromDatasourceRequestDataType inherits HashDataType
                 "short_desc": "The tag to remove",
                 "desc": "The name of the tag to remove from the datasource",
                 "required": True,
+                "example_value": "deprecated",
             },
         };
     }
@@ -63,6 +65,9 @@ public class TableauDeleteTagFromDatasourceDataProvider inherits TableauDataProv
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Response type for action registration
+        const ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
     constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
@@ -81,7 +86,7 @@ public class TableauDeleteTagFromDatasourceDataProvider inherits TableauDataProv
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderTypeMap."hash";
+        return ResponseType;
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

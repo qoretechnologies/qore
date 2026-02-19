@@ -27,7 +27,7 @@ public namespace TableauDataProvider {
 
 #! Request type for updating a datasource
 public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "datasource_id": {
                 "type": StringType,
@@ -35,18 +35,21 @@ public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
                 "short_desc": "The datasource ID to update",
                 "desc": "The unique identifier of the datasource to update",
                 "required": True,
+                "example_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             },
             "name": {
                 "type": StringOrNothingType,
                 "display_name": "Name",
                 "short_desc": "The new datasource name",
                 "desc": "The new name of the datasource",
+                "example_value": "Sales Data 2026",
             },
             "project_id": {
                 "type": StringOrNothingType,
                 "display_name": "Project ID",
                 "short_desc": "The project to move the datasource to",
                 "desc": "The ID of the project to move the datasource to",
+                "example_value": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
             },
             "is_certified": {
                 "type": SoftBoolOrNothingType,
@@ -59,6 +62,7 @@ public class TableauUpdateDatasourceRequestDataType inherits HashDataType {
                 "display_name": "Certification Note",
                 "short_desc": "The certification note",
                 "desc": "A note about the datasource certification",
+                "example_value": "Verified by the data team",
             },
         };
     }
@@ -80,6 +84,9 @@ public class TableauUpdateDatasourceDataProvider inherits TableauDataProviderBas
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Response type for action registration
+        static TableauDatasourceDataType ResponseType();
     }
 
     constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
@@ -98,7 +105,7 @@ public class TableauUpdateDatasourceDataProvider inherits TableauDataProviderBas
     }
 
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new TableauDatasourceDataType();
+        return ResponseType;
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

@@ -45,8 +45,15 @@ public class TableauExecuteApiCallDataProvider inherits TableauDataProviderBase 
             "method": {
                 "display_name": "HTTP Method",
                 "type": StringType,
-                "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
+                "desc": "The HTTP method to use for the API call",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "GET", "display_name": "GET"},
+                    <AllowedValueInfo>{"value": "POST", "display_name": "POST"},
+                    <AllowedValueInfo>{"value": "PUT", "display_name": "PUT"},
+                    <AllowedValueInfo>{"value": "DELETE", "display_name": "DELETE"},
+                ),
+                "example_value": "GET",
             },
             "path": {
                 "display_name": "API Path",
@@ -54,6 +61,7 @@ public class TableauExecuteApiCallDataProvider inherits TableauDataProviderBase 
                 "desc": "The relative API path (e.g. 'projects' or "
                     "'datasources/DATASOURCE_ID')",
                 "required": True,
+                "example_value": "projects",
             },
             "body": {
                 "display_name": "Request Body",
