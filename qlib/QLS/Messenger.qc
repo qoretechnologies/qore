@@ -42,10 +42,11 @@ public class Messenger {
             }
 
             # read headers
-            if (txt =~ /^Content-Length:\s*(\d+)\s*$/i) {
-                contentLength = $1.toInt();
-            } else if (txt =~ /^Content-Type:\s*(.+?)\s*$/i) {
-                contentType = $1;
+            *list<auto> match;
+            if (match = (txt =~ x/^Content-Length:\s*(\d+)\s*$/i)) {
+                contentLength = match[0].toInt();
+            } else if (match = (txt =~ x/^Content-Type:\s*(.+?)\s*$/i)) {
+                contentType = match[0];
             } else if (txt == "") {
                 # read JSON-RPC message
                 if (contentLength == -1) {
