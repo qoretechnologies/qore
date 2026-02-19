@@ -1,0 +1,852 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SquarespaceDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/SquarespaceRestClient.qm
+%requires ../../../../qlib/SquarespaceDataProvider
+
+%exec-class SquarespaceDataProviderTest
+
+public class SquarespaceDataProviderTest inherits QUnit::Test {
+    private {
+        #! Squarespace REST client for integration tests
+        *SquarespaceRestClient::SquarespaceRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "client_id": "i,client-id=s",
+            "client_secret": "s,client-secret=s",
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test product ID (created during integration tests)
+        *string testProductId;
+
+        #! Test variant ID (created during integration tests)
+        *string testVariantId;
+    }
+
+    constructor() : Test("SquarespaceDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Squarespace credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Squarespace client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.SQUARESPACE_CONNECTION;
+        if (conn_name) {
+            if (m_options.verbose) {
+                printf("Using connection: %s\n", conn_name);
+            }
+            client = get_connection(conn_name).get();
+            return;
+        }
+
+        *string token = m_options.token ?? ENV.SQUARESPACE_ACCESS_TOKEN;
+        *string client_id = m_options.client_id ?? ENV.SQUARESPACE_CLIENT_ID;
+        *string client_secret = m_options.client_secret ?? ENV.SQUARESPACE_CLIENT_SECRET;
+
+        if (!token && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Missing Squarespace credentials. Required:\n");
+                printf("  - SQUARESPACE_CONNECTION or -c option (Qorus connection name)\n");
+                printf("Or:\n");
+                printf("  - SQUARESPACE_ACCESS_TOKEN or -t option (access token)\n");
+                printf("Or:\n");
+                printf("  - SQUARESPACE_CLIENT_ID or -i option\n");
+                printf("  - SQUARESPACE_CLIENT_SECRET or -s option\n");
+            }
+            return;
+        }
+
+        # Token-only mode
+        if (token && (!client_id || !client_secret)) {
+            if (m_options.verbose) {
+                printf("Using token-only mode (no OAuth2 refresh)\n");
+            }
+            client = new SquarespaceRestClient::SquarespaceRestClient({
+                "token": token,
+            });
+            return;
+        }
+
+        # Full OAuth2 mode
+        hash<auto> opts = {
+            "oauth2_client_id": client_id,
+            "oauth2_client_secret": client_secret,
+        };
+        if (token) {
+            opts.token = token;
+        }
+        client = new SquarespaceRestClient::SquarespaceRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        try {
+            SquarespaceDataProvider::SquarespaceDataProvider prov({
+                "squarespacerestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+            assertEq("squarespace", prov.getName());
+            assertTrue(prov.getDesc().val());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping sanity tests");
+            }
+            rethrow;
+        }
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("squarespace");
+        assertEq("squarespace", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("squarespacerestclient"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        try {
+            SquarespaceDataProvider::SquarespaceDataProvider prov({
+                "squarespacerestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+            hash<DataProviderInfo> info = prov.getInfo();
+
+            assertTrue(info.supports_children);
+            assertTrue(info.children_can_support_apis);
+            assertTrue(info.children_can_support_records);
+            assertTrue(info.children_can_support_observers);
+            assertEq("SquarespaceDataProvider", info.type);
+
+            assertTrue(info.constructor_options.hasKey("squarespacerestclient"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping metadata tests");
+            }
+            rethrow;
+        }
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        SquarespaceDataProvider::SquarespaceDataProvider prov;
+        try {
+            prov = new SquarespaceDataProvider::SquarespaceDataProvider({
+                "squarespacerestclient_options": {
+                    "token": "fake-token",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OAUTH2-ERROR") {
+                testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            rethrow;
+        }
+
+        # Check child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Verify collection providers exist
+        assertTrue(children.contains("orders"));
+        assertTrue(children.contains("products"));
+        assertTrue(children.contains("product-variants"));
+        assertTrue(children.contains("inventory"));
+        assertTrue(children.contains("transactions"));
+        assertTrue(children.contains("execute-api-call"));
+        assertTrue(children.contains("events"));
+
+        # Check orders child provider
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        assertEq("orders", orders.getName());
+        hash<DataProviderInfo> ordersInfo = orders.getInfo();
+        assertTrue(ordersInfo.supports_read);
+        assertTrue(ordersInfo.supports_native_search);
+        assertTrue(ordersInfo.supports_children);
+
+        # Verify orders has action children
+        list<string> orderChildren = orders.getChildProviderNames();
+        assertTrue(orderChildren.contains("create"));
+        assertTrue(orderChildren.contains("fulfill"));
+
+        # Check products child provider
+        AbstractDataProvider products = prov.getChildProvider("products");
+        assertEq("products", products.getName());
+        hash<DataProviderInfo> productsInfo = products.getInfo();
+        assertTrue(productsInfo.supports_read);
+        assertTrue(productsInfo.supports_native_search);
+
+        # Verify products has action children
+        list<string> productChildren = products.getChildProviderNames();
+        assertTrue(productChildren.contains("create"));
+        assertTrue(productChildren.contains("update"));
+        assertTrue(productChildren.contains("delete"));
+        assertTrue(productChildren.contains("images"));
+
+        # Check product images child provider
+        AbstractDataProvider images = products.getChildProvider("images");
+        assertEq("images", images.getName());
+        list<string> imageChildren = images.getChildProviderNames();
+        assertTrue(imageChildren.contains("upload"));
+        assertTrue(imageChildren.contains("assign"));
+        assertTrue(imageChildren.contains("update"));
+        assertTrue(imageChildren.contains("delete"));
+
+        # Check product-variants child provider
+        AbstractDataProvider variants = prov.getChildProvider("product-variants");
+        assertEq("product-variants", variants.getName());
+        list<string> variantChildren = variants.getChildProviderNames();
+        assertTrue(variantChildren.contains("create"));
+        assertTrue(variantChildren.contains("update"));
+        assertTrue(variantChildren.contains("delete"));
+
+        # Check inventory child provider
+        AbstractDataProvider inventory = prov.getChildProvider("inventory");
+        assertEq("inventory", inventory.getName());
+        list<string> inventoryChildren = inventory.getChildProviderNames();
+        assertTrue(inventoryChildren.contains("update-stock"));
+
+        # Check transactions child provider
+        AbstractDataProvider transactions = prov.getChildProvider("transactions");
+        assertEq("transactions", transactions.getName());
+        hash<DataProviderInfo> transactionsInfo = transactions.getInfo();
+        assertTrue(transactionsInfo.supports_read);
+        assertTrue(transactionsInfo.supports_native_search);
+
+        # Check events child provider and triggers
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(eventChildren.contains("order-updated"));
+        assertTrue(eventChildren.contains("product-updated"));
+        assertTrue(eventChildren.contains("transaction-updated"));
+
+        # Verify event providers have correct info and example data
+        AbstractDataProvider orderUpdated = events.getChildProvider("order-updated");
+        assertEq("order-updated", orderUpdated.getName());
+        hash<DataProviderInfo> orderUpdatedInfo = orderUpdated.getInfo();
+        assertTrue(orderUpdatedInfo.supports_observable);
+
+        # Verify example event data has resource-specific fields
+        auto orderExample = orderUpdated.getExampleEventData("order-updated");
+        assertTrue(orderExample.hasKey("id"));
+        assertTrue(orderExample.hasKey("orderNumber"));
+        assertTrue(orderExample.hasKey("customerEmail"));
+        assertTrue(orderExample.hasKey("fulfillmentStatus"));
+        assertTrue(orderExample.hasKey("grandTotal"));
+
+        AbstractDataProvider productUpdated = events.getChildProvider("product-updated");
+        auto productExample = productUpdated.getExampleEventData("product-updated");
+        assertTrue(productExample.hasKey("id"));
+        assertTrue(productExample.hasKey("name"));
+        assertTrue(productExample.hasKey("type"));
+        assertTrue(productExample.hasKey("variants"));
+
+        AbstractDataProvider transactionUpdated = events.getChildProvider("transaction-updated");
+        auto transactionExample = transactionUpdated.getExampleEventData("transaction-updated");
+        assertTrue(transactionExample.hasKey("id"));
+        assertTrue(transactionExample.hasKey("customerEmail"));
+        assertTrue(transactionExample.hasKey("total"));
+        assertTrue(transactionExample.hasKey("payments"));
+    }
+
+    #! Data type tests - verify record type definitions
+    dataTypeTests() {
+        checkJson();
+        # Test order data type
+        SquarespaceDataProvider::SquarespaceOrderDataType orderType();
+        hash<string, AbstractDataField> orderFields = orderType.getFields();
+        assertTrue(orderFields.hasKey("id"));
+        assertTrue(orderFields.hasKey("orderNumber"));
+        assertTrue(orderFields.hasKey("createdOn"));
+        assertTrue(orderFields.hasKey("fulfillmentStatus"));
+        assertTrue(orderFields.hasKey("grandTotal"));
+        assertTrue(orderFields.hasKey("lineItems"));
+
+        # Test product data type
+        SquarespaceDataProvider::SquarespaceProductDataType productType();
+        hash<string, AbstractDataField> productFields = productType.getFields();
+        assertTrue(productFields.hasKey("id"));
+        assertTrue(productFields.hasKey("name"));
+        assertTrue(productFields.hasKey("type"));
+        assertTrue(productFields.hasKey("storePageId"));
+        assertTrue(productFields.hasKey("isVisible"));
+        assertTrue(productFields.hasKey("variants"));
+
+        # Test product variant data type
+        SquarespaceDataProvider::SquarespaceProductVariantDataType variantType();
+        hash<string, AbstractDataField> variantFields = variantType.getFields();
+        assertTrue(variantFields.hasKey("id"));
+        assertTrue(variantFields.hasKey("sku"));
+        assertTrue(variantFields.hasKey("pricing"));
+
+        # Test typed variant sub-types (used in create product)
+        SquarespaceDataProvider::SquarespacePhysicalVariantDataType physVariant();
+        hash<string, AbstractDataField> physFields = physVariant.getFields();
+        assertTrue(physFields.hasKey("sku"));
+        assertTrue(physFields.hasKey("pricing"));
+        assertTrue(physFields.hasKey("stock"));
+        assertTrue(physFields.hasKey("attributes"));
+        assertTrue(physFields.hasKey("shippingMeasurements"));
+
+        # Verify pricing sub-type has expected fields
+        SquarespaceDataProvider::SquarespaceFullPricingDataType fullPricing();
+        hash<string, AbstractDataField> pricingFields = fullPricing.getFields();
+        assertTrue(pricingFields.hasKey("basePrice"));
+        assertTrue(pricingFields.hasKey("onSale"));
+        assertTrue(pricingFields.hasKey("salePrice"));
+
+        # Verify money sub-type has expected fields
+        SquarespaceDataProvider::SquarespaceMoneyDataType money();
+        hash<string, AbstractDataField> moneyFields = money.getFields();
+        assertTrue(moneyFields.hasKey("currency"));
+        assertTrue(moneyFields.hasKey("value"));
+
+        # Verify stock sub-type has expected fields
+        SquarespaceDataProvider::SquarespaceStockDataType stock();
+        hash<string, AbstractDataField> stockFields = stock.getFields();
+        assertTrue(stockFields.hasKey("quantity"));
+        assertTrue(stockFields.hasKey("unlimited"));
+
+        # Verify shipping measurements sub-type has expected fields
+        SquarespaceDataProvider::SquarespaceShippingMeasurementsDataType shipping();
+        hash<string, AbstractDataField> shippingFields = shipping.getFields();
+        assertTrue(shippingFields.hasKey("weight"));
+        assertTrue(shippingFields.hasKey("dimensions"));
+
+        # Test SERVICE variant type
+        SquarespaceDataProvider::SquarespaceServiceVariantDataType svcVariant();
+        hash<string, AbstractDataField> svcFields = svcVariant.getFields();
+        assertTrue(svcFields.hasKey("sku"));
+        assertTrue(svcFields.hasKey("pricing"));
+        assertTrue(svcFields.hasKey("stock"));
+        assertTrue(svcFields.hasKey("attributes"));
+
+        # Test GIFT_CARD variant type (minimal)
+        SquarespaceDataProvider::SquarespaceGiftCardVariantDataType gcVariant();
+        hash<string, AbstractDataField> gcFields = gcVariant.getFields();
+        assertTrue(gcFields.hasKey("sku"));
+        assertTrue(gcFields.hasKey("pricing"));
+        assertFalse(gcFields.hasKey("stock"));
+        assertFalse(gcFields.hasKey("attributes"));
+
+        # Test dynamic request type for create product
+        SquarespaceDataProvider::SquarespaceCreateProductRequestDataType createReqType();
+        hash<string, AbstractDataField> createFields = createReqType.getFields();
+        assertTrue(createFields.hasKey("type"));
+        assertTrue(createFields.hasKey("storePageId"));
+        assertTrue(createFields.hasKey("variants"));
+        assertTrue(createFields.hasKey("variantAttributes"));
+
+        # Test inventory item data type
+        SquarespaceDataProvider::SquarespaceInventoryItemDataType invType();
+        hash<string, AbstractDataField> invFields = invType.getFields();
+        assertTrue(invFields.hasKey("variantId"));
+        assertTrue(invFields.hasKey("sku"));
+        assertTrue(invFields.hasKey("isUnlimited"));
+        assertTrue(invFields.hasKey("quantity"));
+
+        # Test transaction data type
+        SquarespaceDataProvider::SquarespaceTransactionDataType transType();
+        hash<string, AbstractDataField> transFields = transType.getFields();
+        assertTrue(transFields.hasKey("id"));
+        assertTrue(transFields.hasKey("createdOn"));
+        assertTrue(transFields.hasKey("salesOrderId"));
+        assertTrue(transFields.hasKey("totalSales"));
+    }
+
+    #! Connection tests - verify connection scheme
+    connectionTests() {
+        checkJson();
+        # Verify the scheme is registered
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("squarespaceres");
+        assertTrue(scheme.schemes.squarespaceres);
+        assertTrue(scheme.auto_url);
+
+        # Verify scheme has required options
+        assertTrue(scheme.options.hasKey("oauth2_auth_url"));
+        assertTrue(scheme.options.hasKey("oauth2_token_url"));
+        assertTrue(scheme.options.hasKey("oauth2_client_id"));
+        assertTrue(scheme.options.hasKey("oauth2_client_secret"));
+    }
+
+    #! Integration tests - require valid Squarespace credentials
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Squarespace credentials provided; skipping integration tests");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Running integration tests with live Squarespace API\n");
+        }
+
+        # Create the data provider using the established client
+        SquarespaceDataProvider::SquarespaceDataProvider prov(client);
+
+        # Test 1: Execute API call (validates connection works)
+        testExecuteApiCall(prov);
+
+        # Test 2: List products with field verification
+        testListProducts(prov);
+
+        # Test 3: Create product
+        testCreateProduct(prov);
+
+        # Test 4: Get product by ID (DPAT_FIND_SINGLE)
+        testGetProduct(prov);
+
+        # Test 5: Update product and verify persistence
+        testUpdateProduct(prov);
+
+        # Test 6: List product variants
+        testListProductVariants(prov);
+
+        # Test 7: List orders with field verification
+        testListOrders(prov);
+
+        # Test 8: List inventory with field verification
+        testListInventory(prov);
+
+        # Test 9: List transactions
+        testListTransactions(prov);
+
+        # Test 10: Store pages ref_data
+        testStorePageRefData(prov);
+
+        # Cleanup: delete test product
+        cleanup(prov);
+    }
+
+    #! Integration test: Execute API call (validates connection)
+    private testExecuteApiCall(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing execute-api-call (GET site info)...\n");
+        }
+
+        AbstractDataProvider exec = prov.getChildProvider("execute-api-call");
+        auto result = exec.doRequest({
+            "method": "GET",
+            "path": "1.0/authorization/website",
+        });
+
+        assertTrue(result.val(), "API call should return a result");
+        if (m_options.verbose) {
+            printf("  Site title: %s\n", result.website.siteTitle ?? "N/A");
+        }
+    }
+
+    #! Integration test: List products with field verification
+    private testListProducts(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing list products...\n");
+        }
+
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator i = products.searchRecords(NOTHING, {"limit": 5});
+
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertTrue(rec.id.val(), "Product should have non-empty id");
+            assertTrue(rec.hasKey("type"), "Product should have type field");
+            assertTrue(rec.hasKey("storePageId"), "Product should have storePageId field");
+            if (m_options.verbose) {
+                printf("  Product: %s (ID: %s, type: %s)\n", rec.name ?? "N/A", rec.id,
+                    rec.type ?? "N/A");
+            }
+            count++;
+        }
+        assertTrue(count > 0, "Should find at least one product");
+        if (m_options.verbose) {
+            printf("  Found %d products\n", count);
+        }
+    }
+
+    #! Integration test: Create product and verify persistence
+    private testCreateProduct(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing create product...\n");
+        }
+
+        # Get a store page ID for the product
+        AbstractDataProvider exec = prov.getChildProvider("execute-api-call");
+        auto storePages = exec.doRequest({
+            "method": "GET",
+            "path": "1.0/commerce/store_pages",
+        });
+        if (!storePages.storePages || !storePages.storePages.size()) {
+            testSkip("No store pages available for product creation");
+            return;
+        }
+        string storePageId = storePages.storePages[0].id;
+
+        # Create a product
+        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string productName = "Test Product " + unique;
+
+        AbstractDataProvider createAction = prov.getChildProvider("products")
+            .getChildProvider("create");
+
+        hash<auto> result = createAction.doRequest({
+            "type": "PHYSICAL",
+            "storePageId": storePageId,
+            "name": productName,
+            "description": "Integration test product - safe to delete",
+            "isVisible": False,
+            "variants": ({
+                "sku": "TEST-SKU-" + unique,
+                "pricing": {
+                    "basePrice": {
+                        "currency": "USD",
+                        "value": "9.99",
+                    },
+                },
+            },),
+        });
+
+        assertTrue(result.hasKey("id"), "Created product should have id");
+        assertTrue(result.id.val(), "Product ID should be non-empty");
+        testProductId = result.id;
+
+        if (m_options.verbose) {
+            printf("  Created product: %s (ID: %s)\n", productName, testProductId);
+        }
+
+        # Verify data persistence: re-fetch and compare
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator iter = products.searchRecords(NOTHING, {
+            "product_id": testProductId,
+        });
+        assertTrue(iter.next(), "Should find created product by ID");
+        hash<auto> fetched = iter.getValue();
+        assertEq(testProductId, fetched.id, "Fetched product ID should match");
+        assertEq(productName, fetched.name, "Product name should match");
+        assertEq("PHYSICAL", fetched.type, "Product type should match");
+        assertEq(storePageId, fetched.storePageId, "Product storePageId should match");
+
+        # Save the first variant ID for later tests
+        if (fetched.variants && fetched.variants.size()) {
+            testVariantId = fetched.variants[0].id;
+            if (m_options.verbose) {
+                printf("  Product variant ID: %s\n", testVariantId);
+            }
+        }
+    }
+
+    #! Integration test: Get product by ID (DPAT_FIND_SINGLE)
+    private testGetProduct(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (!testProductId) {
+            testSkip("No test product created");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Testing get product by ID...\n");
+        }
+
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator iter = products.searchRecords(NOTHING, {
+            "product_id": testProductId,
+        });
+        assertTrue(iter.next(), "Should find product by ID");
+        hash<auto> rec = iter.getValue();
+        assertEq(testProductId, rec.id, "Product ID should match");
+        assertTrue(rec.hasKey("name"), "Product should have name");
+        assertTrue(rec.hasKey("type"), "Product should have type");
+        assertTrue(rec.hasKey("variants"), "Product should have variants");
+
+        if (m_options.verbose) {
+            printf("  Got product: %s (type: %s, variants: %d)\n", rec.name, rec.type,
+                rec.variants.size());
+        }
+    }
+
+    #! Integration test: Update product and verify persistence
+    private testUpdateProduct(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (!testProductId) {
+            testSkip("No test product created");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Testing update product...\n");
+        }
+
+        string newDesc = "Updated by integration test at " + now().toString();
+
+        AbstractDataProvider updateAction = prov.getChildProvider("products")
+            .getChildProvider("update");
+
+        hash<auto> result = updateAction.doRequest({
+            "product_id": testProductId,
+            "description": newDesc,
+        });
+
+        assertTrue(result.hasKey("id"), "Updated product should have id");
+        assertEq(testProductId, result.id, "Updated product ID should match");
+
+        # Verify the update persisted
+        AbstractDataProvider products = prov.getChildProvider("products");
+        AbstractDataProviderRecordIterator iter = products.searchRecords(NOTHING, {
+            "product_id": testProductId,
+        });
+        assertTrue(iter.next(), "Should find updated product");
+        hash<auto> fetched = iter.getValue();
+        assertEq(newDesc, fetched.description, "Product description should be updated");
+
+        if (m_options.verbose) {
+            printf("  Updated product description verified\n");
+        }
+    }
+
+    #! Integration test: List product variants
+    private testListProductVariants(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (!testProductId) {
+            testSkip("No test product created");
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Testing list product variants...\n");
+        }
+
+        AbstractDataProvider variants = prov.getChildProvider("product-variants");
+        AbstractDataProviderRecordIterator iter = variants.searchRecords(NOTHING, {
+            "product_id": testProductId,
+        });
+
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> rec = iter.getValue();
+            assertTrue(rec.hasKey("id"), "Variant should have id");
+            assertTrue(rec.hasKey("sku"), "Variant should have sku");
+            assertTrue(rec.hasKey("pricing"), "Variant should have pricing");
+            if (m_options.verbose) {
+                printf("  Variant: %s (SKU: %s)\n", rec.id, rec.sku ?? "N/A");
+            }
+            count++;
+        }
+        assertTrue(count > 0, "Product should have at least one variant");
+
+        if (m_options.verbose) {
+            printf("  Found %d variants\n", count);
+        }
+    }
+
+    #! Integration test: List orders with field verification
+    private testListOrders(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing list orders...\n");
+        }
+
+        AbstractDataProvider orders = prov.getChildProvider("orders");
+        AbstractDataProviderRecordIterator i = orders.searchRecords(NOTHING, {"limit": 5});
+
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertTrue(rec.id.val(), "Order should have non-empty id");
+            assertTrue(rec.hasKey("orderNumber"), "Order should have orderNumber");
+            assertTrue(rec.hasKey("fulfillmentStatus"), "Order should have fulfillmentStatus");
+            if (m_options.verbose) {
+                printf("  Order: %s (ID: %s, status: %s)\n", rec.orderNumber ?? "N/A",
+                    rec.id, rec.fulfillmentStatus ?? "N/A");
+            }
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("  Found %d orders\n", count);
+        }
+        assertTrue(True, "List orders completed without error");
+    }
+
+    #! Integration test: List inventory with field verification
+    private testListInventory(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing list inventory...\n");
+        }
+
+        AbstractDataProvider inventory = prov.getChildProvider("inventory");
+        AbstractDataProviderRecordIterator i = inventory.searchRecords(NOTHING, {"limit": 5});
+
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertTrue(rec.hasKey("variantId"), "Inventory item should have variantId field");
+            assertTrue(rec.hasKey("sku"), "Inventory item should have sku field");
+            assertTrue(rec.hasKey("quantity"), "Inventory item should have quantity field");
+            assertTrue(rec.hasKey("isUnlimited"), "Inventory item should have isUnlimited field");
+            if (m_options.verbose) {
+                printf("  Inventory: %s (SKU: %s, qty: %s, unlimited: %s)\n",
+                    rec.descriptor ?? "N/A", rec.sku ?? "N/A",
+                    string(rec.quantity ?? "N/A"), string(rec.isUnlimited ?? "N/A"));
+            }
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("  Found %d inventory items\n", count);
+        }
+        assertTrue(True, "List inventory completed without error");
+    }
+
+    #! Integration test: List transactions
+    private testListTransactions(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing list transactions...\n");
+        }
+
+        AbstractDataProvider transactions = prov.getChildProvider("transactions");
+        AbstractDataProviderRecordIterator i = transactions.searchRecords(NOTHING, {"limit": 5});
+
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertTrue(rec.id.val(), "Transaction should have non-empty id");
+            assertTrue(rec.hasKey("createdOn"), "Transaction should have createdOn");
+            if (m_options.verbose) {
+                printf("  Transaction: %s (ID: %s)\n", rec.customerEmail ?? "N/A", rec.id);
+            }
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("  Found %d transactions\n", count);
+        }
+        assertTrue(True, "List transactions completed without error");
+    }
+
+    #! Integration test: Store pages ref_data
+    private testStorePageRefData(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (m_options.verbose) {
+            printf("Testing store pages ref_data...\n");
+        }
+
+        AbstractDataProvider products = prov.getChildProvider("products");
+        *hash<string, bool> refTypes = products.getSupportedReferenceData();
+
+        assertTrue(refTypes.hasKey("store_pages"), "Products should support store_pages ref_data");
+        assertTrue(refTypes.hasKey("products"), "Products should support products ref_data");
+
+        *list<hash<AllowedValueInfo>> storePages = products.getReferenceData("store_pages");
+        assertTrue(storePages.val(), "Store pages ref_data should return results");
+        assertTrue(storePages.size() > 0, "Should have at least one store page");
+
+        hash<AllowedValueInfo> firstPage = storePages[0];
+        assertTrue(firstPage.value.val(), "Store page should have a value (ID)");
+        assertTrue(firstPage.display_name.val(), "Store page should have a display name");
+
+        if (m_options.verbose) {
+            foreach hash<AllowedValueInfo> page in (storePages) {
+                printf("  Store page: %s (ID: %s)\n", page.display_name, page.value);
+            }
+        }
+    }
+
+    #! Cleanup: delete test product
+    private cleanup(SquarespaceDataProvider::SquarespaceDataProvider prov) {
+        if (!testProductId) {
+            return;
+        }
+
+        if (m_options.verbose) {
+            printf("Cleaning up: deleting test product %s...\n", testProductId);
+        }
+
+        try {
+            AbstractDataProvider deleteAction = prov.getChildProvider("products")
+                .getChildProvider("delete");
+            deleteAction.doRequest({
+                "product_id": testProductId,
+            });
+            if (m_options.verbose) {
+                printf("  Deleted test product successfully\n");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("  Warning: cleanup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}

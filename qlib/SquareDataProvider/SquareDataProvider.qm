@@ -1344,13 +1344,13 @@ module SquareDataProvider {
 
         # ========== TRIGGERS ==========
 
-        # Watch Customers
+        # New Customer
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
             "path": "/events/" + EVENT_CUSTOMER_CREATED,
             "action": EVENT_CUSTOMER_CREATED,
             "groups": "Triggers",
-            "display_name": "Watch Customers",
+            "display_name": "New Customer",
             "short_desc": "Trigger when a new customer is created",
             "desc": "Fires when a new customer is created in Square. "
                 "Uses polling to detect new records.",
@@ -1367,13 +1367,13 @@ module SquareDataProvider {
             },
         });
 
-        # Watch Orders
+        # Order Created/Updated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
             "path": "/events/" + EVENT_ORDER_CREATED_OR_UPDATED,
             "action": EVENT_ORDER_CREATED_OR_UPDATED,
             "groups": "Triggers",
-            "display_name": "Watch Orders",
+            "display_name": "Order Created/Updated",
             "short_desc": "Trigger when an order is created or updated",
             "desc": "Fires when an order is created or updated in Square. "
                 "Uses polling to detect changes.",
@@ -1390,13 +1390,13 @@ module SquareDataProvider {
             },
         });
 
-        # Watch Payments
+        # Payment Created/Updated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
             "path": "/events/" + EVENT_PAYMENT_CREATED_OR_UPDATED,
             "action": EVENT_PAYMENT_CREATED_OR_UPDATED,
             "groups": "Triggers",
-            "display_name": "Watch Payments",
+            "display_name": "Payment Created/Updated",
             "short_desc": "Trigger when a payment is created or updated",
             "desc": "Fires when a payment is created or updated in Square. "
                 "Uses polling to detect changes.",
@@ -1482,13 +1482,13 @@ module SquareDataProvider {
             },
         });
 
-        # Watch New Events
+        # New Events
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SquareDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_EVENTS,
             "action": EVENT_NEW_EVENTS,
             "groups": "Triggers",
-            "display_name": "Watch New Events",
+            "display_name": "New Events",
             "short_desc": "Trigger when new events occur",
             "desc": "Fires when new events are detected via the Square Events API. "
                 "Supports filtering by event type. Uses polling with 28-day event retention.",
