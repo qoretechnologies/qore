@@ -59,8 +59,8 @@ public class MailgunMakeApiCallRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "API Path",
                 "short_desc": "The API endpoint path",
-                "desc": "The API path to call including the version prefix (e.g., /v3/domains, "
-                    "/v3/lists/mylist@example.com/members, /v4/address/validate)",
+                "desc": "The API path to call including the version prefix (e.g., `/v3/domains`, "
+                    "`/v3/lists/mylist@example.com/members`, `/v4/address/validate`)",
                 "example_value": "/v3/domains",
                 "required": True,
             },
@@ -68,8 +68,8 @@ public class MailgunMakeApiCallRequestDataType inherits HashDataType {
                 "type": AutoHashOrNothingType,
                 "display_name": "Request Body",
                 "short_desc": "The request body",
-                "desc": "The request body for POST/PUT requests. POST requests are form-encoded; "
-                    "PUT requests are sent as JSON.",
+                "desc": "The request body for `POST`/`PUT` requests. `POST` requests are form-encoded; "
+                    "`PUT` requests are sent as JSON.",
             },
             "query_params": {
                 "type": AutoHashOrNothingType,

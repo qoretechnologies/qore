@@ -55,14 +55,14 @@ public namespace EdifactUtil {
                     "display_name": "Skip Cache Read",
                     "short_desc": "Do not read from on-disk cache",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, skip reading the on-disk cache.",
+                    "desc": "If `True`, skip reading the on-disk cache.",
                     "default_value": False,
                 },
                 "cache_only": <DataProviderOptionInfo>{
                     "display_name": "Cache Only",
                     "short_desc": "Load only from cache",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, load only from cache and throw on cache miss.",
+                    "desc": "If `True`, load only from cache and throw on cache miss.",
                     "default_value": False,
                 },
                 "cache_error": <DataProviderOptionInfo>{
@@ -76,21 +76,21 @@ public namespace EdifactUtil {
                     "display_name": "Summary Only",
                     "short_desc": "Return summary only",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, return only counts and segment index without full schema data.",
+                    "desc": "If `True`, return only counts and segment index without full schema data.",
                     "default_value": True,
                 },
                 "reload": <DataProviderOptionInfo>{
                     "display_name": "Reload",
                     "short_desc": "Ignore in-memory registry and reload",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, ignore the in-memory registry and reload.",
+                    "desc": "If `True`, ignore the in-memory registry and reload.",
                     "default_value": False,
                 },
                 "strict": <DataProviderOptionInfo>{
                     "display_name": "Strict EDMD Validation",
                     "short_desc": "Enable strict EDMD validation",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, validate EDMD files more strictly (segment table header, indentation, "
+                    "desc": "If `True`, validate EDMD files more strictly (segment table header, indentation, "
                         "and structural integrity).",
                     "default_value": False,
                 },

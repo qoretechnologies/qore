@@ -58,39 +58,39 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
                 "display_name": "REST Client Options",
                 "short_desc": "Options to the ServiceNowRestClient constructor",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options to the ServiceNowRestClient constructor; only used if a ServiceNowRestClient object "
-                    "is created for a call",
+                "desc": "Options to the `ServiceNowRestClient` constructor; only used if a "
+                    "`ServiceNowRestClient` object is created for a call",
             },
             "client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",
                 "short_desc": "Sets the OAuth2 client ID",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "the client ID (required if 'client_secret' provided)",
+                "desc": "The client ID (required if `client_secret` is provided)",
             },
             "client_secret": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client Secret",
                 "short_desc": "Sets the OAuth2 client secret",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "the client secret (required if 'client_id' provided)",
+                "desc": "The client secret (required if `client_id` is provided)",
             },
             "password": <DataProviderOptionInfo>{
                 "display_name": "Password",
                 "short_desc": "The password for authentication",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "the password (required if 'username' provided)",
+                "desc": "The password (required if `username` is provided)",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "ServiceNow URL",
                 "short_desc": "The URL to the ServiceNow instance",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The URL to the ServiceNow instance; overrides any URL in any REST cient object passed as an "
-                    "option",
+                "desc": "The URL to the ServiceNow instance; overrides any URL in any REST client object "
+                    "passed as an option",
             },
             "username": <DataProviderOptionInfo>{
                 "display_name": "Username",
                 "short_desc": "Sets the username for authentication",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "the username (required if 'password' provided)",
+                "desc": "The username (required if `password` is provided)",
             },
         };
 

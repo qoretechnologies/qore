@@ -153,21 +153,21 @@ public class RedisStringSetRequestDataType inherits DataProvider::HashDataType {
             "key": {
                 "display_name": "Key",
                 "short_desc": "The key to set",
-                "desc": "The key to set (for single SET operation)",
+                "desc": "The key to set (for single `SET` operation)",
                 "type": StringOrNothingType,
                 "example_value": "mykey",
             },
             "value": {
                 "display_name": "Value",
                 "short_desc": "The value to set",
-                "desc": "The value to set (for single SET operation)",
+                "desc": "The value to set (for single `SET` operation)",
                 "type": AutoType,
                 "example_value": "myvalue",
             },
             "pairs": {
                 "display_name": "Key-Value Pairs",
                 "short_desc": "Multiple key-value pairs for MSET",
-                "desc": "A list of {key, value} hashes for MSET operation",
+                "desc": "A list of {key, value} hashes for `MSET` operation",
                 "type": SoftListOrNothingType,
             },
             "ex": {
@@ -237,14 +237,14 @@ public class RedisStringSetResponseDataType inherits DataProvider::HashDataType 
             "success": {
                 "display_name": "Success?",
                 "short_desc": "Operation success status",
-                "desc": "True if the operation was successful",
+                "desc": "`True` if the operation was successful",
                 "type": SoftBoolType,
                 "example_value": True,
             },
             "previous_value": {
                 "display_name": "Previous Value",
                 "short_desc": "Old value before update",
-                "desc": "The previous value if GET option was used, or NOTHING if the key did not exist",
+                "desc": "The previous value if `GET` option was used, or `NOTHING` if the key did not exist",
                 "type": AutoType,
             },
         };
