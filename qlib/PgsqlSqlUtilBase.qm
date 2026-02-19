@@ -2410,8 +2410,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 (foldl $1 + "," + $2, getColumnSqlNames(cols.keys())));
         }
 
-        # use a prepared statement for efficiency
+        # use a prepared statement for efficiency when the datasource supports it;
+        # AbstractDatasource subclasses that are not Datasource or DatasourcePool (e.g. remote
+        # proxy classes) cannot be used with SQLStatement, so fall back to exec() for those
         *SQLStatement stmt;
+        bool use_direct_exec = !(ds instanceof Datasource || ds instanceof DatasourcePool);
 
         # ON CONFLICT DO UPDATE cannot handle duplicate PK values in the same batch;
         # capture PK column names for deduplication in the closure
@@ -2419,16 +2422,21 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         list<string> pk_cols = cols.keys();
 
         return int sub (hash<auto> h) {
-            if (!stmt) {
-                stmt = new SQLStatement(ds);
-                stmt.prepare(sql);
-            }
             # deduplicate rows by PK columns if using DO UPDATE
             if (needs_dedup) {
                 h = deduplicateByPk(h, pk_cols);
             }
             # unwrap bind hashes and wrap lists as pgsql_bind_array for proper array binding
-            stmt.execArgs(transformBulkBindArgs(h));
+            list<auto> args = transformBulkBindArgs(h);
+            if (use_direct_exec) {
+                ds.vexec(sql, args);
+            } else {
+                if (!stmt) {
+                    stmt = new SQLStatement(ds);
+                    stmt.prepare(sql);
+                }
+                stmt.execArgs(args);
+            }
             return UR_Verified;
         };
     }
