@@ -73,7 +73,7 @@ module DataProvider {
         # register filter-records action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/filter",
+            "path": "/",
             "action": "filter-records",
             "display_name": "Filter Records",
             "short_desc": "Filter records by where_cond expression",
@@ -99,7 +99,7 @@ module DataProvider {
         # register select-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/select-fields",
+            "path": "/",
             "action": "select-fields",
             "display_name": "Select Fields",
             "short_desc": "Select and optionally rename fields from records",
@@ -122,7 +122,7 @@ module DataProvider {
         # register set-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/set-fields",
+            "path": "/",
             "action": "set-fields",
             "display_name": "Set Fields",
             "short_desc": "Set fields to constant values in each record",
@@ -144,7 +144,7 @@ module DataProvider {
         # register remove-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/remove-fields",
+            "path": "/",
             "action": "remove-fields",
             "display_name": "Remove Fields",
             "short_desc": "Remove specified fields from records",
@@ -166,7 +166,7 @@ module DataProvider {
         # register search-replace action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/search-replace",
+            "path": "/",
             "action": "search-replace",
             "display_name": "Search and Replace",
             "short_desc": "Search and replace text in a record field",
@@ -192,7 +192,7 @@ module DataProvider {
         # register record-limit action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/record-limit",
+            "path": "/",
             "action": "record-limit",
             "display_name": "Record Limit",
             "short_desc": "Limit the number of records passing through",
@@ -214,7 +214,7 @@ module DataProvider {
         # register running-stats action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/running-stats",
+            "path": "/",
             "action": "running-stats",
             "display_name": "Running Statistics",
             "short_desc": "Compute running statistics over windows of numeric records",
@@ -241,7 +241,7 @@ module DataProvider {
         # register moving-average action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/moving-average",
+            "path": "/",
             "action": "moving-average",
             "display_name": "Moving Average",
             "short_desc": "Compute simple and exponential moving averages per record",
@@ -268,7 +268,7 @@ module DataProvider {
         # register trend-analysis action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/trend-analysis",
+            "path": "/",
             "action": "trend-analysis",
             "display_name": "Trend Analysis",
             "short_desc": "Detect trends using linear regression over windows of records",
@@ -297,7 +297,7 @@ module DataProvider {
         # register anomaly-detection action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/anomaly-detection",
+            "path": "/",
             "action": "anomaly-detection",
             "display_name": "Anomaly Detection",
             "short_desc": "Detect anomalous values using z-score analysis per record",
@@ -324,7 +324,7 @@ module DataProvider {
         # register percentile action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/percentile",
+            "path": "/",
             "action": "percentile",
             "display_name": "Calculate Data Distribution",
             "short_desc": "Computes median, quartiles, and spread of values",
@@ -355,7 +355,7 @@ module DataProvider {
         # register correlation action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/correlation",
+            "path": "/",
             "action": "correlation",
             "display_name": "Find Related Fields",
             "short_desc": "Measures how strongly fields move together",
@@ -381,7 +381,7 @@ module DataProvider {
         # register cross-correlation action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/cross-correlation",
+            "path": "/",
             "action": "cross-correlation",
             "display_name": "Find Delayed Relationships",
             "short_desc": "Discovers if changes in one field predict changes in another",
@@ -411,7 +411,7 @@ module DataProvider {
         # register histogram action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/histogram",
+            "path": "/",
             "action": "histogram",
             "display_name": "Count Value Ranges",
             "short_desc": "Groups values into ranges and counts how many fall in each",
@@ -440,7 +440,7 @@ module DataProvider {
         # register rate-of-change action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/rate-of-change",
+            "path": "/",
             "action": "rate-of-change",
             "display_name": "Measure Speed of Change",
             "short_desc": "Tracks how fast values are changing and accelerating",
@@ -469,7 +469,7 @@ module DataProvider {
         # register ewma-control-chart action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/ewma-control-chart",
+            "path": "/",
             "action": "ewma-control-chart",
             "display_name": "Monitor Process Stability",
             "short_desc": "Detects when values drift outside normal operating range",
@@ -501,7 +501,7 @@ module DataProvider {
         # register seasonality-detection action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/seasonality-detection",
+            "path": "/",
             "action": "seasonality-detection",
             "display_name": "Detect Repeating Patterns",
             "short_desc": "Finds cyclical patterns in data automatically",
@@ -533,7 +533,7 @@ module DataProvider {
         # register group-by action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/group-by",
+            "path": "/",
             "action": "group-by",
             "display_name": "Group By and Aggregate",
             "short_desc": "Group records by field values and compute aggregates per group",
