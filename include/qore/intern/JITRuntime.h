@@ -280,8 +280,14 @@ class StatementBlock;
 //! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
 void qore_rt_push_on_block_exit(int type, StatementBlock* code);
 
-//! Register an on_block_exit handler with compiled IR for native execution.
+//! Register an on_block_exit handler with compiled IR for IR interpreter execution.
 void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code, const QoreIRFunction* handler_ir);
+
+//! Register an on_block_exit handler with a natively compiled LLVM function.
+//! compiled_fn is the native function pointer; handler_func provides all_body_locals
+//! for pre-instantiation/uninstantiation of handler locals.
+void qore_rt_push_compiled_handler(int type, StatementBlock* code,
+        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func);
 
 //! Get current handler count (called at function entry to save base).
 int64_t qore_rt_get_on_block_exit_count();

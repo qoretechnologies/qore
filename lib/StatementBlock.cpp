@@ -862,8 +862,12 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
                         return;
                     }
-                    // Classify locals as IR-only vs AST-visible for optimization
-                    func->computeIROnlyLocals();
+                    // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
+                    // Top-level locals are accessible by any called function/sub through the
+                    // thread-local variable stack, but the IR-only analysis doesn't track
+                    // cross-function access.  Marking a top-level local as IR-only would cause
+                    // StoreLocal to only update the IR cache without syncing to the thread-local
+                    // stack, making the variable invisible to called functions.
                     cached_toplevel_ir = func;
                 });
                 ir_func = cached_toplevel_ir;

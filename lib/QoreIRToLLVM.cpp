@@ -625,13 +625,21 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
             if (inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                 if (linst->local && seen.insert(linst->local).second) {
+                    auto key = reinterpret_cast<const void*>(linst->local);
+                    // Skip outer-scope variables: when pre_instantiated_locals is set,
+                    // variables NOT in it are from an outer scope (e.g. top-level locals
+                    // accessed from a sub).  These are already on the thread-local stack
+                    // and must not be instantiated/uninstantiated or cached in allocas —
+                    // they'll be accessed via qore_rt_load_local() on each use.
+                    if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                        continue;
+                    }
                     function_locals.push_back(linst->local);
                     // Track if this local is first accessed in the entry block
                     // but exclude block-scoped locals (they have their own lifecycle)
-                    if (is_first_block && !block_scoped_locals.count(
-                            reinterpret_cast<const void*>(linst->local))) {
+                    if (is_first_block && !block_scoped_locals.count(key)) {
                         entry_locals.push_back(linst->local);
-                        entry_locals_set.insert(reinterpret_cast<const void*>(linst->local));
+                        entry_locals_set.insert(key);
                     }
                 }
             }
@@ -1310,9 +1318,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         xsink_arg->setName("xsink");
     }
 
-    // Propagate pre-instantiated locals set
-    pre_instantiated_locals = func.pre_instantiated_locals.empty()
-        ? nullptr : &func.pre_instantiated_locals;
+    // Propagate pre-instantiated locals set — always point to the set, even
+    // when empty.  An empty set means ALL LoadLocal targets are outer-scope
+    // variables (e.g. on_block_exit handler bodies that only reference enclosing
+    // function params).  A nullptr disables outer-scope checks entirely.
+    pre_instantiated_locals = &func.pre_instantiated_locals;
 
     // Propagate IR-only locals set for optimization (skip runtime sync for these)
     ir_only_locals_set = func.ir_only_locals.empty()
@@ -2244,6 +2254,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
+            // Outer-scope variables (not in pre_instantiated_locals) must always be
+            // read from the runtime stack, like closure-bound locals.  They're already
+            // on the thread-local variable stack from the calling scope and must not be
+            // cached in allocas (which would be initialized to NOTHING and become stale
+            // after any call that modifies the outer variable).
+            if (linst->local && pre_instantiated_locals
+                    && !pre_instantiated_locals->count(key)) {
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                return true;
+            }
+
             auto it = local_allocas.find(key);
             if (it == local_allocas.end()) {
                 // Create alloca in entry block for this local
@@ -2361,6 +2399,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto key = reinterpret_cast<const void*>(linst->local);
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
+
+            // Outer-scope variables: assign directly to the thread-local stack via
+            // qore_rt_assign_local() without creating an alloca or lazy instantiation.
+            if (linst->local && pre_instantiated_locals
+                    && !pre_instantiated_locals->count(key)) {
+                // Box the value for the runtime assign helper
+                llvm::Value* boxed;
+                if (nanboxed_values.count(inst->operands[0].id)) {
+                    boxed = val;
+                } else if (val->getType() == i64_type) {
+                    boxed = boxIntInline(val);
+                } else if (val->getType() == double_type) {
+                    boxed = boxFloat(val);
+                } else if (val->getType() == i1_type) {
+                    boxed = boxBool(val);
+                } else {
+                    boxed = val;
+                }
+                if (aot_mode) {
+                    auto assign_helper = module.getOrInsertFunction("qore_rt_assign_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    builder->CreateCall(assign_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
+                } else {
+                    auto assign_helper = module.getOrInsertFunction("qore_rt_assign_local",
+                            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    builder->CreateCall(assign_helper, {var_as_ptr, boxed, xsink_arg});
+                }
+                if (inst->result.isValid()) {
+                    // The result is a borrowed reference: qore_rt_assign_local()
+                    // transferred ownership to the thread-local variable stack.
+                    // This is safe because:
+                    // (1) the value remains live on the variable stack until the
+                    //     enclosing scope uninstantiates the variable,
+                    // (2) SSA guarantees single-use so no intervening reassignment
+                    //     can invalidate the borrowed ref before it's consumed, and
+                    // (3) nanboxed marking prevents trackResultForCleanup / double-deref
+                    //     at function cleanup time.
+                    values[inst->result.id] = boxed;
+                    nanboxed_values.insert(inst->result.id);
+                }
+                return true;
+            }
 
             // For non-entry-block locals that are not pre-instantiated:
             // emit instantiation on first store (lazy instantiation).
@@ -7376,17 +7461,57 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), type_val});
             } else if (sinst->handler_ir) {
-                // Compiled handler: pass handler_ir pointer for IR interpreter execution
-                llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(code));
-                llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
-                llvm::Value* handler_ir_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
-                llvm::Value* handler_ir_as_ptr = builder->CreateIntToPtr(handler_ir_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_ir",
-                        llvm::FunctionType::get(void_type,
-                            {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-                builder->CreateCall(helper, {type_val, code_as_ptr, handler_ir_as_ptr});
+                // Try to compile handler body as a native LLVM function in the same module
+                QoreIRToLLVM handler_lowering(ctx);
+                // Share debug info so the handler is in the same compile unit
+                if (active_di_builder && di_cu) {
+                    handler_lowering.setSharedDebugInfo(active_di_builder, di_cu);
+                }
+                std::string handler_error;
+                bool handler_compiled = handler_lowering.lowerFunction(
+                        *sinst->handler_ir, module, handler_error);
+                llvm::Function* handler_fn = nullptr;
+                if (handler_compiled) {
+                    handler_fn = module.getFunction(sinst->handler_ir->name);
+                }
+                if (handler_compiled && handler_fn) {
+                    // Push compiled handler via native runtime helper
+                    if (getenv("QORE_LLVM_DEBUG")) {
+                        fprintf(stderr, "QoreIRToLLVM: compiled on_block_exit handler '%s' "
+                                "to native LLVM\n", sinst->handler_ir->name.c_str());
+                    }
+                    llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(code));
+                    llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
+                    llvm::Value* handler_func_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
+                    llvm::Value* handler_func_as_ptr = builder->CreateIntToPtr(
+                            handler_func_ptr, ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_push_compiled_handler",
+                            llvm::FunctionType::get(void_type,
+                                {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type, ptr_type},
+                                false));
+                    builder->CreateCall(helper,
+                            {type_val, code_as_ptr, handler_fn, handler_func_as_ptr});
+                } else {
+                    // LLVM lowering failed — fall back to IR interpreter path
+                    if (getenv("QORE_LLVM_DEBUG")) {
+                        fprintf(stderr, "QoreIRToLLVM: handler '%s' LLVM lowering failed: "
+                                "%s; falling back to IR interpreter\n",
+                                sinst->handler_ir->name.c_str(), handler_error.c_str());
+                    }
+                    llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(code));
+                    llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
+                    llvm::Value* handler_ir_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
+                    llvm::Value* handler_ir_as_ptr = builder->CreateIntToPtr(
+                            handler_ir_ptr, ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_ir",
+                            llvm::FunctionType::get(void_type,
+                                {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+                    builder->CreateCall(helper, {type_val, code_as_ptr, handler_ir_as_ptr});
+                }
             } else {
                 // AST fallback
                 llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,

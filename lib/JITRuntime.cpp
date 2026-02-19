@@ -2472,18 +2472,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
 struct JITOnBlockExitHandler {
     obe_type_e type;
     StatementBlock* code;
-    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
+    const QoreIRFunction* handler_ir = nullptr;  //!< IR handler for IR interpreter execution
+    uint64_t (*compiled_fn)(ExceptionSink*) = nullptr;  //!< native compiled handler function
+    const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals
 };
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr});
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, nullptr, nullptr});
 }
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code,
         const QoreIRFunction* handler_ir) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, handler_ir});
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, handler_ir, nullptr, nullptr});
+}
+
+extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, StatementBlock* code,
+        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func) {
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, compiled_fn, handler_func});
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
@@ -2504,7 +2511,8 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
     for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
         obe_type_e type = jit_obe_handlers[i].type;
         if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-            if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir) {
+            if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir
+                    || jit_obe_handlers[i].compiled_fn) {
                 // Instantiate exception for on_error blocks as an implicit arg
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
@@ -2515,7 +2523,23 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
                         argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                     }
                 }
-                if (jit_obe_handlers[i].handler_ir) {
+                if (jit_obe_handlers[i].compiled_fn) {
+                    // Execute natively compiled handler
+                    const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
+                    if (hf) {
+                        int64 po = runtime_get_parse_options();
+                        for (LocalVar* lv : hf->all_body_locals) {
+                            lv->instantiate(po);
+                        }
+                    }
+                    QoreValue rv(jit_obe_handlers[i].compiled_fn(&obe_xsink));
+                    rv.discard(nullptr);
+                    if (hf) {
+                        for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
+                            hf->all_body_locals[j]->uninstantiate(&obe_xsink);
+                        }
+                    }
+                } else if (jit_obe_handlers[i].handler_ir) {
                     // Execute compiled handler via IR interpreter
                     QoreValue rv;
                     QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink);
