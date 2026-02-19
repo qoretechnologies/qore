@@ -1143,8 +1143,8 @@ public:
 
 class QoreIRLValueInstruction : public QoreIRInstruction {
 public:
-    QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue)
-            : QoreIRInstruction(op), lvalue(n_lvalue) {
+    QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue, bool n_weak = false)
+            : QoreIRInstruction(op), lvalue(n_lvalue), weak(n_weak) {
         lvalue.ref();
     }
 
@@ -1153,6 +1153,7 @@ public:
     }
 
     QoreValue lvalue;
+    bool weak = false;  //!< true for weak (:=) assignment
 };
 
 class QoreIRExprInstruction : public QoreIRInstruction {
@@ -1431,6 +1432,7 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;
     QoreIRBasicBlock* exception_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
+    bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
 };
 
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)

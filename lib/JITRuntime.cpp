@@ -911,6 +911,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_weak(uint64_t lvalue_bits, uint64_t value_bits,
+        ExceptionSink* xsink) {
+    if (*xsink) {
+        QoreValue value = fromBits(value_bits);
+        value.discard(xsink);
+        return toBits(QoreValue());
+    }
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue value = fromBits(value_bits);
+    QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink, true);
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lvalue_unary(int opcode, uint64_t lvalue_bits, ExceptionSink* xsink) {
     QoreValue lvalue = fromBits(lvalue_bits);
     QoreValue result = QoreIRInterpreter::evalLValueUnary(static_cast<QoreIROpcode>(opcode), lvalue, xsink);
@@ -2615,6 +2628,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32
 extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     return qore_rt_lvalue_store(ctx->exprs[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_weak_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_lvalue_store_weak(ctx->exprs[idx], val, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {

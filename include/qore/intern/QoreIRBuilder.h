@@ -161,7 +161,7 @@ public:
     QoreIRInstruction* createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, bool weak = false);
     QoreIRLValueInstruction* createLValueUnaryOp(QoreIROpcode op, const QoreValue& lvalue,
         const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLValueBinaryOp(QoreIROpcode op, const QoreValue& lvalue, QoreIRValue rhs,

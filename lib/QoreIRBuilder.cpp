@@ -584,8 +584,8 @@ QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue
 }
 
 QoreIRLValueInstruction* QoreIRBuilder::createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
-        const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::StoreLValue, lvalue);
+        const QoreProgramLocation* loc, bool weak) {
+    auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::StoreLValue, lvalue, weak);
     inst->loc = loc;
     inst->operands.push_back(value);
     return inst;

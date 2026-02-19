@@ -2403,13 +2403,6 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     func->initGuardProfiles();
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
-    if (getenv("QORE_IR_TRACE")) {
-        const QoreProgramLocation* loc = signature.getParseLocation();
-        fprintf(stderr, "IR-PROMOTE: '%s' promoted to IR tier (exec_count=%lu) [%s:%d]\n",
-            name, (unsigned long)exec_count.load(std::memory_order_relaxed),
-            loc ? loc->getFile() : "?", loc ? loc->start_line : 0);
-        fflush(stderr);
-    }
     printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
         name, func->num_guards);
 }
@@ -2854,6 +2847,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 }
 
                 QoreValue ir_return_value;
+                bool fell_back_to_ast = false;
                 bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
                     nullptr, nullptr, &pre_instantiated, statements, pgm);
                 if (ok && !*xsink) {
@@ -2861,9 +2855,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 } else if (*xsink) {
                     // exception raised — propagate
                 } else {
-                    // IR execution failed without exception — fall through to AST
-                    printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', falling back to AST\n",
-                        name);
+                    // IR execution failed without exception — clean up pre-instantiated
+                    // locals FIRST (destroys any values from partial IR execution),
+                    // then fall back to AST which manages its own locals
+                    for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
+                        cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                    }
+                    fell_back_to_ast = true;
+                    printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
+                        "falling back to AST\n", name);
                     if (pgm) {
                         pgm->recordIRFallback("execution: runtime failure");
                     }
@@ -2873,9 +2873,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Restore thread-local parse options
                 runtime_set_parse_options(saved_po);
 
-                // Uninstantiate body locals in reverse order (LIFO)
-                for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
-                    cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                // Only uninstantiate pre-instantiated locals if we didn't already
+                // do it before the AST fallback
+                if (!fell_back_to_ast) {
+                    for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
+                        cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                    }
                 }
 
                 if (gate) {

@@ -1104,6 +1104,22 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
+        // StoreLValue invoke: use pre-evaluated RHS operand and weak flag
+        // instead of delegating to AST (which would re-evaluate the RHS).
+        // inv->expr is the full assignment expression; extract the lvalue from it.
+        case QoreIROpcode::StoreLValue: {
+            if (!inv->operands.empty() && inv->expr.hasNode()) {
+                auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (assign) {
+                    QoreValue val = getIRValue(values, inv->operands[0]);
+                    return QoreIRInterpreter::evalLValueStore(assign->getLeft(), val, xsink,
+                        inv->weak);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
@@ -1163,6 +1179,8 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
             }
         }
     }
+    // Clear handlers to prevent double-firing from RAII scope_exit_guard
+    handlers.clear();
     return nrc;
 }
 
@@ -1182,6 +1200,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Track which value slots hold VarRefNewObjectNode results for each LocalVar
     // Used to cleanup references when UninstantiateLocal is processed
     std::unordered_map<const LocalVar*, uint32_t> local_init_slots;
+    // Track value slots from LoadLocal instructions for each LocalVar.
+    // When UninstantiateLocal fires, these slots must be cleaned up so the
+    // block-scoped object's refcount drops to zero and its destructor runs
+    // immediately — not deferred to function exit via cleanupValues().
+    std::unordered_map<const LocalVar*, std::unordered_set<uint32_t>> local_load_slots;
     std::unordered_map<const void*, QoreValue> globals;
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_map<const void*, QoreValue> closures;
@@ -1270,6 +1293,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             cleanupInstantiatedLocals(locals, xsink, pre_instantiated);
         }
     } local_cleanup{instantiated_locals, xsink, pre_instantiated};
+
+    // RAII guard: fire remaining on_block_exit handlers on ANY function exit path.
+    // Normal exits fire handlers via ScopeExit instructions (which clear scope_stack
+    // and on_block_exit_handlers). Error exits (exception from Call/ExprOp/etc.)
+    // skip ScopeExit and return false directly, leaving handlers unfired.
+    // This guard catches those cases by calling fireScopeExits(0) before return,
+    // ensuring on_exit/on_error/on_success handlers always fire.
+    // Constructed AFTER local_cleanup so it's destroyed BEFORE it — handlers fire
+    // while runtime locals are still valid on the thread-local variable stack.
+    struct ScopeExitGuard {
+        decltype(fireScopeExits)& fire;
+        ~ScopeExitGuard() { fire(0); }
+    } scope_exit_guard{fireScopeExits};
 
     // Debug hook support
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
@@ -2134,6 +2170,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
                 }
+                // Track this LoadLocal result slot for cleanup in UninstantiateLocal.
+                // Without this, the last loop iteration's LoadLocal holds an extra
+                // reference to block-scoped objects, deferring their destructor to
+                // function exit instead of firing at block scope exit.
+                if (local_inst->local) {
+                    local_load_slots[local_inst->local].insert(local_inst->result.id);
+                }
                 ++ip;
                 break;
             }
@@ -2780,13 +2823,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         locals.erase(locals_it);
                     }
 
-                    if (is_pre) {
-                        // Pre-instantiated local: clear the value on the runtime stack
-                        // to trigger destructors at block scope exit.  The entry stays
-                        // on the stack so the caller's cleanup can pop it later.
-
-                        // Drop the value slot reference next
-                        auto slot_it = local_init_slots.find(local_inst->local);
+                    // Helper lambda: drop all value slots associated with this local
+                    // (init slot from StoreLocal + load slots from LoadLocal) BEFORE
+                    // lvar->del()/uninstantiate() so that lvar->del() is the true
+                    // final deref and triggers the destructor immediately.
+                    auto cleanupLocalSlots = [&](const LocalVar* lv) {
+                        // Clean up the init slot (from StoreLocal / VarRefNewObjectNode)
+                        auto slot_it = local_init_slots.find(lv);
                         if (slot_it != local_init_slots.end()) {
                             uint32_t slot_id = slot_it->second;
                             auto val_it = values.find(slot_id);
@@ -2797,6 +2840,32 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             cleanup.erase(std::remove(cleanup.begin(), cleanup.end(), slot_id), cleanup.end());
                             local_init_slots.erase(slot_it);
                         }
+                        // Clean up all LoadLocal result slots for this local.
+                        // On the last loop iteration, these slots are never overwritten
+                        // by the next iteration's LoadLocal, so they hold an extra
+                        // reference that defers the object's destructor to function exit.
+                        auto load_it = local_load_slots.find(lv);
+                        if (load_it != local_load_slots.end()) {
+                            for (uint32_t slot_id : load_it->second) {
+                                auto val_it = values.find(slot_id);
+                                if (val_it != values.end()) {
+                                    val_it->second.discard(xsink);
+                                    values.erase(val_it);
+                                }
+                                cleanup.erase(std::remove(cleanup.begin(), cleanup.end(), slot_id),
+                                    cleanup.end());
+                            }
+                            local_load_slots.erase(load_it);
+                        }
+                    };
+
+                    if (is_pre) {
+                        // Pre-instantiated local: clear the value on the runtime stack
+                        // to trigger destructors at block scope exit.  The entry stays
+                        // on the stack so the caller's cleanup can pop it later.
+
+                        // Drop value slot references (init + load slots)
+                        cleanupLocalSlots(local_inst->local);
 
                         // lvar->del() / cvv->clearValue() is the FINAL deref that
                         // triggers the destructor.  After this call, invalidate the
@@ -2821,19 +2890,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cleanupStoredValues(globals, xsink);
                     } else {
                         // Non-pre-instantiated: full uninstantiate (pop + destructor)
-                        // Clean up the value slot that holds the initialization result
-                        // BEFORE uninstantiating the local, so the refcount is correct
-                        auto slot_it = local_init_slots.find(local_inst->local);
-                        if (slot_it != local_init_slots.end()) {
-                            uint32_t slot_id = slot_it->second;
-                            auto val_it = values.find(slot_id);
-                            if (val_it != values.end()) {
-                                val_it->second.discard(xsink);
-                                values.erase(val_it);
-                            }
-                            cleanup.erase(std::remove(cleanup.begin(), cleanup.end(), slot_id), cleanup.end());
-                            local_init_slots.erase(slot_it);
-                        }
+                        // Clean up value slots (init + load) BEFORE uninstantiating
+                        cleanupLocalSlots(local_inst->local);
                         local_inst->local->uninstantiate(xsink);
                         // Destructor may have modified globals via AST code
                         cleanupStoredValues(globals, xsink);
@@ -3419,6 +3477,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // xsink tells evalTiered() to re-execute via AST.
                         printd(2, "QoreIRInterpreter::execute() guard failed for '%s' "
                             "— falling back to AST\n", func.name.c_str());
+                        // Fire on_block_exit handlers before cleanup — guards may fire
+                        // after side-effecting code (e.g., Mutex::lock() + on_exit
+                        // Mutex::unlock()); without this, on_exit handlers are orphaned
+                        // and resources like mutexes remain locked.
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupStoredValues(locals, nullptr);
                         cleanupStoredValues(globals, nullptr);
@@ -3764,7 +3827,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 QoreValue val = getIRValue(values, lval_inst->operands[0]);
-                QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink);
+                QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink,
+                    lval_inst->weak);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
@@ -4694,6 +4758,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(closures, nullptr);
                 return false;
         }
+
     }
 
     if (xsink) {
@@ -5863,7 +5928,8 @@ QoreValue QoreIRInterpreter::evalLValueLoad(const QoreValue& lvalue, ExceptionSi
     return helper.getReferencedValue();
 }
 
-QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink) {
+QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
+        bool weak) {
     LValueHelper helper(lvalue, xsink);
     if (!helper) {
         return QoreValue();
@@ -5872,7 +5938,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     // assignAssume()/takeNode(), but value is a borrowed reference from the
     // caller's values map; without the extra ref, both the variable and the
     // values map would think they own the same single reference
-    if (helper.assign(value.refSelf(), "<lvalue>")) {
+    if (helper.assign(value.refSelf(), "<lvalue>", true, weak)) {
         return QoreValue();
     }
     return value.refSelf();

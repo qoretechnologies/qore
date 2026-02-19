@@ -3035,13 +3035,12 @@ const QoreProgramLocation* QoreIRLowering::getExpressionLocation(const QoreValue
 
 QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
+    // Check for weak assignment first since QoreWeakAssignmentOperatorNode inherits from
+    // QoreAssignmentOperatorNode
+    bool is_weak = dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node) != nullptr;
     auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node);
     if (!assign) {
-        auto* weak = dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node);
-        if (!weak) {
-            return QoreIRValue();
-        }
-        assign = weak;
+        return QoreIRValue();
     }
 
     // Range lvalue (e.g., list[0..2] = x) - delegate entire expression to AST before lowering RHS
@@ -3081,9 +3080,10 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, assign->loc);
             inst->invoke_opcode = QoreIROpcode::StoreLValue;
+            inst->weak = is_weak;
             builder.setBlock(normal_block);
         } else {
-            builder.createStoreLValue(assign->getLeft(), right, assign->loc);
+            builder.createStoreLValue(assign->getLeft(), right, assign->loc, is_weak);
         }
     } else {
         error = "unsupported lvalue for assignment IR lowering";

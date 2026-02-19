@@ -161,6 +161,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("direct-index map with heap-allocated results", \testDirectIndexMapHeapResults());
         addTestCase("hash map duplicate keys", \testHashMapDuplicateKeys());
         addTestCase("hash key access int missing key", \testHashKeyAccessIntMissingKey());
+        addTestCase("weak assignment (:=)", \testWeakAssignment());
+        addTestCase("guard deopt fires on_block_exit handlers", \testGuardDeoptOnBlockExit());
         set_return_value(main());
     }
 
@@ -5627,6 +5629,141 @@ printf(\"%d\\n\", total);
             string result = trim(runScript(code, mode));
             assertEq("60", result,
                     sprintf("hash<string,int> foreach sum %s", mode));
+        }
+    }
+
+    testWeakAssignment() {
+        # Test basic weak assignment (:=) — the weak reference becomes null
+        # when the strong reference goes out of scope. Use a function boundary
+        # so IR/JIT value slot cleanup happens before testing the weak ref.
+        string code = "%modern
+%allow-weak-references
+class MyObj {
+    public { int val; }
+    constructor(int v) { val = v; }
+}
+auto weak_ref;
+sub assign_weak() {
+    MyObj strong(42);
+    weak_ref := strong;
+    printf(\"%d\\n\", weak_ref.val);
+}
+assign_weak();
+# strong is gone (function returned) — weak_ref should be null
+printf(\"%y\\n\", weak_ref);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42\nnull", result, sprintf("weak assignment basic %s", mode));
+        }
+
+        # Test weak assignment in try/catch (invoke path for StoreLValue)
+        string invoke_code = "%modern
+%allow-weak-references
+class MyObj2 {
+    public { int val; }
+    constructor(int v) { val = v; }
+}
+string result;
+try {
+    MyObj2 strong(99);
+    auto weak;
+    weak := strong;
+    result = sprintf(\"%d\", weak.val);
+} catch (hash<ExceptionInfo> ex) {
+    result = \"error\";
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(invoke_code, mode));
+            assertEq("99", result, sprintf("weak assignment invoke path %s", mode));
+        }
+
+        # Test weak assignment in a loop — each iteration creates a new strong
+        # ref; the weak ref from := should access the object in the same iteration
+        string loop_code = "%modern
+%allow-weak-references
+class LoopObj {
+    public { int id; }
+    constructor(int i) { id = i; }
+}
+list<int> results = ();
+auto weak;
+for (int i = 0; i < 5; ++i) {
+    LoopObj obj(i);
+    weak := obj;
+    results += weak.id;
+}
+printf(\"%y\\n\", results);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(loop_code, mode));
+            assertEq("[0, 1, 2, 3, 4]", result, sprintf("weak assignment in loop %s", mode));
+        }
+    }
+
+    testGuardDeoptOnBlockExit() {
+        # Test that on_block_exit handlers fire correctly even when an exception
+        # propagates out of a function executed under IR/JIT (the ScopeExitGuard
+        # RAII fix ensures handlers fire on any function exit path).
+        # Use a function with on_exit that throws — the on_exit must still fire.
+        string code = "%modern
+int exit_count = 0;
+
+sub process(int val) {
+    on_exit ++exit_count;
+    if (val == 199) {
+        throw \"TEST\", \"trigger\";
+    }
+}
+
+# Call many times — after tiered promotion, exception on last call
+# must still fire the on_exit handler
+for (int i = 0; i < 199; ++i) {
+    process(i);
+}
+try {
+    process(199);
+} catch () {}
+
+# exit_count should be 200 (199 normal + 1 from the throw path)
+printf(\"%d\\n\", exit_count);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("200", result, sprintf("on_exit fires on exception %s", mode));
+        }
+
+        # Test on_error/on_success fire correctly across tiers
+        string error_code = "%modern
+list<string> log = ();
+
+sub work(int val) {
+    on_exit log += \"exit\";
+    on_error log += \"error\";
+    on_success log += \"success\";
+    if (val < 0) {
+        throw \"TEST\", \"trigger\";
+    }
+}
+
+# Warm up to trigger IR/JIT promotion
+for (int i = 0; i < 200; ++i) {
+    work(i);
+}
+
+# Reset log and test specific patterns
+log = ();
+work(1);
+try { work(-1); } catch () {}
+work(2);
+printf(\"%y\\n\", log);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(error_code, mode));
+            assertEq("[\"success\", \"exit\", \"error\", \"exit\", \"success\", \"exit\"]", result,
+                sprintf("on_error/on_success across tiers %s", mode));
         }
     }
 }

@@ -3723,6 +3723,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // Cast doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::StoreLValue
+                    && !inv->operands.empty()) {
+                // StoreLValue invoke: use pre-evaluated RHS operand and weak flag.
+                // Extract lvalue from the assignment expression (inv->expr).
+                auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (!assign) {
+                    error = "StoreLValue invoke: expr is not an assignment operator";
+                    return false;
+                }
+                auto* val = getVal(inv->operands[0].id, error);
+                if (!val) { return false; }
+                QoreValue lv = assign->getLeft();
+                uint64_t lv_bits;
+                std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
+                llvm::Value* val_boxed = boxValue(val, inv->operands[0].id);
+                // Clear reload tracker for lvalue target local
+                {
+                    const void* local_key = findLvalueRootLocalKey(lv);
+                    if (local_key) {
+                        clearLocalReloadTracker(local_key, module, llvm_func);
+                    }
+                }
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(lv_bits);
+                    const char* fn_name = inv->weak
+                        ? "qore_rt_lvalue_store_weak_aot" : "qore_rt_lvalue_store_aot";
+                    auto helper = module.getOrInsertFunction(fn_name,
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), val_boxed, xsink_arg});
+                } else {
+                    llvm::Value* lv_const = llvm::ConstantInt::get(i64_type, lv_bits);
+                    const char* fn_name = inv->weak
+                        ? "qore_rt_lvalue_store_weak" : "qore_rt_lvalue_store";
+                    auto helper = module.getOrInsertFunction(fn_name,
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {lv_const, val_boxed, xsink_arg});
+                }
+                // Reload the lvalue target local from runtime
+                {
+                    const void* local_key = findLvalueRootLocalKey(lv);
+                    if (local_key) {
+                        reloadLocalFromRuntime(local_key, module, llvm_func);
+                    }
+                }
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
@@ -5693,13 +5742,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result;
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(lv_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_lvalue_store_aot",
+                const char* fn_name = lvinst->weak
+                    ? "qore_rt_lvalue_store_weak_aot" : "qore_rt_lvalue_store_aot";
+                auto helper = module.getOrInsertFunction(fn_name,
                         llvm::FunctionType::get(i64_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), val_boxed, xsink_arg});
             } else {
                 llvm::Value* lv_const = llvm::ConstantInt::get(i64_type, lv_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_lvalue_store",
+                const char* fn_name = lvinst->weak
+                    ? "qore_rt_lvalue_store_weak" : "qore_rt_lvalue_store";
+                auto helper = module.getOrInsertFunction(fn_name,
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {lv_const, val_boxed, xsink_arg});
             }

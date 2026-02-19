@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -38,8 +38,9 @@ SmartMutex::~SmartMutex() {
 }
 
 int SmartMutex::releaseImpl() {
-    if (tid < 0)
+    if (tid < 0) {
         return -1;
+    }
     return 0;
 }
 
@@ -53,8 +54,9 @@ int SmartMutex::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeo
         waiting++;
         int rc =  nvl->waitOn((AbstractSmartLock *)this, vl, xsink, timeout_ms);
         waiting--;
-        if (rc)
+        if (rc) {
             return -1;
+        }
     }
     if (tid == Lock_Deleted) {
         // getName() for possible inheritance
@@ -80,8 +82,9 @@ int SmartMutex::releaseImpl(ExceptionSink *xsink) {
 }
 
 int SmartMutex::tryGrabImpl(int mtid, VLock *nvl) {
-    if (tid != Lock_Unlocked)
+    if (tid != Lock_Unlocked) {
         return -1;
+    }
     return 0;
 }
 
@@ -93,10 +96,11 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
 
     // insert into cond map
     cond_map_t::iterator i = cmap.find(cond);
-    if (i == cmap.end())
+    if (i == cmap.end()) {
         i = cmap.insert(std::make_pair(cond, 1)).first;
-    else
+    } else {
         ++(i->second);
+    }
 
     // save vlock
     VLock *nvl = vl;
@@ -108,12 +112,14 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
     int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
 
     // decrement cond count and delete from map if 0
-    if (!--(i->second))
+    if (!--(i->second)) {
         cmap.erase(i);
+    }
 
     // reacquire the lock
-    if (grabImpl(mtid, nvl, xsink))
+    if (grabImpl(mtid, nvl, xsink)) {
         return -1;
+    }
 
     grab_intern(mtid, nvl);
     return rc;
@@ -125,8 +131,9 @@ void SmartMutex::destructorImpl(ExceptionSink *xsink) {
         xsink->raiseException("LOCK-ERROR", "%s object deleted in TID %d while one or more Condition variables were "
             "waiting on it", getName(), q_gettid());
         // wake up all condition variables waiting on this mutex
-        for (; i != e; i++)
-        i->first->broadcast();
+        for (; i != e; i++) {
+            i->first->broadcast();
+        }
     }
 }
 

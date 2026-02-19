@@ -2616,6 +2616,19 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     slots.getExprSlot(bits);
+                    // StoreLValue invoke: LLVM lowering uses the lvalue (extracted
+                    // from the assignment expression) as a separate AOT slot
+                    if (ii->invoke_opcode == QoreIROpcode::StoreLValue
+                            && ii->expr.hasNode()) {
+                        auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                            ii->expr.getInternalNode());
+                        if (assign) {
+                            QoreValue lv = assign->getLeft();
+                            uint64_t lv_bits;
+                            memcpy(&lv_bits, &lv, sizeof(lv_bits));
+                            slots.getExprSlot(lv_bits);
+                        }
+                    }
                     break;
                 }
                 case QoreIROpcode::Call:
@@ -2889,6 +2902,20 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
                         ++expr_count;
+                    }
+                    // StoreLValue invoke: count the lvalue slot too
+                    if (ii->invoke_opcode == QoreIROpcode::StoreLValue
+                            && ii->expr.hasNode()) {
+                        auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                            ii->expr.getInternalNode());
+                        if (assign) {
+                            QoreValue lv = assign->getLeft();
+                            uint64_t lv_bits;
+                            memcpy(&lv_bits, &lv, sizeof(lv_bits));
+                            if (seen_exprs.insert(lv_bits).second) {
+                                ++expr_count;
+                            }
+                        }
                     }
                     break;
                 }
@@ -3228,6 +3255,21 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         // Take a ref so the expression survives IR function deletion
                         ii->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
+                    }
+                    // StoreLValue invoke: fill the lvalue slot too
+                    if (ii->invoke_opcode == QoreIROpcode::StoreLValue
+                            && ii->expr.hasNode()) {
+                        auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
+                            ii->expr.getInternalNode());
+                        if (assign) {
+                            QoreValue lv = assign->getLeft();
+                            uint64_t lv_bits;
+                            memcpy(&lv_bits, &lv, sizeof(lv_bits));
+                            if (seen_exprs.insert(lv_bits).second) {
+                                lv.ref();
+                                ctx->exprs[expr_idx++] = lv_bits;
+                            }
+                        }
                     }
                     break;
                 }
