@@ -876,14 +876,19 @@ QoreValue qore_object_private::evalBuiltinMethodWithPrivateData(const QoreMethod
 AbstractPrivateData* qore_object_private::getReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const {
     QoreSafeVarRWReadLocker sl(rml);
 
-    if (status == OS_DELETED || !privateData) {
+    if (status == OS_DELETED) {
         makeAccessDeletedObjectException(xsink, theclass->getName());
+        return nullptr;
+    }
+
+    if (!privateData) {
+        makeObjectIncompatibleException(xsink, theclass->getName());
         return nullptr;
     }
 
     AbstractPrivateData* d = privateData->getReferencedPrivateData(key);
     if (!d) {
-        makeAccessDeletedObjectException(xsink, theclass->getName());
+        makeObjectIncompatibleException(xsink, theclass->getName());
     }
 
     return d;
