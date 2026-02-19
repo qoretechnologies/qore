@@ -101,6 +101,8 @@ modules/astparser/src/ast_scanner.cpp
 modules/astparser/src/QC_*.cpp
 modules/astparser/src/ql_ast.cpp
 modules/astparser/src/*.qtest
+modules/astparser/grammars/tree-sitter-qore/node_modules/
+modules/astparser/grammars/tree-sitter-qore/package-lock.json
 
 # module-reflection
 modules/reflection/src/QC_*.cpp
