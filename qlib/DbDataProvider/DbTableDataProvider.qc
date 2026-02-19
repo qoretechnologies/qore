@@ -56,7 +56,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     "symbol": "like",
                     "groups": "Comparison",
                     "short_desc": "The SQL 'like' operator",
-                    "desc": "The SQL 'like' operator",
+                    "desc": "The SQL `like` operator",
                     "args": (DataProviderSignatureStringType, DataProviderSignatureStringValueType),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
@@ -97,8 +97,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     AbstractDataProviderType::get(StringType),
                     AbstractDataProviderType::get(new Type("AbstractDatasource")),
                 ),
-                "desc": "The datasource connection string or an `AbstractDatasource` object; in case a connection "
-                    "string is given, then the \"table\" option also needs to be given as a string",
+                "desc": "The datasource connection string or an `AbstractDatasource` object; in case a "
+                    "connection string is given, then the `table` option also needs to be given as a string",
             },
             "table": <DataProviderOptionInfo>{
                 "display_name": "Table",
@@ -108,8 +108,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                     AbstractDataProviderType::get(new Type("AbstractTable")),
                 ),
                 "required": True,
-                "desc": "The table name or table object; if a table string is provided, then the \"datasource\" "
-                    "option must also be provided",
+                "desc": "The table name or table object; if a table string is provided, then the "
+                    "`datasource` option must also be provided",
             },
         };
 
@@ -128,9 +128,10 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "display_name": "Returning",
                 "short_desc": "Indication of any output values to return",
                 "type": AbstractDataProviderType::get(AbstractDataProviderType::anyType),
-                "desc": "A string (giving the output name) or a hash describing the return parameters for an insert; "
-                    "a hash will have the following keys: `key`: (required) the column name to return, and `type` "
-                    "(optional) the data type for the output placeholder buffer (ex: `number`)",
+                "desc": "A string (giving the output name) or a hash describing the return parameters for an "
+                    "insert. A hash has the following keys:\n"
+                    "- `key` (required): the column name to return\n"
+                    "- `type` (optional): the data type for the output placeholder buffer (e.g. `number`)",
             },
         };
 

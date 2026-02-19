@@ -54,7 +54,7 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
             "stream_nonblock_open": <FileHandlerOptionInfo>{
                 "type": "bool",
                 "default_value": False,
-                "desc": "if True then the stream will be opened in nonblocking mode (default False)",
+                "desc": "if `True` then the stream will be opened in nonblocking mode (default `False`)",
             },
         };
 

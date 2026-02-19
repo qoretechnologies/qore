@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Messenger.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires json
+
+%exec-class MessengerTest
+
+class MessengerTest inherits QUnit::Test {
+    private {
+        #! Path to the QLS module directory
+        string qlibDir;
+    }
+
+    constructor() : Test("Messenger", "1.0") {
+        qlibDir = get_script_dir() + "/../../../../qlib";
+
+        addTestCase("send format", \testSend());
+        addTestCase("send unicode", \testSendUnicode());
+        addTestCase("receive", \testReceive());
+        addTestCase("receive with Content-Type", \testReceiveWithContentType());
+        addTestCase("receive EOF", \testReceiveEof());
+        addTestCase("receive missing Content-Length", \testReceiveMissingContentLength());
+        addTestCase("receive short read", \testReceiveShortRead());
+        addTestCase("round-trip", \testRoundTrip());
+
+        set_return_value(main());
+    }
+
+    #! Run a Qore script in a subprocess with QLS module available
+    private string runSubprocess(string scriptPath, *string stdinFile) {
+        string cmd = sprintf("QORE_MODULE_DIR=%s qore %s", qlibDir, scriptPath);
+        if (stdinFile) {
+            cmd += " < " + stdinFile;
+        }
+        return backquote(cmd);
+    }
+
+    #! Write a temp Qore script; returns the file path
+    private string writeTempScript(string code) {
+        string tmpDir = ENV.TMPDIR ?? "/tmp";
+        string path = sprintf("%s/messenger_test_%d_%d.qr", tmpDir, getpid(),
+            clock_getmicros());
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        return path;
+    }
+
+    #! Write a temp data file; returns the file path
+    private string writeTempData(string data) {
+        string tmpDir = ENV.TMPDIR ?? "/tmp";
+        string path = sprintf("%s/messenger_data_%d_%d.dat", tmpDir, getpid(),
+            clock_getmicros());
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(data);
+        return path;
+    }
+
+    testSend() {
+        string body = '{"jsonrpc":"2.0","id":1,"result":null}';
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires QLS\n"
+            "QLS::Messenger::send(" + make_json(body) + ");\n"
+        );
+        on_exit unlink(script);
+
+        string output = runSubprocess(script);
+
+        # verify Content-Length header with correct byte count
+        string expected = sprintf("Content-Length: %d\r\n\r\n%s", body.size(), body);
+        assertEq(expected, output, "send produces correct Content-Length header and body");
+    }
+
+    testSendUnicode() {
+        # unicode characters take more bytes than characters
+        string body = '{"msg":"héllo wörld"}';
+        int byteSize = body.size();
+        assertTrue(byteSize > body.length(), "UTF-8 byte size exceeds character count");
+
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires QLS\n"
+            "QLS::Messenger::send(" + make_json(body) + ");\n"
+        );
+        on_exit unlink(script);
+
+        string output = runSubprocess(script);
+
+        string expected = sprintf("Content-Length: %d\r\n\r\n%s", byteSize, body);
+        assertEq(expected, output, "send uses byte size for Content-Length with unicode");
+    }
+
+    testReceive() {
+        string msg = '{"jsonrpc":"2.0","id":1,"method":"initialize"}';
+        string inputData = sprintf("Content-Length: %d\r\n\r\n%s", msg.size(), msg);
+        string dataFile = writeTempData(inputData);
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(script); unlink(dataFile); }
+
+        string output = runSubprocess(script, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertEq(msg, result.msg, "receive correctly parses LSP message body");
+    }
+
+    testReceiveWithContentType() {
+        string msg = '{"jsonrpc":"2.0","id":2,"method":"test"}';
+        string inputData = sprintf(
+            "Content-Length: %d\r\nContent-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n%s",
+            msg.size(), msg
+        );
+        string dataFile = writeTempData(inputData);
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(script); unlink(dataFile); }
+
+        string output = runSubprocess(script, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertEq(msg, result.msg, "receive correctly parses body with Content-Type");
+        assertEq("application/vscode-jsonrpc; charset=utf-8", result."Content-Type",
+            "receive parses Content-Type header");
+    }
+
+    testReceiveEof() {
+        # empty input -> immediate EOF
+        string dataFile = writeTempData("");
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(script); unlink(dataFile); }
+
+        string output = runSubprocess(script, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertEq("EOF", result.error, "receive returns EOF error on empty input");
+    }
+
+    testReceiveMissingContentLength() {
+        # headers without Content-Length followed by blank line
+        string inputData = "Content-Type: application/json\r\n\r\n{}";
+        string dataFile = writeTempData(inputData);
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(script); unlink(dataFile); }
+
+        string output = runSubprocess(script, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertEq("Content-Length header is missing", result.error,
+            "receive returns error when Content-Length is missing");
+    }
+
+    testReceiveShortRead() {
+        # Content-Length claims 100 bytes but body is only 10
+        string shortBody = '{"id": 99}';
+        string inputData = sprintf("Content-Length: 100\r\n\r\n%s", shortBody);
+        string dataFile = writeTempData(inputData);
+        string script = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(script); unlink(dataFile); }
+
+        string output = runSubprocess(script, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertRegex("short read", result.error,
+            "receive returns short read error on truncated body");
+    }
+
+    testRoundTrip() {
+        # send() produces output that receive() can parse back
+        string originalMsg = make_json({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "textDocument/hover",
+            "params": {
+                "textDocument": {"uri": "file:///test.q"},
+                "position": {"line": 10, "character": 5},
+            },
+        });
+
+        # Step 1: use send() to produce wire-format output
+        string sendScript = writeTempScript(
+            "%modern\n"
+            "%requires QLS\n"
+            "QLS::Messenger::send(" + make_json(originalMsg) + ");\n"
+        );
+        on_exit unlink(sendScript);
+
+        string sentData = runSubprocess(sendScript);
+
+        # Step 2: feed send() output to receive() via stdin
+        string dataFile = writeTempData(sentData);
+        string recvScript = writeTempScript(
+            "%modern\n"
+            "%requires json\n"
+            "%requires QLS\n"
+            "hash<auto> result = QLS::Messenger::receive();\n"
+            "stdout.print(make_json(result));\n"
+        );
+        on_exit { unlink(dataFile); unlink(recvScript); }
+
+        string output = runSubprocess(recvScript, dataFile);
+        hash<auto> result = parse_json(output);
+
+        assertEq(originalMsg, result.msg,
+            "round-trip: send then receive preserves message");
+        hash<auto> parsed = parse_json(result.msg);
+        assertEq(42, parsed.id, "round-trip: JSON-RPC id preserved");
+        assertEq("textDocument/hover", parsed.method, "round-trip: method preserved");
+    }
+}

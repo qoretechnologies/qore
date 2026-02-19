@@ -261,7 +261,7 @@ module MailgunDataProvider {
                 "state": <ActionOptionInfo>{
                     "display_name": "State",
                     "short_desc": "Filter by domain state",
-                    "desc": "Filter domains by state (active, unverified, disabled)",
+                    "desc": "Filter domains by state (`active`, `unverified`, `disabled`)",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
                         <AllowedValueInfo>{

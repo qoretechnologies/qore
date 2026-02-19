@@ -34,8 +34,8 @@ public class FileStatRequestDataType inherits HashDataType {
             },
             "symlink": {
                 "type": BoolType,
-                "desc": "If True, then if the target path is a symbolic link, information about the link itself will "
-                    "be returned instead of the target",
+                "desc": "If `True`, then if the target path is a symbolic link, information about the link "
+                    "itself will be returned instead of the target",
                 "default_value": False,
             },
         };

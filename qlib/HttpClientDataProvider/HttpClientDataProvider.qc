@@ -103,7 +103,7 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
                 "display_name": "Pre-Encoded URLs",
                 "short_desc": "If true then URLs are assumed to be preencoded",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "if `true` then all URI paths in URLs are assumed to be already "
+                "desc": "If `true` then all URI paths in URLs are assumed to be already "
                     "[percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and "
                     "any unencoded characters are sent in a URL with a new request, an exception is raised",
                 "default_value": False,

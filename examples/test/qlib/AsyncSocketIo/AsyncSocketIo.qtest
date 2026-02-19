@@ -56,6 +56,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("callback exception safety", \callbackExceptionSafetyTest());
         addTestCase("submit from callback", \submitFromCallbackTest());
         addTestCase("addListener after stop", \addListenerAfterStopTest());
+        addTestCase("concurrent io scalability", \concurrentIoScalabilityTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -828,6 +829,107 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertTrue(submit_ok, "submit from callback should succeed without LOCK-ERROR");
 
         ctrl.cancelByOwner("submit-cb-test");
+    }
+
+    #! Scalability regression test: O(N) mutex hold in I/O thread Phase 3
+    /** Creates N loopback socket pairs, submits N receive operations, waits for all sockets
+        to be registered in the EventLoop (first poll cycle complete), then simultaneously
+        signals all N sockets so they all become "ready" at once.  Phase 3 must then process
+        all N completions while holding the mutex.
+
+        With the former O(N²) computeEventUnion() implementation (full scan of key_events for
+        every operation), this degraded to ~N²·T per Phase 3 cycle, holding the mutex for that
+        entire duration and starving every concurrent submit()/wake() caller.  With the O(k)
+        reverse-index implementation (sock_hash_to_keys), Phase 3 is O(N·k) where k=1 for the
+        normal case of one operation per socket.
+
+        Failure mode for a regression: with N=200 this takes <<1 s linearly but the quadratic
+        version approaches tens of seconds at N≥500 on typical hardware, making any tight HTTP
+        response SLA impossible.
+    */
+    concurrentIoScalabilityTest() {
+        # N concurrent simultaneous I/O completions in one Phase 3 pass
+        int n = 200;
+        # Generous wall-clock bound: O(N) finishes in well under a second on any machine.
+        # O(N²) at N=200 holds the mutex for ~40-90 ms per cycle (at ~1 µs per uniqueHash()
+        # comparison) and, combined with any concurrent lock contention, pushes total elapsed
+        # time well past this bound at larger N values.
+        date threshold = 10s;
+
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # Create N loopback socket pairs: server side receives, client side sends.
+        list<Socket> servers;
+        list<Socket> clients;
+
+        for (int i = 0; i < n; ++i) {
+            Socket listener();
+            listener.bind("127.0.0.1:0");
+            listener.listen();
+            int p = listener.getSocketInfo().port;
+            Socket client();
+            client.connect("127.0.0.1:" + p, 5s);
+            Socket server = listener.accept(5s);
+            push servers, server;
+            push clients, client;
+            listener.close();
+        }
+
+        on_exit {
+            map $1.close(), servers;
+            map $1.close(), clients;
+        }
+
+        # Submit N receive operations — one per server-side socket.
+        list<Queue> queues;
+        for (int i = 0; i < n; ++i) {
+            AbstractPollOperation spop = servers[i].startPollRecvData();
+            Queue q = io_controller.submit(<SocketPollOperationInfo>{
+                "sock": servers[i],
+                "spop": spop,
+                "to": threshold,
+                "owner": sprintf("scalability-%d", i),
+            });
+            push queues, q;
+        }
+
+        # Wait until the I/O thread has completed its first poll cycle so that all N sockets
+        # are registered in the EventLoop (poll_info is set, sockets are watched).
+        assertTrue(io_controller.waitReady(5s), "I/O thread should start within 5 s");
+        # One extra sleep so the ioThread finishes its first Phase 2+3 (registers all sockets).
+        usleep(200ms);
+
+        # Simultaneously deliver one byte to every server socket so all N become "ready"
+        # at the same time.  The ioThread must process all N completions in one Phase 3 pass
+        # while holding the mutex — this is the O(N²) hot spot with the old code.
+        date start = now_us();
+        Counter sent(n);
+        for (int i = 0; i < n; ++i) {
+            int idx = i;
+            background sub () {
+                on_exit sent.dec();
+                clients[idx].send("x", 5s);
+            }();
+        }
+        sent.waitForZero(10s);
+
+        # Collect all N results.
+        int completed = 0;
+        for (int i = 0; i < n; ++i) {
+            *hash<SocketPollResultInfo> r = queues[i].get(threshold);
+            if (r && !r.ex) {
+                ++completed;
+            }
+        }
+        date elapsed = now_us() - start;
+
+        assertEq(n, completed,
+            sprintf("all %d concurrent receive ops must complete (elapsed=%y)", n, elapsed));
+        assertTrue(elapsed < threshold,
+            sprintf("%d simultaneous I/O completions must process in < %y "
+                "(elapsed=%y); O(N²) computeEventUnion() would exceed this at N≥500",
+                n, threshold, elapsed));
     }
 
     #! Tests that addListener throws after the controller has been stopped

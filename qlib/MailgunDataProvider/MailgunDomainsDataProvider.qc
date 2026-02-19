@@ -49,7 +49,7 @@ public class MailgunDomainsDataProvider inherits MailgunDataProviderBase {
                 "display_name": "State",
                 "short_desc": "Filter by domain state",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter domains by state (active, unverified, disabled)",
+                "desc": "Filter domains by state (`active`, `unverified`, `disabled`)",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "active",

@@ -45,8 +45,8 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 
 ### App Info
 - [ ] `display_name` is user-friendly ("Zoho Books" not "zohobooks")
-- [ ] `short_desc` under 80 chars
-- [ ] `desc` explains what the service is
+- [ ] `short_desc` under 80 chars, **plain text** (no markdown formatting)
+- [ ] `desc` is **markdown-formatted** text explaining what the service is (see [Markdown in Descriptions](#markdown-in-descriptions))
 - [ ] Logo provided with correct MIME type
 
 ---
@@ -55,9 +55,11 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 
 ### All Actions
 - [ ] Each action has `display_name`, `short_desc`, `desc`
+- [ ] `short_desc` is **plain text** (no markdown)
+- [ ] `desc` is **markdown-formatted** (see [Markdown in Descriptions](#markdown-in-descriptions))
 - [ ] `groups` organizes actions logically
 - [ ] Each option has `display_name` and `short_desc`
-- [ ] Complex options have `desc` explaining format/structure
+- [ ] Complex options have `desc` explaining format/structure (**markdown-formatted**)
 - [ ] Option `allowed_values` declared explicitly in the option definition (never as text in `desc` or `short_desc`)
 
 ### DPAT_FIND / DPAT_FIND_SINGLE Actions (CRITICAL)
@@ -296,6 +298,110 @@ The UI uses `preselected: True` on action options to determine which fields to s
 - [ ] Entry in `doxygen/lang/120_modules.dox.tmpl`
 - [ ] Release note in `doxygen/lang/900_release_notes.dox.tmpl`
 - [ ] Copyright year is current (2026)
+
+---
+
+## 16. Markdown in Descriptions
+
+All `desc` fields throughout the data provider framework are rendered as **markdown** in the UI. The `short_desc` field is **plain text** (no markdown). This distinction is critical for UX — long descriptions become much more readable with proper formatting.
+
+### Rules
+- [ ] `short_desc` is plain text, under 80 chars, single sentence
+- [ ] `desc` uses markdown formatting for readability
+- [ ] Code references use backticks: `` `field_name` ``, `` `True` ``, `` `NOTHING` ``
+- [ ] Multiple options/alternatives use bullet lists, not inline prose
+- [ ] Important caveats use **bold** for emphasis
+- [ ] URLs use markdown links: `[display text](url)`
+- [ ] Multi-sentence descriptions use line breaks for paragraph separation
+- [ ] Enumerations of values that aren't in `allowed_values` use bullet lists or backtick-separated lists
+- [ ] Sentences in `desc` start with a capital letter
+- [ ] No typos (common: "maxium" → "maximum", "ysed" → "used")
+- [ ] No double spaces in descriptions
+- [ ] All backtick pairs are matched (no unclosed/missing opening backticks)
+
+### Common Anti-Patterns to Check
+- [ ] **Bare `True`/`False`/`NOTHING`/`nothing`/`null`**: Must be backtick-wrapped in `desc` (e.g., `` `True` ``, `` `False` ``, `` `NOTHING` ``)
+- [ ] **Bare field/option names**: References to other fields or options must use backticks (e.g., `` `ssl_key_location` ``, `` `header_names` ``)
+- [ ] **Bare numeric values in context**: Meaningful numeric values should use backticks (e.g., `` `0` ``–`` `255` ``, `` `-100` ``–`` `100` ``)
+- [ ] **Single-quoted values instead of backticks**: Use `` `xlsx` `` not `'xlsx'` for code values in markdown
+- [ ] **Lowercase sentence starts**: Every sentence in `desc` must start with a capital letter (e.g., "If `true`..." not "if `true`...")
+- [ ] **URLs/schemes without backticks**: Protocol schemes like `` `mcp://` ``, `` `http://` `` should be backtick-wrapped
+- [ ] **Class/type names without backticks**: Class names, type names, and API values referenced in prose should be backtick-wrapped
+
+### Long Description Formatting (>500 chars)
+
+Descriptions longer than ~500 characters (typically action options describing complex structures like draw commands, CSV field formats, or multi-feature configurations) need structured formatting beyond simple backtick additions:
+
+- [ ] **Organized with bold section headers**: Group related items under `**Section Name**:` headers
+- [ ] **Bullet lists for enumerations**: Each command, option, or feature gets its own `- ` bullet
+- [ ] **Opening summary sentence**: Start with a concise 1-sentence summary before the detailed breakdown
+- [ ] **Consistent formatting within bullets**: Each bullet uses backticks for the command/option name, followed by a brief description
+
+#### Example (wall of text — poor UX)
+```qore
+"desc": "List of draw command hashes with an op key. Supported operations: set_source_rgb "
+    "(r, g, b), set_source_rgba (r, g, b, a), move_to (x, y), line_to (x, y), "
+    "rectangle (x, y, width, height), arc (xc, yc, radius, angle1, angle2), "
+    "curve_to (x1, y1, x2, y2, x3, y3), stroke, fill, set_font_size (size), "
+    "show_text (text, x, y), translate (tx, ty), scale (sx, sy), rotate (angle), "
+    "create_linear_gradient, create_radial_gradient, save, restore",
+```
+
+#### Example (structured markdown — good UX)
+```qore
+"desc": "List of draw command hashes. Each command has an `op` key specifying the "
+    "operation and operation-specific parameters.\n\n"
+    "**Color and Style**:\n"
+    "- `set_source_rgb` (r, g, b) — color values 0.0–1.0\n"
+    "- `set_source_rgba` (r, g, b, a) — with alpha transparency\n\n"
+    "**Paths**:\n"
+    "- `move_to` (x, y) — move to point without drawing\n"
+    "- `line_to` (x, y) — draw line to point\n"
+    "- `rectangle` (x, y, width, height)\n"
+    "- `arc` (xc, yc, radius, angle1, angle2)\n"
+    "- `curve_to` (x1, y1, x2, y2, x3, y3) — cubic Bézier\n\n"
+    "**Drawing**:\n"
+    "- `stroke` — draw the current path outline\n"
+    "- `fill` — fill the current path\n\n"
+    "**Text**:\n"
+    "- `set_font_size` (size)\n"
+    "- `show_text` (text, x, y)",
+```
+
+### Where `desc` Fields Appear
+- App registration (`registerApp` → `DataProviderAppInfo`)
+- Action registration (`registerAction` → `DataProviderActionInfo`)
+- Action options (`ActionOptionInfo`)
+- Data provider options (`DataProviderOptionInfo`)
+- Request/response type fields (in `Fields` constants)
+- Event types (`DataProviderMessageInfo`)
+- Connection options (`ConnectionOptionInfo`)
+- Provider info (`DataProviderInfo`)
+
+### Example (plain text — poor UX)
+```qore
+"desc": "The maximum number of records to return or to affect; if more records are returned or "
+    "affected, the operation results in an error; for data provider supporting transactions; this "
+    "will normally result in a transaction rollback if a transaction is in progress. This option is "
+    "normally enforced externally from the server interfaced by the data provider",
+```
+
+### Example (markdown — good UX)
+```qore
+"desc": "The maximum number of records to return or to affect.\n\n"
+    "If more records are returned or affected, the operation results in an error. "
+    "For data providers supporting transactions, this will normally result in a "
+    "**transaction rollback** if a transaction is in progress.\n\n"
+    "**Note**: this option is normally enforced externally from the server interfaced "
+    "by the data provider (unlike `limit` which is enforced server-side).",
+```
+
+### Short Descriptions That Don't Need Markdown
+Short `desc` values (1-2 simple sentences) are fine as-is — don't add markdown just for the sake of it. Focus markdown formatting on:
+- Descriptions longer than ~120 characters
+- Descriptions listing multiple options or alternatives
+- Descriptions with code references, field names, or API values
+- Descriptions explaining complex behavior with conditions or caveats
 
 ---
 

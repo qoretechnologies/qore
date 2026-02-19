@@ -34,7 +34,7 @@ public class MemcachedIncrDecrResponseDataType inherits DataProvider::HashDataTy
                 "type": BoolType,
                 "display_name": "Success",
                 "short_desc": "Operation succeeded",
-                "desc": "True if the increment/decrement operation succeeded",
+                "desc": "`True` if the increment/decrement operation succeeded",
                 "example_value": True,
             },
             "value": {

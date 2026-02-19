@@ -29,7 +29,7 @@ public class RedisSortedSetDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "sortedsets",
-            "desc": "Redis sorted set data provider; provides access to sorted set operations (ZADD, ZRANGE, ZSCORE, etc.)",
+            "desc": "Redis sorted set data provider; provides access to sorted set operations (`ZADD`, `ZRANGE`, `ZSCORE`, etc.)",
             "type": "RedisSortedSetDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_children": True,

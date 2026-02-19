@@ -67,7 +67,7 @@ public namespace EdifactUtil {
                     "display_name": "Skip Service Segments",
                     "short_desc": "Skip envelope segments during iteration",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, skip service segments (UNA, UNB, UNZ, UNH, UNT, UNG, UNE, UNS) "
+                    "desc": "If `True`, skip service segments (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) "
                         "during iteration, returning only business data segments.",
                     "default_value": False,
                 },
