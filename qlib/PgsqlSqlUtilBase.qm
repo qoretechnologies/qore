@@ -161,7 +161,8 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
-    - \c hasArrayBind() now returns \c True when the underlying driver supports it (pgsql driver v3.3+)
+    - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
+      at runtime to detect driver support (requires pgsql driver v3.3+)
     - added UNNEST-based bulk insert SQL generation in \c insertIntern(): when bulk data (hash-of-lists)
       is passed, generates <tt>INSERT INTO ... SELECT ... FROM unnest(...)</tt> instead of row-by-row
       inserts, with element-level type casts to avoid binary array OID conflicts
@@ -2041,15 +2042,51 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return addTriggerFunctionUnlocked(tfname, src, trigger);
     }
 
-    #! returns @ref True "True" because the pgsql driver supports array binds / bulk DML operations via UNNEST
+    #! returns @ref True "True" if the pgsql driver supports array binds / bulk DML operations via UNNEST
+    /** Array bind support requires pgsql driver v3.3+ which reports the
+        @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
+    */
     bool hasArrayBind() {
-        return True;
+        return (ds.getCapabilities() & DBI_CAP_HAS_ARRAY_BIND) != 0;
     }
 
-    #! Returns the PostgreSQL array cast type suffix for a given column
-    /** @param col the column object
-        @return the PostgreSQL type name suitable for array casting (e.g., "bigint[]", "text[]")
+    #! transforms bind arguments for bulk DML operations with UNNEST
+    /** Separates scalar and array bind values to match the UNNEST SQL parameter ordering,
+        and creates typed array bind hashes using the column's native PostgreSQL type so
+        the driver sends the correct array OID (e.g., bit[], varbit[], macaddr[], etc.).
+
+        @param data hash of column name to value (or list of values for array columns)
+        @return the transformed bind arguments with typed array bind hashes
+
+        @since %Qore 2.3
     */
+    list<auto> transformBulkBindArgs(hash<auto> data) {
+        # ensure columns are loaded for type lookup
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+
+            getColumnsUnlocked();
+        }
+
+        # separate scalar (non-list) and array (list) bind values;
+        # scalar binds come first to match the UNNEST SQL parameter ordering:
+        #   SELECT ..., $1, ..., $N FROM unnest($N+1, ...) AS u(...)
+        list<auto> scalar_binds = ();
+        list<auto> array_binds = ();
+        foreach hash<auto> i in (data.pairIterator()) {
+            if (i.value.typeCode() == NT_LIST) {
+                # create typed array bind hash with the column's native PostgreSQL type
+                *AbstractColumn col = columns{i.key};
+                string ntype = col ? col.getNativeTypeString() : "text";
+                push array_binds, {"^pgtype^": ntype + "[]", "^value^": unwrapBindHashes(i.value)};
+            } else {
+                push scalar_binds, i.value;
+            }
+        }
+        return scalar_binds + array_binds;
+    }
+
     #! Unwraps driver-specific bind hashes from list elements for UNNEST array binding
     /** Bind hashes (e.g., from pgsql_bind()) have the format {^pgtype^: oid, ^value^: val}.
         The UNNEST SQL uses explicit ::type[] casts, so only the raw values are needed.
@@ -2107,8 +2144,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             }
         }
 
-        if (!is_bulk) {
-            # delegate to base class for single-row inserts
+        if (!is_bulk || !hasArrayBind()) {
+            # delegate to base class for single-row inserts or when driver lacks array bind support
             return AbstractTable::insertIntern(row, \sql, opt, \args);
         }
 
@@ -2189,13 +2226,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             } else if (i.value.typeCode() == NT_LIST) {
                 # regular column with list data: generate UNNEST argument
                 *AbstractColumn col = columns{i.key};
-                # no ::type[] cast on the array bind; instead cast individual elements in SELECT
-                # to avoid binary array OID conflicts with PostgreSQL's array-level casting
+                string ntype = col ? col.getNativeTypeString() : "text";
+                # cast individual elements to the target type in SELECT
+                select_exprs += sprintf("u.c%d::%s", unnest_col_idx, ntype);
+                # use plain %v; the bind hash carries the explicit array type via ^pgtype^
                 unnest_args += "%v";
-                select_exprs += sprintf("u.c%d::%s", unnest_col_idx, col.getNativeTypeString());
-                # unwrap bind hashes (e.g. from pgsql_bind()) since UNNEST uses native array encoding
-                # use push to add the list as a single element (not concatenate)
-                push array_binds, unwrapBindHashes(i.value);
+                # create typed array bind hash so driver knows the exact PostgreSQL array type
+                push array_binds, {"^pgtype^": ntype + "[]", "^value^": unwrapBindHashes(i.value)};
                 ++unnest_col_idx;
             } else {
                 # constant value (e.g. bind hash from cval): use scalar expression in SELECT
@@ -2246,31 +2283,36 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
         sql += sprintf(" returning %s", (foldl $1 + "," + $2, l));
 
+        # detect bulk operations: check if any bind arg is a typed array bind hash or a list
+        bool is_bulk = False;
+        foreach auto arg in (args) {
+            if (arg.typeCode() == NT_HASH && arg.hasKey("^pgtype^")) {
+                is_bulk = True;
+                break;
+            }
+        }
+
+        # exec() returns a hash-of-lists for RETURNING queries
         *hash<auto> h = execData(opt, sql, args);
         if (!h) {
             return h;
         }
-        # check if any value is already a list (bulk result)
-        bool has_list = False;
-        foreach auto v in (h.iterator()) {
-            if (v.value.typeCode() == NT_LIST) {
-                has_list = True;
-                break;
-            }
-        }
-        if (has_list) {
-            # bulk result: return hash-of-lists as-is
+
+        if (is_bulk) {
+            # bulk operation: return hash-of-lists directly (all RETURNING rows)
             return h;
         }
-        # single row result: wrap in lists for consistency with base class
+
+        # single-row operation: unwrap (driver returns {col: [val]} for RETURNING)
         return map {$1.key: $1.value[0]}, h.pairIterator();
     }
 
     #! Returns a closure for performing bulk upsert operations using UNNEST + ON CONFLICT
     code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto,
             *hash<auto> opt) {
-        if (!hasAtomicUpsert()) {
+        if (!hasAtomicUpsert() || !hasArrayBind()) {
             # fall back to default row-by-row closure for old PostgreSQL versions
+            # or when the driver does not support array binding
             return AbstractTable::getBulkUpsertClosure(example_row, upsert_strategy, opt);
         }
 
@@ -2320,12 +2362,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)",
                     getDesc(), k, columns.keys());
             }
-            # no ::type[] cast on the array bind; instead cast individual elements in SELECT
-            # to avoid binary array OID conflicts with PostgreSQL's array-level casting
-            unnest_placeholders += "%v";
+            string ntype = col.getNativeTypeString();
+            # cast individual elements to the target type in SELECT
             string alias = sprintf("c%d", unnest_idx);
             unnest_aliases += alias;
-            select_exprs += sprintf("u.%s::%s", alias, col.getNativeTypeString());
+            select_exprs += sprintf("u.%s::%s", alias, ntype);
+            # use plain %v; the bind hash carries the explicit array type via ^pgtype^
+            unnest_placeholders += "%v";
             ++unnest_idx;
         }
 
@@ -2384,8 +2427,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             if (needs_dedup) {
                 h = deduplicateByPk(h, pk_cols);
             }
-            # unwrap bind hashes (e.g. from pgsql_bind()) since UNNEST uses native array encoding
-            stmt.execArgs(map ($1.typeCode() == NT_LIST ? unwrapBindHashes($1) : $1), h.values());
+            # unwrap bind hashes and wrap lists as pgsql_bind_array for proper array binding
+            stmt.execArgs(transformBulkBindArgs(h));
             return UR_Verified;
         };
     }

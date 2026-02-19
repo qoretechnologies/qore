@@ -188,6 +188,66 @@ private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<au
 }
 ```
 
+### Request Type Fields Pattern
+
+Request type classes should declare a `const Fields` hash in a `public {}` block. This allows action registration code to reference fields directly via `ClassName::Fields` without instantiating the type. The same constant is used in the constructor to add fields to the type.
+
+**Important:** Type classes **must** be declared inside the `public namespace` block in the `.qc` file for `ClassName::Fields` to be resolvable from the `.qm` file. Classes declared outside the namespace block cannot have their constants referenced via `ClassName::ConstantName` from other module files.
+
+```qore
+public namespace MyServiceDataProvider {
+    # Type classes MUST be inside the namespace block
+
+    public class MyCreateRequestDataType inherits HashDataType {
+        public {
+            const Fields = {
+                "name": {
+                    "type": StringType,
+                    "display_name": "Name",
+                    "short_desc": "Resource name",
+                    "desc": "Name of the resource to create",
+                    "example_value": "My Resource",
+                },
+                "type": {
+                    "type": StringType,
+                    "display_name": "Type",
+                    "short_desc": "Resource type",
+                    "desc": "Type of resource",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "standard", "display_name": "Standard"},
+                        <AllowedValueInfo>{"value": "premium", "display_name": "Premium"},
+                    ),
+                },
+                "description": {
+                    "type": StringOrNothingType,
+                    "display_name": "Description",
+                    "short_desc": "Resource description",
+                    "desc": "Optional description of the resource",
+                },
+            };
+        }
+
+        constructor() {
+            addQoreFields(Fields);
+        }
+    }
+}  # end namespace
+```
+
+Data provider classes should declare `ResponseType` and `RequestType` as static members:
+
+```qore
+public class MyCreateDataProvider inherits MyDataProviderBase {
+    public {
+        static MyCreateRequestDataType RequestType();
+        static MyResponseDataType ResponseType();
+    }
+    # ...
+}
+```
+
+These are referenced in action registration as `MyCreateDataProvider::ResponseType`.
+
 ---
 
 ## Action Registration
@@ -244,7 +304,65 @@ if (search_options.itemID) {
 
 ### DPAT_API
 
-Standard request/response pattern. For dynamic options, implement `getRequestTypeWithDataImpl()`.
+Standard request/response pattern. **Every DPAT_API action MUST have `options` and `output_type`** — without them the action appears in the catalog but is completely unusable (no form fields shown to users, no output schema).
+
+Use `DataProviderActionCatalog::getActionOptionFromFields()` to generate action options from request type fields. This ensures action options stay in sync with the request type and inherit field metadata (descriptions, types, allowed values, example values).
+
+**Preferred pattern — use class `Fields` constants:**
+
+Request type classes should declare a `const Fields` in a `public {}` block (see [Request Type Fields Pattern](#request-type-fields-pattern) below). Reference fields via `ClassName::Fields` in action registration, and use `DataProviderClassName::ResponseType` for output_type:
+
+```qore
+DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+    "app": AppName,
+    "path": "/resource/create",
+    "action": "resource-create",
+    "display_name": "Create Resource",
+    "short_desc": "Create a new resource",
+    "desc": "Create a new resource with the given parameters",
+    "action_code": DPAT_API,
+    "options": DataProviderActionCatalog::getActionOptionFromFields(
+        MyCreateRequestDataType::Fields{"name", "type", "value"}, {
+            "preselected": True,
+            "required": True,
+        },
+    ) + DataProviderActionCatalog::getActionOptionFromFields(
+        MyCreateRequestDataType::Fields - ("name", "type", "value"),
+    ),
+    "output_type": MyCreateDataProvider::ResponseType,
+});
+```
+
+**Hash slice note:** `ClassName::Fields{"key1", "key2"}` (multiple keys) returns a hash slice. For a single key, use `ClassName::Fields{"key",}` (trailing comma) to force list context — without it, `ClassName::Fields{"key"}` returns a single value, not a hash.
+
+**Alternative pattern — instantiate the type:**
+
+If the request type class doesn't have a `Fields` constant, instantiate the type and use `getFields()`:
+
+```qore
+MyCreateRequestDataType CreateRequestType();
+
+"options": DataProviderActionCatalog::getActionOptionFromFields(
+    CreateRequestType.getFields(){"name", "type", "value"}, {
+        "preselected": True,
+        "required": True,
+    },
+) + DataProviderActionCatalog::getActionOptionFromFields(
+    CreateRequestType.getFields() - ("name", "type", "value"),
+),
+"output_type": AbstractDataProviderType::get(
+    new Type("hash<MyCreateResponse>")),
+```
+
+**Pattern — all fields optional (no required/preselected split):**
+
+```qore
+"options": DataProviderActionCatalog::getActionOptionFromFields(
+    MyGetInfoRequestDataType::Fields,
+),
+```
+
+For dynamic options, implement `getRequestTypeWithDataImpl()`.
 
 ### DPAT_EVENT
 
@@ -847,3 +965,12 @@ Module works when loaded directly but doesn't appear in Qorus apps. Add to `Data
 
 ### 10. Allowed values in option descriptions
 Never describe allowed values in the `desc` or `short_desc` text. Always declare them explicitly using the `allowed_values` field in `DataProviderOptionInfo`, `ConnectionOptionInfo`, or `ActionOptionInfo`. Text descriptions of allowed values cannot be parsed by the UI for dropdown generation.
+
+### 11. Missing `options` or `output_type` in action registration
+Every `registerAction()` call **must** include `options` (generated via `getActionOptionFromFields()`) and `output_type`. Without `options`, the action shows an empty form and users cannot configure it. Without `output_type`, output fields are invisible. This is the primary user interface — actions without these fields are unusable.
+
+### 12. Single-key hash slicing
+`Fields{"key"}` or `getFields(){"key"}` returns the value at that key (single-value dereference). For a single-key hash slice that returns a hash, use a trailing comma: `Fields{"key",}`. This is critical when passing fields to `getActionOptionFromFields()`, which expects a hash of field definitions — passing a single field's value instead of a hash causes `OPTION-ERROR` at module load time.
+
+### 13. Type classes outside namespace block
+Type classes declared in a `.qc` file **must** be inside the `public namespace ModuleName { ... }` block. If declared outside it (even in the same file), their class constants (e.g., `Fields`) cannot be resolved via `ClassName::ConstantName` from the `.qm` file, causing `PARSE-EXCEPTION: cannot resolve bareword` errors at module load time. See [Request Type Fields Pattern](#request-type-fields-pattern).

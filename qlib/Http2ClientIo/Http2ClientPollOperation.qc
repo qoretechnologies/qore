@@ -260,13 +260,16 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                 : sprintf("%s:%d", url_info.host, url_info.port);
         }
 
-        # Submit request via the socket's HTTP/2 session
-        int stream_id = sock.submitHttp2Request(req_headers, body);
-        string sid = string(stream_id);
-
-        # Register callback for this stream (under lock)
+        # Submit request AND register callback atomically under stream_lock.
+        # This prevents a race where the I/O thread processes the response in
+        # handleReading() before the callback is registered, which would cause
+        # the response to be lost (no callback found → STATE_RESPONSE_READY
+        # path taken instead of callback dispatch).
+        int stream_id;
         {
             AutoLock al(stream_lock);
+            stream_id = sock.submitHttp2Request(req_headers, body);
+            string sid = string(stream_id);
             stream_callbacks{sid} = callback;
             if (ctx) {
                 stream_ctxs{sid} = ctx;
@@ -389,7 +392,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         SocketHttp2ClientMultiplexPollOperation continues reading frames.
     */
     continueReading() {
-        if (state != STATE_RESPONSE_READY) {
+        if (state != STATE_RESPONSE_READY && state != STATE_WAIT_READ) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
         }
         remove completed_response;

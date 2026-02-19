@@ -102,6 +102,10 @@ public class DataProvider {
             "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+
+            # provided by the imagemagick module
+            "imagemagick": "ImageMagickDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the jni module
