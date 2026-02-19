@@ -196,8 +196,8 @@ public class MongoDbBulkRequestDataType inherits HashDataType {
                 "display_name": "Ordered",
                 "short_desc": "Execute operations in order",
                 "type": SoftBoolType,
-                "desc": "If True (default), operations execute in order and stop on first error; "
-                    "if False, operations may execute in any order and continue on errors",
+                "desc": "If `True` (default), operations execute in order and stop on first error; "
+                    "if `False`, operations may execute in any order and continue on errors",
                 "default_value": True,
             },
         };

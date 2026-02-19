@@ -115,6 +115,35 @@ class Issue3596_2 {
     }
 }
 
+#! AbstractDatasource subclass with no C++ private data (abstract C++ base, no setPrivate() call)
+class NullDatasource inherits AbstractDatasource {
+    nothing commit() {}
+    nothing rollback() {}
+    auto exec(string sql, ...) {}
+    auto vexec(string sql, *softlist<auto> vargs) {}
+    auto execRaw(string sql) {}
+    auto select(string sql, ...) {}
+    auto selectRow(string sql, ...) {}
+    auto selectRows(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    nothing beginTransaction() {}
+    *string getUserName() {}
+    *string getPassword() {}
+    *string getDBName() {}
+    *string getDBEncoding() {}
+    *string getOSEncoding() {}
+    *string getHostName() {}
+    *int getPort() {}
+    string getDriverName() { return "null"; }
+    auto getServerVersion() { return "1.0"; }
+    auto getClientVersion() { return "1.0"; }
+    bool inTransaction() { return False; }
+    hash<auto> getConfigHash() { return {}; }
+    string getConfigString() { return ""; }
+}
+
 our auto issue_3596;
 
 const Methods = ('p2', 'getData', 'hello', 'destructor', 'getType', 'p1', 'constructor');
@@ -144,6 +173,7 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         addTestCase("create_object", \testCreateObject());
         addTestCase("inheritance", \inheritance());
         addTestCase("weak refs", \weakRefTest());
+        addTestCase("no private data", \noPrivateDataTest());
         set_return_value(main());
     }
 
@@ -294,5 +324,21 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         }
 
         assertThrows("OBJECT-ALREADY-DELETED", \m.get());
+    }
+
+    #! Tests that calling a C++ method on an object with no C++ private data throws
+    #! OBJECT-INCOMPATIBLE instead of the misleading OBJECT-ALREADY-DELETED
+    noPrivateDataTest() {
+        # NullDatasource inherits abstract C++ class AbstractDatasource but has no C++ private
+        # data (no constructor calls setPrivate()), so calling a non-abstract C++ method on it
+        # triggers getReferencedPrivateData() with privateData == nullptr
+        AbstractDatasource ds = new NullDatasource();
+        assertThrows("OBJECT-INCOMPATIBLE", \ds.currentThreadInTransaction());
+
+        # verify that genuinely deleted objects still throw OBJECT-ALREADY-DELETED;
+        # capture the method reference before delete so the closure holds a strong ref
+        code ref = \ds.currentThreadInTransaction();
+        delete ds;
+        assertThrows("OBJECT-ALREADY-DELETED", ref);
     }
 }

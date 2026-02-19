@@ -137,7 +137,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
                     "display_name": "With Payload",
                     "short_desc": "Include payload in results",
                     "type": AbstractDataProviderTypeMap."*softbool",
-                    "desc": "Whether to return payload data with results; default: True",
+                    "desc": "Whether to return payload data with results; default: `True`",
                 },
                 "with_vector": <DataProviderOptionInfo>{
                     "display_name": "With Vector",

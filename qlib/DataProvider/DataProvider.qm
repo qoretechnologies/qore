@@ -73,11 +73,11 @@ module DataProvider {
         # register filter-records action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/filter",
+            "path": "/",
             "action": "filter-records",
             "display_name": "Filter Records",
             "short_desc": "Filter records by where_cond expression",
-            "desc": "Filter pipeline records using a where_cond expression; "
+            "desc": "Filter pipeline records using a `where_cond` expression; "
                 "matching records pass through, non-matching records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
@@ -99,12 +99,13 @@ module DataProvider {
         # register select-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/select-fields",
+            "path": "/",
             "action": "select-fields",
             "display_name": "Select Fields",
             "short_desc": "Select and optionally rename fields from records",
             "desc": "Select specific fields from each record and optionally rename them; "
-                "only the specified fields appear in the output",
+                "only the selected fields appear in the output.\n\n"
+                "Use `name` to keep a field as-is, or `new_name=old_name` to rename it",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
             "cls": "DataProvider::QoreSelectFieldsProcessor",
@@ -121,7 +122,7 @@ module DataProvider {
         # register set-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/set-fields",
+            "path": "/",
             "action": "set-fields",
             "display_name": "Set Fields",
             "short_desc": "Set fields to constant values in each record",
@@ -143,7 +144,7 @@ module DataProvider {
         # register remove-fields action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/remove-fields",
+            "path": "/",
             "action": "remove-fields",
             "display_name": "Remove Fields",
             "short_desc": "Remove specified fields from records",
@@ -165,7 +166,7 @@ module DataProvider {
         # register search-replace action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/search-replace",
+            "path": "/",
             "action": "search-replace",
             "display_name": "Search and Replace",
             "short_desc": "Search and replace text in a record field",
@@ -191,7 +192,7 @@ module DataProvider {
         # register record-limit action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/record-limit",
+            "path": "/",
             "action": "record-limit",
             "display_name": "Record Limit",
             "short_desc": "Limit the number of records passing through",
@@ -213,13 +214,17 @@ module DataProvider {
         # register running-stats action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/running-stats",
+            "path": "/",
             "action": "running-stats",
             "display_name": "Running Statistics",
             "short_desc": "Compute running statistics over windows of numeric records",
-            "desc": "Compute running statistics (count, sum, average, min, max, standard deviation, "
-                "variance) over a sliding window of records for each configured numeric field; "
-                "emits one analytics event per field when each window is full",
+            "desc": "Compute running statistics over a sliding window of records for each "
+                "configured numeric field; emits one analytics event per field when each "
+                "window is full.\n\n"
+                "Computed statistics:\n"
+                "- `count`, `sum`, `avg` (mean)\n"
+                "- `min_val`, `max_val`\n"
+                "- `stddev` (standard deviation), `variance`",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreRunningStatsProcessor",
@@ -236,13 +241,13 @@ module DataProvider {
         # register moving-average action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/moving-average",
+            "path": "/",
             "action": "moving-average",
             "display_name": "Moving Average",
             "short_desc": "Compute simple and exponential moving averages per record",
-            "desc": "Compute simple moving average (SMA) and exponential moving average (EMA) "
+            "desc": "Compute simple moving average (`SMA`) and exponential moving average (`EMA`) "
                 "for each configured numeric field; emits one analytics event per input record "
-                "with the current SMA and EMA values",
+                "with the current `SMA` and `EMA` values",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreMovingAverageProcessor",
@@ -263,14 +268,14 @@ module DataProvider {
         # register trend-analysis action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/trend-analysis",
+            "path": "/",
             "action": "trend-analysis",
             "display_name": "Trend Analysis",
             "short_desc": "Detect trends using linear regression over windows of records",
-            "desc": "Compute linear regression trend analysis (slope, intercept, r-squared, "
-                "direction) over a window of records for each configured numeric field; "
-                "emits one analytics event per field when each window is full with the "
-                "trend direction (rising, falling, or flat)",
+            "desc": "Compute linear regression trend analysis (`slope`, `intercept`, "
+                "`r_squared`, `direction`) over a window of records for each configured "
+                "numeric field; emits one analytics event per field when each window is full "
+                "with the trend direction (`rising`, `falling`, or `flat`)",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreTrendAnalysisProcessor",
@@ -292,13 +297,13 @@ module DataProvider {
         # register anomaly-detection action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/anomaly-detection",
+            "path": "/",
             "action": "anomaly-detection",
             "display_name": "Anomaly Detection",
             "short_desc": "Detect anomalous values using z-score analysis per record",
             "desc": "Detect anomalous values in each configured numeric field using z-score "
                 "analysis against a sliding window; emits one analytics event per input record "
-                "indicating whether the value exceeds the configured threshold",
+                "indicating whether the value exceeds the configured `threshold`",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreAnomalyDetectionProcessor",
@@ -319,16 +324,17 @@ module DataProvider {
         # register percentile action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/percentile",
+            "path": "/",
             "action": "percentile",
             "display_name": "Calculate Data Distribution",
             "short_desc": "Computes median, quartiles, and spread of values",
             "desc": "Analyzes the distribution of numeric values in each window by computing "
-                "percentiles (median, quartiles, and custom values), interquartile range, "
-                "skewness (whether the data leans left or right), and kurtosis (whether "
-                "values cluster tightly or spread out). For example, for transaction amounts "
-                "it can show that 50%% are under $100, 90%% are under $500, and the spread "
-                "between the 25th and 75th percentile is $200.",
+                "percentiles (median, quartiles, and custom values), interquartile range "
+                "(`iqr`), skewness (whether the data leans left or right), and kurtosis "
+                "(whether values cluster tightly or spread out).\n\n"
+                "For example, for transaction amounts it can show that 50%% are under "
+                "$100, 90%% are under $500, and the spread between the 25th and 75th "
+                "percentile is $200.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QorePercentileProcessor",
@@ -349,16 +355,16 @@ module DataProvider {
         # register correlation action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/correlation",
+            "path": "/",
             "action": "correlation",
             "display_name": "Find Related Fields",
             "short_desc": "Measures how strongly fields move together",
             "desc": "Computes the Pearson correlation coefficient between all pairs of "
                 "configured numeric fields to measure how strongly they move together. "
-                "Values range from -1.0 (perfect inverse relationship) to 1.0 (perfect "
-                "direct relationship), with 0.0 meaning no linear relationship. For example, "
-                "it can show that temperature and ice cream sales are strongly correlated "
-                "(0.92) while humidity and sales are weakly correlated (-0.15).",
+                "Values range from `-1.0` (perfect inverse relationship) to `1.0` (perfect "
+                "direct relationship), with `0.0` meaning no linear relationship.\n\n"
+                "For example, it can show that temperature and ice cream sales are strongly "
+                "correlated (`0.92`) while humidity and sales are weakly correlated (`-0.15`).",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProvider::QoreCorrelationProcessor",
@@ -375,14 +381,14 @@ module DataProvider {
         # register cross-correlation action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/cross-correlation",
+            "path": "/",
             "action": "cross-correlation",
             "display_name": "Find Delayed Relationships",
             "short_desc": "Discovers if changes in one field predict changes in another",
             "desc": "Computes time-lagged cross-correlation between two fields to discover "
-                "whether changes in one field predict changes in another after a delay. "
+                "whether changes in one field predict changes in another after a delay.\n\n"
                 "For example, it can show that a spike in marketing spend correlates with "
-                "increased revenue 3 periods later (lag = 3, correlation = 0.85).",
+                "increased revenue 3 periods later (`lag = 3`, `correlation = 0.85`).",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProvider::QoreCrossCorrelationProcessor",
@@ -405,15 +411,15 @@ module DataProvider {
         # register histogram action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/histogram",
+            "path": "/",
             "action": "histogram",
             "display_name": "Count Value Ranges",
             "short_desc": "Groups values into ranges and counts how many fall in each",
             "desc": "Creates a frequency distribution by dividing the range of values into "
-                "bins and counting how many values fall in each bin. Supports uniform "
-                "(equal-width) and quantile (equal-count) binning. For example, for response "
-                "times it can show that 80%% of requests complete in 0-100ms, 15%% in "
-                "100-200ms, and 5%% take over 200ms.",
+                "bins and counting how many values fall in each bin. Supports `uniform` "
+                "(equal-width) and `quantile` (equal-count) binning.\n\n"
+                "For example, for response times it can show that 80%% of requests complete "
+                "in 0-100ms, 15%% in 100-200ms, and 5%% take over 200ms.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreHistogramProcessor",
@@ -434,14 +440,15 @@ module DataProvider {
         # register rate-of-change action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/rate-of-change",
+            "path": "/",
             "action": "rate-of-change",
             "display_name": "Measure Speed of Change",
             "short_desc": "Tracks how fast values are changing and accelerating",
-            "desc": "Computes the rate of change (first derivative), acceleration (second "
-                "derivative), and percentage change for each record relative to its "
-                "sliding window history. For example, it can show that revenue is growing "
-                "at $1,000/period and accelerating (the growth rate is itself increasing).",
+            "desc": "Computes the `rate_of_change` (first derivative), `acceleration` "
+                "(second derivative), and `percent_change` for each record relative to its "
+                "sliding window history.\n\n"
+                "For example, it can show that revenue is growing at $1,000/period and "
+                "accelerating (the growth rate is itself increasing).",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreRateOfChangeProcessor",
@@ -462,16 +469,16 @@ module DataProvider {
         # register ewma-control-chart action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/ewma-control-chart",
+            "path": "/",
             "action": "ewma-control-chart",
             "display_name": "Monitor Process Stability",
             "short_desc": "Detects when values drift outside normal operating range",
             "desc": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) "
                 "control chart to detect when values drift outside the normal operating range. "
                 "The EWMA smooths out noise while detecting sustained shifts. Each record is "
-                "classified as normal, upper violation, or lower violation. For example, it "
-                "can detect when a server's average response time gradually drifts upward "
-                "beyond its normal range.",
+                "classified as `normal`, `upper_violation`, or `lower_violation`.\n\n"
+                "For example, it can detect when a server's average response time gradually "
+                "drifts upward beyond its normal range.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreEWMAControlChartProcessor",
@@ -494,15 +501,16 @@ module DataProvider {
         # register seasonality-detection action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/seasonality-detection",
+            "path": "/",
             "action": "seasonality-detection",
             "display_name": "Detect Repeating Patterns",
             "short_desc": "Finds cyclical patterns in data automatically",
             "desc": "Detects repeating cyclical patterns in the data using autocorrelation "
                 "analysis. It automatically identifies the dominant period without requiring "
-                "the user to specify it upfront. For example, it can discover that sales data "
-                "has a weekly pattern (period = 7) with a correlation of 0.85, or that a "
-                "temperature sensor shows both daily (period = 24) and yearly patterns.",
+                "the user to specify it upfront.\n\n"
+                "For example, it can discover that sales data has a weekly pattern "
+                "(`period = 7`) with a correlation of `0.85`, or that a temperature sensor "
+                "shows both daily (`period = 24`) and yearly patterns.",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProvider::QoreSeasonalityDetectionProcessor",
@@ -525,13 +533,15 @@ module DataProvider {
         # register group-by action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": QoreApp::AppName,
-            "path": "/group-by",
+            "path": "/",
             "action": "group-by",
             "display_name": "Group By and Aggregate",
             "short_desc": "Group records by field values and compute aggregates per group",
-            "desc": "Group records by one or more field values and compute aggregate functions "
-                "(count, sum, avg, min, max, first, last) per group; emits one output record "
-                "per group on flush with the group field values and computed aggregates",
+            "desc": "Group records by one or more field values and compute aggregate "
+                "functions per group; emits one output record per group on flush with the "
+                "group field values and computed aggregates.\n\n"
+                "Supported aggregate functions: `count()`, `sum(field)`, `avg(field)`, "
+                "`min(field)`, `max(field)`, `first(field)`, `last(field)`",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProvider::QoreGroupByProcessor",

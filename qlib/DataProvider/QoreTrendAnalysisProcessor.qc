@@ -43,9 +43,10 @@ public class QoreTrendAnalysisProcessor inherits AbstractAnalyticsProcessor {
                 "display_name": "Direction Threshold",
                 "short_desc": "Minimum absolute slope to classify as rising or falling",
                 "desc": "The minimum absolute slope value for the trend to be classified as "
-                    "'rising' or 'falling'; slopes with absolute value at or below this threshold "
-                    "are classified as 'flat'; use smaller values for data at large scales where "
-                    "meaningful trends have small slopes; must be >= 0; default: 0.001",
+                    "`rising` or `falling`; slopes with absolute value at or below this threshold "
+                    "are classified as `flat`.\n\n"
+                    "Use smaller values for data at large scales where meaningful trends have "
+                    "small slopes; must be >= 0; default: `0.001`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

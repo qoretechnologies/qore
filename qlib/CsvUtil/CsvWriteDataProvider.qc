@@ -95,19 +95,19 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Field Descriptions",
                 "short_desc": "A hash describing the CSV fields to output",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Sets a hash describing the CSV fields to output; keys are field names, values are "
+                "desc": "A hash describing the CSV fields to output. Keys are field names, values are "
                     "[field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/"
                     "class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) "
                     "or a hash with the following keys:\n"
                     "- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/"
                         "CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html"
                         "#abstractcsviterator_option_field_types)\n"
-                    "- `format`: when ysed with type `date`, a [date format](https://qoretechnologies.com/manual/"
-                        "qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting), when "
-                        "used with type `int`, `float`, or `number`, it is a number format string with 1 to 3 "
-                        "fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: "
-                        "`\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits "
-                        "after the decimal place)"
+                    "- `format`: for `date` types, a "
+                        "[date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/"
+                        "group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` "
+                        "types, a number format string: "
+                        "*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] "
+                        "(e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)"
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Header Names",

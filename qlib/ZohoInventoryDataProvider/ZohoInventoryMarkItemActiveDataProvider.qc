@@ -60,7 +60,7 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
             "active": {
                 "display_name": "Active",
                 "type": SoftBoolType,
-                "desc": "If True, marks the item as active; if False, marks as inactive",
+                "desc": "If `True`, marks the item as active; if `False`, marks as inactive",
                 "required": True,
             },
         });

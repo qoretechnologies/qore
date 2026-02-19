@@ -53,7 +53,7 @@ public namespace EdifactUtil {
                     "display_name": "Write UNA Segment",
                     "short_desc": "Include UNA service string advice",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, write the UNA segment at the beginning of the interchange to "
+                    "desc": "If `True`, write the UNA segment at the beginning of the interchange to "
                         "explicitly define the delimiter characters. Recommended for interoperability.",
                     "default_value": True,
                 },
@@ -61,7 +61,7 @@ public namespace EdifactUtil {
                     "display_name": "Add Line Breaks",
                     "short_desc": "Add newlines after each segment",
                     "type": AbstractDataProviderTypeMap."bool",
-                    "desc": "If True, add a newline character after each segment terminator. This makes "
+                    "desc": "If `True`, add a newline character after each segment terminator. This makes "
                         "the output more readable but increases file size slightly.",
                     "default_value": False,
                 },

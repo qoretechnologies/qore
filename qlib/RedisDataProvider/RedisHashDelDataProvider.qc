@@ -32,7 +32,7 @@ public class RedisHashDelDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "del",
-            "desc": "Redis hash DEL API data provider; deletes hash fields and checks existence (HDEL, HEXISTS)",
+            "desc": "Redis hash DEL API data provider; deletes hash fields and checks existence (`HDEL`, `HEXISTS`)",
             "type": "RedisHashDelDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -169,7 +169,7 @@ public class RedisHashDelResponseDataType inherits DataProvider::HashDataType {
             "exists": {
                 "display_name": "Exists?",
                 "short_desc": "Field exists",
-                "desc": "True if the field exists (for HEXISTS operation)",
+                "desc": "`True` if the field exists (for `HEXISTS` operation)",
                 "type": SoftBoolType,
                 "example_value": True,
             },

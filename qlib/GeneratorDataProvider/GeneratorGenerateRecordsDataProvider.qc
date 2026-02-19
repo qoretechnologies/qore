@@ -47,8 +47,9 @@ public class GeneratorGenerateRecordsDataProvider inherits DataProvider::Abstrac
             "strategy": <DataProviderOptionInfo>{
                 "display_name": "Generation Strategy",
                 "short_desc": "How field values are generated",
-                "desc": "The strategy used to generate field values; 'sequential' produces deterministic values "
-                    "based on the record index; 'random' produces pseudo-random values; defaults to 'sequential'",
+                "desc": "The strategy used to generate field values; `sequential` produces deterministic "
+                    "values based on the record index; `random` produces pseudo-random values; "
+                    "defaults to `sequential`",
                 "type": AbstractDataProviderTypeMap."string",
                 "default_value": GeneratorStrategy::Sequential,
                 "allowed_values": (
@@ -65,18 +66,20 @@ public class GeneratorGenerateRecordsDataProvider inherits DataProvider::Abstrac
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Definitions",
                 "short_desc": "Schema definition for generated records",
-                "desc": "A list of field definition hashes, each with keys: 'name' (string, the field name), "
-                    "'type' (string, one of: 'string', 'int', 'float', 'bool', 'date'), and optionally 'desc' "
-                    "(string, field description); if not provided, a default schema is used with fields: "
-                    "'id' (int), 'name' (string), 'value' (float), 'active' (bool), 'created' (date)",
+                "desc": "A list of field definition hashes, each with keys: `name` (string, the field "
+                    "name), `type` (string, one of: `string`, `int`, `float`, `bool`, `date`), and "
+                    "optionally `desc` (string, field description).\n\n"
+                    "If not provided, a default schema is used with fields: `id` (int), `name` "
+                    "(string), `value` (float), `active` (bool), `created` (date)",
                 "type": new ListDataType("*softlist<GeneratorFieldDefinition>",
                     new GeneratorFieldDefinitionDataType(), True),
             },
             "include_nulls": <DataProviderOptionInfo>{
                 "display_name": "Include Nulls",
                 "short_desc": "Whether to randomly include null values",
-                "desc": "When True and strategy is 'random', approximately 10% of field values will be set to "
-                    "NOTHING (null); useful for testing null handling in data pipelines; defaults to False",
+                "desc": "When `True` and strategy is `random`, approximately 10%% of field values will be "
+                    "set to `NOTHING` (null); useful for testing null handling in data pipelines; "
+                    "defaults to `False`",
                 "type": AbstractDataProviderTypeMap."bool",
                 "default_value": False,
             },
@@ -85,7 +88,7 @@ public class GeneratorGenerateRecordsDataProvider inherits DataProvider::Abstrac
                 "short_desc": "Seed for reproducible random generation",
                 "desc": "An integer seed for the random number generator; when provided, the same seed will "
                     "always produce the same sequence of records, enabling reproducible test data; only "
-                    "effective with 'random' strategy",
+                    "effective with `random` strategy",
                 "type": AbstractDataProviderTypeMap."int",
             },
             "base_date": <DataProviderOptionInfo>{

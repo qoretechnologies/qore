@@ -62,8 +62,8 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             "is_regex": <DataProviderOptionInfo>{
                 "display_name": "Use Regex",
                 "short_desc": "Use regex matching instead of literal",
-                "desc": "If True, the search pattern is treated as a regular expression; "
-                    "if False, it is treated as a literal string",
+                "desc": "If `True`, the search pattern is treated as a regular expression; "
+                    "if `False`, it is treated as a literal string",
                 "type": AbstractDataProviderTypeMap."bool",
                 "required": False,
                 "default_value": False,
@@ -72,7 +72,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 "display_name": "Regex Options",
                 "short_desc": "Regular expression options for matching",
                 "desc": "A list of regular expression option names to apply when performing "
-                    "regex matching (e.g. RE_Global, RE_Caseless)",
+                    "regex matching (e.g. `RE_Global`, `RE_Caseless`)",
                 "type": AbstractDataProviderTypeMap."*list",
                 "required": False,
                 "element_allowed_values": RegularExpressionArgInfo[2].allowed_values,

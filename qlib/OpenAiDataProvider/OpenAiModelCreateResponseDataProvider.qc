@@ -1785,7 +1785,7 @@ public class OpenAiModelCreateResponseRequestDataType inherits HashDataType {
             "store": {
                 "display_name": "Store?",
                 "short_desc": "Whether to store the generated model response for later retrieval via API",
-                "desc": "WhetWhether to store the generated model response for later retrieval via APII",
+                "desc": "Whether to store the generated model response for later retrieval via API",
                 "type": AbstractDataProviderTypeMap."bool",
                 "default_value": False,
             },
