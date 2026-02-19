@@ -2412,9 +2412,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         # use a prepared statement for efficiency when the datasource supports it;
         # AbstractDatasource subclasses that are not Datasource or DatasourcePool (e.g. remote
-        # proxy classes) cannot be used with SQLStatement, so fall back to exec() for those
-        *SQLStatement stmt;
+        # proxy classes) cannot be used with SQLStatement, so fall back to vexec() for those
         bool use_direct_exec = !(ds instanceof Datasource || ds instanceof DatasourcePool);
+        *SQLStatement stmt;
+        if (!use_direct_exec) {
+            stmt = new SQLStatement(ds);
+            stmt.prepare(sql);
+        }
 
         # ON CONFLICT DO UPDATE cannot handle duplicate PK values in the same batch;
         # capture PK column names for deduplication in the closure
@@ -2431,10 +2435,6 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             if (use_direct_exec) {
                 ds.vexec(sql, args);
             } else {
-                if (!stmt) {
-                    stmt = new SQLStatement(ds);
-                    stmt.prepare(sql);
-                }
                 stmt.execArgs(args);
             }
             return UR_Verified;
