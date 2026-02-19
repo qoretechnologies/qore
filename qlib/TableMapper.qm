@@ -1893,13 +1893,12 @@ InboundTableMapperIterator i(input, mapper);
         #! returns a row iterator for the underlying SQL statement for this object
         /** @since TableMapper 1.1.1
 
-            @deprecated for getStatement(); if the underlying database connection object returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" instead of an
-            @ref Qore::SQL::SQLStatement "SQLStatement", then an exception will be raised; use getStatement() instead
+            @deprecated use getStatement() instead; this method is a legacy alias
          */
-        Qore::SQL::SQLStatement getRowIterator() {
+        Qore::SQL::AbstractSQLStatement getRowIterator() {
             if (!m_stmt)
                 initStatement();
-            return cast<SQLStatement>(m_stmt);
+            return m_stmt;
         }
 
         #! returns a row iterator for the underlying SQL statement for this object
