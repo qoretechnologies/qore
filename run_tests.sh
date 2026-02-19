@@ -203,6 +203,17 @@ TEST_COUNT=`echo $TESTS | wc -w`
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
+# Run single test with timeout (default 300s = 5 minutes).
+# Use gtimeout on macOS (GNU coreutils), timeout on Linux.
+TEST_TIMEOUT=${TEST_TIMEOUT:-300}
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=gtimeout
+else
+    TIMEOUT_CMD=""
+fi
+
 # Run tests.
 i=1
 for test in $TESTS; do
@@ -214,12 +225,18 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
-    # Run single test with timeout (default 300s = 5 minutes).
-    TEST_TIMEOUT=${TEST_TIMEOUT:-300}
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval timeout $TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        if [ -n "$TIMEOUT_CMD" ]; then
+            eval $TIMEOUT_CMD $TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        else
+            eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        fi
     else
-        timeout $TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        if [ -n "$TIMEOUT_CMD" ]; then
+            $TIMEOUT_CMD $TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        else
+            $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        fi
     fi
     test_exit=$?
 
