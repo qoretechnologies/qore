@@ -29,7 +29,7 @@ public class RedisSortedSetScoreDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "score",
-            "desc": "Redis sorted set SCORE API; score and rank queries (ZSCORE, ZRANK, ZREVRANK, ZCARD)",
+            "desc": "Redis sorted set SCORE API; score and rank queries (`ZSCORE`, `ZRANK`, `ZREVRANK`, `ZCARD`)",
             "type": "RedisSortedSetScoreDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,

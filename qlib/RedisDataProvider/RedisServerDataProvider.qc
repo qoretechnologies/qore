@@ -29,7 +29,7 @@ public class RedisServerDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "server",
-            "desc": "Redis server operations provider; server management (INFO, DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, TIME)",
+            "desc": "Redis server operations provider; server management (`INFO`, `DBSIZE`, `FLUSHDB`, `FLUSHALL`, `PING`, `ECHO`, `TIME`)",
             "type": "RedisServerDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -131,21 +131,21 @@ public class RedisServerRequestDataType inherits DataProvider::HashDataType {
             "section": {
                 "display_name": "Section",
                 "short_desc": "INFO section",
-                "desc": "Section for INFO (server, clients, memory, persistence, stats, replication, cpu, cluster, keyspace)",
+                "desc": "Section for `INFO` (`server`, `clients`, `memory`, `persistence`, `stats`, `replication`, `cpu`, `cluster`, `keyspace`)",
                 "type": StringOrNothingType,
                 "example_value": "server",
             },
             "message": {
                 "display_name": "Message",
                 "short_desc": "Message for ECHO",
-                "desc": "Message for ECHO",
+                "desc": "Message for `ECHO`",
                 "type": StringOrNothingType,
                 "example_value": "hello",
             },
             "parameter": {
                 "display_name": "Parameter",
                 "short_desc": "Config parameter pattern",
-                "desc": "Parameter pattern for CONFIG GET",
+                "desc": "Parameter pattern for `CONFIG GET`",
                 "type": StringOrNothingType,
                 "example_value": "maxmemory*",
             },
@@ -182,7 +182,7 @@ public class RedisServerResponseDataType inherits DataProvider::HashDataType {
             "response": {
                 "display_name": "Response",
                 "short_desc": "PING/ECHO response",
-                "desc": "Response for PING/ECHO",
+                "desc": "Response for `PING`/`ECHO`",
                 "type": StringOrNothingType,
                 "example_value": "PONG",
             },

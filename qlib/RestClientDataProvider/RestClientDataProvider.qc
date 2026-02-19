@@ -246,7 +246,7 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                 "display_name": "OAuth2 Refresh Token",
                 "short_desc": "Sets the OAuth2 refresh token",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "the OAuth2 refresh token, if any (complements option `token`)",
+                "desc": "The OAuth2 refresh token, if any (complements option `token`)",
                 "sensitive": True,
             },
             "oauth2_scopes": <DataProviderOptionInfo>{
@@ -273,7 +273,7 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                 "display_name": "Pre-Encoded URLs",
                 "short_desc": "If true then URLs are assumed to be preencoded",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "if `true` then all URI paths in URLs are assumed to be already "
+                "desc": "If `true` then all URI paths in URLs are assumed to be already "
                     "[percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and "
                     "any unencoded characters are sent in a URL with a new request, an exception is raised",
                 "default_value": False,

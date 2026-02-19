@@ -124,7 +124,7 @@ public class RedisStringGetRequestDataType inherits DataProvider::HashDataType {
             "keys": {
                 "display_name": "Keys",
                 "short_desc": "Multiple keys to retrieve",
-                "desc": "A list of keys to get values for (use for multiple key retrieval with MGET)",
+                "desc": "A list of keys to get values for (use for multiple key retrieval with `MGET`)",
                 "type": SoftListOrNothingType,
                 "example_value": ("key1", "key2", "key3"),
             },
@@ -145,14 +145,14 @@ public class RedisStringGetResponseDataType inherits DataProvider::HashDataType 
             "value": {
                 "display_name": "Value",
                 "short_desc": "The retrieved value",
-                "desc": "The value of the key (for single key GET), or NOTHING if the key does not exist",
+                "desc": "The value of the key (for single key `GET`), or `NOTHING` if the key does not exist",
                 "type": AutoType,
                 "example_value": "myvalue",
             },
             "values": {
                 "display_name": "Values",
                 "short_desc": "Multiple retrieved values",
-                "desc": "The values of the keys (for MGET), with NOTHING for keys that do not exist",
+                "desc": "The values of the keys (for `MGET`), with `NOTHING` for keys that do not exist",
                 "type": SoftListOrNothingType,
             },
         };

@@ -29,7 +29,7 @@ public class RedisSetAddDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "add",
-            "desc": "Redis set ADD/REM/MEMBERS API; add, remove, and list set members (SADD, SREM, SMEMBERS, SISMEMBER)",
+            "desc": "Redis set ADD/REM/MEMBERS API; add, remove, and list set members (`SADD`, `SREM`, `SMEMBERS`, `SISMEMBER`)",
             "type": "RedisSetAddDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -166,13 +166,13 @@ public class RedisSetAddResponseDataType inherits DataProvider::HashDataType {
             "members": {
                 "display_name": "Members",
                 "short_desc": "Set members",
-                "desc": "Set members for SMEMBERS",
+                "desc": "Set members for `SMEMBERS`",
                 "type": SoftListOrNothingType,
             },
             "is_member": {
                 "display_name": "Is Member?",
                 "short_desc": "Member exists",
-                "desc": "True if member exists for SISMEMBER",
+                "desc": "`True` if member exists for `SISMEMBER`",
                 "type": SoftBoolType,
                 "example_value": True,
             },

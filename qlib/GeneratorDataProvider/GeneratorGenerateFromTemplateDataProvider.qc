@@ -56,9 +56,9 @@ public class GeneratorGenerateFromTemplateDataProvider inherits DataProvider::Ab
             "strategy": <DataProviderOptionInfo>{
                 "display_name": "Generation Strategy",
                 "short_desc": "How template values are varied",
-                "desc": "The strategy for varying template values across generated records; 'sequential' adds "
-                    "the record index to numeric values and appends it as a suffix to strings; 'random' "
-                    "applies random variations; defaults to 'sequential'",
+                "desc": "The strategy for varying template values across generated records; `sequential` "
+                    "adds the record index to numeric values and appends it as a suffix to strings; "
+                    "`random` applies random variations; defaults to `sequential`",
                 "type": AbstractDataProviderTypeMap."string",
                 "default_value": GeneratorStrategy::Sequential,
                 "allowed_values": (
@@ -75,8 +75,9 @@ public class GeneratorGenerateFromTemplateDataProvider inherits DataProvider::Ab
             "include_nulls": <DataProviderOptionInfo>{
                 "display_name": "Include Nulls",
                 "short_desc": "Whether to randomly include null values",
-                "desc": "When True and strategy is 'random', approximately 10% of field values will be set to "
-                    "NOTHING (null); useful for testing null handling in data pipelines; defaults to False",
+                "desc": "When `True` and strategy is `random`, approximately 10%% of field values will be "
+                    "set to `NOTHING` (null); useful for testing null handling in data pipelines; "
+                    "defaults to `False`",
                 "type": AbstractDataProviderTypeMap."bool",
                 "default_value": False,
             },
@@ -84,7 +85,7 @@ public class GeneratorGenerateFromTemplateDataProvider inherits DataProvider::Ab
                 "display_name": "Random Seed",
                 "short_desc": "Seed for reproducible random generation",
                 "desc": "An integer seed for the random number generator for reproducible output; only "
-                    "effective with 'random' strategy",
+                    "effective with `random` strategy",
                 "type": AbstractDataProviderTypeMap."int",
             },
             "base_date": <DataProviderOptionInfo>{

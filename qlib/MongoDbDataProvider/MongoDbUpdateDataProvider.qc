@@ -140,14 +140,14 @@ public class MongoDbUpdateRequestDataType inherits HashDataType {
                 "display_name": "Update One",
                 "short_desc": "Update only one document",
                 "type": SoftBoolType,
-                "desc": "If True, update only the first matching document; otherwise update all matching documents",
+                "desc": "If `True`, update only the first matching document; otherwise update all matching documents",
                 "default_value": False,
             },
             "upsert": {
                 "display_name": "Upsert",
                 "short_desc": "Insert if not found",
                 "type": SoftBoolType,
-                "desc": "If True, insert a new document if no documents match the filter",
+                "desc": "If `True`, insert a new document if no documents match the filter",
                 "default_value": False,
             },
         };

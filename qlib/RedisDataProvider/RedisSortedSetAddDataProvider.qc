@@ -29,7 +29,7 @@ public class RedisSortedSetAddDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "add",
-            "desc": "Redis sorted set ADD API; add, remove, and increment (ZADD, ZREM, ZINCRBY)",
+            "desc": "Redis sorted set ADD API; add, remove, and increment (`ZADD`, `ZREM`, `ZINCRBY`)",
             "type": "RedisSortedSetAddDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,

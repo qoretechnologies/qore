@@ -32,7 +32,7 @@ public class RedisStringDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "strings",
-            "desc": "Redis string data provider; provides access to string operations (GET, SET, INCR, etc.)",
+            "desc": "Redis string data provider; provides access to string operations (`GET`, `SET`, `INCR`, etc.)",
             "type": "RedisStringDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_children": True,

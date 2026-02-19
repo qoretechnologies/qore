@@ -92,30 +92,29 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Field Descriptions",
                 "short_desc": "A hash describing the CSV fields on input",
                 "type": AbstractDataProviderTypeMap."hash",
-                "desc": "The keys are field names as given by the `header_names` or `headers` options (in case "
-                    "neither of these options are used, then field names are numbers starting with `0`) and the "
-                    "values are "
+                "desc": "A hash describing the CSV fields on input. Keys are field names as given by the "
+                    "`header_names` or `headers` options (if neither is used, field names are numbers starting "
+                    "with `0`). Values are "
                     "[field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/"
                     "class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) "
                     "or a hash with the following keys:\n"
                     "- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/"
                         "CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html"
                         "#abstractcsviterator_option_field_types)\n"
-                    "- `format`: when ysed with type `date`, a [date format](https://qoretechnologies.com/manual/"
-                        "qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting), when "
-                        "used with type `int`, `float`, or `number`, it is a number format string with 1 to 3 "
-                        "fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: "
-                        "`\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits "
-                        "after the decimal place)\n"
-                    "- `timezone`: used only with the `date` type; this value is passed to "
+                    "- `format`: for `date` types, a "
+                        "[date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/"
+                        "group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` "
+                        "types, a number format string: "
+                        "*<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] "
+                        "(e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n"
+                    "- `timezone`: for `date` types only; passed to "
                         "[TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/"
-                        "class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9), "
-                        "and the resulting time zone is used to parse the date (this value overrides any default "
-                        "time zone for the object; use only in case date/time values from different time zones are "
-                        "present in different columns of the same file)\n\n"
-                    "Note that setting this value also sets `headers` if not set automatically with `header_names`; "
-                    "if no field type is given, the default is `*string`; note as well that invalid field names "
-                    "given in this option are ignored",
+                        "class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) "
+                        "to parse dates (overrides any default time zone; use when different columns have "
+                        "different time zones)\n\n"
+                    "**Note**: setting this value also sets `headers` if not set automatically with "
+                    "`header_names`. If no field type is given, the default is `*string`. Invalid field names "
+                    "in this option are ignored.",
             },
             "header_lines": <DataProviderOptionInfo>{
                 "display_name": "Number of Header Lines",

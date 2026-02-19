@@ -125,7 +125,7 @@ public class MongoDbDeleteRequestDataType inherits HashDataType {
                 "display_name": "Delete One",
                 "short_desc": "Delete only one document",
                 "type": SoftBoolType,
-                "desc": "If True, delete only the first matching document; otherwise delete all matching documents",
+                "desc": "If `True`, delete only the first matching document; otherwise delete all matching documents",
                 "default_value": False,
             },
         };

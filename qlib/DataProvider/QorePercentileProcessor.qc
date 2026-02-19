@@ -42,8 +42,8 @@ public class QorePercentileProcessor inherits AbstractAnalyticsProcessor {
             "percentiles": <DataProviderOptionInfo>{
                 "display_name": "Percentile Values",
                 "short_desc": "Comma-separated percentile values to compute",
-                "desc": "A comma-separated list of percentile values to compute (0-100); "
-                    "default: \"25,50,75,90,95,99\"",
+                "desc": "A comma-separated list of percentile values to compute (`0`-`100`); "
+                    "default: `\"25,50,75,90,95,99\"`",
                 "type": AbstractDataProviderTypeMap."*string",
             },
         };

@@ -165,7 +165,7 @@ public class QoreDataType inherits AbstractDataProviderType {
         const SupportedOptions = {
             "qore.no_null": <DataProviderTypeOptionInfo>{
                 "type": Type::Boolean,
-                "desc": "if True then NULL is not supported on input if NOTHING is also not accepted",
+                "desc": "if `True` then `NULL` is not supported on input if `NOTHING` is also not accepted",
             },
         };
 

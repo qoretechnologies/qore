@@ -63,7 +63,7 @@ public class MemcachedTouchResponseDataType inherits DataProvider::HashDataType 
                 "type": BoolType,
                 "display_name": "Touched",
                 "short_desc": "Expiration was updated",
-                "desc": "True if the expiration time was successfully updated",
+                "desc": "`True` if the expiration time was successfully updated",
                 "example_value": True,
             },
             "status": {
