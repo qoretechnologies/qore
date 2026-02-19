@@ -361,6 +361,19 @@ static inline void makeAccessDeletedObjectException(ExceptionSink *xsink, const 
     xsink->raiseException("OBJECT-ALREADY-DELETED", "attempt to access an already-deleted object of class '%s'", cname);
 }
 
+static inline void makeObjectIncompatibleException(ExceptionSink* xsink, const char* cname) {
+    xsink->raiseException("OBJECT-INCOMPATIBLE",
+        "object of class '%s' is not compatible with the expected builtin class for this operation",
+        cname);
+}
+
+static inline void makeObjectIncompatibleException(ExceptionSink* xsink, const char* cname,
+        const char* expected_cname) {
+    xsink->raiseException("OBJECT-INCOMPATIBLE",
+        "object of class '%s' is not compatible with the expected builtin class '%s'",
+        cname, expected_cname);
+}
+
 //! returns a custom Qore program location for external modules to generate runtime exceptions with the source location
 class QoreExternalProgramLocationWrapper {
 public:
