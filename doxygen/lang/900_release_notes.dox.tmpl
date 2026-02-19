@@ -723,6 +723,21 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, payments, appointments, catalog items, invoices, and events
       - action catalog integration with 23 actions and 7 triggers
       - connection support with \c squareres:// URL scheme
+    - @ref squarespacerestclientintro "SquarespaceRestClient" module
+      - new module providing a REST client for Squarespace's Commerce API
+      - supports OAuth2 authentication with bearer tokens
+      - provides SquarespaceRestConnection for connection management with \c squarespaceres:// URL scheme
+    - @ref squarespacedataproviderintro "SquarespaceDataProvider" module
+      - new module providing a data provider API for Squarespace Commerce
+      - order management (create, fulfill, list, get by ID)
+      - product management (create, update, delete, list, get by ID)
+      - product variant management (create, update, delete, list)
+      - product image management (upload, assign to variant, update alt text, delete)
+      - inventory management (list, get, update stock quantities)
+      - transaction listing and retrieval
+      - polling-based event triggers for orders, products, and transactions
+      - action catalog integration with 23 actions and 3 triggers
+      - connection support with \c squarespaceres:// URL scheme
     - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
       \c .meta.json metadata files during the build, providing machine-readable documentation for
       all builtin classes, methods, functions, constants, hashdecls, and enums

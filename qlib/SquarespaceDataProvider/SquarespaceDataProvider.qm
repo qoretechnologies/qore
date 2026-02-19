@@ -1,0 +1,775 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SquarespaceDataProvider module definition
+
+/*  SquarespaceDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) SquarespaceRestClient
+%requires uuid
+%try-module json
+%define NoJson
+%endtry
+
+module SquarespaceDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Squarespace Commerce";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new SquarespaceDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SquarespaceDataProvider::AppName,
+            "display_name": "Squarespace",
+            "short_desc": "Squarespace Commerce platform",
+            "desc": "Squarespace is an e-commerce platform for managing online stores.\n\n"
+                "This integration supports orders, products, product variants, product images, "
+                "inventory, and transactions.",
+            "scheme": "squarespaceres",
+            "logo": SquarespaceLogo,
+            "logo_file_name": "squarespace-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        # Create an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/orders/create",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create an Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceCreateOrderDataProvider::ProviderInfo,
+            "options": {
+                "channelName": <ActionOptionInfo>{
+                    "display_name": "Channel Name",
+                    "short_desc": "Third-party channel name (max 30 chars)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Third-party channel name (max 30 chars)",
+                },
+                "externalOrderReference": <ActionOptionInfo>{
+                    "display_name": "External Order Reference",
+                    "short_desc": "Third-party order reference (max 200 chars)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Third-party order reference (max 200 chars)",
+                },
+                "createdOn": <ActionOptionInfo>{
+                    "display_name": "Created On",
+                    "short_desc": "When order was placed (ISO 8601)",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "When order was placed (ISO 8601)",
+                },
+                "priceTaxInterpretation": <ActionOptionInfo>{
+                    "display_name": "Price Tax Interpretation",
+                    "short_desc": "EXCLUSIVE or INCLUSIVE",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "EXCLUSIVE or INCLUSIVE",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "EXCLUSIVE", "desc": "Prices exclude tax"},
+                        <AllowedValueInfo>{"value": "INCLUSIVE", "desc": "Prices include tax"},
+                    ),
+                },
+                "grandTotal": <ActionOptionInfo>{
+                    "display_name": "Grand Total",
+                    "short_desc": "Order grand total (Money object)",
+                    "type": AbstractDataProviderTypeMap."hash",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Order grand total (Money object with currency and value)",
+                },
+                "lineItems": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Order line items",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Array of line item objects (lineItemType, quantity, unitPricePaid)",
+                },
+                "customerEmail": <ActionOptionInfo>{
+                    "display_name": "Customer Email",
+                    "short_desc": "Customer email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Customer email address",
+                },
+                "billingAddress": <ActionOptionInfo>{
+                    "display_name": "Billing Address",
+                    "short_desc": "Billing address",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Billing address",
+                },
+                "shippingAddress": <ActionOptionInfo>{
+                    "display_name": "Shipping Address",
+                    "short_desc": "Shipping address",
+                    "type": AbstractDataProviderTypeMap."*hash",
+                    "desc": "Shipping address",
+                },
+                "fulfillmentStatus": <ActionOptionInfo>{
+                    "display_name": "Fulfillment Status",
+                    "short_desc": "PENDING or FULFILLED",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "PENDING or FULFILLED",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "PENDING", "desc": "Order is pending fulfillment"},
+                        <AllowedValueInfo>{"value": "FULFILLED", "desc": "Order has been fulfilled"},
+                    ),
+                },
+                "inventoryBehavior": <ActionOptionInfo>{
+                    "display_name": "Inventory Behavior",
+                    "short_desc": "DEDUCT or SKIP (default: SKIP)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "DEDUCT or SKIP (default: SKIP)",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "DEDUCT", "desc": "Deduct from inventory"},
+                        <AllowedValueInfo>{"value": "SKIP", "desc": "Do not adjust inventory"},
+                    ),
+                },
+            },
+        });
+
+        # Fulfill an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/orders/fulfill",
+            "action": "fulfill-order",
+            "groups": "Orders",
+            "display_name": "Fulfill an Order",
+            "short_desc": "Fulfill an existing order",
+            "desc": "Fulfill an order in Squarespace with shipment details",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceFulfillOrderDataProvider::ProviderInfo,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order to fulfill",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+                "shouldSendNotification": <ActionOptionInfo>{
+                    "display_name": "Send Notification",
+                    "short_desc": "Send customer notification email",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Send customer notification email",
+                },
+                "shipments": <ActionOptionInfo>{
+                    "display_name": "Shipments",
+                    "short_desc": "Array of shipment objects",
+                    "type": AbstractDataProviderTypeMap."list",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "Array of shipment objects (shipDate, carrierName, service, "
+                        "trackingNumber, trackingUrl)",
+                },
+            },
+        });
+
+        # List Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List all orders",
+            "desc": "List orders in Squarespace with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Filter by order ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "fulfillment_status": <ActionOptionInfo>{
+                    "display_name": "Fulfillment Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Filter by fulfillment status (PENDING, FULFILLED, CANCELED)",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "PENDING", "desc": "Pending fulfillment"},
+                        <AllowedValueInfo>{"value": "FULFILLED", "desc": "Fulfilled"},
+                        <AllowedValueInfo>{"value": "CANCELED", "desc": "Canceled"},
+                    ),
+                },
+                "modified_after": <ActionOptionInfo>{
+                    "display_name": "Modified After",
+                    "short_desc": "Orders modified after this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Orders modified after this ISO 8601 datetime",
+                },
+                "modified_before": <ActionOptionInfo>{
+                    "display_name": "Modified Before",
+                    "short_desc": "Orders modified before this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Orders modified before this ISO 8601 datetime",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/orders",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get an Order",
+            "short_desc": "Get a single order by ID",
+            "desc": "Retrieve a single order by ID from Squarespace",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The order ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "orders",
+                },
+            },
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        # Create a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/create",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create a Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceCreateProductDataProvider::ProviderInfo,
+        });
+
+        # Update a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/update",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update a Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceUpdateProductDataProvider::ProviderInfo,
+        });
+
+        # Delete a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/delete",
+            "action": "delete-product",
+            "groups": "Products",
+            "display_name": "Delete a Product",
+            "short_desc": "Delete a product",
+            "desc": "Delete a product from Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceDeleteProductDataProvider::ProviderInfo,
+        });
+
+        # List Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List all products",
+            "desc": "List products in Squarespace with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Filter by product ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Product Type",
+                    "short_desc": "Filter by type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "desc": "Filter by product type (PHYSICAL, SERVICE, GIFT_CARD, DIGITAL)",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "PHYSICAL", "desc": "Physical product"},
+                        <AllowedValueInfo>{"value": "SERVICE", "desc": "Service product"},
+                        <AllowedValueInfo>{"value": "GIFT_CARD", "desc": "Gift card"},
+                        <AllowedValueInfo>{"value": "DIGITAL", "desc": "Digital product"},
+                    ),
+                },
+                "modified_after": <ActionOptionInfo>{
+                    "display_name": "Modified After",
+                    "short_desc": "Products modified after this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "modified_before": <ActionOptionInfo>{
+                    "display_name": "Modified Before",
+                    "short_desc": "Products modified before this date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get a Product",
+            "short_desc": "Get a single product by ID",
+            "desc": "Retrieve a single product by ID from Squarespace",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # ========== PRODUCT VARIANT ACTIONS ==========
+
+        # Create a Product Variant
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/product-variants/create",
+            "action": "create-product-variant",
+            "groups": "Product Variants",
+            "display_name": "Create a Product Variant",
+            "short_desc": "Create a new product variant",
+            "desc": "Create a new product variant in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceCreateProductVariantDataProvider::ProviderInfo,
+        });
+
+        # Update a Product Variant
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/product-variants/update",
+            "action": "update-product-variant",
+            "groups": "Product Variants",
+            "display_name": "Update a Product Variant",
+            "short_desc": "Update an existing product variant",
+            "desc": "Update an existing product variant in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceUpdateProductVariantDataProvider::ProviderInfo,
+        });
+
+        # Delete a Product Variant
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/product-variants/delete",
+            "action": "delete-product-variant",
+            "groups": "Product Variants",
+            "display_name": "Delete a Product Variant",
+            "short_desc": "Delete a product variant",
+            "desc": "Delete a product variant from Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceDeleteProductVariantDataProvider::ProviderInfo,
+        });
+
+        # List Product Variants
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/product-variants",
+            "action": "list-product-variants",
+            "groups": "Product Variants",
+            "display_name": "List Product Variants",
+            "short_desc": "List variants for a product",
+            "desc": "List product variants in Squarespace (requires product_id)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Product to list variants for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "products",
+                    "preselected": True,
+                },
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== PRODUCT IMAGE ACTIONS ==========
+
+        # Upload a Product Image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/images/upload",
+            "action": "upload-product-image",
+            "groups": "Product Images",
+            "display_name": "Upload a Product Image",
+            "short_desc": "Upload an image for a product",
+            "desc": "Upload a product image in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceUploadProductImageDataProvider::ProviderInfo,
+        });
+
+        # Assign a Product Image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/images/assign",
+            "action": "assign-product-image",
+            "groups": "Product Images",
+            "display_name": "Assign a Product Image",
+            "short_desc": "Assign an image to a variant",
+            "desc": "Assign a product image to a variant in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceAssignProductImageDataProvider::ProviderInfo,
+        });
+
+        # Update a Product Image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/images/update",
+            "action": "update-product-image",
+            "groups": "Product Images",
+            "display_name": "Update a Product Image",
+            "short_desc": "Update image alt text",
+            "desc": "Update a product image alt text in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceUpdateProductImageDataProvider::ProviderInfo,
+        });
+
+        # Delete a Product Image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/products/images/delete",
+            "action": "delete-product-image",
+            "groups": "Product Images",
+            "display_name": "Delete a Product Image",
+            "short_desc": "Delete a product image",
+            "desc": "Delete a product image from Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceDeleteProductImageDataProvider::ProviderInfo,
+        });
+
+        # ========== INVENTORY ACTIONS ==========
+
+        # Update Stock Quantities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/inventory/update-stock",
+            "action": "update-stock-quantities",
+            "groups": "Inventory",
+            "display_name": "Update Stock Quantities",
+            "short_desc": "Adjust inventory stock for a variant",
+            "desc": "Adjust inventory stock for a product variant in Squarespace",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceUpdateStockDataProvider::ProviderInfo,
+        });
+
+        # List Inventory
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/inventory",
+            "action": "list-inventory",
+            "groups": "Inventory",
+            "display_name": "List Inventory",
+            "short_desc": "List inventory items",
+            "desc": "List inventory items in Squarespace with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "modified_after": <ActionOptionInfo>{
+                    "display_name": "Modified After",
+                    "short_desc": "Filter by modification date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "modified_before": <ActionOptionInfo>{
+                    "display_name": "Modified Before",
+                    "short_desc": "Filter by modification date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Inventory
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/inventory",
+            "action": "get-inventory",
+            "groups": "Inventory",
+            "display_name": "Get Inventory",
+            "short_desc": "Get inventory for a variant",
+            "desc": "Retrieve inventory for a specific variant from Squarespace",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "The variant ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== TRANSACTION ACTIONS ==========
+
+        # List Transactions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/transactions",
+            "action": "list-transactions",
+            "groups": "Transactions",
+            "display_name": "List Transactions",
+            "short_desc": "List all transactions",
+            "desc": "List transactions in Squarespace with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "transaction_id": <ActionOptionInfo>{
+                    "display_name": "Transaction ID",
+                    "short_desc": "Filter by transaction ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "modified_after": <ActionOptionInfo>{
+                    "display_name": "Modified After",
+                    "short_desc": "Filter by modification date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "modified_before": <ActionOptionInfo>{
+                    "display_name": "Modified Before",
+                    "short_desc": "Filter by modification date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Transaction
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/transactions",
+            "action": "get-transaction",
+            "groups": "Transactions",
+            "display_name": "Get a Transaction",
+            "short_desc": "Get a single transaction by ID",
+            "desc": "Retrieve a single transaction by ID from Squarespace",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "transaction_id": <ActionOptionInfo>{
+                    "display_name": "Transaction ID",
+                    "short_desc": "The transaction ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== EXECUTE API CALL ==========
+
+        # API Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/execute-api-call",
+            "action": "execute-api-call",
+            "groups": "Other",
+            "display_name": "API Request",
+            "short_desc": "Make a custom API call",
+            "desc": "Make a custom API call to the Squarespace API",
+            "action_code": DPAT_API,
+            "data_provider_info": SquarespaceExecuteApiCallDataProvider::ProviderInfo,
+        });
+
+        # ========== TRIGGERS ==========
+
+        # Order Created/Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_UPDATED,
+            "action": EVENT_ORDER_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Order Created/Updated",
+            "short_desc": "Trigger when an order is created or updated",
+            "desc": "Fires when an order is created or updated in Squarespace. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Product Created/Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/events/" + EVENT_PRODUCT_UPDATED,
+            "action": EVENT_PRODUCT_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Product Created/Updated",
+            "short_desc": "Trigger when a product is created or updated",
+            "desc": "Fires when a product is created or updated in Squarespace. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PRODUCT_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Transaction Created/Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SquarespaceDataProvider::AppName,
+            "path": "/events/" + EVENT_TRANSACTION_UPDATED,
+            "action": EVENT_TRANSACTION_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Transaction Created/Updated",
+            "short_desc": "Trigger when a transaction is created or updated",
+            "desc": "Fires when a transaction is created or updated in Squarespace. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TRANSACTION_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                    "preselected": True,
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage SquarespaceDataProvider Module
+
+    @tableofcontents
+
+    @section squarespacedataproviderintro SquarespaceDataProvider Introduction
+
+    The %SquarespaceDataProvider module provides a data provider API for the Squarespace
+    Commerce platform.
+
+    To use this module, use \c "%requires SquarespaceDataProvider" in your code.
+
+    All the public symbols in the module are defined in the SquarespaceDataProvider namespace.
+
+    The main classes are:
+    - @ref SquarespaceDataProvider::SquarespaceDataProvider "SquarespaceDataProvider":
+      the root data provider for Squarespace
+    - @ref SquarespaceDataProvider::SquarespaceDataProviderFactory "SquarespaceDataProviderFactory":
+      the data provider factory for Squarespace
+
+    @section squarespacedataproviderrelnotes Release Notes
+
+    @subsection squarespacedataproviderv1_0 SquarespaceDataProvider v1.0
+    - the initial version of the %SquarespaceDataProvider module
+*/
+
+#! Contains all public definitions in the SquarespaceDataProvider module
+public namespace SquarespaceDataProvider {
+}
