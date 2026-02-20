@@ -231,7 +231,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         @throw HTTP2-STATE-ERROR if the connection is not ready for requests
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx) {
+            code callback, *hash<auto> ctx, bool streaming = False) {
         if (!isReady()) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot submit request in state: %y", state);
         }
@@ -260,7 +260,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         int stream_id;
         {
             AutoLock al(stream_lock);
-            stream_id = sock.submitHttp2Request(req_headers, body);
+            stream_id = sock.submitHttp2Request(req_headers, body, streaming);
             string sid = string(stream_id);
             stream_callbacks{sid} = callback;
             if (ctx) {
@@ -305,7 +305,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
             bin_data.size(), stream_id, end_stream);
 
         # Send via the socket's HTTP/2 session
-        sock.sendHttp2StreamData(stream_id, bin_data, end_stream, 0);
+        sock.sendHttp2StreamData(stream_id, bin_data, end_stream);
     }
 
     #! Cancels a pending request

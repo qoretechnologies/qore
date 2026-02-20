@@ -142,6 +142,7 @@ class QoreSocket {
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;
+    friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
 
 public:
@@ -1941,7 +1942,7 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
-            size_t body_len, ExceptionSink* xsink);
+            size_t body_len, ExceptionSink* xsink, bool streaming = false);
 
     //! Cancels a pending HTTP/2 stream by sending RST_STREAM
     /** @param stream_id the stream ID to cancel
@@ -1964,8 +1965,39 @@ public:
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+            bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+
+    //! Sends HTTP/2 trailer headers on a stream
+    /** Submits a trailing HEADERS frame with END_STREAM on the specified stream.
+        The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
+        on the last DATA frame so trailers carry the END_STREAM flag.
+
+        @param stream_id the HTTP/2 stream ID
+        @param trailers trailer header name/value pairs
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+            ExceptionSink* xsink);
+
+    //! Submits HTTP/2 streaming response headers without body or END_STREAM
+    /** Calls Http2Session::submitResponseStreaming() to send response HEADERS
+        without END_STREAM. A deferred data provider is created so that body data
+        can be sent later via sendHttp2StreamData() and trailers via sendHttp2Trailers().
+
+        @param stream_id the HTTP/2 stream ID
+        @param status_code HTTP status code (e.g., 200)
+        @param headers response headers
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
 
     //! Sets the active HTTP/2 stream ID for transparent send/recv operations
     /** @param stream_id the stream ID to use for subsequent send/recv operations

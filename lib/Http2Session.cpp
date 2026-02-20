@@ -235,15 +235,17 @@ static std::string toLowerHeaderName(const std::string& name) {
 
 int32_t Http2Session::submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink) {
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming) {
     // Delegate to vector<pair> overload
     std::vector<std::pair<std::string, std::string>> pairs(headers.begin(), headers.end());
-    return submitRequest(method, path, pairs, body, body_len, xsink);
+    return submitRequest(method, path, pairs, body, body_len, xsink, streaming);
 }
 
 int32_t Http2Session::submitRequest(const char* method, const char* path,
         const std::vector<std::pair<std::string, std::string>>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink) {
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit request on server session");
@@ -358,14 +360,14 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         pending_data = BodyData(body, body_len);
         has_body = true;
     }
-    if (has_body || is_extended_connect) {
+    if (has_body || is_extended_connect || streaming) {
         provider_ctx = std::make_unique<DataProviderContext>();
         provider_ctx->h2 = this;
         provider_ctx->provider.source.ptr = provider_ctx.get();
         provider_ctx->provider.read_callback = dataProviderReadCallback;
-        provider_ctx->defer_on_empty = is_extended_connect;
-        provider_ctx->no_end_stream = is_extended_connect;
-        provider_ctx->remove_on_empty = !is_extended_connect;
+        provider_ctx->defer_on_empty = is_extended_connect || streaming;
+        provider_ctx->no_end_stream = is_extended_connect || streaming;
+        provider_ctx->remove_on_empty = !is_extended_connect && !streaming;
         data_prd = &provider_ctx->provider;
     }
 
@@ -1252,54 +1254,76 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
             if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
                 Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
                 if (stream) {
-                    stream->headers_complete = true;
-                    // For requests without a body (like GET), END_STREAM is on the HEADERS frame
-                    if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-                        stream->body_complete = true;
-                        // Mark as complete so the handler is called
-                        // For CONNECT streams, markStreamComplete() keeps the stream in the map
+                    if (frame->headers.cat == NGHTTP2_HCAT_HEADERS) {
+                        // Trailer HEADERS frame (after initial headers + body data)
+                        stream->receiving_trailers = false;
                         if (http2DebugEnabled()) {
                             fprintf(stderr,
-                                "HTTP2 DEBUG: headers complete stream=%d END_STREAM=1 is_connect=%d\n",
-                                frame->hd.stream_id, stream->is_connect ? 1 : 0);
+                                "HTTP2 DEBUG: trailer headers complete stream=%d "
+                                "END_STREAM=%d trailer_count=%zu\n",
+                                frame->hd.stream_id,
+                                (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) ? 1 : 0,
+                                stream->trailers.size());
                             fflush(stderr);
                         }
-                        h2->markStreamComplete(frame->hd.stream_id);
-                    } else if (h2->is_server && stream->is_connect) {
-                        // RFC 8441: Extended CONNECT with :protocol when ENABLE_CONNECT_PROTOCOL
-                        // is not advertised must be rejected. Some nghttp2 versions don't enforce
-                        // this automatically, so reject explicitly to ensure consistent behavior.
-                        if (!stream->connect_protocol.empty()
-                                && !h2->local_settings.enable_connect_protocol) {
-                            printd(5, "onFrameRecvCallback: rejecting extended CONNECT "
-                                "(ENABLE_CONNECT_PROTOCOL not set) stream=%d\n",
-                                frame->hd.stream_id);
-                            if (http2DebugEnabled()) {
-                                fprintf(stderr,
-                                    "HTTP2 DEBUG: rejecting extended CONNECT stream=%d "
-                                    "(ENABLE_CONNECT_PROTOCOL not set)\n",
-                                    frame->hd.stream_id);
-                                fflush(stderr);
-                            }
-                            // Submit RST_STREAM; onStreamCloseCallback is called synchronously,
-                            // which sets reset=true and calls markStreamComplete()
-                            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
-                                frame->hd.stream_id, NGHTTP2_PROTOCOL_ERROR);
-                        } else {
-                            // Normal CONNECT: request is complete once headers are received.
-                            // The client doesn't send END_STREAM because it needs to send data
-                            // on the stream after the handshake completes.
-                            printd(5, "onFrameRecvCallback: CONNECT request complete "
-                                "(no END_STREAM expected)\n");
-                            if (http2DebugEnabled()) {
-                                fprintf(stderr,
-                                    "HTTP2 DEBUG: headers complete stream=%d END_STREAM=0 "
-                                    "is_connect=1\n",
-                                    frame->hd.stream_id);
-                                fflush(stderr);
-                            }
+                        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
                             stream->body_complete = true;
                             h2->markStreamComplete(frame->hd.stream_id);
+                        }
+                    } else {
+                        // Initial HEADERS (request or response)
+                        stream->headers_complete = true;
+                        // For requests without a body (like GET), END_STREAM is on the HEADERS frame
+                        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+                            stream->body_complete = true;
+                            // Mark as complete so the handler is called
+                            // For CONNECT streams, markStreamComplete() keeps the stream in the map
+                            if (http2DebugEnabled()) {
+                                fprintf(stderr,
+                                    "HTTP2 DEBUG: headers complete stream=%d END_STREAM=1 "
+                                    "is_connect=%d\n",
+                                    frame->hd.stream_id, stream->is_connect ? 1 : 0);
+                                fflush(stderr);
+                            }
+                            h2->markStreamComplete(frame->hd.stream_id);
+                        } else if (h2->is_server && stream->is_connect) {
+                            // RFC 8441: Extended CONNECT with :protocol when
+                            // ENABLE_CONNECT_PROTOCOL is not advertised must be rejected.
+                            // Some nghttp2 versions don't enforce this automatically, so reject
+                            // explicitly to ensure consistent behavior.
+                            if (!stream->connect_protocol.empty()
+                                    && !h2->local_settings.enable_connect_protocol) {
+                                printd(5, "onFrameRecvCallback: rejecting extended CONNECT "
+                                    "(ENABLE_CONNECT_PROTOCOL not set) stream=%d\n",
+                                    frame->hd.stream_id);
+                                if (http2DebugEnabled()) {
+                                    fprintf(stderr,
+                                        "HTTP2 DEBUG: rejecting extended CONNECT stream=%d "
+                                        "(ENABLE_CONNECT_PROTOCOL not set)\n",
+                                        frame->hd.stream_id);
+                                    fflush(stderr);
+                                }
+                                // Submit RST_STREAM; onStreamCloseCallback is called
+                                // synchronously, which sets reset=true and calls
+                                // markStreamComplete()
+                                nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+                                    frame->hd.stream_id, NGHTTP2_PROTOCOL_ERROR);
+                            } else {
+                                // Normal CONNECT: request is complete once headers are received.
+                                // The client doesn't send END_STREAM because it needs to send
+                                // data on the stream after the handshake completes.
+                                printd(5, "onFrameRecvCallback: CONNECT request complete "
+                                    "(no END_STREAM expected)\n");
+                                if (http2DebugEnabled()) {
+                                    fprintf(stderr,
+                                        "HTTP2 DEBUG: headers complete stream=%d END_STREAM=0 "
+                                        "is_connect=1\n",
+                                        frame->hd.stream_id);
+                                    fflush(stderr);
+                                }
+                                stream->body_complete = true;
+                                h2->markStreamComplete(frame->hd.stream_id);
+                            }
                         }
                     }
                 }
@@ -1453,6 +1477,37 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
         return 0;
     }
 
+    // Helper lambda: submit pending trailers after signaling EOF + NO_END_STREAM.
+    // nghttp2_submit_trailer() must be called AFTER the data provider callback signals
+    // NGHTTP2_DATA_FLAG_EOF | NGHTTP2_DATA_FLAG_NO_END_STREAM, not before — otherwise
+    // nghttp2 may skip DATA frames and send trailer HEADERS immediately.
+    auto submitPendingTrailers = [&]() {
+        if (ctx->pending_trailers.empty()) {
+            return;
+        }
+        std::vector<nghttp2_nv> nva;
+        nva.reserve(ctx->pending_trailers.size());
+        for (const auto& t : ctx->pending_trailers) {
+            nghttp2_nv nv = {
+                reinterpret_cast<uint8_t*>(const_cast<char*>(t.first.c_str())),
+                reinterpret_cast<uint8_t*>(const_cast<char*>(t.second.c_str())),
+                t.first.size(), t.second.size(), NGHTTP2_NV_FLAG_NONE
+            };
+            nva.push_back(nv);
+        }
+        int rv = nghttp2_submit_trailer(session, stream_id, nva.data(), nva.size());
+        if (rv != 0) {
+            printd(1, "dataProviderReadCallback: nghttp2_submit_trailer failed: %s\n",
+                nghttp2_strerror(rv));
+            ctx->trailer_submit_error = rv;
+        }
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: dataProviderReadCallback submitted %zu trailers "
+                "for stream %d\n", ctx->pending_trailers.size(), stream_id);
+            fflush(stderr);
+        }
+    };
+
     auto it = h2->pending_body_data.find(stream_id);
     if (it == h2->pending_body_data.end()) {
         if (ctx->defer_on_empty) {
@@ -1460,10 +1515,19 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
             return NGHTTP2_ERR_DEFERRED;
         }
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        if (ctx->no_end_stream) {
+            *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+            submitPendingTrailers();
+            if (ctx->trailer_submit_error) {
+                // Trailer submission failed; RST_STREAM this stream
+                return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+            }
+        }
         if (ctx->remove_on_empty) {
             h2->pending_data_providers.erase(stream_id);
         }
-        printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu EOF(no data)\n", stream_id, length);
+        printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu EOF(no data) no_end_stream=%d\n",
+            stream_id, length, ctx->no_end_stream ? 1 : 0);
         return 0;
     }
 
@@ -1480,7 +1544,29 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
         bool is_end = bd.end_stream;
         h2->pending_body_data.erase(it);
         if (ctx->no_end_stream) {
-            *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+            if (is_end && ctx->pending_trailers.empty()) {
+                // End of stream with no trailers: let DATA carry END_STREAM directly
+                // This happens for streaming client requests where sendData(data, True)
+                // signals the end of the request body without sending trailers.
+                *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+                if (ctx->remove_on_empty) {
+                    h2->pending_data_providers.erase(stream_id);
+                }
+            } else {
+                *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+                if (is_end) {
+                    // Trailer mode: signal EOF without END_STREAM so trailers carry END_STREAM
+                    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+                    submitPendingTrailers();
+                    if (ctx->trailer_submit_error) {
+                        // Trailer submission failed; RST_STREAM this stream
+                        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+                    }
+                    // After trailers + EOF, the data provider is no longer needed;
+                    // nghttp2 won't call it again, so clean it up proactively
+                    h2->pending_data_providers.erase(stream_id);
+                }
+            }
         } else if (is_end) {
             // Explicitly signaled end of stream
             *data_flags |= NGHTTP2_DATA_FLAG_EOF;
@@ -1519,9 +1605,16 @@ int Http2Session::onHeaderCallback(nghttp2_session* session, const nghttp2_frame
     std::string header_value(reinterpret_cast<const char*>(value), valuelen);
 
     if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: onHeaderCallback stream=%d header=%s: %s\n",
-            frame->hd.stream_id, header_name.c_str(), header_value.c_str());
+        fprintf(stderr, "HTTP2 DEBUG: onHeaderCallback stream=%d header=%s: %s trailer=%d\n",
+            frame->hd.stream_id, header_name.c_str(), header_value.c_str(),
+            stream->receiving_trailers ? 1 : 0);
         fflush(stderr);
+    }
+
+    // Trailer headers go to the trailers map
+    if (stream->receiving_trailers) {
+        stream->trailers[header_name].push_back(header_value);
+        return 0;
     }
 
     // Handle pseudo-headers
@@ -1567,15 +1660,25 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
 
-    // For server: Create stream for incoming request
-    // For client: Stream already exists for our request
-    if (h2->is_server && frame->hd.type == NGHTTP2_HEADERS) {
-        h2->getOrCreateStream(frame->hd.stream_id);
-    }
     if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: begin headers stream=%d type=%d flags=0x%x\n",
-            frame->hd.stream_id, frame->hd.type, frame->hd.flags);
+        fprintf(stderr, "HTTP2 DEBUG: begin headers stream=%d type=%d flags=0x%x cat=%d\n",
+            frame->hd.stream_id, frame->hd.type, frame->hd.flags,
+            frame->hd.type == NGHTTP2_HEADERS ? frame->headers.cat : -1);
         fflush(stderr);
+    }
+
+    if (frame->hd.type == NGHTTP2_HEADERS) {
+        if (frame->headers.cat == NGHTTP2_HCAT_HEADERS) {
+            // Trailer HEADERS frame (NGHTTP2_HCAT_HEADERS = non-initial HEADERS after body)
+            Http2StreamInfo* stream = h2->getStream(frame->hd.stream_id);
+            if (stream) {
+                stream->receiving_trailers = true;
+            }
+        } else if (h2->is_server) {
+            // For server: Create stream for incoming request
+            // For client: Stream already exists for our request
+            h2->getOrCreateStream(frame->hd.stream_id);
+        }
     }
 
     return 0;
@@ -1695,6 +1798,94 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         return -1;
     }
 
+    return 0;
+}
+
+int Http2Session::submitTrailers(int32_t stream_id,
+        const std::map<std::string, std::string>& trailers, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+
+    if (http2DebugEnabled()) {
+        fprintf(stderr, "HTTP2 DEBUG: submitTrailers stream=%d trailer_count=%zu\n",
+            stream_id, trailers.size());
+        fflush(stderr);
+    }
+    printd(5, "submitTrailers() stream_id=%d trailer_count=%zu\n", stream_id, trailers.size());
+
+    // Validate that the stream exists — the stream may have been moved to completed_streams
+    // after markStreamComplete(), but the data provider should still be active for response
+    // streaming.  Check both streams and pending_data_providers (same pattern as sendStreamData).
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (!stream && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+        xsink->raiseException("HTTP2-ERROR", "stream %d not found; cannot send trailers on a "
+            "closed or non-existent stream", stream_id);
+        return -1;
+    }
+
+    // Configure data provider to signal EOF without END_STREAM (so trailers carry END_STREAM)
+    auto dp_it = pending_data_providers.find(stream_id);
+    if (dp_it != pending_data_providers.end()) {
+        dp_it->second->no_end_stream = true;
+        dp_it->second->defer_on_empty = false;
+
+        // Store trailers in the data provider context — nghttp2_submit_trailer() must be
+        // called AFTER the data provider callback signals EOF + NO_END_STREAM, not before.
+        // The dataProviderReadCallback will call nghttp2_submit_trailer() at the right time.
+        for (const auto& t : trailers) {
+            std::string lname = toLowerHeaderName(t.first);
+            if (lname[0] != ':') {
+                dp_it->second->pending_trailers.emplace_back(lname, t.second);
+            }
+        }
+
+        // Ensure body data signals end of stream
+        auto bd_it = pending_body_data.find(stream_id);
+        if (bd_it != pending_body_data.end()) {
+            bd_it->second.end_stream = true;
+        } else {
+            // No pending body data - create an empty entry to trigger EOF
+            pending_body_data[stream_id] = BodyData(nullptr, 0, true);
+        }
+
+        // Resume the data provider to flush pending body data and trigger EOF
+        int rv = nghttp2_session_resume_data(session, stream_id);
+        if (rv != 0 && rv != NGHTTP2_ERR_INVALID_ARGUMENT) {
+            xsink->raiseException("HTTP2-ERROR", "failed to resume stream data for trailers: %s",
+                nghttp2_strerror(rv));
+            return -1;
+        }
+    } else {
+        // No data provider — submit trailers directly (body already complete)
+        // lowered_names keeps the lowercased header name strings alive while nghttp2_nv
+        // pointers reference their .c_str() data; must outlive the nghttp2_submit_trailer call
+        std::vector<std::string> lowered_names;
+        std::vector<nghttp2_nv> nva;
+        nva.reserve(trailers.size());
+        lowered_names.reserve(trailers.size());
+
+        for (const auto& t : trailers) {
+            std::string lname = toLowerHeaderName(t.first);
+            if (lname[0] == ':') {
+                continue;
+            }
+            lowered_names.push_back(lname);
+            nghttp2_nv nv = {
+                reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
+                reinterpret_cast<uint8_t*>(const_cast<char*>(t.second.c_str())),
+                lowered_names.back().size(), t.second.size(), NGHTTP2_NV_FLAG_NONE
+            };
+            nva.push_back(nv);
+        }
+
+        int rv = nghttp2_submit_trailer(session, stream_id, nva.data(), nva.size());
+        if (rv != 0) {
+            xsink->raiseException("HTTP2-ERROR", "failed to submit trailers: %s",
+                nghttp2_strerror(rv));
+            return -1;
+        }
+    }
+
+    printd(5, "submitTrailers() stream_id=%d SUCCESS\n", stream_id);
     return 0;
 }
 

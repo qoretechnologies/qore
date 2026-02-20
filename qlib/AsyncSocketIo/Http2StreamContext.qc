@@ -94,7 +94,7 @@ public class Http2StreamContext {
         any exception thrown by Socket::sendHttp2StreamData()
     */
     sendData(binary data, bool end_stream = False) {
-        sock.sendHttp2StreamData(stream_id, data, end_stream, 0);
+        sock.sendHttp2StreamData(stream_id, data, end_stream);
     }
 
     #! Read data from this HTTP/2 stream.
@@ -121,6 +121,23 @@ public class Http2StreamContext {
             sock.isDataAvailable(0ms);
         }
         return sock.readHttp2StreamData(stream_id, max_bytes);
+    }
+
+    #! Send HTTP/2 trailer headers on this stream
+    /** Sends a trailing HEADERS frame with END_STREAM containing the given trailer fields.
+        The stream's data provider is configured so the last DATA frame uses
+        NGHTTP2_DATA_FLAG_NO_END_STREAM, and the trailer HEADERS frame carries END_STREAM.
+
+        This is required for protocols like gRPC that communicate status via trailers.
+
+        @param trailers
+        trailer header name/value pairs (e.g., \c "grpc-status", \c "grpc-message")
+
+        @throw HTTP2-ERROR
+        if no HTTP/2 session is active or trailer submission fails
+    */
+    sendTrailers(hash<string, string> trailers) {
+        sock.sendHttp2Trailers(stream_id, trailers);
     }
 }
 

@@ -266,7 +266,7 @@ public class Http2ClientConnection {
         @throw HTTP2-CAPACITY-ERROR if the connection cannot accept more streams
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx) {
+            code callback, *hash<auto> ctx, bool streaming = False) {
         {
             AutoLock al(lock);
             if (state != Http2ClientConnectionState::Ready) {
@@ -282,7 +282,7 @@ public class Http2ClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx);
+        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx, streaming);
 
         # Wake controller if in async mode to ensure the I/O thread processes the request
         if (controller_ref) {

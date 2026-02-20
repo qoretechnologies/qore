@@ -63,6 +63,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;
+    friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
 
@@ -364,7 +365,7 @@ public:
     /** @since %Qore 2.3
     */
     DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
-        size_t body_len, ExceptionSink* xsink);
+        size_t body_len, ExceptionSink* xsink, bool streaming = false);
 
     //! Cancels a pending HTTP/2 stream by sending RST_STREAM
     /** @since %Qore 2.3
@@ -387,8 +388,20 @@ public:
     */
     DLLEXPORT int32_t getHttp2ActiveStream() const;
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+            bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+
+    //! Sends HTTP/2 trailer headers on a stream
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+            ExceptionSink* xsink);
+
+    //! Submits HTTP/2 streaming response headers without body or END_STREAM
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
 
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
