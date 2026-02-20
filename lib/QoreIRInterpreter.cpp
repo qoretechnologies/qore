@@ -682,9 +682,15 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
     if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
         ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, pre_instantiated,
                 function_own_locals);
-        QoreValue stored = value.hasNode() ? value.refSelf() : value;
-        storeValue(locals, var_ref->ref.id, stored, nullptr);
-        assignLocalVarValue(var_ref->ref.id, stored, xsink);
+        // Invalidate the cache entry (don't pre-populate) because
+        // assignLocalVarValue() → acceptAssignment() may coerce the value type.
+        // The next LoadLocal cache miss will read the actual coerced value.
+        auto cache_it = locals.find(var_ref->ref.id);
+        if (cache_it != locals.end()) {
+            cache_it->second.discard(xsink);
+            locals.erase(cache_it);
+        }
+        assignLocalVarValue(var_ref->ref.id, value, xsink);
     }
 }
 
@@ -1351,10 +1357,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     bool debug_active = can_debug && tlpd->runtimeCheck();
     int last_debug_line = -1;  // track line changes for dbgStep
 
-    // Call dbgFunctionEnter if debug is active
+    // Call dbgFunctionEnter if debug is active, then fire block-entry event.
+    // AST mode fires dbgStep(block, nullptr) at block entry (StatementBlock.cpp:239)
+    // to signal the debugger that a new block scope is being entered.
     if (debug_active) {
         tlpd->dbgFunctionEnter(statements, xsink);
         if (*xsink) {
+            return false;  // local_cleanup RAII handles cleanup
+        }
+        int dbg_rc = tlpd->dbgStep(statements, nullptr, xsink);
+        if (dbg_rc || *xsink) {
+            tlpd->dbgFunctionExit(statements, return_value, xsink);
             return false;  // local_cleanup RAII handles cleanup
         }
     }
@@ -2808,9 +2821,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         function_own_locals);
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
-                // Don't cache closure-bound locals — closures can modify the value
+                // Don't cache closure-bound locals — closures can modify the value.
+                // We invalidate (rather than pre-populate) the cache here because
+                // assignLocalVarValue() → acceptAssignment() may coerce the value
+                // (e.g., list → list<hash<auto>>).  When the list has refcount > 1
+                // (due to the cache holding a ref), acceptInputComplexList() creates
+                // a COPY with the correct value type info.  The local variable gets
+                // the copy; if we cached the original, it would be stale.  The next
+                // LoadLocal cache miss will read the actual coerced value.
                 if (!local_inst->local || !local_inst->local->closureUse()) {
-                    storeValue(locals, local_inst->local, val, xsink);
+                    auto cache_it = locals.find(local_inst->local);
+                    if (cache_it != locals.end()) {
+                        cache_it->second.discard(xsink);
+                        locals.erase(cache_it);
+                    }
                 }
                 assignLocalVarValue(local_inst->local, val, xsink);
                 // If the variable holds a reference, assignLocalVarValue wrote through

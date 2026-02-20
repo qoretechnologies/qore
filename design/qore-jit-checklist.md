@@ -373,9 +373,8 @@ Deliverables:
 - [x] DWARF debug info emitted for all JIT-compiled functions (DICompileUnit,
       DISubprogram, DILocation per instruction)
 - [x] Source file/line mapping from `QoreProgramLocation` on each IR instruction
-- [x] GDB JIT registration via `llvm::orc::enableDebuggerSupport()` — disabled in
-      Phase 6 due to thread safety issues (shared ObjectLinkingLayer plugin not safe
-      for concurrent compilations). DWARF info is still emitted in the modules.
+- [x] GDB JIT registration via `llvm::orc::enableDebuggerSupport()` — re-enabled;
+      thread-safe because `compile_mutex` serializes all JIT compilations.
 - [x] Graceful fallback: if debugger support fails, JIT still works (non-fatal)
 
 Deliverables:
@@ -448,9 +447,8 @@ memory safety verification, and CI integration.
 
 Known issues at aggressive thresholds only (pass at default thresholds):
 - `HTTPClient.qtest` / `FtpClient.qtest` — network timeout (not a code bug)
-- `test-debug.qtest` — 1/789 assertions: mid-execution debugger attachment edge case
-  (function already dispatched to IR when debugger attaches inside its body; see
-  "Debugger Support — Gap Analysis & Roadmap" section below for details and fix plan)
+- `test-debug.qtest` — passes 791/791 at aggressive thresholds after adding IR block-entry
+  debug events (`dbgStep(block, nullptr)` matching AST path)
 
 ### Thread Safety Fixes
 
@@ -460,10 +458,10 @@ Known issues at aggressive thresholds only (pass at default thresholds):
 - [x] **LLVM compilation serialization**: LLVM's code generation (MCStreamer, DWARF emission)
       is not thread-safe for concurrent compilations. Added `compile_mutex` to serialize the
       entire compilation pipeline (IR lowering → `addIRModule` → `lookup`).
-- [x] **Debugger support disabled**: `llvm::orc::enableDebuggerSupport()` registers a
-      shared `ObjectLinkingLayer` plugin that is not thread-safe. Disabled to prevent
+- [x] **Debugger support re-enabled**: `llvm::orc::enableDebuggerSupport()` is now safe
+      because `compile_mutex` serializes all JIT compilation. Previously disabled due to
       "Emitting values inside a locked bundle is forbidden" crashes during concurrent
-      compilation. TODO: Re-enable once LLJIT compilation is better isolated.
+      compilation.
 - [x] **Double-check locking**: Cache lookups use `cache_mutex` for fast path; re-check
       under `compile_mutex` prevents duplicate compilations.
 
@@ -524,7 +522,7 @@ Deliverables:
 - [x] `include/qore/intern/QoreJIT.h` — thread safety: `compile_mutex`, `std::once_flag`,
       `init_success`/`init_error` members
 - [x] `lib/QoreJIT.cpp` — thread-safe init with `std::call_once`, compilation serialization,
-      disabled `enableDebuggerSupport`
+      `enableDebuggerSupport` (re-enabled, safe under `compile_mutex`)
 - [x] `include/qore/intern/QoreIRToLLVM.h` — `trackResultForCleanup`, `invoke_result_allocas`,
       `invoke_alloca_map` members
 - [x] `lib/QoreIRToLLVM.cpp` — targeted cleanup tracking for GC correctness; Return
@@ -1353,12 +1351,11 @@ current promotion tier. This ensures:
 - Tier promotion continues in the background; when the debugger detaches, functions resume
   running at their promoted tier
 
-**Known limitation**: If a function attaches a debugger mid-execution (e.g., calls
-`DebugProgram::addProgram()` inside its body) and was already dispatched to IR/JIT for that
-call, debug step events from that function's own body are lost for the current invocation.
-Subsequent calls will be correctly forced to AST. This affects 1/789 assertions in
-`test-debug.qtest` at aggressive tiered thresholds (3/10); all 789/789 pass at default
-thresholds (100/1000).
+**Known limitation**: If a function is already executing in native JIT code when a debugger
+attaches mid-execution, debug events are lost for that one invocation. The IR interpreter
+handles mid-execution attachment correctly (including block-entry events). Subsequent calls
+will be correctly forced to AST. `test-debug.qtest` passes 791/791 at both default and
+aggressive tiered thresholds (3/10).
 
 **Files**: `lib/Function.cpp` (dispatch-time check), `include/qore/intern/qore_program_private.h`
 (`hasDebuggerAttached()` accessor).
@@ -1367,11 +1364,8 @@ thresholds (100/1000).
 
 Added statement-boundary debug hooks to the IR interpreter for mid-execution debugger
 attachment. When a debugger attaches while a function is already executing in IR, the hooks
-generate `dbgStep`, `dbgFunctionEnter`, `dbgFunctionExit`, and `dbgException` events.
-
-Functions dispatched with a debugger already attached still use AST for full event fidelity
-(the IR interpreter generates only `onStep` events, not `onBlock` block-entry events that
-the AST path produces). This preserves correct debug trace sequences for the test suite.
+generate `dbgStep`, `dbgFunctionEnter`, `dbgFunctionExit`, `dbgException`, and block-entry
+events matching the AST path's debug event sequence.
 
 #### Implementation
 
@@ -1380,7 +1374,8 @@ the AST path produces). This preserves correct debug trace sequences for the tes
 
 2. **Debug context setup**: At the top of `execute()`, get `ThreadLocalProgramData*` via
    `get_thread_local_program_data()` and check `runtimeCheck()`. Call `dbgFunctionEnter()`
-   if debugging is active at entry.
+   followed by `dbgStep(statements, nullptr)` (block-entry event, matching
+   `StatementBlock.cpp:239`) if debugging is active at entry.
 
 3. **Statement-boundary `dbgStep`**: Before each opcode dispatch, check if the source line
    changed. If so, look up the `AbstractStatement*` via `getStatementFromIndex()` and call
@@ -1394,16 +1389,16 @@ the AST path produces). This preserves correct debug trace sequences for the tes
    Handles debugger dismissing exceptions (continues normal flow if exception cleared).
 
 6. **Dispatch-time override preserved**: `evalTiered()` still forces AST for both IR and JIT
-   tiers when a debugger is already attached at dispatch time. This ensures full debug event
-   fidelity (including `onBlock` events). The IR hooks handle only the mid-execution case.
+   tiers when a debugger is already attached at dispatch time. The IR interpreter now provides
+   equivalent debug event fidelity (including block-entry events) for the mid-execution case.
 
 #### Checklist
 
 - [x] Add `StatementBlock*` and `QoreProgram*` params to `QoreIRInterpreter::execute()`
 - [x] Track current source line; emit `dbgStep` when line changes and `runtimeCheck()` is true
-- [x] Emit `dbgFunctionEnter` at start, `dbgFunctionExit` at return/exception exit
+- [x] Emit `dbgFunctionEnter` at start, `dbgStep(block, nullptr)` for block entry, `dbgFunctionExit` at return/exception exit
 - [x] Emit `dbgException` after Invoke/Throw/Rethrow raises exceptions
-- [x] Test: `test-debug.qtest` passes 789/789 at both default and aggressive thresholds (3/10)
+- [x] Test: `test-debug.qtest` passes 791/791 at both default and aggressive thresholds (3/10)
 - [x] Performance: negligible overhead when no debugger attached (branch-predicted `runtimeCheck()`)
 
 ### Phase 9: JIT Debug Support — Dispatch-Time AST Override (Complete)
@@ -1418,11 +1413,12 @@ AST execution, providing full debug fidelity with zero performance overhead when
   `qore_program_private::get(*pgm)->hasDebuggerAttached()` at every function entry. When true,
   forces `tier = TIER_AST` regardless of the function's current compilation tier.
 - **IR interpreter hooks** (Phase 8): The IR interpreter checks `runtimeCheck()` each iteration,
-  handling mid-execution debugger attachment for functions running in IR mode.
-- **JIT mid-execution gap**: If a function is already executing in native JIT code when a debugger
-  attaches, debug events are lost for that one invocation. This is a rare edge case in practice
-  (the debugger is typically attached before calling test functions) and is not tested by
-  `test-debug.qtest`.
+  handling mid-execution debugger attachment for functions running in IR mode. Includes
+  block-entry events (`dbgStep(block, nullptr)`) matching the AST path.
+- **JIT mid-execution gap** (documented limitation): If a function is already executing in native
+  JIT code when a debugger attaches, debug events are lost for that one invocation. This is a
+  rare edge case (the debugger is typically attached before calling test functions). The IR
+  interpreter handles this case correctly; only the native JIT tier has this gap.
 
 #### Status
 
