@@ -153,7 +153,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         mServer.waitForAsyncIo();
 
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             printf("HTTPS test server on port %d\n", mSslPort);
         }
     }
@@ -169,7 +169,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Print latency statistics if verbose
     private printLatencyStats(string label, list<float> latencies) {
-        if (m_options.verbose < 2 || !latencies) {
+        if (m_options.verbose < 3 || !latencies) {
             return;
         }
 
@@ -232,7 +232,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(1, stats.total_connections, "should use 1 connection for sequential requests");
 
         printLatencyStats("sequential request latency", latencies);
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             printf("  %d requests: %.1f ms total, %.1f req/s\n", request_count, total_ms, throughput);
         }
     }
@@ -307,7 +307,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(1, stats.total_connections, "should use 1 multiplexed connection");
 
         printLatencyStats("multiplexed request latency", latencies);
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             printf("  %d concurrent requests: %.1f ms total, %.1f req/s, %d succeeded\n",
                 request_count, total_ms, throughput, success_count);
         }
@@ -374,7 +374,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         float throughput = success_count * 1000.0 / total_ms;
 
         printLatencyStats("connection pool latency", latencies);
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             printf("  %d requests, max_connections=%d: %.1f ms total, %.1f req/s, connections=%d, %d succeeded\n",
                 request_count, max_connections, total_ms, throughput, stats.total_connections, success_count);
         }
@@ -410,7 +410,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
             float throughput_mbps = (size / 1048576.0) / (ms / 1000.0);
 
-            if (m_options.verbose > 1) {
+            if (m_options.verbose > 2) {
                 printf("  %dKB: %.2f ms, %.2f MB/s\n", size / 1024, ms, throughput_mbps);
             }
         }
@@ -479,7 +479,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             sprintf("at least 75%% should succeed (got %d/%d)", success_count, request_count));
 
         printLatencyStats("latency distribution", latencies);
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             float throughput = success_count * 1000.0 / total_ms;
             printf("  %d requests, concurrency=%d: %.1f ms total, %.1f req/s\n",
                 request_count, concurrency, total_ms, throughput);
@@ -544,7 +544,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         printLatencyStats("direct mode", direct_latencies);
         printLatencyStats("controller mode", ctrl_latencies);
-        if (m_options.verbose > 1) {
+        if (m_options.verbose > 2) {
             printf("  Direct: %.1f req/s (%.1f ms total)\n", direct_throughput, direct_total_ms);
             printf("  Controller: %.1f req/s (%.1f ms total)\n", ctrl_throughput, ctrl_total_ms);
             float ratio = ctrl_throughput / direct_throughput;
