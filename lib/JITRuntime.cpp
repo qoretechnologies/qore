@@ -412,12 +412,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
     uint64_t result = toBits(val);
     if (result != value && cleanup_ptr) {
-        // acceptAssignment created a copy (list/hash with new complexTypeInfo).
-        // Transfer cleanup ownership from the original to the copy so the
-        // invoke-result cleanup alloca tracks the coerced value.
-        QoreValue old_cleanup = fromBits(*cleanup_ptr);
+        // acceptAssignment created a copy with complexTypeInfo and already freed
+        // the old value internally (via discard in acceptInputComplexList/Hash).
+        // The cleanup alloca's old pointer is now dangling — update it to track
+        // the new coerced value.  Do NOT discard the old cleanup value; it was
+        // already freed by acceptAssignment.
         *cleanup_ptr = result;
-        old_cleanup.discard(xsink);
     }
     return result;
 }
