@@ -913,6 +913,12 @@ void QoreJIT::bgCompileThreadLoop() {
 
 void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees) {
+    // IR-only mode should never attempt JIT compilation
+    // Skip background thread creation if LLVM is not initialized
+    if (!jit) {
+        return;
+    }
+
     // Ensure background thread is running
     startBackgroundThread();
 
