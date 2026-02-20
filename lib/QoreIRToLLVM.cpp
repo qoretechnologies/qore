@@ -2575,6 +2575,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
             }
+            // Complex type coercion: acceptAssignment() sets complexTypeInfo on
+            // lists/hashes so runtime variant resolution can match typed signatures
+            // like translate(list<hash<auto>>, string).  This must happen BEFORE
+            // storing to the alloca because LoadLocal reads from the alloca directly.
+            // For non-IR-only locals, qore_rt_assign_local() also does coercion on
+            // the runtime stack, but the alloca would remain stale without this.
+            bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+            if (linst->local
+                    && QoreTypeInfo::isComplex(linst->local->getTypeInfo())
+                    && !QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+                // Look up cleanup alloca for the source value (from Invoke tracking).
+                // If a copy is made during coercion, the helper transfers cleanup
+                // ownership from the original to the copy.
+                llvm::Value* cleanup_ptr = llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(module.getContext(), 0));
+                auto ca_it = invoke_alloca_map.find(inst->operands[0].id);
+                if (ca_it != invoke_alloca_map.end()) {
+                    cleanup_ptr = ca_it->second;
+                }
+                if (aot_mode) {
+                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                            llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    boxed = builder->CreateCall(coerce_fn, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), boxed, cleanup_ptr,
+                            xsink_arg});
+                } else {
+                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                            llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i64_type, ptr_type, ptr_type}, false));
+                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
+                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                    boxed = builder->CreateCall(coerce_fn, {ti_as_ptr, boxed, cleanup_ptr,
+                            xsink_arg});
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             builder->CreateStore(boxed, it->second);
             if (inst->result.isValid()) {
                 values[inst->result.id] = boxed;
@@ -2590,7 +2629,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Sync to Qore thread-local variable stack so AST callbacks can resolve this local.
             // Skip sync for IR-only locals — they are never accessed by AST callbacks.
-            if (linst->local && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
+            if (linst->local && !is_ir_only) {
                 if (aot_mode) {
                     auto assign_helper = module.getOrInsertFunction("qore_rt_assign_local_aot",
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));

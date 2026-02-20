@@ -406,6 +406,22 @@ extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, Ex
     helper.assign(stored);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    QoreValue val = fromBits(value);
+    QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
+    uint64_t result = toBits(val);
+    if (result != value && cleanup_ptr) {
+        // acceptAssignment created a copy (list/hash with new complexTypeInfo).
+        // Transfer cleanup ownership from the original to the copy so the
+        // invoke-result cleanup alloca tracks the coerced value.
+        QoreValue old_cleanup = fromBits(*cleanup_ptr);
+        *cleanup_ptr = result;
+        old_cleanup.discard(xsink);
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
     if (!var) {
         return toBits(QoreValue());
@@ -2598,6 +2614,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_
 extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfo();
+    return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx) {
