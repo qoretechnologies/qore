@@ -40,6 +40,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdint>
+#include <thread>
+#include <queue>
+#include <condition_variable>
 
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
@@ -140,6 +143,16 @@ public:
             void* root_deopt_counter,
             const std::vector<BatchCallee>& callees);
 
+    //! Enqueue a function for background JIT compilation.
+    //! The function stays at IR tier until compilation finishes in the background.
+    //! Safe to call from any thread, including during tiered execution.
+    void enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
+            void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr);
+
+    //! Wait for all pending background compilations to complete.
+    //! Used during shutdown.
+    void waitForBgCompileQueue();
+
 private:
     QoreJIT() = default;
     QoreJIT(const QoreJIT&) = delete;
@@ -170,6 +183,29 @@ private:
     bool compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,
             const std::vector<BatchCallee>& callees);
+
+    //! Background compilation work item
+    struct BgCompileWork {
+        const UserVariantBase* uvb;                         //!< function to compile
+        const QoreIRFunction* ir_func;                      //!< IR representation
+        void* deopt_ptr;                                    //!< deopt counter pointer
+        std::vector<BatchCallee> callees;                   //!< direct callees (if any)
+        bool has_callees = false;                           //!< true if callees should be compiled
+    };
+
+    // Background compilation thread management
+    std::thread bg_compile_thread;                          //!< dedicated background worker thread
+    std::queue<BgCompileWork> bg_compile_queue;             //!< pending compilation work
+    std::mutex bg_queue_mutex;                              //!< protects the queue
+    std::condition_variable bg_queue_cv;                    //!< signals new work or queue empty
+    std::atomic<bool> bg_thread_running{false};             //!< shutdown flag
+    std::condition_variable bg_queue_empty_cv;              //!< signals when queue becomes empty
+
+    //! Background thread worker loop
+    void bgCompileThreadLoop();
+
+    //! Initialize and start the background compilation thread
+    void startBackgroundThread();
 };
 
 #endif

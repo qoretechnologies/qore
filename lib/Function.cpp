@@ -57,9 +57,11 @@
 #include <atomic>
 #include <cassert>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <pthread.h>
 
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
@@ -2579,29 +2581,23 @@ static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFuncti
 void UserVariantBase::attemptJITCompilation() const {
     assert(cached_ir);
 
-    // Try to acquire the JIT compile lock without blocking.
-    // This prevents deadlocks when JIT compilation is triggered while Qore mutexes
-    // (e.g., synchronized function gates) are held by the calling thread.
-    // If the lock is contended, the function stays at IR tier and retries on next call.
-    if (!QoreJIT::instance().tryAcquireCompileLock()) {
-        // Reset state to 0 so we can try again on next call
-        jit_compile_state.store(0, std::memory_order_release);
-        printd(3, "UserVariantBase::attemptJITCompilation() '%s' compile lock contended, deferring\n",
-            cached_ir->name.c_str());
-        return;
-    }
+    // Enqueue for background JIT compilation instead of compiling synchronously.
+    // This allows I/O threads and other critical threads to continue executing IR code
+    // while the background thread performs expensive LLVM compilation.
+    //
+    // The function stays at IR tier until background compilation finishes and promotes it.
+    // To avoid deadlocks when JIT is triggered from synchronized functions, we use
+    // background compilation which doesn't hold any Qore mutexes during the lengthy
+    // LLVM phases.
 
-    std::string error;
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
     auto callees = collectDirectCallees(*cached_ir, pgm);
 
-    bool success;
     if (!callees.empty()) {
-        // Batch compile: root function + callees in a shared LLVM module
         if (getenv("QORE_BATCH_DEBUG")) {
-            fprintf(stderr, "BATCH: '%s' compiling with %d callees:",
+            fprintf(stderr, "BATCH: '%s' enqueued with %d callees:",
                 cached_ir->name.c_str(), (int)callees.size());
             for (const auto& c : callees) {
                 fprintf(stderr, " %s%s", c.ir_func->name.c_str(),
@@ -2610,52 +2606,16 @@ void UserVariantBase::attemptJITCompilation() const {
             fprintf(stderr, "\n");
             fflush(stderr);
         }
-        printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch compiling with %d callees\n",
+        printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             cached_ir->name.c_str(), (int)callees.size());
-        success = QoreJIT::instance().compileFunctionBatchLocked(*cached_ir, error, deopt_ptr, callees);
+        QoreJIT::instance().enqueueBgCompile(this, cached_ir, deopt_ptr, &callees);
     } else {
-        // No eligible callees: single-function compilation
-        success = QoreJIT::instance().compileFunctionLocked(*cached_ir, error, deopt_ptr);
+        // No eligible callees: single-function background compilation
+        QoreJIT::instance().enqueueBgCompile(this, cached_ir, deopt_ptr);
     }
 
-    QoreJIT::instance().releaseCompileLock();
-
-    if (!success) {
-        jit_compile_failed = true;
-        jit_compile_state.store(2, std::memory_order_release);
-        printd(2, "UserVariantBase::attemptJITCompilation() '%s' failed: %s\n",
-            cached_ir->name.c_str(), error.c_str());
-        return;
-    }
-
-    JitFunctionPtr fn = QoreJIT::instance().lookupFunction(cached_ir->name);
-    if (!fn) {
-        jit_compile_failed = true;
-        jit_compile_state.store(2, std::memory_order_release);
-        printd(2, "UserVariantBase::attemptJITCompilation() '%s' lookup failed\n", cached_ir->name.c_str());
-        return;
-    }
-    // Set cached_jit_fn BEFORE updating current_tier: the acquire/release on current_tier
-    // ensures cached_jit_fn is visible to threads that see TIER_JIT.
-    cached_jit_fn = fn;
-    jit_compile_state.store(2, std::memory_order_relaxed);
-    current_tier.store(TIER_JIT, std::memory_order_release);
-    printd(3, "UserVariantBase::attemptJITCompilation() '%s' promoted to JIT tier\n", cached_ir->name.c_str());
-
-    // Register compiled function pointers for callees that were batch-compiled.
-    // This promotes them to JIT tier immediately, bypassing their own tiered
-    // compilation warmup.
-    for (const auto& callee : callees) {
-        JitFunctionPtr callee_fn = QoreJIT::instance().lookupFunction(callee.ir_func->name);
-        if (callee_fn) {
-            const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();
-            if (callee_uvb) {
-                const_cast<UserVariantBase*>(callee_uvb)->registerPrecompiledFunction(callee_fn);
-                printd(3, "UserVariantBase::attemptJITCompilation() batch-promoted callee '%s' to JIT tier\n",
-                    callee.ir_func->name.c_str());
-            }
-        }
-    }
+    printd(3, "UserVariantBase::attemptJITCompilation() '%s' enqueued for background compilation\n",
+        cached_ir->name.c_str());
 }
 
 void UserVariantBase::attemptJITRecompilation() const {

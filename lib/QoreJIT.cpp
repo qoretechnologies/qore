@@ -767,7 +767,167 @@ void QoreJIT::setJITThreshold(uint64_t t) {
     jit_threshold = t;
 }
 
+void QoreJIT::startBackgroundThread() {
+    // Start the background compilation thread if not already running
+    if (!bg_thread_running.exchange(true, std::memory_order_acq_rel)) {
+        bg_compile_thread = std::thread(&QoreJIT::bgCompileThreadLoop, this);
+    }
+}
+
+void QoreJIT::bgCompileThreadLoop() {
+    // Background worker thread loop — compiles functions while main thread executes IR
+    while (bg_thread_running.load(std::memory_order_acquire)) {
+        BgCompileWork work;
+        {
+            std::unique_lock<std::mutex> lock(bg_queue_mutex);
+            // Wait for work or shutdown signal
+            bg_queue_cv.wait(lock, [this]() {
+                return !bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire);
+            });
+            if (bg_compile_queue.empty()) {
+                // Signal that queue is empty (for waitForBgCompileQueue)
+                bg_queue_empty_cv.notify_all();
+                continue;  // Shutdown signal or spurious wakeup, check loop condition
+            }
+            work = bg_compile_queue.front();
+            bg_compile_queue.pop();
+        }
+
+        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
+        std::lock_guard<std::mutex> lock(compile_mutex);
+
+        std::string error;
+        bool success;
+
+        if (getenv("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", work.ir_func->name.c_str());
+        }
+
+        if (work.has_callees) {
+            // Batch compile: root function + callees
+            success = compileFunctionBatchInternal(*work.ir_func, error, work.deopt_ptr, work.callees);
+        } else {
+            // Single-function compilation
+            success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
+        }
+
+        if (!success) {
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", work.ir_func->name.c_str(), error.c_str());
+            }
+            // Mark compilation as failed; uvb->jit_compile_failed will be set by evalTiered
+            continue;
+        }
+
+        // Lookup the compiled function and register it
+        JitFunctionPtr fn = lookupFunction(work.ir_func->name);
+        if (!fn) {
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", work.ir_func->name.c_str());
+            }
+            continue;
+        }
+
+        // Register the compiled function for the root uvb
+        const UserVariantBase* root_uvb = work.uvb;
+        if (root_uvb) {
+            // Cast away const to set cached_jit_fn and tier
+            UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
+            mutable_uvb->cached_jit_fn = fn;
+            mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
+            mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
+
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", work.ir_func->name.c_str());
+            }
+        }
+
+        // Register compiled function pointers for batch-compiled callees
+        if (work.has_callees) {
+            for (const auto& callee : work.callees) {
+                JitFunctionPtr callee_fn = lookupFunction(callee.ir_func->name);
+                if (callee_fn && callee.variant) {
+                    const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();
+                    if (callee_uvb) {
+                        UserVariantBase* mutable_callee = const_cast<UserVariantBase*>(callee_uvb);
+                        mutable_callee->registerPrecompiledFunction(callee_fn);
+                        if (getenv("QORE_JIT_TIMING")) {
+                            fprintf(stderr, "[BG-JIT] batch-promoted callee '%s' to JIT tier\n",
+                                    callee.ir_func->name.c_str());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Signal that queue may now be empty (for waitForBgCompileQueue)
+        {
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
+            if (bg_compile_queue.empty()) {
+                bg_queue_empty_cv.notify_all();
+            }
+        }
+    }
+}
+
+void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction* ir_func,
+        void* deopt_counter, const std::vector<BatchCallee>* callees) {
+    // Ensure background thread is running
+    startBackgroundThread();
+
+    // Check if compilation was already enqueued (jit_compile_state is already 1)
+    // to avoid duplicate work
+    int expected = 0;
+    if (!const_cast<UserVariantBase*>(uvb)->jit_compile_state.compare_exchange_strong(
+            expected, 1, std::memory_order_acq_rel)) {
+        // Already enqueued or completed
+        return;
+    }
+
+    BgCompileWork work;
+    work.uvb = uvb;
+    work.ir_func = ir_func;
+    work.deopt_ptr = deopt_counter;
+    if (callees) {
+        work.callees = *callees;
+        work.has_callees = true;
+    } else {
+        work.has_callees = false;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        bg_compile_queue.push(work);
+    }
+    bg_queue_cv.notify_one();
+
+    if (getenv("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] enqueued compilation of '%s'\n", ir_func->name.c_str());
+    }
+}
+
+void QoreJIT::waitForBgCompileQueue() {
+    // Wait for all pending compilations to complete using condition variable
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    bg_queue_empty_cv.wait(lock, [this]() {
+        return bg_compile_queue.empty();
+    });
+}
+
 void QoreJIT::shutdown() {
+    // Stop the background compilation thread first
+    if (bg_thread_running.load(std::memory_order_acquire)) {
+        {
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
+            bg_thread_running.store(false, std::memory_order_release);
+        }
+        bg_queue_cv.notify_one();
+        if (bg_compile_thread.joinable()) {
+            bg_compile_thread.join();
+        }
+    }
+
+    // Then shut down LLVM
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
     jit.reset();
     symbols_registered = false;

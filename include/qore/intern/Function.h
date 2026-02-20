@@ -618,10 +618,12 @@ private:
 
 class VRMutex;
 class UserVariantExecHelper;
+class QoreJIT;
 
 // base implementation shared between all user variants
 class UserVariantBase {
     friend class UserVariantExecHelper;
+    friend class QoreJIT;
 
 public:
     //! Tiered compilation execution tier
