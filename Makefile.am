@@ -84,6 +84,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/ShippoRestClient.qm \
 	qlib/SquareRestClient.qm \
 	qlib/SquarespaceRestClient.qm \
+	qlib/TableauRestClient.qm \
 	qlib/Cin7CoreRestClient.qm \
 	qlib/UnleashedRestClient.qm \
 	qlib/FilePoller.qm \
@@ -157,6 +158,7 @@ DOX_SPLIT_MODULES = \
     qlib/SquareDataProvider \
     qlib/ChargebeeDataProvider \
     qlib/SquarespaceDataProvider \
+    qlib/TableauDataProvider \
     qlib/Cin7CoreDataProvider \
     qlib/UnleashedDataProvider \
     qlib/SwaggerDataProvider \
@@ -232,6 +234,7 @@ ShippoDataProvider_modverdir = $(modverdir)/ShippoDataProvider
 SquareDataProvider_modverdir = $(modverdir)/SquareDataProvider
 ChargebeeDataProvider_modverdir = $(modverdir)/ChargebeeDataProvider
 SquarespaceDataProvider_modverdir = $(modverdir)/SquarespaceDataProvider
+TableauDataProvider_modverdir = $(modverdir)/TableauDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
 UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
@@ -291,6 +294,7 @@ dist_ShippoDataProvider_modver_DATA = $(wildcard qlib/ShippoDataProvider/*.q[cm]
 dist_SquareDataProvider_modver_DATA = $(wildcard qlib/SquareDataProvider/*.q[cm]) $(wildcard qlib/SquareDataProvider/*.svg)
 dist_ChargebeeDataProvider_modver_DATA = $(wildcard qlib/ChargebeeDataProvider/*.q[cm]) $(wildcard qlib/ChargebeeDataProvider/*.svg)
 dist_SquarespaceDataProvider_modver_DATA = $(wildcard qlib/SquarespaceDataProvider/*.q[cm]) $(wildcard qlib/SquarespaceDataProvider/*.svg)
+dist_TableauDataProvider_modver_DATA = $(wildcard qlib/TableauDataProvider/*.q[cm]) $(wildcard qlib/TableauDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
 dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*.q[cm]) $(wildcard qlib/UnleashedDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])
@@ -1243,6 +1247,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/LinearDataProvider/linear-logo.svg \
 	qlib/SquareDataProvider/square-logo.svg \
 	qlib/SquarespaceDataProvider/squarespace-logo.svg \
+	qlib/TableauDataProvider/tableau-logo.svg \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \

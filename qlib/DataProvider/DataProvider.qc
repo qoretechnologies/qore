@@ -139,6 +139,7 @@ public class DataProvider {
             "shipstation": "ShipStationDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
+            "tableau": "TableauDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",

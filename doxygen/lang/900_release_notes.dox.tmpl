@@ -738,6 +738,20 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for orders, products, and transactions
       - action catalog integration with 23 actions and 3 triggers
       - connection support with \c squarespaceres:// URL scheme
+    - @ref tableaurestclientintro "TableauRestClient" module
+      - new module providing a REST client for Tableau's analytics and BI REST API
+      - supports Personal Access Token (PAT) session-token authentication
+      - provides TableauRestConnection for connection management with \c tableaures:// URL scheme
+    - @ref tableaudataproviderintro "TableauDataProvider" module
+      - new module providing a data provider API for Tableau analytics
+      - datasource management (search, get, update, delete, download, add/remove tags)
+      - project management (search, create, update, delete)
+      - user management (search, get, create, update, delete)
+      - extract refresh task management (list, get, delete)
+      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
+      - polling-based event triggers for new datasources and new projects
+      - action catalog integration with 20 actions and 8 triggers
+      - connection support with \c tableaures:// URL scheme
     - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
       \c .meta.json metadata files during the build, providing machine-readable documentation for
       all builtin classes, methods, functions, constants, hashdecls, and enums
