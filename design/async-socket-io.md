@@ -2,69 +2,299 @@
 
 ## Overview
 
-The AsyncSocketIo module provides a shared async socket I/O controller that powers HttpServerAsyncIo and other
-components that rely on non-blocking socket polling. The core abstraction is a SocketPollOperation that
+The AsyncSocketIo module provides a shared async socket I/O controller that powers HttpServerAsyncIo, Http2ClientIo,
+and other components that rely on non-blocking socket polling. The core abstraction is a SocketPollOperation that
 represents a unit of work (accept, read/write, handshake, etc) executed by a dedicated I/O thread that polls
-all active sockets.
+all active sockets via an EventLoop (kqueue/epoll/poll).
 
-This document describes the controller's internal model and the supported integration points for other code.
+This document describes the controller's internal model, the Http2ClientIo client module, and the supported
+integration points for other code.
 
 ## Components
 
 - AsyncSocketIoController (qlib/AsyncSocketIo/AsyncSocketIoController.qc)
-  - Owns the I/O thread and the control pipe.
-  - Maintains a list of SocketPollOperation instances and a poll list built from them.
-  - Processes commands that add, cancel, and update operations.
-  - Pushes operation results to a result queue consumed by a coordinator thread.
+  - Owns the I/O thread and an EventNotifier for cross-thread signaling.
+  - Maintains a cache of SocketPollOperation instances and an EventLoop for efficient polling.
+  - Processes commands (Add, Cancel, CancelOwner, Quit, Wake) from a command queue.
+  - Delivers results via callback (invoked in the I/O thread) or Queue.
 
 - HttpServerAsyncIo (qlib/HttpServerAsyncIo)
   - Uses AsyncSocketIoController to perform accept and I/O operations.
   - Provides higher-level HTTP request handling and response writes.
 
+- Http2ClientIo (qlib/Http2ClientIo)
+  - Connection manager, connection, stream handle, and poll operation classes for HTTP/2 client multiplexing.
+  - Integrates with AsyncSocketIoController for event-driven I/O, or runs standalone with sync polling.
+
 - SocketPollOperation (C++ and Qore types)
   - A pollable operation that exposes state and poll interests.
   - Includes SSL/TLS negotiation state for accept operations where needed.
+  - SocketHttp2ClientMultiplexPollOperation (C++) handles HTTP/2 client multiplexing at the frame level.
 
 ## Thread Model
 
-- I/O thread
-  - Blocks in Socket::poll() over all current operations plus a control pipe read end.
-  - Wakes on socket readiness or control pipe activity.
-  - Processes commands and updates operations in a loop.
+- **I/O thread** — one per controller instance
+  - Blocks in EventLoop::poll() over all registered sockets plus the EventNotifier.
+  - Wakes on socket readiness or EventNotifier activity.
+  - Processes commands, drives `continuePoll()` on operations, and delivers results directly.
+  - Results are delivered via callback (called in the I/O thread) or pushed to a Queue.
+  - The three-phase loop (snapshot → continuePoll → update/deliver) releases the lock during
+    `continuePoll()` so worker threads can `submit()` concurrently.
 
-- Coordinator thread
-  - Consumes results and performs higher-level handling (HTTP request dispatch, etc).
+- **Worker threads**
+  - Submit operations via `submit()` or `exec()`.
+  - The I/O thread delivers results back to workers via callback or Queue — there is no separate
+    coordinator thread.
 
-## Control Pipe and Command Queue
+## EventNotifier and Command Queue
 
-The controller uses a pipe to wake the I/O thread whenever a command is enqueued. The sequence is:
+The controller uses an EventNotifier (registered in the persistent EventLoop) to wake the I/O thread
+whenever a command is enqueued. This replaces the previous pipe-based approach.
 
-1. A command is appended to the command queue under the controller lock.
-2. The control pipe is written to if a wakeup is required.
-3. The I/O thread drains the pipe and processes queued commands.
+### Enqueueing (worker thread)
 
-This requires careful coordination to avoid lost wakeups or continuous readability of the pipe. The queue and
-pipe are not atomic together, so controller logic must ensure a consistent protocol for when a write is issued
-and when a drain is performed.
+1. Acquire the controller lock (`m`).
+2. Append the command to `cmdq`.
+3. Release the lock.
+4. Call `notifier.notify()` (outside the lock).
+
+### Processing (I/O thread — `processCommands()`)
+
+There is a race condition between enqueueing and notification:
+
+- Worker: (1) enqueue command (with lock), (2) notify (without lock)
+- I/O thread: (1) process commands (with lock), (2) acknowledge (without lock)
+
+Race scenario: the I/O thread finds `cmdq` empty, the worker enqueues and notifies, then the I/O
+thread acknowledges — consuming the notification without processing the new command.
+
+The fix is a nested loop:
+
+1. Acquire lock, drain `cmdq`, release lock.
+2. Call `notifier.acknowledge()`.
+3. Re-acquire lock, check if `cmdq` has new commands.
+4. If new commands exist, loop back to step 1.
+5. If `cmdq` is empty, return.
+
+This guarantees every enqueued command is processed even when notifications and enqueues interleave.
+
+### Commands
+
+Commands are members of the `IoCommand` enum:
+
+| Command       | Description                                    |
+|---------------|------------------------------------------------|
+| `Add`         | Add a new SocketPollOperation                  |
+| `Cancel`      | Cancel a specific operation by key             |
+| `CancelOwner` | Cancel all operations for a given owner       |
+| `Quit`        | Stop the I/O thread                            |
+| `Wake`        | Wake the I/O thread to re-poll (e.g., flush HTTP/2 frames) |
 
 ## Integration Guidelines
 
-### Listener operations
+### submit()
 
-- Use the HttpServerAsyncIo API or AsyncSocketIoController APIs to add listeners.
-- Listener creation should submit a SocketPollOperation for accept work.
-- Do not manipulate internal poll lists directly.
+```qore
+*Queue submit(hash<SocketPollOperationInfo> info, *bool replace)
+```
 
-### Async send/receive
+Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 
-- Represent any I/O work as a SocketPollOperation submitted to the controller.
-- Operations should signal completion by returning results that the coordinator thread can process.
-- All interaction with the controller must follow its locking requirements.
+| Field         | Type                       | Description                                             |
+|---------------|----------------------------|---------------------------------------------------------|
+| `sock`        | `Socket`                   | Required. The socket to poll.                           |
+| `spop`        | `AbstractPollOperation`    | Required. The poll operation to drive.                  |
+| `poll_info`   | `*hash<SocketPollInfo>`    | Last poll info (normally omitted on first submit).      |
+| `to`          | `date`                     | Timeout (default: 30s). Negative = no timeout.          |
+| `owner`       | `string`                   | Required. Owner ID for `cancelByOwner()`.               |
+| `other`       | `*hash<auto>`              | Free-form data returned with the result.                |
+| `resultQueue` | `*Queue`                   | Optional shared result Queue.                           |
+| `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
+| `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
 
-### Locking
+When `callback` is provided, results are delivered by calling the callback in the I/O thread.
+When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
+created and returned.
 
-- Internal controller locks must be held when accessing queue or shared state.
-- Public helper methods in the controller should enforce locking assumptions (via @assert when possible).
+The `replace` flag allows replacing an existing operation on the same key (used for connection
+re-polling patterns like HTTP/2 persistent connections).
+
+### exec()
+
+```qore
+hash<SocketPollResultInfo> exec(hash<SocketPollOperationInfo> info, *bool replace)
+```
+
+Blocking variant of `submit()`. Submits the operation and waits for the result via `Queue::get()`.
+Cannot be used with callback mode.
+
+### wake()
+
+```qore
+wake()
+```
+
+Sends a `Wake` command to the I/O thread, causing it to re-evaluate poll state. Used primarily
+for HTTP/2 frame flushing when handler threads queue outbound frames while the I/O thread is
+blocked in `poll()`.
+
+### cancelByOwner()
+
+```qore
+int cancelByOwner(string owner)
+```
+
+Cancels all operations belonging to the given owner. Returns the number of operations canceled.
+Blocks until all cancellations are complete (uses a Condition variable to synchronize with the
+I/O thread). Used for bulk cleanup during shutdown (e.g., connection manager `closeAll()`).
+
+### cancel() / cancelByKey()
+
+Cancel a single operation by socket unique hash or custom key.
+
+## Http2ClientIo Module
+
+The Http2ClientIo module provides a full HTTP/2 client multiplexing stack that integrates with
+AsyncSocketIoController for event-driven I/O or runs standalone with synchronous polling.
+
+### Http2ClientConnectionManager
+
+`qlib/Http2ClientIo/Http2ClientConnectionManager.qc`
+
+Connection pool manager with:
+
+- **Connection pooling**: `hash<string, list<Http2ClientConnection>> pool` keyed by `"host:port"`.
+  Protected by `RWLock pool_lock()`.
+- **Load balancing**: `getConnection()` finds a connection with available stream capacity or creates
+  a new one.
+- **Controller integration**: `setController(controller)` enables async mode. New connections are
+  submitted to the controller with `to = -1s` (no timeout) and callback delivery. The callback
+  re-submits the connection after handling each result, keeping it alive in the event loop.
+- **Cleanup**: `closeAll()` calls `controller.cancelByOwner(self.uniqueHash())` for bulk cancellation
+  of all managed connections.
+
+### Http2ClientConnection
+
+`qlib/Http2ClientIo/Http2ClientConnection.qc`
+
+Wraps a Socket + Http2ClientPollOperation pair.
+
+- **Thread safety**: `Mutex lock()` protects all state. `Condition ready_cond()` for waiting on
+  connection readiness.
+- **Single-driver pattern**: `bool driving` — only one thread drives the poll loop at a time.
+  Other threads wait on `ready_cond` with a timeout.
+- **Sync mode**: `drivePoll(timeout)` performs a single poll iteration. `driveToReady(timeout)`
+  loops until the HTTP/2 handshake completes. Uses `EventNotifier poll_notifier()` to wake the
+  blocked poll when new requests are submitted.
+- **Controller mode**: `isControllerMode()` returns true when a controller reference is set.
+  `submitRequest()` calls `controller_ref.wake()` after submitting to nghttp2, waking the I/O
+  thread to pick up the new stream.
+- **States**: `Connecting` → `Ready` → `Draining` (GOAWAY received) → `Closed`.
+
+### Http2ClientStreamHandle
+
+`qlib/Http2ClientIo/Http2ClientStreamHandle.qc`
+
+Per-request handle providing three usage patterns:
+
+- **Synchronous**: `request(method, path, headers, body)` — submits a request and blocks until
+  the response arrives via `Condition response_cond()`.
+- **Asynchronous**: `submitAsync(method, path, headers, body, callback)` — submits a request
+  with a callback. The callback receives `(hash<auto> response, *hash<auto> error)`.
+- **Streaming**: `startStreaming(method, path, headers)` initiates a streaming connection (e.g.,
+  SSE). `readData(timeout)` reads from an internal `Queue data_queue`. An `end_stream` sentinel
+  signals stream completion.
+
+### Http2ClientPollOperation
+
+`qlib/Http2ClientIo/Http2ClientPollOperation.qc`
+
+Qore-level state machine wrapping the C++ multiplex poll operation.
+
+**States:**
+
+```
+CONNECTING → SSL_UPGRADE → READING ⇄ WAIT_READ → CLOSED
+```
+
+| State           | Description                                                         |
+|-----------------|---------------------------------------------------------------------|
+| `connecting`    | TCP connection in progress (inner op: SocketPollOperationConnect)    |
+| `ssl_upgrade`   | SSL/TLS handshake with ALPN for h2 negotiation                     |
+| `reading`       | HTTP/2 connection active; reading frames and dispatching responses   |
+| `wait_read`     | Paused after callback dispatch; `continueReading()` transitions back to `reading` |
+| `closed`        | Connection closed (GOAWAY, error, or max empty reads)               |
+
+**Callback dispatch pattern:**
+
+1. `continuePoll()` calls `current_op.getOutput()` to get completed responses.
+2. Looks up the stream callback under `stream_lock`.
+3. Calls the callback outside the lock to prevent deadlock.
+4. Sets `callback_dispatched = True` to signal the caller.
+5. Transitions to `wait_read`. The caller checks `checkAndClearCallbackDispatched()` to decide
+   whether to skip the next poll timeout (since a response was already delivered).
+
+**Key methods:**
+
+- `submitRequest(method, path, headers, body, callback, ctx)` — registers callback under
+  `stream_lock` **before** submitting to nghttp2 (prevents race where response arrives before
+  callback is registered).
+- `continueReading()` — resumes reading after callback dispatch (`wait_read` → `reading`).
+- `checkAndClearCallbackDispatched()` — returns true and clears the flag if a callback was
+  dispatched during the last `continuePoll()`.
+
+### SocketHttp2ClientMultiplexPollOperation (C++)
+
+`include/qore/intern/QC_SocketPollOperation.h`
+
+Low-level C++ poll operation for HTTP/2 client multiplexing.
+
+**States (C++):**
+
+| Constant           | Description                              |
+|--------------------|------------------------------------------|
+| `H2C_NONE`         | Initial state                            |
+| `H2C_SEND_PREFACE` | Sending connection preface (SETTINGS)    |
+| `H2C_RECV_PREFACE` | Receiving preface response               |
+| `H2C_READING`      | Reading HTTP/2 frames                    |
+| `H2C_CLOSED`       | Connection closed                        |
+
+**Response queue**: `std::deque<QoreHashNode*> completed_responses` protected by `response_lock`.
+`getOutput()` pops the front; `goalReached()` checks non-empty.
+
+**CallbackGuard** — safe destruction pattern:
+
+```cpp
+struct CallbackGuard {
+    std::mutex mutex;
+    bool destroyed = false;
+};
+std::shared_ptr<CallbackGuard> callback_guard;
+```
+
+The `onStreamComplete` callback captures `callback_guard` by shared_ptr. The destructor sets
+`destroyed = true` under the mutex. The callback checks the flag under the mutex before accessing
+`this`, eliminating use-after-free when the poll operation is destroyed while a callback is
+in flight.
+
+**Session reuse**: At construction, checks `sock->priv->h2_session`. If it exists, the session
+is reused (avoids recreating the nghttp2 session). The session is stored back on the socket for
+the next poll operation on the same connection.
+
+### Lock Hierarchy
+
+The following lock ordering must be respected to prevent deadlocks:
+
+1. `Http2ClientConnectionManager::pool_lock` (RWLock)
+2. `Http2ClientConnection::lock` (Mutex)
+3. `Http2ClientPollOperation::stream_lock` (Mutex)
+4. `AsyncSocketIoController::m` (Mutex)
+5. `SocketHttp2ClientMultiplexPollOperation::response_lock` (QoreThreadLock)
+
+Key design decisions that prevent deadlock:
+- Callbacks are delivered **outside** all locks.
+- The I/O thread never calls back into the connection manager.
+- `submit()` does not hold the caller's lock when calling into the controller.
 
 ## HTTP/2 Frame Flushing
 
@@ -160,15 +390,24 @@ than closing it. This allows the HTTP/2 connection to remain active for subseque
 
 Known failure modes include:
 
-- Lost wakeups (command queue not processed because the pipe was not written).
-- Pipe remaining readable forever (causing a busy poll loop).
-- Operations not resubmitted or removed correctly, leading to hangs or timeouts.
-- HTTP/2 frames queued in nghttp2 but not flushed to the wire (see "HTTP/2 Frame Flushing" above).
-- Handler thread submitting HTTP/2 responses without calling `wake()`, leaving frames buffered until the next
-  unrelated poll wakeup.
-- RST'd HTTP/2 streams reaching the application layer (see "HTTP/2 Extended CONNECT Rejection" above). All
-  four rejection layers must be maintained for cross-platform correctness.
+- **EventNotifier race**: Commands enqueued but notification consumed without processing. The nested
+  acknowledge-and-recheck loop in `processCommands()` prevents this (see "EventNotifier and Command Queue").
+- **Operations not resubmitted or removed correctly**, leading to hangs or timeouts.
+- **HTTP/2 frames queued in nghttp2 but not flushed** to the wire (see "HTTP/2 Frame Flushing" above).
+- **Handler thread submitting HTTP/2 responses without calling `wake()`**, leaving frames buffered until the
+  next unrelated poll wakeup.
+- **RST'd HTTP/2 streams reaching the application layer** (see "HTTP/2 Extended CONNECT Rejection" above).
+  All four rejection layers must be maintained for cross-platform correctness.
+- **Single-driver starvation** (client-side): If the driving thread blocks for too long in `drivePoll()`,
+  other threads waiting on `ready_cond` may time out. Controller mode avoids this by delegating to the
+  shared I/O thread.
+- **Callback dispatch ordering** (client-side): Stream callbacks are dispatched in the order responses
+  complete (FIFO from `completed_responses` deque), not in submission order. Callers must not assume
+  request-order delivery.
+- **Use-after-free in stream callbacks**: The `CallbackGuard` pattern in
+  `SocketHttp2ClientMultiplexPollOperation` prevents this — the destructor sets `destroyed = true` and
+  callbacks check the flag before accessing the object.
 
-Any changes to queue or pipe handling must preserve the wakeup protocol described above. Any changes to HTTP/2
-frame processing must preserve the flush-after-receive pattern and the extended CONNECT rejection layers.
-
+Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck protocol described
+above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
+CONNECT rejection layers.
