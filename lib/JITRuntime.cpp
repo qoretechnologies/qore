@@ -435,6 +435,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     return result;
 }
 
+extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    QoreValue val = fromBits(value);
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        return;
+    }
+    // refSelf before assign — assign takes ownership of the reference
+    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    // check_types=false — coercion has already been applied via qore_rt_coerce_value
+    helper.assign(stored, "<lvalue>", false);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
     if (!var) {
         return toBits(QoreValue());
@@ -2627,6 +2642,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_
 extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int32_t local_idx,

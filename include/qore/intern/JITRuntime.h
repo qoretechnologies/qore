@@ -177,6 +177,11 @@ void qore_rt_instantiate_local(LocalVar* var);
 //! runtime stays in sync.
 void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
+//! Assign a NaN-boxed QoreValue to a local variable without type coercion.
+//! Used when coercion has already been applied (e.g., via qore_rt_coerce_value).
+//! This avoids double-coercion for complex-typed locals.
+void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
@@ -462,6 +467,10 @@ uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink*
 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Assign to a local variable via AOT context slot without type coercion.
+//! Used when coercion has already been applied.
+void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
 //! Instantiate a local variable via AOT context slot
 void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
