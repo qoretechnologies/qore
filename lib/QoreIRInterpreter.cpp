@@ -434,15 +434,11 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
     return -1;
 }
 
-static QoreValue getIRValue(const std::unordered_map<uint32_t, QoreValue>& values, QoreIRValue id) {
-    if (!id.isValid()) {
+static QoreValue getIRValue(const std::vector<QoreValue>& values, QoreIRValue id) {
+    if (!id.isValid() || id.id >= values.size()) {
         return QoreValue();
     }
-    auto it = values.find(id.id);
-    if (it == values.end()) {
-        return QoreValue();
-    }
-    return it->second;
+    return values[id.id];
 }
 
 static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
@@ -454,22 +450,33 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     }
 }
 
+// Ensures the values vector is large enough to hold the given slot ID
+static inline void ensureValueSlotSize(std::vector<QoreValue>& values, uint32_t id) {
+    if (id >= values.size()) {
+        // Grow vector exponentially to amortize allocation cost
+        size_t new_size = std::max((size_t)(id + 1), values.size() * 2);
+        values.resize(new_size);
+    }
+}
+
+// Sets a value slot without discarding the previous value (for simple assignments like Const)
+static inline void setValueSlotDirect(std::vector<QoreValue>& values, uint32_t id, QoreValue new_val) {
+    ensureValueSlotSize(values, id);
+    values[id] = new_val;
+}
+
 // Sets a value slot, discarding any previous value to prevent leaks in loops.
 // Each slot holds a +1 reference (from new, refSelf, or call result), so
 // discarding on overwrite is safe — SSA guarantees the old value is from a
 // prior iteration and no longer needed by the current computation.
-static void setValueSlot(std::unordered_map<uint32_t, QoreValue>& values,
+static void setValueSlot(std::vector<QoreValue>& values,
         uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
-    auto it = values.find(id);
-    if (it != values.end()) {
-        it->second.discard(xsink);
-        it->second = new_val;
-    } else {
-        values[id] = new_val;
-    }
+    ensureValueSlotSize(values, id);
+    values[id].discard(xsink);
+    values[id] = new_val;
 }
 
-static void cleanupValues(std::unordered_map<uint32_t, QoreValue>& values, std::vector<uint32_t>& cleanup,
+static void cleanupValues(std::vector<QoreValue>& values, std::vector<uint32_t>& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
     // Track cleaned value slot IDs to handle duplicates from loop iterations.
     // When an instruction executes multiple times, it may push its result ID multiple
@@ -480,11 +487,10 @@ static void cleanupValues(std::unordered_map<uint32_t, QoreValue>& values, std::
             continue;  // Already cleaned this slot
         }
         cleaned_ids.insert(*it);
-        auto val_it = values.find(*it);
-        if (val_it == values.end()) {
+        if (*it >= values.size()) {
             continue;
         }
-        QoreValue temp = val_it->second;
+        QoreValue temp = values[*it];
         if (cleanup_log && temp.hasNode()) {
             if (temp.getType() == NT_STRING) {
                 auto* str = temp.get<QoreStringNode>();
@@ -498,9 +504,8 @@ static void cleanupValues(std::unordered_map<uint32_t, QoreValue>& values, std::
         temp.discard(no_throw ? nullptr : xsink);
         // Clear the entry to prevent stale pointer access if execution
         // continues (e.g., after an exception is caught in a loop).
-        // Set to NOTHING (bits=0) instead of erasing to avoid potential
-        // map rehashing issues.
-        val_it->second = QoreValue();
+        // Set to NOTHING (bits=0) instead of erasing.
+        values[*it] = QoreValue();
     }
     cleanup.clear();
 }
@@ -694,7 +699,7 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
     }
 }
 
-static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>& values,
+static QoreListNode* buildArgList(const std::vector<QoreValue>& values,
         const std::vector<QoreIRValue>& operands, size_t start_index, ExceptionSink* xsink) {
     QoreListNode* args = new QoreListNode(autoTypeInfo);
     qore_list_private* priv = qore_list_private::get(*args);
@@ -719,7 +724,7 @@ static QoreListNode* buildArgList(const std::unordered_map<uint32_t, QoreValue>&
 // computed value as the result.  Using evalBinary with the operand values returns
 // the correct computed value.
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
-        const std::unordered_map<uint32_t, QoreValue>& values, ExceptionSink* xsink) {
+        const std::vector<QoreValue>& values, ExceptionSink* xsink) {
     QoreIROpcode op = inv->invoke_opcode;
     switch (op) {
         // Unary computation opcodes
@@ -1227,7 +1232,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return false;
     }
 #endif
-    std::unordered_map<uint32_t, QoreValue> values;
+    // Use vector for IR value slots for O(1) direct index access instead of O(1) hash lookup
+    // QoreIRFunction assigns IDs sequentially starting from 1, so vector[id] is direct access
+    std::vector<QoreValue> values;
+    // Reserve space for typical function IR slots (10-100 usually, some have more)
+    // Vector will auto-grow if needed in setValueSlot, but reserve reduces reallocations
+    values.reserve(128);
     std::vector<uint32_t> cleanup;
     std::unordered_map<const void*, QoreValue> locals;
     std::unordered_set<const LocalVar*> instantiated_locals;
@@ -1511,31 +1521,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                values[cinst->result.id] = QoreValue(cinst->constant.int_value);
+                setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.int_value));
                 ++ip;
                 break;
             }
             case QoreIROpcode::ConstFloat: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                values[cinst->result.id] = QoreValue(cinst->constant.float_value);
+                setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.float_value));
                 ++ip;
                 break;
             }
             case QoreIROpcode::ConstBool: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                values[cinst->result.id] = QoreValue(cinst->constant.bool_value);
+                setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.bool_value));
                 ++ip;
                 break;
             }
             case QoreIROpcode::ConstNothing: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                values[cinst->result.id] = QoreValue();
+                setValueSlotDirect(values, cinst->result.id, QoreValue());
                 ++ip;
                 break;
             }
             case QoreIROpcode::ConstNull: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                values[cinst->result.id] = QoreValue::makeNull();
+                setValueSlotDirect(values, cinst->result.id, QoreValue::makeNull());
                 ++ip;
                 break;
             }
@@ -2913,10 +2923,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         auto slot_it = local_init_slots.find(lv);
                         if (slot_it != local_init_slots.end()) {
                             uint32_t slot_id = slot_it->second;
-                            auto val_it = values.find(slot_id);
-                            if (val_it != values.end()) {
-                                val_it->second.discard(xsink);
-                                values.erase(val_it);
+                            if (slot_id < values.size()) {
+                                values[slot_id].discard(xsink);
+                                values[slot_id] = QoreValue();  // Set to NOTHING instead of erase
                             }
                             cleanup.erase(std::remove(cleanup.begin(), cleanup.end(), slot_id), cleanup.end());
                             local_init_slots.erase(slot_it);
@@ -2928,10 +2937,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         auto load_it = local_load_slots.find(lv);
                         if (load_it != local_load_slots.end()) {
                             for (uint32_t slot_id : load_it->second) {
-                                auto val_it = values.find(slot_id);
-                                if (val_it != values.end()) {
-                                    val_it->second.discard(xsink);
-                                    values.erase(val_it);
+                                if (slot_id < values.size()) {
+                                    values[slot_id].discard(xsink);
+                                    values[slot_id] = QoreValue();  // Set to NOTHING instead of erase
                                 }
                                 cleanup.erase(std::remove(cleanup.begin(), cleanup.end(), slot_id),
                                     cleanup.end());
@@ -4909,10 +4917,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     removeCleanupEntry(cleanup, ret->value.id);
                     if (val.hasNode()) {
                         return_value = val.refSelf();
-                        auto it = values.find(ret->value.id);
-                        if (it != values.end()) {
-                            it->second.discard(xsink);
-                            values.erase(it);
+                        if (ret->value.id < values.size()) {
+                            values[ret->value.id].discard(xsink);
+                            values[ret->value.id] = QoreValue();  // Set to NOTHING instead of erase
                         }
                     } else {
                         return_value = val;
