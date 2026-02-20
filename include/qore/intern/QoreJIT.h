@@ -203,6 +203,7 @@ private:
     std::mutex bg_queue_mutex;                              //!< protects the queue
     std::condition_variable bg_queue_cv;                    //!< signals new work or queue empty
     std::atomic<bool> bg_thread_running{false};             //!< shutdown flag
+    std::atomic<int> bg_active_work{0};                     //!< count of pending+in-progress compilations
     std::condition_variable bg_queue_empty_cv;              //!< signals when queue becomes empty
 
     //! Background thread worker loop

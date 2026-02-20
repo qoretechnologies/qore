@@ -785,8 +785,10 @@ void QoreJIT::bgCompileThreadLoop() {
                 return !bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire);
             });
             if (bg_compile_queue.empty()) {
-                // Signal that queue is empty (for waitForBgCompileQueue)
-                bg_queue_empty_cv.notify_all();
+                // Check if all work is truly complete (queue empty AND no in-progress compilations)
+                if (bg_active_work.load(std::memory_order_acquire) == 0) {
+                    bg_queue_empty_cv.notify_all();
+                }
                 continue;  // Shutdown signal or spurious wakeup, check loop condition
             }
             work = bg_compile_queue.front();
@@ -816,6 +818,11 @@ void QoreJIT::bgCompileThreadLoop() {
                 fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", work.ir_func->name.c_str(), error.c_str());
             }
             // Mark compilation as failed; uvb->jit_compile_failed will be set by evalTiered
+            // Decrement active work and signal if queue is now empty
+            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+            if (remaining == 0) {
+                bg_queue_empty_cv.notify_all();
+            }
             continue;
         }
 
@@ -824,6 +831,11 @@ void QoreJIT::bgCompileThreadLoop() {
         if (!root_uvb) {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] work item uvb is null, skipping\n");
+            }
+            // Decrement active work and signal if queue is now empty
+            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+            if (remaining == 0) {
+                bg_queue_empty_cv.notify_all();
             }
             continue;
         }
@@ -834,6 +846,11 @@ void QoreJIT::bgCompileThreadLoop() {
             // Compilation was cancelled, failed, or already completed
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, work.ir_func->name.c_str());
+            }
+            // Decrement active work and signal if queue is now empty
+            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+            if (remaining == 0) {
+                bg_queue_empty_cv.notify_all();
             }
             continue;
         }
@@ -846,6 +863,11 @@ void QoreJIT::bgCompileThreadLoop() {
             }
             // Mark as failed
             const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.store(2, std::memory_order_release);
+            // Decrement active work and signal if queue is now empty
+            int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+            if (remaining == 0) {
+                bg_queue_empty_cv.notify_all();
+            }
             continue;
         }
 
@@ -881,12 +903,10 @@ void QoreJIT::bgCompileThreadLoop() {
             }
         }
 
-        // Signal that queue may now be empty (for waitForBgCompileQueue)
-        {
-            std::lock_guard<std::mutex> lock(bg_queue_mutex);
-            if (bg_compile_queue.empty()) {
-                bg_queue_empty_cv.notify_all();
-            }
+        // Decrement active work counter after successful completion and signal if queue is now empty
+        int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (remaining == 0) {
+            bg_queue_empty_cv.notify_all();
         }
     }
 }
@@ -904,6 +924,9 @@ void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction*
         // Already enqueued or completed
         return;
     }
+
+    // Increment active work counter before adding to queue
+    bg_active_work.fetch_add(1, std::memory_order_relaxed);
 
     BgCompileWork work;
     work.uvb = uvb;
@@ -928,10 +951,11 @@ void QoreJIT::enqueueBgCompile(const UserVariantBase* uvb, const QoreIRFunction*
 }
 
 void QoreJIT::waitForBgCompileQueue() {
-    // Wait for all pending compilations to complete using condition variable
+    // Wait for all pending AND in-progress compilations to complete.
+    // Both queue must be empty AND all active work must be done.
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
     bg_queue_empty_cv.wait(lock, [this]() {
-        return bg_compile_queue.empty();
+        return bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0;
     });
 }
 

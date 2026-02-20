@@ -37,6 +37,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/EncryptionTransforms.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <atomic>
 #include <cerrno>
@@ -327,6 +328,10 @@ void qore_cleanup() {
         ExceptionSink xsink;
         purge_thread_resources(&xsink);
     }
+
+    // Shutdown JIT background thread FIRST before destroying programs/functions
+    // to avoid use-after-free: BgCompileWork holds raw pointers to UserVariantBase members
+    QoreJIT::instance().shutdown();
 
     // first delete all user modules
     QMM.delUser();
