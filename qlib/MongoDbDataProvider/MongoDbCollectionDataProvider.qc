@@ -86,7 +86,7 @@ public class MongoDbCollectionDataProvider inherits DataProvider::AbstractDataPr
                 "display_name": "Upsert",
                 "short_desc": "Create document if not found",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If True, create a new document if no document matches the filter",
+                "desc": "If `True`, create a new document if no document matches the filter",
                 "default_value": True,
             },
         };

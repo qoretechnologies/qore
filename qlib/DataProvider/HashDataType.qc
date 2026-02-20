@@ -349,7 +349,7 @@ auto v = t.getDefaultValue();
 
     #! Adds a set of fields from a hash
     /** @param new_fields a hash keyed by field name where values are hashes that can be processed by
-        @ref QoreDataField::constructor(hash<auto>)
+        @ref QoreDataField::constructor(hash\\<auto\\>) "QoreDataField::constructor(hash<auto>)"
 
         @since DataProvider 3.0
     */

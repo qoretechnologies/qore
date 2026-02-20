@@ -76,7 +76,7 @@ public class Pop3ClientDataProviderBase inherits AbstractDataProvider {
                 "display_name": "URL",
                 "short_desc": "The URL to connect to",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "A URL for an POP3 or POP3S connection; must use an `pop3://` or `pop3s://` scheme",
+                "desc": "A URL for a POP3 or POP3S connection; must use a `pop3://` or `pop3s://` scheme",
                 "required": True,
             },
         };

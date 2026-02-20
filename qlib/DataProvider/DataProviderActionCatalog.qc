@@ -132,6 +132,23 @@ public hashdecl DataProviderAppInfo {
 
     #! User-defined info about the app
     *hash<auto> info;
+
+    #! Per-app connection options override
+    /** When set, these options are used instead of @c ConnectionSchemeInfo.options for connection
+        creation forms. This allows multiple apps to share the same connection scheme (e.g. @c "db")
+        while presenting different form fields.
+
+        @since %DataProvider 3.3
+    */
+    *hash<string, hash<ConnectionProvider::ConnectionOptionInfo>> connection_options;
+
+    #! Per-app auto_url override
+    /** When @ref True, the connection URL is generated automatically from options and the URL
+        field is not shown in the connection creation form, regardless of the scheme's auto_url setting.
+
+        @since %DataProvider 3.3
+    */
+    *bool auto_url;
 }
 
 #! Data Provider Action Type Codes
@@ -223,9 +240,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! The group names for the option, if any
     *softlist<string> groups;
 
-    #! Is the option required or not?
-    bool required;
-
     #! Is the option part of a required group?
     /** A required group is a group of options of which at least one must be set
     */
@@ -236,13 +250,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! An optional regex pattern for validating string values
     *string validation_regex;
-
-    #! A list of other options that must be set before this option can be chosen
-    /** Each element in the list is either
-       - a string: giving a single option that the element depends on
-       - a list of strings: giving a group of options, one of which must be set before this option can be chosen
-    */
-    *softlist<softstring> depends_on;
 
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
@@ -268,15 +275,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! A tag allowing the type of the option to be retrieved at runtime
     *string dynamic_type;
 
-    #! If the option should be preselected
-    bool preselected;
-
-    #! Is this option read-only?
-    bool readonly;
-
-    #! Is this option disabled?
-    bool disabled;
-
     #! Does this option support templates?
     bool supports_templates = True;
 
@@ -300,9 +298,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! Does the value of this option determine the structure of other options?
     bool structural_determinate;
-
-    #! Any information about how to react to changes
-    *softlist<softstring> on_change;
 }
 
 #! DataProvider path var info
@@ -470,6 +465,7 @@ public class DataProviderActionCatalog {
             "display_name": True,
             "short_desc": True,
             "desc": True,
+            "groups": True,
             "logo": True,
             "logo_file_name": True,
             "logo_mime_type": True,
@@ -893,6 +889,8 @@ public class DataProviderActionCatalog {
                 DataProviderActionCatalog::doInit(h);
             }
         }
+        # initialize all pending actions to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.value.iterator()), (remove initactionmap).pairIterator();
         return appcache.values();
     }
 
@@ -911,6 +909,8 @@ public class DataProviderActionCatalog {
         if (*hash<auto> h = remove initmap{app}) {
             DataProviderActionCatalog::doInit(h);
         }
+        # initialize any pending actions for the app to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -935,6 +935,8 @@ public class DataProviderActionCatalog {
         if (*hash<auto> h = remove initmap{app}) {
             DataProviderActionCatalog::doInit(h);
         }
+        # initialize any pending actions for the app to ensure supports_* flags are set
+        map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -954,6 +956,13 @@ public class DataProviderActionCatalog {
         # initialize any matching pending apps
         map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap,
             regex($1, regex_pattern, regex_options);
+        # initialize pending actions for matching apps to ensure supports_* flags are set
+        foreach string appname in (keys initactionmap) {
+            if (appcache{appname} && (regex(appname, regex_pattern, regex_options)
+                    || regex(appcache{appname}.desc, regex_pattern, regex_options))) {
+                map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+            }
+        }
         if (resolve_output_types) {
             DataProviderActionCatalog::resolveOutputTypes();
         }
@@ -978,9 +987,29 @@ public class DataProviderActionCatalog {
             # initialize any matching pending apps
             map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap, ($1.upr().find(substr) >= 0);
 
+            # initialize pending actions for matching apps to ensure supports_* flags are set
+            foreach string appname in (keys initactionmap) {
+                if (appcache{appname} && ((appname.upr().find(substr) >= 0)
+                        || (appcache{appname}.desc.upr().find(substr) >= 0))) {
+                    map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+                }
+            }
+
             return map $1, appcache.values(),
                 ($1.name.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
         }
+
+        # case-sensitive path: initialize any matching pending apps
+        map DataProviderActionCatalog::doInit(remove initmap{$1}), keys initmap, ($1.find(substr) >= 0);
+
+        # initialize pending actions for matching apps to ensure supports_* flags are set
+        foreach string appname in (keys initactionmap) {
+            if (appcache{appname} && ((appname.find(substr) >= 0)
+                    || (appcache{appname}.desc.find(substr) >= 0))) {
+                map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
+            }
+        }
+
         return map $1, appcache.values(), ($1.name.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
     }
 

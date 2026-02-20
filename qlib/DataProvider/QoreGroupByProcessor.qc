@@ -26,7 +26,7 @@
 public namespace DataProvider {
 
 #! Parsed aggregate specification for the group-by processor
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public hashdecl GroupByAggSpec {
     #! Output field name for the aggregate result
@@ -64,7 +64,7 @@ public hashdecl GroupByAggSpec {
     });
     @endcode
 
-    @since %DataProvider 3.4
+    @since %DataProvider 3.3
 */
 public class QoreGroupByProcessor inherits AbstractDataProvider {
     public {
@@ -90,11 +90,11 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
                 "display_name": "Aggregate Expressions",
                 "short_desc": "Aggregate expressions to compute per group",
                 "desc": "Comma-separated aggregate expressions in the format "
-                    "'name=op(field)' or 'op(field)'; "
-                    "supported operations: count(), sum(field), avg(field), min(field), "
-                    "max(field), first(field), last(field); "
-                    "output field name defaults to 'op_field' or 'count'; "
-                    "example: 'total=sum(amount),orders=count(),avg_price=avg(price)'",
+                    "`name=op(field)` or `op(field)`.\n\n"
+                    "Supported operations: `count()`, `sum(field)`, `avg(field)`, "
+                    "`min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\n"
+                    "Output field name defaults to `op_field` (or `count` for `count()`). "
+                    "Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },

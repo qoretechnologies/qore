@@ -632,6 +632,8 @@ int ModuleManager::runTimeLoadModule(ExceptionSink* xsink, const char* name, Qor
     return QMM.runTimeLoadModule(*xsink, *xsink, name, pgm, nullptr, QMLO_NONE, QP_WARN_MODULES, false, mod_desc_func);
 }
 
+static const char* get_feature_from_path(QoreString& tmp);
+
 int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, QoreProgram* mpgm, unsigned load_opt, int warning_mask, bool reexport,
         qore_binary_module_desc_t mod_desc_func) {
@@ -639,6 +641,22 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
         return -1;
+    }
+
+    // fast path: if the feature is already loaded in this program and there are no special load options,
+    // return without acquiring the global module lock; this is thread-safe because all modifications to
+    // featureList occur under the parse lock, which we hold here exclusively
+    if (pgm && !load_opt) {
+        // extract the feature name from a path argument if necessary (same logic as loadModuleIntern())
+        QoreString tmp;
+        const char* feat_name = name;
+        if (strchrs(name, "./\\")) {
+            tmp = name;
+            feat_name = get_feature_from_path(tmp);
+        }
+        if (qore_program_private::get(*pgm)->hasFeature(feat_name)) {
+            return 0;
+        }
     }
 
     AutoLocker al2(mutex); // grab global module lock

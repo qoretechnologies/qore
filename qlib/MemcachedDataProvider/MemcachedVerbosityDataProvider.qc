@@ -120,7 +120,7 @@ public class MemcachedVerbosityResponseDataType inherits DataProvider::HashDataT
                 "type": BoolType,
                 "display_name": "Success",
                 "short_desc": "Command succeeded",
-                "desc": "True if the verbosity level was set successfully",
+                "desc": "`True` if the verbosity level was set successfully",
                 "example_value": True,
             },
             "status": {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugLinenoiseCmdLine.qm Debug common code
 
-/*  DebugLinenoiseCmdLine.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugLinenoiseCmdLine.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 0.8.13
+%requires qore >= 2.0
 %requires DebugCmdLine
 %requires linenoise
 
@@ -55,18 +55,19 @@ public namespace DebugLinenoiseCmdLine {
     #! debug linenoise command line class
     public class DebugLinenoiseCommandLine inherits DebugCommandLine {
         public {
-            string ln_prompt = 'qdbg> ';
+            string ln_prompt;
             const defaultHistoryFileName = '.qdbg.history';
             const defaultIndent = "  ";
         }
 
         #! Creates the object
         constructor() {
+            ln_prompt = tc.enabled ? "\033[1;36mqdbg>\033[0m " : "qdbg> ";
         }
 
         #! Returns all commands from the subclass plus history commands added by this module
         private hash<auto> getCommands() {
-            hash cmds = DebugCommandLine::getCommands();
+            hash<auto> cmds = DebugCommandLine::getCommands();
             cmds.'>' += (
                 'history': (
                     '>': (
@@ -104,11 +105,102 @@ public namespace DebugLinenoiseCmdLine {
             return cmds;
         }
 
+        #! Updates the right-side prompt to show current context
+        private updateRightPrompt() {
+            string rp = "";
+            *auto pgmId = getContextValue('programId');
+            *auto tid = getContextValue('threadId');
+            if (exists pgmId || exists tid) {
+                rp = tc.enabled ? "\033[2m[" : "[";
+                if (exists pgmId) {
+                    rp += sprintf("pgm:%s", pgmId);
+                }
+                if (exists tid) {
+                    if (exists pgmId) {
+                        rp += " ";
+                    }
+                    rp += sprintf("tid:%s", tid);
+                }
+                rp += tc.enabled ? "]\033[0m" : "]";
+            }
+            Linenoise::set_right_prompt(rp);
+        }
+
+        #! Hints callback for inline argument display
+        private *hash<auto> getHints(string input) {
+            if (!input.val()) {
+                return NOTHING;
+            }
+            try {
+                list<auto> args = splitCmd(input).args;
+                if (!args) {
+                    return NOTHING;
+                }
+                *hash<auto> cmd = findCmd(args, fcHelp | fcExpandUniqueCmd);
+                if (cmd.cmd.desc) {
+                    return {
+                        "text": "  " + cmd.cmd.desc,
+                        "color": 90,
+                        "bold": False,
+                    };
+                }
+            } catch () {
+                # suppress exceptions in hints
+            }
+            return NOTHING;
+        }
+
+        #! Syntax highlighting callback
+        private string syntaxHighlight(string input) {
+            if (!input.val() || !tc.enabled) {
+                return input;
+            }
+            try {
+                hash<auto> h = splitCmd(input);
+                if (!h.args) {
+                    return input;
+                }
+                *hash<auto> cmd = findCmd(h.args, fcExpandUniqueCmd);
+                # colorize recognized command (first token)
+                if (h.pos && h.pos.size() > 0) {
+                    int cmdStart = h.pos[0].start;
+                    int cmdEnd = h.pos[0].end;
+                    string cmdText = input.substr(cmdStart, cmdEnd - cmdStart);
+                    string prefix = cmdStart > 0 ? input.substr(0, cmdStart) : "";
+                    string suffix = cmdEnd < input.size() ? input.substr(cmdEnd) : "";
+                    if (cmd.cmd) {
+                        return prefix + tc.success(cmdText) + suffix;
+                    } else {
+                        return prefix + tc.error(cmdText) + suffix;
+                    }
+                }
+            } catch () {
+                # suppress exceptions in highlighting
+            }
+            return input;
+        }
+
+        #! Key binding: Ctrl+G — show current program/thread context
+        private *hash<auto> keyCtrlG(hash<auto> state) {
+            *auto pgmId = getContextValue('programId');
+            *auto tid = getContextValue('threadId');
+            printfImpl("program: %y, thread: %y", pgmId, tid);
+            return NOTHING;
+        }
+
         #! Sets up command-line handling with linenoise
         public runCmdLine() {
-            # Linenoise::history_load('history.txt');
-            # Linenoise::history_set_max_len(256);
+            Linenoise::history_set_max_len(1000);
             Linenoise::set_callback(\getLineCompletions());
+            Linenoise::set_hints_callback(\getHints());
+            Linenoise::set_menu_complete(True);
+            Linenoise::set_completion_case_insensitive(True);
+            if (tc.enabled) {
+                Linenoise::set_syntax_callback(\syntaxHighlight());
+            }
+            # key bindings
+            Linenoise::bind_key("ctrl-g", \keyCtrlG());
+            updateRightPrompt();
             string lastLine = '';
             while (True) {
                 *string line = Linenoise::line(ln_prompt);
@@ -131,10 +223,10 @@ public namespace DebugLinenoiseCmdLine {
                 } catch (hash<ExceptionInfo> ex) {
                     printfImpl("%s: %s", ex.err, ex.desc);
                 }
+                updateRightPrompt();
             }
             if (historyFileName) {
                 try {
-                    #printfImpl("Linenoise::history_save(%y)\n", historyFileName);
                     Linenoise::history_save(historyFileName);
                 } catch (hash<ExceptionInfo> ex) {
                     printfImpl("Cannot save history to %y (%s)\n", historyFileName, ex.desc);
@@ -143,8 +235,10 @@ public namespace DebugLinenoiseCmdLine {
         }
 
         #! Initializes the history and command-line session
-        public init(hash opt) {
+        public init(hash<auto> opt) {
             DebugCommandLine::init(opt);
+            # update prompt with current color setting
+            ln_prompt = tc.enabled ? "\033[1;36mqdbg>\033[0m " : "qdbg> ";
             if (!exists opt.history) {
                 # use file name in home dir
                 foreach string k in (('HOME', 'USERPROFILE')) {
@@ -159,15 +253,15 @@ public namespace DebugLinenoiseCmdLine {
             if (historyFileName) {
                 try {
                     Linenoise::history_load(historyFileName);
-                } catch (hash ex) {
+                } catch (hash<ExceptionInfo> ex) {
                     printfImpl("Cannot load history from %y (%s)\n", historyFileName, ex.desc);
                 }
             }
             if (opt.session) {
                 try {
                     loadSession(opt.session);
-                } catch (hash ex) {
-                    printfImpl("Cannot load seesion from %y (%s)\n", opt.session, ex.desc);
+                } catch (hash<ExceptionInfo> ex) {
+                    printfImpl("Cannot load session from %y (%s)\n", opt.session, ex.desc);
                 }
             }
         }

@@ -130,7 +130,7 @@ public class MongoDbFindRequestDataType inherits HashDataType {
                 "display_name": "Filter",
                 "short_desc": "Query filter for matching documents",
                 "type": HashOrNothingType,
-                "desc": "A query filter hash to match documents (empty or NOTHING for all documents)",
+                "desc": "A query filter hash to match documents (empty or `NOTHING` for all documents)",
             },
             "limit": {
                 "display_name": "Limit",

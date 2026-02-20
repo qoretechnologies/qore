@@ -85,6 +85,12 @@ struct Http2StreamInfo {
     // Headers (values stored as vectors to support duplicate header names per RFC 7540 Section 8.1.2.5)
     std::map<std::string, std::vector<std::string>> headers;
 
+    //! Trailer headers (received after body in a trailing HEADERS frame)
+    std::map<std::string, std::vector<std::string>> trailers;
+
+    //! True when receiving trailer headers (after initial headers + body)
+    bool receiving_trailers = false;
+
     // Body data
     std::vector<char> body;
 
@@ -176,7 +182,8 @@ public:
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink);
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming = false);
 
     //! Submit a request with support for duplicate header names (client-side)
     /** Uses a vector of pairs to allow multiple entries with the same header name,
@@ -187,11 +194,13 @@ public:
         @param body Request body (can be nullptr)
         @param body_len Length of request body
         @param xsink Exception sink for error reporting
+        @param streaming If true, keep the stream open for subsequent sendStreamData() calls
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
         const std::vector<std::pair<std::string, std::string>>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink);
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming = false);
 
     //! Submit a response (server-side)
     /** @param stream_id Stream ID for the response
@@ -282,6 +291,20 @@ public:
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Submit HTTP/2 trailer headers on a stream (server-side)
+    /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
+        The data provider for this stream is configured to signal EOF without
+        END_STREAM on the last DATA frame, so that the trailer HEADERS carries
+        the END_STREAM flag.
+
+        @param stream_id Stream ID to send trailers on
+        @param trailers Trailer header name/value pairs
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitTrailers(int32_t stream_id,
+        const std::map<std::string, std::string>& trailers, ExceptionSink* xsink);
+
     //! Set the stream type (for protocol upgrades like WebSocket/SSE)
     DLLLOCAL void setStreamType(int32_t stream_id, Http2StreamType type);
 
@@ -371,9 +394,10 @@ public:
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
 
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
-    /** @param stream_id the completed stream ID
-        @param stream the stream info (may be nullptr if stream was reset before completion)
-        @param xsink exception sink for error reporting
+    /** Callback arguments:
+        - \c stream_id: the completed stream ID
+        - \c stream: the stream info (may be nullptr if stream was reset before completion)
+        - \c xsink: exception sink for error reporting
     */
     using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
         ExceptionSink* xsink)>;
@@ -544,6 +568,10 @@ private:
         bool defer_on_empty = false;
         bool no_end_stream = false;
         bool remove_on_empty = true;
+        //! Trailers to submit after body EOF (set by submitTrailers())
+        std::vector<std::pair<std::string, std::string>> pending_trailers;
+        //! Error from nghttp2_submit_trailer() failure in data provider callback
+        int trailer_submit_error = 0;
     };
     std::map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
 

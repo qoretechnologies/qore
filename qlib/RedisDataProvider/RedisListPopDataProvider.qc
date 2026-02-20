@@ -29,7 +29,7 @@ public class RedisListPopDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "pop",
-            "desc": "Redis list POP API data provider; pops elements from lists (LPOP, RPOP, BLPOP, BRPOP)",
+            "desc": "Redis list POP API data provider; pops elements from lists (`LPOP`, `RPOP`, `BLPOP`, `BRPOP`)",
             "type": "RedisListPopDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -107,7 +107,7 @@ public class RedisListPopRequestDataType inherits DataProvider::HashDataType {
             "right": {
                 "display_name": "Pop Right?",
                 "short_desc": "Pop from right side (RPOP)",
-                "desc": "Pop from right side (RPOP) instead of left (LPOP)",
+                "desc": "Pop from right side (`RPOP`) instead of left (`LPOP`)",
                 "type": SoftBoolOrNothingType,
             },
             "count": {
@@ -144,7 +144,7 @@ public class RedisListPopResponseDataType inherits DataProvider::HashDataType {
             "value": {
                 "display_name": "Value",
                 "short_desc": "Popped value",
-                "desc": "The popped value, or NOTHING if list is empty",
+                "desc": "The popped value, or `NOTHING` if list is empty",
                 "type": AutoType,
                 "example_value": "item1",
             },

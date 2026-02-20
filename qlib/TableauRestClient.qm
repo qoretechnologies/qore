@@ -1,0 +1,531 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TableauRestClient.qm Qore user module for calling Tableau REST API services
+
+/*  TableauRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) ConnectionProvider >= 1.4
+
+module TableauRestClient {
+    version = "1.0";
+    desc = "User module for calling Tableau REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("tableaures", TableauRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage TableauRestClient Module
+
+    @tableofcontents
+
+    @section tableaurestclientintro TableauRestClient Introduction
+
+    The %TableauRestClient module provides an API for calling Tableau REST API services.
+
+    To use this module, use \c "%requires TableauRestClient" in your code.
+
+    All the public symbols in the module are defined in the TableauRestClient namespace.
+
+    The main classes are:
+    - @ref TableauRestClient::TableauRestClient "TableauRestClient":
+      this class provides the REST client API for communication with the Tableau REST API;
+      it handles Personal Access Token session-based authentication
+    - @ref TableauRestClient::TableauRestConnection "TableauRestConnection":
+      provides a connection object to Tableau services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires TableauRestClient
+
+TableauRestClient tableau({
+    "subdomain": ENV.TABLEAU_SUBDOMAIN,
+    "token_name": ENV.TABLEAU_TOKEN_NAME,
+    "token_secret": ENV.TABLEAU_TOKEN_SECRET,
+    "content_url": ENV.TABLEAU_CONTENT_URL,
+});
+hash<auto> result = tableau.get("projects");
+printf("Projects: %y\n", result.body.projects);
+    @endcode
+
+    @section tableaurestclientrelnotes Release Notes
+
+    @subsection tableaurestclientv1_0 TableauRestClient v1.0
+    - the initial version of the %TableauRestClient module
+*/
+
+#! the TableauRestClient namespace contains all the objects in the TableauRestClient module
+public namespace TableauRestClient {
+
+#! This class provides the REST client API for communication with Tableau servers
+/** Tableau uses a REST API with Personal Access Token (PAT) session-based authentication.
+
+    @par Authentication:
+    Tableau uses a session-token model:
+    - Sign in with PAT credentials via POST to auth/signin
+    - Receive a session token and site LUID
+    - Include X-Tableau-Auth header on all subsequent requests
+    - All resource paths are prefixed with sites/{site-luid}/
+
+    @par URL Structure:
+    https://{subdomain}.online.tableau.com/api/{api_version}
+
+    @par API Versioning:
+    The API version is embedded in the URL path (e.g., 3.27)
+*/
+public class TableauRestClient inherits RestClient::RestClient {
+    public {
+        #! Default API version
+        const DefaultApiVersion = "3.27";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (serverinfo works without auth, no leading slash)
+        const DefaultPingPath = "serverinfo";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            # Tableau's ingress gateway requires Content-Length on POST requests;
+            # HTTP/2 may not send it, so force HTTP/1.1
+            "http_version": "1.1",
+        };
+    }
+
+    private {
+        #! The PAT token name
+        string token_name;
+
+        #! The PAT token secret
+        string token_secret;
+
+        #! The site content URL (site name)
+        string content_url;
+
+        #! The API version
+        string api_version;
+
+        #! The session token from sign-in
+        *string session_token;
+
+        #! The site LUID from sign-in
+        *string site_luid;
+
+        #! The session expiry time
+        *date session_expiry;
+
+        #! Mutex for thread-safe authentication
+        Mutex auth_lock();
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+TableauRestClient tableau({
+    "subdomain": "us-east-23b",
+    "token_name": "my-token-name",
+    "token_secret": "qlE1g9MMh9vbrjjg==:...",
+    "content_url": "my-site-name",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c subdomain: the Tableau Cloud pod name (required)
+        - \c token_name: the Personal Access Token name (required)
+        - \c token_secret: the Personal Access Token secret (required)
+        - \c content_url: the site content URL / site name (default: empty string for default site)
+        - \c api_version: the API version (default: 3.27)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(TableauRestClient::getOptions(opts), do_not_connect) {
+        token_name = opts.token_name;
+        token_secret = opts.token_secret;
+        content_url = opts.content_url ?? "";
+        api_version = opts.api_version ?? DefaultApiVersion;
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Returns the site LUID (signs in if necessary)
+    *string getSiteLuid() {
+        return site_luid;
+    }
+
+    #! Overrides doRequest to handle session-token authentication and path prefixing
+    /** For non-auth paths, this method:
+        - Ensures the client is authenticated (lazy sign-in)
+        - Prefixes the path with sites/{site-luid}/
+        - Adds the X-Tableau-Auth header
+        - Handles 401 re-authentication retry
+    */
+    hash<auto> doRequest(string method, string path, auto body,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        # Paths that don't need auth or site prefix
+        bool is_auth_path = (path =~ /^auth\// || path == "serverinfo");
+
+        if (!is_auth_path) {
+            ensureAuthenticated();
+            # Prefix with sites/{site_luid}/
+            path = "sites/" + site_luid + "/" + path;
+            # Add session token header
+            if (!hdr) {
+                hdr = {};
+            }
+            hdr."X-Tableau-Auth" = session_token;
+        }
+
+        try {
+            return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            # On 401, try re-auth once (only for non-auth paths)
+            if (!is_auth_path && ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 401) {
+                invalidateSession();
+                ensureAuthenticated();
+                # Rebuild path with new site_luid
+                path = regex_subst(path, "^sites/[^/]+/", "sites/" + site_luid + "/");
+                hdr."X-Tableau-Auth" = session_token;
+                return RestClient::doRequest(method, path, body, \info, decode_errors, hdr);
+            }
+            rethrow;
+        }
+    }
+
+    #! Ensures the client has a valid session token
+    private ensureAuthenticated() {
+        auth_lock.lock();
+        on_exit auth_lock.unlock();
+        if (!session_token || (session_expiry && now_us() >= session_expiry)) {
+            signIn();
+        }
+    }
+
+    #! Invalidates the current session
+    private invalidateSession() {
+        auth_lock.lock();
+        on_exit auth_lock.unlock();
+        remove session_token;
+        remove site_luid;
+        remove session_expiry;
+    }
+
+    #! Signs in to Tableau with PAT credentials
+    /** Uses the parent RestClient::doRequest() to avoid recursion through our override
+    */
+    private signIn() {
+        hash<auto> body = {
+            "credentials": {
+                "personalAccessTokenName": token_name,
+                "personalAccessTokenSecret": token_secret,
+                "site": {
+                    "contentUrl": content_url,
+                },
+            },
+        };
+        hash<auto> sign_in_info;
+        hash<auto> response = RestClient::doRequest("POST", "auth/signin", body,
+            \sign_in_info, True);
+        session_token = response.body.credentials.token;
+        site_luid = response.body.credentials.site.id;
+        # Conservative expiry: 100 minutes (Cloud actual: 120 min, Server: 240 min)
+        session_expiry = now_us() + 100m;
+    }
+
+    #! returns options for @ref TableauRestClient::TableauRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Build URL from subdomain and api_version
+        string subdomain = opts.subdomain;
+        string api_version = opts.api_version ?? DefaultApiVersion;
+        rv.url = sprintf("https://%s.online.tableau.com/api/%s", subdomain, api_version);
+
+        # Remove custom options that RestClient doesn't understand
+        remove rv.token_name;
+        remove rv.token_secret;
+        remove rv.content_url;
+        remove rv.subdomain;
+        remove rv.api_version;
+
+        return rv;
+    }
+}
+
+#! Class for Tableau REST connections; returns @ref TableauRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c subdomain: the Tableau Cloud pod name
+    - \c token_name: the Personal Access Token name
+    - \c token_secret: the Personal Access Token secret
+    - \c content_url: the site content URL / site name
+    - \c api_version: the Tableau REST API version
+
+    @see @ref TableauRestClient::TableauRestClient::constructor() for more information on the above options
+*/
+public class TableauRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Tableau REST Connection",
+            "short_desc": "A connection to the Tableau REST API",
+            "desc": "A connection to the Tableau REST API for analytics and data management",
+            "cls": Class::forName("TableauRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "tableaures": True,
+            },
+            "base_scheme_map": {
+                "https": "tableaures",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": TableauRestClient::DefaultData,
+                },
+                "subdomain": <ConnectionOptionInfo>{
+                    "display_name": "Subdomain",
+                    "short_desc": "Tableau Cloud pod name",
+                    "type": "string",
+                    "desc": "The Tableau Cloud pod name (e.g., 'us-east-23b', '10ax', '10ay'). "
+                        "For Tableau Cloud, the server address must contain the pod name.",
+                    "preselected": True,
+                },
+                "token_name": <ConnectionOptionInfo>{
+                    "display_name": "Token Name",
+                    "short_desc": "Personal Access Token name",
+                    "type": "string",
+                    "desc": "The name of the Personal Access Token for authentication",
+                    "preselected": True,
+                },
+                "token_secret": <ConnectionOptionInfo>{
+                    "display_name": "Token Secret",
+                    "short_desc": "Personal Access Token secret",
+                    "type": "string",
+                    "desc": "The secret value of the Personal Access Token",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "content_url": <ConnectionOptionInfo>{
+                    "display_name": "Site Name",
+                    "short_desc": "Tableau site content URL",
+                    "type": "string",
+                    "desc": "The content URL (site name) for the Tableau site. "
+                        "Use an empty string for the default site.",
+                    "default_value": "",
+                },
+                "api_version": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "Tableau REST API version",
+                    "type": "string",
+                    "desc": "The Tableau REST API version (e.g., '3.27')",
+                    "default_value": TableauRestClient::DefaultApiVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": TableauRestClient::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": TableauRestClient::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": TableauRestClient::DefaultPingPath,
+                },
+            },
+            "required_options": "subdomain,token_name,token_secret",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "Tableau Cloud Connection",
+                    "intent": "info",
+                    "content": "Enter your Tableau Cloud pod name (subdomain) and Personal Access "
+                        "Token credentials.\n\n"
+                        "- **Subdomain**: The pod name from your Tableau Cloud URL "
+                        "(e.g., 'us-east-23b' from https://us-east-23b.online.tableau.com)\n"
+                        "- **Token Name / Secret**: Create a Personal Access Token in your "
+                        "Tableau account settings",
+                },
+            ),
+        };
+    }
+
+    #! creates the TableauRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = "tableaures://online.tableau.com",
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the TableauRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(TableauRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref TableauRestConnection::constructor()
+    /** Constructs the connection URL from the subdomain and api_version options
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        string subdomain = config.opts.subdomain ?? "online";
+        string api_version = config.opts.api_version ?? TableauRestClient::DefaultApiVersion;
+        string url = sprintf("tableaures://%s.online.tableau.com/api/%s", subdomain, api_version);
+        return config + {
+            "url": url,
+        };
+    }
+
+    #! returns \c "tableaures"
+    string getType() {
+        return "tableaures";
+    }
+
+    #! Returns connection options
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return RestConnection::getConnectionOptions(rtopts);
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "Tableau";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the TableauDataProvider and creates
+        # the data provider object dynamically
+        load_module("TableauDataProvider");
+        return create_object("TableauDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> updates;
+            # Rebuild URL from current subdomain and api_version options
+            string subdomain = opts.subdomain ?? "online";
+            string api_version = opts.api_version ?? TableauRestClient::DefaultApiVersion;
+            string correct_url = sprintf("tableaures://%s.online.tableau.com/api/%s",
+                subdomain, api_version);
+            if (url != correct_url) {
+                updates.url = correct_url;
+            }
+            # Fix ping_path if it has a leading slash
+            if (opts.ping_path =~ /^\//) {
+                updates.ping_path = opts.ping_path[1..];
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
+            }
+        }
+    }
+
+    #! returns a @ref TableauRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref TableauRestClient object
+    */
+    private TableauRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new TableauRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

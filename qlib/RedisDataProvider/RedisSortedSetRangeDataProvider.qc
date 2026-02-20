@@ -29,7 +29,7 @@ public class RedisSortedSetRangeDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "range",
-            "desc": "Redis sorted set RANGE API; range queries (ZRANGE, ZREVRANGE, ZRANGEBYSCORE)",
+            "desc": "Redis sorted set RANGE API; range queries (`ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`)",
             "type": "RedisSortedSetRangeDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -146,14 +146,14 @@ public class RedisSortedSetRangeRequestDataType inherits DataProvider::HashDataT
             "start": {
                 "display_name": "Start",
                 "short_desc": "Start index",
-                "desc": "Start index for ZRANGE (default: 0)",
+                "desc": "Start index for `ZRANGE` (default: `0`)",
                 "type": IntOrNothingType,
                 "example_value": 0,
             },
             "stop": {
                 "display_name": "Stop",
                 "short_desc": "Stop index",
-                "desc": "Stop index for ZRANGE (default: -1)",
+                "desc": "Stop index for `ZRANGE` (default: `-1`)",
                 "type": IntOrNothingType,
                 "example_value": -1,
             },

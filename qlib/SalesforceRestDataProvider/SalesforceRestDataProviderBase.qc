@@ -33,7 +33,7 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
                 "display_name": "API Version",
                 "short_desc": "The Salesforce API version to use",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The Salesforce API version to use (\"auto\" = latest version available)",
+                "desc": "The Salesforce API version to use (`auto` = latest version available)",
             },
             "oauth2_auth_url": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Auth URL",

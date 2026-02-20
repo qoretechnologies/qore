@@ -441,6 +441,12 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! find a module by name without locking; the caller must hold the mutex
+    DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
+        module_map_t::iterator i = map.find(name);
+        return i == map.end() ? nullptr : i->second;
+    }
+
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false);
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
@@ -582,11 +588,6 @@ protected:
 
     // list of module directories
     UniqueDirectoryList moduleDirList;
-
-    DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
-        module_map_t::iterator i = map.find(name);
-        return i == map.end() ? 0 : i->second;
-    }
 
     DLLLOCAL QoreAbstractModule* loadModuleIntern(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
         AutoLocker sl(mutex); // make sure checking and loading are atomic

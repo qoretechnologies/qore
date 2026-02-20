@@ -1,0 +1,265 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_IsolationForest.qpp
+
+    Qore ml module - IsolationForest class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_IsolationForest.h"
+
+// Extern declaration for hashdecl (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclIsolationForestResult;
+
+//! The IsolationForest class implements the Isolation Forest anomaly detection algorithm
+/** Isolation Forest detects anomalies by randomly partitioning data. Anomalous points
+    are isolated in fewer partitions (shorter path lengths) than normal points.
+
+    The anomaly score ranges from 0.0 (normal) to 1.0 (anomalous). Points with scores
+    above the configured threshold are flagged as anomalies.
+
+    Each instance is independent and thread-safe for concurrent scoring after fitting.
+
+    @par Example:
+    @code{.py}
+# Create an Isolation Forest with default settings
+IsolationForest iforest({"n_trees": 100, "sample_size": 256, "threshold": 0.6});
+
+# Train on normal data
+list<hash<auto>> training_data = (
+    {"temperature": 20.0, "pressure": 1013.0},
+    {"temperature": 21.5, "pressure": 1012.0},
+    {"temperature": 19.8, "pressure": 1014.0},
+    # ... more normal records
+);
+iforest.fit(training_data);
+
+# Score a new record
+hash<IsolationForestResult> result = iforest.score({"temperature": 85.0, "pressure": 500.0});
+printf("Anomaly score: %f, is anomaly: %y\n", result.anomaly_score, result.is_anomaly);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass IsolationForest [arg=QoreIsolationForest* iforest; ns=Qore::ML; flags=final];
+
+//! Creates an IsolationForest with the given options
+/** @param options a hash with the following optional keys:
+    - \c n_trees (int): number of isolation trees to build (default: 100)
+    - \c sample_size (int): number of samples to use for each tree (default: 256)
+    - \c max_depth (int): maximum tree depth; 0 = auto (ceil(log2(sample_size))) (default: 0)
+    - \c threshold (float): anomaly score threshold for the is_anomaly flag (default: 0.5)
+    - \c seed (int): random seed for reproducibility; 0 = random (default: 0)
+
+    @par Example:
+    @code{.py}
+IsolationForest iforest({"n_trees": 200, "threshold": 0.6, "seed": 42});
+    @endcode
+
+    @throw ML-ISOLATION-FOREST-ERROR invalid option values
+*/
+IsolationForest::constructor(*hash<auto> options) {
+    int64 n_trees = 100;
+    int64 sample_size = 256;
+    int64 max_depth = 0;
+    double threshold = 0.5;
+    int64 seed = 0;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("n_trees");
+        if (!v.isNullOrNothing()) {
+            n_trees = v.getAsBigInt();
+        }
+        v = options->getKeyValue("sample_size");
+        if (!v.isNullOrNothing()) {
+            sample_size = v.getAsBigInt();
+        }
+        v = options->getKeyValue("max_depth");
+        if (!v.isNullOrNothing()) {
+            max_depth = v.getAsBigInt();
+        }
+        v = options->getKeyValue("threshold");
+        if (!v.isNullOrNothing()) {
+            threshold = v.getAsFloat();
+        }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) {
+            seed = v.getAsBigInt();
+        }
+    }
+
+    if (n_trees < 1) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "n_trees must be >= 1; got " QLLD, n_trees);
+        return;
+    }
+    if (sample_size < 2) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "sample_size must be >= 2; got " QLLD, sample_size);
+        return;
+    }
+    if (threshold < 0.0 || threshold > 1.0) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "threshold must be between 0.0 and 1.0; got %f", threshold);
+        return;
+    }
+
+    self->setPrivate(CID_ISOLATIONFOREST,
+        new QoreIsolationForest(static_cast<int>(n_trees), static_cast<int>(sample_size),
+            static_cast<int>(max_depth), threshold, seed));
+}
+
+//! Creates a copy of the IsolationForest
+/** @throw COPY-ERROR IsolationForest objects cannot be copied
+*/
+IsolationForest::copy() {
+    xsink->raiseException("COPY-ERROR", "IsolationForest objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records
+/** Extracts numeric fields from the records and builds the isolation tree ensemble.
+
+    @param data a list of hashes where each hash represents a record; only numeric fields
+    (int, float) are used as features
+
+    @par Example:
+    @code{.py}
+iforest.fit(data_records);
+    @endcode
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-ISOLATION-FOREST-ERROR if fitting fails
+*/
+nothing IsolationForest::fit(list<auto> data) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    iforest->setFieldNames(field_names);
+    iforest->fit(matrix, xsink);
+}
+
+//! Trains the model on a numeric matrix
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @par Example:
+    @code{.py}
+iforest.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)));
+    @endcode
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+*/
+nothing IsolationForest::fitMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    iforest->fit(mat, xsink);
+}
+
+//! Scores a single record for anomalousness
+/** @param record a hash with the same numeric fields used during training
+
+    @return an @ref IsolationForestResult hash with:
+    - \c anomaly_score: float in [0, 1] (higher = more anomalous)
+    - \c is_anomaly: bool, true if score >= threshold
+    - \c average_path_length: average path length across all trees
+    - \c expected_path_length: expected path length for the training sample size
+
+    @par Example:
+    @code{.py}
+hash<IsolationForestResult> result = iforest.score({"temperature": 85.0, "pressure": 500.0});
+    @endcode
+
+    @throw ML-ISOLATION-FOREST-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<IsolationForestResult> IsolationForest::score(hash<auto> record) {
+    const std::vector<std::string>& field_names = iforest->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-ISOLATION-FOREST-ERROR",
+            "model was fitted with fitMatrix(); use scoreMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return iforest->score(point, xsink);
+}
+
+//! Scores multiple rows in matrix form
+/** @param matrix a list of lists where each inner list is a row of numeric values
+
+    @return a list of @ref IsolationForestResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<IsolationForestResult>> results = iforest.scoreMatrix(test_data);
+    @endcode
+
+    @throw ML-ISOLATION-FOREST-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<IsolationForestResult>> IsolationForest::scoreMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return iforest->scoreMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+
+    @par Example:
+    @code{.py}
+if (!iforest.isFitted()) {
+    iforest.fit(data);
+}
+    @endcode
+*/
+bool IsolationForest::isFitted() [flags=CONSTANT] {
+    return iforest->isFitted();
+}
+
+//! Returns the number of trees in the ensemble
+/** @return the number of isolation trees
+*/
+int IsolationForest::getNumTrees() [flags=CONSTANT] {
+    return iforest->getNumTrees();
+}
+
+//! Returns the configured sample size
+/** @return the subsample size used for each tree
+*/
+int IsolationForest::getSampleSize() [flags=CONSTANT] {
+    return iforest->getSampleSize();
+}
+
+//! Returns the anomaly score threshold
+/** @return the threshold value
+*/
+float IsolationForest::getThreshold() [flags=CONSTANT] {
+    return iforest->getThreshold();
+}

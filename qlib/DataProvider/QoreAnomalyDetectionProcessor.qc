@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that performs z-score based anomaly detection per record
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreAnomalyDetectionProcessor inherits AbstractAnalyticsProcessor {
     public {
@@ -44,7 +44,7 @@ public class QoreAnomalyDetectionProcessor inherits AbstractAnalyticsProcessor {
                 "short_desc": "Z-score threshold for flagging anomalies",
                 "desc": "The z-score threshold above which a value is flagged as anomalous; "
                     "lower values increase sensitivity (more anomalies detected); "
-                    "must be greater than 0; default: 3.0",
+                    "must be greater than `0`; default: `3.0`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

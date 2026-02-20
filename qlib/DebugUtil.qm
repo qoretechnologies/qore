@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DebugUtil.qm Debug common code
 
-/*  DebugUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  DebugUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@
 %no-debugging
 
 module DebugUtil {
-    version = "0.1.1";
+    version = "0.2";
     desc = "user module providing common debug stuff";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.org>";
     url = "http://qoretechnologies.org";
@@ -46,6 +46,12 @@ module DebugUtil {
 
     The %DebugUtil module provides common functionality for implementing debugger utilities
 
+    @subsection du_v0_2 v0.2
+    - added string enums: @ref DebugResponseType, @ref DebugRunStateName, @ref DebugFlowName,
+      @ref DebugPolicyName, @ref DebugEventCmd for type-safe debug protocol constants
+    - added @ref ResponseSync class for thread-safe single-response synchronization
+    - updated mapping constants to use enum keys
+
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging
       (<a href="https://github.com/qoretechnologies/qore/issues/4635">issue 4635</a>)
@@ -56,6 +62,74 @@ module DebugUtil {
 
 #! the DebugUtil namespace contains all the definitions in the DebugUtil module
 public namespace DebugUtil {
+    #! Thread-safe single-response synchronization helper
+    /**
+        Replaces the non-atomic Counter-based while(getCount() > 0) { dec(); } pattern
+        with a Mutex-guarded flag that safely handles concurrent access from sender and
+        receiver threads.
+
+        @par Example:
+        @code{.py}
+        ResponseSync sync();
+        # sender thread:
+        sync.prepare();
+        sendCommand(data);
+        *auto result = sync.waitForResponse(1500ms);
+
+        # receiver thread:
+        sync.deliver(responseData);
+        @endcode
+    */
+    public class ResponseSync {
+        private {
+            Mutex m();
+            Condition cond();
+            bool pending = False;
+            auto responseData;
+        }
+
+        #! Prepare to wait for a response (call before sending command)
+        prepare() {
+            AutoLock al(m);
+            pending = True;
+            responseData = NOTHING;
+        }
+
+        #! Wait for response with timeout; returns NOTHING on timeout
+        *auto waitForResponse(timeout to) {
+            AutoLock al(m);
+            if (!pending) {
+                return responseData;
+            }
+            if (!cond.wait(m, to)) {
+                # signaled — response arrived
+                return responseData;
+            }
+            # timeout
+            pending = False;
+            return NOTHING;
+        }
+
+        #! Deliver a response (called from receiver thread)
+        /** @return True if response was delivered, False if no one was waiting */
+        bool deliver(auto data) {
+            AutoLock al(m);
+            if (!pending) {
+                return False;
+            }
+            responseData = data;
+            pending = False;
+            cond.signal();
+            return True;
+        }
+
+        #! Check if a response is currently pending
+        bool isPending() {
+            AutoLock al(m);
+            return pending;
+        }
+    }
+
     #! class supporting argument parsing for executing programs to debug
     /**
         When implementing a wrapper that executes a program whose name is passed on the command line, we can divide
@@ -64,7 +138,7 @@ public namespace DebugUtil {
         - target program filename
         - program arguments
 
-        The class support argument parsing for such a case.
+        The class supports argument parsing for such a case.
 
         Examples:
         @verbatim
@@ -73,44 +147,45 @@ public namespace DebugUtil {
                 'verbose': 'v,verbose',
                 'listen': 'l,listen=s@',
             );
-            wrapper-prog -v -l xxx xxx -v -l    # the second xxx is target program name
-            wrapper-prog -v -h xxx xxx          # the first xxx is target program name
-            wrapper-prog -v --listen=xxx xxx    # the second xxx is target program name
-            wrapper-prog -v --listen xxx xxx    # the second xxx is target program name
+            wrapper-prog -v -l xxx trg -v -l    # trg is the target program name
+            wrapper-prog -v -h trg xxx          # trg is the target program name
+            wrapper-prog -v --listen=xxx trg    # trg is the target program name
+            wrapper-prog -v --listen xxx trg    # trg is the target program name
         @endverbatim
     **/
     public class WrapperGetOpt inherits GetOpt {
-        public constructor(hash options): GetOpt(options) {
+        #! create the object with the given @ref Qore::GetOpt "GetOpt" option hash
+        public constructor(hash<auto> options) : GetOpt(options) {
         }
 
         #! Parses input arguments until a standalone argument is found.
         /**
             @param args @ref list of arguments passed to wrapper, typically ARGV
             @param wrp_args returns list of wrapper arguments
-            @param pgm_name returns target program filename. "" is considered as special file name (stdin), NOTHING when no name provided
+            @param pgm_name returns the target program filename; "" is considered a special file name (meaning \c stdin), NOTHING when no name provided
             @param pgm_args return @ref list of target program arguments
 
             @par Example:
             @code{.py}
             hash opts = (
-    		    'help': 'h,help',
-    	    	'verbose': 'v,verbose',
+                'help': 'h,help',
+                'verbose': 'v,verbose',
                 'listen': 'l,listen=s@',
             );
-    		WrapperGetOpt g(opts);
-		    list dargs;
-    		hash opt;
+            WrapperGetOpt g(opts);
+            list dargs;
+            hash opt;
             *string fileName;
-		    g.split(ARGV, \dargs, \fileName, \ARGV);
+            g.split(ARGV, \dargs, \fileName, \ARGV);
 
             try {
                 opt = g.parse2(\dargs);
-            } catch (hash ex) {
+            } catch (hash<ExceptionInfo> ex) {
                 stderr.printf("%s: %s\n", ex.err, ex.desc);
                 help(-1);
             }
 
-            if (exists fileName) {
+            if (!exists fileName) {
                 stderr.print("No input file\n");
                 exit(-1);
             }
@@ -125,7 +200,7 @@ public namespace DebugUtil {
                 string s = shift args;
                 push wrp_args, s;
                 if (s !~ /^\-/ ) {
-                    list a = wrp_args;
+                    list<auto> a = wrp_args;
                     parse(\a);
                     if (a) {
                         # last arg is filename
@@ -149,23 +224,105 @@ public namespace DebugUtil {
     #! The debug protocol version implemented
     public const QoreDebugProtocolVersion = "0.1";
 
+    #! Debug protocol response/message type
+    public enum DebugResponseType : string {
+        #! Normal response to a command
+        Response = "response",
+        #! Error response
+        Error = "error",
+        #! Asynchronous event (interrupt, run, breakpoint change, etc.)
+        Event = "event",
+        #! Thread-specific response (sent to blocked debug thread)
+        Thread = "thread",
+    }
+
+    #! Debug run state names (user-facing strings for run state control)
+    public enum DebugRunStateName : string {
+        #! Detach from debugging
+        Detach = "detach",
+        #! Continue running
+        Run = "run",
+        #! Step to next statement
+        Step = "step",
+        #! Step over (don't enter functions)
+        StepOver = "stepover",
+        #! Run until return from current function
+        UntilReturn = "untilreturn",
+    }
+
+    #! Debug flow control names (user-facing strings for flow control)
+    public enum DebugFlowName : string {
+        #! No flow override
+        None = "none",
+        #! Force return from function
+        Return = "return",
+        #! Break out of loop
+        Break = "break",
+        #! Continue to next loop iteration
+        Continue = "continue",
+    }
+
+    #! Breakpoint policy names
+    public enum DebugPolicyName : string {
+        #! No policy
+        None = "none",
+        #! Accept (whitelist) threads
+        Accept = "accept",
+        #! Reject (blacklist) threads
+        Reject = "reject",
+    }
+
+    #! Debug event command names
+    public enum DebugEventCmd : string {
+        #! Program execution interrupted (breakpoint, step, etc.)
+        Interrupt = "interrupt",
+        #! Program resumed execution
+        Run = "run",
+        #! Breakpoint created/modified/deleted
+        Breakpoint = "breakpoint",
+        #! Welcome message on connection
+        Welcome = "welcome",
+    }
+
     #! base class for controlling debugging
     public class AbstractDebugControl inherits Logger::LoggerWrapper {
         public {
             #! for debugging of debug library to see where exception is raised
             bool showFullException = False;
 
-            const runStateStrings = ('detach': DebugDetach, 'run': DebugRun, 'step': DebugStep, 'stepover': DebugStepOver, 'untilreturn': DebugUntilReturn);
-            const flowStrings = ('none': 0, 'return': DebugFlowReturn, 'break': DebugFlowBreak, 'continue': DebugFlowContinue);
-            const boolStrings = ('false': False, 'true': True);
-            const policyStrings = ('none': BreakpointPolicyNone, 'accept': BreakpointPolicyAccept, 'reject': BreakpointPolicyReject);
+            #! maps run state name strings to Qore debug run state constants
+            const runStateStrings = {
+                DebugRunStateName::Detach: DebugDetach,
+                DebugRunStateName::Run: DebugRun,
+                DebugRunStateName::Step: DebugStep,
+                DebugRunStateName::StepOver: DebugStepOver,
+                DebugRunStateName::UntilReturn: DebugUntilReturn,
+            };
+            #! maps flow control name strings to Qore debug flow constants
+            const flowStrings = {
+                DebugFlowName::None: 0,
+                DebugFlowName::Return: DebugFlowReturn,
+                DebugFlowName::Break: DebugFlowBreak,
+                DebugFlowName::Continue: DebugFlowContinue,
+            };
+            #! maps boolean name strings to boolean values
+            const boolStrings = {
+                "false": False,
+                "true": True,
+            };
+            #! maps breakpoint policy name strings to Qore breakpoint policy constants
+            const policyStrings = {
+                DebugPolicyName::None: BreakpointPolicyNone,
+                DebugPolicyName::Accept: BreakpointPolicyAccept,
+                DebugPolicyName::Reject: BreakpointPolicyReject,
+            };
         }
 
         constructor(*LoggerInterface logger) {
             setLogger(logger);
         }
 
-        static public list enumFilter(softlist items, *string path) {
+        static public list<auto> enumFilter(softlist items, *string path) {
             if (path.size() == 0) {
                 return items;
             }
@@ -173,8 +330,9 @@ public namespace DebugUtil {
         }
 
         static public bool evalCondition(softstring value, *string cond) {
-            if (!cond.val())
+            if (!cond.val()) {
                 return True;
+            }
             if (cond =~ /^=/) {
                 return substr(cond, 1) == value;
             } else {
@@ -184,7 +342,7 @@ public namespace DebugUtil {
         }
 
         # make_json/yaml does not support object code etc. so we need somehow process values
-        static public hash serialize(auto val) {
+        static public hash<auto> serialize(auto val) {
             auto v;
             switch (val.typeCode()) {
             case NT_NOTHING:
@@ -214,7 +372,7 @@ public namespace DebugUtil {
                 foreach string k in (keys val) {
                     if (val{k}.typeCode() == NT_OBJECT) {
                         v{k}.type = val{k}.className();
-                        v{k}.value = sprintf("%N", val{k});  # TODO: to avoid circular references between objects
+                        v{k}.value = sprintf("%Y", val{k});  # TODO: to avoid circular references between objects
                     } else {
                         v{k} = AbstractDebugControl::serialize(val{k});
                     }
@@ -223,7 +381,7 @@ public namespace DebugUtil {
             default:
                 # unsupported types, no value passed
             }
-            hash sv.type = val.type();
+            hash<auto> sv.type = val.type();
             if (exists v) {
                 sv.value = v;
             }
@@ -238,13 +396,13 @@ public namespace DebugUtil {
                 case NT_NULL:
                     return NULL;
                 case NT_LIST:
-                    list ret;
+                    list<auto> ret;
                     foreach auto i in (sv.value) {
                         push ret, AbstractDebugControl::unserialize(i);
                     }
                     return ret;
                 case NT_HASH:
-                    hash ret;
+                    hash<auto> ret;
                     foreach string k in (keys sv.value) {
                         ret{k} = AbstractDebugControl::unserialize(sv.value{k});
                     }
@@ -258,7 +416,7 @@ public namespace DebugUtil {
                 case NT_NUMBER:
                     return sv.value;
                 default:
-                    throw "DEBUG-ERROR", sprintf("Cannot assing value of type: %y", sv.type);
+                    throw "DEBUG-ERROR", sprintf("Cannot assign value of type: %y", sv.type);
                 }
             } else {
                 return sv;

@@ -113,13 +113,30 @@ public class ShippoDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    #! Creates a ShippoDataProvider for unit tests
+    /** Catches connection errors and skips the test (for CI where external APIs may be unavailable)
+        @return the provider, or NOTHING if the test should be skipped
+    */
+    private *ShippoDataProvider::ShippoDataProvider tryCreateProvider() {
+        try {
+            return new ShippoDataProvider::ShippoDataProvider({"apikey": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Shippo API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
         checkJson();
         # Test creating provider with fake credentials
-        ShippoDataProvider::ShippoDataProvider prov({
-            "apikey": "fake-key-for-testing",
-        });
+        *ShippoDataProvider::ShippoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("shippo", prov.getName());
         assertEq("Shippo data provider for shipping, labels, and order management", prov.getDesc());
     }
@@ -142,9 +159,10 @@ public class ShippoDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        ShippoDataProvider::ShippoDataProvider prov({
-            "apikey": "x",
-        });
+        *ShippoDataProvider::ShippoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -167,9 +185,10 @@ public class ShippoDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        ShippoDataProvider::ShippoDataProvider prov({
-            "apikey": "x",
-        });
+        *ShippoDataProvider::ShippoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -317,9 +336,10 @@ public class ShippoDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        ShippoDataProvider::ShippoDataProvider prov({
-            "apikey": "invalid-key",
-        });
+        *ShippoDataProvider::ShippoDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
@@ -337,10 +357,18 @@ public class ShippoDataProviderTest inherits QUnit::Test {
     cornerCaseTests() {
         checkJson();
         # Test REST client URL
-        ShippoRestClient::ShippoRestClient client1({
-            "apikey": "x",
-        });
-        assertTrue(client1.getURL() =~ /api\.goshippo\.com$/);
+        try {
+            ShippoRestClient::ShippoRestClient client1({
+                "apikey": "x",
+            });
+            assertTrue(client1.getURL() =~ /api\.goshippo\.com$/);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Shippo API: %s", ex.desc));
+            }
+            rethrow;
+        }
 
         # Test with OAuth2 options - should not throw (use do_not_connect=True to avoid OAuth2 login)
         ShippoRestClient::ShippoRestClient client2({

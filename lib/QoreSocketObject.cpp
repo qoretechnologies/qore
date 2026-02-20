@@ -738,9 +738,9 @@ int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_c
 }
 
 int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const void* body,
-        size_t body_len, ExceptionSink* xsink) {
+        size_t body_len, ExceptionSink* xsink, bool streaming) {
     AutoLocker al(priv->m);
-    return priv->socket->submitHttp2Request(headers, body, body_len, xsink);
+    return priv->socket->submitHttp2Request(headers, body, body_len, xsink, streaming);
 }
 
 void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
@@ -764,14 +764,26 @@ int32_t QoreSocketObject::getHttp2ActiveStream() const {
 }
 
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+        bool end_stream, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
-    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, timeout_ms, xsink);
+    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     return priv->socket->readHttp2StreamData(stream_id, max_bytes, xsink);
+}
+
+int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->sendHttp2Trailers(stream_id, trailers, xsink);
+}
+
+int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
 }
 
 long QoreSocketObject::verifyPeerCertificate() {

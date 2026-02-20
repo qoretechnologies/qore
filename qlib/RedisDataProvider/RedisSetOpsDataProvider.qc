@@ -29,7 +29,7 @@ public class RedisSetOpsDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "ops",
-            "desc": "Redis set operations API; union, intersection, difference (SUNION, SINTER, SDIFF, SMOVE)",
+            "desc": "Redis set operations API; union, intersection, difference (`SUNION`, `SINTER`, `SDIFF`, `SMOVE`)",
             "type": "RedisSetOpsDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -140,21 +140,21 @@ public class RedisSetOpsRequestDataType inherits DataProvider::HashDataType {
             "source": {
                 "display_name": "Source",
                 "short_desc": "Source set for SMOVE",
-                "desc": "Source set for SMOVE",
+                "desc": "Source set for `SMOVE`",
                 "type": StringOrNothingType,
                 "example_value": "source_set",
             },
             "destination": {
                 "display_name": "Destination",
                 "short_desc": "Destination set",
-                "desc": "Destination set for store operations and SMOVE",
+                "desc": "Destination set for store operations and `SMOVE`",
                 "type": StringOrNothingType,
                 "example_value": "dest_set",
             },
             "member": {
                 "display_name": "Member",
                 "short_desc": "Member to move",
-                "desc": "Member to move for SMOVE",
+                "desc": "Member to move for `SMOVE`",
                 "type": AutoType,
             },
         };
@@ -183,7 +183,7 @@ public class RedisSetOpsResponseDataType inherits DataProvider::HashDataType {
             "moved": {
                 "display_name": "Moved?",
                 "short_desc": "Member was moved",
-                "desc": "True if member was moved (for SMOVE)",
+                "desc": "`True` if member was moved (for `SMOVE`)",
                 "type": SoftBoolType,
                 "example_value": True,
             },

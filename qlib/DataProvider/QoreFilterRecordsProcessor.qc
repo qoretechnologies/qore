@@ -40,8 +40,8 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
             "where_cond": <DataProviderOptionInfo>{
                 "display_name": "Filter Expression",
                 "short_desc": "A structured filter expression",
-                "desc": "A structured filter expression (hash<DataProviderExpression>) built by the "
-                    "expression builder",
+                "desc": "A structured filter expression (`hash<DataProviderExpression>`) built by "
+                    "the expression builder",
                 "type": AbstractDataProviderTypeMap."*hash",
                 "required": True,
             },

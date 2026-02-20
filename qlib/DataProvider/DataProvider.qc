@@ -75,7 +75,11 @@ public class DataProvider {
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
 
+            # provided by the cairo module
+            "cairo": "CairoDataProvider",
+
             "cdsrest": "CdsRestDataProvider",
+            "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
@@ -99,6 +103,10 @@ public class DataProvider {
             "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
             "httpclient": "HttpClientDataProvider",
+
+            # provided by the imagemagick module
+            "imagemagick": "ImageMagickDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the jni module
@@ -108,6 +116,8 @@ public class DataProvider {
 
             # provided by the json module
             "mcpclient": "McpClientDataProvider",
+
+            "ml": "DataProviderML",
 
             "mailgun": "MailgunDataProvider",
             "mewsrest": "MewsRestDataProvider",
@@ -119,6 +129,7 @@ public class DataProvider {
 
             "openai": "OpenAiDataProvider",
             "pop3": "Pop3ClientDataProvider",
+            "qdrant": "QdrantDataProvider",
             "redis": "RedisDataProvider",
             "restclient": "RestClientDataProvider",
             "restschema": "RestSchemaDataProvider",
@@ -128,6 +139,8 @@ public class DataProvider {
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
             "square": "SquareDataProvider",
+            "squarespace": "SquarespaceDataProvider",
+            "tableau": "TableauDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",
@@ -656,7 +669,7 @@ DbDataProvider db = DataProvider::getFactoryObjectFromStringUseEnv("db{datasourc
 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John" && @age > 18');
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DataProviderExpression> parseDpqlExpression(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -680,7 +693,7 @@ if (!result.success) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DpqlParseResult> parseDpqlExpressionWithInfo(string text,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -704,7 +717,7 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
 # Result: @name == "John"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static string serializeDpqlExpression(hash<DataProviderExpression> exp,
             *hash<string, hash<DataProviderExpressionInfo>> expressions) {
@@ -725,7 +738,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlTokenInfo>> getDpqlTokens(string text) {
         DpqlTokenizer tokenizer(text);
@@ -750,7 +763,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 # Returns completions for fields starting with "na"
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
             hash<string, AbstractDataField> fields,
@@ -779,7 +792,7 @@ if (errors) {
 }
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static list<hash<DpqlDiagnostic>> validateDpqlExpression(string text,
             hash<string, AbstractDataField> fields,

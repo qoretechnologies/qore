@@ -112,8 +112,8 @@ public class ExecSqlRequestType inherits HashDataType {
                 "short_desc": "The SQL statement to execute including any placeholders for bind arguments as '%v'; "
                     "the statement is automatically committed",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The SQL statement to execute including any placeholders for bind arguments as '%v'; "
-                    "the statement is automatically committed",
+                "desc": "The SQL statement to execute including any placeholders for bind arguments "
+                    "as `%v`; the statement is automatically committed",
             },
             "args": {
                 "display_name": "Arguments",

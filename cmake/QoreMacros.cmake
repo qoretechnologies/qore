@@ -91,6 +91,72 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
 ENDMACRO (QORE_WRAP_QPP_VALUE)
 
 #
+# Install qpp-generated .meta.json files into a per-module subdirectory
+# under the metadata directory.
+#
+# usage:
+#   qore_install_qpp_metadata(mymodule ${QPP_META_SOURCES})
+#
+MACRO (QORE_INSTALL_QPP_METADATA _module_name)
+    set(_meta_files ${ARGN})
+    if (_meta_files)
+        install(FILES ${_meta_files}
+                DESTINATION ${QORE_METADATA_DIR}/${_module_name})
+    endif()
+ENDMACRO (QORE_INSTALL_QPP_METADATA)
+
+#
+# Extract metadata from Qore source (.qm/.qc) files at build time using
+# qore-extract-qm-metadata. Generates .meta.json files and installs them
+# into a per-module subdirectory under the metadata directory.
+#
+# Requires: qore + astparser + QoreApiMetadata modules to be available.
+# Set QORE_QM_METADATA_ENV for custom environment (e.g. QORE_MODULE_DIR,
+# LD_LIBRARY_PATH) and QORE_QM_METADATA_DEPENDS for build dependencies.
+#
+# usage:
+#   qore_extract_qm_metadata(mymodule qlib/Foo.qm qlib/Bar.qm)
+#
+MACRO (QORE_EXTRACT_QM_METADATA _module_name)
+    if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR)
+        set(_qm_meta_files "")
+        foreach(_qm_file ${ARGN})
+            get_filename_component(_qm_basename ${_qm_file} NAME)
+            set(_qm_meta_out ${CMAKE_CURRENT_BINARY_DIR}/${_qm_basename}.meta.json)
+            if(DEFINED QORE_QM_METADATA_ENV)
+                add_custom_command(OUTPUT ${_qm_meta_out}
+                    COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                        ${QORE_QM_METADATA_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
+                        ${_qm_meta_out}
+                    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
+                    COMMENT "Extracting metadata from ${_qm_file}"
+                    VERBATIM
+                )
+            else()
+                add_custom_command(OUTPUT ${_qm_meta_out}
+                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
+                        ${_qm_meta_out}
+                    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
+                    COMMENT "Extracting metadata from ${_qm_file}"
+                    VERBATIM
+                )
+            endif()
+            list(APPEND _qm_meta_files ${_qm_meta_out})
+        endforeach()
+        add_custom_target(${_module_name}-qm-metadata ALL
+            DEPENDS ${_qm_meta_files})
+        if(QORE_QM_METADATA_DEPENDS)
+            add_dependencies(${_module_name}-qm-metadata
+                ${QORE_QM_METADATA_DEPENDS})
+        endif()
+        install(FILES ${_qm_meta_files}
+                DESTINATION ${QORE_METADATA_DIR}/${_module_name})
+    endif()
+ENDMACRO (QORE_EXTRACT_QM_METADATA)
+
+#
 # Create dox code from dox.tmpl files
 #
 #  _dox_files : output dox filenames created in CMAKE_CURRENT_BINARY_DIR
@@ -444,6 +510,58 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
     # install qm file
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+
+    # extract and install QM metadata (automatic for user modules)
+    if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
+            AND DEFINED QORE_QM_METADATA_SUBDIR)
+        set(_um_qm_meta_files "")
+        # use module-specific subdirectory to avoid collisions when
+        # different modules contain .qc files with the same basename
+        set(_um_meta_dir ${CMAKE_CURRENT_BINARY_DIR}/qm-metadata/${f})
+        file(MAKE_DIRECTORY ${_um_meta_dir})
+        foreach(_src_file ${_mod_targets})
+            get_filename_component(_src_ext ${_src_file} EXT)
+            if("${_src_ext}" STREQUAL ".qm" OR "${_src_ext}" STREQUAL ".qc")
+                # resolve relative paths to absolute
+                if(NOT IS_ABSOLUTE "${_src_file}")
+                    set(_src_file "${CMAKE_SOURCE_DIR}/${_src_file}")
+                endif()
+                get_filename_component(_src_name ${_src_file} NAME)
+                set(_meta_out ${_um_meta_dir}/${_src_name}.meta.json)
+                if(DEFINED QORE_QM_METADATA_ENV)
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${CMAKE_COMMAND} -E env
+                            ${QORE_QM_METADATA_ENV}
+                            ${QORE_QM_METADATA_EXECUTABLE}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                else()
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                endif()
+                list(APPEND _um_qm_meta_files ${_meta_out})
+            endif()
+        endforeach()
+        if(_um_qm_meta_files)
+            add_custom_target(qm-metadata-${f} ALL
+                DEPENDS ${_um_qm_meta_files})
+            if(QORE_QM_METADATA_DEPENDS)
+                add_dependencies(qm-metadata-${f}
+                    ${QORE_QM_METADATA_DEPENDS})
+            endif()
+            install(FILES ${_um_qm_meta_files}
+                    DESTINATION
+                        ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR})
+        endif()
+    endif()
 ENDMACRO (QORE_USER_MODULE)
 
 # Install qore native/user module (.qm file) into proper location.
@@ -550,6 +668,47 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     if (DEFINED _mod_jar_targets)
         install(FILES ${_mod_jar_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar)
         message(STATUS "called install for ${_mod_jar_targets} -> ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar")
+    endif()
+
+    # extract and install QM metadata (automatic for external user modules)
+    if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
+            AND DEFINED _external_module_name)
+        set(_ext_qm_meta_files "")
+        # use module-specific subdirectory to avoid collisions when
+        # different modules contain .qc files with the same basename
+        set(_ext_meta_dir ${CMAKE_CURRENT_BINARY_DIR}/qm-metadata/${f})
+        file(MAKE_DIRECTORY ${_ext_meta_dir})
+        foreach(_src_file ${_mod_targets})
+            get_filename_component(_src_ext ${_src_file} EXT)
+            if("${_src_ext}" STREQUAL ".qm" OR "${_src_ext}" STREQUAL ".qc")
+                # resolve relative paths to absolute
+                if(NOT IS_ABSOLUTE "${_src_file}")
+                    set(_src_file "${CMAKE_SOURCE_DIR}/${_src_file}")
+                endif()
+                get_filename_component(_src_name ${_src_file} NAME)
+                set(_meta_out ${_ext_meta_dir}/${_src_name}.meta.json)
+                add_custom_command(OUTPUT ${_meta_out}
+                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                        ${_src_file} ${_meta_out}
+                    DEPENDS ${_src_file}
+                    COMMENT "Extracting metadata from ${_src_name}"
+                    VERBATIM
+                )
+                list(APPEND _ext_qm_meta_files ${_meta_out})
+            endif()
+        endforeach()
+        if(_ext_qm_meta_files)
+            if(NOT TARGET ${_external_module_name}-qm-metadata)
+                add_custom_target(${_external_module_name}-qm-metadata ALL)
+            endif()
+            add_custom_target(qm-metadata-${f} ALL
+                DEPENDS ${_ext_qm_meta_files})
+            add_dependencies(${_external_module_name}-qm-metadata
+                qm-metadata-${f})
+            install(FILES ${_ext_qm_meta_files}
+                    DESTINATION
+                        ${QORE_METADATA_DIR}/${_external_module_name})
+        endif()
     endif()
 ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 

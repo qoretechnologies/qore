@@ -34,7 +34,7 @@ public class MemcachedStorageResponseDataType inherits DataProvider::HashDataTyp
                 "type": BoolType,
                 "display_name": "Stored",
                 "short_desc": "Value was stored",
-                "desc": "True if the value was successfully stored",
+                "desc": "`True` if the value was successfully stored",
                 "example_value": True,
             },
             "status": {

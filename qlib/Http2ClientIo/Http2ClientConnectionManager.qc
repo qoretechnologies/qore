@@ -384,16 +384,24 @@ public class Http2ClientConnectionManager {
             int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
             if (current_count >= opts.max_connections_per_host) {
                 # All connections are at capacity, pick the one with fewest streams
-                Http2ClientConnection best;
+                # When multiple connections have the same minimum count (e.g. all 0 during
+                # connection establishment), collect all ties and distribute evenly to avoid
+                # piling all threads onto the first connection (thundering herd)
+                list<Http2ClientConnection> candidates;
                 int min_streams = 2147483647;
                 foreach Http2ClientConnection conn in (pool{key}) {
                     int streams = conn.getActiveStreamCount();
                     if (streams < min_streams) {
                         min_streams = streams;
-                        best = conn;
+                        candidates = (conn,);
+                    } else if (streams == min_streams) {
+                        push candidates, conn;
                     }
                 }
-                if (best) {
+                if (candidates) {
+                    Http2ClientConnection best = candidates.size() == 1
+                        ? candidates[0]
+                        : candidates[rand() % candidates.size()];
                     log(LoggerLevel::DEBUG, "using connection %d with %d streams to %s (all at capacity)",
                         best.getConnectionId(), min_streams, key);
                     return best;

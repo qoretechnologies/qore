@@ -173,6 +173,30 @@ cargo install tree-sitter-cli@0.26.5
     needs to be pre-installed.
     @endparblock
 
+    @par New Build Dependencies for the ml Module: Eigen3 (Required) and ONNX Runtime (Optional)
+    @parblock
+    The new \c ml binary module requires <a href="https://eigen.tuxfamily.org/">Eigen3</a> (>= 3.4) for linear
+    algebra operations. If Eigen3 is not found, the \c ml module will not be built.
+
+    Install the Eigen3 development packages:
+    - <b>Debian/Ubuntu:</b> \c libeigen3-dev
+    - <b>RHEL/Fedora:</b> \c eigen3-devel
+    - <b>Alpine:</b> \c eigen-dev
+    - <b>macOS (Homebrew):</b> \c eigen
+
+    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the \c OnnxModel class for
+    running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.
+
+    Install ONNX Runtime development packages where available:
+    - <b>RHEL/Fedora:</b> not available as a system package; install from
+      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
+    - <b>Debian/Ubuntu (24.04):</b> not available as a system package; build from
+      <a href="https://github.com/microsoft/onnxruntime">source</a> or install from
+      <a href="https://github.com/microsoft/onnxruntime/releases">ONNX Runtime releases</a>
+    - <b>Alpine:</b> \c onnxruntime-dev
+    - <b>macOS (Homebrew):</b> \c onnxruntime
+    @endparblock
+
     - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",
@@ -412,6 +436,9 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::HTTPClient::setHttp2Settings() "HTTPClient::setHttp2Settings()": sets HTTP/2 settings
       - @ref Qore::HTTPClient::getHttpVersion() "HTTPClient::getHttpVersion()": returns negotiated HTTP version
       - @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()": sends HTTP request and returns headers without reading body, enabling streaming response handling
+      - static @ref Qore::SQL::Datasource::makeConfigString() "Datasource::makeConfigString()": builds a datasource
+        connection string from a @ref datasource_hash "datasource hash" (the inverse of
+        @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new functions:
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
@@ -422,6 +449,9 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::inflate_raw_to_string() "inflate_raw_to_string()": raw DEFLATE decompression to string
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::SQL::make_datasource_string() "make_datasource_string()": builds a datasource connection string
+        from a @ref datasource_hash "datasource hash" (the inverse of
+        @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
     - new zero-cost assertion and debug statements
@@ -480,6 +510,10 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - @ref qdrantdataproviderintro "QdrantDataProvider" module
+      - new module providing a data provider API for Qdrant vector database instances
+      - supports collection management, point CRUD, vector search (query API), alias management,
+        snapshot management, cluster management, and service health endpoints
     - @ref generatordataproviderintro "GeneratorDataProvider" module
       - new module providing a data provider API for generating configurable test record streams for data
         pipeline testing with no external dependencies
@@ -505,6 +539,24 @@ cargo install tree-sitter-cli@0.26.5
         commands
       - includes MemcachedClient class for direct memcached server interaction
       - connection support with \c memcached:// and \c memcacheds:// (SSL) URL schemes
+    - \c ml module
+      - new builtin module providing machine learning algorithms powered by Eigen3
+      - Isolation Forest for unsupervised anomaly detection
+      - Local Outlier Factor (LOF) for density-based anomaly detection using k-nearest neighbors
+      - DBSCAN density-based clustering with euclidean, manhattan, and cosine distance metrics
+      - KMeans clustering with k-means++ initialization and online mini-batch updates
+      - Gaussian Mixture Model (GMM) for probabilistic soft clustering using EM algorithm
+      - Linear Regression for supervised prediction using ordinary least squares
+      - PCA for dimensionality reduction with variance threshold auto-selection
+      - Holt-Winters triple exponential smoothing for time series forecasting
+      - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
+      - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+    - @ref dataprovidermlintro "DataProviderML" module
+      - new module providing data pipeline processors wrapping the ml binary module
+      - 9 core ML pipeline processors: isolation-forest, dbscan-clustering, kmeans-clustering, pca,
+        holt-winters, seasonal-decomposition, linear-regression, lof, and gmm
+      - optional onnx-model pipeline processor for ONNX Runtime inference
+      - action catalog integration with the "ML Analytics" app
     - @ref mongodb "mongodb" module
       - new builtin module providing MongoDB client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
@@ -611,6 +663,21 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref chargebeerestclientintro "ChargebeeRestClient" module
+      - new module providing a REST client for Chargebee's subscription billing API
+      - supports HTTP Basic Authentication with API Key as username
+      - provides ChargebeeRestConnection for connection management with \c chargebee:// URL scheme
+    - @ref chargebeedataproviderintro "ChargebeeDataProvider" module
+      - new module providing a data provider API for Chargebee subscription billing and revenue management
+      - customer management (create, read, update, delete, search)
+      - subscription management (create, read, update, delete, search)
+      - invoice management (create, read, update, delete, collect payment, record payment, refund)
+      - coupon management (create, read, update, delete, search)
+      - promotional credit management (add, deduct, set, search)
+      - transaction retrieval
+      - webhook-based event triggers for customers, subscriptions, invoices, and all events
+      - action catalog integration with 30 actions and 4 triggers
+      - connection support with \c chargebee:// URL scheme
     - @ref cin7corerestclientintro "Cin7CoreRestClient" module
       - new module providing a REST client for Cin7Core (DEAR Inventory) API
       - supports Account ID and API Key authentication via headers
@@ -670,6 +737,35 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, payments, appointments, catalog items, invoices, and events
       - action catalog integration with 23 actions and 7 triggers
       - connection support with \c squareres:// URL scheme
+    - @ref squarespacerestclientintro "SquarespaceRestClient" module
+      - new module providing a REST client for Squarespace's Commerce API
+      - supports OAuth2 authentication with bearer tokens
+      - provides SquarespaceRestConnection for connection management with \c squarespaceres:// URL scheme
+    - @ref squarespacedataproviderintro "SquarespaceDataProvider" module
+      - new module providing a data provider API for Squarespace Commerce
+      - order management (create, fulfill, list, get by ID)
+      - product management (create, update, delete, list, get by ID)
+      - product variant management (create, update, delete, list)
+      - product image management (upload, assign to variant, update alt text, delete)
+      - inventory management (list, get, update stock quantities)
+      - transaction listing and retrieval
+      - polling-based event triggers for orders, products, and transactions
+      - action catalog integration with 23 actions and 3 triggers
+      - connection support with \c squarespaceres:// URL scheme
+    - @ref tableaurestclientintro "TableauRestClient" module
+      - new module providing a REST client for Tableau's analytics and BI REST API
+      - supports Personal Access Token (PAT) session-token authentication
+      - provides TableauRestConnection for connection management with \c tableaures:// URL scheme
+    - @ref tableaudataproviderintro "TableauDataProvider" module
+      - new module providing a data provider API for Tableau analytics
+      - datasource management (search, get, update, delete, download, add/remove tags)
+      - project management (search, create, update, delete)
+      - user management (search, get, create, update, delete)
+      - extract refresh task management (list, get, delete)
+      - webhook-based event triggers for datasource lifecycle events (created, deleted, updated, refresh started/succeeded/failed)
+      - polling-based event triggers for new datasources and new projects
+      - action catalog integration with 20 actions and 8 triggers
+      - connection support with \c tableaures:// URL scheme
     - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
       \c .meta.json metadata files during the build, providing machine-readable documentation for
       all builtin classes, methods, functions, constants, hashdecls, and enums
@@ -776,6 +872,12 @@ cargo install tree-sitter-cli@0.26.5
         operator wrapping
       - preserves comments, parse directives, and string literals
       - idempotent formatting (formatting already-formatted code produces identical output)
+
+    - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
+      - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
+        connectivity using the \c db:// URL scheme with automatic connection scheme registration
+      - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
+        (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
     @subsection qore_2_3_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now

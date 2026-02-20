@@ -149,8 +149,8 @@ nothing DebugProgram::waitForTerminationAndClear() {
 /**
  *
  */
-int DebugProgram::getInterruptedCount() {
-   dpgm->getInterruptedCount();
+int DebugProgram::getInterruptedCount() [flags=CONSTANT] {
+   return dpgm->getInterruptedCount();
 }
 
 //! Add program to debugging

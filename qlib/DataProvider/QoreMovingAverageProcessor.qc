@@ -25,7 +25,7 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that computes simple moving average (SMA) and exponential moving average (EMA) per record
-/** @since %DataProvider 3.4
+/** @since %DataProvider 3.3
 */
 public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
     public {
@@ -44,7 +44,7 @@ public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
                 "short_desc": "Smoothing factor for exponential moving average (0-1)",
                 "desc": "The smoothing factor (alpha) for the exponential moving average; "
                     "higher values weight recent data more heavily; "
-                    "must be between 0.0 and 1.0 exclusive; default: 0.2",
+                    "must be between `0.0` and `1.0` exclusive; default: `0.2`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

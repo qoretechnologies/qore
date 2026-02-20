@@ -13,6 +13,9 @@
 public class ParseDatasourceTest inherits QUnit::Test {
     constructor() : Test("Parse_datasource test", "1.0") {
         addTestCase("Test 1", \test(), NOTHING);
+        addTestCase("makeConfigString", \testMakeConfigString());
+        addTestCase("make_datasource_string", \testMakeDatasourceString());
+        addTestCase("round trip", \testRoundTrip());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -87,5 +90,247 @@ public class ParseDatasourceTest inherits QUnit::Test {
         assertThrows("DATASOURCE-PARSE-ERROR", "missing hostname", sub() { parse_datasource("a@b%"); });
         assertThrows("DATASOURCE-PARSE-ERROR", "missing hostname", sub() { parse_datasource("a@b%{}"); });
         assertThrows("DATASOURCE-PARSE-ERROR", "invalid characters present", sub() { parse_datasource("a@b%c:12x2"); });
+    }
+
+    testMakeConfigString() {
+        # full config with all fields
+        assertEq("pgsql:user/pass@dbname(utf8)%hostname:5432{min=4,max=10}",
+            Datasource::makeConfigString({
+                "type": "pgsql",
+                "user": "user",
+                "pass": "pass",
+                "db": "dbname",
+                "charset": "utf8",
+                "host": "hostname",
+                "port": 5432,
+                "options": {"min": "4", "max": "10"},
+            }));
+
+        # minimal config: type + db only
+        assertEq("pgsql:@dbname", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "dbname",
+        }));
+
+        # type only, no db
+        assertEq("pgsql:@", Datasource::makeConfigString({
+            "type": "pgsql",
+        }));
+
+        # without password (safe URL)
+        assertEq("pgsql:user@dbname", Datasource::makeConfigString({
+            "type": "pgsql",
+            "user": "user",
+            "db": "dbname",
+        }));
+
+        # sqlite3 file path
+        assertEq("sqlite3:@/tmp/my-db.sqlite", Datasource::makeConfigString({
+            "type": "sqlite3",
+            "db": "/tmp/my-db.sqlite",
+        }));
+
+        # sqlite3 in-memory
+        assertEq("sqlite3:@:memory:", Datasource::makeConfigString({
+            "type": "sqlite3",
+            "db": ":memory:",
+        }));
+
+        # boolean true option -> key only
+        assertEq("pgsql:@db{opt1}", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "options": {"opt1": True},
+        }));
+
+        # boolean false option -> skipped
+        assertEq("pgsql:@db", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "options": {"opt1": False},
+        }));
+
+        # NOTHING option -> skipped
+        assertEq("pgsql:@db", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "options": {"opt1": NOTHING},
+        }));
+
+        # host without port
+        assertEq("pgsql:@db%myhost", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "host": "myhost",
+        }));
+
+        # password with @ in it
+        assertEq("pgsql:user/p@ss@dbname", Datasource::makeConfigString({
+            "type": "pgsql",
+            "user": "user",
+            "pass": "p@ss",
+            "db": "dbname",
+        }));
+
+        # multiple options with mixed types
+        assertEq("pgsql:@db{opt1,opt2=val2}", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "options": {"opt1": True, "opt2": "val2"},
+        }));
+
+        # port without host -> port is silently dropped (parser expects %host:port)
+        assertEq("pgsql:@db", Datasource::makeConfigString({
+            "type": "pgsql",
+            "db": "db",
+            "port": 5432,
+        }));
+
+        # error: missing type key
+        assertThrows("MAKE-DATASOURCE-STRING-ERROR", sub() {
+            Datasource::makeConfigString({"db": "test"});
+        });
+
+        # error: empty type value
+        assertThrows("MAKE-DATASOURCE-STRING-ERROR", sub() {
+            Datasource::makeConfigString({"type": ""});
+        });
+    }
+
+    testMakeDatasourceString() {
+        # standalone function produces same result as static method
+        hash<auto> config = {
+            "type": "pgsql",
+            "user": "user",
+            "pass": "pass",
+            "db": "dbname",
+            "charset": "utf8",
+            "host": "hostname",
+            "port": 5432,
+            "options": {"min": "4", "max": "10"},
+        };
+        assertEq(Datasource::makeConfigString(config), make_datasource_string(config));
+
+        # minimal config
+        config = {
+            "type": "pgsql",
+            "db": "dbname",
+        };
+        assertEq(Datasource::makeConfigString(config), make_datasource_string(config));
+
+        # error case works the same
+        assertThrows("MAKE-DATASOURCE-STRING-ERROR", sub() {
+            make_datasource_string({"db": "test"});
+        });
+    }
+
+    testRoundTrip() {
+        # hash -> string -> hash: parse_datasource(make_datasource_string(h)) == h
+        {
+            hash<auto> h = {
+                "type": "pgsql",
+                "user": "user",
+                "pass": "pass",
+                "db": "dbname",
+                "charset": "utf8",
+                "host": "hostname",
+                "port": 5432,
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # minimal config round trip
+        {
+            hash<auto> h = {
+                "type": "pgsql",
+                "db": "dbname",
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # sqlite3 file path round trip
+        {
+            hash<auto> h = {
+                "type": "sqlite3",
+                "db": "/tmp/my-db.sqlite",
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # sqlite3 in-memory round trip
+        {
+            hash<auto> h = {
+                "type": "sqlite3",
+                "db": ":memory:",
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # host + port round trip
+        {
+            hash<auto> h = {
+                "type": "pgsql",
+                "user": "user",
+                "db": "db",
+                "host": "host",
+                "port": 5432,
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # options round trip
+        {
+            hash<auto> h = {
+                "type": "pgsql",
+                "user": "user",
+                "db": "db",
+                "options": {"min": "4", "max": "10"},
+            };
+            assertEq(h, parse_datasource(make_datasource_string(h)));
+        }
+
+        # boolean true option round trip
+        {
+            hash<auto> h = {
+                "type": "pgsql",
+                "db": "db",
+                "options": {"opt1": True},
+            };
+            # boolean True becomes key-only in string, which parse_datasource returns as True
+            string s = make_datasource_string(h);
+            assertEq("pgsql:@db{opt1}", s);
+            hash<auto> parsed = parse_datasource(s);
+            assertEq(True, parsed.options.opt1);
+        }
+
+        # string -> hash -> string: make_datasource_string(parse_datasource(s)) == s
+        {
+            string s = "pgsql:user/pass@dbname(utf8)%hostname:5432{min=4,max=10}";
+            assertEq(s, make_datasource_string(parse_datasource(s)));
+        }
+
+        # minimal string round trip
+        {
+            string s = "pgsql:@dbname";
+            assertEq(s, make_datasource_string(parse_datasource(s)));
+        }
+
+        # user + db string round trip
+        {
+            string s = "pgsql:user@dbname";
+            assertEq(s, make_datasource_string(parse_datasource(s)));
+        }
+
+        # password with @ round trip
+        {
+            string s = "pgsql:user/p@ss@dbname";
+            assertEq(s, make_datasource_string(parse_datasource(s)));
+        }
+
+        # host + port string round trip
+        {
+            string s = "pgsql:@db%myhost:1234";
+            assertEq(s, make_datasource_string(parse_datasource(s)));
+        }
     }
 }

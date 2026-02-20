@@ -83,6 +83,9 @@ lib/ql_thread.cpp
 lib/ql_time.cpp
 lib/ql_type.cpp
 
+# Generated SCU files for modules
+modules/*/src/*_scu.cpp
+
 # Bison & Flex
 lib/parser.cpp
 lib/parser.hpp
@@ -98,6 +101,8 @@ modules/astparser/src/ast_scanner.cpp
 modules/astparser/src/QC_*.cpp
 modules/astparser/src/ql_ast.cpp
 modules/astparser/src/*.qtest
+modules/astparser/grammars/tree-sitter-qore/node_modules/
+modules/astparser/grammars/tree-sitter-qore/package-lock.json
 
 # module-reflection
 modules/reflection/src/QC_*.cpp
@@ -118,8 +123,9 @@ docs
 doxygen/lang/*.dox
 doxygen/qlib/*.qm
 Doxyfile
-!modules/astparser/docs/
-!modules/astparser/docs/mainpage.dox.tmpl
+!modules/*/docs/
+!modules/*/docs/mainpage.dox.tmpl
+modules/*/docs/mainpage.dox
 Doxyfile.???*
 *.tag
 

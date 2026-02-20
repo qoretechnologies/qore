@@ -307,6 +307,7 @@ set(QORE_BIN_FILES
     bin/qore-asyncapi-gen
     bin/qfmt
     bin/qls
+    bin/qore-extract-qm-metadata
 )
 
 set(QORE_DOX_TMPL_SRC
@@ -587,8 +588,8 @@ qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC
 
 add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
 
-# install qpp metadata files
-install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+# install qpp metadata files into per-module subdirectory
+install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata/core)
 add_custom_target(BISON_GENERATED_FILES DEPENDS ${BISON_qoreparser_OUTPUTS})
 add_custom_target(FLEX_GENERATED_FILES DEPENDS ${FLEX_qorescanner_OUTPUTS})
 
@@ -1468,6 +1469,13 @@ if (MONGOC_FOUND)
 else()
     message(STATUS "libmongoc not found - mongodb module will not be built")
 endif()
+# ml module (requires Eigen3)
+find_package(Eigen3 3.4 QUIET NO_MODULE)
+if (Eigen3_FOUND)
+    add_subdirectory(modules/ml)
+else()
+    message(STATUS "Eigen not found - ml module will not be built")
+endif()
 
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
@@ -1479,6 +1487,37 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # ---
 # modules here are divided to groups in the order of dependence
 # and then sorted alphabetically inside the groups
+
+# metadata extraction for qlib modules (uses build-tree qore + astparser)
+# QM metadata extraction requires the json binary module (via QoreApiMetadata).
+# On a fresh build json will not be installed yet; re-run cmake after
+# installing the json module to enable QM metadata extraction.
+set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
+set(QORE_QM_METADATA_SUBDIR core-qlib)
+set(QORE_QM_METADATA_ENV
+    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
+    "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
+set(QORE_QM_METADATA_DEPENDS qore astparser)
+find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
+if(_qore_exe)
+    execute_process(
+        COMMAND ${_qore_exe} -l json -ne ""
+        RESULT_VARIABLE _qore_json_rc
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(_qore_json_rc EQUAL 0)
+        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+        message(STATUS "json module available; QM metadata extraction enabled")
+    else()
+        message(STATUS "json module not available; QM metadata extraction disabled"
+            " (re-run cmake after installing json)")
+    endif()
+    unset(_qore_json_rc)
+else()
+    message(STATUS "qore not installed; QM metadata extraction disabled"
+        " (re-run cmake after installing qore and json)")
+endif()
+unset(_qore_exe)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")
@@ -1508,7 +1547,10 @@ qore_user_module("qlib/TextWrap.qm" "Util")
 qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
-qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;qore-q-logo.svg")
+qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
+if (Eigen3_FOUND)
+    qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+endif()
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
@@ -1553,7 +1595,7 @@ qore_user_module("qlib/Sqlite3SqlUtil.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/XdbcFirebirdSqlUtilBase.qm" "SqlUtil;DataProvider")
 qore_user_module("qlib/WebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;DataProvider")
 qore_user_module("qlib/TableMapper.qm" "MapperUtil;Mapper;SqlUtil;DataProvider")
-qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil")
+qore_user_module("qlib/DbDataProvider" "DataProvider;SqlUtil;BulkSqlUtil;ConnectionProvider")
 qore_user_module("qlib/FtpPoller.qm" "FtpPollerUtil;Util;DataProvider")
 qore_user_module("qlib/SchemaReverse.qm" "Qorize;Schema;SqlUtil;Util")
 qore_user_module("qlib/DebugHandler.qm" "DebugProgramControl;DebugUtil;HttpServer;HttpServerUtil;WebSocketHandler;WebSocketUtil")
@@ -1584,6 +1626,7 @@ qore_user_module("qlib/BigCommerceRestClient.qm" "ConnectionProvider;Mime;RestCl
 qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CdsRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ChargebeeRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/FreshBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1599,6 +1642,8 @@ qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestCli
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/TableauRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1613,6 +1658,7 @@ qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchema
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider" "elastic-logo.svg")
+qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
@@ -1642,6 +1688,9 @@ qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClien
 qore_user_module("qlib/ShipStationDataProvider" "ShipStationRestClient;RestClient;DataProvider" "shipstation-logo.svg")
 qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProvider" "shippo-logo.svg")
 qore_user_module("qlib/SquareDataProvider" "SquareRestClient;RestClient;DataProvider" "square-logo.svg")
+qore_user_module("qlib/ChargebeeDataProvider" "ChargebeeRestClient;RestClient;DataProvider" "chargebee-logo.svg")
+qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
+qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
 
@@ -1659,6 +1708,9 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
+    if (Eigen3_FOUND)
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
+    endif()
     if (MONGOC_FOUND)
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
     endif()
@@ -1695,6 +1747,9 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     endforeach()
     # Binary module doc dependencies
     add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise)
+    if (Eigen3_FOUND)
+        add_dependencies(docs-lang-final docs-ml)
+    endif()
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()

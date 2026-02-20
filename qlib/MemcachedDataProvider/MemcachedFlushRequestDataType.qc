@@ -57,7 +57,7 @@ public class MemcachedFlushResponseDataType inherits DataProvider::HashDataType 
                 "type": BoolType,
                 "display_name": "Flushed",
                 "short_desc": "Cache was flushed",
-                "desc": "True if the flush command was accepted by the server",
+                "desc": "`True` if the flush command was accepted by the server",
                 "example_value": True,
             },
             "status": {

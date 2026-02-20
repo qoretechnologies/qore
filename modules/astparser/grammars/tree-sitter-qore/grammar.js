@@ -425,18 +425,19 @@ module.exports = grammar({
     variable_declarator: $ => choice(
       seq(
         field('name', $.variable_name),
-        optional(seq(choice('=', '+='), field('value', $._expression))),
+        optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
       ),
       // Object construction: identifier(args) or just identifier
       // Also: hash member init: hash sd.type = 'event'
       seq(
         field('name', $.identifier),
         optional(choice(
-          seq(choice('=', '+='), field('value', $._expression)),
+          seq(choice('=', '+=', ':='), field('value', $._expression)),
           $.argument_list,  // Constructor arguments
           // Hash member init via dot notation: hash sd.member = value
           // Also supports dynamic member: hash rv.(expr) = value
-          seq(repeat1(seq('.', choice($.identifier, seq('(', $._expression, ')')))), '=', field('value', $._expression)),
+          // Also supports string keys: hash res."DAV:href" = value
+          seq(repeat1(seq('.', choice($.identifier, $.string, seq('(', $._expression, ')')))), '=', field('value', $._expression)),
         )),
       ),
     ),
@@ -893,11 +894,13 @@ module.exports = grammar({
 
     // Type keywords that can also be used as variable names or cast functions.
     // All simple type keywords are included so they can appear in expression context.
+    // 'union' is included because it is not a reserved word in Qore.
     _type_keyword: $ => choice(
       'string', 'int', 'float', 'number', 'bool', 'binary', 'date',
       'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
       'softstring', 'softdate', 'softlist', 'timeout',
       'object', 'code', 'reference', 'nothing', 'any', 'auto', 'data',
+      'union',
     ),
 
     argument_list: $ => seq(
@@ -985,14 +988,20 @@ module.exports = grammar({
     ),
 
     // Higher-order functions
-    // map expr, list[, filter] — no prec.right so that trailing commas
-    // in enclosing hash/list literals are correctly handled
+    // map expr, list[, filter] — Qore's LALR grammar uses `list: exp ','` to
+    // support trailing commas globally.  In the tree-sitter grammar we handle
+    // this locally: a trailing comma alternative (prec.dynamic -2) is only
+    // chosen when the enclosing context cannot consume the comma itself
+    // (e.g. inside a ternary expression).
     map_expression: $ => seq(
       'map',
       field('expression', $._expression),
       ',',
       field('list', $._expression),
-      optional(prec.dynamic(-1, seq(',', field('filter', $._expression)))),
+      optional(choice(
+        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
+        prec.dynamic(-2, ','),
+      )),
     ),
 
     select_expression: $ => seq(
@@ -1000,7 +1009,10 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
-      optional(prec.dynamic(-1, seq(',', field('filter', $._expression)))),
+      optional(choice(
+        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
+        prec.dynamic(-2, ','),
+      )),
     ),
 
     foldl_expression: $ => prec.right(seq(
@@ -1008,6 +1020,7 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      optional(prec.dynamic(-2, ',')),
     )),
 
     foldr_expression: $ => prec.right(seq(
@@ -1015,6 +1028,7 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      optional(prec.dynamic(-2, ',')),
     )),
 
     implicit_argument: $ => /\$\d+/,
@@ -1045,7 +1059,9 @@ module.exports = grammar({
       $.null,
       $.nothing,
       $.date,
+      $.time,
       $.binary,
+      $.special_float,
     ),
 
     integer: $ => token(choice(
@@ -1077,14 +1093,29 @@ module.exports = grammar({
       /[0-9]{4}-[0-9]{2}-[0-9]{2}/,
       optional(seq(
         /[T ]/,
-        /[0-9]{2}:[0-9]{2}:[0-9]{2}/,
-        optional(/\.[0-9]+/),
-        optional(choice(
-          /[+-][0-9]{2}:?[0-9]{2}/,  // timezone offset
-          'Z',                        // UTC timezone
-        )),
+        /[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?/,
+      )),
+      // Timezone applies to both date-only and date+time forms
+      // (Qore scanner: {YEAR}-{MONTH}-{DAY}?{TZ}?)
+      optional(choice(
+        /[+-][0-9]{2}(:?[0-9]{2}(:?[0-9]{2})?)?/,  // timezone offset: +HH, +HHMM, +HH:MM, etc.
+        'Z',                                          // UTC timezone
       )),
     )),
+
+    // Standalone time literal: HH:MM:SS with optional fractional seconds and timezone
+    // e.g., 10:20:30, 10:20:30Z, 10:20:30.123+01:00
+    time: $ => token(seq(
+      /[0-9]{1,2}:[0-9]{2}:[0-9]{2}/,
+      optional(/\.[0-9]+/),
+      optional(choice(
+        /[+-][0-9]{2}(:?[0-9]{2})?/,
+        'Z',
+      )),
+    )),
+
+    // IEEE 754 special float constants
+    special_float: $ => token(choice('@inf@', '@nan@')),
 
     binary: $ => token(/<[0-9a-fA-F]*>/),
 
@@ -1197,23 +1228,9 @@ module.exports = grammar({
     ),
 
     hash_entry: $ => seq(
-      field('key', $._hash_key),
+      field('key', $._expression),
       ':',
       field('value', $._expression),
-    ),
-
-    // Hash keys are more restricted than general expressions to avoid
-    // ambiguity with ternary operator (a ? b : c vs hash key : value)
-    _hash_key: $ => choice(
-      $.string,
-      $.identifier,
-      $.variable_name,
-      $.scoped_identifier,
-      $.implicit_argument,  // $1, $2, etc. for map expressions
-      $.member_expression,  // $1.key, obj.field for map expressions
-      $.index_expression,   // Map{$1.key} etc. as computed key
-      $.call_expression,    // sprintf(...) etc. as computed key
-      seq('(', $._expression, ')'),  // computed key in parentheses
     ),
 
     // ==================== Regex ====================

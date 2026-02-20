@@ -32,7 +32,7 @@ public class RedisHashDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "hashes",
-            "desc": "Redis hash data provider; provides access to hash operations (HGET, HSET, HGETALL, etc.)",
+            "desc": "Redis hash data provider; provides access to hash operations (`HGET`, `HSET`, `HGETALL`, etc.)",
             "type": "RedisHashDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_children": True,
