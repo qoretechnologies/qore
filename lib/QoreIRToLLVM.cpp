@@ -2464,13 +2464,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     alloca_builder.CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
 
-                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
-                            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
-                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
-                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-                    auto* coerced = builder->CreateCall(coerce_fn,
-                            {ti_as_ptr, boxed, cleanup, xsink_arg});
+                    llvm::Value* coerced;
+                    if (aot_mode) {
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                                llvm::FunctionType::get(i64_type,
+                                        {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                        coerced = builder->CreateCall(coerce_fn,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                                 boxed, cleanup, xsink_arg});
+                    } else {
+                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+                        llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
+                        llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                        coerced = builder->CreateCall(coerce_fn,
+                                {ti_as_ptr, boxed, cleanup, xsink_arg});
+                    }
                     emitExceptionCheck(module, llvm_func, inst);
                     boxed = coerced;
                     invoke_result_allocas.push_back(cleanup);
@@ -2660,13 +2671,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 alloca_builder.CreateStore(
                         llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
 
-                auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
-                llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
-                llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-                auto* coerced = builder->CreateCall(coerce_fn,
-                        {ti_as_ptr, boxed, cleanup, xsink_arg});
+                llvm::Value* coerced;
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                            llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                    coerced = builder->CreateCall(coerce_fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             boxed, cleanup, xsink_arg});
+                } else {
+                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
+                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                    coerced = builder->CreateCall(coerce_fn,
+                            {ti_as_ptr, boxed, cleanup, xsink_arg});
+                }
                 emitExceptionCheck(module, llvm_func, inst);
                 boxed = coerced;
                 invoke_result_allocas.push_back(cleanup);
