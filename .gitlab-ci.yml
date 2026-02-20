@@ -85,6 +85,7 @@ test-alpine-amd64:
   tags:
     - k8s
     - amd64
+  timeout: 1h30m
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
   script:
@@ -129,6 +130,7 @@ test-ir-ubuntu-amd64:
   tags:
     - k8s
     - amd64
+  timeout: 2h
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
