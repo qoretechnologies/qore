@@ -169,7 +169,10 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
     #! Returns True if the connection is ready for requests
     bool isReady() {
-        return state == STATE_READING || state == STATE_WAIT_READ;
+        # Capture state once to avoid TOCTOU: the I/O thread can change state between
+        # two reads (e.g., WAIT_READ → READING), causing both comparisons to fail
+        string s = state;
+        return s == STATE_READING || s == STATE_WAIT_READ;
     }
 
     #! Returns True if a callback was dispatched during the last continuePoll() call, then clears the flag
@@ -232,8 +235,10 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
             code callback, *hash<auto> ctx, bool streaming = False) {
-        if (!isReady()) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot submit request in state: %y", state);
+        # Capture state once to avoid TOCTOU between isReady() and the error message
+        string current_state = state;
+        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
+            throw "HTTP2-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
         }
 
         # Build request headers
@@ -283,8 +288,10 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         @throw HTTP2-STATE-ERROR if not in ready state
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
-        if (!isReady()) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot send data in state: %y", state);
+        # Capture state once to avoid TOCTOU between isReady() and the error message
+        string current_state = state;
+        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
+            throw "HTTP2-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
         }
 
         string sid = string(stream_id);
