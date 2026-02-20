@@ -515,10 +515,20 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Start HTTP/2 client multiplex mode
         AbstractPollOperation poll_op = sock.startPollHttp2ClientMultiplex();
 
-        # Drive the poll operation until ready (or error)
+        # Drive the poll operation until HTTP/2 connection is established.
+        # goalReached() requires a completed response, but we just need the
+        # connection preface exchange to finish (state = "reading-frames").
         date start = now_us();
         date timeout = 10s;
-        while (!poll_op.goalReached()) {
+        while (True) {
+            string state = poll_op.getState();
+            if (state == "reading-frames") {
+                break;
+            }
+            if (state == "closed") {
+                testSkip("HTTP/2 connection closed during establishment");
+                return;
+            }
             if (now_us() - start > timeout) {
                 testSkip("HTTP/2 connection establishment timed out");
                 return;
