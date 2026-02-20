@@ -1827,14 +1827,33 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     result.input_stream.reassignThread();
                     binary buf;
-                    while (True) {
-                        *binary chunk = result.input_stream.read(65536);
-                        if (!chunk) {
-                            break;
+                    try {
+                        while (True) {
+                            *binary chunk = result.input_stream.read(65536);
+                            if (!chunk) {
+                                break;
+                            }
+                            buf += chunk;
                         }
-                        buf += chunk;
+                        body = buf;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # InputStream read failed (e.g. callback error); send 500 error
+                        # response since no HEADERS have been submitted to nghttp2 yet
+                        log(LoggerLevel::ERROR,
+                            "Error reading InputStream for HTTP/2 stream=%d on %y: %s: %s",
+                            stream_id, uh, ex.err, ex.desc);
+                        try {
+                            cinfo.sock.submitHttp2Response(stream_id, 500,
+                                {"content-type": "text/plain"},
+                                sprintf("Internal Server Error: %s: %s", ex.err, ex.desc));
+                            controllers[cinfo.controller_idx].wake();
+                        } catch (hash<ExceptionInfo> ex2) {
+                            log(LoggerLevel::ERROR,
+                                "Error sending HTTP/2 error response for stream=%d on %y: %s: %s",
+                                stream_id, uh, ex2.err, ex2.desc);
+                        }
+                        return;
                     }
-                    body = buf;
                 }
 
                 # Submit response to nghttp2 session (thread-safe)

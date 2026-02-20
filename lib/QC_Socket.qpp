@@ -4508,13 +4508,11 @@ int Socket::getHttp2ActiveStream() {
 /** @param stream_id the HTTP/2 stream ID to send on
     @param data the binary data to send
     @param end_stream set to @ref True "True" to end the stream after sending
-    @param timeout_ms ignored (non-blocking)
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
-        timeout timeout_ms = 0) {
-    s->sendHttp2StreamData((int32_t)stream_id, data, (bool)end_stream, timeout_ms, xsink);
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+    s->sendHttp2StreamData((int32_t)stream_id, data, (bool)end_stream, xsink);
     return QoreValue();
 }
 
@@ -4528,6 +4526,100 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 */
 *binary Socket::readHttp2StreamData(int stream_id, int max_bytes = 0) {
     return s->readHttp2StreamData((int32_t)stream_id, (size_t)max_bytes, xsink);
+}
+
+//! Sends HTTP/2 trailer headers on a stream
+/** Submits a trailing HEADERS frame with END_STREAM on the specified stream.
+    The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
+    on the last DATA frame so that the trailer HEADERS frame carries END_STREAM.
+
+    This is required for protocols like gRPC that communicate status via HTTP/2
+    trailers (e.g., \c grpc-status, \c grpc-message).
+
+    @param stream_id the HTTP/2 stream ID
+    @param trailers trailer header name/value pairs
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or trailer submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
+    s->sendHttp2Trailers((int32_t)stream_id, trailers, xsink);
+    return QoreValue();
+}
+
+//! Submits HTTP/2 streaming response headers without body or END_STREAM
+/** This method sends response HEADERS without END_STREAM, creating a deferred
+    data provider. Body data can be sent later via @ref sendHttp2StreamData() and
+    trailers via @ref sendHttp2Trailers(). The data must be flushed by a poll
+    operation that drives the HTTP/2 session's sendPendingData().
+
+    This is used for protocols like gRPC where response headers, body data, and
+    trailers are sent as separate steps.
+
+    @param stream_id the HTTP/2 stream ID
+    @param status_code HTTP status code (e.g., 200)
+    @param headers response headers
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
+        *hash<auto> headers) {
+    s->submitHttp2StreamingResponseHeaders((int32_t)stream_id, status_code, headers, xsink);
+    return QoreValue();
+}
+
+//! Returns a poll operation for flushing pending HTTP/2 data
+/** This poll operation flushes all pending HTTP/2 data that has been queued
+    via @ref submitHttp2StreamingResponseHeaders(), @ref sendHttp2StreamData(),
+    and/or @ref sendHttp2Trailers(). It calls the HTTP/2 session's sendPendingData()
+    until no more data remains.
+
+    @par Example:
+    @code{.py}
+    # After reading request with startPollReadHttp2Request()
+    auto request = read_op.getOutput();
+    int stream_id = request.stream_id;
+
+    # Submit headers, body, and trailers
+    sock.submitHttp2StreamingResponseHeaders(stream_id, 200, headers);
+    sock.sendHttp2StreamData(stream_id, body_data, False);
+    sock.sendHttp2Trailers(stream_id, {"grpc-status": "0"});
+
+    # Flush all pending data to the socket
+    AbstractPollOperation flush_op = sock.startPollHttp2Flush();
+    while (True) {
+        *hash<SocketPollInfo> info = flush_op.continuePoll();
+        if (!info) {
+            break;
+        }
+        Socket::poll((info,), 10s);
+    }
+    @endcode
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for flushing pending data
+
+    @throw SOCKET-NOT-OPEN The socket is not connected
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollHttp2Flush() {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2FlushPollOperation(xsink, s),
+        xsink
+    );
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("http2-flush"), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns a poll operation for HTTP/2 client multiplexed connection handling
@@ -4596,7 +4688,7 @@ AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
 
     @since %Qore 2.3
 */
-int Socket::submitHttp2Request(hash<auto> headers, *data body) {
+int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -4620,7 +4712,7 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body) {
         }
     }
 
-    return s->submitHttp2Request(headers, body_ptr, body_len, xsink);
+    return s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
 }
 
 //! Cancels a pending HTTP/2 stream

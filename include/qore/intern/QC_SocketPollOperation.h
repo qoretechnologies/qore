@@ -673,6 +673,18 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         input_stream = nullptr;
         current_chunk = nullptr;
+        // Send RST_STREAM to notify client that the stream is being cancelled
+        {
+            AutoLocker al(sock->priv->m);
+            Http2Session* session = sock->priv->socket->priv->h2_session.get();
+            if (session) {
+                ExceptionSink rst_xsink;
+                session->submitRstStream(stream_id, NGHTTP2_CANCEL, &rst_xsink);
+                if (!rst_xsink) {
+                    session->sendPendingDataBlocking(100, &rst_xsink);
+                }
+            }
+        }
         if (set_non_block) {
             sock->clearNonBlock();
             set_non_block = false;
@@ -691,6 +703,52 @@ private:
     bool need_reassign = true;
     int stream_fd = -1;
     SimpleRefHolder<BinaryNode> current_chunk;
+
+    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+};
+
+//! Poll operation for flushing pending HTTP/2 data
+/** This poll operation flushes all pending HTTP/2 data that has been queued
+    via submitHttp2StreamingResponseHeaders(), sendHttp2StreamData(), and/or
+    sendHttp2Trailers(). It calls sendPendingData() until no more data remains.
+
+    State machine:
+    - H2F_FLUSHING: Calling sendPendingData() to write pending data to socket
+    - H2F_DONE: All pending data has been written
+
+    @since %Qore 2.3
+*/
+class SocketHttp2FlushPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketHttp2FlushPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return h2f_state == H2F_DONE;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        switch (h2f_state) {
+            case H2F_FLUSHING: return "flushing";
+            case H2F_DONE: return "done";
+            default: return "unknown";
+        }
+    }
+
+private:
+    enum FlushState { H2F_FLUSHING, H2F_DONE };
+    FlushState h2f_state = H2F_FLUSHING;
 
     DLLLOCAL virtual bool abortNeedsClose() const { return true; }
 };

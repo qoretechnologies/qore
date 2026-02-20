@@ -328,11 +328,27 @@ public class Http2ClientStreamHandle {
             data_queue = new Queue();
         }
 
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            bool ready = conn.isControllerMode()
+                ? conn.waitForReady(request_timeout)
+                : conn.driveToReady(request_timeout);
+            if (!ready) {
+                {
+                    AutoLock al(lock);
+                    state = Http2ClientStreamState::Pending;
+                    streaming = False;
+                    delete data_queue;
+                }
+                throw "HTTP2-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
             stream_id = conn.submitRequest(method, path, headers, NOTHING,
-                \handleStreamingResponse());
+                \handleStreamingResponse(), NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {
             # Rollback state on error
             {
@@ -357,6 +373,9 @@ public class Http2ClientStreamHandle {
         @throw HTTP2-STREAM-CLOSED if the stream is closed and no data is queued
     */
     auto readData(*timeout timeout_ms) {
+        timeout wait_timeout = timeout_ms ?? request_timeout;
+        bool controller_mode = conn.isControllerMode();
+
         {
             AutoLock al(lock);
             if (!streaming) {
@@ -371,7 +390,38 @@ public class Http2ClientStreamHandle {
             }
         }
 
-        return data_queue.get(timeout_ms ?? request_timeout);
+        if (controller_mode) {
+            # Controller drives I/O; just wait on the queue
+            try {
+                return data_queue.get(wait_timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    return NOTHING;
+                }
+                rethrow;
+            }
+        }
+
+        # Non-controller mode: drive the poll while waiting for data
+        date end_time = now_us() + wait_timeout;
+        while (True) {
+            # Check queue with short timeout
+            try {
+                return data_queue.get(0);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+                # Queue empty — drive poll
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return NOTHING;
+            }
+
+            conn.drivePoll(min(remaining, 1s));
+        }
     }
 
     #! Sends data on a streaming connection
@@ -401,6 +451,26 @@ public class Http2ClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
         conn.sendStreamData(sid, data, end_stream);
+
+        # In non-controller mode, drive the poll to flush send data
+        if (!conn.isControllerMode()) {
+            conn.drivePoll(1s);
+        }
+    }
+
+    #! Returns trailers from the completed response
+    /** Returns HTTP/2 trailer headers from the response, if any were received.
+        Trailers are available after the stream is complete.
+
+        This is used by protocols like gRPC that communicate status via HTTP/2 trailers
+        (e.g., \c "grpc-status", \c "grpc-message").
+
+        @return trailer headers as a hash, or @ref nothing if no trailers were received
+        or the stream is not yet complete
+    */
+    *hash<string, string> getTrailers() {
+        AutoLock al(lock);
+        return response.trailers;
     }
 
     #! Cancels the request
@@ -457,8 +527,11 @@ public class Http2ClientStreamHandle {
             return;
         }
 
-        # For streaming, we may receive multiple callbacks
-        # The first callback typically has headers, subsequent have data
+        # The callback is invoked once with the complete response when the
+        # stream finishes (headers + body + trailers). Detect stream completion
+        # from the presence of trailers or the end_stream flag.
+        bool is_end = resp.end_stream.toBool() || exists resp.trailers;
+
         {
             AutoLock al(lock);
             if (resp.headers && state == Http2ClientStreamState::Open) {
@@ -467,8 +540,10 @@ public class Http2ClientStreamHandle {
             if (resp.body) {
                 state = Http2ClientStreamState::ReceivingBody;
             }
-            if (resp.end_stream) {
+            if (is_end) {
                 state = Http2ClientStreamState::Complete;
+                # Store response for getTrailers() access
+                response = resp;
             }
         }
 
@@ -476,7 +551,7 @@ public class Http2ClientStreamHandle {
             data_queue.push(resp.body);
         }
 
-        if (resp.end_stream) {
+        if (is_end) {
             # Use explicit sentinel to distinguish from timeout (which returns NOTHING)
             data_queue.push({"end_stream": True});
         }
