@@ -51,6 +51,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR hash map select guard smoke", \testIrHashMapSelectGuardSmoke());
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR rethrow outside catch smoke", \testIrRethrowOutsideCatchSmoke());
+        addTestCase("IR rethrow with args smoke", \testIrRethrowWithArgsSmoke());
         addTestCase("IR guard mismatch smoke", \testIrGuardMismatchSmoke());
         addTestCase("IR guard exception flow smoke", \testIrGuardExceptionFlowSmoke());
         addTestCase("IR logical guard exception smoke", \testIrLogicalGuardExceptionSmoke());
@@ -275,7 +276,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
             qore_bin, script.path, out.path, err.path);
-        int rc = runCommand(cmd, script.path, 2);
+        int rc = runCommand(cmd, script.path);
         string err_output = ReadOnlyFile::readTextFile(err.path);
         if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
             testSkip("exec-mode option not supported by test qore binary");
@@ -1964,7 +1965,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
             qore_bin, script.path, out.path, err.path);
-        int rc = runCommand(cmd, script.path);
+        int rc = runCommand(cmd, script.path, 2);
         string err_output = ReadOnlyFile::readTextFile(err.path);
         if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
             testSkip("exec-mode option not supported by test qore binary");
@@ -1975,6 +1976,50 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
         assertTrue(err_output =~ /RETHROW-NOT-IN-CATCH-BLOCK/,
             "Expected rethrow outside catch error");
+    }
+
+    testIrRethrowWithArgsSmoke() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        # Test rethrow with args (replaceTop) — e.g. "rethrow $1.err, new_desc"
+        # This pattern is used by RestClient's on_error handler
+        TmpFile script();
+        script.file.write("%new-style\n%modern\n");
+        script.file.write("string result;\n");
+        script.file.write("try {\n");
+        script.file.write("    try {\n");
+        script.file.write("        throw \"TEST-ERR\", \"original desc\";\n");
+        script.file.write("    } catch (hash<ExceptionInfo> ex) {\n");
+        script.file.write("        rethrow ex.err, sprintf(\"%s (modified)\", ex.desc);\n");
+        script.file.write("    }\n");
+        script.file.write("} catch (hash<ExceptionInfo> ex) {\n");
+        script.file.write("    result = sprintf(\"%s:%s\", ex.err, ex.desc);\n");
+        script.file.write("}\n");
+        script.file.write("printf(\"%s\\n\", result);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR rethrow with args should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("TEST-ERR:original desc (modified)\n", stdout_output,
+            "Unexpected IR rethrow with args output");
     }
 
     testIrGuardMismatchSmoke() {

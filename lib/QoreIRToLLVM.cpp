@@ -4081,11 +4081,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Rethrow ===
         case QoreIROpcode::Rethrow: {
             const auto* rethrow_inst = static_cast<const QoreIRThrowInstruction*>(inst);
-            // Rethrow: copy exception from td->catchException into xsink,
-            // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
-            auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
-                    llvm::FunctionType::get(void_type, {ptr_type}, false));
-            builder->CreateCall(rethrow_helper, {xsink_arg});
+            if (!rethrow_inst->operands.empty()) {
+                // Rethrow with args: replaceTop() + rethrow + catch_end
+                llvm::Value* args_val = getVal(rethrow_inst->operands[0].id, error);
+                if (!args_val) {
+                    return false;
+                }
+                args_val = boxValue(args_val, rethrow_inst->operands[0].id);
+                auto rethrow_args_helper = module.getOrInsertFunction("qore_rt_rethrow_with_args",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(rethrow_args_helper, {args_val, xsink_arg});
+            } else {
+                // Plain rethrow: copy exception from td->catchException into xsink,
+                // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
+                auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                builder->CreateCall(rethrow_helper, {xsink_arg});
+            }
             // Clean up additional catch scopes beyond the innermost one
             if (rethrow_inst->catch_depth > 1) {
                 auto catch_end_helper = module.getOrInsertFunction("qore_rt_catch_end",

@@ -616,6 +616,8 @@ static int expectedOperands(QoreIROpcode op) {
             return 1;
         case QoreIROpcode::Throw:
             return 1;
+        case QoreIROpcode::Rethrow:
+            return -1;  // 0 operands (plain rethrow) or 1 operand (rethrow with args)
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::LoadImplicitArgv:   // No operands - load entire $argv
         case QoreIROpcode::LoadImplicitElement:// No operands - load current $#

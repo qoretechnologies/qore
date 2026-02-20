@@ -1242,6 +1242,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<const void*, QoreValue> globals;
     std::unordered_map<const void*, QoreValue> threadlocals;
     std::unordered_map<const void*, QoreValue> closures;
+    // Track active iterators (from IteratorCreate/IteratorCreateReverse) for cleanup
+    // on non-normal exit paths. IteratorCreate stores the iterator pointer as int64_t
+    // in the values map; cleanupValues() treats int64_t as a plain number (no delete).
+    std::unordered_set<FunctionalOperatorInterface*> active_iterators;
     // on_block_exit handlers collected during IR execution
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     // Catch exception stack for rethrow support
@@ -1325,6 +1329,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             cleanupInstantiatedLocals(locals, xsink, pre_instantiated);
         }
     } local_cleanup{instantiated_locals, xsink, pre_instantiated};
+
+    // RAII guard: delete active iterators on any function exit path.
+    // IteratorNext deletes iterators on the normal done path, but return/exception
+    // can exit without reaching done, leaking the iterator stored as raw int64_t.
+    struct IteratorCleanupGuard {
+        std::unordered_set<FunctionalOperatorInterface*>& iters;
+        ~IteratorCleanupGuard() {
+            for (auto* iter : iters) {
+                delete iter;
+            }
+        }
+    } iter_cleanup{active_iterators};
 
     // Pointer to the function's own locals set (pre_instantiated_locals from QoreIRFunction).
     // Used by ensureLocalInstantiated() to distinguish function-own locals from outer-scope
@@ -2799,6 +2815,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     break;
                 }
                 // Store as int (pointer) — same pattern as IteratorCreate
+                if (iter) {
+                    active_iterators.insert(iter);
+                }
                 setValueSlot(values, inst->result.id,
                         QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
                 ++ip;
@@ -3369,6 +3388,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 // Store iterator pointer as int64_t in result
                 // A nullptr means the iterable was empty (nothing)
+                if (iter) {
+                    active_iterators.insert(iter);
+                }
                 setValueSlot(values, iter_inst->result.id, QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
                 ++ip;
                 break;
@@ -3388,6 +3410,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ValueOptionalRefHolder val(xsink);
                 bool done = iter->getNext(val, xsink);
                 if (xsink && *xsink) {
+                    active_iterators.erase(iter);
                     delete iter;
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, nullptr);
@@ -3398,6 +3421,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (done) {
                     // Iterator exhausted - clean up and branch to done
+                    active_iterators.erase(iter);
                     delete iter;
                     // Clear the iterator value so we don't double-delete
                     setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
@@ -4832,6 +4856,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (!ex) {
                     xsink->raiseException("IR-EXEC-ERROR", "rethrow without exception");
                 } else {
+                    if (!inst->operands.empty()) {
+                        // Rethrow with args: modify the exception's err/desc/arg
+                        // before rethrowing (matches AST RethrowStatement::execImpl)
+                        QoreValue arg = getIRValue(values, inst->operands[0]);
+                        if (arg.getType() == NT_LIST) {
+                            ex = ex->replaceTop(*arg.get<const QoreListNode>(), *xsink);
+                        }
+                    }
                     qore_es_private::get(*xsink)->rethrow(ex);
                 }
                 if (debug_active && *xsink) {

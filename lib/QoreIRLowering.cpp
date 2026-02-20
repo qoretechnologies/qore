@@ -1610,13 +1610,17 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!value.isValid()) {
                 return false;
             }
-            // NOTE: do NOT emit ScopeExits before Throw/Rethrow — same reason as Throw above.
-            // Emit CatchCleanup for all active catch scopes before throwing
-            for (int i = 0; i < catch_cleanup_depth; ++i) {
-                builder.createCatchCleanup(stmt->loc);
-            }
+            // NOTE: do NOT emit ScopeExits or CatchCleanup before Rethrow —
+            // rethrow needs td->catchException intact to get the exception to
+            // modify via replaceTop().  Store catch_cleanup_depth in the
+            // instruction so the rethrow handler can clean up all catch scopes
+            // AFTER rethrowing.
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
-            builder.createThrow(value, handler, stmt->loc);
+            auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
+            rethrow_inst->catch_depth = catch_cleanup_depth;
+            // Attach args to the Rethrow instruction so the interpreter/JIT can
+            // call catch_get_exception()->replaceTop() with the new err/desc/arg.
+            rethrow_inst->operands.push_back(value);
         } else {
             // NOTE: do NOT emit ScopeExits before Rethrow — same reason as Throw above.
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException

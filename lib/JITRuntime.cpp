@@ -344,6 +344,19 @@ extern "C" DLLEXPORT void qore_rt_rethrow(ExceptionSink* xsink) {
     qore_rt_catch_end(xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink) {
+    QoreException* ex = catch_get_exception();
+    if (ex) {
+        QoreValue args = fromBits(args_bits);
+        if (args.getType() == NT_LIST) {
+            ex = ex->replaceTop(*args.get<const QoreListNode>(), *xsink);
+        }
+        qore_es_private::get(*xsink)->rethrow(ex);
+    }
+    // Clean up catch scope after rethrow
+    qore_rt_catch_end(xsink);
+}
+
 // --- Deopt helpers ---
 
 extern "C" DLLEXPORT void qore_rt_deopt(void* deopt_counter_ptr) {
