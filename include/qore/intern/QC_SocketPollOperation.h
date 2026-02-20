@@ -673,6 +673,18 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         input_stream = nullptr;
         current_chunk = nullptr;
+        // Send RST_STREAM to notify client that the stream is being cancelled
+        {
+            AutoLocker al(sock->priv->m);
+            Http2Session* session = sock->priv->socket->priv->h2_session.get();
+            if (session) {
+                ExceptionSink rst_xsink;
+                session->submitRstStream(stream_id, NGHTTP2_CANCEL, &rst_xsink);
+                if (!rst_xsink) {
+                    session->sendPendingDataBlocking(100, &rst_xsink);
+                }
+            }
+        }
         if (set_non_block) {
             sock->clearNonBlock();
             set_non_block = false;

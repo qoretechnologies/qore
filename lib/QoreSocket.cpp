@@ -6236,6 +6236,12 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                     if (poll_rv < 0) {
                         xsink->raiseException("HTTP2-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
                         return nullptr;
                     }
                     if (poll_rv == 0) {
@@ -6249,7 +6255,15 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                     chunk->preallocate(chunk_size);
                     int64 count = input_stream->readNonBlock(
                         const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
-                    if (*xsink) return nullptr;
+                    if (*xsink) {
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        return nullptr;
+                    }
                     if (count == 0) {
                         // poll said readable but read returned 0 → EOF
                         eof = true;
@@ -6260,7 +6274,15 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                 } else {
                     // Non-pollable (memory) streams - read() never blocks
                     current_chunk = input_stream->readHelper(chunk_size, xsink);
-                    if (*xsink) return nullptr;
+                    if (*xsink) {
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        return nullptr;
+                    }
                     if (!current_chunk) {
                         eof = true;
                         continue;
