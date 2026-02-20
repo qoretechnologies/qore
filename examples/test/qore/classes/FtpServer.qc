@@ -387,13 +387,19 @@ class FtpServer {
     }
 
     private doEpsv(Socket ns, reference data, Counter dcnt, reference dataquit) {
+        # get the local address and family from the control connection to bind the data socket
+        # to the same address family; this prevents a mismatch where the control connection is
+        # IPv6 but the data socket is IPv4-only, which would cause the client to connect to the
+        # wrong service if another process happens to be listening on the same port over IPv6
+        hash<auto> ctrl_info = ns.getSocketInfo();
+        string data_host = ctrl_info.address;
+        int data_family = ctrl_info.af;
         # get random port
         int dport;
-        # workaround for issue #1259 (https://github.com/qoretechnologies/qore/issues/1259)
         while (True) {
             dport = 10000 + (rand() % 40000);
             try {
-                data.bindINET("localhost", dport, True, AF_INET);
+                data.bindINET(data_host, dport, True, data_family);
                 break;
             } catch (hash ex) {
                 continue;
