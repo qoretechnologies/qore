@@ -819,27 +819,48 @@ void QoreJIT::bgCompileThreadLoop() {
             continue;
         }
 
-        // Lookup the compiled function and register it
+        // Defensive check: only process if uvb is still valid (if jit_compile_state != 1, compilation was cancelled/failed)
+        const UserVariantBase* root_uvb = work.uvb;
+        if (!root_uvb) {
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] work item uvb is null, skipping\n");
+            }
+            continue;
+        }
+
+        // Verify the work item is still pending by checking compile state
+        int state = const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.load(std::memory_order_acquire);
+        if (state != 1) {
+            // Compilation was cancelled, failed, or already completed
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, work.ir_func->name.c_str());
+            }
+            continue;
+        }
+
+        // Lookup the compiled function
         JitFunctionPtr fn = lookupFunction(work.ir_func->name);
         if (!fn) {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", work.ir_func->name.c_str());
             }
+            // Mark as failed
+            const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.store(2, std::memory_order_release);
             continue;
         }
 
         // Register the compiled function for the root uvb
-        const UserVariantBase* root_uvb = work.uvb;
-        if (root_uvb) {
-            // Cast away const to set cached_jit_fn and tier
-            UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
-            mutable_uvb->cached_jit_fn = fn;
-            mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
-            mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
+        // Cast away const to set cached_jit_fn and tier
+        UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
+        // Write function pointer (non-atomic, but followed by release fence)
+        mutable_uvb->cached_jit_fn = fn;
+        // Ensure cached_jit_fn write is visible before tier update
+        std::atomic_thread_fence(std::memory_order_release);
+        mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
+        mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
 
-            if (getenv("QORE_JIT_TIMING")) {
-                fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", work.ir_func->name.c_str());
-            }
+        if (getenv("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", work.ir_func->name.c_str());
         }
 
         // Register compiled function pointers for batch-compiled callees
@@ -926,6 +947,43 @@ void QoreJIT::shutdown() {
         // Join the background thread (it should exit quickly since bg_thread_running is false)
         if (bg_compile_thread.joinable()) {
             bg_compile_thread.join();
+        }
+    }
+
+    // Process any remaining work items synchronously before shutting down LLVM
+    // This ensures all pending compilations complete before context destruction
+    while (true) {
+        BgCompileWork work;
+        {
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
+            if (bg_compile_queue.empty()) {
+                break;
+            }
+            work = bg_compile_queue.front();
+            bg_compile_queue.pop();
+        }
+
+        // Compile any remaining work synchronously
+        std::string error;
+        bool success;
+        if (work.has_callees) {
+            success = compileFunctionBatchInternal(*work.ir_func, error, work.deopt_ptr, work.callees);
+        } else {
+            success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
+        }
+
+        if (success) {
+            JitFunctionPtr fn = lookupFunction(work.ir_func->name);
+            if (fn && work.uvb) {
+                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                mutable_uvb->cached_jit_fn = fn;
+                std::atomic_thread_fence(std::memory_order_release);
+                mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
+                mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
+            }
+        } else if (work.uvb) {
+            UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+            mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
         }
     }
 
