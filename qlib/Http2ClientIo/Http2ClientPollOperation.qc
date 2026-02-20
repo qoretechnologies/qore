@@ -43,11 +43,8 @@ public namespace Http2ClientIo {
     @par Stream Callbacks
     When a response is complete, the registered callback for that stream ID is
     invoked with the response data. Callbacks are registered via submitRequest().
-
-    @par continueReading() Pattern
-    After dispatching a response, call continueReading() to resume frame reading
-    without recreating the underlying C++ poll operation.  This preserves the
-    nghttp2 session state (including any already-received frames for other streams).
+    After callback dispatch, call continueReading() to resume frame reading
+    without recreating the underlying C++ poll operation.
 
 */
 public class Http2ClientPollOperation inherits AbstractPollOperation {
@@ -58,7 +55,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         # Note: STATE_PREFACE was removed - the C++ layer handles preface internally
         const STATE_READING = "reading";
         const STATE_WAIT_READ = "wait_read";
-        const STATE_RESPONSE_READY = "response_ready";
         const STATE_CLOSED = "closed";
 
         #! Maximum consecutive empty reads before closing
@@ -74,12 +70,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
         #! Current poll operation (connect, ssl, or h2 multiplex)
         AbstractPollOperation current_op;
-
-        #! The completed response when ready (from last stream completion)
-        *hash<auto> completed_response;
-
-        #! Stream ID of the completed response
-        *int completed_stream_id;
 
         #! Pending stream callbacks: stream_id -> callback
         hash<string, code> stream_callbacks;
@@ -164,9 +154,12 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         return state;
     }
 
-    #! Returns True when a response is ready to be processed
+    #! Always returns False; this is a long-running multiplexed operation
+    /** Responses are dispatched via stream callbacks registered with submitRequest(),
+        not via the goalReached()/getOutput() pattern.
+    */
     bool goalReached() {
-        return state == STATE_RESPONSE_READY;
+        return False;
     }
 
     #! Returns True if the connection is closed
@@ -176,7 +169,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
 
     #! Returns True if the connection is ready for requests
     bool isReady() {
-        return state == STATE_READING || state == STATE_WAIT_READ || state == STATE_RESPONSE_READY;
+        return state == STATE_READING || state == STATE_WAIT_READ;
     }
 
     #! Returns True if a callback was dispatched during the last continuePoll() call, then clears the flag
@@ -263,8 +256,7 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         # Submit request AND register callback atomically under stream_lock.
         # This prevents a race where the I/O thread processes the response in
         # handleReading() before the callback is registered, which would cause
-        # the response to be lost (no callback found → STATE_RESPONSE_READY
-        # path taken instead of callback dispatch).
+        # the response to be discarded as an orphaned cancelled-stream response.
         int stream_id;
         {
             AutoLock al(stream_lock);
@@ -369,7 +361,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     continue;
                 }
 
-                case STATE_RESPONSE_READY:
                 case STATE_CLOSED:
                     return NOTHING;
             }
@@ -377,26 +368,15 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         return NOTHING;
     }
 
-    #! Returns the completed response when ready
-    auto getOutput() {
-        return completed_response;
-    }
-
-    #! Returns the stream ID of the completed response
-    *int getCompletedStreamId() {
-        return completed_stream_id;
-    }
-
     #! Continues reading without creating a new poll operation
-    /** Called after a response has been dispatched. The same underlying C++
-        SocketHttp2ClientMultiplexPollOperation continues reading frames.
+    /** Called after a callback has been dispatched to resume frame reading.
+        The same underlying C++ SocketHttp2ClientMultiplexPollOperation continues
+        reading frames, preserving the nghttp2 session state.
     */
     continueReading() {
-        if (state != STATE_RESPONSE_READY && state != STATE_WAIT_READ) {
+        if (state != STATE_WAIT_READ) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
         }
-        remove completed_response;
-        remove completed_stream_id;
         empty_read_count = 0;
         state = STATE_READING;
     }
@@ -571,7 +551,6 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                             ex.err, ex.desc);
                     }
                     # Callback handled the response - continue reading for more frames
-                    # (don't set STATE_RESPONSE_READY, loop continues in continuePoll)
                     state = STATE_WAIT_READ;
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
@@ -579,11 +558,15 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                     };
                 }
 
-                # No callback - store for getOutput() polling
-                completed_response = output;
-                completed_stream_id = stream_id;
-                state = STATE_RESPONSE_READY;
-                return NOTHING;
+                # No callback found - stream was cancelled after response arrived;
+                # discard the orphaned response and continue reading to avoid a
+                # livelock where STATE_RESPONSE_READY is never consumed
+                log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
+                state = STATE_WAIT_READ;
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": sock,
+                };
             }
 
             # No response ready yet - check if we need to wait for more data

@@ -223,8 +223,11 @@ public class Http2ClientStreamHandle {
                     response_cond.wait(lock, remaining);
                 } else {
                     # In sync mode, release lock and drive poll directly
+                    # Cap poll timeout to 1s to avoid blocking the single driver
+                    # thread for extended periods, which would starve other threads
+                    # waiting for their responses to be dispatched
                     delete al;
-                    conn.drivePoll(remaining);
+                    conn.drivePoll(min(remaining, 1s));
                     al = new AutoLock(lock);
                 }
             }
