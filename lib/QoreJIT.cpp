@@ -915,19 +915,21 @@ void QoreJIT::waitForBgCompileQueue() {
 }
 
 void QoreJIT::shutdown() {
-    // Stop the background compilation thread first
-    if (bg_thread_running.load(std::memory_order_acquire)) {
+    // Ensure background thread is stopped BEFORE any other shutdown
+    bool was_running = bg_thread_running.exchange(false, std::memory_order_acq_rel);
+    if (was_running) {
+        // Signal the thread to wake up and exit
         {
             std::lock_guard<std::mutex> lock(bg_queue_mutex);
-            bg_thread_running.store(false, std::memory_order_release);
-        }
+        }  // Release lock before notify
         bg_queue_cv.notify_one();
+        // Join the background thread (it should exit quickly since bg_thread_running is false)
         if (bg_compile_thread.joinable()) {
             bg_compile_thread.join();
         }
     }
 
-    // Then shut down LLVM
+    // Then shut down LLVM (acquire compile_mutex to serialize with any ongoing compilation)
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
     jit.reset();
     symbols_registered = false;

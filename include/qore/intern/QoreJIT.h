@@ -155,6 +155,10 @@ public:
 
 private:
     QoreJIT() = default;
+    ~QoreJIT() {
+        // Ensure background thread is stopped before destructor completes
+        shutdown();
+    }
     QoreJIT(const QoreJIT&) = delete;
     QoreJIT& operator=(const QoreJIT&) = delete;
 
