@@ -2426,6 +2426,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         list<string> pk_cols = cols.keys();
 
         return int sub (hash<auto> h) {
+            # detect single-row input (scalars) and convert to hash-of-lists for UNNEST compatibility
+            if (h.firstValue().typeCode() != NT_LIST) {
+                h = map {$1.key: ($1.value,)}, h.pairIterator();
+            }
             # deduplicate rows by PK columns if using DO UPDATE
             if (needs_dedup) {
                 h = deduplicateByPk(h, pk_cols);
@@ -2438,6 +2442,108 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 stmt.execArgs(args);
             }
             return UR_Verified;
+        };
+    }
+
+    #! Returns a closure for performing bulk update operations using UNNEST
+    /** Generates an efficient UPDATE ... FROM (SELECT unnest(...)) WHERE ... statement that processes
+        all rows in a single SQL execution.
+
+        @param example_set an example single-row hash of SET column values
+        @param example_cond an example single-row hash of WHERE condition values
+        @return a closure that accepts (hash<auto> set_data, hash<auto> cond_data) and returns the
+            affected row count; both arguments can be single-row hashes or hash-of-lists
+
+        @see getBulkUpsertClosure()
+    */
+    code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
+        if (!hasArrayBind()) {
+            return AbstractTable::getBulkUpdateClosure(example_set, example_cond);
+        }
+
+        # ensure columns are loaded
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+
+            getColumnsUnlocked();
+        }
+
+        # build the UNNEST-based UPDATE SQL:
+        # UPDATE table_name AS t
+        # SET col1 = dq.s0::type1, col2 = dq.s1::type2
+        # FROM (SELECT unnest(%v) AS s0, unnest(%v) AS s1, unnest(%v) AS c0) AS dq
+        # WHERE t.cond_col = dq.c0::cond_type
+
+        list<string> set_assignments = ();
+        list<string> unnest_placeholders = ();
+        list<string> unnest_aliases = ();
+        int idx = 0;
+
+        # SET columns
+        foreach string k in (keys example_set) {
+            *AbstractColumn col = columns{k};
+            if (!col) {
+                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)",
+                    getDesc(), k, columns.keys());
+            }
+            string alias = sprintf("s%d", idx);
+            unnest_aliases += alias;
+            unnest_placeholders += "%v";
+            set_assignments += sprintf("%s = dq.%s::%s", getColumnSqlName(k), alias, col.getNativeTypeString());
+            ++idx;
+        }
+
+        # WHERE condition columns
+        list<string> where_clauses = ();
+        foreach string k in (keys example_cond) {
+            *AbstractColumn col = columns{k};
+            if (!col) {
+                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)",
+                    getDesc(), k, columns.keys());
+            }
+            string alias = sprintf("c%d", idx);
+            unnest_aliases += alias;
+            unnest_placeholders += "%v";
+            where_clauses += sprintf("t.%s = dq.%s::%s", getColumnSqlName(k), alias, col.getNativeTypeString());
+            ++idx;
+        }
+
+        string sql = sprintf("update %s as t set %s from (select %s) as dq where %s",
+            getSqlName(),
+            (foldl $1 + ", " + $2, set_assignments),
+            (foldl $1 + ", " + $2, (map sprintf("unnest(%s) as %s", unnest_placeholders[$#], unnest_aliases[$#]),
+                unnest_aliases)),
+            (foldl $1 + " and " + $2, where_clauses));
+
+        bool use_direct_exec = !(ds instanceof Datasource || ds instanceof DatasourcePool);
+        *SQLStatement stmt;
+        if (!use_direct_exec) {
+            stmt = new SQLStatement(ds);
+            stmt.prepare(sql);
+        }
+
+        # capture column keys for building bind args in the closure
+        list<string> set_keys = keys example_set;
+        list<string> cond_keys = keys example_cond;
+
+        return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            # detect single-row input and convert to hash-of-lists
+            if (set_data.firstValue().typeCode() != NT_LIST) {
+                set_data = map {$1.key: ($1.value,)}, set_data.pairIterator();
+                cond_data = map {$1.key: ($1.value,)}, cond_data.pairIterator();
+            }
+            # build bind args: set columns then cond columns
+            hash<auto> combined;
+            map (combined{$1} = set_data{$1}), set_keys;
+            map (combined{$1} = cond_data{$1}), cond_keys;
+            list<auto> args = transformBulkBindArgs(combined);
+            if (use_direct_exec) {
+                ds.vexec(sql, args);
+            } else {
+                stmt.execArgs(args);
+            }
+            return set_data.firstValue().size();
         };
     }
 

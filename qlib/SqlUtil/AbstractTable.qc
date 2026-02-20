@@ -3506,6 +3506,57 @@ upsert(row_hash);
         };
     }
 
+    #! returns a closure for performing bulk update operations
+    /** The closure accepts two hash arguments: set data and condition data, each as a hash-of-lists
+        (one list per column). Returns the number of rows affected.
+
+        The default implementation iterates over rows using a prepared statement.
+        Drivers that support more efficient bulk operations (e.g. PostgreSQL UNNEST) can override this.
+
+        @param example_set an example single-row hash of SET column values
+        @param example_cond an example single-row hash of WHERE condition values
+        @return a closure that accepts (hash<auto> set_data, hash<auto> cond_data) and returns the affected row count
+
+        @see getBulkUpsertClosure()
+    */
+    code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
+        # execute the first row to generate and prepare the SQL
+        *SQLStatement stmt;
+        bool first = True;
+        return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            int uc = 0;
+            if (set_data.firstValue().typeCode() == NT_LIST) {
+                # hash-of-lists: iterate over rows
+                foreach hash<auto> row in (set_data.contextIterator()) {
+                    hash<auto> row_cond = (map {$1.key: $1.value[$#]}, cond_data.pairIterator());
+                    if (first) {
+                        string sql;
+                        uc += self.update(row, row_cond, \sql);
+                        stmt = self.getStatement();
+                        stmt.prepare(sql);
+                        first = False;
+                    } else {
+                        stmt.execArgs(row.values() + row_cond.values());
+                        uc += stmt.affectedRows();
+                    }
+                }
+            } else {
+                # single row
+                if (first) {
+                    string sql;
+                    uc += self.update(set_data, cond_data, \sql);
+                    stmt = self.getStatement();
+                    stmt.prepare(sql);
+                    first = False;
+                } else {
+                    stmt.execArgs(set_data.values() + cond_data.values());
+                    uc += stmt.affectedRows();
+                }
+            }
+            return uc;
+        };
+    }
+
     #! returns a closure that can be executed given a hash argument representing a single row that will be updated or inserted in the database with the given upsert strategy; the table must have a unique key to do this; the closure returned checks the input hash for validity
     /** @par Example:
         @code{.py}
