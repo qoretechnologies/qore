@@ -393,7 +393,7 @@ class FtpServer {
         # wrong service if another process happens to be listening on the same port over IPv6
         hash<auto> ctrl_info = ns.getSocketInfo();
         string data_host = ctrl_info.address;
-        int data_family = ctrl_info.af;
+        int data_family = ctrl_info.family;
         # get random port
         int dport;
         while (True) {
