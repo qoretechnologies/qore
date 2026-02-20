@@ -402,12 +402,19 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     module->setDataLayout(jit->getDataLayout());
 
     // Lower IR to LLVM IR
-    QoreIRToLLVM lowering(*ctx);
-    if (deopt_counter) {
-        lowering.setDeoptCounter(deopt_counter);
-    }
-    if (!lowering.lowerFunction(func, *module, error)) {
-        return false;
+    // NOTE: the lowering object must be destroyed before we transfer the module/context
+    // to the JIT (addIRModule + lookup below), because QoreIRToLLVM holds an IRBuilder
+    // with DebugLoc metadata references into the LLVMContext.  After addIRModule() +
+    // lookup() trigger materialization, the JIT may free the context; destroying the
+    // IRBuilder afterwards would crash in MetadataTracking::untrack().
+    {
+        QoreIRToLLVM lowering(*ctx);
+        if (deopt_counter) {
+            lowering.setDeoptCounter(deopt_counter);
+        }
+        if (!lowering.lowerFunction(func, *module, error)) {
+            return false;
+        }
     }
 
     // Run LLVM optimization passes
