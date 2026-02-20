@@ -234,6 +234,12 @@ private:
     // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
     std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
+    // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.
+    // On normal exit (IteratorNext done), the alloca is nulled out.
+    // On abnormal exit (return/throw inside foreach body), emitIteratorCleanup()
+    // calls qore_rt_iterator_cleanup() for each non-null alloca.
+    std::vector<llvm::Value*> iterator_cleanup_allocas;
+
     // Reload tracker allocas for local variables modified by lvalue operations.
     // Each tracker alloca holds the most recent qore_rt_load_local reload value
     // (+1 ref) so it can be decref'd before being replaced or at function exit.
@@ -334,6 +340,9 @@ private:
 
     // Emit qore_rt_decref calls for tracked runtime call results
     void emitInvokeCleanup(llvm::Module& module);
+
+    // Emit qore_rt_iterator_cleanup calls for active iterators
+    void emitIteratorCleanup(llvm::Module& module);
 
     // Track a runtime helper result for cleanup at function exit.
     // Creates an alloca initialized to NOTHING in the entry block, stores the result,

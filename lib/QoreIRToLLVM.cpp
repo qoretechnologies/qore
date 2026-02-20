@@ -350,6 +350,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // iterator_next: (ptr, ptr, ptr) -> i64
     module.getOrInsertFunction("qore_rt_iterator_next",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+    // iterator_cleanup: (ptr) -> void — deletes non-null iterator on abnormal exit
+    module.getOrInsertFunction("qore_rt_iterator_cleanup",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
 
     // Reference foreach helpers
     // ref_foreach_init: (i64, ptr) -> i64
@@ -872,6 +875,18 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
+    if (iterator_cleanup_allocas.empty()) {
+        return;
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+    for (llvm::Value* alloca_ptr : iterator_cleanup_allocas) {
+        llvm::Value* iter_ptr = builder->CreateLoad(ptr_type, alloca_ptr);
+        builder->CreateCall(helper, {iter_ptr});
+    }
+}
+
 void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
         llvm::Function* llvm_func) {
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
@@ -1194,26 +1209,12 @@ llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
     if (jit_deopt_block) {
         return jit_deopt_block;
     }
+    // Create the block but leave it empty — body is emitted during finalization
+    // (after all instructions are lowered) so that emitIteratorCleanup and
+    // emitInvokeCleanup cover ALL tracked allocas.  Guards can appear after
+    // ConstString/Invoke instructions; emitting cleanup at creation time would
+    // miss allocas not yet created.
     jit_deopt_block = llvm::BasicBlock::Create(ctx, "jit_deopt", llvm_func);
-    // Save current insert point, emit the deopt block, then restore
-    llvm::BasicBlock* saved_block = builder->GetInsertBlock();
-    llvm::BasicBlock::iterator saved_point = builder->GetInsertPoint();
-    builder->SetInsertPoint(jit_deopt_block);
-    // Call qore_rt_request_jit_deopt(deopt_counter_ptr) to set the thread-local
-    // deopt flag and increment the deopt counter
-    auto deopt_fn = module.getOrInsertFunction("qore_rt_request_jit_deopt",
-            llvm::FunctionType::get(void_type, {ptr_type}, false));
-    llvm::Value* counter_ptr = builder->CreateIntToPtr(
-        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
-        ptr_type);
-    builder->CreateCall(deopt_fn, {counter_ptr});
-    // Return NOTHING directly — the caller (evalTiered or JITRuntime fast path)
-    // checks the deopt flag and falls back to AST execution.  Body locals are
-    // pre-instantiated by the caller and cleaned up there, so no JIT-side
-    // cleanup is needed.
-    builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
-    // Restore insert point
-    builder->SetInsertPoint(saved_block, saved_point);
     return jit_deopt_block;
 }
 
@@ -1458,6 +1459,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     preinstantiated_entry_loads.clear();
     invoke_result_allocas.clear();
     invoke_alloca_map.clear();
+    iterator_cleanup_allocas.clear();
     pending_phis.clear();
     local_reload_trackers.clear();
     error_return_block = nullptr;
@@ -1622,9 +1624,33 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (error_return_block) {
         builder->SetInsertPoint(error_return_block);
         emitOnBlockExitExec(module);
+        emitIteratorCleanup(module);
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
+        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    }
+
+    // Finalize the JIT deopt block (if used): clean up all tracked allocas
+    // (iterator and invoke result) before requesting deopt and returning.
+    // Deferred from getOrCreateJitDeoptBlock() so that cleanup covers ALL
+    // allocas from the entire function, not just those created before the
+    // first guard instruction.  Body locals are pre-instantiated by the
+    // caller and cleaned up there; on_block_exit handlers are NOT fired here
+    // because the caller will re-execute the function via AST fallback.
+    if (jit_deopt_block) {
+        builder->SetInsertPoint(jit_deopt_block);
+        emitIteratorCleanup(module);
+        emitPreinstantiatedCleanup(module);
+        emitInvokeCleanup(module);
+        // Call qore_rt_request_jit_deopt(deopt_counter_ptr) to set the
+        // thread-local deopt flag and increment the deopt counter
+        auto deopt_fn = module.getOrInsertFunction("qore_rt_request_jit_deopt",
+                llvm::FunctionType::get(void_type, {ptr_type}, false));
+        llvm::Value* counter_ptr = builder->CreateIntToPtr(
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
+            ptr_type);
+        builder->CreateCall(deopt_fn, {counter_ptr});
         builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
     }
 
@@ -3226,6 +3252,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Execute on_block_exit handlers before cleanup
             emitOnBlockExitExec(module);
+            // Delete active iterators (from foreach body early exit)
+            emitIteratorCleanup(module);
             // Release entry-load refs for pre-instantiated locals (tiered compilation)
             emitPreinstantiatedCleanup(module);
             // Release Invoke/ConstString result refs
@@ -3241,6 +3269,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::ReturnNothing: {
             emitOnBlockExitExec(module);
+            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
@@ -4071,6 +4100,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // No exception target: execute on_block_exit, uninstantiate locals and return NOTHING
             emitOnBlockExitExec(module);
+            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
@@ -4116,6 +4146,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // No outer handler: return from function; caller sees exception in xsink
             emitOnBlockExitExec(module);
+            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
@@ -5892,6 +5923,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = builder->CreateCall(helper, {iterable_boxed, xsink_arg});
             values[inst->result.id] = result;
             // Iterator pointer is NOT nanboxed — it's an opaque ptr
+
+            // Track active iterator for cleanup on non-normal exit
+            {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                llvm::AllocaInst* iter_alloca = ab.CreateAlloca(ptr_type, nullptr, "iter_cleanup");
+                ab.CreateStore(llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0)), iter_alloca);
+                builder->CreateStore(result, iter_alloca);
+                iterator_cleanup_allocas.push_back(iter_alloca);
+                invoke_alloca_map[inst->result.id] = iter_alloca;
+            }
+
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -7658,6 +7702,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(helper, {xsink_arg});
             // Thread exit raises an exception; execute on_block_exit, uninstantiate locals and return
             emitOnBlockExitExec(module);
+            emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
             emitLocalUninstantiation(module);
@@ -7785,6 +7830,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Store the iterator pointer as the result
             values[inst->result.id] = result;
             // Don't mark as nanboxed - it's a raw pointer
+
+            // Track active iterator for cleanup on non-normal exit (return/throw
+            // inside foreach body before iterator is exhausted).
+            // Alloca hoisted to entry block, initialized to nullptr.
+            {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                llvm::AllocaInst* iter_alloca = ab.CreateAlloca(ptr_type, nullptr, "iter_cleanup");
+                ab.CreateStore(llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0)), iter_alloca);
+                // Store the iterator pointer in the cleanup alloca
+                builder->CreateStore(result, iter_alloca);
+                iterator_cleanup_allocas.push_back(iter_alloca);
+                // Store the alloca in invoke_alloca_map so IteratorNext can null it on done
+                invoke_alloca_map[inst->result.id] = iter_alloca;
+            }
+
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -7817,6 +7879,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             llvm::Value* old_iter_val = builder->CreateLoad(i64_type, out_val_ptr, "old_iter_val");
             builder->CreateCall(decref_fn, {old_iter_val, xsink_arg});
+            // Null out the iterator cleanup alloca BEFORE the call.
+            // qore_rt_iterator_next deletes the iterator on done/exception;
+            // nulling first ensures emitIteratorCleanup won't double-delete
+            // if emitExceptionCheck branches to error_return_block.
+            auto iter_alloca_it = invoke_alloca_map.find(iter_inst->iterator.id);
+            if (iter_alloca_it != invoke_alloca_map.end()) {
+                builder->CreateStore(llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0)), iter_alloca_it->second);
+            }
             // Call qore_rt_iterator_next(iter_ptr, out_val_ptr, xsink) -> i64 (1=done, 0=continue)
             // Always writes to out_val_ptr (VAL_NOTHING on done/exception, value on continue)
             auto helper = module.getOrInsertFunction("qore_rt_iterator_next",
@@ -7824,6 +7895,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* done_flag = builder->CreateCall(helper, {iter_ptr, out_val_ptr, xsink_arg});
             // Check for exception
             emitExceptionCheck(module, llvm_func, inst);
+            // Restore iterator pointer in cleanup alloca if NOT done (iterator still alive)
+            if (iter_alloca_it != invoke_alloca_map.end()) {
+                llvm::Value* is_not_done = builder->CreateICmpEQ(done_flag,
+                        llvm::ConstantInt::get(i64_type, 0));
+                llvm::Value* restored_ptr = builder->CreateSelect(is_not_done, iter_ptr,
+                        llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0)));
+                builder->CreateStore(restored_ptr, iter_alloca_it->second);
+            }
             // Load the output value (will be used if not done)
             llvm::Value* out_val = builder->CreateLoad(i64_type, out_val_ptr, "iter_val");
             values[inst->result.id] = out_val;

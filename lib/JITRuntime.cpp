@@ -2886,6 +2886,15 @@ extern "C" DLLEXPORT int64_t qore_rt_iterator_next(void* iter_ptr, uint64_t* out
     return 0;
 }
 
+// Cleans up an active iterator on non-normal function exit paths.
+// Called from JIT-compiled code's exit cleanup when a foreach body is exited
+// by return/throw before the iterator is exhausted.
+extern "C" DLLEXPORT void qore_rt_iterator_cleanup(void* iter_ptr) {
+    if (iter_ptr) {
+        delete reinterpret_cast<FunctionalOperatorInterface*>(iter_ptr);
+    }
+}
+
 // --- Reference foreach helpers ---
 
 // Opaque state for reference foreach iteration

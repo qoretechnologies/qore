@@ -372,6 +372,11 @@ void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t 
 //! Create a reverse iterator from a list/iterable (for foldr); returns opaque iterator pointer
 void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink);
 
+// --- Iterator cleanup helper ---
+
+//! Clean up an active iterator on non-normal function exit (return/throw inside foreach body)
+void qore_rt_iterator_cleanup(void* iter_ptr);
+
 // --- Reference foreach helpers ---
 
 //! Initialize reference foreach state from a ParseReferenceNode expression.
