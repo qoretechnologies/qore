@@ -1435,9 +1435,9 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
+    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-set(QORE_QM_METADATA_DEPENDS qore astparser)
+set(QORE_QM_METADATA_DEPENDS qore astparser reflection)
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(
