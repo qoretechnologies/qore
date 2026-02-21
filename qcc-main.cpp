@@ -399,12 +399,13 @@ int main(int argc, char** argv) {
             rc = 1;
         } else {
             // Compile to executable
+            QoreParseOptions po = qpgm->getParseOptions();
             if (!QoreAOT::compile(
                     qpgm,
                     source_text.c_str(), (int)source_text.size(),
                     source_file,
                     output,
-                    qpgm->getParseOptions64(),
+                    po.getLo(),
                     error,
                     opt_level,
                     target_triple,

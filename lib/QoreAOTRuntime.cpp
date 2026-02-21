@@ -1644,6 +1644,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             } else {
                 printd(0, "AOT v2: invalid local slot %d for LOCAL_VARREF expr slot %d (num_locals=%d)\n",
                     local_slot, i, ctx->num_locals);
+                has_unsupported = true;
             }
         }
 
@@ -1653,6 +1654,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else if (kind != AOTExprKind::GENERIC_EVAL) {
             printd(2, "AOT v2: unresolved expr slot %d (kind=%d) for '%s'\n",
                 i, (int)kind, name);
+            has_unsupported = true;
         }
     }
 
