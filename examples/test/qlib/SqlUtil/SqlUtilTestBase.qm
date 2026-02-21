@@ -114,6 +114,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("Order By", \orderByTest());
         addTestCase("Offset / Limit", \offsetLimitTest());
         addTestCase("Update", \updateTest());
+        addTestCase("BulkUpdate", \bulkUpdateTest());
         addTestCase("Upsert", \upsertTest());
         # Cannot delete because additional tests in the module-specific .qtest files
         # are too inter-connected (tightly coupled) to these tests' DB modifications.
@@ -808,6 +809,48 @@ public class SqlTestBase inherits QUnit::Test {
         string sql; on_error printf ("SQL: %s\n", sql);
 
         map assertEq(1, table.update($1 - "id", ("id": $1.id), \sql)), insert_data;
+    }
+
+    bulkUpdateTest() {
+        if (!table) testSkip("no DB connection");
+
+        on_success table.commit();
+        on_error table.rollback();
+
+        # ensure we have insert_data rows in the table
+        assertGt(1, insert_data.size(), "need at least 2 rows for bulk update test");
+
+        # build hash-of-lists for SET and COND from insert_data
+        # SET: update id_ to a new value per row; COND: match on id
+        hash<auto> set_hash = {"id_": ()};
+        hash<auto> cond_hash = {"id": ()};
+        list<hash<auto>> expected;
+        foreach hash<auto> row in (insert_data) {
+            int new_id_ = row.id * 100;
+            set_hash."id_" += (new_id_,);
+            cond_hash."id" += (row.id,);
+            expected += {"id": row.id, "id_": new_id_};
+        }
+
+        # get bulk update closure and execute with hash-of-lists
+        code bulk_update = table.getBulkUpdateClosure({"id_": expected[0]."id_"}, {"id": expected[0].id});
+        int rows_updated = bulk_update(set_hash, cond_hash);
+        assertEq(insert_data.size(), rows_updated, "bulk update row count");
+
+        # verify each row was updated with the correct value
+        foreach hash<auto> exp in (expected) {
+            *hash<auto> actual = table.selectRow({"columns": ("id", "id_"), "where": {"id": exp.id}});
+            assertEq(exp."id_", actual."id_", sprintf("bulk update row id=%d", exp.id));
+        }
+
+        # test single-row path through the same closure
+        int single_rows = bulk_update({"id_": -1}, {"id": insert_data[0].id});
+        assertEq(1, single_rows, "single row update via bulk closure");
+        assertEq(-1, table.selectRow({"columns": ("id_",), "where": {"id": insert_data[0].id}})."id_",
+            "single row update value");
+
+        # restore original data
+        map table.update($1 - "id", {"id": $1.id}), insert_data;
     }
 
     upsertTest() {
