@@ -417,6 +417,7 @@ LANG_QPP_SRC = lib/QC_AbstractSmartLock.qpp \
 	lib/QC_Socket.qpp \
     lib/QC_SocketPollOperation.qpp \
     lib/QC_SocketPollOperationBase.qpp \
+    lib/QC_AsyncIoController.qpp \
 	lib/QC_SSLCertificate.qpp \
 	lib/QC_SSLPrivateKey.qpp \
 	lib/QC_StdoutOutputStream.qpp \

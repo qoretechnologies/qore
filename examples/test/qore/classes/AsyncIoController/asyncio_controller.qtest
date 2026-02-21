@@ -1,0 +1,747 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class AsyncIoControllerTest
+
+#! Comprehensive tests for the AsyncIoController class
+class AsyncIoControllerTest inherits QUnit::Test {
+    public {
+        const ConnectTimeout = 60s;
+        const ShortTimeout = 10s;
+    }
+
+    constructor() : Test("AsyncIoControllerTest", "1.0") {
+        addTestCase("basic construction and state", \testConstruction());
+        addTestCase("autostop flag", \testAutostop());
+        addTestCase("start/stop lifecycle", \testStartStop());
+        addTestCase("submit with queue result", \testSubmitQueue());
+        addTestCase("submit with callback", \testSubmitCallback());
+        addTestCase("submit with shared queue", \testSubmitSharedQueue());
+        addTestCase("exec synchronous", \testExec());
+        addTestCase("cancel by socket", \testCancelBySocket());
+        addTestCase("cancel by key", \testCancelByKey());
+        addTestCase("cancel by owner", \testCancelByOwner());
+        addTestCase("submit with replace", \testSubmitReplace());
+        addTestCase("submit with custom key", \testSubmitCustomKey());
+        addTestCase("autostop behavior", \testAutostopBehavior());
+        addTestCase("autostop disabled", \testAutostopDisabled());
+        addTestCase("multiple concurrent operations", \testMultipleConcurrent());
+        addTestCase("getInfo", \testGetInfo());
+        addTestCase("waitReady", \testWaitReady());
+        addTestCase("other data passthrough", \testOtherData());
+        addTestCase("duplicate key error", \testDuplicateKeyError());
+        addTestCase("submit after stop error", \testSubmitAfterStop());
+        addTestCase("wake", \testWake());
+        addTestCase("operation timeout", \testOperationTimeout());
+        addTestCase("copy constructor", \testCopy());
+        set_return_value(main());
+    }
+
+    #! Helper: build a SocketPollOperationInfo hash for a connect operation
+    private hash<SocketPollOperationInfo> makeConnectInfo(Socket client, AbstractPollOperation spop,
+            string owner = "test", timeout to = ConnectTimeout) {
+        return <SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": owner,
+            "to": to,
+        };
+    }
+
+    #! Helper: create a connected socket pair and a recv operation that will block until data is sent
+    /** This creates an operation that will not complete until data is explicitly sent.
+        Useful for testing cancel, replace, and other operations that need an in-flight operation.
+        @return a hash with keys: listener, server, client, spop
+    */
+    private hash<auto> setupBlockingRecvOp() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        # Establish a connection
+        Socket client();
+        client.connect("localhost:" + port);
+        Socket server = listener.accept(ConnectTimeout);
+
+        # Create a recv operation on the server side - will block until client sends data
+        AbstractPollOperation spop = server.startPollRecvString(1024);
+
+        return {
+            "listener": listener,
+            "server": server,
+            "client": client,
+            "spop": spop,
+        };
+    }
+
+    testConstruction() {
+        # Default construction (autostop = True)
+        {
+            AsyncIoController ctrl();
+            assertTrue(ctrl.getAutostop());
+            assertFalse(ctrl.running());
+            assertEq(0, ctrl.getCacheSize());
+        }
+
+        # Explicit autostop = True
+        {
+            AsyncIoController ctrl1(True);
+            assertTrue(ctrl1.getAutostop());
+        }
+
+        # Explicit autostop = False
+        {
+            AsyncIoController ctrl2(False);
+            assertFalse(ctrl2.getAutostop());
+        }
+    }
+
+    testAutostop() {
+        AsyncIoController ctrl();
+        assertTrue(ctrl.getAutostop());
+
+        ctrl.setAutostop(False);
+        assertFalse(ctrl.getAutostop());
+
+        ctrl.setAutostop(True);
+        assertTrue(ctrl.getAutostop());
+    }
+
+    testStartStop() {
+        AsyncIoController ctrl(False);
+        assertFalse(ctrl.running());
+
+        ctrl.start();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertTrue(ctrl.running());
+
+        ctrl.stop();
+        assertFalse(ctrl.running());
+
+        # Stop when already stopped should be safe
+        ctrl.stop();
+        assertFalse(ctrl.running());
+    }
+
+    testSubmitQueue() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+
+        Queue q = ctrl.submit(makeConnectInfo(client, spop));
+        assertEq(True, exists q);
+        assertEq(1, ctrl.getCacheSize());
+
+        # Accept the connection on the listener side
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Wait for the result
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertEq(True, exists result);
+        assertEq(True, exists result.sock);
+        assertEq(True, exists result.spop);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    testSubmitCallback() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+
+        Queue sync_q();
+        auto rv = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "callback": sub (hash<SocketPollResultInfo> result) {
+                sync_q.push(result);
+            },
+        });
+        # When callback is provided, submit returns NOTHING
+        assertNothing(rv);
+
+        # Accept the connection
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Result delivered via callback
+        hash<SocketPollResultInfo> result = sync_q.get(ConnectTimeout);
+        assertEq(True, exists result);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    testSubmitSharedQueue() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client1();
+        AbstractPollOperation spop1 = client1.startPollConnect("localhost:" + port);
+
+        Socket client2();
+        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+        Queue shared_q();
+
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client1,
+            "spop": spop1,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "resultQueue": shared_q,
+        });
+
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client2,
+            "spop": spop2,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "resultQueue": shared_q,
+        });
+
+        assertEq(2, ctrl.getCacheSize());
+
+        # Accept both connections
+        Socket accepted1 = listener.accept(ConnectTimeout);
+        Socket accepted2 = listener.accept(ConnectTimeout);
+
+        # Both results arrive in the shared queue
+        hash<SocketPollResultInfo> result1 = shared_q.get(ConnectTimeout);
+        assertEq(True, exists result1);
+        assertFalse(result1.canceled ?? False);
+
+        hash<SocketPollResultInfo> result2 = shared_q.get(ConnectTimeout);
+        assertEq(True, exists result2);
+        assertFalse(result2.canceled ?? False);
+    }
+
+    testExec() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+
+        # Accept in a background thread since exec() blocks
+        Counter done(1);
+        background sub () {
+            try {
+                on_exit done.dec();
+                Socket accepted = listener.accept(ConnectTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # Ignore
+            }
+        }();
+
+        hash<SocketPollResultInfo> result = ctrl.exec(makeConnectInfo(client, spop));
+
+        assertEq(True, exists result);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+
+        assertEq(0, done.waitForZero(ConnectTimeout));
+    }
+
+    testCancelBySocket() {
+        # Use a blocking recv operation so the operation stays in-flight
+        hash<auto> setup = setupBlockingRecvOp();
+        AsyncIoController ctrl(False);
+
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "test",
+            "to": -1,
+        });
+
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertEq(1, ctrl.getCacheSize());
+
+        # Cancel the operation by socket
+        bool canceled = ctrl.cancel(setup.server);
+        assertTrue(canceled);
+        assertEq(0, ctrl.getCacheSize());
+
+        # The result should indicate cancellation
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertTrue(result.canceled ?? False);
+
+        ctrl.stop();
+    }
+
+    testCancelByKey() {
+        hash<auto> setup = setupBlockingRecvOp();
+        AsyncIoController ctrl(False);
+
+        string key = "my-custom-key";
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "test",
+            "to": -1,
+            "key": key,
+        });
+
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertEq(1, ctrl.getCacheSize());
+
+        bool canceled = ctrl.cancelByKey(key);
+        assertTrue(canceled);
+        assertEq(0, ctrl.getCacheSize());
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertTrue(result.canceled ?? False);
+
+        # Cancel non-existent key should return False
+        canceled = ctrl.cancelByKey("no-such-key");
+        assertFalse(canceled);
+
+        ctrl.stop();
+    }
+
+    testCancelByOwner() {
+        # Create 3 blocking recv operations with different owners
+        hash<auto> setup1 = setupBlockingRecvOp();
+        hash<auto> setup2 = setupBlockingRecvOp();
+        hash<auto> setup3 = setupBlockingRecvOp();
+
+        AsyncIoController ctrl(False);
+
+        Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup1.server, "spop": setup1.spop, "owner": "owner-A", "to": -1,
+        });
+        Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup2.server, "spop": setup2.spop, "owner": "owner-A", "to": -1,
+        });
+        Queue q3 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup3.server, "spop": setup3.spop, "owner": "owner-B", "to": -1,
+        });
+
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertEq(3, ctrl.getCacheSize());
+
+        # Cancel all operations for owner-A
+        int count = ctrl.cancelByOwner("owner-A");
+        assertEq(2, count);
+        assertEq(1, ctrl.getCacheSize());
+
+        # Verify both owner-A operations were canceled
+        hash<SocketPollResultInfo> result1 = q1.get(ShortTimeout);
+        assertTrue(result1.canceled ?? False);
+
+        hash<SocketPollResultInfo> result2 = q2.get(ShortTimeout);
+        assertTrue(result2.canceled ?? False);
+
+        # owner-B operation should still be active; cancel it too
+        count = ctrl.cancelByOwner("owner-B");
+        assertEq(1, count);
+        assertEq(0, ctrl.getCacheSize());
+
+        hash<SocketPollResultInfo> result3 = q3.get(ShortTimeout);
+        assertTrue(result3.canceled ?? False);
+
+        # Cancel with no matching owner
+        count = ctrl.cancelByOwner("no-such-owner");
+        assertEq(0, count);
+
+        ctrl.stop();
+    }
+
+    testSubmitReplace() {
+        # Use a blocking recv op for the first operation (so it stays in-flight)
+        hash<auto> setup1 = setupBlockingRecvOp();
+        AsyncIoController ctrl(False);
+
+        string key = "replace-key";
+        Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup1.server,
+            "spop": setup1.spop,
+            "owner": "test",
+            "to": -1,
+            "key": key,
+        });
+
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertEq(1, ctrl.getCacheSize());
+
+        # Create a new connect operation to replace the old one
+        Socket listener2();
+        listener2.bind("localhost:0");
+        listener2.listen();
+        int port2 = listener2.getSocketInfo().port;
+
+        Socket client2();
+        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port2);
+
+        Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client2,
+            "spop": spop2,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "key": key,
+        }, True);
+
+        # Old operation should have been canceled
+        hash<SocketPollResultInfo> result1 = q1.get(ShortTimeout);
+        assertTrue(result1.canceled ?? False);
+
+        # New operation is active
+        assertEq(1, ctrl.getCacheSize());
+
+        # Accept and verify the new operation completes
+        Socket accepted2 = listener2.accept(ConnectTimeout);
+        hash<SocketPollResultInfo> result2 = q2.get(ConnectTimeout);
+        assertEq(True, exists result2);
+        assertFalse(result2.canceled ?? False);
+
+        ctrl.stop();
+    }
+
+    testSubmitCustomKey() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client1();
+        AbstractPollOperation spop1 = client1.startPollConnect("localhost:" + port);
+
+        Socket client2();
+        AbstractPollOperation spop2 = client2.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+
+        Queue q1 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client1,
+            "spop": spop1,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "key": "connect:1",
+        });
+
+        Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client2,
+            "spop": spop2,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "key": "connect:2",
+        });
+
+        assertEq(2, ctrl.getCacheSize());
+
+        # Accept both connections
+        Socket accepted1 = listener.accept(ConnectTimeout);
+        Socket accepted2 = listener.accept(ConnectTimeout);
+
+        # Both should complete
+        hash<SocketPollResultInfo> result1 = q1.get(ConnectTimeout);
+        assertFalse(result1.canceled ?? False);
+        assertNothing(result1.ex);
+
+        hash<SocketPollResultInfo> result2 = q2.get(ConnectTimeout);
+        assertFalse(result2.canceled ?? False);
+        assertNothing(result2.ex);
+    }
+
+    testAutostopBehavior() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl(True);
+
+        Queue q = ctrl.submit(makeConnectInfo(client, spop));
+
+        assertTrue(ctrl.running());
+
+        # Accept the connection to let the operation complete
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Wait for result
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+
+        # With autostop, the I/O thread should stop after all operations complete
+        ctrl.waitStop();
+        assertFalse(ctrl.running());
+    }
+
+    testAutostopDisabled() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl(False);
+
+        Queue q = ctrl.submit(makeConnectInfo(client, spop));
+
+        assertTrue(ctrl.running());
+
+        # Accept the connection
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Wait for result
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+
+        # Give I/O thread time to process
+        usleep(100000);
+
+        # With autostop disabled, I/O thread should keep running
+        assertTrue(ctrl.running());
+        assertEq(0, ctrl.getCacheSize());
+
+        ctrl.stop();
+        assertFalse(ctrl.running());
+    }
+
+    testMultipleConcurrent() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        int count = 5;
+        AsyncIoController ctrl();
+        list<Queue> queues = ();
+
+        for (int i = 0; i < count; ++i) {
+            Socket client();
+            AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+            Queue q = ctrl.submit(<SocketPollOperationInfo>{
+                "sock": client,
+                "spop": spop,
+                "owner": "test-" + i,
+                "to": ConnectTimeout,
+                "key": "connect:" + i,
+            });
+            push queues, q;
+        }
+
+        # With the C++ controller, localhost connects may complete before all submits finish,
+        # so getCacheSize() may be less than count; the real test is that all 5 complete
+        assertTrue(ctrl.getCacheSize() >= 1);
+
+        # Accept all connections
+        for (int i = 0; i < count; ++i) {
+            Socket accepted = listener.accept(ConnectTimeout);
+        }
+
+        # All should complete
+        int completed = 0;
+        foreach Queue q in (queues) {
+            hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+            assertEq(True, exists result);
+            if (!(result.canceled ?? False) && !result.ex) {
+                ++completed;
+            }
+        }
+        assertEq(count, completed);
+    }
+
+    testGetInfo() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+
+        hash<auto> info = ctrl.getInfo();
+        assertTrue(info.running);
+        assertEq(0, info.cache_size);
+        assertFalse(info.autostop);
+        assertFalse(info.shutting_down);
+        assertEq(True, info.tid > 0);
+        assertEq("list<string>", info.cache_keys.fullType());
+        assertEq(0, info.cache_keys.size());
+
+        ctrl.stop();
+
+        info = ctrl.getInfo();
+        assertFalse(info.running);
+    }
+
+    testWaitReady() {
+        AsyncIoController ctrl(False);
+
+        # waitReady before start should return false with timeout
+        bool ready = ctrl.waitReady(100ms);
+        assertFalse(ready);
+
+        ctrl.start();
+        ready = ctrl.waitReady(ShortTimeout);
+        assertTrue(ready);
+
+        ctrl.stop();
+    }
+
+    testOtherData() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        AsyncIoController ctrl();
+
+        hash<auto> other_data = {
+            "request_id": 42,
+            "label": "test-op",
+            "nested": {"a": 1, "b": 2},
+        };
+
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "test",
+            "to": ConnectTimeout,
+            "other": other_data,
+        });
+
+        # Accept connection
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        # Verify 'other' data is passed through
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertEq(True, exists result.other);
+        assertEq(42, result.other.request_id);
+        assertEq("test-op", result.other.label);
+        assertEq(1, result.other.nested.a);
+    }
+
+    testDuplicateKeyError() {
+        hash<auto> setup1 = setupBlockingRecvOp();
+        AsyncIoController ctrl(False);
+
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup1.server,
+            "spop": setup1.spop,
+            "owner": "test",
+            "to": -1,
+            "key": "dup-key",
+        });
+
+        assertTrue(ctrl.waitReady(ShortTimeout));
+
+        # Second submit with same key without replace should throw
+        hash<auto> setup2 = setupBlockingRecvOp();
+
+        assertThrows("ASYNC-IO-ERROR", sub () {
+            ctrl.submit(<SocketPollOperationInfo>{
+                "sock": setup2.server,
+                "spop": setup2.spop,
+                "owner": "test",
+                "to": -1,
+                "key": "dup-key",
+            });
+        });
+
+        ctrl.stop();
+    }
+
+    testSubmitAfterStop() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        ctrl.stop();
+        assertFalse(ctrl.running());
+
+        # Submit after stop should work (restarts thread)
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        Queue q = ctrl.submit(makeConnectInfo(client, spop));
+
+        # Accept and complete
+        Socket accepted = listener.accept(ConnectTimeout);
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+    }
+
+    testWake() {
+        # Wake on a non-running controller should not crash
+        AsyncIoController ctrl(False);
+        ctrl.wake();
+
+        # Wake on a running controller
+        ctrl.start();
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        ctrl.wake();
+        # No assertion needed - just verify no crash/hang
+        ctrl.stop();
+    }
+
+    testOperationTimeout() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+
+        # Connect on localhost completes quickly; verify the op succeeds (not times out)
+        AsyncIoController ctrl();
+        Queue q = ctrl.submit(makeConnectInfo(client, spop));
+
+        # Accept the connection
+        Socket accepted = listener.accept(ConnectTimeout);
+
+        hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
+        assertFalse(result.canceled ?? False);
+        assertNothing(result.ex);
+    }
+
+    testCopy() {
+        AsyncIoController ctrl(False);
+        AsyncIoController ctrl_copy = ctrl.copy();
+
+        # Copy should be independent
+        assertFalse(ctrl_copy.getAutostop());
+        assertFalse(ctrl_copy.running());
+        assertEq(0, ctrl_copy.getCacheSize());
+
+        # Modifying original should not affect copy
+        ctrl.setAutostop(True);
+        assertTrue(ctrl.getAutostop());
+        assertFalse(ctrl_copy.getAutostop());
+    }
+}

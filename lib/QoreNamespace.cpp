@@ -49,6 +49,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_EventLoop.h"
 #include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QC_ProgramControl.h"
@@ -209,7 +210,9 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclFilesystemPathInfo,
     * hashdeclFilesystemSecurityConfigInfo,
     * hashdeclNetworkSecurityConfigInfo,
-    * hashdeclSandboxConfigInfo;
+    * hashdeclSandboxConfigInfo,
+    * hashdeclSocketPollOperationInfo,
+    * hashdeclSocketPollResultInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
 
@@ -1268,6 +1271,13 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSocketClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));
     qns.addSystemClass(initEventLoopClass(qns));
+    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes
+    // Must be after initSocketClass, initAbstractPollOperationClass, and get_thread_ns (Queue)
+    // Must be before initAsyncIoControllerClass which references these hashdecls
+    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
+    hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+
+    qns.addSystemClass(initAsyncIoControllerClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class
     qns.addSystemClass(initExpressionClass(qns));

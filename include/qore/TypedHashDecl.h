@@ -301,4 +301,14 @@ DLLEXPORT extern const TypedHashDecl* hashdeclNetworkSecurityConfigInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSandboxConfigInfo;
 
+//! SocketPollOperationInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
+
+//! SocketPollResultInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
+
 #endif

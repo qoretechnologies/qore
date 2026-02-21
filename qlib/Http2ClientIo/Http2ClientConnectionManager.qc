@@ -453,12 +453,12 @@ public class Http2ClientConnectionManager {
 
         # Build the info hash for the controller
         # Use the SocketPollOperationInfo hashdecl from AsyncSocketIo
-        hash<AsyncSocketIo::SocketPollOperationInfo> info = <AsyncSocketIo::SocketPollOperationInfo>{
+        hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": owner,
             "to": -1s,  # no timeout for persistent HTTP/2 connections
-            "callback": sub (hash<AsyncSocketIo::SocketPollResultInfo> result) {
+            "callback": sub (hash<SocketPollResultInfo> result) {
                 handleConnectionResult(key, conn, result);
             },
         };
@@ -476,7 +476,7 @@ public class Http2ClientConnectionManager {
         @param result the poll result from the controller
     */
     private handleConnectionResult(string key, Http2ClientConnection conn,
-            hash<AsyncSocketIo::SocketPollResultInfo> result) {
+            hash<SocketPollResultInfo> result) {
         if (result.canceled) {
             log(LoggerLevel::DEBUG, "connection %d canceled", conn.getConnectionId());
             return;
