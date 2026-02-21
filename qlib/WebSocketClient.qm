@@ -1750,7 +1750,7 @@ ws.setEventQueue();
     private sendWsFrame(binary data) {
         if (http2_websocket && h2_stream_id > 0) {
             # HTTP/2: Send data through the HTTP/2 stream
-            hc.sendHttp2StreamData(h2_stream_id, data, False, timeout_ms);
+            hc.sendHttp2StreamData(h2_stream_id, data, False);
         } else {
             # HTTP/1.1: Send data directly over the socket
             hc.send2(data, timeout_ms);

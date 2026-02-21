@@ -3314,36 +3314,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
                         llvm::FunctionType::get(void_type, {i64_type}, false));
                 builder->CreateCall(incref_fn, {boxed_ret});
-
-                // Apply return type coercion for complex-typed returns in JIT mode
-                // (e.g., hashdecl, list<T>, hash<K,V>). This ensures the return
-                // value has complexTypeInfo set for runtime variant resolution.
-                // Pattern matches StoreLocal type coercion (QoreIRToLLVM.cpp ~2684-2690).
-                // In JIT mode, the raw TypeInfo* pointer is valid in the same process.
-                bool is_complex_typed = !aot_mode && current_ir_func->return_type_info
-                    && QoreTypeInfo::isComplex(current_ir_func->return_type_info)
-                    && !QoreTypeInfo::isReference(current_ir_func->return_type_info);
-
-                if (is_complex_typed) {
-                    llvm::Function* fn = builder->GetInsertBlock()->getParent();
-                    llvm::BasicBlock* entry = &fn->getEntryBlock();
-                    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-                    auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr,
-                            "return_coerce_cleanup");
-                    alloca_builder.CreateStore(
-                            llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-
-                    auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
-                            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
-                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(current_ir_func->return_type_info));
-                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-                    llvm::Value* coerced = builder->CreateCall(coerce_fn,
-                            {ti_as_ptr, boxed_ret, cleanup, xsink_arg});
-                    emitExceptionCheck(module, llvm_func, inst);
-                    boxed_ret = coerced;
-                    invoke_result_allocas.push_back(cleanup);
-                }
             }
             // Execute on_block_exit handlers before cleanup
             emitOnBlockExitExec(module);
