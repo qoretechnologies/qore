@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
 
 #include "qore/intern/ThreadResourceList.h"
@@ -672,6 +673,14 @@ void ThreadEntry::cleanup() {
     if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid) {
         pthread_detach(ptid);
     }
+
+    // clear per-thread cancellation state
+    cancel_requested.store(false, std::memory_order_relaxed);
+    if (cancel_reason) {
+        cancel_reason->deref();
+        cancel_reason = nullptr;
+    }
+
     status = QTS_AVAIL;
 }
 
@@ -3502,4 +3511,83 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
         data.destructor(data.data);
     }
     return 0;
+}
+
+// --- Thread Cancellation API ---
+
+int QoreThreadList::cancelThread(int tid, const char* reason) {
+    AutoLocker al(lck);
+    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+        return -1;
+    }
+    if (!entry[tid].active()) {
+        return -1;
+    }
+    // security: only allow cancellation within the same program context
+    ThreadData* td = entry[tid].thread_data;
+    if (td && td->current_pgm != getProgram()) {
+        return -1;
+    }
+    if (reason) {
+        if (entry[tid].cancel_reason) {
+            entry[tid].cancel_reason->deref();
+        }
+        entry[tid].cancel_reason = new QoreStringNode(reason);
+    }
+    entry[tid].cancel_requested.store(true, std::memory_order_release);
+    return 0;
+}
+
+void QoreThreadList::clearCancel(int tid) {
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        entry[tid].cancel_requested.store(false, std::memory_order_release);
+        if (entry[tid].cancel_reason) {
+            entry[tid].cancel_reason->deref();
+            entry[tid].cancel_reason = nullptr;
+        }
+    }
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    // check thread-level cancellation first (cheap: one atomic load)
+    int tid = q_gettid();
+    if (thread_list.isCancelRequested(tid)) {
+        if (xsink) {
+            QoreStringNode* reason = thread_list.getCancelReason(tid);
+            if (reason) {
+                xsink->raiseException("THREAD-CANCELLED",
+                    new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
+            } else {
+                xsink->raiseException("THREAD-CANCELLED",
+                    new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
+            }
+        }
+        return true;
+    }
+
+    // check program-level interrupt
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        if (xsink) {
+            if (smh->checkIOInterrupt(xsink, operation)) {
+                return true;
+            }
+        } else if (smh->isInterruptRequested()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int qore_cancel_thread(int tid, const char* reason) {
+    return thread_list.cancelThread(tid, reason);
+}
+
+void qore_clear_thread_cancel() {
+    thread_list.clearCancel(q_gettid());
+}
+
+bool qore_is_thread_cancel_requested() {
+    return thread_list.isCancelRequested(q_gettid());
 }

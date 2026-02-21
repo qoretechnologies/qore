@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2005 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2005 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -137,20 +137,8 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink) {
 }
 
 int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink) {
-    // Check for sandbox interrupt support
-    QoreSandboxManagerHelper smh;
-
-    // If no sandbox manager, use regular wait
-    if (!smh) {
-        int rc = (timeout_ms < 0) ? wait(m) : wait2(m, timeout_ms);
-        return rc ? QORE_COND_RESULT_TIMEOUT : QORE_COND_RESULT_SUCCESS;
-    }
-
-    // Check for interrupt before waiting
-    if (smh->isInterruptRequested()) {
-        if (xsink) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
-        }
+    // Check for cancellation or program interrupt before waiting
+    if (xsink && qore_check_cancel(xsink, "condition wait")) {
         return QORE_COND_RESULT_INTERRUPTED;
     }
 
@@ -183,11 +171,8 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
             return QORE_COND_RESULT_TIMEOUT;
         }
 
-        // Timeout occurred - check for interrupt
-        if (smh->isInterruptRequested()) {
-            if (xsink) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "condition wait interrupted");
-            }
+        // Timeout occurred - check for cancellation or program interrupt
+        if (xsink && qore_check_cancel(xsink, "condition wait")) {
             return QORE_COND_RESULT_INTERRUPTED;
         }
 

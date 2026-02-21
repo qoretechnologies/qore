@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,6 @@
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreSandboxManager.h>
 #include "qore/intern/WhileStatement.h"
 #include "qore/intern/StatementBlock.h"
 
@@ -50,10 +49,8 @@ int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     int rc = 0;
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "while loop")) {
             break;
         }
 
@@ -91,10 +88,8 @@ int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
     int rc_state = 0;
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "while loop")) {
             break;
         }
 

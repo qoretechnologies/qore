@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -75,31 +75,23 @@ AutoReadLock arl(rwlock);
  */
 AutoReadLock::constructor(RWLock[RWLock] rwl) {
     ReferenceHolder<RWLock> holder(rwl, xsink);
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
-                return;
-            }
-            int rc = rwl->readLock(xsink, poll_ms);
-            if (*xsink) {
-                return;  // Error occurred
-            }
-            if (rc == 0) {
-                // Lock acquired - create the AutoReadLock object with already-locked rwl
-                QoreAutoReadLock *arwl = new QoreAutoReadLock(holder.release());
-                self->setPrivate(CID_AUTOREADLOCK, arwl);
-                return;
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "read lock")) {
+            return;
         }
-    }
-    ReferenceHolder<QoreAutoReadLock> arwl(new QoreAutoReadLock(holder.release(), xsink), xsink);
-    if (!*xsink) {
-        self->setPrivate(CID_AUTOREADLOCK, arwl.release());
+        int rc = rwl->readLock(xsink, poll_ms);
+        if (*xsink) {
+            return;  // Error occurred
+        }
+        if (rc == 0) {
+            // Lock acquired - create the AutoReadLock object with already-locked rwl
+            QoreAutoReadLock *arwl = new QoreAutoReadLock(holder.release());
+            self->setPrivate(CID_AUTOREADLOCK, arwl);
+            return;
+        }
+        // rc != 0 means timeout, loop and check again
     }
 }
 

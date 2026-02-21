@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -118,43 +118,38 @@ if (gate.enter(1500ms))
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int Gate::enter(timeout timeout_ms) {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManagerHelper smh;
-   if (smh) {
-      const int poll_ms = 500;  // 500ms polling interval
-      int64 remaining = timeout_ms;
-      bool infinite = (timeout_ms <= 0);
+   // Always poll for cancel/interrupt checking
+   const int poll_ms = 500;  // 500ms polling interval
+   int64 remaining = timeout_ms;
+   bool infinite = (timeout_ms <= 0);
 
-      while (true) {
-         if (smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting to enter gate");
-            return -1;
-         }
+   while (true) {
+      if (qore_check_cancel(xsink, "gate enter")) {
+         return -1;
+      }
 
-         int this_timeout;
-         if (infinite) {
-            this_timeout = poll_ms;
-         } else {
-            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-         }
+      int this_timeout;
+      if (infinite) {
+         this_timeout = poll_ms;
+      } else {
+         this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+      }
 
-         int rc = g->grab(xsink, this_timeout);
-         if (*xsink) {
-            return -1;  // Error occurred
-         }
-         if (rc == 0) {
-            return 0;  // Gate acquired
-         }
+      int rc = g->grab(xsink, this_timeout);
+      if (*xsink) {
+         return -1;  // Error occurred
+      }
+      if (rc == 0) {
+         return 0;  // Gate acquired
+      }
 
-         if (!infinite) {
-            remaining -= this_timeout;
-            if (remaining <= 0) {
-               return -1;  // Overall timeout exceeded
-            }
+      if (!infinite) {
+         remaining -= this_timeout;
+         if (remaining <= 0) {
+            return -1;  // Overall timeout exceeded
          }
       }
    }
-   return g->grab(xsink, timeout_ms);
 }
 
 //! Increments the lock count if the lock is unlocked or already owned by the same thread, otherwise blocks until the lock counter reaches zero
@@ -171,26 +166,21 @@ gate.enter();
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 nothing Gate::enter() {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManagerHelper smh;
-   if (smh) {
-      const int poll_ms = 500;  // 500ms polling interval
-      while (true) {
-         if (smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting to enter gate");
-            return QoreValue();
-         }
-         int rc = g->grab(xsink, poll_ms);
-         if (*xsink) {
-            return QoreValue();  // Error occurred
-         }
-         if (rc == 0) {
-            return QoreValue();  // Gate acquired
-         }
-         // rc != 0 means timeout, loop and check interrupt again
+   // Always poll for cancel/interrupt checking
+   const int poll_ms = 500;  // 500ms polling interval
+   while (true) {
+      if (qore_check_cancel(xsink, "gate enter")) {
+         return QoreValue();
       }
+      int rc = g->grab(xsink, poll_ms);
+      if (*xsink) {
+         return QoreValue();  // Error occurred
+      }
+      if (rc == 0) {
+         return QoreValue();  // Gate acquired
+      }
+      // rc != 0 means timeout, loop and check again
    }
-   g->grab(xsink);
 }
 
 //! Decrements the lock counter; if it reaches zero then the lock is unlocked and any blocked threads are awoken; in this case 0 is returned; in all other cases, non-zero is returned
