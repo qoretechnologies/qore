@@ -29,10 +29,6 @@ option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
 
-option(QORE_BUILD_IR_SMOKE
-       "Build the Qore IR smoke test executable"
-       OFF)
-
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -71,72 +67,6 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "-I${CMAKE_SOURCE_DIR}/include")
 
 find_package(Java)
-
-# LLVM is required for JIT compilation
-# On macOS, LLVM from package managers is not on the default search path;
-# auto-detect it from MacPorts or Homebrew if not already configured
-if (APPLE AND NOT LLVM_DIR AND NOT LLVM_ROOT)
-    # MacPorts: pick the highest version >= 16 from /opt/local/libexec/llvm-*
-    file(GLOB _macports_llvm_dirs "/opt/local/libexec/llvm-*")
-    if (_macports_llvm_dirs)
-        list(SORT _macports_llvm_dirs COMPARE NATURAL ORDER DESCENDING)
-        foreach(_dir ${_macports_llvm_dirs})
-            get_filename_component(_ver "${_dir}" NAME)
-            string(REGEX REPLACE "llvm-" "" _ver "${_ver}")
-            if (_ver GREATER_EQUAL 16 AND EXISTS "${_dir}/lib/cmake/llvm/LLVMConfig.cmake")
-                set(LLVM_DIR "${_dir}/lib/cmake/llvm")
-                message(STATUS "Auto-detected MacPorts LLVM ${_ver} at ${_dir}")
-                break()
-            endif()
-        endforeach()
-    endif()
-
-    # Homebrew: check versioned (llvm@NN) then unversioned (llvm)
-    if (NOT LLVM_DIR)
-        if (CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-            set(_brew_prefix "/opt/homebrew/opt")
-        else()
-            set(_brew_prefix "/usr/local/opt")
-        endif()
-        file(GLOB _brew_llvm_dirs "${_brew_prefix}/llvm@*")
-        if (_brew_llvm_dirs)
-            list(SORT _brew_llvm_dirs COMPARE NATURAL ORDER DESCENDING)
-            foreach(_dir ${_brew_llvm_dirs})
-                if (EXISTS "${_dir}/lib/cmake/llvm/LLVMConfig.cmake")
-                    set(LLVM_DIR "${_dir}/lib/cmake/llvm")
-                    message(STATUS "Auto-detected Homebrew LLVM at ${_dir}")
-                    break()
-                endif()
-            endforeach()
-        endif()
-        if (NOT LLVM_DIR AND EXISTS "${_brew_prefix}/llvm/lib/cmake/llvm/LLVMConfig.cmake")
-            set(LLVM_DIR "${_brew_prefix}/llvm/lib/cmake/llvm")
-            message(STATUS "Auto-detected Homebrew LLVM at ${_brew_prefix}/llvm")
-        endif()
-    endif()
-endif()
-find_package(LLVM REQUIRED CONFIG)
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-if (LLVM_VERSION_MAJOR LESS 16)
-    message(FATAL_ERROR "LLVM 16 or later is required for JIT support; found ${LLVM_PACKAGE_VERSION}")
-endif()
-
-# Use LLVM's own library detection; shared LLVM builds provide a single libLLVM-XX.so
-# while static builds provide individual component libraries
-if (LLVM_LINK_LLVM_DYLIB)
-    set(LLVM_LIBS LLVM)
-else()
-    include(AddLLVM)
-    llvm_map_components_to_libnames(LLVM_LIBS
-        Core
-        OrcJIT
-        Passes
-        ${LLVM_NATIVE_ARCH}
-        Support
-    )
-endif()
-message(STATUS "LLVM libs: ${LLVM_LIBS}")
-include_directories(${LLVM_INCLUDE_DIRS})
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
@@ -287,6 +217,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_TermIOS.qpp
     lib/QC_TimeZone.qpp
     lib/QC_TreeMap.qpp
+    lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
     lib/QC_ThreadPool.qpp
@@ -413,7 +344,6 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
     doxygen/lang/222_sandboxing.dox.tmpl
-    doxygen/lang/223_execution_modes.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
@@ -436,54 +366,33 @@ find_package(ICONV REQUIRED)
 if(NOT BISON_EXECUTABLE AND DEFINED ENV{BISON_EXECUTABLE})
     set(BISON_EXECUTABLE $ENV{BISON_EXECUTABLE} CACHE FILEPATH "Path to bison executable")
 endif()
-set(BISON_WRAPPER_PATH ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-get_filename_component(BISON_EXECUTABLE_NAME "${BISON_EXECUTABLE}" NAME)
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    unset(BISON_REAL_EXECUTABLE CACHE)
-    unset(BISON_REAL_EXECUTABLE)
-endif()
-if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    if(BISON_REAL_EXECUTABLE)
-        get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-        if(NOT BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-            set(BISON_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to bison executable" FORCE)
-        else()
-            unset(BISON_EXECUTABLE CACHE)
-            unset(BISON_EXECUTABLE)
-        endif()
-    else()
-        unset(BISON_EXECUTABLE CACHE)
-        unset(BISON_EXECUTABLE)
-    endif()
-endif()
 find_package(BISON REQUIRED)
-
-if(BISON_EXECUTABLE STREQUAL BISON_WRAPPER_PATH OR BISON_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    if(NOT BISON_REAL_EXECUTABLE)
-        find_program(BISON_REAL_EXECUTABLE NAMES bison)
-    endif()
-else()
-    set(BISON_REAL_EXECUTABLE ${BISON_EXECUTABLE})
-endif()
-get_filename_component(BISON_REAL_EXECUTABLE_NAME "${BISON_REAL_EXECUTABLE}" NAME)
-if(BISON_REAL_EXECUTABLE_NAME STREQUAL "bison-wrapper.sh")
-    find_program(BISON_REAL_EXECUTABLE NAMES bison)
-endif()
-set(BISON_REAL_EXECUTABLE ${BISON_REAL_EXECUTABLE} CACHE FILEPATH "Path to real bison executable" FORCE)
-set(BISON_WRAPPER_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/bison-wrapper.sh)
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bison-wrapper.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh
-    @ONLY
-)
-execute_process(COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh)
-set(BISON_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/bison-wrapper.sh CACHE FILEPATH "Path to bison executable" FORCE)
 find_package(FLEX 2.5.35 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
+
+# LLVM configuration for JIT compilation (required)
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
+
+# Handle platform-specific LLVM installation locations
+if(NOT LLVM_FOUND AND APPLE)
+    # Try MacPorts
+    find_package(LLVM REQUIRED CONFIG PATHS /opt/local/libexec/llvm-* NO_DEFAULT_PATH)
+    if(LLVM_FOUND)
+        message(STATUS "Found LLVM via MacPorts: ${LLVM_INCLUDE_DIRS}")
+    else()
+        # Try Homebrew
+        find_package(LLVM REQUIRED CONFIG PATHS /usr/local/opt/llvm/lib/cmake/llvm /opt/homebrew/opt/llvm/lib/cmake/llvm NO_DEFAULT_PATH)
+        if(LLVM_FOUND)
+            message(STATUS "Found LLVM via Homebrew: ${LLVM_INCLUDE_DIRS}")
+        endif()
+    endif()
+endif()
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 
@@ -682,16 +591,6 @@ bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
-# Suppress GCC's false-positive free-nonheap-object warning from the generated parser.
-set_source_files_properties(
-    ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
-)
-set_source_files_properties(
-    lib/single-compilation-unit.cpp
-    PROPERTIES COMPILE_FLAGS "-Wno-free-nonheap-object"
-)
-
 # qpp
 if(NOT HAVE_GETOPT_H)
 set(QPP_GETOPT_LONG_SRC lib/getopt_long.cpp)
@@ -773,19 +672,12 @@ set(LIBQORE_CPP_SRC
     lib/SwitchStatement.cpp
     lib/Variable.cpp
     lib/support.cpp
-    lib/QoreParseContext.cpp
     lib/QoreType.cpp
     lib/ModuleManager.cpp
     lib/QoreException.cpp
     lib/ExceptionSink.cpp
     lib/QoreStandardException.cpp
     lib/QoreXSinkException.cpp
-    lib/QoreJIT.cpp
-    lib/QoreIRToLLVM.cpp
-    lib/JITRuntime.cpp
-    lib/QoreAOT.cpp
-    lib/QoreAOTRuntime.cpp
-    lib/QoreAOTBinary.cpp
     lib/QoreClass.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
@@ -855,17 +747,13 @@ set(LIBQORE_CPP_SRC
     lib/QoreRegex.cpp
     lib/QoreRegexBase.cpp
     lib/QoreRegexSubst.cpp
-    lib/QoreIRBuilder.cpp
-    lib/QoreIRPrinter.cpp
-    lib/QoreIRVerifier.cpp
-    lib/QoreIRLowering.cpp
-    lib/QoreIRInterpreter.cpp
     lib/QoreTransliteration.cpp
     lib/Sequence.cpp
     lib/QoreReferenceCounter.cpp
     lib/QoreHTTPClient.cpp
     lib/QoreHttpClientObject.cpp
     lib/ParseOptionMap.cpp
+    lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
     lib/ReferenceArgumentHelper.cpp
@@ -1001,69 +889,408 @@ set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/
 
 # prepare libqore target
 if (SINGLE_COMPILATION_UNIT)
-    # Generate the SCU dynamically from LIBQORE_CPP_SRC and LIBQORE_QPP_CPP_SRC.
+    # Generate single-compilation-unit.cpp in the build directory to ensure
+    # generated parser.cpp and scanner.cpp from the build directory are used
+    # instead of any stale files from autotools builds in lib/
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
-
-    set(SCU_CONTENT "/* Auto-generated single compilation unit - do not edit */\n")
-    set(SCU_ALL_DEPS "")
-    foreach(src ${LIBQORE_CPP_SRC})
-        # Resolve to absolute path
-        if (IS_ABSOLUTE "${src}")
-            set(abs_src "${src}")
-        else()
-            set(abs_src "${CMAKE_SOURCE_DIR}/${src}")
-        endif()
-
-        list(APPEND SCU_ALL_DEPS "${abs_src}")
-        get_filename_component(basename "${src}" NAME)
-        if (basename STREQUAL "parser.cpp")
-            string(APPEND SCU_CONTENT
-                "#if defined(__GNUC__)\n"
-                "#pragma GCC diagnostic push\n"
-                "#pragma GCC diagnostic ignored \"-Wfree-nonheap-object\"\n"
-                "#endif\n"
-                "#include \"${abs_src}\"\n"
-                "#if defined(__GNUC__)\n"
-                "#pragma GCC diagnostic pop\n"
-                "#endif\n")
-        elseif (basename STREQUAL "scanner.cpp")
-            string(APPEND SCU_CONTENT
-                "#include \"${abs_src}\"\n"
-                "#undef ECHO\n")
-        else()
-            string(APPEND SCU_CONTENT "#include \"${abs_src}\"\n")
-        endif()
-    endforeach()
-
-    # QPP-generated files (already absolute paths in CMAKE_BINARY_DIR)
-    foreach(src ${LIBQORE_QPP_CPP_SRC})
-        string(APPEND SCU_CONTENT "#include \"${src}\"\n")
-        list(APPEND SCU_ALL_DEPS "${src}")
-    endforeach()
-
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        "${SCU_CONTENT}")
+"// Auto-generated wrapper - ensures build directory files are used
+#include \"${CMAKE_CURRENT_BINARY_DIR}/parser.cpp\"
+#include \"${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp\"
+#undef ECHO
+#include \"${CMAKE_SOURCE_DIR}/lib/BarewordNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SelfVarrefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/StaticClassVarRefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ReferenceNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/lvalue_ref.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/BackquoteNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ContextrefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ComplexContextrefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ContextRowNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ClassRefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ScopedRefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AbstractQoreNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreStringNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DateTimeNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/qore_date_private.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHashNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/BinaryNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNumberNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNullNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNothingNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/VarRefNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/FunctionCallNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/NewComplexTypeNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseHashNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseListNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreClosureParseNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreClosureNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreImplicitArgumentNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreImplicitElementNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Function.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/GlobalVariableList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/FunctionList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AbstractStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/OnBlockExitStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ExpressionStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ReturnStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/StatementBlock.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ContextStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SummarizeStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/IfStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WhileStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DoWhileStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ForStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ForEachStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/TryStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ThrowStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AssertStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DebugStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RethrowStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SwitchStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Variable.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WeakReferenceNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WeakHashReferenceNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WeakListReferenceNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/support.cpp\"
+#ifdef HAVE_SIGNAL_HANDLING
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSignal.cpp\"
+#endif
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreType.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ModuleManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreException.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ExceptionSink.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreStandardException.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreXSinkException.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreClass.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/TypedHashDecl.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEnumDecl.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreReflection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Context.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/FindNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/charset.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/unicode-charmaps.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ThreadClosureVariableStack.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ThreadLocalVariableData.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreProgram.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreProgramHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNamespace.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNet.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreURL.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTimeZoneManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreString.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreObject.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RSet.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RSection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreListNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/qore-main.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreGetOpt.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFtpClient.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DBI.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ConstantList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreClassList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/HashDeclList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/EnumList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RuntimeConfig.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/thread.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AbstractThreadResource.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ThreadResourceList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/VRMutex.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/VLock.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRWLock.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/AbstractSmartLock.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SmartMutex.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Datasource.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/DatasourcePool.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ManagedDatasource.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SQLStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSQLStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ExecArgList.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/CallReferenceNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/NamedScope.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/RWLock.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLCertificate.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreQueueHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegex.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexSubst.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTransliteration.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Sequence.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreReferenceCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHTTPClient.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientObject.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ParseOptionMap.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreDeleteOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRemoveOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSpliceOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreExtractOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreKeysOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryMinusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreUnaryPlusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalNotOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreDotEvalOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalAbsoluteEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreModuloOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBinaryAndOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBinaryOrOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBinaryXorOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBinaryNotOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreShiftLeftOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreShiftRightOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreExistsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreElementsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreInstanceOfOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreQuestionMarkOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHashObjectDereferenceOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexMatchOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexNMatchOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexExtractOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexSubstOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTransliterationOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAssignmentOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreListAssignmentOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePlusEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntPlusEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMinusEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntMinusEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreOrEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAndEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreModuloEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMultiplyEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreDivideEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreXorEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreShiftLeftEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreShiftRightEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePostIncrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntPostIncrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePostDecrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntPostDecrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePreIncrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntPreIncrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePreDecrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIntPreDecrementOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalLessThanOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalGreaterThanOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalLessThanOrEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalGreaterThanOrEqualsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreDivisionOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMapOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMapSelectOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHashMapOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHashMapSelectOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSelectOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFoldlOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreNullCoalescingOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreValueCoalescingOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreChompOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTrimOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSquareBracketsOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreShiftOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreUnshiftOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePopOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePushOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalAndOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalOrOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLogicalComparisonOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePlusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMinusOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreMultiplicationOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBackgroundOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRangeOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSquareBracketsRangeOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreValue.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigIntNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreBigFloatNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperatorInterface.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/FunctionalOperator.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/StreamPipe.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/CompressionTransforms.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/EncryptionTransforms.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/Transform.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSerializable.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/UnicodeCharacterIterator.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreEllipsesNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreRegexInterface.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreThreadLocalStorage.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_thread.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_time.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_lib.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_math.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_type.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_env.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_string.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_pwd.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_misc.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_list.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_crypto.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_object.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_file.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_compression.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_dbi.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_context.cpp\"
+#include \"${CMAKE_BINARY_DIR}/qc_option.cpp\"
+#include \"${CMAKE_BINARY_DIR}/qc_errno.cpp\"
+#include \"${CMAKE_BINARY_DIR}/qc_qore.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Socket.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ProgramControl.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Program.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_DebugProgram.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Breakpoint.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Expression.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Regex.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_RegexSubst.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_RegexExtract.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ReadOnlyFile.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_File.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Dir.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_GetOpt.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FtpClient.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractQuantifiedIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractBidirectionalIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractQuantifiedBidirectionalIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ListIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ListReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashKeyIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashKeyReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashPairIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashPairReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashListIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HashListReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ListHashIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ListHashReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectKeyIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectKeyReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectPairIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ObjectPairReverseIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractLineIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FileLineIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_DataLineIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_InputStreamLineIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SingleValueIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_RangeIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ThreadPool.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractDatasource.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractSQLStatement.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Datasource.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_DatasourcePool.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SQLStatement.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Queue.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Mutex.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Condition.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_RWLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SandboxManager.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Gate.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Sequence.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SSLCertificate.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AutoGate.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AutoReadLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AutoWriteLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_TermIOS.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractSmartLock.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_TimeZone.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_TreeMap.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_QoreParseOptions.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractThreadResource.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StreamBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_InputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_BinaryInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StringInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FileInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EncodingConversionInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EncodingConversionOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_OutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_BinaryOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StringOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FileOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StreamPipe.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_PipeInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_PipeOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StreamWriter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StreamReader.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_BufferedStreamReader.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Transform.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_TransformInputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_TransformOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StdoutOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StderrOutputStream.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 
-    add_library(libqore SHARED
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        ${LIBQORE_SOURCE_HEADERS})
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"
 
-    # Explicitly tell cmake that the SCU object depends on all included .cpp
-    # files.  The .d file scanner should handle this, but the Unix Makefiles
-    # generator does not reliably trigger rebuilds from .d-tracked includes.
-    set_source_files_properties(
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        PROPERTIES OBJECT_DEPENDS "${SCU_ALL_DEPS}"
-    )
+#include \"${CMAKE_SOURCE_DIR}/lib/xxhash.cpp\"
+
+#ifndef HAVE_GLOB
+#include \"${CMAKE_SOURCE_DIR}/lib/glob.cpp\"
+#endif
+#ifndef HAVE_INET_NTOP
+#include \"${CMAKE_SOURCE_DIR}/lib/inet_ntop.cpp\"
+#endif
+#ifndef HAVE_INET_PTON
+#include \"${CMAKE_SOURCE_DIR}/lib/inet_pton.cpp\"
+#endif
+#ifdef DEBUG
+#include \"${CMAKE_SOURCE_DIR}/lib/ql_debug.cpp\"
+#endif
+// Non-blocking I/O support for streams
+#include \"${CMAKE_SOURCE_DIR}/lib/InputStream.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/OutputStream.cpp\"
+// HTTP/2 support is always enabled (nghttp2 is required)
+#include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
+// JIT/IR/AOT compilation support
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreJIT.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/JITRuntime.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp\"
+")
+    add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
-endif (SINGLE_COMPILATION_UNIT)
-
-if (SINGLE_COMPILATION_UNIT)
-    add_custom_target(rebuild-scu
-        COMMAND ${CMAKE_COMMAND} -E touch
-            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        COMMENT "Forcing SCU rebuild")
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
@@ -1074,88 +1301,18 @@ target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
-target_compile_definitions(libqore PRIVATE QORE_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
 if (WIN32 OR MINGW OR MSYS)
     target_compile_definitions(libqore PUBLIC BUILDING_DLL)
 endif (WIN32 OR MINGW OR MSYS)
 
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
-target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
+target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
 
-set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
+set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES} ${LLVM_LIBS})
 string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 target_link_libraries(libqore ${QORE_LIBS})
-target_link_libraries(libqore ${LLVM_LIBS})
-
-# Generate AOT link configuration for cross-platform support
-# Convert library references to linker flags suitable for system linker
-# Convert a CMake library list to space-separated linker flags.
-# Handles: absolute paths, -l flags, plain names, and imported targets.
-function(qore_libs_to_flags OUTPUT_VAR)
-    set(_flags)
-    foreach(_lib ${ARGN})
-        if(_lib MATCHES "^(-|/)")
-            # Already a flag (-lpthread, -L/path) or absolute path (/usr/lib/libssl.so)
-            list(APPEND _flags "${_lib}")
-        elseif(TARGET ${_lib})
-            # CMake imported target — resolve to actual library file
-            get_target_property(_loc ${_lib} IMPORTED_LOCATION)
-            if(NOT _loc)
-                get_target_property(_loc ${_lib} IMPORTED_LOCATION_RELEASE)
-            endif()
-            if(_loc)
-                list(APPEND _flags "${_loc}")
-            else()
-                # Imported target without a direct location — use -l<name>
-                list(APPEND _flags "-l${_lib}")
-            endif()
-        elseif(_lib)
-            # Plain library name (dl, pthread, LLVM) — add -l prefix
-            list(APPEND _flags "-l${_lib}")
-        endif()
-    endforeach()
-    string(REPLACE ";" " " _flags_str "${_flags}")
-    string(STRIP "${_flags_str}" _flags_str)
-    set(${OUTPUT_VAR} "${_flags_str}" PARENT_SCOPE)
-endfunction()
-
-# Dynamic link: minimal extra libs beyond -lqore (system libs for dl, threads)
-qore_libs_to_flags(_QORE_AOT_DYN_LIBS ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-
-# Static link: all transitive dependencies (QORE_LIBS + LLVM_LIBS)
-# Include LLVM library directory since LLVM libs may not be on the standard search path
-qore_libs_to_flags(_QORE_AOT_STATIC_LIBS ${QORE_LIBS} -L${LLVM_LIBRARY_DIR} ${LLVM_LIBS})
-
-# On macOS, add -isysroot so the AOT linker can find system libraries (libc++, etc.)
-if(APPLE)
-    if(CMAKE_OSX_SYSROOT)
-        set(_MACOS_SYSROOT "${CMAKE_OSX_SYSROOT}")
-    else()
-        execute_process(
-            COMMAND xcrun --show-sdk-path
-            OUTPUT_VARIABLE _MACOS_SYSROOT
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-        )
-    endif()
-    if(_MACOS_SYSROOT)
-        string(APPEND _QORE_AOT_DYN_LIBS " -isysroot ${_MACOS_SYSROOT}")
-        string(APPEND _QORE_AOT_STATIC_LIBS " -isysroot ${_MACOS_SYSROOT}")
-    endif()
-endif()
-
-# Write the config file
-file(WRITE "${CMAKE_BINARY_DIR}/aot-link.conf"
-"# Qore AOT link configuration - generated by CMake, do not edit\n"
-"cxx=${CMAKE_CXX_COMPILER}\n"
-"libdir=${CMAKE_INSTALL_FULL_LIBDIR}\n"
-"dynamic_libs=${_QORE_AOT_DYN_LIBS}\n"
-"static_libs=${_QORE_AOT_STATIC_LIBS}\n"
-)
-install(FILES "${CMAKE_BINARY_DIR}/aot-link.conf"
-        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/qore")
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
 endif (WIN32 OR MINGW OR MSYS)
@@ -1176,74 +1333,15 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
-# Optional static libqore for AOT static linking
-option(BUILD_STATIC_LIBQORE "Build static libqore for AOT static linking" OFF)
-if (BUILD_STATIC_LIBQORE)
-    if (SINGLE_COMPILATION_UNIT)
-        add_library(libqore_static STATIC
-            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-            ${LIBQORE_SOURCE_HEADERS})
-        set_source_files_properties(
-            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-            PROPERTIES OBJECT_DEPENDS "${SCU_ALL_DEPS}"
-        )
-    else ()
-        add_library(libqore_static STATIC ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
-    endif ()
-    add_dependencies(libqore_static QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES)
-    target_compile_definitions(libqore_static PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
-    target_compile_definitions(libqore_static PRIVATE MODULE_DIR="${MODULE_DIR}")
-    target_compile_definitions(libqore_static PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
-    target_compile_definitions(libqore_static PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
-    target_compile_definitions(libqore_static PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
-    target_compile_definitions(libqore_static PRIVATE QORE_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
-    target_include_directories(libqore_static PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
-    set_target_properties(libqore_static PROPERTIES OUTPUT_NAME qore_static)
-    install(TARGETS libqore_static ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-endif ()
-
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})
 target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
-# qcc - Qore Code Compiler
-add_executable(qcc qcc-main.cpp)
-target_link_libraries(qcc libqore)
-
-if (QORE_BUILD_IR_SMOKE)
-    if (SINGLE_COMPILATION_UNIT)
-        add_executable(qore-ir-smoke
-            test/ir/ir_smoke.cpp
-            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        )
-    else()
-        add_executable(qore-ir-smoke
-            test/ir/ir_smoke.cpp
-            ${LIBQORE_QPP_CPP_SRC}
-            ${LIBQORE_CPP_SRC}
-            ${LIBQORE_ASM_SRC}
-        )
-    endif()
-    target_compile_definitions(qore-ir-smoke PRIVATE _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
-    target_compile_definitions(qore-ir-smoke PRIVATE MODULE_DIR="${MODULE_DIR}")
-    target_compile_definitions(qore-ir-smoke PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
-    target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
-    target_compile_definitions(qore-ir-smoke PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
-    target_compile_definitions(qore-ir-smoke PRIVATE QORE_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
-    target_include_directories(qore-ir-smoke PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include
-        ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
-        ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
-    target_link_libraries(qore-ir-smoke ${QORE_LIBS})
-    target_link_libraries(qore-ir-smoke ${LLVM_LIBS})
-endif()
-
-# Ensure the installed qore and qcc binaries can resolve @rpath/libqore.20.dylib.
+# Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
-set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
-set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 if (DEFINED LIBJSIG AND APPLE)
     add_custom_command(TARGET qore
@@ -1278,7 +1376,7 @@ qore_dist(${VERSION})
 install(PROGRAMS ${QORE_BIN_FILES}
         DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
-install(TARGETS qore qcc qpp libqore
+install(TARGETS qore qpp libqore
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 #install(TARGETS qore qpp qr libqore
@@ -1435,9 +1533,9 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
+    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-set(QORE_QM_METADATA_DEPENDS qore astparser reflection)
+set(QORE_QM_METADATA_DEPENDS qore astparser)
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(
@@ -1463,6 +1561,7 @@ unset(_qore_exe)
 qore_user_module("qlib/DatasourceProvider.qm" "")
 qore_user_module("qlib/DebugUtil.qm" "")
 qore_user_module("qlib/FsUtil.qm" "")
+qore_user_module("qlib/HttpStreamClient.qm" "")
 qore_user_module("qlib/Qdx.qm" "")
 qore_user_module("qlib/Qorize.qm" "")
 qore_user_module("qlib/QoreHistory" "modules/linenoise/linenoise")
@@ -1637,8 +1736,8 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
         set(QORE_LANG_DOC_TAGFILES "")
     foreach(mod ${QORE_USER_MODULE_NAMES})
         # Tag file is generated in build root as {mod}.tag
-        # Relative path to module html from lang html: ../modules/{mod}/html
-        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../modules/${mod}/html\"")
+        # Relative path to module html from lang html: ../../modules/{mod}/html
+        set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/${mod}.tag=../../modules/${mod}/html\"")
     endforeach()
     # Add binary module tag files required for lang cross-references.
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/astparser/astparser.tag=../../modules/astparser/html\"")

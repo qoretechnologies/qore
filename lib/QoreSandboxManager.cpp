@@ -959,18 +959,6 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
 }
 
 //------------------------------------------------------------------------------
-// Runtime sandbox manager access
-//------------------------------------------------------------------------------
-
-bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        return smh->checkIOInterrupt(xsink, operation);
-    }
-    return false;
-}
-
-//------------------------------------------------------------------------------
 // QoreSandboxManagerHelper implementation
 //------------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -382,16 +382,13 @@ struct qore_qf_private {
         // must be called with the lock held
         assert(m.trylock());
 
-        // Check for sandbox interrupt support
-        QoreSandboxManagerHelper smh;
-
         const char* ptr = static_cast<const char*>(buf);
         size_t remaining = len;
         size_t total_written = 0;
 
         while (remaining > 0) {
-            // Check for interrupt
-            if (smh && xsink && smh->checkIOInterrupt(xsink, "file write")) {
+            // Check for cancellation or program interrupt
+            if (xsink && qore_check_cancel(xsink, "file write")) {
                 return -1;
             }
 
@@ -474,20 +471,18 @@ struct qore_qf_private {
         char* buf = (char* )malloc(sizeof(char) * bs);
         char* bbuf = 0;
 
-        // Check for sandbox interrupt support
-        QoreSandboxManagerHelper smh;
         const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
 
         while (true) {
-            // Check for interrupt
-            if (smh && smh->checkIOInterrupt(xsink, "file read")) {
+            // Check for cancellation or program interrupt
+            if (qore_check_cancel(xsink, "file read")) {
                 br = 0;
                 break;
             }
 
-            // wait for data with polling for interruptibility
+            // wait for data with polling for cancel/interrupt checking
             int effective_timeout = timeout_ms;
-            if (smh && (timeout_ms < 0 || timeout_ms > poll_interval)) {
+            if (timeout_ms < 0 || timeout_ms > poll_interval) {
                 effective_timeout = poll_interval;
             }
 
@@ -497,7 +492,7 @@ struct qore_qf_private {
                     break;
                 }
                 // If we used a smaller timeout for polling, continue if not timed out yet
-                if (smh && timeout_ms != effective_timeout) {
+                if (timeout_ms != effective_timeout) {
                     if (timeout_ms > 0) {
                         timeout_ms -= effective_timeout;
                         if (timeout_ms <= 0) {
@@ -580,18 +575,15 @@ struct qore_qf_private {
 
         bool tty = (bool)isatty(fd);
 
-        // Check for sandbox interrupt support
-        QoreSandboxManagerHelper smh;
-
         int ch, rc = -1;
         int char_count = 0;
-        const int check_interval = 100;  // Check interrupt every 100 characters
+        const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
-            // Check for interrupt periodically
-            if (smh && xsink && ++char_count >= check_interval) {
+            // Check for cancellation or program interrupt periodically
+            if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (smh->checkIOInterrupt(xsink, "file readLine")) {
+                if (qore_check_cancel(xsink, "file readLine")) {
                     return -1;
                 }
             }
@@ -638,18 +630,15 @@ struct qore_qf_private {
         if (!is_open)
             return -2;
 
-        // Check for sandbox interrupt support
-        QoreSandboxManagerHelper smh;
-
         int ch, rc = -1;
         int char_count = 0;
-        const int check_interval = 100;  // Check interrupt every 100 characters
+        const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
-            // Check for interrupt periodically
-            if (smh && xsink && ++char_count >= check_interval) {
+            // Check for cancellation or program interrupt periodically
+            if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (smh->checkIOInterrupt(xsink, "file readUntil")) {
+                if (qore_check_cancel(xsink, "file readUntil")) {
                     return -1;
                 }
             }
@@ -847,21 +836,18 @@ struct qore_qf_private {
         if (!is_open)
             return -2;
 
-        // Check for sandbox interrupt support
-        QoreSandboxManagerHelper smh;
-
         // offset in bytes
         unsigned pos = 0;
 
         int ch, rc = -1;
         int char_count = 0;
-        const int check_interval = 100;  // Check interrupt every 100 characters
+        const int check_interval = 100;  // Check cancel/interrupt every 100 characters
 
         while ((ch = readChar()) >= 0) {
-            // Check for interrupt periodically
-            if (smh && xsink && ++char_count >= check_interval) {
+            // Check for cancellation or program interrupt periodically
+            if (xsink && ++char_count >= check_interval) {
                 char_count = 0;
-                if (smh->checkIOInterrupt(xsink, "file readUntil")) {
+                if (qore_check_cancel(xsink, "file readUntil")) {
                     return -1;
                 }
             }

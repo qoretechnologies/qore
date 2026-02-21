@@ -155,7 +155,7 @@ public:
     DLLLOCAL FunctionList() {
     }
 
-    DLLLOCAL FunctionList(const FunctionList& old, qore_ns_private* ns, int64 po);
+    DLLLOCAL FunctionList(const FunctionList& old, qore_ns_private* ns, const QoreParseOptions& po);
 
     DLLLOCAL ~FunctionList() {
         del();

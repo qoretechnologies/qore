@@ -43,9 +43,9 @@ ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& ol
             builtin ? PO_NO_INHERIT_USER_FUNC_VARIANTS : PO_NO_SYSTEM_FUNC_VARIANTS), ns) {
 }
 
-FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, int64 po) {
-    bool no_user = po & PO_NO_INHERIT_USER_FUNC_VARIANTS;
-    bool no_builtin = po & PO_NO_SYSTEM_FUNC_VARIANTS;
+FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const QoreParseOptions& po) {
+    bool no_user = static_cast<bool>(po & PO_NO_INHERIT_USER_FUNC_VARIANTS);
+    bool no_builtin = static_cast<bool>(po & PO_NO_SYSTEM_FUNC_VARIANTS);
     for (fl_map_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i) {
         QoreFunction* f = i->second->getFunction();
         if (f->allPrivate()) {
@@ -66,7 +66,8 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, int64 p
             fe = new FunctionEntry(i->first, func, ns);;
         } else {
             // otherwise we have to make a new function object with only the desired visible variants
-            fe = new FunctionEntry(i->first, new QoreFunction(*f, po), ns);
+            // pass po.getLo() until QoreFunction is migrated to QoreParseOptions
+            fe = new FunctionEntry(i->first, new QoreFunction(*f, po.getLo()), ns);
         }
         insert(std::make_pair(fe->getName(), fe));
     }

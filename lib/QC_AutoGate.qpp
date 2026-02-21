@@ -75,32 +75,23 @@ AutoGate ag(gate);
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoGate::constructor(Gate[QoreGate] gate) {
-    ReferenceHolder<QoreGate> holder(gate, xsink);
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting to enter gate");
-                return;
-            }
-            int rc = gate->grab(xsink, poll_ms);
-            if (*xsink) {
-                return;  // Error occurred
-            }
-            if (rc == 0) {
-                // Gate acquired - create the AutoGate object with already-entered gate
-                QoreAutoGate* ag = new QoreAutoGate(holder.release());
-                self->setPrivate(CID_AUTOGATE, ag);
-                return;
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "gate enter")) {
+            return;
         }
-    }
-    ReferenceHolder<QoreAutoGate> ag(new QoreAutoGate(holder.release(), xsink), xsink);
-    if (!*xsink) {
-        self->setPrivate(CID_AUTOGATE, ag.release());
+        int rc = gate->grab(xsink, poll_ms);
+        if (*xsink) {
+            return;  // Error occurred
+        }
+        if (rc == 0) {
+            // Gate acquired - create the AutoGate object with already-entered gate
+            QoreAutoGate* ag = new QoreAutoGate(gate.release());
+            self->setPrivate(CID_AUTOGATE, ag);
+            return;
+        }
+        // rc != 0 means timeout, loop and check again
     }
 }
 

@@ -51,8 +51,6 @@ ConstructorMethod m(cls);
     @throw UNKOWN-METHOD cannot find a constructor method for the given class
  */
 ConstructorMethod::constructor(Class[QoreReflectionClass] cls) {
-    ReferenceHolder<QoreReflectionClass> holder(cls, xsink);
-
     // get exclusive access to program object
     QoreExternalProgramContextHelper pch(xsink, cls->pgm);
     if (*xsink) {

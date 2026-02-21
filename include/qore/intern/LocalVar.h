@@ -400,7 +400,7 @@ public:
         return parse_assigned;
     }
 
-    DLLLOCAL void instantiate(int64 parse_options) {
+    DLLLOCAL void instantiate(const QoreParseOptions& parse_options) {
         //printd(5, "LocalVar::instantiate() this: %p '%s' typeInfo: %s NO ASSIGNMENT\n", this, name.c_str(),
         //    QoreTypeInfo::getName(typeInfo));
         instantiateIntern(QoreValue(), false);
@@ -566,7 +566,7 @@ public:
         // important for type checking
         if (is_auto_type && narrowedTypeInfo) {
             QoreProgram* pgm = getProgram();
-            if (!pgm || !(pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES)) {
+            if (!pgm || !(pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
                 // Don't return narrowed type if declared type is or-nothing
                 if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
                     return typeInfo;

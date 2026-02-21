@@ -94,6 +94,22 @@ qore --no-filesystem --no-network script.q
 Program p(PO_LOCKDOWN);
     @endcode
 
+    For even stricter sandboxing, you can use the @ref Qore::ParseOptions "ParseOptions" class to add
+    extended options (bits 64+) that go beyond the 64-bit \c int limitation:
+
+    @code{.py}
+ParseOptions opts(PO_LOCKDOWN);
+opts.set("no-class-defs");      # prevent class definitions
+opts.set("no-constant-defs");   # prevent constant definitions
+opts.set("no-namespace-defs");  # prevent namespace definitions
+opts.set("no-new");             # prevent use of the 'new' operator
+Program p(opts);
+    @endcode
+
+    @see @ref Qore::ParseOptions "ParseOptions"
+
+    @since %Qore 2.3
+
     @subsection sandbox_po_limitations Parse Option Limitations
 
     While parse options are effective for completely disabling functionality, they have limitations:

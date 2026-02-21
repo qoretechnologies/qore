@@ -35,7 +35,7 @@
 
 #include <cassert>
 
-GlobalVariableList::GlobalVariableList(const GlobalVariableList& old, int64 po) {
+GlobalVariableList::GlobalVariableList(const GlobalVariableList& old, const QoreParseOptions& po) {
     // don't inherit any global vars if the appropriate flag is not already set
     if ((po & PO_NO_INHERIT_GLOBAL_VARS))
         return;

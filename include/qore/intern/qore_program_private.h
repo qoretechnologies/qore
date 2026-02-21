@@ -330,8 +330,8 @@ typedef vector_map_t<std::string, QoreValue> dmap_t;
 //typedef std::map<std::string, QoreValue> dmap_t;
 
 // map for pushed parse options
-typedef vector_map_t<const char*, int64> ppo_t;
-//typedef std::map<const char*, int64, ltstr> ppo_t;
+typedef vector_map_t<const char*, QoreParseOptions> ppo_t;
+//typedef std::map<const char*, QoreParseOptions, ltstr> ppo_t;
 
 class AbstractQoreZoneInfo;
 
@@ -481,8 +481,8 @@ public:
 
     ParseWarnOptions pwo;
 
-    int64 dom = 0,     // a mask of functional domains used in this Program
-        pend_dom = 0;  // a mask of pending function domains used in this Program
+    QoreParseOptions dom,      // a mask of functional domains used in this Program
+        pend_dom;                // a mask of pending function domains used in this Program
 
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
@@ -520,7 +520,7 @@ public:
     // public object that owns this private implementation
     QoreProgram* pgm;
 
-    DLLLOCAL qore_program_private_base(QoreProgram* n_pgm, int64 n_parse_options, QoreProgram* p_pgm = nullptr)
+    DLLLOCAL qore_program_private_base(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm = nullptr)
             : plock(&ma_recursive),
             sb(this),
             only_first_except(false),
@@ -551,7 +551,7 @@ public:
 
         // initialize global vars
         // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
-        bool no_external_info = (n_parse_options & PO_NO_EXTERNAL_INFO);
+        bool no_external_info = static_cast<bool>(n_parse_options & PO_NO_EXTERNAL_INFO);
 
         Var *var = qore_root_ns_private::runtimeCreateVar(*RootNS, *QoreNS, "ARGV", listTypeInfo, true);
         if (var) {
@@ -597,24 +597,24 @@ public:
     DLLLOCAL void startThread(ExceptionSink& xsink);
 
     // returns significant parse options to drop
-    DLLLOCAL int64 checkDeserializeParseOptions(int64 po) {
+    DLLLOCAL QoreParseOptions checkDeserializeParseOptions(const QoreParseOptions& po) {
         if (pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS) {
             return 0;
         }
         return pwo.parse_options & ~po & ~PO_FREE_STYLE_OPTIONS;
     }
 
-    DLLLOCAL void replaceParseOptionsIntern(int64 po) {
+    DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
     }
 
-    DLLLOCAL bool checkSetParseOptions(int64 po) {
+    DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
         // only return an error if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
         return (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS)));
     }
 
-    DLLLOCAL void setParseOptionsIntern(int64 po) {
+    DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options |= po;
     }
 
@@ -627,7 +627,7 @@ protected:
     //typedef std::map<const char*, AbstractQoreProgramExternalData*, ltstr> extmap_t;
     extmap_t extmap;
 
-    DLLLOCAL void setParent(QoreProgram* p_pgm, int64 n_parse_options);
+    DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
 
     // for independent programs (not inherited from another QoreProgram object)
     DLLLOCAL void newProgram();
@@ -708,7 +708,7 @@ public:
     typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
     //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
 
-    DLLLOCAL qore_program_private(QoreProgram* n_pgm, int64 n_parse_options, QoreProgram* p_pgm = nullptr);
+    DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm = nullptr);
 
     DLLLOCAL ~qore_program_private();
 
@@ -1663,11 +1663,11 @@ public:
         return *parseSink;
     }
 
-    DLLLOCAL void disableParseOptionsIntern(int64 po) {
+    DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options &= ~po;
     }
 
-    DLLLOCAL int setParseOptions(int64 po, ExceptionSink* xsink) {
+    DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
         if (checkSetParseOptions(po)) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
@@ -1678,7 +1678,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL int disableParseOptions(int64 po, ExceptionSink* xsink) {
+    DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
@@ -1691,7 +1691,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL int replaceParseOptions(int64 po, ExceptionSink* xsink) {
+    DLLLOCAL int replaceParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
         if (!(getProgram()->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
             xsink->raiseException("OPTION-ERROR", "the calling Program does not have the PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()");
@@ -1703,7 +1703,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, int64 po) {
+    DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
         if (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS))) {
@@ -1715,7 +1715,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, int64 po) {
+    DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
         if (((po & PO_FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
@@ -1927,21 +1927,21 @@ public:
     }
 
     // returns the mask of domain options not met in the current program
-    DLLLOCAL int64 parseAddDomain(int64 n_dom) {
+    DLLLOCAL QoreParseOptions parseAddDomain(const QoreParseOptions& n_dom) {
         assert(!(n_dom & PO_FREE_OPTIONS));
-        int64 rv = 0;
+        QoreParseOptions rv;
 
         // handle negative and positive options separately / differently
-        int64 pos = (n_dom & PO_POSITIVE_OPTIONS);
+        QoreParseOptions pos = (n_dom & PO_POSITIVE_OPTIONS);
         if (pos) {
-            int64 p_tmp = pwo.parse_options & PO_POSITIVE_OPTIONS;
+            QoreParseOptions p_tmp = pwo.parse_options & PO_POSITIVE_OPTIONS;
             // make sure all positive arguments are set
             if ((pos & p_tmp) != pos) {
                 rv = ((pos & p_tmp) ^ pos);
                 pend_dom |= pos;
             }
         }
-        int64 neg = (n_dom & ~PO_POSITIVE_OPTIONS);
+        QoreParseOptions neg = (n_dom & ~QoreParseOptions(PO_POSITIVE_OPTIONS));
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;
@@ -2344,20 +2344,20 @@ public:
         srcpgm->priv->exportFunction(xsink, trgpgm->priv, name, new_name, inject);
     }
 
-    DLLLOCAL static int64 parseAddDomain(QoreProgram* pgm, int64 n_dom) {
+    DLLLOCAL static QoreParseOptions parseAddDomain(QoreProgram* pgm, const QoreParseOptions& n_dom) {
         return pgm->priv->parseAddDomain(n_dom);
     }
 
-    DLLLOCAL static int64 getDomain(const QoreProgram& pgm) {
+    DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {
         return pgm.priv->dom;
     }
 
-    DLLLOCAL static void runtimeAddDomain(QoreProgram& pgm, int64 n_dom) {
+    DLLLOCAL static void runtimeAddDomain(QoreProgram& pgm, const QoreParseOptions& n_dom) {
         pgm.priv->dom |= n_dom;
     }
 
-    DLLLOCAL static int64 forceReplaceParseOptions(QoreProgram& pgm, int64 po) {
-        int64 rv = pgm.priv->pwo.parse_options;
+    DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
         return rv;
     }
@@ -2755,7 +2755,7 @@ public:
 
 private:
     mutable QoreCounter debug_program_counter;  // number of thread calls to debug program instance.
-    DLLLOCAL void init(QoreProgram* n_pgm, int64 n_parse_options,
+    DLLLOCAL void init(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             const AbstractQoreZoneInfo* n_TZ = QTZM.getLocalZoneInfo()) {
     }
 

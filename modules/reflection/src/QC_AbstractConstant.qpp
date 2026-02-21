@@ -99,8 +99,6 @@ bool b = con1.isEqual(con2);
     @return @ref True if the AbstractConstant object passed as an argument is equal to the current object; @ref False if not
 */
 bool AbstractConstant::isEqual(AbstractConstant[QoreReflectionConstant] con) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionConstant> holder(con, xsink);
-
     return con->ce == c->ce;
 }
 

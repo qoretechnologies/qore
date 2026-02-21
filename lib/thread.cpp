@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
 
 #include "qore/intern/ThreadResourceList.h"
@@ -325,7 +326,7 @@ static int initial_thread = -1;
 // this structure holds all thread-specific data
 class ThreadData {
 public:
-    int64 runtime_po = 0;
+    QoreParseOptions runtime_po;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -672,6 +673,14 @@ void ThreadEntry::cleanup() {
     if (status != QTS_NA && status != QTS_RESERVED && !joined && ptid) {
         pthread_detach(ptid);
     }
+
+    // clear per-thread cancellation state
+    cancel_requested.store(false, std::memory_order_relaxed);
+    if (cancel_reason) {
+        cancel_reason->deref();
+        cancel_reason = nullptr;
+    }
+
     status = QTS_AVAIL;
 }
 
@@ -1171,11 +1180,6 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.find(id);
 }
 
-LocalVarValue* thread_find_lvar_maybe(const char* id) {
-    ThreadData* td = thread_data.get();
-    return td->tlpd->lvstack.findMaybe(id);
-}
-
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
@@ -1199,10 +1203,6 @@ void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
 
 ClosureVarValue* thread_find_closure_var(const char* id) {
     return thread_data.get()->tlpd->cvstack.find(id);
-}
-
-ClosureVarValue* thread_try_find_closure_var(const char* id) {
-    return thread_data.get()->tlpd->cvstack.try_find(id);
 }
 
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
@@ -1240,8 +1240,7 @@ void thread_set_closure_parse_env(ClosureParseEnvironment* cenv) {
 }
 
 ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
-    const QoreClosureBase* rt_env = thread_data.get()->closure_rt_env;
-    return rt_env ? rt_env->find(id) : nullptr;
+    return thread_data.get()->closure_rt_env->find(id);
 }
 
 ClosureParseEnvironment* thread_get_closure_parse_env() {
@@ -1610,7 +1609,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        int64 po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, int64& old_po) {
+        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -1636,7 +1635,7 @@ void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStateme
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        int64 po) {
+        const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
@@ -1812,7 +1811,7 @@ void qore_get_runtime_context(QoreRuntimeContext* rc) {
     rc->pgm = pgm ? pgm : td->call_program_context;
     rc->loc = td->runtime_loc;
     rc->stmt = td->runtime_statement;
-    rc->po = td->runtime_po;
+    rc->po = td->runtime_po.getLo();
     rc->stack_loc = td->current_stack_location;
     rc->element = get_implicit_element();
 }
@@ -2180,10 +2179,6 @@ const QoreListNode* thread_get_implicit_args() {
     return thread_data.get()->current_implicit_arg;
 }
 
-void thread_set_implicit_args(QoreListNode* args) {
-    thread_data.get()->current_implicit_arg = args;
-}
-
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
     ThreadData* td = thread_data.get();
     return (td->current_obj == o && td->current_code == name) ? true : false;
@@ -2498,19 +2493,15 @@ RootQoreNamespace* getRootNS() {
     //return (thread_data.get())->pgmStack->getProgram()->getRootNS();
 }
 
-int64 parse_get_parse_options() {
-    return (thread_data.get())->current_pgm->getParseOptions64();
+QoreParseOptions parse_get_parse_options() {
+    return (thread_data.get())->current_pgm->getParseOptions();
 }
 
-int64 runtime_get_parse_options() {
+QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
 }
 
-void runtime_set_parse_options(int64 po) {
-    thread_data.get()->runtime_po = po;
-}
-
-int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
+QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     assert(n);
     ThreadData* td = thread_data.get();
     const QoreStackLocation* w = td->current_stack_location;
@@ -2518,7 +2509,7 @@ int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     //printd(5, "runtime_get_parse_options_stack() n: %d w: %p\n", (int)n, w);
     while (w) {
         if (i == n) {
-            return w->getProgram()->getParseOptions64();
+            return w->getProgram()->getParseOptions();
         }
         ++i;
         w = w->getNext();
@@ -2527,11 +2518,11 @@ int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     return 0;
 }
 
-bool parse_check_parse_option(int64 o) {
+bool parse_check_parse_option(const QoreParseOptions& o) {
     return (parse_get_parse_options() & o) == o;
 }
 
-bool runtime_check_parse_option(int64 o) {
+bool runtime_check_parse_option(const QoreParseOptions& o) {
     return (runtime_get_parse_options() & o) == o;
 }
 
@@ -3520,4 +3511,83 @@ int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor) {
         data.destructor(data.data);
     }
     return 0;
+}
+
+// --- Thread Cancellation API ---
+
+int QoreThreadList::cancelThread(int tid, const char* reason) {
+    AutoLocker al(lck);
+    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+        return -1;
+    }
+    if (!entry[tid].active()) {
+        return -1;
+    }
+    // security: only allow cancellation within the same program context
+    ThreadData* td = entry[tid].thread_data;
+    if (td && td->current_pgm != getProgram()) {
+        return -1;
+    }
+    if (reason) {
+        if (entry[tid].cancel_reason) {
+            entry[tid].cancel_reason->deref();
+        }
+        entry[tid].cancel_reason = new QoreStringNode(reason);
+    }
+    entry[tid].cancel_requested.store(true, std::memory_order_release);
+    return 0;
+}
+
+void QoreThreadList::clearCancel(int tid) {
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        entry[tid].cancel_requested.store(false, std::memory_order_release);
+        if (entry[tid].cancel_reason) {
+            entry[tid].cancel_reason->deref();
+            entry[tid].cancel_reason = nullptr;
+        }
+    }
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    // check thread-level cancellation first (cheap: one atomic load)
+    int tid = q_gettid();
+    if (thread_list.isCancelRequested(tid)) {
+        if (xsink) {
+            QoreStringNode* reason = thread_list.getCancelReason(tid);
+            if (reason) {
+                xsink->raiseException("THREAD-CANCELLED",
+                    new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
+            } else {
+                xsink->raiseException("THREAD-CANCELLED",
+                    new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
+            }
+        }
+        return true;
+    }
+
+    // check program-level interrupt
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        if (xsink) {
+            if (smh->checkIOInterrupt(xsink, operation)) {
+                return true;
+            }
+        } else if (smh->isInterruptRequested()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int qore_cancel_thread(int tid, const char* reason) {
+    return thread_list.cancelThread(tid, reason);
+}
+
+void qore_clear_thread_cancel() {
+    thread_list.clearCancel(q_gettid());
+}
+
+bool qore_is_thread_cancel_requested() {
+    return thread_list.isCancelRequested(q_gettid());
 }

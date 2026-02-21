@@ -825,7 +825,7 @@ protected:
     const char* old_path;
 
     qore_program_private* pgm;
-    int64 po;
+    QoreParseOptions po;
 
     ExceptionSink& xsink;
     bool dup;

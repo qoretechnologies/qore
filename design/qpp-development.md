@@ -113,40 +113,46 @@ qns.addSystemClass(initClassNameClass(qns));
 
 ### Object Parameter Handling
 
-When methods accept Qore objects (like `Socket`), the QPP processor references the private data. You must dereference it when the method exits:
+When methods accept Qore objects (like `Socket`), the QPP processor generates a `HARD_QORE_VALUE_OBJ_DATA` macro call that creates a `ReferenceHolder<Type>` automatically. The reference is decremented when the `ReferenceHolder` goes out of scope. No manual wrapping is needed.
 
 ```cpp
 nothing ClassName::methodWithSocket(Socket[QoreSocketObject] socket, int events) {
-    // REQUIRED: Use ReferenceHolder to ensure proper cleanup
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
+    // socket is a ReferenceHolder<QoreSocketObject> - cleanup is automatic
 
-    // Now use socket...
+    // Use operator-> for method calls (returns T*):
     if (!socket->isOpen()) {
         xsink->raiseException("ERROR", "Socket not open");
         return QoreValue();
     }
-    // ...
+
+    // Use operator* to get the raw T* pointer when needed:
+    some_function(*socket);
+
+    // Use .release() to transfer ownership (prevents auto-deref):
+    other_object->takeSocket(socket.release());
 }
 ```
 
-The pattern for different object types:
-- `Socket[QoreSocketObject]` -> `ReferenceHolder<QoreSocketObject>`
-- `ReadOnlyFile[File]` -> `ReferenceHolder<File>`
-- `Mutex[AbstractSmartLock]` -> `ReferenceHolder<AbstractSmartLock>`
+Key points for working with object parameters (which are `ReferenceHolder<Type>`):
+- `socket->method()` works via `operator->()` which returns `T*`
+- `*socket` returns `T*` via `operator*()` — use where a raw pointer is needed
+- `**socket` dereferences the raw pointer — use where a `T&` reference is needed
+- `socket.release()` transfers ownership by returning `T*` and releasing the holder
+- `if (socket)` works via `operator bool()`
+- For optional parameters (`*Type[Class] param`), the holder may be null
 
 ### Accessing the QoreObject* for Object Parameters
 
 When you have an object parameter like `Socket[QoreSocketObject] socket`, the QPP macro `HARD_QORE_VALUE_OBJ_DATA` (defined in `include/qore/params.h`) creates two variables:
 
-1. `socket` - the private data pointer (`QoreSocketObject*`)
-2. `obj_socket` - the `QoreObject*` wrapper (prefixed with `obj_`)
+1. `socket` - a `ReferenceHolder<QoreSocketObject>` managing the referenced private data
+2. `obj_socket` - the `const QoreObject*` wrapper (prefixed with `obj_`)
 
 This is useful when you need the `QoreObject*` rather than just the private data:
 
 ```cpp
 nothing EventLoop::del(Socket[QoreSocketObject] socket) {
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
-
+    // socket is automatically a ReferenceHolder<QoreSocketObject>
     // Use obj_socket (the QoreObject*) for operations that need the object pointer
     // For example, looking up by object identity in a map
     el->removeByObject(const_cast<QoreObject*>(obj_socket), xsink);
@@ -154,9 +160,9 @@ nothing EventLoop::del(Socket[QoreSocketObject] socket) {
 ```
 
 The naming pattern is `obj_<parameter_name>`:
-- `Socket[QoreSocketObject] socket` -> `obj_socket` is the `QoreObject*`
-- `ReadOnlyFile[File] file` -> `obj_file` is the `QoreObject*`
-- `Mutex[AbstractSmartLock] mutex` -> `obj_mutex` is the `QoreObject*`
+- `Socket[QoreSocketObject] socket` -> `obj_socket` is the `const QoreObject*`
+- `ReadOnlyFile[File] file` -> `obj_file` is the `const QoreObject*`
+- `Mutex[AbstractSmartLock] mutex` -> `obj_mutex` is the `const QoreObject*`
 
 **Use case example**: When maintaining a map of registered objects (e.g., an event loop), you may need to look up by `QoreObject*` to handle cases where the underlying resource (socket fd, file handle) has been closed but the object is still registered.
 
@@ -412,7 +418,7 @@ class QoreFeatureClass : public AbstractPrivateData {
 4. [ ] Add `#include "qore/intern/QC_ClassName.h"` to `QoreNamespace.cpp`
 5. [ ] Add `qns.addSystemClass(initClassNameClass(qns));` to `QoreNamespace.cpp`
 6. [ ] Verify no reserved words used as method names
-7. [ ] Verify object parameters use `ReferenceHolder` pattern
+7. [ ] Verify object parameters are used correctly (`*param` for raw pointers, `.release()` for ownership transfer)
 8. [ ] Build and test
 
 ## Common Errors
@@ -423,8 +429,8 @@ Usually means a reserved word was used as a method name. Rename the method.
 ### "reference to undefined type"
 The class is not registered in `QoreNamespace.cpp`. Add the include and `addSystemClass` call.
 
-### Memory leaks with object parameters
-Missing `ReferenceHolder` for object parameters. Add the holder pattern.
+### Type mismatch with object parameters
+Object parameters are `ReferenceHolder<Type>`, not raw `Type*`. Use `*param` to get the raw pointer, `**param` to get a reference, or `param.release()` to transfer ownership.
 
 ## Example: Complete EventLoop Class
 

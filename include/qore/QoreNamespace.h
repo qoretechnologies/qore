@@ -43,6 +43,8 @@
 
 #define _QORE_QORENAMESPACE_H
 
+#include <qore/QoreParseOptions.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -83,7 +85,7 @@ public:
 
         @since %Qore 1.0
     */
-    DLLEXPORT QoreNamespace(const QoreNamespace& old, int64 po);
+    DLLEXPORT QoreNamespace(const QoreNamespace& old, const QoreParseOptions& po);
 
     //! destroys the object and frees memory
     DLLEXPORT virtual ~QoreNamespace();
@@ -137,7 +139,7 @@ public:
     /** @param po parse options to use when copying the namespace
         @return a deep copy of the namespace
     */
-    DLLEXPORT QoreNamespace* copy(int64 po = PO_DEFAULT) const;
+    DLLEXPORT QoreNamespace* copy(const QoreParseOptions& po = PO_DEFAULT) const;
 
     //! gets a hash of all classes in the namespace, the hash keys are the class names and the values are lists of strings giving the method names
     /**

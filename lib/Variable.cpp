@@ -143,7 +143,7 @@ const QoreTypeInfo* Var::parseGetTypeInfo() {
     // important for type checking
     if (is_auto_type && narrowedTypeInfo) {
         QoreProgram* pgm = getProgram();
-        if (!pgm || !(pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES)) {
+        if (!pgm || !(pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
             // Don't return narrowed type if declared type is or-nothing
             if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
                 return refTypeInfo ? refTypeInfo : typeInfo;
@@ -2264,7 +2264,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     if (!lvh)
         return;
 
-    bool broken_list_range = runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
+    bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
 
     int64 start, stop, seq_size;
     {

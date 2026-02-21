@@ -224,7 +224,7 @@ public:
     DLLLOCAL MethodVariantBase(ClassAccess n_access, bool n_final, int64 n_flags, bool n_is_user = false,
             bool n_is_abstract = false) :
             AbstractQoreFunctionVariant(n_flags |
-                (n_is_abstract && (getProgram()->getParseOptions64() & PO_BROKEN_VARARGS)
+                (n_is_abstract && (getProgram()->getParseOptions() & PO_BROKEN_VARARGS)
                     ? QCF_USES_EXTRA_ARGS
                     : 0
                 ), n_is_user), access(n_access), final(n_final), abstract(n_is_abstract) {

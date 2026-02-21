@@ -306,7 +306,7 @@ qore_program_private::qore_program_to_object_map_t qore_program_private::qore_pr
 QoreRWLock qore_program_private::lck_programMap;
 volatile unsigned qore_program_private::programIdCounter = 1;
 
-qore_program_private::qore_program_private(QoreProgram* n_pgm, int64 n_parse_options, QoreProgram* p_pgm)
+qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
     registerProgram();
 }
@@ -531,7 +531,7 @@ void qore_program_private_base::newProgram() {
 #endif
 }
 
-void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_options) {
+void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
     //    p_pgm->priv->sb.getLVList(), this, pgm, p_pgm->priv->pwo.parse_options, n_parse_options,
@@ -598,7 +598,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, int64 n_parse_opti
 }
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
-    bool atomic_rollback = pwo.parse_options & PO_ALLOW_REPARSE;
+    bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces
     qore_root_ns_private::get(*RootNS)->parseRollback(xsink, atomic_rollback);
 
@@ -1683,10 +1683,10 @@ QoreProgram::QoreProgram() : priv(new qore_program_private(this, PO_DEFAULT)) {
 }
 
 // setup independent program object
-QoreProgram::QoreProgram(int64 po) : priv(new qore_program_private(this, po)) {
+QoreProgram::QoreProgram(const QoreParseOptions& po) : priv(new qore_program_private(this, po)) {
 }
 
-QoreProgram::QoreProgram(QoreProgram* pgm, int64 po, bool ec, const char* ecn)
+QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
         : priv(new qore_program_private(this, po, pgm)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: %d\n", this, pgm, priv,
         priv->getProgramId());
@@ -1743,11 +1743,7 @@ RootQoreNamespace* QoreProgram::getRootNS() const {
     return priv->RootNS;
 }
 
-int QoreProgram::getParseOptions() const {
-    return (int)priv->pwo.parse_options;
-}
-
-int64 QoreProgram::getParseOptions64() const {
+QoreParseOptions QoreProgram::getParseOptions() const {
     return priv->pwo.parse_options;
 }
 
@@ -1813,23 +1809,23 @@ bool QoreProgram::existsFunction(const char* name) {
     return qore_root_ns_private::runtimeExistsFunction(*priv->RootNS, name) ? true : false;
 }
 
-void QoreProgram::parseSetParseOptions(int64 po) {
+void QoreProgram::parseSetParseOptions(const QoreParseOptions& po) {
     priv->parseSetParseOptions(&loc_builtin, po);
 }
 
-void QoreProgram::parseDisableParseOptions(int64 po) {
+void QoreProgram::parseDisableParseOptions(const QoreParseOptions& po) {
     priv->parseDisableParseOptions(&loc_builtin, po);
 }
 
-void QoreProgram::setParseOptions(int64 po, ExceptionSink* xsink) {
+void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
     priv->setParseOptions(po, xsink);
 }
 
-void QoreProgram::disableParseOptions(int64 po, ExceptionSink* xsink) {
+void QoreProgram::disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
     priv->disableParseOptions(po, xsink);
 }
 
-void QoreProgram::replaceParseOptions(int64 po, ExceptionSink* xsink) {
+void QoreProgram::replaceParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
     priv->replaceParseOptions(po, xsink);
 }
 

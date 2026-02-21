@@ -3020,7 +3020,7 @@ int i = get_parse_options();
     @since %Qore 0.8.7
  */
 int get_parse_options() [flags=CONSTANT] {
-   return runtime_get_parse_options();
+   return runtime_get_parse_options().getLo();
 }
 
 //! sets the return value for a Program object when running with @ref exec-class "%exec-class"

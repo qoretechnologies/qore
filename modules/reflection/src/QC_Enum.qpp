@@ -90,8 +90,6 @@ bool b = e1.isEqual(e2);
     @ref Qore::Program "Program" containers, it will return @ref False
 */
 bool Enum::isEqual(Enum[QoreReflectionEnum] en) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionEnum> holder(en, xsink);
-
     return e->ed->equal(en->ed);
 }
 
@@ -450,13 +448,12 @@ Enum e = Enum::forName(pgm, "::Color");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Enum Enum::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), pgm), xsink);
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), *pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }

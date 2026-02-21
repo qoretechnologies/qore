@@ -66,7 +66,7 @@ public:
     DLLLOCAL GlobalVariableList() {
     }
 
-    DLLLOCAL GlobalVariableList(const GlobalVariableList& old, int64 po);
+    DLLLOCAL GlobalVariableList(const GlobalVariableList& old, const QoreParseOptions& po);
 
     DLLLOCAL void mergePublic(const GlobalVariableList& old);
 

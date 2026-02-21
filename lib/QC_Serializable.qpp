@@ -222,8 +222,7 @@ obj.serialize(stream);
     and non-serializable objects)
 */
 Serializable::serialize(OutputStream[OutputStream] stream, *int flags) {
-    ReferenceHolder<OutputStream> holder(stream, xsink);
-    QoreSerializable::serialize(*self, *stream, flags, xsink);
+    QoreSerializable::serialize(*self, **stream, flags, xsink);
 }
 
 //! converts the object to binary data representing the object
@@ -353,8 +352,7 @@ hash<SerializationInfo> h = Serializable::deserializeToData(stream);
     reference to an unknown class or @ref hashdecl
  */
 static hash<SerializationInfo> Serializable::deserializeToData(InputStream[InputStream] stream, *int flags) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<InputStream> holder(stream, xsink);
-    return QoreSerializable::deserializeToData(xsink, *stream, flags);
+    return QoreSerializable::deserializeToData(xsink, **stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -391,8 +389,7 @@ auto val = Serializable::deserialize(stream);
     reference to an unknown class or @ref hashdecl
  */
 static auto Serializable::deserialize(InputStream[InputStream] stream, *int flags) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<InputStream> holder(stream, xsink);
-    return QoreSerializable::deserialize(xsink, *stream, flags);
+    return QoreSerializable::deserialize(xsink, **stream, flags);
 }
 
 //! Deserializes data produced with serialize() and returns the value represented by the data
@@ -494,8 +491,7 @@ Serializable::serialize(val, stream);
     and non-serializable objects)
 */
 static Serializable::serialize(auto val, OutputStream[OutputStream] stream, *int flags) {
-    ReferenceHolder<OutputStream> holder(stream, xsink);
-    QoreSerializable::serialize(val, *stream, flags, xsink);
+    QoreSerializable::serialize(val, **stream, flags, xsink);
 }
 
 //! serializes the data and returns the serialized data as a binary object

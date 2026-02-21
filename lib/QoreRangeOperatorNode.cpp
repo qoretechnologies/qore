@@ -150,7 +150,7 @@ FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(Ru
     int64 stop = rh->getAsBigInt();
 
     value_type = list;
-    int64 po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
     if (!(po & PO_BROKEN_RANGE)) {
         if (start <= stop) {
             ++stop;

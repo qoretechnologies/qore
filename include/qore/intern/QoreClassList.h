@@ -89,7 +89,7 @@ private:
 public:
     DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false) {}
     DLLLOCAL ~QoreClassList();
-    DLLLOCAL QoreClassList(const QoreClassList& old, int64 po, qore_ns_private* ns);
+    DLLLOCAL QoreClassList(const QoreClassList& old, const QoreParseOptions& po, qore_ns_private* ns);
 
     DLLLOCAL void mergeUserPublic(const QoreClassList& old, qore_ns_private* ns);
 

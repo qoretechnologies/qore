@@ -153,18 +153,17 @@ Constant con = Constant::forName(pgm, "Option::HAVE_FORK");
     @note searches namespace constants only; does not search class constants
  */
 static Constant Constant::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionNamespaceConstant> cls(new QoreReflectionNamespaceConstant(pgm, npath->c_str(), xsink), xsink);
+    ReferenceHolder<QoreReflectionNamespaceConstant> cls(new QoreReflectionNamespaceConstant(*pgm, npath->c_str(), xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_CONSTANT, pgm, cls.release());
+    return new QoreObject(QC_CONSTANT, *pgm, cls.release());
 }
 
 //! Returns a list of constants matching the regular expression pattern argument or an empty list if no namespace constants match
@@ -201,6 +200,5 @@ list<Constant> l = Constant::findAllRegex(pgm, "^T");
     @note searches namespace constants only; does not search class constants
 */
 static list<Constant> Constant::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_constants(*pattern, re_opts, pgm, xsink);
+    return find_all_constants(*pattern, re_opts, *pgm, xsink);
 }

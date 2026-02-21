@@ -484,6 +484,7 @@ constexpr int H2S_REQUEST_READY = 4;
 constexpr int H2S_SENDING = 5;
 constexpr int H2S_FLUSHING = 6;  // Poll for POLLOUT to ensure data is flushed
 constexpr int H2S_SENT = 7;
+constexpr int H2S_HEADERS_READY = 8;  // Headers received (headers-only mode)
 
 //! Poll operation for reading HTTP/2 requests on a server connection
 /** This poll operation handles HTTP/2 server-side request reading:
@@ -515,7 +516,15 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const {
-        return h2_state == H2S_REQUEST_READY && !peer_closed;
+        return ((h2_state == H2S_REQUEST_READY || h2_state == H2S_HEADERS_READY) && !peer_closed);
+    }
+
+    //! Set headers-only mode: poll completes when HEADERS arrive (before END_STREAM)
+    DLLLOCAL void setHeadersOnly(bool v) {
+        headers_only = v;
+        if (h2_session) {
+            h2_session->setHeadersOnlyMode(v);
+        }
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
@@ -529,6 +538,7 @@ public:
             case H2S_RECV_PREFACE: return "receiving-preface";
             case H2S_READING: return "reading-frames";
             case H2S_REQUEST_READY: return "request-ready";
+            case H2S_HEADERS_READY: return "headers-ready";
             default: return "unknown";
         }
     }
@@ -550,6 +560,7 @@ private:
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
     bool peer_closed = false;
+    bool headers_only = false;  //!< If true, goal is reached on HEADERS (before END_STREAM)
     //! Cached completed stream info, dequeued in continuePoll(), used by getOutput()
     std::unique_ptr<Http2StreamInfo> cached_stream;
 
@@ -557,6 +568,13 @@ private:
 
     //! Initialize HTTP/2 session
     DLLLOCAL int initSession(ExceptionSink* xsink);
+
+    //! Check for headers-only dispatch in continuePoll()
+    /** @param handled set to true if the check produced a result (caller should return rv)
+        @param xsink exception sink
+        @return poll info hash if polling needed, nullptr if headers dispatched or not applicable
+    */
+    DLLLOCAL QoreHashNode* checkHeadersOnlyDispatch(bool& handled, ExceptionSink* xsink);
 };
 
 //! Poll operation for sending HTTP/2 responses

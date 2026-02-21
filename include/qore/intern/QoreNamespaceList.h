@@ -127,7 +127,7 @@ public:
     DLLLOCAL QoreNamespaceList() {
     }
 
-    DLLLOCAL QoreNamespaceList(const QoreNamespaceList& old, int64 po, const qore_ns_private& parent);
+    DLLLOCAL QoreNamespaceList(const QoreNamespaceList& old, const QoreParseOptions& po, const qore_ns_private& parent);
 
     DLLLOCAL ~QoreNamespaceList() {
         deleteAll();

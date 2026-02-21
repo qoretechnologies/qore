@@ -98,10 +98,10 @@ public:
 class LVListInstantiator {
     const LVList* l;
     ExceptionSink* xsink;
-    int64 parse_options;
+    QoreParseOptions parse_options;
 
 public:
-    DLLLOCAL LVListInstantiator(ExceptionSink* xs, const LVList* l, int64 parse_options) : l(l) {
+    DLLLOCAL LVListInstantiator(ExceptionSink* xs, const LVList* l, const QoreParseOptions& parse_options) : l(l) {
         if (!l) return;
         assert(l->size());
         xsink = xs;

@@ -904,7 +904,6 @@ f.setEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
 */
 nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
@@ -914,7 +913,7 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto arg, *bool with_dat
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    f->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the %ReadOnlyFile object so that @ref file_events "file events" are no longer added to the @ref Qore::Thread::Queue "Queue"

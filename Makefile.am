@@ -432,6 +432,7 @@ LANG_QPP_SRC = lib/QC_AbstractSmartLock.qpp \
 	lib/QC_ThreadPool.qpp \
 	lib/QC_TimeZone.qpp \
 	lib/QC_TreeMap.qpp \
+	lib/QC_QoreParseOptions.qpp \
 	lib/QC_Transform.qpp \
 	lib/QC_TransformInputStream.qpp \
 	lib/QC_TransformOutputStream.qpp \
@@ -776,6 +777,7 @@ include_HEADERS = \
 	include/qore/SQLStatement.h \
 	include/qore/SystemEnvironment.h \
 	include/qore/ParseOptionMap.h \
+	include/qore/QoreParseOptions.h \
 	include/qore/QoreHTTPClient.h \
 	include/qore/QoreHttpClientObject.h \
 	include/qore/QoreRWLock.h \

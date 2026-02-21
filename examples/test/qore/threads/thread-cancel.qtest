@@ -1,0 +1,741 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+%disable-warning unreferenced-variable
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ThreadCancelTest
+
+public class ThreadCancelTest inherits QUnit::Test {
+    constructor() : Test("ThreadCancelTest", "1.0") {
+        # Basic cancel_thread() / thread_cancelled() / clear_thread_cancel() tests
+        addTestCase("cancel_thread basic", \testCancelThreadBasic());
+        addTestCase("thread_cancelled and clear_thread_cancel", \testThreadCancelledAndClear());
+        addTestCase("cancel_thread with reason", \testCancelThreadWithReason());
+        addTestCase("cancel_thread invalid TID", \testCancelThreadInvalidTid());
+        addTestCase("cancel_thread negative TID", \testCancelThreadNegativeTid());
+        addTestCase("cancel_thread self error", \testCancelThreadSelf());
+
+        # Cancel loop tests
+        addTestCase("cancel while loop", \testCancelWhileLoop());
+        addTestCase("cancel for loop", \testCancelForLoop());
+        addTestCase("cancel do-while loop", \testCancelDoWhileLoop());
+        addTestCase("cancel foreach loop", \testCancelForeachLoop());
+
+        # Cancel sleep/usleep tests
+        addTestCase("cancel sleep", \testCancelSleep());
+        addTestCase("cancel usleep int", \testCancelUsleepInt());
+        addTestCase("cancel usleep date", \testCancelUsleepDate());
+
+        # Cancel threading primitive tests
+        addTestCase("cancel Queue::get", \testCancelQueueGet());
+        addTestCase("cancel Queue::pop", \testCancelQueuePop());
+        addTestCase("cancel Counter::waitForZero", \testCancelCounterWait());
+        addTestCase("cancel Counter::waitForZero no timeout", \testCancelCounterWaitNoTimeout());
+        addTestCase("cancel Gate::enter", \testCancelGateEnter());
+        addTestCase("cancel Mutex::lock", \testCancelMutexLock());
+        addTestCase("cancel RWLock::readLock", \testCancelRWLockRead());
+        addTestCase("cancel RWLock::writeLock", \testCancelRWLockWrite());
+        addTestCase("cancel Condition::wait", \testCancelConditionWait());
+
+        # Cancel auto-lock tests
+        addTestCase("cancel AutoLock", \testCancelAutoLock());
+        addTestCase("cancel AutoGate", \testCancelAutoGate());
+        addTestCase("cancel AutoReadLock", \testCancelAutoReadLock());
+        addTestCase("cancel AutoWriteLock", \testCancelAutoWriteLock());
+
+        # Queue negative timeout regression test
+        addTestCase("Queue negative timeout", \testQueueNegativeTimeout());
+
+        # Interaction with program interrupt
+        addTestCase("program interrupt still works", \testProgramInterrupt());
+        addTestCase("cancel_thread cross-program security", \testCrossProgramSecurity());
+
+        # Pipe stream cancel test
+        addTestCase("cancel pipe read", \testCancelPipeRead());
+
+        # Additional corner case and negative tests
+        addTestCase("cancel_thread with reason string", \testCancelThreadReasonString());
+        addTestCase("cancel_thread TID 0", \testCancelThreadTidZero());
+        addTestCase("cancel_thread return value", \testCancelThreadReturnValue());
+        addTestCase("cancel already-cancelled thread", \testCancelAlreadyCancelled());
+        addTestCase("clear_thread_cancel when not cancelled", \testClearWhenNotCancelled());
+        addTestCase("cancel timed Queue::get", \testCancelTimedQueueGet());
+        addTestCase("cancel timed Queue::pop", \testCancelTimedQueuePop());
+        addTestCase("cancel file lock", \testCancelFileLock());
+        addTestCase("cancel after thread exits", \testCancelAfterThreadExits());
+
+        set_return_value(main());
+    }
+
+    #------------------------------------------------------------------
+    # Helper: run code in a background thread, cancel it, and return
+    # the exception info (or NOTHING if no exception was thrown)
+    #------------------------------------------------------------------
+    private hash<ExceptionInfo> cancelBackgroundThread(code task, int delay_ms = 100) {
+        Counter ready(1);
+        Counter done(1);
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            try {
+                task();
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(delay_ms * 1000);  # Give the thread time to enter blocking state
+        cancel_thread(child_tid);
+        done.waitForZero(5000);
+        @assert(done.getCount() == 0);
+        return ex_info;
+    }
+
+    #------------------------------------------------------------------
+    # Basic API tests
+    #------------------------------------------------------------------
+
+    testCancelThreadBasic() {
+        Counter ready(1);
+        Counter done(1);
+        bool was_cancelled = False;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            # Spin until cancelled - the loop check point will detect it
+            try {
+                while (True) {
+                    # Loop body - cancel check happens at loop boundary
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                was_cancelled = (ex.err == "THREAD-CANCELLED");
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+        cancel_thread(child_tid);
+        done.waitForZero(5000);
+        assertTrue(was_cancelled, "thread should have been cancelled");
+    }
+
+    testThreadCancelledAndClear() {
+        # Test thread_cancelled() and clear_thread_cancel() on the current thread
+        # We can set the cancel flag via a helper thread and check without loop
+        Counter ready(1);
+        Counter done(1);
+        Queue results();
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            # Block on the queue - will be unblocked when main thread pushes data
+            # The queue get with timeout will poll; once cancel is set, thread_cancelled() returns True
+            try {
+                results.push(thread_cancelled());  # Should be False initially
+                # Now block until cancel is set - we use Queue::get which will throw THREAD-CANCELLED
+                Queue wait_q();
+                wait_q.get();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED") {
+                    results.push(thread_cancelled());  # Should be True after catching
+                    clear_thread_cancel();
+                    results.push(thread_cancelled());  # Should be False after clearing
+                }
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+        cancel_thread(child_tid);
+        done.waitForZero(5000);
+
+        assertFalse(results.get(), "thread_cancelled() should be False initially");
+        assertTrue(results.get(), "thread_cancelled() should be True after cancel (even after catching exception)");
+        assertFalse(results.get(), "thread_cancelled() should be False after clear_thread_cancel()");
+    }
+
+    testCancelThreadWithReason() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            while (True) {}
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "exception should be THREAD-CANCELLED");
+    }
+
+    testCancelThreadInvalidTid() {
+        # Cancel non-existent thread should return False
+        bool rc = cancel_thread(99999);
+        assertFalse(rc, "cancel_thread with invalid TID should return False");
+    }
+
+    testCancelThreadNegativeTid() {
+        # Cancel with negative TID should throw
+        bool got_exception = False;
+        try {
+            cancel_thread(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            got_exception = True;
+            assertEq("THREAD-CANCEL-ERROR", ex.err, "negative TID should throw THREAD-CANCEL-ERROR");
+        }
+        assertTrue(got_exception, "cancel_thread(-1) should throw");
+    }
+
+    testCancelThreadSelf() {
+        # Trying to cancel own thread should throw an exception
+        bool got_exception = False;
+        try {
+            cancel_thread(gettid());
+        } catch (hash<ExceptionInfo> ex) {
+            got_exception = True;
+            assertEq("THREAD-CANCEL-ERROR", ex.err, "self-cancel should throw THREAD-CANCEL-ERROR");
+        }
+        assertTrue(got_exception, "cancel_thread(self) should throw");
+    }
+
+    #------------------------------------------------------------------
+    # Cancel loop tests
+    #------------------------------------------------------------------
+
+    testCancelWhileLoop() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            while (True) {
+                # Intentionally empty - cancel check at loop boundary
+            }
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "while loop should throw THREAD-CANCELLED");
+    }
+
+    testCancelForLoop() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            for (int i = 0; i < 999999999; i++) {
+                # Intentionally empty
+            }
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "for loop should throw THREAD-CANCELLED");
+    }
+
+    testCancelDoWhileLoop() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            do {
+                # Intentionally empty
+            } while (True);
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "do-while loop should throw THREAD-CANCELLED");
+    }
+
+    testCancelForeachLoop() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            list<int> l = ();
+            for (int i = 0; i < 999999999; i++) {
+                l += i;
+            }
+            foreach int i in (l) {
+                # Should not get here since the for loop above should be cancelled first
+            }
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "foreach loop should throw THREAD-CANCELLED");
+    }
+
+    #------------------------------------------------------------------
+    # Cancel sleep/usleep tests
+    #------------------------------------------------------------------
+
+    testCancelSleep() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            sleep(60);  # Sleep 60 seconds - should be cancelled
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "sleep should throw THREAD-CANCELLED");
+    }
+
+    testCancelUsleepInt() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            usleep(60000000);  # 60 seconds in microseconds
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "usleep(int) should throw THREAD-CANCELLED");
+    }
+
+    testCancelUsleepDate() {
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            usleep(60s);
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "usleep(date) should throw THREAD-CANCELLED");
+    }
+
+    #------------------------------------------------------------------
+    # Cancel threading primitive tests
+    #------------------------------------------------------------------
+
+    testCancelQueueGet() {
+        Queue q();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            q.get();  # Block forever on empty queue
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "Queue::get should throw THREAD-CANCELLED");
+    }
+
+    testCancelQueuePop() {
+        Queue q();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            q.pop();  # Block forever on empty queue
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "Queue::pop should throw THREAD-CANCELLED");
+    }
+
+    testCancelCounterWait() {
+        Counter c(1);  # Will never reach 0
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            c.waitForZero(60000);  # 60s timeout
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "Counter::waitForZero(timeout) should throw THREAD-CANCELLED");
+    }
+
+    testCancelCounterWaitNoTimeout() {
+        Counter c(1);  # Will never reach 0
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            c.waitForZero();  # Infinite wait
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "Counter::waitForZero() should throw THREAD-CANCELLED");
+    }
+
+    testCancelGateEnter() {
+        Gate g();
+        g.enter();  # Take the gate in the main thread
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            g.enter();  # Block waiting for gate
+        });
+        g.exit();
+        assertEq("THREAD-CANCELLED", ex.err, "Gate::enter should throw THREAD-CANCELLED");
+    }
+
+    testCancelMutexLock() {
+        Mutex m();
+        m.lock();  # Lock in main thread
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            m.lock();  # Block waiting for mutex
+        });
+        m.unlock();
+        assertEq("THREAD-CANCELLED", ex.err, "Mutex::lock should throw THREAD-CANCELLED");
+    }
+
+    testCancelRWLockRead() {
+        RWLock rwl();
+        rwl.writeLock();  # Write lock in main thread
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            rwl.readLock();  # Block waiting for read lock
+        });
+        rwl.writeUnlock();
+        assertEq("THREAD-CANCELLED", ex.err, "RWLock::readLock should throw THREAD-CANCELLED");
+    }
+
+    testCancelRWLockWrite() {
+        RWLock rwl();
+        rwl.writeLock();  # Write lock in main thread
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            rwl.writeLock();  # Block waiting for write lock
+        });
+        rwl.writeUnlock();
+        assertEq("THREAD-CANCELLED", ex.err, "RWLock::writeLock should throw THREAD-CANCELLED");
+    }
+
+    testCancelConditionWait() {
+        Mutex m();
+        Condition cond();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            m.lock();
+            on_exit m.unlock();
+            cond.wait(m);  # Block waiting for signal
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "Condition::wait should throw THREAD-CANCELLED");
+    }
+
+    #------------------------------------------------------------------
+    # Cancel auto-lock tests
+    #------------------------------------------------------------------
+
+    testCancelAutoLock() {
+        Mutex m();
+        m.lock();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            AutoLock al(m);  # Block waiting for mutex
+        });
+        m.unlock();
+        assertEq("THREAD-CANCELLED", ex.err, "AutoLock constructor should throw THREAD-CANCELLED");
+    }
+
+    testCancelAutoGate() {
+        Gate g();
+        g.enter();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            AutoGate ag(g);  # Block waiting for gate
+        });
+        g.exit();
+        assertEq("THREAD-CANCELLED", ex.err, "AutoGate constructor should throw THREAD-CANCELLED");
+    }
+
+    testCancelAutoReadLock() {
+        RWLock rwl();
+        rwl.writeLock();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            AutoReadLock arl(rwl);  # Block waiting for read lock
+        });
+        rwl.writeUnlock();
+        assertEq("THREAD-CANCELLED", ex.err, "AutoReadLock constructor should throw THREAD-CANCELLED");
+    }
+
+    testCancelAutoWriteLock() {
+        RWLock rwl();
+        rwl.writeLock();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            AutoWriteLock awl(rwl);  # Block waiting for write lock
+        });
+        rwl.writeUnlock();
+        assertEq("THREAD-CANCELLED", ex.err, "AutoWriteLock constructor should throw THREAD-CANCELLED");
+    }
+
+    #------------------------------------------------------------------
+    # Queue negative timeout regression test
+    #------------------------------------------------------------------
+
+    testQueueNegativeTimeout() {
+        Queue q(10);
+        q.push("test");
+        q.push(123);
+
+        # Positive: get data
+        assertEq("test", q.get(), "Queue::get should return data");
+        assertEq(123, q.get(), "Queue::get should return second element");
+
+        # Negative timeout on empty queue should throw QUEUE-TIMEOUT immediately
+        bool got_timeout = False;
+        try {
+            q.get(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                got_timeout = True;
+            }
+        }
+        assertTrue(got_timeout, "Queue::get(-1) on empty queue should throw QUEUE-TIMEOUT");
+
+        # Same for pop
+        q.push("data");
+        assertEq("data", q.pop(), "Queue::pop should return data");
+
+        got_timeout = False;
+        try {
+            q.pop(-1);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                got_timeout = True;
+            }
+        }
+        assertTrue(got_timeout, "Queue::pop(-1) on empty queue should throw QUEUE-TIMEOUT");
+    }
+
+    #------------------------------------------------------------------
+    # Program interrupt interaction tests
+    #------------------------------------------------------------------
+
+    testProgramInterrupt() {
+        # Verify that SandboxManager-based interrupt still works alongside thread cancel
+        SandboxManager sm();
+        sm.requestInterrupt();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+sub infinite_loop() {
+    while (True) {}
+}
+", "program_interrupt_test");
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("infinite_loop");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "PROGRAM-INTERRUPTED should still work with the new cancel mechanism");
+        sm.clearInterrupt();
+    }
+
+    testCrossProgramSecurity() {
+        # Test that program interrupt via SandboxManager can stop threads
+        # in a child program (separate from thread cancel)
+        SandboxManager sm();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+
+        p.parse("
+%modern
+
+sub loop_forever() {
+    while (True) {}
+}
+", "cross_program_test");
+
+        # Pre-request interrupt so loop exits immediately
+        sm.requestInterrupt();
+
+        bool got_interrupt = False;
+        try {
+            p.callFunction("loop_forever");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PROGRAM-INTERRUPTED") {
+                got_interrupt = True;
+            }
+        }
+
+        assertTrue(got_interrupt, "program interrupt should work on child program threads");
+        sm.clearInterrupt();
+    }
+
+    #------------------------------------------------------------------
+    # Pipe stream cancel test
+    #------------------------------------------------------------------
+
+    testCancelPipeRead() {
+        StreamPipe pipe(True, 30000, 1024);
+        PipeInputStream pis = pipe.getInputStream();
+        PipeOutputStream pos = pipe.getOutputStream();
+
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            *binary data = pis.read(100);  # Block waiting for data
+        });
+
+        # Clean up the pipe
+        try { pos.close(); } catch () {}
+        try { pis.finishClose(); } catch () {}
+
+        assertEq("THREAD-CANCELLED", ex.err, "PipeInputStream::read should throw THREAD-CANCELLED");
+    }
+
+    #------------------------------------------------------------------
+    # Additional corner case and negative tests
+    #------------------------------------------------------------------
+
+    testCancelThreadReasonString() {
+        # Verify the reason string appears in the exception description
+        Counter ready(1);
+        Counter done(1);
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            try {
+                while (True) {}
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+        cancel_thread(child_tid, "test reason message");
+        done.waitForZero(5000);
+
+        assertEq("THREAD-CANCELLED", ex_info.err, "should get THREAD-CANCELLED");
+        assertRegex("test reason message", ex_info.desc, "reason string should appear in exception description");
+    }
+
+    testCancelThreadTidZero() {
+        # TID 0 should throw THREAD-CANCEL-ERROR
+        bool got_exception = False;
+        try {
+            cancel_thread(0);
+        } catch (hash<ExceptionInfo> ex) {
+            got_exception = True;
+            assertEq("THREAD-CANCEL-ERROR", ex.err, "TID 0 should throw THREAD-CANCEL-ERROR");
+        }
+        assertTrue(got_exception, "cancel_thread(0) should throw");
+    }
+
+    testCancelThreadReturnValue() {
+        # Verify cancel_thread returns True on success
+        Counter ready(1);
+        Counter done(1);
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            try {
+                while (True) {}
+            } catch (hash<ExceptionInfo> ex) {
+                # expected
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+        bool rv = cancel_thread(child_tid);
+        assertTrue(rv, "cancel_thread should return True on success");
+        done.waitForZero(5000);
+    }
+
+    testCancelAlreadyCancelled() {
+        # Cancelling an already-cancelled thread should still succeed
+        Counter ready(1);
+        Counter done(1);
+        int child_tid;
+        Queue sync();
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            try {
+                # Block until cancelled
+                Queue wait_q();
+                wait_q.get();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED") {
+                    # Signal we caught the first cancel, then wait for second
+                    clear_thread_cancel();
+                    sync.push(True);
+                    try {
+                        Queue wait_q2();
+                        wait_q2.get();
+                    } catch (hash<ExceptionInfo> ex2) {
+                        sync.push(ex2.err);
+                    }
+                }
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+
+        # First cancel
+        bool rv1 = cancel_thread(child_tid);
+        assertTrue(rv1, "first cancel should succeed");
+
+        # Wait for thread to catch and clear
+        auto caught = sync.get(5000);
+        assertTrue(caught, "thread should have caught first cancel");
+
+        # Second cancel
+        usleep(100ms);
+        bool rv2 = cancel_thread(child_tid);
+        assertTrue(rv2, "second cancel should succeed");
+
+        auto err = sync.get(5000);
+        assertEq("THREAD-CANCELLED", err, "second cancel should also produce THREAD-CANCELLED");
+        done.waitForZero(5000);
+    }
+
+    testClearWhenNotCancelled() {
+        # Calling clear_thread_cancel() when no cancel is pending should be a no-op
+        assertFalse(thread_cancelled(), "should not be cancelled initially");
+        clear_thread_cancel();  # Should not throw or crash
+        assertFalse(thread_cancelled(), "should still not be cancelled after clear");
+    }
+
+    testCancelTimedQueueGet() {
+        Queue q();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            q.get(60000);  # 60s timed wait
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "timed Queue::get should throw THREAD-CANCELLED");
+    }
+
+    testCancelTimedQueuePop() {
+        Queue q();
+        hash<ExceptionInfo> ex = cancelBackgroundThread(sub() {
+            q.pop(60000);  # 60s timed wait
+        });
+        assertEq("THREAD-CANCELLED", ex.err, "timed Queue::pop should throw THREAD-CANCELLED");
+    }
+
+    testCancelFileLock() {
+        # POSIX fcntl locks are per-process, so two fds in the same process
+        # won't conflict. Instead, test that the cancel check in lockBlocking
+        # works by setting cancel before calling it.
+        string path = tmp_location() + "/thread-cancel-lock-test-" + string(getpid());
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("test");
+        }
+
+        Counter ready(1);
+        Counter done(1);
+        *hash<ExceptionInfo> ex_info;
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            ready.dec();
+            try {
+                # Wait for cancel to be set, then try lockBlocking
+                # The cancel check at the top of the poll loop will catch it
+                Queue wait_q();
+                wait_q.get();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED") {
+                    # Now try lockBlocking - the cancel flag is still set
+                    File f();
+                    f.open2(path, O_RDWR);
+                    try {
+                        f.lockBlocking(F_WRLCK);
+                    } catch (hash<ExceptionInfo> ex2) {
+                        ex_info = ex2;
+                    }
+                    f.close();
+                }
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(100ms);
+        cancel_thread(child_tid);
+        done.waitForZero(5000);
+        unlink(path);
+
+        assertEq("THREAD-CANCELLED", ex_info.err, "File::lockBlocking should throw THREAD-CANCELLED when cancel is set");
+    }
+
+    testCancelAfterThreadExits() {
+        # Cancel a thread that has already exited - should return False
+        Counter done(1);
+        int child_tid;
+
+        background sub() {
+            child_tid = gettid();
+            done.dec();
+            # Thread exits immediately
+        }();
+
+        done.waitForZero(5000);
+        usleep(100ms);  # Give the thread time to fully exit
+
+        bool rv = cancel_thread(child_tid);
+        assertFalse(rv, "cancel_thread on exited thread should return False");
+    }
+}

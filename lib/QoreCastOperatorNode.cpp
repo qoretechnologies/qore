@@ -88,7 +88,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     };
 
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
-    bool or_nothing = (pti->or_nothing || (getProgram()->getParseOptions64() & PO_BROKEN_CAST));
+    bool or_nothing = (pti->or_nothing || (getProgram()->getParseOptions() & PO_BROKEN_CAST));
     if (!exp && or_nothing) {
         ReferenceHolder<> holder(this, nullptr);
         val = QoreValue();

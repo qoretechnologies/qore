@@ -531,18 +531,31 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                 # Get the stream ID from the response
                 int stream_id = output.stream_id;
                 string sid = string(stream_id);
-                log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
-                    stream_id, output.status_code);
+                if (exists output.status_code) {
+                    log(LoggerLevel::DEBUG, "response ready: stream_id=%d status=%d",
+                        stream_id, output.status_code);
+                } else {
+                    log(LoggerLevel::DEBUG, "streaming data: stream_id=%d bytes=%d",
+                        stream_id, output.body.size());
+                }
 
                 # Dispatch to callback if registered (get callback under lock)
+                # For streaming (partial) responses without end_stream, keep
+                # the callback for subsequent data chunks
+                bool is_end = output.end_stream.toBool();
                 *code cb;
                 *hash<auto> stream_ctx;
                 {
                     AutoLock al(stream_lock);
-                    cb = remove stream_callbacks{sid};
-                    stream_ctx = remove stream_ctxs{sid};
-                    if (cb) {
-                        --active_stream_count;
+                    if (is_end) {
+                        cb = remove stream_callbacks{sid};
+                        stream_ctx = remove stream_ctxs{sid};
+                        if (cb) {
+                            --active_stream_count;
+                        }
+                    } else {
+                        cb = stream_callbacks{sid};
+                        stream_ctx = stream_ctxs{sid};
                     }
                 }
                 if (cb) {

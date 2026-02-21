@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -244,11 +244,11 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, int64 po, const AbstractStatement*& old_stmt,
-        const QoreProgramLocation*& old_loc, int64& old_po);
+        const QoreProgramLocation* loc, const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
-DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, int64 po);
+DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
 
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
@@ -259,13 +259,12 @@ DLLLOCAL const AbstractStatement* get_runtime_statement();
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
-DLLLOCAL int64 parse_get_parse_options();
-DLLLOCAL int64 runtime_get_parse_options();
-DLLLOCAL void runtime_set_parse_options(int64 po);
-DLLLOCAL int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
+DLLLOCAL QoreParseOptions parse_get_parse_options();
+DLLLOCAL QoreParseOptions runtime_get_parse_options();
+DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
-DLLLOCAL bool parse_check_parse_option(int64 o);
-DLLLOCAL bool runtime_check_parse_option(int64 o);
+DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
+DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
 DLLLOCAL RootQoreNamespace* getRootNS();
 DLLLOCAL void updateCVarStack(CVNode* ncvs);
@@ -478,7 +477,7 @@ protected:
 class QoreProgramLocationHelper {
 public:
     DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, const QoreProgramLocation* loc,
-            const AbstractStatement* stat, int64 parse_options) : has_po(true) {
+            const AbstractStatement* stat, const QoreParseOptions& parse_options) : has_po(true) {
         swap_runtime_statement_location(xsink, stat, loc, parse_options, statement, this->loc,
             this->parse_options);
     }
@@ -498,7 +497,7 @@ public:
 protected:
     const QoreProgramLocation* loc;
     const AbstractStatement* statement;
-    int64 parse_options;
+    QoreParseOptions parse_options;
     bool has_po;
 };
 
@@ -581,7 +580,6 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
-DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
@@ -638,10 +636,8 @@ public:
 };
 
 DLLLOCAL const QoreListNode* thread_get_implicit_args();
-DLLLOCAL void thread_set_implicit_args(QoreListNode* args);
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
-DLLLOCAL LocalVarValue* thread_find_lvar_maybe(const char* id);
 
 // to get the current runtime object
 DLLLOCAL QoreObject* runtime_get_stack_object();

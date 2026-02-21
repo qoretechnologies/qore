@@ -235,7 +235,6 @@ EventLoop::copy() {
     @throw SOCKET-NOT-OPEN Socket is not open
 */
 nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
     if (!socket->isOpen()) {
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot add closed socket to event loop");
         return QoreValue();
@@ -263,7 +262,6 @@ nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
     @throw FILE-READ-ERROR File is not open
 */
 nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
-    ReferenceHolder<File> holder(file, xsink);
     if (!file->isOpen()) {
         xsink->raiseException("FILE-READ-ERROR", "Cannot add closed file to event loop");
         return QoreValue();
@@ -291,7 +289,6 @@ nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
     @throw SOCKET-NOT-OPEN Socket is not open
 */
 nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) {
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
     if (!socket->isOpen()) {
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot modify closed socket in event loop");
         return QoreValue();
@@ -316,7 +313,6 @@ nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) {
     @note It is safe to call this method for sockets that are not registered or have been closed
 */
 nothing EventLoop::del(Socket[QoreSocketObject] socket) {
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
     // Use obj_socket (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
     // This handles the case where the socket has been closed but is still registered
     el->removeByObject(const_cast<QoreObject*>(obj_socket), xsink);
@@ -331,7 +327,6 @@ nothing EventLoop::del(Socket[QoreSocketObject] socket) {
     @note It is safe to call this method for files that are not registered or have been closed
 */
 nothing EventLoop::del(ReadOnlyFile[File] file) {
-    ReferenceHolder<File> holder(file, xsink);
     // Use obj_file (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
     // This handles the case where the file has been closed but is still registered
     el->removeByObject(const_cast<QoreObject*>(obj_file), xsink);
@@ -353,7 +348,6 @@ nothing EventLoop::del(ReadOnlyFile[File] file) {
     @since %Qore 2.1
 */
 nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
-    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
     if (!notifier->isValid()) {
         xsink->raiseException("EVENT-NOTIFIER-ERROR", "Cannot add invalid notifier to event loop");
         return QoreValue();
@@ -362,7 +356,7 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
 #ifdef DARWIN
     // macOS: use optimized EVFILT_USER path (nginx-style)
     // This avoids pipe overhead and uses direct kqueue user events
-    el->addNotifier(notifier, const_cast<QoreObject*>(obj_notifier), xsink);
+    el->addNotifier(*notifier, const_cast<QoreObject*>(obj_notifier), xsink);
 #else
     // Other platforms: use fd-based registration
     int fd = notifier->fd();
@@ -389,10 +383,9 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
     @since %Qore 2.1
 */
 nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
-    ReferenceHolder<QoreEventNotifier> holder(notifier, xsink);
 #ifdef DARWIN
     // macOS: use optimized removal path
-    el->removeNotifier(notifier, xsink);
+    el->removeNotifier(*notifier, xsink);
 #else
     // Other platforms: use fd-based removal
     el->removeByObject(const_cast<QoreObject*>(obj_notifier), xsink);

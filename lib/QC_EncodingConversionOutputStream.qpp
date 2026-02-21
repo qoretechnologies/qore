@@ -63,7 +63,7 @@ qclass EncodingConversionOutputStream [arg=EncodingConversionOutputStream* os; n
  */
 EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] os, string sourceEncoding, string destEncoding) {
    SimpleRefHolder<EncodingConversionOutputStream> ecos(new EncodingConversionOutputStream(
-         os, QEM.findCreate(sourceEncoding), QEM.findCreate(destEncoding), xsink));
+         os.release(), QEM.findCreate(sourceEncoding), QEM.findCreate(destEncoding), xsink));
    self->setPrivate(CID_ENCODINGCONVERSIONOUTPUTSTREAM, ecos.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_ENCODINGCONVERSIONOUTPUTSTREAM);

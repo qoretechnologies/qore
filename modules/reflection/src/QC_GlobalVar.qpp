@@ -107,8 +107,6 @@ bool b = var1.isEqual(var2);
     @ref Qore::Program "Program" containers, it will return @ref False
 */
 bool GlobalVar::isEqual(GlobalVar[QoreReflectionGlobalVar] var) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionGlobalVar> holder(var, xsink);
-
     return v->var == var->var;
 }
 
@@ -346,13 +344,12 @@ GlobalVar var = GlobalVar::forName(pgm, "::ENV");
 encoding" and an error occurs during encoding conversion
  */
 static GlobalVar GlobalVar::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str(), pgm), xsink);
+    ReferenceHolder<QoreReflectionGlobalVar> var(new QoreReflectionGlobalVar(xsink, npath->c_str(), *pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -391,6 +388,5 @@ list<GlobalVar> l = GlobalVar::findAllRegex(pgm, "^E");
     @return a list of global variables matching the regular expression pattern argument or an empty list if no global variables match
 */
 static list<GlobalVar> GlobalVar::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_gvars(*pattern, re_opts, pgm, xsink);
+    return find_all_gvars(*pattern, re_opts, *pgm, xsink);
 }

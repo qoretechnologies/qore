@@ -296,7 +296,6 @@ TimeZone::set(tz);
     @endcode
  */
 static nothing TimeZone::set(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
-    ReferenceHolder<TimeZoneData> holder(zone, xsink);
     getProgram()->setTZ(zone->get());
 }
 

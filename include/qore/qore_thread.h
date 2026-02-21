@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -380,5 +380,63 @@ DLLEXPORT q_user_tld* q_get_thread_local_data_all(int key);
     @since %Qore 0.9.5
 */
 DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_destructor = true);
+
+/** @defgroup thread_cancel_api Thread Cancellation API
+    Functions for cooperative per-thread cancellation.
+
+    Thread cancellation allows one thread to request that another thread stop execution.
+    The target thread receives a \c THREAD-CANCELLED exception at the next cancellation point
+    (loop iteration, blocking wait, sleep, I/O operation).
+
+    @since %Qore 2.2
+*/
+///@{
+
+//! Checks for both thread cancellation and program interrupt
+/** This is the primary cancellation check function. Call it at cancellation points in
+    binary modules. It checks the per-thread cancellation flag first (cheap atomic load),
+    then the program-level interrupt via the sandbox manager.
+
+    @param xsink exception sink — receives \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED
+    @param operation description of the operation being checked (for exception messages)
+
+    @return true if cancelled/interrupted (exception raised), false otherwise
+
+    @since %Qore 2.2
+*/
+DLLEXPORT bool qore_check_cancel(ExceptionSink* xsink, const char* operation = "operation");
+
+//! Requests cooperative cancellation of a specific thread
+/** The target thread will receive a \c THREAD-CANCELLED exception at the next cancellation
+    point. Only threads in the same program context can be cancelled.
+
+    @param tid the Qore thread ID to cancel
+    @param reason optional reason string (will be included in the exception message)
+
+    @return 0 on success, -1 if the thread was not found, not active, or in a different program
+
+    @since %Qore 2.2
+*/
+DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
+
+//! Clears the cancellation flag for the current thread
+/** Call this after catching a \c THREAD-CANCELLED exception if the thread should continue
+    running (e.g., to complete cleanup operations without re-triggering at the next
+    cancellation point).
+
+    @since %Qore 2.2
+*/
+DLLEXPORT void qore_clear_thread_cancel();
+
+//! Returns true if cancellation has been requested for the current thread
+/** Non-throwing check — allows code to detect cancellation without triggering an exception.
+
+    @return true if cancellation has been requested
+
+    @since %Qore 2.2
+*/
+DLLEXPORT bool qore_is_thread_cancel_requested();
+
+///@}
 
 #endif  // ifndef _QORE_THREAD_H

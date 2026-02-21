@@ -236,7 +236,7 @@ public:
     bool resolved;
     int err = 0;
 
-    DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, int64 po);
+    DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po);
 
     //! Set up a fully-resolved signature from AOT binary metadata (no parsing required)
     /** Used during AOT binary deserialization to construct a variant with known parameter types
@@ -514,7 +514,7 @@ public:
         return is_user ? CT_USER : CT_BUILTIN;
     }
 
-    DLLLOCAL int64 getParseOptions(int64 po) const;
+    DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 
     DLLLOCAL int64 getFlags() const {
         return flags;
@@ -710,7 +710,7 @@ public:
         return statements;
     }
 
-    DLLLOCAL int64 getParseOptions(int64 po) const;
+    DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 
     DLLLOCAL void parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo);
 
@@ -941,7 +941,7 @@ public:
     }
 
     // copy constructor (used by method functions when copied)
-    DLLLOCAL QoreFunction(const QoreFunction& old, int64 po = 0, bool copy_all = false, bool n_inject = false)
+    DLLLOCAL QoreFunction(const QoreFunction& old, const QoreParseOptions& po = QoreParseOptions(), bool copy_all = false, bool n_inject = false)
         : name(old.name),
             unique_functionality(old.unique_functionality),
             unique_flags(old.unique_flags),
@@ -962,8 +962,8 @@ public:
             all_priv(old.all_priv),
             nn_uniqueReturnType(old.nn_uniqueReturnType),
             from_module(old.from_module) {
-        bool no_user = po & PO_NO_INHERIT_USER_FUNC_VARIANTS;
-        bool no_builtin = po & PO_NO_SYSTEM_FUNC_VARIANTS;
+        bool no_user = static_cast<bool>(po & PO_NO_INHERIT_USER_FUNC_VARIANTS);
+        bool no_builtin = static_cast<bool>(po & PO_NO_SYSTEM_FUNC_VARIANTS);
 
         // copy variants by reference
         for (vlist_t::const_iterator i = old.vlist.begin(), e = old.vlist.end(); i != e; ++i) {
@@ -1358,9 +1358,9 @@ protected:
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-        bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const;
+        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const;
 
-    DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, int64 ppo,
+    DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;
 };
 
