@@ -1118,6 +1118,10 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
         return;
     }
     for (auto& [key, alloca] : local_allocas) {
+        // Skip IR-only locals — they cannot be modified by AST callbacks
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            continue;
+        }
         reloadLocalFromRuntime(key, module, llvm_func);
     }
 }
@@ -4322,9 +4326,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Calls can modify local variables through side effects;
-            // reload all local allocas from the runtime variable stack
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Calls can modify local variables through side effects IF they have
+            // reference-typed parameters. Skip reload for calls with no ref args.
+            if (expr_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4454,8 +4460,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Calls can modify local variables through side effects IF they have
+            // reference-typed parameters. Skip reload for calls with no ref args.
+            if (direct_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4523,8 +4532,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Calls can modify local variables through side effects IF they have
+            // reference-typed parameters. Skip reload for calls with no ref args.
+            if (direct_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4658,8 +4670,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Calls can modify local variables through side effects IF they have
+            // reference-typed parameters. Skip reload for calls with no ref args.
+            if (direct_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);

@@ -72,6 +72,7 @@ public:
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
             const std::vector<QoreValue>* closure = nullptr,
             const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
+            const LocalVar* excluded_selfid = nullptr,
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
             bool suppress_guard_deopt = false);
 };

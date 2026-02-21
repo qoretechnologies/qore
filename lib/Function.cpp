@@ -2879,38 +2879,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 int64 saved_po = runtime_get_parse_options();
                 runtime_set_parse_options(po);
 
-                // Build set of pre-instantiated local variables for the IR interpreter.
-                // Use the cached set built during IR lowering to avoid per-call allocation.
-                // Note: selfid is included in the cached set but only used if (self && selfid).
-                std::unordered_set<const LocalVar*> pre_instantiated;
-                if (cached_ir->cached_pre_instantiated) {
-                    // Use the cached set as base (includes params, argv, selfid, ast_visible_body_locals)
-                    pre_instantiated = *cached_ir->cached_pre_instantiated;
-                    // Remove selfid if self is null (selfid was instantiated above only if self exists)
-                    if (!self && signature.selfid) {
-                        pre_instantiated.erase(signature.selfid);
-                    }
-                } else {
-                    // Fallback: build the set if cache is not available
-                    // This shouldn't happen in normal execution but handles edge cases
-                    for (unsigned i = 0; i < signature.numParams(); ++i) {
-                        pre_instantiated.insert(signature.lv[i]);
-                    }
-                    if (signature.argvid) {
-                        pre_instantiated.insert(signature.argvid);
-                    }
-                    if (self && signature.selfid) {
-                        pre_instantiated.insert(signature.selfid);
-                    }
-                    for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
-                        pre_instantiated.insert(lv);
-                    }
-                }
+                // Use the cached set of pre-instantiated locals built during IR lowering.
+                // Pass pointer directly to avoid per-call allocation (critical for recursive calls).
+                // If self is null and signature.selfid is present, pass it as excluded_selfid
+                // so the IR interpreter skips it even though it's in the cached set.
+                const LocalVar* excluded_selfid = (!self && signature.selfid) ? signature.selfid : nullptr;
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
                 bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
-                    nullptr, nullptr, &pre_instantiated, statements, pgm);
+                    nullptr, nullptr, cached_ir->cached_pre_instantiated, excluded_selfid, statements, pgm);
                 if (ok && !*xsink) {
                     val = ir_return_value;
                 } else if (*xsink) {

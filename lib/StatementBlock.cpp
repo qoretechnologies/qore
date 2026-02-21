@@ -918,7 +918,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // guard failure because re-executing the entire block from the
                     // beginning would duplicate side effects (I/O, mutations).
                     ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
-                        nullptr, nullptr, &pre_instantiated, nullptr, nullptr, true);
+                        nullptr, nullptr, &pre_instantiated, nullptr, nullptr, nullptr, true);
                 }
 
                 // Uninstantiate nested locals after JIT execution (reverse order)

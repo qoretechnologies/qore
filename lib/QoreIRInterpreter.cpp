@@ -1226,7 +1226,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
-        const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt) {
+        const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;

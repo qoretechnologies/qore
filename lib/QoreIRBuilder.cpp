@@ -625,7 +625,35 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
+    // For generic Call/CallMethod/CallStatic/CallIndirect, conservatively assume
+    // ref args are possible since we don't have resolved variant information
+    if (op == QoreIROpcode::Call || op == QoreIROpcode::CallMethod ||
+        op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallIndirect) {
+        inst->has_ref_args = true;
+    }
     return inst;
+}
+
+static bool checkRefArgs(const AbstractQoreFunctionVariant* variant) {
+    if (!variant) return false;
+    // Get the UserVariantBase to access parameter type information
+    auto* uvb = variant->getUserVariantBase();
+    if (!uvb) return false;
+    auto* sig = uvb->getUserSignature();
+    if (!sig) return false;
+    // Check if any parameter is a reference type
+    // Parameters 0..n-1 are the declared parameters
+    for (size_t i = 0; i < sig->numParams(); ++i) {
+        auto pinfo = sig->getParamTypeInfo(i);
+        if (pinfo && QoreTypeInfo::isReference(pinfo)) {
+            return true;
+        }
+    }
+    // Check if *argv is used (splat parameter) — argv can contain reference-typed values
+    if (sig->argvid) {
+        return true;  // Conservative: argv may contain reference types
+    }
+    return false;
 }
 
 QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction* qf,
@@ -635,6 +663,8 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 
@@ -645,6 +675,8 @@ QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const Q
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 
@@ -657,6 +689,8 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 
@@ -667,6 +701,8 @@ QoreIRCallStaticDirectInstruction* QoreIRBuilder::createCallStaticDirect(const Q
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 

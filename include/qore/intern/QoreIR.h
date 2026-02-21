@@ -1175,6 +1175,7 @@ public:
     }
 
     QoreValue expr;
+    bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
 };
 
 //! Direct function call instruction - bypasses AST round-trip for resolved function calls
@@ -1197,6 +1198,7 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (may be null)
     QoreProgram* pgm = nullptr;             //!< The program context
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     //!< operands[0..n-1] are the function arguments
 };
 
@@ -1225,6 +1227,7 @@ public:
     const QoreClass* qc = nullptr;          //!< The class containing the method
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1256,6 +1259,7 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     QoreValue expr;                             //!< Original AST expression (for AOT)
+    bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1278,6 +1282,7 @@ public:
     const QoreMethod* method = nullptr;     //!< The resolved static method pointer
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     //!< operands[0..n-1] are the pre-evaluated method arguments
 };
 
