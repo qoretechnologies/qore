@@ -2417,12 +2417,51 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         }
         return;
     }
+    // Compute max value ID for right-sizing interpreter value vector
+    uint32_t max_vid = 0;
+    for (const auto& block : func->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid() && inst->result.id > max_vid) {
+                max_vid = inst->result.id;
+            }
+            for (const auto& operand : inst->operands) {
+                if (operand.isValid() && operand.id > max_vid) {
+                    max_vid = operand.id;
+                }
+            }
+        }
+    }
+    func->max_value_id = max_vid;
+
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
     // Initialize type profiling for guards
     func->initGuardProfiles();
+
+    // Build cached pre-instantiated set to avoid per-call allocation in evalTiered()
+    // This includes: parameters + argvid + selfid + ast_visible_body_locals
+    // (NOT all_body_locals - only the AST-visible subset)
+    auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
+    // Add parameter locals
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        cached_pre_inst->insert(signature.lv[i]);
+    }
+    // Add argv
+    if (signature.argvid) {
+        cached_pre_inst->insert(signature.argvid);
+    }
+    // Add selfid (if it exists - will be conditional at runtime)
+    if (signature.selfid) {
+        cached_pre_inst->insert(signature.selfid);
+    }
+    // Add ast_visible_body_locals (the filtered subset, not all_body_locals)
+    for (LocalVar* lv : func->ast_visible_body_locals) {
+        cached_pre_inst->insert(lv);
+    }
+    func->cached_pre_instantiated = cached_pre_inst;
+
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
     printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
@@ -2837,32 +2876,31 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 runtime_set_parse_options(po);
 
                 // Build set of pre-instantiated local variables for the IR interpreter.
-                // Parameter locals are already instantiated by setupCall() in eval().
-                // argvid/selfid are instantiated above in this function or by the caller
-                //   (e.g. UserConstructorVariant::evalConstructor() pushes selfid before
-                //    calling evalIntern() with self=0).
-                // Body locals are instantiated just above (ast_visible_body_locals, not all_body_locals).
-                // All must be in pre_instantiated so the IR interpreter doesn't
-                // re-instantiate them (which would push a new frame with value 0).
-                // CRITICAL FIX: Build a temporary set with only the locals that are actually
-                // instantiated. Do NOT use pre_instantiated_cache which includes ALL body locals
-                // (all_body_locals), but we only instantiate the filtered ast_visible_body_locals.
+                // Use the cached set built during IR lowering to avoid per-call allocation.
+                // Note: selfid is included in the cached set but only used if (self && selfid).
                 std::unordered_set<const LocalVar*> pre_instantiated;
-                // Add parameter locals (instantiated by setupCall in eval())
-                for (unsigned i = 0; i < signature.numParams(); ++i) {
-                    pre_instantiated.insert(signature.lv[i]);
-                }
-                // Add argv (instantiated above at line 2812)
-                if (signature.argvid) {
-                    pre_instantiated.insert(signature.argvid);
-                }
-                // Add selfid (only if it was instantiated above at line 2808)
-                if (self && signature.selfid) {
-                    pre_instantiated.insert(signature.selfid);
-                }
-                // Add ast_visible_body_locals (instantiated at line 2823)
-                for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
-                    pre_instantiated.insert(lv);
+                if (cached_ir->cached_pre_instantiated) {
+                    // Use the cached set as base (includes params, argv, selfid, ast_visible_body_locals)
+                    pre_instantiated = *cached_ir->cached_pre_instantiated;
+                    // Remove selfid if self is null (selfid was instantiated above only if self exists)
+                    if (!self && signature.selfid) {
+                        pre_instantiated.erase(signature.selfid);
+                    }
+                } else {
+                    // Fallback: build the set if cache is not available
+                    // This shouldn't happen in normal execution but handles edge cases
+                    for (unsigned i = 0; i < signature.numParams(); ++i) {
+                        pre_instantiated.insert(signature.lv[i]);
+                    }
+                    if (signature.argvid) {
+                        pre_instantiated.insert(signature.argvid);
+                    }
+                    if (self && signature.selfid) {
+                        pre_instantiated.insert(signature.selfid);
+                    }
+                    for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+                        pre_instantiated.insert(lv);
+                    }
                 }
 
                 QoreValue ir_return_value;

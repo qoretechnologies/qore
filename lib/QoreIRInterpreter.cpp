@@ -1235,9 +1235,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Use vector for IR value slots for O(1) direct index access instead of O(1) hash lookup
     // QoreIRFunction assigns IDs sequentially starting from 1, so vector[id] is direct access
     std::vector<QoreValue> values;
-    // Reserve space for typical function IR slots (10-100 usually, some have more)
-    // Vector will auto-grow if needed in setValueSlot, but reserve reduces reallocations
-    values.reserve(128);
+    // Right-size the reservation based on actual max_value_id from the function
+    // to avoid unnecessary allocations for small functions while allowing growth for large ones
+    size_t reserve_size = func.max_value_id > 0 ? func.max_value_id + 1 : 128;
+    values.reserve(reserve_size);
     std::vector<uint32_t> cleanup;
     std::unordered_map<const void*, QoreValue> locals;
     std::unordered_set<const LocalVar*> instantiated_locals;

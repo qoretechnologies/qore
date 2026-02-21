@@ -1544,6 +1544,10 @@ public:
     explicit QoreIRFunction(std::string n_name) : name(std::move(n_name)) {
     }
 
+    ~QoreIRFunction() {
+        delete cached_pre_instantiated;
+    }
+
     QoreIRBasicBlock* createBlock(const std::string& block_name) {
         auto block = std::make_unique<QoreIRBasicBlock>(block_name);
         QoreIRBasicBlock* ptr = block.get();
@@ -1571,6 +1575,9 @@ public:
     std::string name;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
+    // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
+    uint32_t max_value_id = 0;
+
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
     // all body locals from the statement tree).  The JIT must not
@@ -1580,6 +1587,11 @@ public:
     // Cached LocalVar* set for fast iteration in evalTiered() without per-call allocation.
     // Populated in attemptIRLowering() with the same sources as pre_instantiated_locals.
     std::unordered_set<const LocalVar*> pre_instantiated_cache;
+
+    // Cached pre-instantiated set (params + argvid + ast_visible_body_locals)
+    // This is built once during IR lowering and reused on every call.
+    // selfid is handled separately since it's conditional on (self && selfid).
+    mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
 
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
