@@ -190,8 +190,8 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     QoreAOTBinaryHeader header = in_header;
     header.section_count = static_cast<uint32_t>(sections.size());
 
-    // Calculate on-disk header size based on version
-    uint32_t header_size = (header.version >= 2) ? QORE_AOT_HEADER_SIZE_V2 : QORE_AOT_HEADER_SIZE_V1;
+    // Fixed header size (60 bytes)
+    uint32_t header_size = QORE_AOT_HEADER_SIZE;
     uint32_t section_dir_size = static_cast<uint32_t>(sections.size() * sizeof(QoreAOTSectionHeader));
     uint32_t string_pool_size = strings.size();
     uint32_t data_size = static_cast<uint32_t>(buffer.size());
@@ -200,7 +200,7 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     output.clear();
     output.reserve(total);
 
-    // Write header
+    // Write header (60 bytes, single flat format)
     auto writeU8LE = [&](uint8_t v) {
         output.push_back(v);
     };
@@ -221,24 +221,42 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
             output.push_back(static_cast<uint8_t>((uv >> (i * 8)) & 0xFF));
         }
     };
+    auto writeU64LE = [&](uint64_t v) {
+        for (int i = 0; i < 8; ++i) {
+            output.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
+        }
+    };
 
-    // Version 1 fields (28 bytes)
+    // Bytes 0-3: magic
     writeU32LE(header.magic);
+    // Bytes 4-5: version
     writeU16LE(header.version);
+    // Bytes 6-7: flags
     writeU16LE(header.flags);
-    writeI64LE(header.parse_options);
+    // Bytes 8-15: parse_options_lo
+    writeI64LE(header.parse_options_lo);
+    // Bytes 16-19: section_count
     writeU32LE(header.section_count);
+    // Bytes 20-23: label_offset
     writeU32LE(header.label_offset);
+    // Bytes 24-27: label_length
     writeU32LE(header.label_length);
-
-    // Version 2 extension fields (8 bytes)
-    if (header.version >= 2) {
-        writeU16LE(header.max_opcode_id);
-        writeU8LE(header.qore_version_major);
-        writeU8LE(header.qore_version_minor);
-        writeU16LE(header.qore_version_patch);
-        writeU16LE(header.reserved2);
-    }
+    // Bytes 28-29: max_opcode_id
+    writeU16LE(header.max_opcode_id);
+    // Bytes 30: qore_version_major
+    writeU8LE(header.qore_version_major);
+    // Bytes 31: qore_version_minor
+    writeU8LE(header.qore_version_minor);
+    // Bytes 32-33: qore_version_patch
+    writeU16LE(header.qore_version_patch);
+    // Bytes 34-35: reserved
+    writeU16LE(header.reserved);
+    // Bytes 36-43: parse_options_hi
+    writeI64LE(header.parse_options_hi);
+    // Bytes 44-51: source_hash
+    writeU64LE(header.source_hash);
+    // Bytes 52-59: feature_flags
+    writeU64LE(header.feature_flags);
 
     // Write section directory
     for (auto& sec : sections) {
@@ -265,16 +283,50 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
     data = in_data;
     total_size = in_size;
 
-    // Need at least 6 bytes to read magic + version
-    if (in_size < 6) {
-        error = "binary too small for header";
+    // Fixed header size (60 bytes)
+    const uint32_t header_size = QORE_AOT_HEADER_SIZE;
+
+    // Check full header fits
+    if (in_size < header_size) {
+        error = "binary too small for header (" + std::to_string(in_size) + " < " + std::to_string(header_size) + ")";
         return false;
     }
 
-    // Read magic and version first to determine header size
+    // Read header (60 bytes, single flat format)
     const uint8_t* ptr = data;
     header.magic = readU32(ptr);
     header.version = readU16(ptr);
+    header.flags = readU16(ptr);
+    header.parse_options_lo = readI64(ptr);
+    header.section_count = readU32(ptr);
+    header.label_offset = readU32(ptr);
+    header.label_length = readU32(ptr);
+    header.max_opcode_id = readU16(ptr);
+    header.qore_version_major = readU8(ptr);
+    header.qore_version_minor = readU8(ptr);
+    header.qore_version_patch = readU16(ptr);
+    header.reserved = readU16(ptr);
+    header.parse_options_hi = readI64(ptr);
+
+    // Read new v1 fields: source_hash (8) and feature_flags (8)
+    uint64_t source_hash = 0;
+    uint64_t feature_flags = 0;
+    {
+        uint64_t temp = 0;
+        for (int i = 0; i < 8; ++i) {
+            temp |= static_cast<uint64_t>(ptr[i]) << (i * 8);
+        }
+        source_hash = temp;
+        ptr += 8;
+        temp = 0;
+        for (int i = 0; i < 8; ++i) {
+            temp |= static_cast<uint64_t>(ptr[i]) << (i * 8);
+        }
+        feature_flags = temp;
+        ptr += 8;
+    }
+    header.source_hash = source_hash;
+    header.feature_flags = feature_flags;
 
     // Validate magic
     if (header.magic != QORE_AOT_BINARY_MAGIC) {
@@ -282,50 +334,16 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Validate version and determine on-disk header size
-    uint32_t header_size;
-    if (header.version == 1) {
-        header_size = QORE_AOT_HEADER_SIZE_V1;
-    } else if (header.version <= QORE_AOT_BINARY_VERSION) {
-        header_size = QORE_AOT_HEADER_SIZE_V2;
-    } else {
+    // Validate version (must be exactly 1)
+    if (header.version != QORE_AOT_BINARY_VERSION) {
         error = "unsupported binary format version " + std::to_string(header.version)
-              + " (max supported: " + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
+              + " (expected " + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
               + "; please update your Qore installation";
         return false;
     }
 
-    // Check full header fits
-    if (in_size < header_size) {
-        error = "binary too small for version " + std::to_string(header.version) + " header";
-        return false;
-    }
-
-    // Read remaining v1 header fields
-    header.flags = readU16(ptr);
-    header.parse_options = readI64(ptr);
-    header.section_count = readU32(ptr);
-    header.label_offset = readU32(ptr);
-    header.label_length = readU32(ptr);
-
-    // Read v2 extension fields (or set defaults for v1)
-    if (header.version >= 2) {
-        header.max_opcode_id = readU16(ptr);
-        header.qore_version_major = readU8(ptr);
-        header.qore_version_minor = readU8(ptr);
-        header.qore_version_patch = readU16(ptr);
-        header.reserved2 = readU16(ptr);
-    } else {
-        // v1 binary: no opcode compatibility info available
-        header.max_opcode_id = 0;
-        header.qore_version_major = 0;
-        header.qore_version_minor = 0;
-        header.qore_version_patch = 0;
-        header.reserved2 = 0;
-    }
-
-    // Validate opcode compatibility (v2+ binaries only)
-    if (header.version >= 2 && header.max_opcode_id > QORE_IR_MAX_OPCODE) {
+    // Validate opcode compatibility
+    if (header.max_opcode_id > QORE_IR_MAX_OPCODE) {
         error = "binary was compiled with Qore "
               + std::to_string(header.qore_version_major) + "."
               + std::to_string(header.qore_version_minor) + "."

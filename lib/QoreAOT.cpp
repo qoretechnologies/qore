@@ -241,7 +241,79 @@ struct AOTCompiledFunc {
     int num_exprs = 0;              //!< number of expression slots in AOT context
     int num_stmts = 0;              //!< number of statement slots in AOT context (OnBlockExit)
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
+    uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
 };
+
+// ---- Feature flag helpers ----
+
+//! Map IR opcode to feature flag (if it requires special runtime support)
+static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
+    switch (op) {
+        // RefForeach* opcodes (325-330)
+        case QoreIROpcode::RefForeachInit:
+        case QoreIROpcode::RefForeachSize:
+        case QoreIROpcode::RefForeachGetEntry:
+        case QoreIROpcode::RefForeachRecord:
+        case QoreIROpcode::RefForeachFinalize:
+        case QoreIROpcode::RefForeachCleanup:  return QORE_AOT_FEAT_FOREACH_REF;
+        // Cast* opcodes (252-256)
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum:           return QORE_AOT_FEAT_NATIVE_CAST;
+        case QoreIROpcode::OnBlockExit:        return QORE_AOT_FEAT_BLOCK_EXIT;
+        // Direct list index (13-15)
+        case QoreIROpcode::ListGetInt:
+        case QoreIROpcode::ListGetFloat:
+        case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:   return QORE_AOT_FEAT_HASH_KEY_ACCESS;
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStaticDirect:   return QORE_AOT_FEAT_FAST_CALL;
+        default:                               return 0;
+    }
+}
+
+//! Scan all IR instructions in a function and collect required features
+static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
+    uint64_t flags = 0;
+    for (const auto& block : f.blocks) {
+        for (const auto& inst : block->instructions) {
+            flags |= opcodeToFeatureFlag(inst->opcode);
+        }
+    }
+    return flags;
+}
+
+//! Combine feature flags from all compiled functions
+static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
+    uint64_t flags = 0;
+    for (const auto& cf : funcs) {
+        flags |= cf.feature_flags;
+    }
+    return flags;
+}
+
+//! Compute xxHash64 of source file bytes
+static uint64_t computeSourceHash(const char* label) {
+    if (!label) {
+        return 0;
+    }
+    std::ifstream f(label, std::ios::binary | std::ios::ate);
+    if (!f.is_open()) {
+        return 0;
+    }
+    auto sz = f.tellg();
+    if (sz <= 0) {
+        return 0;
+    }
+    std::vector<char> src(static_cast<size_t>(sz));
+    f.seekg(0);
+    f.read(src.data(), sz);
+    return XXH64(src.data(), static_cast<size_t>(sz), 0);
+}
 
 //! Report AOT compilation statistics
 static void reportAOTCompileStats(const char* label, int compiled_count, int total_funcs,
@@ -444,6 +516,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                    // Scan IR function for required features
+                    cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
                     printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
@@ -559,6 +633,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
+                        // Scan IR function for required features
+                        cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
                         printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
@@ -1053,6 +1129,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     // Extract slot identities (no uvb for toplevel)
                     extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids);
+                    // Scan IR function for required features
+                    cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
                     toplevel_ok = true;
@@ -1096,15 +1174,15 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
-        hdr.parse_options = parse_options.getLo();
+        hdr.parse_options_lo = parse_options.getLo();
         hdr.label_offset = writer.strings.add(label);
-        // v2 fields: opcode compatibility and Qore version
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
         hdr.qore_version_patch = QORE_VERSION_PATCH;
-        // v3 field: high 64 bits of parse options
         hdr.parse_options_hi = parse_options.getHi();
+        hdr.source_hash = computeSourceHash(label);
+        hdr.feature_flags = computeFeatureFlags(compiled_funcs);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -2173,15 +2251,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-        hdr.parse_options = mod_po.getLo();
+        hdr.parse_options_lo = mod_po.getLo();
         hdr.label_offset = writer.strings.add(label);
-        // v2 fields: opcode compatibility and Qore version
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
         hdr.qore_version_patch = QORE_VERSION_PATCH;
-        // v3 field: high 64 bits of parse options
         hdr.parse_options_hi = mod_po.getHi();
+        hdr.source_hash = computeSourceHash(label);
+        hdr.feature_flags = computeFeatureFlags(compiled_funcs);
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
         // at runtime before deserializing the namespace tree
@@ -2501,15 +2579,15 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-            hdr.parse_options = mod_po.getLo();
+            hdr.parse_options_lo = mod_po.getLo();
             hdr.label_offset = writer.strings.add(qm_path.c_str());
-            // v2 fields: opcode compatibility and Qore version
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
             hdr.qore_version_patch = QORE_VERSION_PATCH;
-            // v3 field: high 64 bits of parse options
             hdr.parse_options_hi = mod_po.getHi();
+            hdr.source_hash = computeSourceHash(qm_path.c_str());
+            hdr.feature_flags = computeFeatureFlags(compiled_funcs);
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
             // at runtime before deserializing the namespace tree

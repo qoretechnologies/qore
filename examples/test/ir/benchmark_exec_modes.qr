@@ -16,9 +16,12 @@
 #   QORE_BIN         Path to the qore binary to benchmark (default: argv[0] or "qore")
 #   LD_LIBRARY_PATH  Library path for the qore binary
 #   BENCH_MODES      Comma-separated list of modes to run (default: ast,ir,tiered,jit,aot)
-#   BENCH_ITERS      Base iteration count (default: 1000000)
+#   BENCH_ITERS      Base iteration count (default: 10000000 for extended benchmarks)
+#
+# Note: This is the extended benchmark suite with 10x longer iterations for more
+# reliable measurements. Compilation time is separated from execution time for AOT.
 
-const DEFAULT_ITERATIONS = 1000000;
+const DEFAULT_ITERATIONS = 10000000;  # 10x longer than original (1M -> 10M)
 
 hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path) {
     # Write code to temp file
@@ -30,19 +33,28 @@ hash<auto> sub run_benchmark(string name, string code, string mode, string qore_
     }
 
     string cmd;
+    float compile_ms = 0.0;
+
     if (mode == "aot") {
-        # For AOT, compile to native executable then run it directly
+        # For AOT, measure compilation and execution separately
         string qcc_bin = regex_subst(qore_bin, "qore$", "qcc");
         string aot_exe = sprintf("/tmp/bench_%s_aot", name);
         string compile_cmd = sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>/dev/null",
             ld_path, qcc_bin, aot_exe, tmp);
+
+        # Time the compilation
+        date compile_start = now_us();
         system(compile_cmd);
+        date compile_end = now_us();
+        compile_ms = (compile_end - compile_start).durationMicroseconds() / 1000.0;
+
         cmd = sprintf("LD_LIBRARY_PATH=%s %s 2>/dev/null", ld_path, aot_exe);
     } else {
         cmd = sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>/dev/null",
             ld_path, qore_bin, mode, tmp);
     }
 
+    # Time the execution (for all modes)
     date start = now_us();
     string output = backquote(cmd);
     date end = now_us();
@@ -52,6 +64,7 @@ hash<auto> sub run_benchmark(string name, string code, string mode, string qore_
 
     return {
         "elapsed_ms": elapsed_ms,
+        "compile_ms": compile_ms,  # Only non-zero for AOT
         "output": trim(output),
     };
 }
@@ -308,10 +321,14 @@ printf(\"%%d\\n\", result.size());
         modes = ("ast", "ir", "tiered", "jit", "aot");
     }
 
-    printf("Performance Benchmark: %s\n", modes.join(" vs "));
-    printf("Iterations base: %d\n", iterations);
+    printf("================================================================================\n");
+    printf("Extended Performance Benchmark (10x longer iterations for reliable measurements)\n");
+    printf("================================================================================\n");
+    printf("Modes: %s\n", modes.join(" vs "));
+    printf("Base iterations: %d\n", iterations);
     printf("Binary: %s\n", qore_bin);
-    printf("========================================================================\n\n");
+    printf("Note: AOT shows execution time (compilation time shown separately)\n");
+    printf("================================================================================\n\n");
 
     # Results table
     hash<string, hash<string, float>> results;
@@ -333,7 +350,13 @@ printf(\"%%d\\n\", result.size());
                 have_expected = True;
             }
             string status = r.output == expected_output ? "OK" : "MISMATCH";
-            printf("  %-7s: %8.1f ms  [%s]\n", mode, r.elapsed_ms, status);
+            if (mode == "aot" && r.compile_ms > 0) {
+                # Show AOT as: execution time (compilation time)
+                printf("  %-7s: %8.1f ms (compile: %6.1f ms)  [%s]\n",
+                    mode, r.elapsed_ms, r.compile_ms, status);
+            } else {
+                printf("  %-7s: %8.1f ms  [%s]\n", mode, r.elapsed_ms, status);
+            }
         }
 
         # Calculate speedups relative to AST
@@ -354,9 +377,9 @@ printf(\"%%d\\n\", result.size());
     }
 
     # Summary table
-    printf("========================================================================\n");
-    printf("SUMMARY (times in ms)\n");
-    printf("========================================================================\n");
+    printf("================================================================================\n");
+    printf("SUMMARY (execution times in ms, compilation time excluded for AOT)\n");
+    printf("================================================================================\n");
     # Header
     string header = sprintf("%-15s", "Test");
     foreach string mode in (modes) {
@@ -395,5 +418,14 @@ printf(\"%%d\\n\", result.size());
             printf("  %-7s: %.2fx\n", mode, total_speedup / count);
         }
     }
+
+    printf("\n");
+    printf("================================================================================\n");
+    printf("NOTES:\n");
+    printf("  - All times are EXECUTION times (how fast the code runs)\n");
+    printf("  - AOT compilation times are shown separately per test and NOT included above\n");
+    printf("  - JIT/tiered compilation happens during first execution and is included\n");
+    printf("  - 10x longer iterations than original for more reliable measurements\n");
+    printf("================================================================================\n");
 }
 }

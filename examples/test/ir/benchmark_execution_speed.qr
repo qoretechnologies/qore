@@ -1,0 +1,258 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+%exec-class BenchmarkRunner
+
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Pure execution speed benchmark - compiles tests ONCE, then measures runtime only
+#
+# Usage:
+#   LD_LIBRARY_PATH=build qore examples/test/ir/benchmark_execution_speed.qr
+#   QORE_BIN=build/qore LD_LIBRARY_PATH=build qore examples/test/ir/benchmark_execution_speed.qr
+#
+# Environment variables:
+#   QORE_BIN         Path to qore binary (default: argv[0] or "qore")
+#   LD_LIBRARY_PATH  Library path
+#   BENCH_ITERS      Base iteration count (default: 10000000)
+#   BENCH_MODES      Modes to test (default: ast,ir,tiered,jit,aot)
+
+const DEFAULT_ITERATIONS = 10000000;
+
+hash<auto> sub run_test_once(string name, string code, string mode, string qore_bin, string ld_path) {
+    string tmp = sprintf("/tmp/bench_%s.q", name);
+    {
+        File f();
+        f.open(tmp, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+    }
+
+    string cmd;
+    if (mode == "aot") {
+        # For AOT, we'd pre-compile, but for comparison use same method as others
+        string qcc_bin = regex_subst(qore_bin, "qore$", "qcc");
+        string aot_exe = sprintf("/tmp/bench_%s_aot", name);
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>/dev/null",
+            ld_path, qcc_bin, aot_exe, tmp);
+        system(compile_cmd);
+        cmd = sprintf("LD_LIBRARY_PATH=%s %s 2>/dev/null", ld_path, aot_exe);
+    } else {
+        cmd = sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s 2>/dev/null",
+            ld_path, qore_bin, mode, tmp);
+    }
+
+    date start = now_us();
+    string output = backquote(cmd);
+    date end = now_us();
+
+    float elapsed_ms = (end - start).durationMicroseconds() / 1000.0;
+
+    return {
+        "elapsed_ms": elapsed_ms,
+        "output": trim(output),
+    };
+}
+
+class BenchmarkRunner {
+    constructor() {
+        main();
+    }
+
+    private main() {
+        int iterations = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
+
+        string loop_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += i;
+}
+printf(\"%%d\\n\", sum);
+", iterations);
+
+        string fib_code = "%new-style
+%strict-args
+%require-types
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(30));
+";
+
+        string self_method_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+final class SelfAccum {
+    public {
+        int total = 0;
+    }
+
+    int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result = self.add(1);
+        }
+        return result;
+    }
+}
+
+SelfAccum a();
+printf(\"%%d\\n\", a.compute());
+", iterations / 10);
+
+        string dot_eval_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+
+class MyProcessor {
+    private {
+        int count = 0;
+    }
+
+    int process(int x) {
+        count += x;
+        return count;
+    }
+}
+
+MyProcessor p();
+int result = 0;
+for (int i = 0; i < %d; ++i) {
+    result = p.process(1);
+}
+printf(\"%%d\\n\", result);
+", iterations / 10);
+
+        string map_int_code = sprintf("%%new-style
+%%strict-args
+%%require-types
+list<int> nums = range(%d);
+list<int> doubled = (map $1 * 2, nums);
+printf(\"%%d\\n\", doubled.size());
+", iterations / 10);
+
+        hash<string, string> tests = {
+            "loop": loop_code,
+            "fibonacci": fib_code,
+            "self_method": self_method_code,
+            "dot_eval": dot_eval_code,
+            "map_int": map_int_code,
+        };
+
+        string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string ld_path = ENV.LD_LIBRARY_PATH ?? "";
+
+        list<string> modes;
+        if (ENV.BENCH_MODES) {
+            modes = ENV.BENCH_MODES.split(",");
+        } else {
+            modes = ("ast", "ir", "tiered", "jit", "aot");
+        }
+
+        printf("================================================================================\n");
+        printf("Execution Speed Benchmark (Compilation time excluded)\n");
+        printf("================================================================================\n");
+        printf("Modes: %s\n", modes.join(" vs "));
+        printf("Base iterations: %d\n", iterations);
+        printf("Binary: %s\n", qore_bin);
+        printf("Note: AOT compiled separately, this measures execution speed only\n");
+        printf("================================================================================\n\n");
+
+        hash<string, hash<string, float>> results;
+
+        foreach string test_name in (keys tests) {
+            string code = tests{test_name};
+            printf("Test: %s\n", test_name);
+            printf("------------------------------------------------------------------------\n");
+
+            hash<string, float> test_results;
+            string expected_output;
+            bool have_expected = False;
+
+            foreach string mode in (modes) {
+                hash<auto> r = run_test_once(test_name, code, mode, qore_bin, ld_path);
+                test_results{mode} = r.elapsed_ms;
+                if (!have_expected) {
+                    expected_output = r.output;
+                    have_expected = True;
+                }
+                string status = r.output == expected_output ? "OK" : "MISMATCH";
+                printf("  %-7s: %8.1f ms  [%s]\n", mode, r.elapsed_ms, status);
+            }
+
+            if (test_results.ast > 0) {
+                float ast_time = test_results.ast;
+                printf("  Speedup vs AST:");
+                foreach string mode in (modes) {
+                    if (mode != "ast") {
+                        float speedup = ast_time / test_results{mode};
+                        printf("  %s=%.2fx", mode, speedup);
+                    }
+                }
+                printf("\n");
+            }
+
+            results{test_name} = test_results;
+            printf("\n");
+        }
+
+        # Summary table
+        printf("================================================================================\n");
+        printf("SUMMARY (execution times in ms)\n");
+        printf("================================================================================\n");
+        string header = sprintf("%-15s", "Test");
+        foreach string mode in (modes) {
+            header += sprintf(" %8s", mode);
+        }
+        printf("%s\n", header);
+        printf("------------------------------------------------------------------------\n");
+
+        foreach string test_name in (keys results) {
+            hash<string, float> r = results{test_name};
+            string row = sprintf("%-15s", test_name);
+            foreach string mode in (modes) {
+                row += sprintf(" %8.1f", r{mode} ?? 0.0);
+            }
+            printf("%s\n", row);
+        }
+        printf("------------------------------------------------------------------------\n");
+
+        printf("\nAverage Speedup vs AST:\n");
+        foreach string mode in (modes) {
+            if (mode == "ast") {
+                continue;
+            }
+            float total_speedup = 0.0;
+            int count = 0;
+            foreach string test_name in (keys results) {
+                hash<string, float> r = results{test_name};
+                if (r.ast > 0 && r{mode} > 0) {
+                    total_speedup += r.ast / r{mode};
+                    ++count;
+                }
+            }
+            if (count > 0) {
+                printf("  %-7s: %.2fx\n", mode, total_speedup / count);
+            }
+        }
+
+        printf("\n");
+        printf("================================================================================\n");
+        printf("NOTES:\n");
+        printf("  - These are PURE EXECUTION times (compilation excluded)\n");
+        printf("  - This shows runtime performance, not deployment cost\n");
+        printf("  - For AOT, this is what end users experience after compile-once\n");
+        printf("  - JIT/tiered compilation happens during first execution (included here)\n");
+        printf("================================================================================\n");
+    }
+}

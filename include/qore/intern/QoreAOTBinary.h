@@ -48,26 +48,26 @@ class qore_ns_private;
 //! Magic number: "QORD" in big-endian (0x514F5244)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x514F5244;
 
-//! Current binary format version
-/** Version history:
-    - v1: Initial format (Qore 2.0 - 2.2)
-    - v2: Added max_opcode_id and qore_version fields for backwards compatibility (Qore 2.3+)
-    - v3: Added parse_options_hi field for full 128-bit QoreParseOptions (Qore 2.3+)
-*/
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 3;
+//! Current binary format version (clean v1 format with full 128-bit parse options + source hash)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 1;
 
-//! On-disk header size for version 1 (28 bytes)
-constexpr uint32_t QORE_AOT_HEADER_SIZE_V1 = 28;
-
-//! On-disk header size for version 2 (36 bytes)
-constexpr uint32_t QORE_AOT_HEADER_SIZE_V2 = 36;
-
-//! On-disk header size for version 3 (44 bytes)
-constexpr uint32_t QORE_AOT_HEADER_SIZE_V3 = 44;
+//! On-disk header size (60 bytes)
+constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
+
+//! Feature flags for binary compatibility (64-bit bitmask in header.feature_flags)
+constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (325-330)
+constexpr uint64_t QORE_AOT_FEAT_NATIVE_CAST     = 1ULL << 1;  //!< Cast* opcodes (252-256)
+constexpr uint64_t QORE_AOT_FEAT_BLOCK_EXIT      = 1ULL << 2;  //!< OnBlockExit opcode
+constexpr uint64_t QORE_AOT_FEAT_DIRECT_INDEX    = 1ULL << 3;  //!< ListGet* opcodes (13-15)
+constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_ACCESS = 1ULL << 4;  //!< HashKeyAccess opcodes
+constexpr uint64_t QORE_AOT_FEAT_FAST_CALL       = 1ULL << 5;  //!< CallMethodDirect/CallStaticDirect
+constexpr uint64_t QORE_AOT_FEAT_COMPLEX_RETURN  = 1ULL << 6;  //!< reserved, set to 0 for now
+//! Mask of all currently supported features
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -116,34 +116,23 @@ struct QoreAOTSectionHeader {
     uint32_t size;      //!< size in bytes
 };
 
-//! Binary file header
-/** The on-disk layout is version-dependent:
-    - Version 1: 28 bytes (fields through label_length)
-    - Version 2: 36 bytes (adds max_opcode_id, qore_version, reserved2)
-    - Version 3+: 44 bytes (adds parse_options_hi)
-
-    The reader uses version-dependent header sizes; the in-memory struct
-    always has all fields (v2 and v3 fields default to 0 for older binaries).
-*/
+//! Binary file header (60 bytes total, no version dispatch needed)
 struct QoreAOTBinaryHeader {
-    // --- Version 1 fields (28 bytes on disk) ---
     uint32_t magic;              //!< QORE_AOT_BINARY_MAGIC
-    uint16_t version;            //!< QORE_AOT_BINARY_VERSION
+    uint16_t version;            //!< QORE_AOT_BINARY_VERSION (always 1)
     uint16_t flags;              //!< QORE_AOT_FLAG_*
-    int64_t parse_options;       //!< parse options used during compilation (low 64 bits)
+    int64_t parse_options_lo;    //!< low 64 bits of parse options (0-63)
     uint32_t section_count;      //!< number of sections
     uint32_t label_offset;       //!< offset into string pool for source label
     uint32_t label_length;       //!< length of source label
-
-    // --- Version 2 fields (8 additional bytes on disk) ---
     uint16_t max_opcode_id;      //!< maximum IR opcode ID that this binary may use
     uint8_t qore_version_major;  //!< Qore version major that compiled this binary
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
-    uint16_t reserved2;          //!< reserved for future use
-
-    // --- Version 3 fields (8 additional bytes on disk) ---
-    int64_t parse_options_hi;    //!< high 64 bits of parse options (bits 64-127)
+    uint16_t reserved;           //!< reserved for future use (must be 0)
+    int64_t parse_options_hi;    //!< high 64 bits of parse options (64-127)
+    uint64_t source_hash;        //!< xxHash64 of source file bytes (0 = not set)
+    uint64_t feature_flags;      //!< QORE_AOT_FEAT_* bitset of required IR features
 };
 
 //! String pool with deduplication for efficient string storage

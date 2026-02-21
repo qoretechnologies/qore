@@ -2195,4 +2195,73 @@ printf(\"%d\\n\", pos.size());
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT select on typed int list");
     }
+
+    testCompileV1Binary() {
+        # Test that we can compile a script successfully with the new v1 binary format
+        string code = "%modern\nprintf(\"hello v1\\n\");";
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile the script to AOT binary
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Check that compilation succeeded
+        assertTrue(is_file(paths.out), "AOT binary was created");
+        assertFalse(compile_out =~ /error|Error|failed/i, "Compilation succeeded without errors");
+    }
+
+    testExecuteV1Binary() {
+        # Test that a v1 binary executes correctly
+        string code = "%modern
+int x = 42;
+printf(\"result: %d\\n\", x);
+";
+        string aot_out = compileAndRun(code);
+        assertFalse(aot_out =~ /error|COMPILE_FAILED/i, "v1 binary executes without error");
+        assertTrue(aot_out =~ /result: 42/, "v1 binary produces correct output");
+    }
+
+    testV1HeaderWithMethodCalls() {
+        # Test v1 binary with method calls (tests feature flag discovery)
+        string code = "%modern
+list<string> items = (\"hello\", \"world\");
+foreach string item in (items) {
+    printf(\"%s\\n\", item);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 binary with method calls matches interpreter");
+    }
+
+    testV1HeaderArithmetic() {
+        # Test v1 binary with arithmetic operations (comprehensive functionality test)
+        string code = "%modern
+int a = 10;
+int b = 20;
+int c = a + b;
+int d = c * 2;
+float e = d / 3.0;
+printf(\"%d %d %d %.2f\\n\", a, b, c, e);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 binary arithmetic matches interpreter");
+    }
+
+    testV1BinaryRegressionPrevious() {
+        # Test that v1 format doesn't break previously working scripts
+        string code = "%modern
+hash<auto> h = {\"x\": 1, \"y\": 2};
+printf(\"%d %d\\n\", h.x, h.y);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 hash operations match interpreter");
+    }
 }

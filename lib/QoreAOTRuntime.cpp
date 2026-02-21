@@ -142,6 +142,8 @@
 #include <string>
 #include <deque>
 #include <unordered_map>
+#include <fstream>
+#include <vector>
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -3213,6 +3215,40 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
         }
 
+        // Advisory checks for source staleness and feature compatibility
+        {
+            const QoreAOTBinaryHeader& aot_hdr = deserializer.getReader().getHeader();
+            if (aot_hdr.source_hash != 0 && label != nullptr) {
+                std::ifstream sf(label, std::ios::binary | std::ios::ate);
+                if (sf.is_open()) {
+                    auto sz = sf.tellg();
+                    if (sz > 0) {
+                        std::vector<char> src(static_cast<size_t>(sz));
+                        sf.seekg(0);
+                        sf.read(src.data(), sz);
+                        uint64_t live_hash = XXH64(src.data(), static_cast<size_t>(sz), 0);
+                        if (live_hash != aot_hdr.source_hash) {
+                            printd(0, "AOT WARNING: binary source hash mismatch for '%s' "
+                                "(compiled=0x%016llx, current=0x%016llx); source has changed\n",
+                                label,
+                                (unsigned long long)aot_hdr.source_hash,
+                                (unsigned long long)live_hash);
+                        }
+                    }
+                }
+            }
+            // Feature compatibility check
+            if (aot_hdr.feature_flags != 0) {
+                uint64_t unsupported = aot_hdr.feature_flags & ~QORE_AOT_SUPPORTED_FEATURES;
+                if (unsupported) {
+                    printd(0, "AOT WARNING: binary '%s' requires unsupported features 0x%016llx; "
+                        "affected functions will fall back to JIT\n",
+                        label ? label : "<unknown>",
+                        (unsigned long long)unsupported);
+                }
+            }
+        }
+
         // Register pre-compiled function pointers
         QoreProgram* fallback_pgm = nullptr;
         if (num_functions > 0 && functions) {
@@ -3955,6 +3991,40 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         err->concat(deser_error.c_str());
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
+    }
+
+    // Advisory checks for source staleness and feature compatibility
+    {
+        const QoreAOTBinaryHeader& aot_hdr = deserializer.getReader().getHeader();
+        if (aot_hdr.source_hash != 0 && label != nullptr) {
+            std::ifstream sf(label, std::ios::binary | std::ios::ate);
+            if (sf.is_open()) {
+                auto sz = sf.tellg();
+                if (sz > 0) {
+                    std::vector<char> src(static_cast<size_t>(sz));
+                    sf.seekg(0);
+                    sf.read(src.data(), sz);
+                    uint64_t live_hash = XXH64(src.data(), static_cast<size_t>(sz), 0);
+                    if (live_hash != aot_hdr.source_hash) {
+                        printd(0, "AOT WARNING: binary source hash mismatch for '%s' "
+                            "(compiled=0x%016llx, current=0x%016llx); source has changed\n",
+                            label,
+                            (unsigned long long)aot_hdr.source_hash,
+                            (unsigned long long)live_hash);
+                    }
+                }
+            }
+        }
+        // Feature compatibility check
+        if (aot_hdr.feature_flags != 0) {
+            uint64_t unsupported = aot_hdr.feature_flags & ~QORE_AOT_SUPPORTED_FEATURES;
+            if (unsupported) {
+                printd(0, "AOT WARNING: binary '%s' requires unsupported features 0x%016llx; "
+                    "affected functions will fall back to JIT\n",
+                    label ? label : "<unknown>",
+                    (unsigned long long)unsupported);
+            }
+        }
     }
 
     // Register pre-compiled AOT functions
