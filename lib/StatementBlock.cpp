@@ -619,8 +619,8 @@ int TopLevelStatementBlock::parseInit() {
     }
 
     // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    int64 current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = current_parse_options & PO_ALLOW_REPARSE;
+    const QoreParseOptions& current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
 
     if (!first && lvars) {
         // push already-registered local variables on the stack
@@ -745,10 +745,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     if (!pgm) {
         pgm = rc.getProgram();
     }
-    int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
     // AOT pre-compiled top-level function — execute directly if registered
-    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+    if (!((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram, but nested

@@ -2179,6 +2179,10 @@ const QoreListNode* thread_get_implicit_args() {
     return thread_data.get()->current_implicit_arg;
 }
 
+void thread_set_implicit_args(QoreListNode* argv) {
+    thread_data.get()->current_implicit_arg = argv;
+}
+
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
     ThreadData* td = thread_data.get();
     return (td->current_obj == o && td->current_code == name) ? true : false;

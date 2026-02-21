@@ -1738,7 +1738,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          std::string error;
          if (is_split_module) {
             // Compile split module directory
-            if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options, error,
+            if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options.getLo(), error,
                      aot_opt_level, aot_target, aot_include_source)) {
                fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
                rc = 1;
@@ -1748,7 +1748,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          } else if (compile_module_mode) {
             if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
-                     source_label.c_str(), output_path, parse_options, error,
+                     source_label.c_str(), output_path, parse_options.getLo(), error,
                      aot_opt_level, aot_target, aot_include_source)) {
                fprintf(stderr, "AOT module compilation failed: %s\n", error.c_str());
                rc = 1;
@@ -1758,7 +1758,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             }
          } else {
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
-                     source_label.c_str(), output_path, parse_options, error,
+                     source_label.c_str(), output_path, parse_options.getLo(), error,
                      aot_opt_level, aot_target, aot_static, aot_include_source)) {
                fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
                rc = 1;

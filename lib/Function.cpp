@@ -2773,18 +2773,20 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 // Instantiate AST-visible body locals so that
                 // AST Invoke callbacks can find them on the thread-local stack.
-                int64 po = pgm->getParseOptions64();
+                const QoreParseOptions& po = pgm->getParseOptions();
                 if (!body_locals.empty()) {
                     for (LocalVar* lv : body_locals) {
                         lv->instantiate(po);
                     }
                 }
 
-                // Set thread-local parse options so that builtin code called from
-                // JIT/AOT-compiled functions (e.g. RangeIterator checking
+                // Swap in the program's parse options for the duration of JIT/AOT execution
+                // so that builtin code called from JIT/AOT-compiled functions (e.g. RangeIterator checking
                 // PO_BROKEN_RANGE) sees the correct program parse options.
-                int64 saved_po = runtime_get_parse_options();
-                runtime_set_parse_options(po);
+                const AbstractStatement* old_stmt;
+                const QoreProgramLocation* old_loc;
+                QoreParseOptions old_po;
+                swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
                 uint64_t result_bits;
                 if (cached_aot_ctx && cached_aot_fn) {
@@ -2813,7 +2815,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 }
 
                 // Restore thread-local parse options
-                runtime_set_parse_options(saved_po);
+                swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
                 // Uninstantiate in reverse order (LIFO)
                 if (!body_locals.empty()) {
@@ -2869,15 +2871,17 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Instantiate AST-visible body locals (excludes IR-only locals that
                 // are never accessed by AST callbacks) so that AST Invoke callbacks
                 // can find them on the thread-local variable stack.
-                int64 po = pgm->getParseOptions64();
+                const QoreParseOptions& po = pgm->getParseOptions();
                 for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
                     lv->instantiate(po);
                 }
 
-                // Set thread-local parse options so that builtin code called from
-                // IR-interpreted functions sees the correct program parse options.
-                int64 saved_po = runtime_get_parse_options();
-                runtime_set_parse_options(po);
+                // Swap in the program's parse options for the duration of IR execution
+                // so that builtin code called from IR-interpreted functions sees the correct program parse options.
+                const AbstractStatement* old_stmt;
+                const QoreProgramLocation* old_loc;
+                QoreParseOptions old_po;
+                swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
                 // Use the cached set of pre-instantiated locals built during IR lowering.
                 // Pass pointer directly to avoid per-call allocation (critical for recursive calls).
@@ -2910,7 +2914,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 }
 
                 // Restore thread-local parse options
-                runtime_set_parse_options(saved_po);
+                swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
                 // Only uninstantiate pre-instantiated AST-visible locals if we didn't already
                 // do it before the AST fallback
@@ -3042,8 +3046,8 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // have stale expression slots when called outside tiered mode.
             if (statements && !has_aot
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
-                int64 po = pgm->getParseOptions64();
-                if ((po & PO_MODERN) == PO_MODERN) {
+                const QoreParseOptions& po = pgm->getParseOptions();
+                if ((po & QoreParseOptions(PO_MODERN)) == QoreParseOptions(PO_MODERN)) {
                     return evalTiered(name, argv, self, xsink);
                 }
             }

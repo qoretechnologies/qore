@@ -462,18 +462,9 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        // First try the cvstack — this finds the correct entry for the current function instance
-        // in recursive calls.  When a function with closure_use locals is called from within a
-        // closure's execution context (e.g., recursive call from do_eq), the closure_rt_env
-        // points to the calling closure's environment, which contains the OUTER variable.
-        // The cvstack always has the most recently pushed (innermost) entry on top.
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            // Fall back to the closure runtime environment — needed for background thread
-            // closure execution and closures that outlive their enclosing function (cvstack
-            // entries have been popped).
-            val = thread_get_runtime_closure_var(this);
-        }
+        // First try the closure runtime environment — needed for background thread
+        // closure execution and closures that outlive their enclosing function.
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
         if (!val) {
             val = thread_find_closure_var(name.c_str());
         }
@@ -505,10 +496,7 @@ public:
         if (!closure_use) {
             return get_var()->isRef();
         }
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            val = thread_get_runtime_closure_var(this);
-        }
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
         if (!val) {
             val = thread_find_closure_var(name.c_str());
         }
@@ -523,10 +511,10 @@ public:
             return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
-        // First try the cvstack — see comment in eval() for rationale
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        // Try to get runtime closure variable
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
         if (!val) {
-            val = thread_get_runtime_closure_var(this);
+            val = thread_find_closure_var(name.c_str());
         }
         if (!val) {
             val = thread_find_closure_var(name.c_str());
@@ -539,11 +527,8 @@ public:
             return get_var()->remove(lvrh, typeInfo);
         }
 
-        // First try the cvstack — see comment in eval() for rationale
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
-            val = thread_get_runtime_closure_var(this);
-        }
+        // Try the closure runtime environment — needed for closures
+        ClosureVarValue* val = thread_get_runtime_closure_var(this);
         if (!val) {
             val = thread_find_closure_var(name.c_str());
         }

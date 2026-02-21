@@ -393,6 +393,18 @@ if(NOT LLVM_FOUND AND APPLE)
     endif()
 endif()
 
+# Get LLVM libraries
+# LLVM 21+ builds as a single unified library, get the name from llvm-config
+execute_process(
+    COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libs all
+    OUTPUT_VARIABLE LLVM_LIBS_RAW
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+# Convert space-separated -l flags to semicolon-separated CMake list
+string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS_RAW}")
+string(REPLACE "-l" "" LLVM_LIBS "${LLVM_LIBS}")
+message(STATUS "LLVM libraries from llvm-config: ${LLVM_LIBS}")
+
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 

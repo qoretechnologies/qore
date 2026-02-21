@@ -545,7 +545,7 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
     if (locals.insert(var).second) {
         // Skip instantiation for locals that are already instantiated by the caller
         if (!pre_instantiated || pre_instantiated->find(var) == pre_instantiated->end()) {
-            var->instantiate(0);
+            var->instantiate(QoreParseOptions());
         }
     }
 }

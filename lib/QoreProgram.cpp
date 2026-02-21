@@ -1942,14 +1942,16 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     // RAII guard ensures restore even if an unexpected C++ exception propagates.
     class RuntimePoGuard {
     public:
-        RuntimePoGuard(int64 new_po) : saved_po(runtime_get_parse_options()) {
-            runtime_set_parse_options(new_po);
+        RuntimePoGuard(const QoreParseOptions& new_po) {
+            swap_runtime_statement_location(nullptr, nullptr, nullptr, new_po, saved_stmt, saved_loc, saved_po);
         }
         ~RuntimePoGuard() {
-            runtime_set_parse_options(saved_po);
+            swap_runtime_statement_location(nullptr, saved_stmt, saved_loc, saved_po, saved_stmt, saved_loc, saved_po);
         }
     private:
-        int64 saved_po;
+        const AbstractStatement* saved_stmt = nullptr;
+        const QoreProgramLocation* saved_loc = nullptr;
+        QoreParseOptions saved_po;
     };
     RuntimePoGuard po_guard(priv->pwo.parse_options);
     return priv->sb.exec(xsink);

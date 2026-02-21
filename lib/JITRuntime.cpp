@@ -401,7 +401,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_box_big_int(int64_t val) {
 
 extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
     if (var) {
-        var->instantiate(0);
+        var->instantiate(QoreParseOptions());
     }
 }
 
@@ -2087,7 +2087,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
     if (!skip_body_locals) {
-        int64 po = uvb->pgm->getParseOptions64();
+        const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
             lv->instantiate(po);
         }
@@ -2099,7 +2099,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
     if (!*xsink && qore_jit_deopt_requested()) {
         // Ensure body locals are on thread stack for AST execution
         if (skip_body_locals) {
-            int64 po = uvb->pgm->getParseOptions64();
+            const QoreParseOptions& po = uvb->pgm->getParseOptions();
             for (LocalVar* lv : body_locals) {
                 lv->instantiate(po);
             }
@@ -2576,7 +2576,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
                     // Execute natively compiled handler
                     const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
                     if (hf) {
-                        int64 po = runtime_get_parse_options();
+                        const QoreParseOptions& po = runtime_get_parse_options();
                         for (LocalVar* lv : hf->all_body_locals) {
                             lv->instantiate(po);
                         }

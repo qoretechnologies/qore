@@ -192,7 +192,7 @@ static std::string getLibqoreDir() {
             return path.substr(0, pos);
         }
     }
-    return QORE_LIBDIR;
+    return "";
 }
 
 //! Generate a unique variant key that includes parameter types to distinguish overloads
@@ -1088,7 +1088,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         failed_count, compiled_funcs);
 
     // Use the program's actual parse options (includes directives like %modern)
-    parse_options = pgm->getParseOptions64();
+    parse_options = pgm->getParseOptions().getLo();
 
     // Step 3: Build serialized metadata and generate main() + function registration table
     {

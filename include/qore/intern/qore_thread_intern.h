@@ -636,6 +636,7 @@ public:
 };
 
 DLLLOCAL const QoreListNode* thread_get_implicit_args();
+DLLLOCAL void thread_set_implicit_args(QoreListNode* argv);
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
 
