@@ -101,6 +101,10 @@ public class DataProvider {
             "gcal": "GoogleCalendarDataProvider",
             "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
+
+            # provided by the grpc module
+            "grpc": "GrpcDataProvider",
+
             "httpclient": "HttpClientDataProvider",
 
             # provided by the imagemagick module
