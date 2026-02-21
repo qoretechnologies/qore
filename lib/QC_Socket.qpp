@@ -4161,7 +4161,8 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
     @param opts optional hash with options:
     - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
       (before END_STREAM); the stream stays in the session for incremental reading via
-      @ref readHttp2StreamDataBlock()
+      @ref readHttp2StreamDataBlock().  After all stream data has been consumed, call
+      @ref cleanupHttp2Stream() to free the stream state.
 
     @see isHttp2()
 
@@ -4560,6 +4561,27 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 /** Blocks until data is available on the specified stream, the stream
     completes (END_STREAM), or the timeout expires.
 
+    @par Thread Safety
+    This method intentionally does @b not acquire the Socket object's mutex, because holding
+    the mutex during a blocking I/O wait would prevent other threads from performing write,
+    flush, or cleanup operations on the same socket.  Thread safety for the HTTP/2 session
+    internals is provided by the session's own recursive mutex.
+
+    Callers must observe the following concurrency rules:
+    - Only call this method from the thread that owns the connection (i.e. the handler thread
+      that drives the HTTP/2 session).
+    - Do not call @ref close() or other read operations concurrently on the same socket.
+    - Write-side operations (@ref flushHttp2(), @ref sendHttp2StreamData(),
+      @ref sendHttp2Trailers()) are safe to call from the same thread.
+
+    @par Headers-Only Streams
+    When a stream is dispatched with the \c headers_only option via
+    @ref startPollReadHttp2Request(), the stream remains in the HTTP/2 session after the poll
+    completes so that body data can be read incrementally with this method.  After all data has
+    been consumed (i.e. @ref isHttp2StreamComplete() returns @ref True "True"), call
+    @ref cleanupHttp2Stream() to remove the stream from the session and prevent stream-state
+    accumulation on long-lived connections.
+
     @param stream_id the HTTP/2 stream ID
     @param timeout read timeout (default 30s)
 
@@ -4601,7 +4623,23 @@ nothing Socket::flushHttp2(timeout timeout = 5s) {
 
 //! Remove an HTTP/2 stream from the session
 /** Cleans up a dispatched stream after the handler has finished processing.
-    Should be called after a headers-only dispatched stream is fully handled.
+    This method must be called after a headers-only dispatched stream is fully handled
+    (i.e. after @ref isHttp2StreamComplete() returns @ref True "True" or the stream is
+    otherwise no longer needed) to free stream state and prevent accumulation of stale
+    streams on long-lived connections.
+
+    @par Typical Usage
+    @code{.py}
+    # Read all data from a headers-only stream
+    while (!sock.isHttp2StreamComplete(stream_id)) {
+        *binary data = sock.readHttp2StreamDataBlock(stream_id, 30s);
+        if (data) {
+            process(data);
+        }
+    }
+    # Remove the stream from the session
+    sock.cleanupHttp2Stream(stream_id);
+    @endcode
 
     @param stream_id the HTTP/2 stream ID to remove
 

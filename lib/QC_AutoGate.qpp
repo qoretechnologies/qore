@@ -85,8 +85,8 @@ AutoGate::constructor(Gate[QoreGate] gate) {
         if (*xsink) {
             return;  // Error occurred
         }
-        if (rc == 0) {
-            // Gate acquired - create the AutoGate object with already-entered gate
+        if (rc >= 0) {
+            // Gate acquired (rc=0: first entry, rc>0: reentrant)
             QoreAutoGate* ag = new QoreAutoGate(gate.release());
             self->setPrivate(CID_AUTOGATE, ag);
             return;
