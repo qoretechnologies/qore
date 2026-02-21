@@ -1005,6 +1005,16 @@ struct qore_socket_private {
 
             int rc = ::accept(sock, addr, size);
             if (rc != QORE_INVALID_SOCKET) {
+                // On macOS/Darwin, accept() inherits O_NONBLOCK from the listening socket;
+                // the accepted socket must be returned in blocking mode so that
+                // subsequent blocking operations (e.g., SSL handshake) work correctly.
+                // Without this, async I/O listener sockets (set non-blocking for poll)
+                // produce accepted sockets that fail SSL negotiation with errors like
+                // SSL_R_PACKET_LENGTH_TOO_LONG due to partial TLS record reads.
+                int arg = fcntl(rc, F_GETFL, 0);
+                if (arg >= 0 && (arg & O_NONBLOCK)) {
+                    fcntl(rc, F_SETFL, arg & ~O_NONBLOCK);
+                }
                 return rc;
             }
 

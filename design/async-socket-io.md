@@ -40,11 +40,15 @@ integration points for other code.
   - Results are delivered via callback (called in the I/O thread) or pushed to a Queue.
   - The three-phase loop (snapshot → continuePoll → update/deliver) releases the lock during
     `continuePoll()` so worker threads can `submit()` concurrently.
+  - At the end of Phase 1 (cache snapshot), `processed_seq` is set to `submit_seq` and
+    `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
+    thread has captured all previously submitted operations in its poll set.
 
 - **Worker threads**
   - Submit operations via `submit()` or `exec()`.
   - The I/O thread delivers results back to workers via callback or Queue — there is no separate
     coordinator thread.
+  - `submit()` increments `submit_seq` under the lock before waking the I/O thread.
 
 ## EventNotifier and Command Queue
 
@@ -147,6 +151,31 @@ int cancelByOwner(string owner)
 Cancels all operations belonging to the given owner. Returns the number of operations canceled.
 Blocks until all cancellations are complete (uses a Condition variable to synchronize with the
 I/O thread). Used for bulk cleanup during shutdown (e.g., connection manager `closeAll()`).
+
+### waitForProcessing()
+
+```qore
+bool waitForProcessing(*timeout to)
+```
+
+Blocks until the I/O thread's Phase 1 cache snapshot has captured all operations that were
+submitted before the call. Returns `True` if all pending operations have been processed,
+`False` if the timeout expired or the I/O thread is not running.
+
+This provides a stronger guarantee than `waitReady()`: not only is the I/O thread running,
+but it has actually polled all pending operations at least once. This is critical for test
+and setup code where clients connect immediately after submitting accept operations — using
+`waitReady()` alone allows a race where the I/O thread is running but hasn't yet entered
+its poll loop with the new operations, causing clients to connect before the server is
+listening.
+
+**Mechanism**: `submit()` increments `submit_seq` under the controller lock. At the end of
+Phase 1, the I/O thread sets `processed_seq = submit_seq` and broadcasts `processed_cond`.
+`waitForProcessing()` captures the current `submit_seq` as the target and waits until
+`processed_seq >= target`.
+
+**Edge case**: If called before any `submit()`, both counters are 0 and it returns `True`
+immediately (provided `tid != 0`). This is correct — there is nothing to wait for.
 
 ### cancel() / cancelByKey()
 
@@ -386,6 +415,39 @@ When `getOutput()` returns NOTHING (because a RST'd stream was filtered or the r
 `handleHttp2RequestReady()` in `HttpAsyncSocketIoController.qc` continues reading on the connection rather
 than closing it. This allows the HTTP/2 connection to remain active for subsequent streams.
 
+## Platform-Specific Fixes
+
+### macOS accept() O_NONBLOCK Inheritance
+
+File: `include/qore/intern/qore_socket_private.h`
+
+On macOS/Darwin, `accept()` inherits `O_NONBLOCK` from the listening socket. In async I/O
+mode, listener sockets are set non-blocking for `poll()` / `kqueue()`. Without clearing the
+flag, accepted sockets perform non-blocking reads during SSL handshake, causing partial TLS
+record reads that manifest as `SSL_R_PACKET_LENGTH_TOO_LONG`.
+
+The fix clears `O_NONBLOCK` via `fcntl(F_SETFL)` on every accepted fd immediately after
+`accept()` returns. The second `fcntl` return value is unchecked — failure is essentially
+impossible on a just-accepted fd and non-critical.
+
+### macOS kqueue Closed-fd Detection
+
+File: `lib/QoreSocket.cpp`
+
+On macOS, closing a monitored fd removes its kqueue registration without delivering an event.
+If a socket is closed by another thread while the I/O thread is blocked in `kevent()`,
+`kevent()` may return 0 (timeout) with no events for the closed fd. The fix scans all
+monitored fds after `kevent()` returns and reports `SOCK_POLLERR` for any fd that has become
+invalid (`fcntl(F_GETFD)` returns `EBADF`).
+
+**Caller contract**: This means `Socket::poll()` may return results even when `kevent()`
+returned 0 events. All callers handle this correctly:
+- `AsyncSocketIoController` builds a `ready_sockets` presence map from the poll result list.
+  A socket with `SOCK_POLLERR` is correctly treated as "ready", and `continuePoll()` detects
+  the error state.
+- `Http2ClientConnection::drivePoll()` ignores the `Socket::poll()` return value entirely.
+- Test code checks for result presence, not specific event types.
+
 ## Failure Modes
 
 Known failure modes include:
@@ -401,6 +463,13 @@ Known failure modes include:
 - **Single-driver starvation** (client-side): If the driving thread blocks for too long in `drivePoll()`,
   other threads waiting on `ready_cond` may time out. Controller mode avoids this by delegating to the
   shared I/O thread.
+- **SSL race after submit** (server-side): If clients connect immediately after `submit()` but
+  before the I/O thread's Phase 1 snapshot captures the accept operation, the accept may not be
+  polled in time. Combined with macOS `O_NONBLOCK` inheritance on accepted sockets, this produced
+  `SSL_R_PACKET_LENGTH_TOO_LONG` in CI. Fixed by (1) `waitForProcessing()` for deterministic
+  readiness, (2) clearing `O_NONBLOCK` on accepted fds, (3) kqueue closed-fd detection. Callers
+  that need to connect immediately after submitting accept operations should use
+  `waitForProcessing()` rather than `waitReady()`.
 - **Callback dispatch ordering** (client-side): Stream callbacks are dispatched in the order responses
   complete (FIFO from `completed_responses` deque), not in submission order. Callers must not assume
   request-order delivery.

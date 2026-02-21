@@ -156,6 +156,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! Flag indicating I/O thread is ready
         bool ready_flag = False;
 
+        #! Submit sequence counter; incremented under lock on each submit() call
+        int submit_seq = 0;
+
+        #! Processed sequence counter; updated by I/O thread after Phase 1 cache snapshot
+        int processed_seq = 0;
+
+        #! Condition variable signaled when processed_seq advances
+        Condition processed_cond();
+
         #! Persistent event loop for efficient kqueue/epoll/poll
         EventLoop loop();
 
@@ -330,6 +339,45 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return ready_flag;
     }
 
+    #! Waits until the I/O thread has processed all currently submitted operations
+    /** This method blocks until the I/O thread's Phase 1 cache snapshot has captured all
+        operations that were submitted before the call. This provides a stronger guarantee
+        than waitReady(): not only is the I/O thread running, but it has actually polled
+        all pending operations at least once.
+
+        @param to maximum time to wait; use @ref NOTHING for no timeout
+
+        @return @ref True if all submitted operations have been processed, @ref False if the
+        timeout expired or the I/O thread is not running
+
+        @since %AsyncSocketIo 1.0
+    */
+    bool waitForProcessing(*timeout to) {
+        AutoLock al(m);
+        if (!tid) {
+            return False;
+        }
+        int target = submit_seq;
+        if (processed_seq >= target) {
+            return True;
+        }
+        if (to) {
+            date deadline = now_us() + to;
+            while (processed_seq < target && tid) {
+                timeout remaining = deadline - now_us();
+                if (remaining <= 0s) {
+                    return False;
+                }
+                processed_cond.wait(m, remaining);
+            }
+            return processed_seq >= target;
+        }
+        while (processed_seq < target && tid) {
+            processed_cond.wait(m);
+        }
+        return processed_seq >= target;
+    }
+
     #! Submits a socket operation to be performed and returns a Queue where the results will be returned
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced
@@ -408,6 +456,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     log(LoggerLevel::DEBUG, "submit: info=%y", info);
                 }
             }
+            ++submit_seq;
             if (io_exiting || !tid) {
                 startIntern();
             }
@@ -676,6 +725,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             {
                 AutoLock al(m);
                 ready_flag = False;
+                processed_seq = 0;
+                submit_seq = 0;
+                processed_cond.broadcast();
                 io_exiting = False;
                 int cur_tid = gettid();
                 if (tid == cur_tid) {
@@ -795,6 +847,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             "cinfo": cinfo,
                         };
                     }
+                    processed_seq = submit_seq;
+                    processed_cond.broadcast();
                 }
 
                 # ── PHASE 2: continuePoll outside the lock ────────────────────

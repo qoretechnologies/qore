@@ -1793,7 +1793,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         timeout = timeout ?? 5s;
         # Wait for globalAsyncCtrl I/O thread to be ready
         # The callback-based controller doesn't have a separate coordinator thread
-        return globalAsyncCtrl.waitReady(timeout);
+        return globalAsyncCtrl.waitForProcessing(timeout);
     }
 
     startConnection(code c) {
