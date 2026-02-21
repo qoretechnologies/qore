@@ -547,6 +547,38 @@ cargo install tree-sitter-cli@0.26.5
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
+    - <b>Cooperative thread cancellation</b>
+      - new @ref Qore::cancel_thread() "cancel_thread()" function to request cooperative cancellation of another
+        thread by TID, with an optional reason string
+      - new @ref Qore::thread_cancelled() "thread_cancelled()" function to poll the cancellation flag for the
+        current thread (lightweight atomic check, no exception)
+      - new @ref Qore::clear_thread_cancel() "clear_thread_cancel()" function to clear the cancellation flag,
+        allowing cleanup code to proceed without re-triggering cancellation
+      - cancellation is cooperative: the target thread is not forcefully terminated; instead, a
+        \c THREAD-CANCELLED exception is raised at the next cancellation check point
+      - check points are built into: language-level loops (\c while, \c for, \c foreach, \c do-while),
+        @ref Qore::sleep() "sleep()" / @ref Qore::usleep() "usleep()",
+        @ref Qore::Thread::Gate "Gate" enter,
+        @ref Qore::Thread::Mutex "Mutex" lock,
+        @ref Qore::Thread::Counter "Counter" waitForZero,
+        @ref Qore::Thread::Condition "Condition" wait,
+        @ref Qore::Thread::RWLock "RWLock" readLock/writeLock,
+        @ref Qore::Thread::AutoLock "AutoLock" / @ref Qore::Thread::AutoGate "AutoGate" /
+        @ref Qore::Thread::AutoReadLock "AutoReadLock" / @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
+        constructors,
+        @ref Qore::Thread::Queue "Queue" get/pop,
+        pipe I/O, file locking, and backquote operations
+      - integrates with the @ref Qore::SandboxManager "SandboxManager" interrupt mechanism via a unified
+        internal check (\c qore_check_cancel()) that polls for both thread-level cancellation and
+        program-level interrupt requests
+      - @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::clear_thread_cancel() "clear_thread_cancel()"
+        require the @ref Qore::Option::HAVE_THREAD_CONTROL "THREAD_CONTROL" functional domain; sandboxed code
+        without this domain cannot clear the cancellation flag, making cancellation effectively unavoidable
+      - @ref Qore::thread_cancelled() "thread_cancelled()" only requires \c THREAD_INFO, so any code can poll its
+        cancellation status
+      - cancelling an already-cancelled thread updates the reason string
+      - cancelling a thread that has already exited returns @ref False
+      - attempting to cancel the current thread raises \c THREAD-CANCEL-ERROR
     - new @ref Qore::ParseOptions "ParseOptions" class providing an opaque container for parse option flags
       supporting more than 64 option bits
       (<a href="https://github.com/qoretechnologies/qore/issues/5145">issue 5145</a>)
@@ -595,6 +627,8 @@ cargo install tree-sitter-cli@0.26.5
         connection string from a @ref datasource_hash "datasource hash" (the inverse of
         @ref Qore::SQL::parse_datasource() "parse_datasource()")
     - new functions:
+      - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
+      - @ref Qore::clear_thread_cancel() "clear_thread_cancel()": clears the cancellation flag for the current thread
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
@@ -607,6 +641,8 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::SQL::make_datasource_string() "make_datasource_string()": builds a datasource connection string
         from a @ref datasource_hash "datasource hash" (the inverse of
         @ref Qore::SQL::parse_datasource() "parse_datasource()")
+      - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
+        for the current thread
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
     - new zero-cost assertion and debug statements

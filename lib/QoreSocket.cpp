@@ -2153,12 +2153,12 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         }
     }
 
+    // Track which poll_list indices have events and what events they have
+    // Use std::map to preserve order (sorted by index) for consistent output order
+    std::map<size_t, int> result_events;
+
     // Process events if we have any
     if (rc > 0) {
-        // Track which poll_list indices have events and what events they have
-        // Use std::map to preserve order (sorted by index) for consistent output order
-        std::map<size_t, int> result_events;
-
         for (int i = 0; i < rc; ++i) {
             size_t idx = reinterpret_cast<size_t>(events[i].udata);
             if (events[i].flags & EV_ERROR) {
@@ -2184,8 +2184,30 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
             result_events[idx] = evt;
         }
+    }
 
-        // Build result list
+    // Check for fds that were closed during the kqueue wait.
+    // On macOS, closing a monitored fd removes its kqueue registration
+    // without delivering an event, so we need to detect this case.
+    // NOTE: This means callers may receive SOCK_POLLERR results even when
+    // kevent() itself returned 0 (timeout).  All current callers handle this:
+    // - AsyncSocketIoController treats any socket in ready_list as "ready"
+    //   and calls continuePoll(), which handles error states
+    // - Http2ClientConnection ignores the poll() return value entirely
+    // - Test code checks for result presence, not event types
+    if (!*xsink) {
+        for (const auto& info : fd_info) {
+            if (result_events.count(info.index)) {
+                continue;
+            }
+            if (fcntl(info.fd, F_GETFD) == -1 && errno == EBADF) {
+                result_events[info.index] = SOCK_POLLERR;
+            }
+        }
+    }
+
+    // Build result list
+    if (!*xsink) {
         for (const auto& [idx, evt] : result_events) {
             if (evt) {
                 const QoreHashNode* orig = poll_list->retrieveEntry(idx).get<const QoreHashNode>();

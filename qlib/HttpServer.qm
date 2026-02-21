@@ -1814,7 +1814,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         timeout = timeout ?? 5s;
         # Wait for globalAsyncCtrl I/O thread to be ready
         # The callback-based controller doesn't have a separate coordinator thread
-        return globalAsyncCtrl.waitReady(timeout);
+        return globalAsyncCtrl.waitForProcessing(timeout);
     }
 
     startConnection(code c) {
@@ -2508,7 +2508,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv, \async_response_out);
         } else if (rv."code" >= 400) {
-            if (!rv.body && !rv.hasKeyValue("chunked_body")) {
+            if (!head && !rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
             }
             if (async_response_out) {
