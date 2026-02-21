@@ -3528,7 +3528,8 @@ upsert(row_hash);
             if (set_data.firstValue().typeCode() == NT_LIST) {
                 # hash-of-lists: iterate over rows
                 foreach hash<auto> row in (set_data.contextIterator()) {
-                    hash<auto> row_cond = (map {$1.key: $1.value[$#]}, cond_data.pairIterator());
+                    int row_idx = $#;
+                    hash<auto> row_cond = (map {$1.key: $1.value[row_idx]}, cond_data.pairIterator());
                     if (first) {
                         string sql;
                         uc += self.update(row, row_cond, \sql);
