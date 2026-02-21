@@ -496,7 +496,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 }
 
                 ++total_funcs;
-                std::string method_name = std::string(class_path) + "::" + meth->getName();
+                // Strip leading :: from class_path if present (getPath() returns ::ClassName)
+                const char* class_name = class_path;
+                if (class_name[0] == ':' && class_name[1] == ':') {
+                    class_name += 2;
+                }
+                std::string method_name = std::string(class_name) + "::" + meth->getName();
                 // Generate unique key including parameter types to distinguish overloads
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 // Skip duplicate variant keys (iterator may yield committed + pending)
@@ -2648,6 +2653,24 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getExprSlot(bits);
                     break;
                 }
+                case QoreIROpcode::CallMethodDirect: {
+                    auto* cmdi = static_cast<QoreIRCallMethodDirectInstruction*>(inst.get());
+                    if (cmdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &cmdi->expr, sizeof(bits));
+                        slots.getExprSlot(bits);
+                    }
+                    break;
+                }
+                case QoreIROpcode::InvokeMethodDirect: {
+                    auto* imdi = static_cast<QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                    if (imdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &imdi->expr, sizeof(bits));
+                        slots.getExprSlot(bits);
+                    }
+                    break;
+                }
                 case QoreIROpcode::LoadLValue:
                 case QoreIROpcode::StoreLValue:
                 case QoreIROpcode::PreIncLValue:
@@ -3144,6 +3167,28 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::CallMethodDirect: {
+                    auto* cmdi = static_cast<QoreIRCallMethodDirectInstruction*>(inst.get());
+                    if (cmdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &cmdi->expr, sizeof(bits));
+                        if (seen_exprs.insert(bits).second) {
+                            ++expr_count;
+                        }
+                    }
+                    break;
+                }
+                case QoreIROpcode::InvokeMethodDirect: {
+                    auto* imdi = static_cast<QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                    if (imdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &imdi->expr, sizeof(bits));
+                        if (seen_exprs.insert(bits).second) {
+                            ++expr_count;
+                        }
+                    }
+                    break;
+                }
                 case QoreIROpcode::CallStaticDirect: {
                     auto* csdi = static_cast<QoreIRCallStaticDirectInstruction*>(inst.get());
                     uint64_t bits;
@@ -3537,6 +3582,30 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     if (seen_exprs.insert(bits).second) {
                         vrni->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallMethodDirect: {
+                    auto* cmdi = static_cast<QoreIRCallMethodDirectInstruction*>(inst.get());
+                    if (cmdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &cmdi->expr, sizeof(bits));
+                        if (seen_exprs.insert(bits).second) {
+                            cmdi->expr.ref();
+                            ctx->exprs[expr_idx++] = bits;
+                        }
+                    }
+                    break;
+                }
+                case QoreIROpcode::InvokeMethodDirect: {
+                    auto* imdi = static_cast<QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                    if (imdi->expr) {
+                        uint64_t bits;
+                        memcpy(&bits, &imdi->expr, sizeof(bits));
+                        if (seen_exprs.insert(bits).second) {
+                            imdi->expr.ref();
+                            ctx->exprs[expr_idx++] = bits;
+                        }
                     }
                     break;
                 }

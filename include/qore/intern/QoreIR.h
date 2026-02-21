@@ -1205,16 +1205,26 @@ public:
 class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
 public:
     QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
-            const AbstractQoreFunctionVariant* n_variant = nullptr)
+            const AbstractQoreFunctionVariant* n_variant = nullptr, const QoreValue& n_expr = QoreValue())
             : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
               method(n_method),
               qc(n_qc),
-              variant(n_variant) {
+              variant(n_variant),
+              expr(n_expr) {
+        if (expr) expr.ref();
+    }
+
+    ~QoreIRCallMethodDirectInstruction() override {
+        if (expr) {
+            ExceptionSink xsink;
+            expr.discard(&xsink);
+        }
     }
 
     const QoreMethod* method = nullptr;     //!< The resolved method pointer
     const QoreClass* qc = nullptr;          //!< The class containing the method
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
+    QoreValue expr;                         //!< Original AST expression (for AOT)
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1225,10 +1235,19 @@ class QoreIRInvokeMethodDirectInstruction : public QoreIRInstruction {
 public:
     QoreIRInvokeMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant,
-            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception, const QoreValue& n_expr = QoreValue())
             : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
               method(n_method), qc(n_qc), variant(n_variant),
-              normal_target(n_normal), exception_target(n_exception) {
+              normal_target(n_normal), exception_target(n_exception),
+              expr(n_expr) {
+        if (expr) expr.ref();
+    }
+
+    ~QoreIRInvokeMethodDirectInstruction() override {
+        if (expr) {
+            ExceptionSink xsink;
+            expr.discard(&xsink);
+        }
     }
 
     const QoreMethod* method = nullptr;         //!< The resolved method pointer
@@ -1236,6 +1255,7 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
+    QoreValue expr;                             //!< Original AST expression (for AOT)
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 

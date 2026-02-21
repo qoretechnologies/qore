@@ -255,7 +255,8 @@ public:
         const std::vector<std::string>& paramNames,
         const std::vector<const QoreTypeInfo*>& paramTypes,
         const std::vector<QoreValue>& defaults,
-        bool hasVarargs);
+        bool hasVarargs,
+        const QoreClass* classTypeInfo = nullptr);
 
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)

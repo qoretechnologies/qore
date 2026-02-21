@@ -6083,11 +6083,11 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
             }
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
-                    normal_block, handler, call->loc);
+                    normal_block, handler, expr, call->loc);
             builder.setBlock(normal_block);
             result = inst->result;
         } else {
-            result = builder.createCallMethodDirect(method, qc, variant, operands, call->loc)->result;
+            result = builder.createCallMethodDirect(method, qc, variant, operands, expr, call->loc)->result;
         }
         return result;
     }

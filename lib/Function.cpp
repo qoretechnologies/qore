@@ -755,7 +755,8 @@ void UserSignature::setupFromAOTMetadata(
         const std::vector<std::string>& paramNames,
         const std::vector<const QoreTypeInfo*>& paramTypes,
         const std::vector<QoreValue>& defaults,
-        bool hasVarargs) {
+        bool hasVarargs,
+        const QoreClass* classTypeInfo) {
     // Set return type
     returnTypeInfo = retType;
 
@@ -775,6 +776,11 @@ void UserSignature::setupFromAOTMetadata(
     for (size_t i = 0; i < paramTypes.size(); ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
         lv[i] = pp->createLocalVar(pname, paramTypes[i]);
+    }
+
+    // Create selfid local var for methods (matches parseInitPushLocalVars behavior)
+    if (classTypeInfo) {
+        selfid = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
     }
 
     // Create argv local var - always created (matches parseInitPushLocalVars behavior)

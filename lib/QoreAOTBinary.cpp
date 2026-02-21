@@ -2506,7 +2506,8 @@ static bool readAndSetupVariantSignature(
         const uint8_t*& ptr, const uint8_t* end,
         UserVariantBase* uvb,
         bool& has_varargs,
-        std::string& error) {
+        std::string& error,
+        const QoreClass* classTypeInfo = nullptr) {
     // return type path
     const char* ret_type_path = reader.readStringRef(ptr);
 
@@ -2569,7 +2570,7 @@ static bool readAndSetupVariantSignature(
 
     // Set up the variant's signature from metadata
     UserSignature* sig = uvb->getUserSignature();
-    sig->setupFromAOTMetadata(pgm, ret_ti, param_names, param_types, param_defaults, has_varargs);
+    sig->setupFromAOTMetadata(pgm, ret_ti, param_names, param_types, param_defaults, has_varargs, classTypeInfo);
 
     // Clean up default values (they were ref'd by setupFromAOTMetadata)
     for (auto& dv : param_defaults) {
@@ -2717,7 +2718,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             bool has_varargs = false;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    umv, has_varargs, error)) {
+                    umv, has_varargs, error, qc)) {
                 // Method variant will be deleted by addUserMethod on failure, or we need to clean up
                 delete umv;
                 return false;

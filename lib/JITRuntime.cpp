@@ -3401,3 +3401,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
     }
     return qore_rt_call_static_method_direct(call->getMethod(), call->getVariant(), args, nargs, xsink);
 }
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue expr;
+    std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
+    auto* call = dynamic_cast<const SelfFunctionCallNode*>(expr.getInternalNode());
+    if (!call) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for method direct AOT call");
+        return toBits(QoreValue());
+    }
+    const QoreMethod* method = call->getMethod();
+    if (!method) {
+        xsink->raiseException("AOT-ERROR", "null method in method direct AOT call");
+        return toBits(QoreValue());
+    }
+    return qore_rt_call_method_direct(method, args, nargs, xsink);
+}
