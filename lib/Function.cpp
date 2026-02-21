@@ -2774,8 +2774,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Instantiate AST-visible body locals so that
                 // AST Invoke callbacks can find them on the thread-local stack.
                 int64 po = pgm->getParseOptions64();
-                for (LocalVar* lv : body_locals) {
-                    lv->instantiate(po);
+                if (!body_locals.empty()) {
+                    for (LocalVar* lv : body_locals) {
+                        lv->instantiate(po);
+                    }
                 }
 
                 // Set thread-local parse options so that builtin code called from
@@ -2814,8 +2816,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 runtime_set_parse_options(saved_po);
 
                 // Uninstantiate in reverse order (LIFO)
-                for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                    body_locals[i]->uninstantiate(xsink);
+                if (!body_locals.empty()) {
+                    for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                        body_locals[i]->uninstantiate(xsink);
+                    }
                 }
 
                 if (gate) {
