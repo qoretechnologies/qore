@@ -1572,6 +1572,11 @@ public:
     // thread-local variable stack.
     std::vector<LocalVar*> all_body_locals;
 
+    // Subset of all_body_locals that are NOT IR-only: must be pre-instantiated by
+    // evalTiered() so AST Invoke callbacks can find them on the thread-local stack.
+    // Populated by computeIROnlyLocals() after ir_only_locals is determined.
+    std::vector<LocalVar*> ast_visible_body_locals;
+
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code — never referenced by Invoke expression subtrees,
     // delegate-to-AST statements, or closure captures.  For these locals, the LLVM

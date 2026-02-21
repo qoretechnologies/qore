@@ -756,15 +756,6 @@ public:
     //! Returns true if all body locals are IR-only (can skip instantiation in fast call path)
     DLLLOCAL bool areAllBodyLocalsIROnly() const;
 
-    //! Returns the AST-visible (filtered) body locals for JIT fast call path
-    //! (excludes IR-only locals that are never accessed by AST callbacks)
-    DLLLOCAL const std::vector<LocalVar*>& getASTVisibleBodyLocals() const;
-
-    //! Returns true if this variant has a cached AOT function
-    DLLLOCAL bool hasCachedAOT() const {
-        return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
-    }
-
     //! Returns the cached IR function (if at IR tier or higher), or nullptr
     DLLLOCAL const QoreIRFunction* getCachedIR() const {
         return cached_ir;

@@ -2122,6 +2122,14 @@ bool UserVariantBase::areAllBodyLocalsIROnly() const {
     return all_body_locals_ir_only;
 }
 
+const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
+    if (cached_aot_ctx) {
+        return cached_aot_ctx->all_body_locals;
+    }
+    assert(cached_ir);
+    return cached_ir->ast_visible_body_locals;
+}
+
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     signature.parseInitPushLocalVars(classTypeInfo);
 }
@@ -2710,12 +2718,14 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             ArgvContextHelper argv_helper(argv.release(), xsink);
 
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // Get body locals from AOT context or cached IR
+                // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
+                // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
+                // are never accessed by AST callbacks).
                 const std::vector<LocalVar*>& body_locals = cached_aot_ctx
                     ? cached_aot_ctx->all_body_locals
-                    : cached_ir->all_body_locals;
+                    : cached_ir->ast_visible_body_locals;
 
-                // Instantiate ALL body locals (top-level + nested blocks) so that
+                // Instantiate AST-visible body locals so that
                 // AST Invoke callbacks can find them on the thread-local stack.
                 int64 po = pgm->getParseOptions64();
                 for (LocalVar* lv : body_locals) {
@@ -2806,10 +2816,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             ArgvContextHelper argv_helper(argv.release(), xsink);
 
             if (!gate || (gate->enter(xsink) >= 0)) {
-                // Instantiate ALL body locals (top-level + nested) so that AST Invoke
-                // callbacks can find them on the thread-local variable stack.
+                // Instantiate AST-visible body locals (excludes IR-only locals that
+                // are never accessed by AST callbacks) so that AST Invoke callbacks
+                // can find them on the thread-local variable stack.
                 int64 po = pgm->getParseOptions64();
-                for (LocalVar* lv : cached_ir->all_body_locals) {
+                for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
                     lv->instantiate(po);
                 }
 
@@ -2839,10 +2850,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     // exception raised — propagate
                 } else {
                     // IR execution failed without exception — clean up pre-instantiated
-                    // locals FIRST (destroys any values from partial IR execution),
+                    // AST-visible locals FIRST (destroys any values from partial IR execution),
                     // then fall back to AST which manages its own locals
-                    for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
-                        cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                    for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
+                        cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                     }
                     fell_back_to_ast = true;
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
@@ -2856,11 +2867,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Restore thread-local parse options
                 runtime_set_parse_options(saved_po);
 
-                // Only uninstantiate pre-instantiated locals if we didn't already
+                // Only uninstantiate pre-instantiated AST-visible locals if we didn't already
                 // do it before the AST fallback
                 if (!fell_back_to_ast) {
-                    for (int i = (int)cached_ir->all_body_locals.size() - 1; i >= 0; --i) {
-                        cached_ir->all_body_locals[i]->uninstantiate(xsink);
+                    for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
+                        cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                     }
                 }
 

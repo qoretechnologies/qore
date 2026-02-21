@@ -2079,8 +2079,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
 template <typename ExecFn>
 static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
         QoreValue& val, ExceptionSink* xsink) {
-    const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
+    // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
+    // are never accessed by AST callbacks).
     bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+    const std::vector<LocalVar*>& body_locals = uvb->hasCachedAOT()
+        ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
+        : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
     if (!skip_body_locals) {
         int64 po = uvb->pgm->getParseOptions64();
         for (LocalVar* lv : body_locals) {

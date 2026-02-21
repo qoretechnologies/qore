@@ -1632,6 +1632,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the function has delegate-to-AST statements, ALL locals are AST-visible
     // because the AST execution could access any local through the thread-local stack.
     if (has_delegate_to_ast) {
+        ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': has_delegate_to_ast, all AST-visible\n", name.c_str());
         return;  // ir_only_locals stays empty — all locals are AST-visible
     }
@@ -1639,6 +1640,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the AST walker hit an unknown node type, conservatively treat all locals
     // as AST-visible.  This ensures correctness even for unhandled AST structures.
     if (unknown_node_found) {
+        ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': unknown_node_found, all AST-visible\n", name.c_str());
         return;
     }
@@ -1671,6 +1673,14 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
         printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);
         ir_only_locals.insert(key);
+    }
+
+    // Build filtered instantiation list: body locals NOT classified as IR-only.
+    ast_visible_body_locals.clear();
+    for (LocalVar* lv : all_body_locals) {
+        if (!ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
+            ast_visible_body_locals.push_back(lv);
+        }
     }
 
 }
