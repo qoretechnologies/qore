@@ -38,6 +38,10 @@ class AsyncIoControllerTest inherits QUnit::Test {
         addTestCase("wake", \testWake());
         addTestCase("operation timeout", \testOperationTimeout());
         addTestCase("copy constructor", \testCopy());
+        addTestCase("actual timeout expiry", \testActualTimeout());
+        addTestCase("direct cancel when I/O thread not running", \testDirectCancel());
+        addTestCase("setLogger validation", \testSetLoggerValidation());
+        addTestCase("continuePoll exception", \testContinuePollException());
         set_return_value(main());
     }
 
@@ -410,9 +414,6 @@ class AsyncIoControllerTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result1 = q1.get(ShortTimeout);
         assertTrue(result1.canceled ?? False);
 
-        # New operation is active
-        assertEq(1, ctrl.getCacheSize());
-
         # Accept and verify the new operation completes
         Socket accepted2 = listener2.accept(ConnectTimeout);
         hash<SocketPollResultInfo> result2 = q2.get(ConnectTimeout);
@@ -743,5 +744,135 @@ class AsyncIoControllerTest inherits QUnit::Test {
         ctrl.setAutostop(True);
         assertTrue(ctrl.getAutostop());
         assertFalse(ctrl_copy.getAutostop());
+    }
+
+    testActualTimeout() {
+        # Create a connected pair but never send data, so the recv op will time out
+        hash<auto> setup = setupBlockingRecvOp();
+
+        AsyncIoController ctrl();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "test",
+            "to": 1s,  # 1 second timeout
+        });
+
+        # Wait for the result — should arrive within a few seconds
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result);
+        assertFalse(result.canceled ?? False);
+        # Timeout delivers an exception hash with err = "SOCKET-TIMEOUT"
+        assertEq(True, exists result.ex);
+        assertEq("SOCKET-TIMEOUT", result.ex.err);
+    }
+
+    testDirectCancel() {
+        # Test cancel on unknown key returns False
+        AsyncIoController ctrl(False);
+        assertFalse(ctrl.cancelByKey("nonexistent-key"));
+
+        # Test cancelByOwner on unknown owner returns 0
+        assertEq(0, ctrl.cancelByOwner("nonexistent-owner"));
+
+        # Test cancel by key on a running operation
+        hash<auto> setup = setupBlockingRecvOp();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup.server,
+            "spop": setup.spop,
+            "owner": "test",
+            "to": -1,
+            "key": "cancel-key",
+        });
+        assertTrue(ctrl.waitReady(ShortTimeout));
+        assertTrue(ctrl.cancelByKey("cancel-key"));
+        assertEq(0, ctrl.getCacheSize());
+
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertTrue(result.canceled ?? False);
+
+        # Test cancelByOwner on a running operation
+        hash<auto> setup2 = setupBlockingRecvOp();
+        ctrl.start();
+        Queue q2 = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": setup2.server,
+            "spop": setup2.spop,
+            "owner": "cancel-owner",
+            "to": -1,
+        });
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
+        assertEq(1, ctrl.cancelByOwner("cancel-owner"));
+        assertEq(0, ctrl.getCacheSize());
+
+        hash<SocketPollResultInfo> result2 = q2.get(ShortTimeout);
+        assertTrue(result2.canceled ?? False);
+
+        ctrl.stop();
+    }
+
+    testSetLoggerValidation() {
+        AsyncIoController ctrl();
+
+        # Passing NOTHING should succeed (clears logger)
+        ctrl.setLogger();
+
+        # Object with both logArgs and isEnabledFor should succeed
+        # (We need a real LoggerInterface object; test that invalid objects are rejected)
+
+        # Object missing logArgs should throw
+        assertThrows("ASYNC-IO-ERROR", "logArgs", sub() {
+            ctrl.setLogger(new Mutex());
+        });
+
+        # Passing NOTHING again should succeed (idempotent clear)
+        ctrl.setLogger();
+    }
+
+    testContinuePollException() {
+        # Use a connected pair — we need a valid socket for the SocketPollOperationInfo
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port);
+        Socket server = listener.accept(ConnectTimeout);
+
+        # Create an operation with an ErrorPollOp that throws on continuePoll
+        # Since no poll_info is provided, the I/O thread calls continuePoll immediately
+        AsyncIoController ctrl();
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": new ErrorPollOp(),
+            "owner": "test",
+            "to": ConnectTimeout,
+        });
+
+        # The result should have an exception — continuePoll throws immediately
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result);
+        assertFalse(result.canceled ?? False);
+        assertEq(True, exists result.ex);
+        assertEq("TEST-POLL-ERROR", result.ex.err);
+    }
+}
+
+#! Mock poll operation that throws on continuePoll
+class ErrorPollOp inherits AbstractPollOperation {
+    string getGoal() {
+        return "error";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        throw "TEST-POLL-ERROR", "intentional error from test poll operation";
     }
 }

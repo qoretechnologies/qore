@@ -369,8 +369,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         if (io_exiting || !tid) {
             startIntern(xsink);
             if (*xsink) {
+                // Copy PollInfo out before erasing — pinfo is a reference into cache
+                PollInfo failed_pinfo = pinfo;
+                pinfo = PollInfo();
                 cache.erase(uh);
-                pinfo.cleanup(xsink);
+                failed_pinfo.cleanup(xsink);
                 // res still owns new_queue_obj — destructor will clean it up
                 return nullptr;
             }
@@ -553,23 +556,49 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         }
     } else if (count > 0) {
         // Wait for all cancellations to complete
-        AutoLocker al(m);
-        // The CancelOwner handler will signal done_cond when all ops are canceled.
-        // Also check !tid: if the I/O thread exits (e.g. via autostop or crash)
-        // before processing the CancelOwner command, we must not hang.
-        while (tid) {
-            // Check if there are still operations for this owner
-            bool found = false;
-            for (auto& it : cache) {
-                if (it.second.owner == owner_str) {
-                    found = true;
+        {
+            AutoLocker al(m);
+            // The CancelOwner handler will signal done_cond when all ops are canceled.
+            // Also check !tid: if the I/O thread exits (e.g. via autostop or crash)
+            // before processing the CancelOwner command, we must not hang.
+            while (tid) {
+                // Check if there are still operations for this owner
+                bool found = false;
+                for (auto& it : cache) {
+                    if (it.second.owner == owner_str) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
                     break;
                 }
+                done_cond.wait(m);
             }
-            if (!found) {
-                break;
+
+            // If tid dropped to 0 but matching ops remain, collect them for direct cancel
+            if (!tid) {
+                std::vector<std::string> keys;
+                for (auto& [key, pinfo] : cache) {
+                    if (pinfo.owner == owner_str) {
+                        keys.push_back(key);
+                    }
+                }
+                for (auto& key : keys) {
+                    auto it = cache.find(key);
+                    if (it != cache.end()) {
+                        direct_pinfos.push_back(it->second);
+                        it->second = PollInfo();
+                        cache.erase(it);
+                    }
+                }
             }
-            done_cond.wait(m);
+        }
+
+        // Deliver cancel results for any remaining ops after I/O thread exit
+        for (auto& pinfo : direct_pinfos) {
+            doCancelIntern(pinfo, xsink);
+            pinfo.cleanup(xsink);
         }
     }
 
@@ -741,6 +770,23 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) const {
 }
 
 void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsink) {
+    if (logger_obj) {
+        // Validate the logger object has the required methods
+        const QoreClass* cls = logger_obj->getClass();
+        if (!cls->findMethod("logArgs")) {
+            xsink->raiseException("ASYNC-IO-ERROR",
+                "logger object of class '%s' does not implement logArgs() method",
+                cls->getName());
+            return;
+        }
+        if (!cls->findMethod("isEnabledFor")) {
+            xsink->raiseException("ASYNC-IO-ERROR",
+                "logger object of class '%s' does not implement isEnabledFor() method",
+                cls->getName());
+            return;
+        }
+    }
+
     AutoLocker al(m);
     if (logger) {
         logger->deref(xsink);
@@ -810,8 +856,8 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         ROdereference();
         return;
     }
-
-    log(LOGGER_LEVEL_DEBUG, "I/O thread started (tid: %d)", tid);
+    // NOTE: do not call log() here — caller holds the lock.
+    // The I/O thread itself logs "I/O thread ready" when it starts.
 }
 
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
@@ -994,8 +1040,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     // Operation finished (error, timeout, or completed)
                     unregisterFromEventLoop(result.key, xsink);
 
-                    // Build result hash
+                    // Build result hash (buildResultHash does refSelf on ex_hash)
                     QoreHashNode* result_hash = buildResultHash(pinfo, false, result.ex_hash, xsink);
+                    // Deref our copy of ex_hash — buildResultHash already refSelf'd it
+                    if (result.ex_hash) {
+                        result.ex_hash->deref(xsink);
+                        result.ex_hash = nullptr;
+                    }
 
                     // Prepare deferred delivery
                     DeferredDelivery dd;
@@ -1050,9 +1101,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 }
             }
 
-            // Check autostop
+            // Check autostop (only if no deliveries pending — recheck after delivery)
             if (cache.empty() && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
-                log(LOGGER_LEVEL_DEBUG, "all operations completed; exiting I/O thread (autostop)");
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1092,7 +1142,6 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         if (!do_autostop && !deferred_deliveries.empty()) {
             AutoLocker al(m);
             if (cache.empty() && autostop_flag && cmdq.empty()) {
-                log(LOGGER_LEVEL_DEBUG, "all operations completed after deliveries; exiting I/O thread");
                 io_exiting = true;
                 if (io_waiting) {
                     io_cond.broadcast();
@@ -1102,6 +1151,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         if (do_autostop) {
+            log(LOGGER_LEVEL_DEBUG, "all operations completed; exiting I/O thread (autostop)");
             break;
         }
 
@@ -1605,15 +1655,23 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
 }
 
 void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
-    // Acquire lock and ref the logger to avoid data race with setLogger()
+    // Snapshot and ref the logger under lock, then release the lock before calling
+    // any user-provided methods (isEnabledFor, logArgs) to avoid deadlock if the
+    // logger re-enters the controller.
     LoggerBridge* lgr;
     {
         AutoLocker al(m);
-        if (!logger || !logger->isEnabledFor(level)) {
+        if (!logger) {
             return;
         }
         lgr = logger;
         lgr->ref();
+    }
+
+    if (!lgr->isEnabledFor(level)) {
+        ExceptionSink xsink;
+        lgr->deref(&xsink);
+        return;
     }
 
     va_list args;
@@ -1626,6 +1684,25 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
     lgr->deref(&xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
+void AsyncIoControllerPriv::logWithRef(LoggerBridge* lgr, int level, const char* fmt, ...) {
+    if (!lgr) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    QoreStringNode* msg = new QoreStringNode();
+    msg->vsprintf(fmt, args);
+    va_end(args);
+
+    ExceptionSink xsink;
+    lgr->logArgs(level, msg, nullptr, &xsink);
+    msg->deref();
     if (xsink) {
         xsink.clear();
     }

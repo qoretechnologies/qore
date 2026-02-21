@@ -109,12 +109,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return ctrl.getAutostop();
     }
 
-    #! Starts monitoring
-    /** This method starts the I/O thread and waits for it to signal that it's ready
-        before returning. This ensures deterministic behavior where callers can
-        immediately submit operations after start() returns.
+    #! Starts the I/O thread if not already running
+    /** The I/O thread is automatically started when the first operation is submitted.
+        This method is only needed if you want to pre-start the thread.
 
-        @throw CONTROLLER-START-ERROR if the I/O thread is already running
+        If the I/O thread is already running, this is a no-op.
+
+        @note Use @ref waitReady() after calling this method if you need to ensure
+        the I/O thread is fully initialized before submitting operations.
     */
     start() {
         ctrl.start();

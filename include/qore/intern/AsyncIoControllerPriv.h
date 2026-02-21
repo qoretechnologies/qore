@@ -321,8 +321,13 @@ private:
     //! Wait for a cancel to complete
     DLLLOCAL void waitCancel(const std::string& key);
 
-    //! Log a message
+    //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     DLLLOCAL void log(int level, const char* fmt, ...) const;
+
+    //! Log a message using a pre-acquired logger reference (lock-free — safe to call with lock held)
+    /** @param lgr a referenced LoggerBridge (caller must deref after call)
+    */
+    DLLLOCAL static void logWithRef(LoggerBridge* lgr, int level, const char* fmt, ...);
 
     //! Get the socket unique hash from a QoreSocketObject
     DLLLOCAL static std::string getSocketHash(QoreSocketObject* sock);
