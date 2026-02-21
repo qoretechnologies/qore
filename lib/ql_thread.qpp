@@ -598,7 +598,6 @@ on_exit set_thread_tz(tz);
     @since %Qore 0.8.5
  */
 nothing set_thread_tz(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
-    ReferenceHolder<TimeZoneData> holder(zone, xsink);
     set_thread_tz(zone->get());
 }
 
@@ -665,8 +664,7 @@ set_thread_resource(obj);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
-    ReferenceHolder<AbstractQoreThreadResource> holder(resource, xsink);
-    set_thread_resource(resource);
+    set_thread_resource(*resource);
 }
 
 //! removes a thread resource from the current thread
@@ -690,8 +688,7 @@ remove_thread_resource(obj);
     @since %Qore 0.8.12
  */
 bool remove_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
-    ReferenceHolder<AbstractQoreThreadResource> holder(resource, xsink);
-    return remove_thread_resource(resource) ? false : true;
+    return remove_thread_resource(*resource) ? false : true;
 }
 
 //! sets a callable thread resource for the current thread with an optional argument

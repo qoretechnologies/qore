@@ -77,12 +77,11 @@ qclass SocketPollOperation [private_members=string goal; arg=SocketPollOperation
     @throw INVALID-GOAL thrown if the goal is invalid
 */
 SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *hash<auto> opts) {
-    ReferenceHolder<QoreSocketObject> holder(socket, xsink);
     ReferenceHolder<SocketPollOperationBase> poller(xsink);
     if (*goal == "connect") {
-        poller = get_connect_poll_operation(xsink, false, opts, holder);
+        poller = get_connect_poll_operation(xsink, false, opts, socket);
     } else if (*goal == "connect-ssl") {
-        poller = get_connect_poll_operation(xsink, true, opts, holder);
+        poller = get_connect_poll_operation(xsink, true, opts, socket);
     } else {
         xsink->raiseException("INVALID-GOAL", "goal '%s' not recognized; expecting one of: 'connect', 'connect-ssl'",
             goal->c_str());

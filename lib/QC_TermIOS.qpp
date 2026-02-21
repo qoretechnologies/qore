@@ -845,10 +845,8 @@ bool b = termios.isEqual(termios2);
  */
 bool TermIOS::isEqual(Termios[QoreTermIOS] termios) [flags=CONSTANT] {
 #ifdef HAVE_TERMIOS_H
-   ReferenceHolder<QoreTermIOS> holder(termios, xsink);
-   return s->is_equal(termios);
+   return s->is_equal(*termios);
 #else
-   termios = 0;
    return missing_method_error("TermIOS::isEqual", "TERMIOS", xsink);
 #endif
 }

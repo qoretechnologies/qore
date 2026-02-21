@@ -77,8 +77,6 @@ bool b = m1.isEqual(m2);
     @return @ref True if the AbstractMember object passed as an argument is equal to the current object; @ref False if not
 */
 bool AbstractMember::isEqual(AbstractMember[QoreReflectionMember] mem) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionMember> holder(mem, xsink);
-
     return mem->mem == m->mem;
 }
 

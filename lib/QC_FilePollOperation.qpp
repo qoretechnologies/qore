@@ -53,12 +53,11 @@ qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOpe
     @param num_bytes the number of bytes to read; < 0 means read the entire file
 */
 FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool to_string, int num_bytes = -1) {
-    ReferenceHolder<File> holder(file, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
     }
-    ReferenceHolder<SocketPollOperationBase> poller(new FileReadPollOperation(xsink, holder.release(), npath->c_str(),
+    ReferenceHolder<SocketPollOperationBase> poller(new FileReadPollOperation(xsink, file.release(), npath->c_str(),
         num_bytes, to_string), xsink);
     if (*xsink) {
         return;

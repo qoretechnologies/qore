@@ -75,7 +75,6 @@ AutoGate ag(gate);
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoGate::constructor(Gate[QoreGate] gate) {
-    ReferenceHolder<QoreGate> holder(gate, xsink);
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     while (true) {
@@ -88,7 +87,7 @@ AutoGate::constructor(Gate[QoreGate] gate) {
         }
         if (rc == 0) {
             // Gate acquired - create the AutoGate object with already-entered gate
-            QoreAutoGate* ag = new QoreAutoGate(holder.release());
+            QoreAutoGate* ag = new QoreAutoGate(gate.release());
             self->setPrivate(CID_AUTOGATE, ag);
             return;
         }

@@ -2008,9 +2008,8 @@ pgm.setSandboxManager(sm);
     @since Qore 2.1
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sm) {
-   // setSandboxManager() takes its own strong reference; use ReferenceHolder for the arg ref
-   ReferenceHolder<QoreSandboxManager> holder(sm, xsink);
-   p->setSandboxManager(sm);
+   // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
+   p->setSandboxManager(*sm);
 }
 
 //! Returns the sandbox manager for this program if set

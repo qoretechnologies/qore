@@ -124,8 +124,7 @@ int cmp = oid1.compare(oid2);
     @endcode
 */
 int ObjectId::compare(ObjectId[QoreObjectId] other) [flags=CONSTANT] {
-    ReferenceHolder<QoreObjectId> holder(other, xsink);
-    return oid->compare(other);
+    return oid->compare(*other);
 }
 
 //! Checks if this ObjectId equals another
@@ -140,8 +139,7 @@ if (oid1.equals(oid2)) {
     @endcode
 */
 bool ObjectId::equals(ObjectId[QoreObjectId] other) [flags=CONSTANT] {
-    ReferenceHolder<QoreObjectId> holder(other, xsink);
-    return oid->equals(other);
+    return oid->equals(*other);
 }
 
 //! Returns a hash code for this ObjectId

@@ -60,7 +60,7 @@ qclass TransformOutputStream [arg=TransformOutputStream* os; ns=Qore; vparent=Ou
 */
 TransformOutputStream::constructor(Qore::OutputStream[OutputStream] os, Qore::Transform[Transform] t) {
     // here we pass the references to os and t to "tos"
-    SimpleRefHolder<TransformOutputStream> tos(new TransformOutputStream(os, t));
+    SimpleRefHolder<TransformOutputStream> tos(new TransformOutputStream(*os, *t));
     self->setPrivate(CID_TRANSFORMOUTPUTSTREAM, tos.release());
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_TRANSFORMOUTPUTSTREAM);

@@ -51,8 +51,6 @@ CopyMethod m(cls);
     @throw UNKOWN-METHOD cannot find a copy method for the class
  */
 CopyMethod::constructor(Class[QoreReflectionClass] cls) {
-    ReferenceHolder<QoreReflectionClass> holder(cls, xsink);
-
     // get exclusive access to program object
     QoreExternalProgramContextHelper pch(xsink, cls->pgm);
     if (*xsink) {

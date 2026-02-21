@@ -188,8 +188,7 @@ printf("finally some_value is 0\n");
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, timeout timeout_ms = 0) {
-    ReferenceHolder<AbstractSmartLock> holder(lock, xsink);
-    return condition_wait_impl(c, lock, timeout_ms, xsink);
+    return condition_wait_impl(c, *lock, timeout_ms, xsink);
 }
 
 //! Blocks a thread until signaled; accepts a relative date/time timeout value
@@ -228,8 +227,6 @@ while (some_value > 0) {
     @since %Qore 2.3
  */
 int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> timeout_date) {
-    ReferenceHolder<AbstractSmartLock> holder(lock, xsink);
-
     int64 timeout_ms = timeout_date->getRelativeMilliseconds();
     // ensure positive sub-millisecond timeouts don't truncate to 0
     // (0 is the "indefinite wait" sentinel)
@@ -237,7 +234,7 @@ int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> ti
         timeout_ms = 1;
     }
 
-    return condition_wait_impl(c, lock, timeout_ms, xsink);
+    return condition_wait_impl(c, *lock, timeout_ms, xsink);
 }
 
 //! Returns the number of threads currently blocked on this object using the AbstractSmartLock passed
@@ -253,8 +250,6 @@ printf("%d thread(s) waiting on the Condition\n", cond.wait_count(m));
     @endcode
  */
 int Condition::wait_count(AbstractSmartLock[AbstractSmartLock] lock) {
-    ReferenceHolder<AbstractSmartLock> holder(lock, xsink);
-
-    return c->wait_count(lock);
+    return c->wait_count(*lock);
 }
 

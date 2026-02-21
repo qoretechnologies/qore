@@ -266,7 +266,7 @@ nothing ProgramControl::setGlobalVarValue(string name, auto value) {
 nothing ProgramControl::assignBreakpoint(Breakpoint[QoreBreakpoint] bkpt) {
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
-   p->assignBreakpoint(bkpt, xsink);
+   p->assignBreakpoint(*bkpt, xsink);
 }
 
 //! delete all breakpoints from instance

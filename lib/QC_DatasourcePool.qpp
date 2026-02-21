@@ -248,11 +248,9 @@ DatasourcePool::constructor(string driver, *string user, *string pass, *string d
          assert(*xsink);
          return;
       }
-      dsp_constructor_hash(*h, self, queue, arg, xsink);
+      dsp_constructor_hash(*h, self, queue.release(), arg, xsink);
       return;
    }
-
-   ReferenceHolder<Queue> q(queue, xsink);
 
    DBIDriver *db_driver = DBI.find(driver->getBuffer());
    if (!db_driver) {
@@ -277,7 +275,7 @@ DatasourcePool::constructor(string driver, *string user, *string pass, *string d
 
    SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver, user ? user->getBuffer() : 0, pass ? pass->getBuffer() : 0,
 							 db ? db->getBuffer() : 0, encoding ? encoding->getBuffer() : 0, host ? host->getBuffer() : 0,
-							 min, max, port, 0, q.release(), arg.refSelf()));
+							 min, max, port, 0, queue.release(), arg.refSelf()));
    if (!*xsink)
       self->setPrivate(CID_DATASOURCEPOOL, ds.release());
    else
@@ -301,14 +299,13 @@ DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @since %Qore 0.8.6
  */
 DatasourcePool::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ReferenceHolder<Queue> q(queue, xsink);
     ReferenceHolder<QoreHashNode> h(parseDatasource(desc->getBuffer(), xsink), xsink);
     if (!h) {
         assert(*xsink);
         return;
     }
 
-    dsp_constructor_hash(*h, self, q.release(), arg, xsink);
+    dsp_constructor_hash(*h, self, queue.release(), arg, xsink);
 }
 
 //! Creates a DatasourcePool object from a hash argument giving parameters for the constructor
@@ -334,7 +331,7 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
  */
 DatasourcePool::constructor(hash<auto> opts, *Qore::Thread::Queue[Queue] queue, auto arg) {
-   dsp_constructor_hash(opts, self, queue, arg, xsink);
+   dsp_constructor_hash(opts, self, queue.release(), arg, xsink);
 }
 
 //! Throws an exception if any transactions are in progress and returns immediately; the object is destroyed after any in-progress requests are completed
@@ -1032,12 +1029,10 @@ int DatasourcePool::getErrorTimeout() [flags=CONSTANT] {
     @since %Qore 0.8.9
  */
 nothing DatasourcePool::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg) {
-   ReferenceHolder<Queue> q(queue, xsink);
-
    if (queue->getMax() != -1)
       return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
-   ds->setEventQueue(q.release(), arg.refSelf(), xsink);
+   ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
 }
 
 //! Clears the queue object for DBI events on the pool

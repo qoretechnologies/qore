@@ -388,8 +388,6 @@ Datasource db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 5432);
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 */
 Datasource::constructor(string driver, *string user, *string pass, *string db, *string encoding, *string host, *softint port, *hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ReferenceHolder<Queue> q(queue, xsink);
-
     if (!port && driver->find('@') != -1) {
         qore_offset_t colon = driver->find(':');
         qore_offset_t atsign = driver->find('@');
@@ -403,7 +401,7 @@ Datasource::constructor(string driver, *string user, *string pass, *string db, *
             assert(*xsink);
             return;
         }
-        ds_constructor_hash(*h, self, q.release(), arg, xsink);
+        ds_constructor_hash(*h, self, queue.release(), arg, xsink);
         return;
     }
 
@@ -444,7 +442,7 @@ Datasource::constructor(string driver, *string user, *string pass, *string db, *
         ds_set_options(*ds, options, xsink);
 
     if (queue)
-        ds->setEventQueue(q.release(), arg.refSelf(), xsink);
+        ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
 
     self->setPrivate(CID_DATASOURCE, ds.release());
 }
@@ -468,14 +466,12 @@ Datasource ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @since %Qore 0.8.6
 */
 Datasource::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ReferenceHolder<Queue> q(queue, xsink);
-
     TempEncodingHelper tstr(desc, QCS_UTF8, xsink);
     if (*xsink) {
         return;
     }
 
-    create_datasource_from_conf(**tstr, *self, q.release(), arg, xsink);
+    create_datasource_from_conf(**tstr, *self, queue.release(), arg, xsink);
 }
 
 //! Creates a Datasource object from a hash argument giving parameters for the constructor
@@ -517,7 +513,7 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 */
 Datasource::constructor(hash<auto> opts, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ds_constructor_hash(opts, self, queue, arg, xsink);
+    ds_constructor_hash(opts, self, queue.release(), arg, xsink);
 }
 
 //! Closes the datasource if it's open (if any operations are in progress, will block until the operations complete) and destroys the object
@@ -1443,12 +1439,10 @@ string Datasource::getConfigString() [flags=CONSTANT] {
     @since %Qore 0.8.9
 */
 nothing Datasource::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg) {
-    ReferenceHolder<Queue> q(queue, xsink);
-
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
-    ds->setEventQueue(q.release(), arg.refSelf(), xsink);
+    ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
 }
 
 //! Clears the queue object for DBI events on the datasource

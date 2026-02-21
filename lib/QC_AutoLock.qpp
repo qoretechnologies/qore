@@ -83,7 +83,6 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoLock::constructor(Mutex[SmartMutex] mutex) {
-    ReferenceHolder<SmartMutex> holder(mutex, xsink);
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     while (true) {
@@ -96,7 +95,7 @@ AutoLock::constructor(Mutex[SmartMutex] mutex) {
         }
         if (rc == 0) {
             // Lock acquired - create the AutoLock object with already-locked mutex
-            QoreAutoLock *qsl = new QoreAutoLock(holder.release());
+            QoreAutoLock *qsl = new QoreAutoLock(mutex.release());
             self->setPrivate(CID_AUTOLOCK, qsl);
             return;
         }
