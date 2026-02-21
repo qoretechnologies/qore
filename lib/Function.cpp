@@ -2834,11 +2834,29 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // argvid/selfid are instantiated above in this function or by the caller
                 //   (e.g. UserConstructorVariant::evalConstructor() pushes selfid before
                 //    calling evalIntern() with self=0).
-                // Body locals are instantiated just above.
+                // Body locals are instantiated just above (ast_visible_body_locals, not all_body_locals).
                 // All must be in pre_instantiated so the IR interpreter doesn't
                 // re-instantiate them (which would push a new frame with value 0).
-                // Use cached pre_instantiated_cache to avoid per-call set allocation.
-                const std::unordered_set<const LocalVar*>& pre_instantiated = cached_ir->pre_instantiated_cache;
+                // CRITICAL FIX: Build a temporary set with only the locals that are actually
+                // instantiated. Do NOT use pre_instantiated_cache which includes ALL body locals
+                // (all_body_locals), but we only instantiate the filtered ast_visible_body_locals.
+                std::unordered_set<const LocalVar*> pre_instantiated;
+                // Add parameter locals (instantiated by setupCall in eval())
+                for (unsigned i = 0; i < signature.numParams(); ++i) {
+                    pre_instantiated.insert(signature.lv[i]);
+                }
+                // Add argv (instantiated above at line 2812)
+                if (signature.argvid) {
+                    pre_instantiated.insert(signature.argvid);
+                }
+                // Add selfid (only if it was instantiated above at line 2808)
+                if (self && signature.selfid) {
+                    pre_instantiated.insert(signature.selfid);
+                }
+                // Add ast_visible_body_locals (instantiated at line 2823)
+                for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+                    pre_instantiated.insert(lv);
+                }
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
