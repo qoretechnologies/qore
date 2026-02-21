@@ -139,8 +139,8 @@ int Gate::enter(timeout timeout_ms) {
       if (*xsink) {
          return -1;  // Error occurred
       }
-      if (rc == 0) {
-         return 0;  // Gate acquired
+      if (rc >= 0) {
+         return 0;  // Gate acquired (rc=0: first entry, rc>0: reentrant)
       }
 
       if (!infinite) {
@@ -176,8 +176,8 @@ nothing Gate::enter() {
       if (*xsink) {
          return QoreValue();  // Error occurred
       }
-      if (rc == 0) {
-         return QoreValue();  // Gate acquired
+      if (rc >= 0) {
+         return QoreValue();  // Gate acquired (rc=0: first entry, rc>0: reentrant)
       }
       // rc != 0 means timeout, loop and check again
    }

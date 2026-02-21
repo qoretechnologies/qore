@@ -1117,10 +1117,14 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     # only called from the listeners - do not call externally
     listenerStopped(HttpListener l) {
         # decrement listener count
-        on_exit c.dec();
+        on_exit {
+            c.dec();
+        }
 
         lm.enter();
-        on_exit lm.exit();
+        on_exit {
+            lm.exit();
+        }
 
         # Remove listener from async I/O controller if running
         if (asyncIo) {
@@ -1187,7 +1191,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # Shutdown all listeners - stop accepting new connections
         lm.enter();
-        on_exit lm.exit();
+        on_exit {
+            lm.exit();
+        }
 
         map $1.stop(), listeners.iterator();
         c.waitForZero();
