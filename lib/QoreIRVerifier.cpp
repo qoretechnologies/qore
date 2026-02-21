@@ -1425,23 +1425,19 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CallClosureDirect:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
-        // CallDirect has its own instruction class with an expr field
+        // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
+        // but they pre-evaluate all arguments into IR operands. The expr args are only used by AOT serialization,
+        // not re-evaluated at JIT runtime. Returning nullptr prevents incorrect classification of call args as
+        // AST-visible locals, allowing parameters to be properly classified as IR-only.
         case QoreIROpcode::CallDirect:
-            return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return nullptr;
 
         // Invoke has its own instruction class
         case QoreIROpcode::Invoke:
             return &static_cast<const QoreIRInvokeInstruction*>(inst)->expr;
-
-        // Direct static method call with expr field
-        case QoreIROpcode::CallStaticDirect:
-            return &static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->expr;
-
-        // Direct dot-eval method call with expr field
-        case QoreIROpcode::DotEvalMethodDirect:
-            return &static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->expr;
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-            return &static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->expr;
 
         // Native access opcodes with expr fields
         case QoreIROpcode::LoadStaticVar:

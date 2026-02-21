@@ -3384,20 +3384,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     if (check_stack(xsink)) {
         return toBits(QoreValue());
     }
-    assert(variant);
 
-    const UserVariantBase* uvb = variant->getUserVariantBase();
-    if (!uvb) {
-        // Builtin static method — fall back to slow path for proper type coercion
-        // (builtins can have soft types like softstring that require CodeEvaluationHelper)
-        ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
-        RuntimeConfig& rc = rc_get_current_ref();
-        return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
-    }
-
-    // If the callee is not JIT-compiled yet, fall back to the slow path.
-    // This can happen in tiered compilation when the callee hasn't been promoted yet.
-    if (!uvb->hasCachedFunction()) {
+    // variant may be nullptr for AOT-deserialized StaticMethodCallNode nodes
+    // (resolveExprSlot creates nodes without a resolved variant pointer).
+    // Fall through to the slow path in that case.
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb || !uvb->hasCachedFunction()) {
         ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
         RuntimeConfig& rc = rc_get_current_ref();
         return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
