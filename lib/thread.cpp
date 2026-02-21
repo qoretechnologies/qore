@@ -326,7 +326,7 @@ static int initial_thread = -1;
 // this structure holds all thread-specific data
 class ThreadData {
 public:
-    int64 runtime_po = 0;
+    QoreParseOptions runtime_po;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -1609,7 +1609,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        int64 po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, int64& old_po) {
+        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -1635,7 +1635,7 @@ void swap_runtime_location(const QoreProgramLocation* loc, const AbstractStateme
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        int64 po) {
+        const QoreParseOptions& po) {
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
@@ -1811,7 +1811,7 @@ void qore_get_runtime_context(QoreRuntimeContext* rc) {
     rc->pgm = pgm ? pgm : td->call_program_context;
     rc->loc = td->runtime_loc;
     rc->stmt = td->runtime_statement;
-    rc->po = td->runtime_po;
+    rc->po = td->runtime_po.getLo();
     rc->stack_loc = td->current_stack_location;
     rc->element = get_implicit_element();
 }
@@ -2493,15 +2493,15 @@ RootQoreNamespace* getRootNS() {
     //return (thread_data.get())->pgmStack->getProgram()->getRootNS();
 }
 
-int64 parse_get_parse_options() {
-    return (thread_data.get())->current_pgm->getParseOptions64();
+QoreParseOptions parse_get_parse_options() {
+    return (thread_data.get())->current_pgm->getParseOptions();
 }
 
-int64 runtime_get_parse_options() {
+QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
 }
 
-int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
+QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     assert(n);
     ThreadData* td = thread_data.get();
     const QoreStackLocation* w = td->current_stack_location;
@@ -2509,7 +2509,7 @@ int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     //printd(5, "runtime_get_parse_options_stack() n: %d w: %p\n", (int)n, w);
     while (w) {
         if (i == n) {
-            return w->getProgram()->getParseOptions64();
+            return w->getProgram()->getParseOptions();
         }
         ++i;
         w = w->getNext();
@@ -2518,11 +2518,11 @@ int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     return 0;
 }
 
-bool parse_check_parse_option(int64 o) {
+bool parse_check_parse_option(const QoreParseOptions& o) {
     return (parse_get_parse_options() & o) == o;
 }
 
-bool runtime_check_parse_option(int64 o) {
+bool runtime_check_parse_option(const QoreParseOptions& o) {
     return (runtime_get_parse_options() & o) == o;
 }
 

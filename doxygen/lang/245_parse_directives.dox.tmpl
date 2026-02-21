@@ -76,9 +76,9 @@
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
     |@ref no-debugging "%no-debugging"|Forbids debugging of the current @ref Qore::Program "Program" object <br><br>Since %Qore 0.8.13
-    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option
+    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option<br><br>Since %Qore 2.3
     |@ref no-child-restrictions "%no-child-restrictions"|Allows child program objects to have parse option restrictions that are not a strict subset of the parents'; equivalent to parse option @ref Qore::PO_NO_CHILD_PO_RESTRICTIONS and the <tt>-</tt><tt>-no-child-restrictions</tt> command line option
-    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option
+    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option<br><br>Since %Qore 2.3
     |@ref no-database "%no-database"|Disallows access to database functionality (for example the @ref Qore::SQL::Datasource "Datasource class"; equivalent to parse option @ref Qore::PO_NO_DATABASE and the <tt>-</tt><tt>-no-database</tt> command line option
     |@ref no-external-access "%no-external-access"|made up of @ref no-process-control "%no-process-control", @ref no-network "%no-network", @ref no-filesystem "%no-filesystem", @ref no-database "%no-database", @ref no-external-info "%no-external-info", and @ref no-modules "%no-modules"; equivalent to parse option @ref Qore::PO_NO_EXTERNAL_ACCESS and the <tt>-</tt><tt>-no-external-access</tt> command line option
     |@ref no-external-info "%no-external-info"|Disallows any access to functionality that provides external information (see @ref no-external-info "%no-external-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_EXTERNAL_INFO and the <tt>-</tt><tt>-no-external-info</tt> command line option
@@ -89,9 +89,9 @@
     |@ref no-io "%no-io"|Made up of @ref no-gui "%no-gui" \| @ref no-terminal-io "%no-terminal-io" \| @ref no-filesystem "%no-filesystem" \| @ref no-network "%no-network" \| @ref no-database "%no-database"; equivalent to parse option @ref Qore::PO_NO_IO and the \c --no-io command line option
     |@ref no-locale-control "%no-locale-control"|Disallows access to functionality that changes locale information (see %no-locale-control for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_LOCALE_CONTROL and the <tt>-</tt><tt>-no-locale-control</tt> command line option
     |@ref no-modules "%no-modules"|Disallows loading @ref qore_modules "modules" with the @ref requires "%requires", @ref try-module "%try-module", and @ref try-reexport-module "%try-reexport-module" parse directive or at runtime with load_module(); equivalent to @ref Qore::PO_NO_MODULES and the <tt>-pno-modules</tt> command line option <br><br>Since %Qore 0.8.4
-    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option
+    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option<br><br>Since %Qore 2.3
     |@ref no-network "%no-network"|Disallows access to the network; equivalent to parse option @ref Qore::PO_NO_NETWORK and the <tt>-</tt><tt>-no-network</tt> command line option
-    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option
+    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option<br><br>Since %Qore 2.3
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
@@ -1426,6 +1426,8 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new class definitions. Any use of the reserved word \c class will result in a parse exception.
 
+    @since %Qore 2.3
+
     <hr>
     @section no-constant-defs %no-constant-defs
 
@@ -1440,6 +1442,8 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows new constant definitions. Any use of the reserved word \c const will result in a parse exception.
+
+    @since %Qore 2.3
 
     <hr>
     @section no-database %no-database
@@ -1683,6 +1687,8 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new @ref qore_namespaces "namespace definitions".
 
+    @since %Qore 2.3
+
     <hr>
     @section no-network %no-network
 
@@ -1715,6 +1721,8 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows use of the @ref new "new operator".
+
+    @since %Qore 2.3
 
     <hr>
     @section no-process-control %no-process-control

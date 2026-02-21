@@ -434,13 +434,13 @@ QoreUserModule::~QoreUserModule() {
 
 void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
     //printd(5, "QoreUserModule::addToProgramImpl() mod '%s': tpgm %p po: %p pgm dom: %p\n", name.c_str(), tpgm,
-    //    tpgm->getParseOptions64(), qore_program_private::getDomain(*pgm));
+    //    tpgm->getParseOptions(), qore_program_private::getDomain(*pgm));
     // first check the module's functional domain
-    int64 dom = qore_program_private::getDomain(*pgm);
-    if (tpgm->getParseOptions64() & dom) {
+    QoreParseOptions dom = qore_program_private::getDomain(*pgm);
+    if (tpgm->getParseOptions() & dom) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s' implements "
             "functionality restricted in the Program object trying to import the module (" QLLX ")",
-            name.c_str(), tpgm->getParseOptions64() & dom);
+            name.c_str(), (tpgm->getParseOptions() & dom).getLo());
         return;
     }
     // issue #3592: must add feature first
@@ -943,7 +943,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     }
 
     // check if parse options allow loading any modules at all
-    if (pgm && (pgm->getParseOptions64() & PO_NO_MODULES)) {
+    if (pgm && (pgm->getParseOptions() & PO_NO_MODULES)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot load modules ('%s' " \
             "requested) into the current Program object because PO_NO_MODULES is set", name);
         return nullptr;
@@ -1130,11 +1130,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
 
     // parse options for the module
-    int64 parseOptions = USER_MOD_PO;
+    QoreParseOptions parseOptions = USER_MOD_PO;
     // add in parse options from the current program, if any, disabling style and types options already set with
     // USER_MOD_PO
     if (p) {
-        int64 parent_po = p->getParseOptions64();
+        QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
         parseOptions |= (parent_po & ~(PO_FREE_OPTIONS | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG));
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
@@ -1478,11 +1478,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
 
     // parse options for the module
-    int64 po = USER_MOD_PO;
+    QoreParseOptions po = USER_MOD_PO;
     // add in parse options from the current program, if any, disabling style and types options already set with
     // USER_MOD_PO
     if (p) {
-        int64 parent_po = p->getParseOptions64();
+        QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
         po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_NO_GLOBAL_VARS|PO_ENABLE_DEBUG));
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
@@ -1509,8 +1509,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     //printd(5, "QoreModuleManager::loadUserModuleFromPath(path: '%s') cwd: '%s' tpgm: %p po: " QLLD
     //  " allow-injection: %s tpgm allow-injection: %s pgm allow-injection: %s\n", path, td ? td : "n/a", tpgm, po,
     //  po & PO_ALLOW_INJECTION ? "true" : "false",
-    //  (tpgm ? tpgm->getParseOptions64() & PO_ALLOW_INJECTION : 0) ? "true" : "false",
-    //  mpgm->getParseOptions64() & PO_ALLOW_INJECTION ? "true" : "false");
+    //  (tpgm ? tpgm->getParseOptions() & PO_ALLOW_INJECTION : 0) ? "true" : "false",
+    //  mpgm->getParseOptions() & PO_ALLOW_INJECTION ? "true" : "false");
 
     // note: the module will contain a normalized path which will be used for parsing
     std::unique_ptr<QoreUserModule> mi(new QoreUserModule(pholder.release(), td, path, feature, load_opt,
@@ -1571,11 +1571,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
 
     // parse options for the module
-    int64 po = USER_MOD_PO;
+    QoreParseOptions po = USER_MOD_PO;
     // add in parse options from the current program, if any, disabling style and types options already set with
     // USER_MOD_PO
     if (p) {
-        int64 parent_po = p->getParseOptions64();
+        QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
         po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_ENABLE_DEBUG));
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL

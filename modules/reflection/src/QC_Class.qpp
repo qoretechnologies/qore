@@ -89,7 +89,7 @@ static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNod
 }
 
 int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
-    if (getProgram()->getParseOptions64() & cls->getDomain()) {
+    if (getProgram()->getParseOptions() & cls->getDomain()) {
         xsink->raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to the " \
             "'%s' class", cls->getName());
         return -1;

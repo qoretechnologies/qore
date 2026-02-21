@@ -411,6 +411,25 @@ cargo install tree-sitter-cli@0.26.5
       - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" and
         @ref Qore::SandboxManager::createWebSafe() "createWebSafe()"
       - see @ref sandboxing "Sandboxing and Security" for full documentation
+    - new @ref Qore::ParseOptions "ParseOptions" class providing an opaque container for parse option flags
+      supporting more than 64 option bits
+      (<a href="https://github.com/qoretechnologies/qore/issues/5145">issue 5145</a>)
+      - overcomes the limitation of the legacy @ref PO_constants "PO_*" 64-bit integer constants
+      - supports options by name (string), by integer constant, or by combining other ParseOptions objects
+      - new @ref Qore::Program "Program" constructor overload accepting a @ref Qore::ParseOptions "ParseOptions" object
+      - new @ref Qore::Program::getFullParseOptions() "Program::getFullParseOptions()" method returning
+        a @ref Qore::ParseOptions "ParseOptions" object
+      - new @ref Qore::Program::setParseOptions() "Program::setParseOptions(ParseOptions)" and
+        @ref Qore::Program::disableParseOptions() "Program::disableParseOptions(ParseOptions)" overloads
+    - new extended parse options (beyond 64-bit) now enforced at parse time:
+      - @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS": prevents class definitions
+        (parse directive: @ref no-class-defs "%no-class-defs")
+      - @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS": prevents constant definitions
+        (parse directive: @ref no-constant-defs "%no-constant-defs")
+      - @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS": prevents namespace definitions
+        (parse directive: @ref no-namespace-defs "%no-namespace-defs")
+      - @ref Qore::PO_NO_NEW "PO_NO_NEW": prevents use of the \c new operator
+        (parse directive: @ref no-new "%no-new")
     - <b>ReadOnlyFile short reads</b>
       - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
         fill the requested size

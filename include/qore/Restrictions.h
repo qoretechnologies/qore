@@ -33,6 +33,8 @@
 
 #define _QORE_RESTRICTIONS_H
 
+#include <qore/QoreParseOptions.h>
+
 /** @file Restrictions.h
     defines parse restrictions and functional domains for builtin functions and qore class methods
 */
@@ -109,11 +111,13 @@
 #define PO_NO_SYSTEM_CLASSES                PO_NO_INHERIT_SYSTEM_CLASSES
 #define PO_NO_USER_CLASSES                  PO_NO_INHERIT_USER_CLASSES
 
-// TODO: these are documented but unimplemented parse options (no bits available)
-#define PO_NO_CLASS_DEFS                    0  //!< placeholder: would disallow class definitions
-#define PO_NO_CONSTANT_DEFS                 0  //!< placeholder: would disallow constant definitions
-#define PO_NO_NAMESPACE_DEFS                0  //!< placeholder: would disallow namespace definitions
-#define PO_NO_NEW                           0  //!< placeholder: would disallow the 'new' keyword
+// extended parse options (bits 64+) — implemented via QoreParseOptions class
+// NOTE: these macros intentionally remain as 0 here for backward compatibility with QPP constant generation
+// Use QoreParseOptions::NO_CLASS_DEFS etc. directly in C++ code that uses QoreParseOptions
+#define PO_NO_CLASS_DEFS                    0  //!< disallow class definitions; use QoreParseOptions::NO_CLASS_DEFS in C++
+#define PO_NO_CONSTANT_DEFS                 0  //!< disallow constant definitions; use QoreParseOptions::NO_CONSTANT_DEFS in C++
+#define PO_NO_NAMESPACE_DEFS                0  //!< disallow namespace definitions; use QoreParseOptions::NO_NAMESPACE_DEFS in C++
+#define PO_NO_NEW                           0  //!< disallow the 'new' keyword; use QoreParseOptions::NO_NEW in C++
 
 #define PO_DEFAULT 0            //!< no parse options set by default
 

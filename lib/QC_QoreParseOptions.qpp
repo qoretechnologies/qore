@@ -1,0 +1,489 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_QoreParseOptions.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_QoreParseOptions.h"
+
+//! Opaque parse option container supporting extended options beyond 64 bits
+/** The ParseOptions class encapsulates parse option flags in an opaque container that supports
+    more than 64 option bits, overcoming the limitation of the legacy @ref PO_constants "PO_*" integer constants.
+
+    Parse options can be specified by name (string), by integer constant (PO_* values for bits 0-63),
+    or by combining other ParseOptions objects.
+
+    @par Example:
+    @code{.py}
+ParseOptions opts(PO_LOCKDOWN);
+opts.set("no-class-defs");
+opts.set("no-new");
+Program pgm(opts);
+
+# Query:
+ParseOptions po = pgm.getParseOptions();
+if (po.hasAny(PO_NO_NETWORK)) {
+    printf("network access disabled\n");
+}
+if (po.hasAny("no-class-defs")) {
+    printf("class definitions disabled\n");
+}
+    @endcode
+
+    @since %Qore 2.1
+*/
+qclass ParseOptions [arg=QoreParseOptionsData* pod];
+
+//! Creates an empty ParseOptions object with no options set
+/** @par Example:
+    @code{.py}
+ParseOptions opts();
+    @endcode
+*/
+ParseOptions::constructor() {
+    self->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData());
+}
+
+//! Creates a ParseOptions object from a PO_* integer constant
+/** @param po the parse option integer constant (bits 0-63)
+
+    @par Example:
+    @code{.py}
+ParseOptions opts(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+    @endcode
+*/
+ParseOptions::constructor(softint po) {
+    self->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(QoreParseOptions(po)));
+}
+
+//! Creates a ParseOptions object from a parse option name string
+/** @param name the parse option name (e.g. \c "no-network", \c "no-class-defs")
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-class-defs");
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+ParseOptions::constructor(string name) {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(po));
+}
+
+//! Creates a ParseOptions object from a list of parse option name strings
+/** @param names a list of parse option names (e.g. \c ("no-network", "no-class-defs"))
+
+    @par Example:
+    @code{.py}
+ParseOptions opts(("no-class-defs", "no-new", "no-namespace-defs"));
+    @endcode
+
+    @throw PARSE-OPTION-ERROR an option name in the list is unknown
+*/
+ParseOptions::constructor(list<string> names) {
+    QoreParseOptions po;
+    ConstListIterator li(names);
+    while (li.next()) {
+        QoreValue v = li.getValue();
+        if (v.getType() != NT_STRING) {
+            xsink->raiseException("PARSE-OPTION-ERROR", "list element %d is not a string", (int)li.index());
+            return;
+        }
+        QoreParseOptions opt = QoreParseOptionsData::resolveOption(v.get<const QoreStringNode>(), xsink);
+        if (*xsink) {
+            return;
+        }
+        po |= opt;
+    }
+    self->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(po));
+}
+
+//! Creates a copy of the ParseOptions object
+/**
+*/
+ParseOptions::copy() {
+    self->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(*pod));
+}
+
+//! Returns a new ParseOptions object with additional options merged from another ParseOptions object
+/** @param other the other ParseOptions object to merge
+
+    @return a new ParseOptions object with all options from both objects
+
+    @par Example:
+    @code{.py}
+ParseOptions merged = opts.merge(other_opts);
+    @endcode
+*/
+ParseOptions ParseOptions::merge(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT] {
+QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(pod->get() | other->get()));
+    return obj;
+}
+
+//! Returns a new ParseOptions object with additional options merged from an integer constant
+/** @param po the parse option integer constant to merge (bits 0-63)
+
+    @return a new ParseOptions object with all options from both
+
+    @par Example:
+    @code{.py}
+ParseOptions merged = opts.merge(PO_NO_NETWORK);
+    @endcode
+*/
+ParseOptions ParseOptions::merge(softint po) [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(pod->get() | QoreParseOptions(po)));
+    return obj;
+}
+
+//! Returns a new ParseOptions object with additional options merged from a string name
+/** @param name the parse option name to merge
+
+    @return a new ParseOptions object with the named option added
+
+    @par Example:
+    @code{.py}
+ParseOptions merged = opts.merge("no-class-defs");
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+ParseOptions ParseOptions::merge(string name) [flags=CONSTANT] {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(pod->get() | po));
+    return obj;
+}
+
+//! Returns a new ParseOptions object masked with another ParseOptions object
+/** @param other the mask to apply
+
+    @return a new ParseOptions object with only the bits present in both
+
+    @par Example:
+    @code{.py}
+ParseOptions masked = opts.mask(other_opts);
+    @endcode
+*/
+ParseOptions ParseOptions::mask(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT] {
+QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(pod->get() & other->get()));
+    return obj;
+}
+
+//! Returns a new ParseOptions object masked with an integer constant
+/** @param po the mask to apply (bits 0-63)
+
+    @return a new ParseOptions object with only the bits present in both
+
+    @par Example:
+    @code{.py}
+ParseOptions masked = opts.mask(PO_NO_IO);
+    @endcode
+*/
+ParseOptions ParseOptions::mask(softint po) [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(pod->get() & QoreParseOptions(po)));
+    return obj;
+}
+
+//! Returns a new ParseOptions object with all bits inverted
+/** @return a new ParseOptions object with inverted bits
+
+    @par Example:
+    @code{.py}
+ParseOptions inverted = opts.invert();
+    @endcode
+*/
+ParseOptions ParseOptions::invert() [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS,
+        new QoreParseOptionsData(~pod->get()));
+    return obj;
+}
+
+//! Sets options in place from another ParseOptions object (bitwise OR)
+/** @param other the options to set
+
+    @par Example:
+    @code{.py}
+opts.set(other_opts);
+    @endcode
+*/
+nothing ParseOptions::set(ParseOptions[QoreParseOptionsData] other) {
+pod->getRef() |= other->get();
+}
+
+//! Sets options in place from an integer constant (bitwise OR)
+/** @param po the parse option integer constant to set (bits 0-63)
+
+    @par Example:
+    @code{.py}
+opts.set(PO_NO_NETWORK);
+    @endcode
+*/
+nothing ParseOptions::set(softint po) {
+    pod->getRef() |= QoreParseOptions(po);
+}
+
+//! Sets an option in place by name
+/** @param name the parse option name to set
+
+    @par Example:
+    @code{.py}
+opts.set("no-class-defs");
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+nothing ParseOptions::set(string name) {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (!*xsink) {
+        pod->getRef() |= po;
+    }
+}
+
+//! Clears options in place from another ParseOptions object (bitwise AND NOT)
+/** @param other the options to clear
+
+    @par Example:
+    @code{.py}
+opts.clear(other_opts);
+    @endcode
+*/
+nothing ParseOptions::clear(ParseOptions[QoreParseOptionsData] other) {
+pod->getRef() &= ~other->get();
+}
+
+//! Clears options in place from an integer constant (bitwise AND NOT)
+/** @param po the parse option integer constant to clear (bits 0-63)
+
+    @par Example:
+    @code{.py}
+opts.clear(PO_NO_NETWORK);
+    @endcode
+*/
+nothing ParseOptions::clear(softint po) {
+    pod->getRef() &= ~QoreParseOptions(po);
+}
+
+//! Clears an option in place by name
+/** @param name the parse option name to clear
+
+    @par Example:
+    @code{.py}
+opts.clear("no-class-defs");
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+nothing ParseOptions::clear(string name) {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (!*xsink) {
+        pod->getRef() &= ~po;
+    }
+}
+
+//! Returns @ref True if all the specified options are set
+/** @param other the options to check
+
+    @return @ref True if all bits in @a other are set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAll(other_opts)) {
+    printf("all options set\n");
+}
+    @endcode
+*/
+bool ParseOptions::hasAll(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT] {
+return pod->get().hasAll(other->get());
+}
+
+//! Returns @ref True if all the specified options are set (integer constant version)
+/** @param po the parse option integer constant to check (bits 0-63)
+
+    @return @ref True if all bits in @a po are set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAll(PO_NO_NETWORK | PO_NO_FILESYSTEM)) {
+    printf("network and filesystem disabled\n");
+}
+    @endcode
+*/
+bool ParseOptions::hasAll(softint po) [flags=CONSTANT] {
+    return pod->get().hasAll(QoreParseOptions(po));
+}
+
+//! Returns @ref True if all the specified options are set (string name version)
+/** @param name the parse option name to check
+
+    @return @ref True if the named option is set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAll("no-class-defs")) {
+    printf("class definitions disabled\n");
+}
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+bool ParseOptions::hasAll(string name) [flags=CONSTANT] {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return pod->get().hasAll(po);
+}
+
+//! Returns @ref True if any of the specified options are set
+/** @param other the options to check
+
+    @return @ref True if any bit in @a other is set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAny(other_opts)) {
+    printf("at least one option in common\n");
+}
+    @endcode
+*/
+bool ParseOptions::hasAny(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT] {
+return pod->get().hasAny(other->get());
+}
+
+//! Returns @ref True if any of the specified options are set (integer constant version)
+/** @param po the parse option integer constant to check (bits 0-63)
+
+    @return @ref True if any bit in @a po is set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAny(PO_NO_NETWORK | PO_NO_FILESYSTEM)) {
+    printf("network or filesystem disabled\n");
+}
+    @endcode
+*/
+bool ParseOptions::hasAny(softint po) [flags=CONSTANT] {
+    return pod->get().hasAny(QoreParseOptions(po));
+}
+
+//! Returns @ref True if any of the specified options are set (string name version)
+/** @param name the parse option name to check
+
+    @return @ref True if the named option is set in this object
+
+    @par Example:
+    @code{.py}
+if (opts.hasAny("no-class-defs")) {
+    printf("class definitions disabled\n");
+}
+    @endcode
+
+    @throw PARSE-OPTION-ERROR the given option name is unknown
+*/
+bool ParseOptions::hasAny(string name) [flags=CONSTANT] {
+    QoreParseOptions po = QoreParseOptionsData::resolveOption(name, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return pod->get().hasAny(po);
+}
+
+//! Returns @ref True if no options are set
+/** @return @ref True if no bits are set
+
+    @par Example:
+    @code{.py}
+if (opts.empty()) {
+    printf("no options set\n");
+}
+    @endcode
+*/
+bool ParseOptions::empty() [flags=CONSTANT] {
+    return pod->get().empty();
+}
+
+//! Returns a list of parse option name strings for all set options
+/** @return a list of option name strings
+
+    @par Example:
+    @code{.py}
+list<string> names = opts.toStringList();
+    @endcode
+*/
+list<string> ParseOptions::toStringList() [flags=CONSTANT] {
+    return pod->toStringList(xsink);
+}
+
+//! Returns the low 64 bits as an integer (bits 0-63 only, for backward compatibility)
+/** @return the low 64 bits of the parse options as an integer
+
+    @note This method only returns bits 0-63. Extended options (bits 64+) are not included.
+    Use @ref toStringList() for a complete representation.
+
+    @par Example:
+    @code{.py}
+int legacy_po = opts.toInt();
+    @endcode
+*/
+int ParseOptions::toInt() [flags=CONSTANT] {
+    return pod->get().getLo();
+}
+
+//! Returns @ref True if this object equals another ParseOptions object
+/** @param other the other ParseOptions object to compare
+
+    @return @ref True if both objects have exactly the same options set
+
+    @par Example:
+    @code{.py}
+if (opts.equals(other_opts)) {
+    printf("options are equal\n");
+}
+    @endcode
+*/
+bool ParseOptions::equals(ParseOptions[QoreParseOptionsData] other) [flags=CONSTANT] {
+return pod->get() == other->get();
+}

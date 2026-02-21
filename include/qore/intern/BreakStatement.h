@@ -54,7 +54,7 @@ private:
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context) {
         if (!(parse_context.pflag & PF_BREAK_OK)) {
-            if (!(parse_context.pgm->getParseOptions64() & PO_BROKEN_LOOP_STATEMENT)) {
+            if (!(parse_context.pgm->getParseOptions() & PO_BROKEN_LOOP_STATEMENT)) {
                 parseException(*loc, "BREAK-NOT-ALLOWED", "break statements are only allowed in switch and loop " \
                     "statements");
                 return -1;

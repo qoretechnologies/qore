@@ -108,6 +108,12 @@ void ParseOptionMap::static_init() {
     DO_MAP("new-style",                PO_NEW_STYLE);
     DO_MAP("modern",                   PO_MODERN);
 
+    // extended parse options (bits 64+)
+    DO_MAP("no-class-defs",            QoreParseOptions::NO_CLASS_DEFS);
+    DO_MAP("no-constant-defs",         QoreParseOptions::NO_CONSTANT_DEFS);
+    DO_MAP("no-namespace-defs",        QoreParseOptions::NO_NAMESPACE_DEFS);
+    DO_MAP("no-new",                   QoreParseOptions::NO_NEW);
+
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);
     //DO_MAP("no-user-classes",          PO_NO_INHERIT_USER_CLASSES);
@@ -115,26 +121,20 @@ void ParseOptionMap::static_init() {
     //DO_MAP("no-user-hashdecls",        PO_NO_INHERIT_USER_HASHDECLS);
 }
 
-int ParseOptionMap::find_code(const char *name) {
+QoreParseOptions ParseOptionMap::find_code(const char* name) {
     opt_map_t::iterator i = map.find(name);
-    //printd(5, "find_code(%s) returning %p\n", name, i == map.end() ? -1 : i->second);
-    return (int)(i == map.end() ? -1 : i->second);
+    return (i == map.end() ? QoreParseOptions(-1) : i->second);
 }
 
-int64 ParseOptionMap::find_code64(const char *name) {
-    opt_map_t::iterator i = map.find(name);
-    //printd(5, "find_code(%s) returning %p\n", name, i == map.end() ? -1 : i->second);
-    return (i == map.end() ? -1 : i->second);
-}
-
-const char *ParseOptionMap::find_name(int code) {
+const char* ParseOptionMap::find_name(const QoreParseOptions& code) {
     rev_opt_map_t::iterator i = rmap.find(code);
-    return (i == rmap.end() ? 0 : i->second);
+    return (i == rmap.end() ? nullptr : i->second);
 }
 
 void ParseOptionMap::list_options() {
-    for (auto& i : map)
+    for (auto& i : map) {
         printf("%s\n", i.first);
+    }
 }
 
 QoreHashNode* ParseOptionMap::getCodeToStringMap() {
@@ -142,7 +142,12 @@ QoreHashNode* ParseOptionMap::getCodeToStringMap() {
     QoreString key;
     for (auto& i : rmap) {
         key.clear();
-        key.sprintf(QLLD, i.first);
+        // format as "lo:hi" for extended options, just "lo" for legacy
+        if (i.first.getHi()) {
+            key.sprintf(QLLD ":" QLLD, i.first.getLo(), i.first.getHi());
+        } else {
+            key.sprintf(QLLD, i.first.getLo());
+        }
         h->setKeyValue(key.c_str(), new QoreStringNode(i.second), nullptr);
     }
     return h;
@@ -151,10 +156,17 @@ QoreHashNode* ParseOptionMap::getCodeToStringMap() {
 QoreHashNode* ParseOptionMap::getStringToCodeMap() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     for (auto& i : map) {
-        h->setKeyValue(i.first, i.second, nullptr);
+        // for backward compatibility, return int for legacy options (hi == 0)
+        if (i.second.getHi()) {
+            // for extended options, return as a string "lo:hi"
+            QoreStringNode* val = new QoreStringNode;
+            val->sprintf(QLLD ":" QLLD, i.second.getLo(), i.second.getHi());
+            h->setKeyValue(i.first, val, nullptr);
+        } else {
+            h->setKeyValue(i.first, i.second.getLo(), nullptr);
+        }
     }
     return h;
 }
-
 
 #undef DO_MAP

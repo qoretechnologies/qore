@@ -37,7 +37,7 @@ QoreProgramHelper::QoreProgramHelper(ExceptionSink& xs) : pgm(new QoreProgram), 
 }
 
 //! creates the QoreProgram object and sets the parse options
-QoreProgramHelper::QoreProgramHelper(int64 parse_options, ExceptionSink& xs) : pgm(new QoreProgram(parse_options)), xsink(xs) {
+QoreProgramHelper::QoreProgramHelper(const QoreParseOptions& parse_options, ExceptionSink& xs) : pgm(new QoreProgram(parse_options)), xsink(xs) {
 }
 
 //! waits until all background threads in the Qore library have terminated and until the QoreProgram object is done executing and then dereferences the object

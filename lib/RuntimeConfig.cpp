@@ -130,11 +130,11 @@ void RuntimeConfig::setStatement(const AbstractStatement* stmt) {
     implRef().stmt = stmt;
 }
 
-int64_t RuntimeConfig::getParseOptions() const {
+QoreParseOptions RuntimeConfig::getParseOptions() const {
     return implRef().po;
 }
 
-void RuntimeConfig::setParseOptions(int64_t po) {
+void RuntimeConfig::setParseOptions(const QoreParseOptions& po) {
     implRef().po = po;
 }
 
@@ -306,7 +306,7 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt,
         bool has_po,
-        int64_t new_po,
+        const QoreParseOptions& new_po,
         ExceptionSink* xsink)
     : rc(rc), old_loc(rc.getLocation()), old_stmt(rc.getStatement()), old_po(rc.getParseOptions()),
       tls_old_loc(rc.getLocation()), tls_old_stmt(rc.getStatement()), tls_old_po(rc.getParseOptions()),

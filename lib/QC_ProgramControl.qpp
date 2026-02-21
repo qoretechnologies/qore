@@ -105,7 +105,7 @@ ProgramControl::destructor() {
 /** see Qore::Program::getParseOptions "Program::getParseOptions()"
  */
 int ProgramControl::getParseOptions() {
-   return p->getParseOptions64();
+   return p->getParseOptions().getLo();
 }
 
 //! Returns the current script directory as a string or @ref nothing if not set

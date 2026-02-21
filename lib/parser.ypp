@@ -900,6 +900,10 @@ struct NSNode {
         switch (type) {
             case NSN_OCD:
                 //printd(5, "ocd: %s %d-%d c: %d-%d\n", n.ocd->oc->getName(), n.ocd->loc.start_line, n.ocd->loc.end_line, qore_class_private::get(*n.ocd->oc)->loc.start_line, qore_class_private::get(*n.ocd->oc)->loc.end_line);
+                if (parse_check_parse_option(QoreParseOptions::NO_CLASS_DEFS)) {
+                    parse_error(*n.ocd->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
+                        n.ocd->name->ostr);
+                }
                 ns.parseAddPendingClass(n.ocd->loc, *(n.ocd->name), n.ocd->oc);
                 delete n.ocd;
                 break;
@@ -914,6 +918,10 @@ struct NSNode {
                 delete n.enumdef;
                 break;
             case NSN_CONST:
+                if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+                    parse_error(*n.cn->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                        n.cn->name.ostr);
+                }
                 ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub);
                 delete n.cn;
                 break;
@@ -922,6 +930,10 @@ struct NSNode {
                 delete n.td;
                 break;
             case NSN_NS:
+                if (parse_check_parse_option(QoreParseOptions::NO_NAMESPACE_DEFS)) {
+                    parse_error(*qore_ns_private::get(*n.ns)->loc,
+                        "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
+                }
                 ns.parseAddNamespace(n.ns);
                 break;
             case NSN_FUNC:
@@ -2167,6 +2179,10 @@ top_level_command:
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | class_def {
+        if (parse_check_parse_option(QoreParseOptions::NO_CLASS_DEFS)) {
+            parse_error(*$1->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
+                $1->name->ostr);
+        }
         qore_root_ns_private::parseAddClass($1->loc, *($1->name), $1->oc);
 
         delete $1;
@@ -2193,12 +2209,20 @@ top_level_command:
         delete $1;
     }
     | scoped_const_decl {
+        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+            parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                $1->name.ostr);
+        }
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "constant", $1->name.ostr);
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub);
         delete $1;
     }
     | unscoped_const_decl {
+        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+            parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                $1->name.ostr);
+        }
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub);
         delete $1;
     }
@@ -2221,9 +2245,10 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2);
     }
     | top_namespace_decl {
-        // Note: PO_NO_NAMESPACE_DEFS restriction was removed as it was documented but
-        // never enforced. The PO_ALLOW_REPARSE design allows namespace definitions
-        // in interactive REPL mode where incremental parsing is needed.
+        if (parse_check_parse_option(QoreParseOptions::NO_NAMESPACE_DEFS)) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+            parse_error(*loc, "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
+        }
         qore_root_ns_private::parseAddNamespace($1);
     }
     | TOK_MODULE '{' module_decls '}' {
@@ -2869,7 +2894,7 @@ try_statement:
             missing_type_decl = false;
         }
         if ($5 && missing_type_decl) {
-            int64 po = parse_get_parse_options();
+            QoreParseOptions po = parse_get_parse_options();
             if (po & PO_REQUIRE_TYPES) {
                 SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("the catch block is missing a " \
                     "type declaration; the exception argument should be declared as 'hash<ExceptionInfo>' or " \
@@ -3191,6 +3216,10 @@ class_attributes:
     }
     | unscoped_const_decl {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+            parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                $1->getName());
+        }
         $$ = new QoreParseClass(loc);
         qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public);
         delete $1;
@@ -3216,6 +3245,10 @@ class_attributes:
     }
     | class_attributes unscoped_const_decl {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line);
+        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+            parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                $2->getName());
+        }
         qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public);
         $$ = $1;
         delete $2;
@@ -3429,8 +3462,13 @@ member2:
     }
     | unscoped_const_decl {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
-        if ($1->pub)
+        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+            parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
+                $1->getName());
+        }
+        if ($1->pub) {
             parse_error(*loc, "cannot change class constant scope for constant '%s' within a public or private declaration block", $1->name.ostr);
+        }
         $$ = new MemberInfo(loc, $1->name.takeName(), $1->value);
         delete $1;
     }
@@ -4305,16 +4343,25 @@ exp_c:
     }
     | TOK_NEW IDENTIFIER '(' myexp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+            parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
+        }
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
     }
     | TOK_NEW SCOPED_REF '(' myexp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+            parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
+        }
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
     }
     | TOK_NEW ANGLE_IDENTIFIER '(' myexp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+            parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
+        }
         const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
         $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), make_args(argsloc, $4)));
     }

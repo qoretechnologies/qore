@@ -82,7 +82,7 @@ const QoreEnumDecl* EnumList::find(const char* name) const {
     return i != hm.end() ? i->second : nullptr;
 }
 
-EnumList::EnumList(const EnumList& old, int64 po, qore_ns_private* ns) {
+EnumList::EnumList(const EnumList& old, const QoreParseOptions& po, qore_ns_private* ns) {
     for (auto& i : old.hm) {
         if (!i.second->isSystem()) {
             if ((po & PO_NO_ENUM) || !qore_enum_decl_private::get(*i.second)->isPublic()) {
