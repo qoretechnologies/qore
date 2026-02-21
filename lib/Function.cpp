@@ -778,10 +778,9 @@ void UserSignature::setupFromAOTMetadata(
         lv[i] = pp->createLocalVar(pname, paramTypes[i]);
     }
 
-    // Create selfid local var for methods (matches parseInitPushLocalVars behavior)
-    if (classTypeInfo) {
-        selfid = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
-    }
+    // Note: selfid is NOT created here for methods - it will be created during the
+    // normal class method initialization process. Doing it here causes conflicts with
+    // the resolution logic that tries to set it.
 
     // Create argv local var - always created (matches parseInitPushLocalVars behavior)
     // evalTiered() unconditionally instantiates argvid
