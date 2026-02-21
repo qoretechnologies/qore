@@ -517,8 +517,8 @@ class AsyncIoControllerTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result = q.get(ConnectTimeout);
         assertFalse(result.canceled ?? False);
 
-        # Give I/O thread time to process
-        usleep(100000);
+        # Wait for I/O thread to process the completed operation
+        assertTrue(ctrl.waitForProcessing(ShortTimeout));
 
         # With autostop disabled, I/O thread should keep running
         assertTrue(ctrl.running());

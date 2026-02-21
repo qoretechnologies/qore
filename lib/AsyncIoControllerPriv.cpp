@@ -143,19 +143,18 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 
 // --- AsyncIoControllerPriv implementation ---
 
-AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop)
+AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : tid(0), autostop_flag(autostop), shutting_down(false), force_poll(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
       submit_seq(0), processed_seq(0), logger(nullptr),
       loop(nullptr), notifier(nullptr) {
-    ExceptionSink xsink;
-    loop = new QoreEventLoop(&xsink);
-    if (xsink) {
-        xsink.clear();
+    loop = new QoreEventLoop(xsink);
+    if (*xsink) {
+        return;
     }
-    notifier = new QoreEventNotifier(&xsink);
-    if (xsink) {
-        xsink.clear();
+    notifier = new QoreEventNotifier(xsink);
+    if (*xsink) {
+        return;
     }
 }
 
@@ -241,7 +240,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         timeout_us = v.getAsBigInt() * 1000LL;
     }
 
-    // Get callback
+    // Get callback — wrap in RAII immediately
     v = info->getKeyValue("callback");
     ResolvedCallReferenceNode* callback = nullptr;
     if (v.getType() == NT_RUNTIME_CLOSURE || v.getType() == NT_FUNCREF) {
@@ -249,46 +248,58 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         callback->ref();
     }
 
+    // RAII cleanup for refcounted resources acquired below.
+    // Pointers are nulled as ownership transfers to PollInfo or the caller.
+    struct SubmitResources {
+        ResolvedCallReferenceNode* callback;
+        Queue* result_queue;
+        QoreHashNode* other_hash;
+        QoreHashNode* poll_info_hash;
+        QoreObject* new_queue_obj;
+        ExceptionSink* xsink;
+
+        ~SubmitResources() {
+            if (callback) { callback->deref(xsink); }
+            if (result_queue) { result_queue->deref(xsink); }
+            if (other_hash) { other_hash->deref(xsink); }
+            if (poll_info_hash) { poll_info_hash->deref(xsink); }
+            if (new_queue_obj) { new_queue_obj->deref(xsink); }
+        }
+    } res{callback, nullptr, nullptr, nullptr, nullptr, xsink};
+
     // Get result queue
     v = info->getKeyValue("resultQueue");
-    Queue* result_queue = nullptr;
     QoreObject* result_queue_obj = nullptr;
     if (v.getType() == NT_OBJECT) {
         QoreObject* qobj = v.get<QoreObject>();
-        result_queue = static_cast<Queue*>(qobj->getReferencedPrivateData(CID_QUEUE, xsink));
+        res.result_queue = static_cast<Queue*>(qobj->getReferencedPrivateData(CID_QUEUE, xsink));
         if (*xsink) {
-            if (callback) {
-                callback->deref(xsink);
-            }
             return nullptr;
         }
-        if (result_queue) {
+        if (res.result_queue) {
             result_queue_obj = qobj;
         }
     }
 
     // Get 'other' data
     v = info->getKeyValue("other");
-    QoreHashNode* other_hash = nullptr;
     if (v.getType() == NT_HASH) {
-        other_hash = v.get<QoreHashNode>();
-        other_hash->ref();
+        res.other_hash = v.get<QoreHashNode>();
+        res.other_hash->ref();
     }
 
     // Get poll_info
     v = info->getKeyValue("poll_info");
-    QoreHashNode* poll_info_hash = nullptr;
     if (v.getType() == NT_HASH) {
-        poll_info_hash = v.get<QoreHashNode>();
-        poll_info_hash->ref();
+        res.poll_info_hash = v.get<QoreHashNode>();
+        res.poll_info_hash->ref();
     }
 
     // If no callback and no shared queue, create a new result queue
-    QoreObject* new_queue_obj = nullptr;
-    if (!callback && !result_queue) {
-        result_queue = new Queue();
-        new_queue_obj = new QoreObject(QC_QUEUE, getProgram(), result_queue);
-        result_queue->ref();  // extra ref for PollInfo storage
+    if (!callback && !res.result_queue) {
+        res.result_queue = new Queue();
+        res.new_queue_obj = new QoreObject(QC_QUEUE, getProgram(), res.result_queue);
+        res.result_queue->ref();  // extra ref for PollInfo storage
     }
 
     bool do_signal = false;
@@ -299,22 +310,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         if (shutting_down) {
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
-            // Clean up
-            if (callback) {
-                callback->deref(xsink);
-            }
-            if (result_queue) {
-                result_queue->deref(xsink);
-            }
-            if (other_hash) {
-                other_hash->deref(xsink);
-            }
-            if (poll_info_hash) {
-                poll_info_hash->deref(xsink);
-            }
-            if (new_queue_obj) {
-                new_queue_obj->deref(xsink);
-            }
             return nullptr;
         }
 
@@ -324,21 +319,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             if (!replace) {
                 xsink->raiseException("ASYNC-IO-ERROR",
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
-                if (callback) {
-                    callback->deref(xsink);
-                }
-                if (result_queue) {
-                    result_queue->deref(xsink);
-                }
-                if (other_hash) {
-                    other_hash->deref(xsink);
-                }
-                if (poll_info_hash) {
-                    poll_info_hash->deref(xsink);
-                }
-                if (new_queue_obj) {
-                    new_queue_obj->deref(xsink);
-                }
                 return nullptr;
             }
             // Queue cancel for existing operation
@@ -366,21 +346,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         if (shutting_down) {
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
-            if (callback) {
-                callback->deref(xsink);
-            }
-            if (result_queue) {
-                result_queue->deref(xsink);
-            }
-            if (other_hash) {
-                other_hash->deref(xsink);
-            }
-            if (poll_info_hash) {
-                poll_info_hash->deref(xsink);
-            }
-            if (new_queue_obj) {
-                new_queue_obj->deref(xsink);
-            }
             return nullptr;
         }
 
@@ -388,15 +353,16 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
         pinfo.sock = sock;
-        sock_holder.release();  // Transfer ownership
+        sock_holder.release();  // Transfer ownership to pinfo
         pinfo.spop_obj = spop_obj;
         spop_obj->ref();
-        pinfo.poll_info = poll_info_hash;  // Already refed or nullptr
+        // Transfer refcounted resources from RAII struct to pinfo
+        pinfo.poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
         pinfo.timeout_us = timeout_us;
         pinfo.owner = owner;
-        pinfo.other = other_hash;  // Already refed or nullptr
-        pinfo.queue = result_queue;  // Already refed or nullptr
-        pinfo.callback = callback;  // Already refed or nullptr
+        pinfo.other = res.other_hash; res.other_hash = nullptr;
+        pinfo.queue = res.result_queue; res.result_queue = nullptr;
+        pinfo.callback = res.callback; res.callback = nullptr;
         pinfo.timeout_date_us = 0;  // Will be set in I/O thread
 
         // Start I/O thread if needed
@@ -405,9 +371,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             if (*xsink) {
                 cache.erase(uh);
                 pinfo.cleanup(xsink);
-                if (new_queue_obj) {
-                    new_queue_obj->deref(xsink);
-                }
+                // res still owns new_queue_obj — destructor will clean it up
                 return nullptr;
             }
         }
@@ -422,8 +386,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
     log(LOGGER_LEVEL_DEBUG, "submit: operation '%s' submitted (owner: '%s')", uh.c_str(), owner.c_str());
 
-    if (new_queue_obj) {
-        return new_queue_obj;
+    // Return queue to caller — transfer ownership out of RAII struct
+    if (res.new_queue_obj) {
+        QoreObject* rv = res.new_queue_obj;
+        res.new_queue_obj = nullptr;
+        return rv;
     }
     if (result_queue_obj) {
         result_queue_obj->ref();
@@ -475,16 +442,27 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     bool rv = false;
     bool do_signal = false;
     bool stopped = false;
+    PollInfo direct_pinfo;
+    bool direct_cancel = false;
 
     {
         AutoLocker al(m);
         auto it = cache.find(uh);
         if (it != cache.end()) {
             rv = true;
-            if (!cancel_cond_map.count(uh)) {
-                cancel_cond_map[uh] = new QoreCondition();
+            if (tid && !io_exiting) {
+                // I/O thread is running — enqueue the cancel command
+                if (!cancel_cond_map.count(uh)) {
+                    cancel_cond_map[uh] = new QoreCondition();
+                }
+                do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
+            } else {
+                // I/O thread not running — handle cancel directly
+                direct_cancel = true;
+                direct_pinfo = it->second;
+                it->second = PollInfo();
+                cache.erase(it);
             }
-            do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
         }
     }
 
@@ -492,7 +470,10 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         notifier->notify();
     }
 
-    if (rv) {
+    if (direct_cancel) {
+        doCancelIntern(direct_pinfo, xsink);
+        direct_pinfo.cleanup(xsink);
+    } else if (rv) {
         waitCancel(uh);
     }
 
@@ -502,6 +483,8 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         if (autostop_flag && rv && cache.empty() && tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
+        } else {
+            do_signal = false;
         }
     }
 
@@ -520,6 +503,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     std::string owner_str(owner->c_str());
     bool do_signal = false;
     int count = 0;
+    std::vector<PollInfo> direct_pinfos;
 
     QoreCondition done_cond;
 
@@ -533,8 +517,27 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             }
         }
 
-        if (count > 0 && tid && !io_exiting) {
-            do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond);
+        if (count > 0) {
+            if (tid && !io_exiting) {
+                // I/O thread is running — enqueue the cancel command
+                do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond);
+            } else {
+                // I/O thread not running — handle cancel directly
+                std::vector<std::string> keys;
+                for (auto& [key, pinfo] : cache) {
+                    if (pinfo.owner == owner_str) {
+                        keys.push_back(key);
+                    }
+                }
+                for (auto& key : keys) {
+                    auto it = cache.find(key);
+                    if (it != cache.end()) {
+                        direct_pinfos.push_back(it->second);
+                        it->second = PollInfo();
+                        cache.erase(it);
+                    }
+                }
+            }
         }
     }
 
@@ -542,11 +545,19 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         notifier->notify();
     }
 
-    if (count > 0) {
+    if (!direct_pinfos.empty()) {
+        // Deliver cancel results directly (I/O thread not running)
+        for (auto& pinfo : direct_pinfos) {
+            doCancelIntern(pinfo, xsink);
+            pinfo.cleanup(xsink);
+        }
+    } else if (count > 0) {
         // Wait for all cancellations to complete
         AutoLocker al(m);
-        // The CancelOwner handler will signal done_cond when all ops are canceled
-        while (true) {
+        // The CancelOwner handler will signal done_cond when all ops are canceled.
+        // Also check !tid: if the I/O thread exits (e.g. via autostop or crash)
+        // before processing the CancelOwner command, we must not hang.
+        while (tid) {
             // Check if there are still operations for this owner
             bool found = false;
             for (auto& it : cache) {
@@ -791,7 +802,12 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     tid = q_start_thread(xsink, ioThreadEntry, this);
     if (tid == -1) {
         tid = 0;
-        deref(xsink);
+        // Cannot call deref() here because the caller holds the lock;
+        // deref() -> stop() -> AutoLocker(m) -> deadlock.
+        // Since the caller always holds a reference (via QoreObject), this
+        // ROdereference() will never be the last ref, so we can safely
+        // just undo the ref() above without triggering destruction.
+        ROdereference();
         return;
     }
 
@@ -1161,6 +1177,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         sock_hash_to_keys.clear();
         socket_refcounts.clear();
 
+        // Signal any pending CancelOwner done_cond waiters in the command queue
+        // so cancelByOwner() doesn't hang when the I/O thread exits
+        for (auto& pending_cmd : cmdq) {
+            if (pending_cmd.done_cond) {
+                pending_cmd.done_cond->broadcast();
+            }
+        }
+        cmdq.clear();
+
         tid = 0;
         io_exiting = false;
         ready_flag = false;
@@ -1191,32 +1216,49 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
 
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
-                    // Cancel all operations
-                    AutoLocker al(m);
-                    std::vector<std::string> keys;
-                    for (auto& [key, pinfo] : cache) {
-                        keys.push_back(key);
-                    }
+                    // Collect PollInfo copies and cancel conditions under lock
+                    std::vector<PollInfo> quit_pinfos;
+                    std::vector<QoreCondition*> quit_conds;
+                    {
+                        AutoLocker al(m);
+                        std::vector<std::string> keys;
+                        for (auto& [key, pinfo] : cache) {
+                            keys.push_back(key);
+                        }
 
-                    for (auto& key : keys) {
-                        auto it = cache.find(key);
-                        if (it != cache.end()) {
-                            unregisterFromEventLoop(key, xsink);
-                            doCancelIntern(it->second, xsink);
-                            auto cit = cancel_cond_map.find(key);
-                            if (cit != cancel_cond_map.end()) {
-                                cit->second->broadcast();
-                                delete cit->second;
-                                cancel_cond_map.erase(cit);
+                        for (auto& key : keys) {
+                            auto it = cache.find(key);
+                            if (it != cache.end()) {
+                                unregisterFromEventLoop(key, xsink);
+                                // Move PollInfo out of cache
+                                quit_pinfos.push_back(it->second);
+                                it->second = PollInfo();
+                                cache.erase(it);
+
+                                auto cit = cancel_cond_map.find(key);
+                                if (cit != cancel_cond_map.end()) {
+                                    quit_conds.push_back(cit->second);
+                                    cancel_cond_map.erase(cit);
+                                } else {
+                                    quit_conds.push_back(nullptr);
+                                }
                             }
-                            it->second.cleanup(xsink);
-                            cache.erase(it);
+                        }
+
+                        io_exiting = true;
+                        if (io_waiting) {
+                            io_cond.broadcast();
                         }
                     }
 
-                    io_exiting = true;
-                    if (io_waiting) {
-                        io_cond.broadcast();
+                    // Deliver cancel results outside lock (prevents callback deadlock)
+                    for (size_t i = 0; i < quit_pinfos.size(); ++i) {
+                        doCancelIntern(quit_pinfos[i], xsink);
+                        quit_pinfos[i].cleanup(xsink);
+                        if (quit_conds[i]) {
+                            quit_conds[i]->broadcast();
+                            delete quit_conds[i];
+                        }
                     }
                     return true;
                 }
@@ -1563,8 +1605,15 @@ void AsyncIoControllerPriv::waitCancel(const std::string& key) {
 }
 
 void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
-    if (!logger || !logger->isEnabledFor(level)) {
-        return;
+    // Acquire lock and ref the logger to avoid data race with setLogger()
+    LoggerBridge* lgr;
+    {
+        AutoLocker al(m);
+        if (!logger || !logger->isEnabledFor(level)) {
+            return;
+        }
+        lgr = logger;
+        lgr->ref();
     }
 
     va_list args;
@@ -1574,8 +1623,9 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     va_end(args);
 
     ExceptionSink xsink;
-    logger->logArgs(level, msg, nullptr, &xsink);
+    lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
+    lgr->deref(&xsink);
     if (xsink) {
         xsink.clear();
     }

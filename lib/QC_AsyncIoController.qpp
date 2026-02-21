@@ -149,7 +149,7 @@ qclass AsyncIoController [dom=NETWORK; arg=AsyncIoControllerPriv* ctrl; ns=Qore]
     @throw EVENT-LOOP-ERROR failed to create the event loop or event notifier
 */
 AsyncIoController::constructor(bool autostop = True) {
-    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(autostop), xsink);
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(autostop, xsink), xsink);
     if (*xsink) {
         return;
     }
@@ -168,7 +168,7 @@ AsyncIoController::destructor() {
 /** @note The copy creates a new independent controller with no shared state
 */
 AsyncIoController::copy() {
-    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(ctrl->getAutostop()), xsink);
+    ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(ctrl->getAutostop(), xsink), xsink);
     if (*xsink) {
         return;
     }

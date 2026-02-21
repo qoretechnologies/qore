@@ -70,8 +70,9 @@ public:
 
     //! Creates the controller
     /** @param autostop if true, the I/O thread will stop when all operations complete
+        @param xsink for exception handling
     */
-    DLLLOCAL AsyncIoControllerPriv(bool autostop = true);
+    DLLLOCAL AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink);
 
     //! Destructor
     DLLLOCAL virtual ~AsyncIoControllerPriv();
