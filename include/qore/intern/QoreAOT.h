@@ -258,6 +258,28 @@ extern "C" QoreStringNode* qore_aot_module_init_v2(
     const QoreAOTFunc* functions, int num_functions
 );
 
+//! C ABI entry point called by source-stripped AOT binaries from their generated main() (v3 - full 128-bit parse_options)
+/** Like qore_aot_run_v2, but accepts full 128-bit parse options as two int64_t values.
+*/
+extern "C" int qore_aot_run_v3(
+    int argc, char** argv,
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options_lo, int64_t parse_options_hi,
+    const QoreAOTFunc* functions, int num_functions
+);
+
+//! C ABI entry point called by source-stripped AOT modules from their generated qore_module_init() (v3 - full 128-bit parse_options)
+/** Like qore_aot_module_init_v2, but accepts full 128-bit parse options as two int64_t values.
+*/
+extern "C" QoreStringNode* qore_aot_module_init_v3(
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options_lo, int64_t parse_options_hi,
+    const char* mod_name,
+    const QoreAOTFunc* functions, int num_functions
+);
+
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init()
 extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns);
 
@@ -319,7 +341,7 @@ public:
                        const char* source_text, int source_len,
                        const char* label,
                        const std::string& output_path,
-                       int64_t parse_options,
+                       const QoreParseOptions& parse_options,
                        std::string& error,
                        int opt_level = 2,
                        const char* target_triple = nullptr,
@@ -341,7 +363,7 @@ public:
     static bool compileModule(const char* source_text, int source_len,
                               const char* label,
                               const std::string& output_path,
-                              int64_t parse_options,
+                              const QoreParseOptions& parse_options,
                               std::string& error,
                               int opt_level = 2,
                               const char* target_triple = nullptr,
@@ -364,7 +386,7 @@ public:
     */
     static bool compileSeparatedModule(const char* dir_path,
                                        const std::string& output_path,
-                                       int64_t parse_options,
+                                       const QoreParseOptions& parse_options,
                                        std::string& error,
                                        int opt_level = 2,
                                        const char* target_triple = nullptr,

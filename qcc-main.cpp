@@ -405,7 +405,7 @@ int main(int argc, char** argv) {
                     source_text.c_str(), (int)source_text.size(),
                     source_file,
                     output,
-                    po.getLo(),
+                    po,
                     error,
                     opt_level,
                     target_triple,

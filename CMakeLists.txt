@@ -1351,6 +1351,12 @@ target_link_libraries(qore libqore)
 #add_executable(qr ${QR_CPP_SRC})
 #target_link_libraries(qr libqore)
 
+# qcc - Qore Code Compiler (AOT)
+add_executable(qcc qcc-main.cpp)
+target_link_libraries(qcc libqore)
+set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
+set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
+
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
@@ -1388,7 +1394,7 @@ qore_dist(${VERSION})
 install(PROGRAMS ${QORE_BIN_FILES}
         DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
-install(TARGETS qore qpp libqore
+install(TARGETS qore qcc qpp libqore
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 #install(TARGETS qore qpp qr libqore

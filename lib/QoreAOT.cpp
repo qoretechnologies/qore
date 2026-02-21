@@ -825,7 +825,7 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
-        int64_t parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs) {
+        const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs) {
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
@@ -886,18 +886,19 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         func_table_gv = nullptr;
     }
 
-    // Declare qore_aot_run_v2
+    // Declare qore_aot_run_v3 (accepts full 128-bit parse options as two i64)
     auto* aot_run_type = llvm::FunctionType::get(i32_type, {
         i32_type,       // argc
         ptr_type,       // argv
         ptr_type,       // metadata (const uint8_t*)
         i32_type,       // metadata_len
         ptr_type,       // label
-        i64_type,       // parse_options
+        i64_type,       // parse_options_lo
+        i64_type,       // parse_options_hi
         ptr_type,       // functions
         i32_type        // num_functions
     }, false);
-    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v2", aot_run_type);
+    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v3", aot_run_type);
 
     // Generate main()
     auto* main_type = llvm::FunctionType::get(i32_type, {i32_type, ptr_type}, false);
@@ -935,7 +936,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         meta_ptr,
         builder.getInt32(static_cast<int>(metadata.size())),
         lbl_ptr,
-        builder.getInt64(parse_options),
+        builder.getInt64(parse_options.getLo()),
+        builder.getInt64(parse_options.getHi()),
         funcs_ptr,
         builder.getInt32(num_funcs)
     });
@@ -947,7 +949,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                       const char* source_text, int source_len,
                       const char* label,
                       const std::string& output_path,
-                      int64_t parse_options,
+                      const QoreParseOptions& parse_options,
                       std::string& error,
                       int opt_level,
                       const char* target_triple,
@@ -1087,9 +1089,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
     reportAOTCompileStats("compilation", compiled_count, total_funcs + 1,
         failed_count, compiled_funcs);
 
-    // Use the program's actual parse options (includes directives like %modern)
-    parse_options = pgm->getParseOptions().getLo();
-
     // Step 3: Build serialized metadata and generate main() + function registration table
     {
         QoreAOTBinaryWriter writer;
@@ -1097,13 +1096,15 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
-        hdr.parse_options = parse_options;
+        hdr.parse_options = parse_options.getLo();
         hdr.label_offset = writer.strings.add(label);
         // v2 fields: opcode compatibility and Qore version
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
         hdr.qore_version_patch = QORE_VERSION_PATCH;
+        // v3 field: high 64 bits of parse options
+        hdr.parse_options_hi = parse_options.getHi();
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -1798,11 +1799,11 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
 }
 
 //! Generate LLVM IR for binary module ABI symbols
-/** Embeds serialized metadata blob and calls qore_aot_module_init_v2.
+/** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
 */
 static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
-        int64_t parse_options, const QoreAOTModuleInfo& mod_info,
+        const QoreParseOptions& parse_options, const QoreAOTModuleInfo& mod_info,
         const std::vector<AOTCompiledFunc>& compiled_funcs) {
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
@@ -1897,12 +1898,12 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             func_table_init, "qore_aot_mod_funcs");
     }
 
-    // Declare qore_aot_module_init_v2: QoreStringNode* (metadata, metadata_len, label, parse_options, mod_name, funcs, num_funcs)
+    // Declare qore_aot_module_init_v3: QoreStringNode* (metadata, metadata_len, label, parse_options_lo, parse_options_hi, mod_name, funcs, num_funcs)
     auto* init_ret_type = ptr_type;
     auto* aot_mod_init_type = llvm::FunctionType::get(init_ret_type, {
-        ptr_type, i32_type, ptr_type, i64_type, ptr_type, ptr_type, i32_type
+        ptr_type, i32_type, ptr_type, i64_type, i64_type, ptr_type, ptr_type, i32_type
     }, false);
-    auto aot_mod_init_fn = module.getOrInsertFunction("qore_aot_module_init_v2", aot_mod_init_type);
+    auto aot_mod_init_fn = module.getOrInsertFunction("qore_aot_module_init_v3", aot_mod_init_type);
 
     // Declare qore_aot_module_ns_init: void (root_ns, qore_ns)
     auto* aot_mod_ns_init_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
@@ -1947,7 +1948,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             meta_ptr,
             builder.getInt32(static_cast<int>(metadata.size())),
             lbl_ptr,
-            builder.getInt64(parse_options),
+            builder.getInt64(parse_options.getLo()),
+            builder.getInt64(parse_options.getHi()),
             name_ptr,
             funcs_ptr,
             builder.getInt32(num_funcs)
@@ -2043,7 +2045,7 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
 bool QoreAOT::compileModule(const char* source_text, int source_len,
                              const char* label,
                              const std::string& output_path,
-                             int64_t parse_options,
+                             const QoreParseOptions& parse_options,
                              std::string& error,
                              int opt_level,
                              const char* target_triple,
@@ -2058,8 +2060,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
     // Step 2: Parse the module source to get the namespace tree with functions
     // We need PO_IN_MODULE for the parser to handle the module block
-    int64_t mod_po = parse_options | PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
-        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR;
+    QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
+        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -2171,13 +2173,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-        hdr.parse_options = mod_po;
+        hdr.parse_options = mod_po.getLo();
         hdr.label_offset = writer.strings.add(label);
         // v2 fields: opcode compatibility and Qore version
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
         hdr.qore_version_patch = QORE_VERSION_PATCH;
+        // v3 field: high 64 bits of parse options
+        hdr.parse_options_hi = mod_po.getHi();
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
         // at runtime before deserializing the namespace tree
@@ -2258,7 +2262,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
 bool QoreAOT::compileSeparatedModule(const char* dir_path,
                                      const std::string& output_path,
-                                     int64_t parse_options,
+                                     const QoreParseOptions& parse_options,
                                      std::string& error,
                                      int opt_level,
                                      const char* target_triple,
@@ -2322,8 +2326,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str(), dir_str.c_str());
 
     // Step 5: Create QoreProgram and set up module context
-    int64_t mod_po = parse_options | PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
-        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR;
+    QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
+        | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -2497,13 +2501,15 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-            hdr.parse_options = mod_po;
+            hdr.parse_options = mod_po.getLo();
             hdr.label_offset = writer.strings.add(qm_path.c_str());
             // v2 fields: opcode compatibility and Qore version
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
             hdr.qore_version_patch = QORE_VERSION_PATCH;
+            // v3 field: high 64 bits of parse options
+            hdr.parse_options_hi = mod_po.getHi();
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
             // at runtime before deserializing the namespace tree

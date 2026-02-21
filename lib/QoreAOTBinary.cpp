@@ -1662,6 +1662,10 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     if (!deserializeMethods(error)) {
         return false;
     }
+    // Commit all newly deserialized classes (set initialized + commit pending method variants)
+    if (!commitDeserializedClasses(error)) {
+        return false;
+    }
     if (!deserializeFallbackSources(error)) {
         return false;
     }
@@ -2743,6 +2747,25 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             qc->getName(), method_name, is_static ? "static" : "instance", num_variants);
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
+    // Commit all newly deserialized classes (set initialized + commit pending method variants)
+    for (size_t i = 0; i < class_list.size(); ++i) {
+        if (preexisting_classes.count(i)) {
+            continue;  // already initialized and committed
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        // Signatures already resolved by readAndSetupVariantSignature — just set initialized
+        priv->initialized = true;
+        // Commits all pending method variants (hm, shm maps); handles base-class recursion
+        priv->parseCommit();
+    }
     return true;
 }
 

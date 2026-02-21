@@ -3127,6 +3127,21 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
     return result;
 }
 
+//! C ABI entry point for AOT binaries (v3 - full 128-bit parse options)
+//! Wrapper around qore_aot_run_v2, accepting parse_options as two int64_t values
+extern "C" DLLEXPORT int qore_aot_run_v3(
+    int argc, char** argv,
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options_lo, int64_t parse_options_hi,
+    const QoreAOTFunc* functions, int num_functions
+) {
+    // For v3, we receive the full 128-bit parse options but v2 only uses the low 64 bits
+    // The high 64 bits are preserved in the binary header but functionally equivalent for now
+    return qore_aot_run_v2(argc, argv, metadata, metadata_len, label,
+                           parse_options_lo, functions, num_functions);
+}
+
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     const char* source, int source_len,
     const char* label,
@@ -3544,6 +3559,21 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
 
     return nullptr;  // success
+}
+
+//! C ABI entry point for AOT modules (v3 - full 128-bit parse options)
+//! Wrapper around qore_aot_module_init_v2, accepting parse_options as two int64_t values
+extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
+    const uint8_t* metadata, int metadata_len,
+    const char* label,
+    int64_t parse_options_lo, int64_t parse_options_hi,
+    const char* mod_name,
+    const QoreAOTFunc* functions, int num_functions
+) {
+    // For v3, we receive the full 128-bit parse options but v2 only uses the low 64 bits
+    // The high 64 bits are preserved in the binary header but functionally equivalent for now
+    return qore_aot_module_init_v2(metadata, metadata_len, label, parse_options_lo,
+                                   mod_name, functions, num_functions);
 }
 
 extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,

@@ -3144,7 +3144,7 @@ static bool runIRExecutorStatementSmoke() {
         }
         {
             LocalVar foreach_var("foreach_var_exec", bigIntTypeInfo);
-            LocalVarInstantiator foreach_guard(foreach_var, program->getParseOptions64(), &xsink);
+            LocalVarInstantiator foreach_guard(foreach_var, program->getParseOptions(), &xsink);
             QoreListNode* foreach_list = new QoreListNode(bigIntTypeInfo);
             foreach_list->push(QoreValue(1), nullptr);
             StatementBlock* body = new StatementBlock(1, 1);

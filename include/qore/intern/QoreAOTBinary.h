@@ -52,14 +52,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x514F5244;
 /** Version history:
     - v1: Initial format (Qore 2.0 - 2.2)
     - v2: Added max_opcode_id and qore_version fields for backwards compatibility (Qore 2.3+)
+    - v3: Added parse_options_hi field for full 128-bit QoreParseOptions (Qore 2.3+)
 */
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 2;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 3;
 
 //! On-disk header size for version 1 (28 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE_V1 = 28;
 
 //! On-disk header size for version 2 (36 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE_V2 = 36;
+
+//! On-disk header size for version 3 (44 bytes)
+constexpr uint32_t QORE_AOT_HEADER_SIZE_V3 = 44;
 
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
@@ -115,17 +119,18 @@ struct QoreAOTSectionHeader {
 //! Binary file header
 /** The on-disk layout is version-dependent:
     - Version 1: 28 bytes (fields through label_length)
-    - Version 2+: 36 bytes (adds max_opcode_id, qore_version, reserved2)
+    - Version 2: 36 bytes (adds max_opcode_id, qore_version, reserved2)
+    - Version 3+: 44 bytes (adds parse_options_hi)
 
     The reader uses version-dependent header sizes; the in-memory struct
-    always has all fields (v2 fields default to 0 for v1 binaries).
+    always has all fields (v2 and v3 fields default to 0 for older binaries).
 */
 struct QoreAOTBinaryHeader {
     // --- Version 1 fields (28 bytes on disk) ---
     uint32_t magic;              //!< QORE_AOT_BINARY_MAGIC
     uint16_t version;            //!< QORE_AOT_BINARY_VERSION
     uint16_t flags;              //!< QORE_AOT_FLAG_*
-    int64_t parse_options;       //!< parse options used during compilation
+    int64_t parse_options;       //!< parse options used during compilation (low 64 bits)
     uint32_t section_count;      //!< number of sections
     uint32_t label_offset;       //!< offset into string pool for source label
     uint32_t label_length;       //!< length of source label
@@ -136,6 +141,9 @@ struct QoreAOTBinaryHeader {
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
     uint16_t reserved2;          //!< reserved for future use
+
+    // --- Version 3 fields (8 additional bytes on disk) ---
+    int64_t parse_options_hi;    //!< high 64 bits of parse options (bits 64-127)
 };
 
 //! String pool with deduplication for efficient string storage
@@ -888,6 +896,7 @@ class QoreAOTBinaryDeserializer {
     bool deserializeFunctions(std::string& error);
     bool deserializeMethods(std::string& error);
     bool deserializeFallbackSources(std::string& error);
+    bool commitDeserializedClasses(std::string& error);
 
 public:
     ~QoreAOTBinaryDeserializer() {
