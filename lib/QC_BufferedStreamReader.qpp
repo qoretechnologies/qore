@@ -66,7 +66,7 @@ qclass BufferedStreamReader [arg=BufferedStreamReader* sr; ns=Qore; vparent=Stre
     @throw STREAM-BUFFER-ERROR an invalid stream buffer size was specified; the buffer size must be a positive integer
  */
 BufferedStreamReader::constructor(Qore::InputStream[InputStream] is, *string encoding, int bufsize = DefaultStreamBufferSize) {
-   SimpleRefHolder<BufferedStreamReader> reader(new BufferedStreamReader(xsink, *is, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, bufsize));
+   SimpleRefHolder<BufferedStreamReader> reader(new BufferedStreamReader(xsink, is.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, bufsize));
    if (*xsink)
       return;
    self->setPrivate(CID_BUFFEREDSTREAMREADER, reader.release());

@@ -58,7 +58,7 @@ qclass TransformInputStream [arg=TransformInputStream* is; ns=Qore; vparent=Inpu
     @param t the transformation to apply
  */
 TransformInputStream::constructor(Qore::InputStream[InputStream] is, Qore::Transform[Transform] t) {
-   SimpleRefHolder<TransformInputStream> tis(new TransformInputStream(*is, *t));
+   SimpleRefHolder<TransformInputStream> tis(new TransformInputStream(is.release(), t.release()));
    self->setPrivate(CID_TRANSFORMINPUTSTREAM, tis.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_TRANSFORMINPUTSTREAM);

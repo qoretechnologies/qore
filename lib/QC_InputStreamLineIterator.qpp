@@ -75,7 +75,7 @@ InputStreamLineIterator::constructor(Qore::InputStream[InputStream] is, *string 
         bool trim = True, int bufsize = DefaultStreamBufferSize) {
     if (eol && eol->empty())
         eol = nullptr;
-    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, *is,
+    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, is.release(),
         encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, eol, trim, bufsize));
     if (*xsink)
         return;
@@ -99,7 +99,7 @@ InputStreamLineIterator::constructor(Qore::InputStream[InputStream] is, *string 
 InputStreamLineIterator::constructor(Qore::StreamReader[StreamReader] sr, *string eol, bool trim = True) {
     if (eol && eol->empty())
         eol = nullptr;
-    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, *sr, eol, trim));
+    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, sr.release(), eol, trim));
     if (*xsink)
         return;
     self->setPrivate(CID_INPUTSTREAMLINEITERATOR, li.release());

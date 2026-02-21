@@ -59,7 +59,7 @@ qclass StreamWriter [arg=StreamWriter* sw; ns=Qore; internal_members=OutputStrea
     @param encoding character encoding of the StreamWriter; all passed string data will be converted to this encoding before being written to the output stream; if not present, the @ref default_encoding "default character encoding" is assumed
  */
 StreamWriter::constructor(Qore::OutputStream[OutputStream] os, *string encoding) {
-   SimpleRefHolder<StreamWriter> writer(new StreamWriter(xsink, *os, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
+   SimpleRefHolder<StreamWriter> writer(new StreamWriter(xsink, os.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
    if (*xsink)
       return;
    self->setPrivate(CID_STREAMWRITER, writer.release());

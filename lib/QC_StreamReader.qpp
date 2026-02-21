@@ -58,7 +58,7 @@ qclass StreamReader [arg=StreamReader* sr; ns=Qore; internal_members=InputStream
     @param encoding character encoding of the data from the @ref InputStream; if not present, the @ref default_encoding "default character encoding" is assumed
  */
 StreamReader::constructor(Qore::InputStream[InputStream] is, *string encoding) {
-    SimpleRefHolder<StreamReader> reader(new StreamReader(xsink, *is, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
+    SimpleRefHolder<StreamReader> reader(new StreamReader(xsink, is.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
     if (*xsink)
         return;
     self->setPrivate(CID_STREAMREADER, reader.release());
