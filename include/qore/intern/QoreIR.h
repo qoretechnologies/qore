@@ -1557,6 +1557,14 @@ public:
     // re-instantiate/uninstantiate these.
     std::unordered_set<const void*> pre_instantiated_locals;
 
+    // Cached LocalVar* set for fast iteration in evalTiered() without per-call allocation.
+    // Populated in attemptIRLowering() with the same sources as pre_instantiated_locals.
+    std::unordered_set<const LocalVar*> pre_instantiated_cache;
+
+    // Return type info for the function (populated in attemptIRLowering()).
+    // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
+    const QoreTypeInfo* return_type_info = nullptr;
+
     // All body locals from the statement tree (top-level + all nested blocks
     // from fully-lowered statements: if/for/while/try/switch).
     // Used by evalTiered() to instantiate/uninstantiate all locals before/after

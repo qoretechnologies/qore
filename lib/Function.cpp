@@ -2349,16 +2349,22 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     std::string unique_name = std::string(name) + "@" + std::to_string((uintptr_t)this)
         + "_" + std::to_string(variant_counter.fetch_add(1));
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // Store the return type info for type coercion in Return opcode lowering
+    func->return_type_info = getReturnTypeInfo();
     // Record which locals are pre-instantiated by the calling convention so the JIT
     // skips instantiation/uninstantiation for them.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
-        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
+        LocalVar* lv = signature.lv[i];
+        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        func->pre_instantiated_cache.insert(lv);
     }
     if (signature.argvid) {
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
+        func->pre_instantiated_cache.insert(signature.argvid);
     }
     if (signature.selfid) {
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
+        func->pre_instantiated_cache.insert(signature.selfid);
     }
     // Collect ALL body locals from the statement tree (top-level + nested blocks from
     // fully-lowered statements).  These are instantiated by evalTiered() before IR/JIT
@@ -2366,6 +2372,7 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     collectAllStatementLocals(statements, func->all_body_locals);
     for (LocalVar* lv : func->all_body_locals) {
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        func->pre_instantiated_cache.insert(lv);
     }
     QoreIRBuilder builder(func);
     auto* entry = func->createBlock("entry");
@@ -2819,22 +2826,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Body locals are instantiated just above.
                 // All must be in pre_instantiated so the IR interpreter doesn't
                 // re-instantiate them (which would push a new frame with value 0).
-                std::unordered_set<const LocalVar*> pre_instantiated;
-                for (unsigned i = 0; i < signature.numParams(); ++i) {
-                    pre_instantiated.insert(signature.lv[i]);
-                }
-                if (signature.argvid) {
-                    pre_instantiated.insert(signature.argvid);
-                }
-                // Always add selfid to pre_instantiated when it exists; even when
-                // self==nullptr (constructor case), the caller has already pushed
-                // selfid onto the thread-local variable stack.
-                if (signature.selfid) {
-                    pre_instantiated.insert(signature.selfid);
-                }
-                for (LocalVar* lv : cached_ir->all_body_locals) {
-                    pre_instantiated.insert(lv);
-                }
+                // Use cached pre_instantiated_cache to avoid per-call set allocation.
+                const std::unordered_set<const LocalVar*>& pre_instantiated = cached_ir->pre_instantiated_cache;
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;

@@ -1486,9 +1486,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRInstruction* inst = block->instructions[ip].get();
 
         // Debug: fire dbgStep on source line changes.
-        // Re-check runtimeCheck() each iteration to detect mid-execution debugger attachment.
-        if (debug_active || (can_debug && tlpd->runtimeCheck())) {
-            debug_active = true;  // latch on once debugger is detected
+        // Debugger attachment takes effect at next function call, not mid-instruction.
+        if (debug_active) {
             if (inst->loc && inst->loc->start_line != last_debug_line) {
                 last_debug_line = inst->loc->start_line;
                 // start_line + offset: statements are indexed by this combined value
