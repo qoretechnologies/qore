@@ -257,10 +257,15 @@ public:
 
     DLLLOCAL void setNormalUserMethod(QoreMethod* n_qm, LocalVar* selfid) {
         setMethod(n_qm);
-        getUserVariantBase()->setSelfId(selfid);
-        assert(selfid);
-        assert(selfid->getTypeInfo());
-        assert(QoreTypeInfo::getUniqueReturnClass(selfid->getTypeInfo()));
+        UserVariantBase* uvb = getUserVariantBase();
+        // Only set selfid if the variant doesn't already have one
+        // (e.g., from AOT deserialization via setupFromAOTMetadata)
+        if (!uvb->getUserSignature()->getSelfId()) {
+            uvb->setSelfId(selfid);
+            assert(selfid);
+            assert(selfid->getTypeInfo());
+            assert(QoreTypeInfo::getUniqueReturnClass(selfid->getTypeInfo()));
+        }
     }
 
     DLLLOCAL const QoreMethod* method() const {
