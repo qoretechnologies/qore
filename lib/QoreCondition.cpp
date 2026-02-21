@@ -44,11 +44,17 @@ QoreCondition::~QoreCondition() {
 }
 
 int QoreCondition::signal() {
+    signal_gen.fetch_add(1, std::memory_order_release);
     return pthread_cond_signal(&c);
 }
 
 int QoreCondition::broadcast() {
+    signal_gen.fetch_add(1, std::memory_order_release);
     return pthread_cond_broadcast(&c);
+}
+
+uint64_t QoreCondition::getSignalGen() const {
+    return signal_gen.load(std::memory_order_acquire);
 }
 
 int QoreCondition::wait(pthread_mutex_t *m) {

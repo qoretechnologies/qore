@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -104,6 +104,11 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
     // release lock
     release_intern();
 
+    // record signal generation before waiting to detect signals fired during
+    // the gap between returning from pthread_cond_timedwait and reacquiring
+    // the Qore-level mutex in grabImpl
+    uint64_t gen = cond->getSignalGen();
+
     // wait for condition
     int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
 
@@ -116,6 +121,15 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
         return -1;
 
     grab_intern(mtid, nvl);
+
+    // detect signals/broadcasts that were fired while this thread was
+    // reacquiring the Qore-level mutex (waiting on asl_cond in grabImpl);
+    // during that window the thread is not listening on the user's condition,
+    // so the signal would otherwise be permanently lost
+    if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
+        rc = 0;
+    }
+
     return rc;
 }
 

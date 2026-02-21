@@ -66,6 +66,9 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         // release lock
         release_intern();
 
+        // record signal generation before waiting
+        uint64_t gen = cond->getSignalGen();
+
         // wait for condition
         int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
 
@@ -80,6 +83,12 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         }
 
         grab_intern(mtid, nvl);
+
+        // detect signals/broadcasts fired while reacquiring the Qore-level mutex
+        if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
+            rc = 0;
+        }
+
         return rc;
     }
 
@@ -116,6 +125,9 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         release_read_lock_intern(i);
     }
 
+    // record signal generation before waiting
+    uint64_t gen = cond->getSignalGen();
+
     // wait for condition
     int rc = timeout_ms ? cond->wait(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
 
@@ -130,6 +142,11 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         if (grab_read_lock_intern(mtid, nvl, 0, xsink)) {
             return -1;
         }
+    }
+
+    // detect signals/broadcasts fired while reacquiring the read lock
+    if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
+        rc = 0;
     }
 
     return rc;
