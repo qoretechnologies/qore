@@ -884,6 +884,9 @@ endif ()
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/ql_debug.cpp)
 endif ()
+if (HAVE_TERMIOS_H)
+    set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/QoreTermIOS.cpp)
+endif ()
 # Non-blocking I/O support for streams (used by HTTP/2 streaming to avoid buffering large responses in memory)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/InputStream.cpp
@@ -1299,6 +1302,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreTermIOS.cpp\"
 ")
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
