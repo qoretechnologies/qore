@@ -3381,12 +3381,91 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
         return toBits(QoreValue());
     }
 
-    // Build QoreListNode from the NaN-boxed args array
-    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+    assert(variant);
 
-    RuntimeConfig& rc = rc_get_current_ref();
-    // Use eval() for all variants — handles soft type coercion via CodeEvaluationHelper
-    return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        // Builtin static method — fall back to slow path for proper type coercion
+        // (builtins can have soft types like softstring that require CodeEvaluationHelper)
+        ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+        RuntimeConfig& rc = rc_get_current_ref();
+        return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
+    }
+
+    // If the callee is not JIT-compiled yet, fall back to the slow path.
+    // This can happen in tiered compilation when the callee hasn't been promoted yet.
+    if (!uvb->hasCachedFunction()) {
+        ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+        RuntimeConfig& rc = rc_get_current_ref();
+        return toBits(qore_method_private::eval(*method, xsink, rc, nullptr, *arg_list));
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
+    // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
+    // not by runtime variable lookup (ThreadLocalVariableData::find() skips frame_boundary entries).
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        return toBits(QoreValue());
+    }
+
+    // Build argv for excess arguments (varargs)
+    // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv_priv->pushIntern(val);
+        }
+    }
+
+    // Instantiate argv variable (if the function has an argv parameter)
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
+            return uvb->execCachedFunction(xs);
+        }, val, xsink);
+    }
+
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    // Apply return type coercion (e.g. softlist wrapping) to match
+    // ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+
+    return toBits(val);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
