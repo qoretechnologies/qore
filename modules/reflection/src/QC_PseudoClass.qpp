@@ -169,7 +169,6 @@ PseudoClass cls(type);
     @see forType()
  */
 PseudoClass::constructor(Type[QoreType] type) {
-    ReferenceHolder<QoreType> holder(type, xsink);
     self->setPrivate(CID_PSEUDOCLASS, new QoreReflectionClass(getProgram(), qore_pseudo_get_class(type->typeInfo)));
 }
 
@@ -201,7 +200,6 @@ PseudoClass cls = PseudoClass::forType(type);
     match can be found, a %PseudoClass object for @ref Qore::zzz8valuezzz9 "<value>" is returned
 */
 static PseudoClass PseudoClass::forType(Type[QoreType] type) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     QoreProgram* pgm = getProgram();
     return new QoreObject(QC_PSEUDOCLASS, pgm, new QoreReflectionClass(pgm, qore_pseudo_get_class(type->typeInfo)));
 }

@@ -583,8 +583,8 @@ int TopLevelStatementBlock::parseInit() {
     }
 
     // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    int64 current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = current_parse_options & PO_ALLOW_REPARSE;
+    QoreParseOptions current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = static_cast<bool>(current_parse_options & PO_ALLOW_REPARSE);
 
     if (!first && lvars) {
         // push already-registered local variables on the stack
@@ -677,7 +677,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
     // before the program's pwo is initialized (due to C++ member initialization order)
     QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
-    int64 runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    QoreParseOptions runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
     // This is determined by the execution high water mark (ehwm)

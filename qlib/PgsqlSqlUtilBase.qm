@@ -2414,7 +2414,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # AbstractDatasource subclasses that are not Datasource or DatasourcePool (e.g. remote
         # proxy classes) cannot be used with SQLStatement, so fall back to vexec() for those
         bool use_direct_exec = !(ds instanceof Datasource || ds instanceof DatasourcePool);
-        *SQLStatement stmt;
+        *AbstractSQLStatement stmt;
         if (!use_direct_exec) {
             stmt = new SQLStatement(ds);
             stmt.prepare(sql);
@@ -2517,7 +2517,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             (foldl $1 + " and " + $2, where_clauses));
 
         bool use_direct_exec = !(ds instanceof Datasource || ds instanceof DatasourcePool);
-        *SQLStatement stmt;
+        *AbstractSQLStatement stmt;
         if (!use_direct_exec) {
             stmt = new SQLStatement(ds);
             stmt.prepare(sql);

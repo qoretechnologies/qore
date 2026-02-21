@@ -244,11 +244,11 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, int64 po, const AbstractStatement*& old_stmt,
-        const QoreProgramLocation*& old_loc, int64& old_po);
+        const QoreProgramLocation* loc, const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
-DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, int64 po);
+DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
 
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
@@ -259,12 +259,12 @@ DLLLOCAL const AbstractStatement* get_runtime_statement();
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
 
-DLLLOCAL int64 parse_get_parse_options();
-DLLLOCAL int64 runtime_get_parse_options();
-DLLLOCAL int64 runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
+DLLLOCAL QoreParseOptions parse_get_parse_options();
+DLLLOCAL QoreParseOptions runtime_get_parse_options();
+DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
-DLLLOCAL bool parse_check_parse_option(int64 o);
-DLLLOCAL bool runtime_check_parse_option(int64 o);
+DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
+DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
 DLLLOCAL RootQoreNamespace* getRootNS();
 DLLLOCAL void updateCVarStack(CVNode* ncvs);
@@ -477,7 +477,7 @@ protected:
 class QoreProgramLocationHelper {
 public:
     DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, const QoreProgramLocation* loc,
-            const AbstractStatement* stat, int64 parse_options) : has_po(true) {
+            const AbstractStatement* stat, const QoreParseOptions& parse_options) : has_po(true) {
         swap_runtime_statement_location(xsink, stat, loc, parse_options, statement, this->loc,
             this->parse_options);
     }
@@ -497,7 +497,7 @@ public:
 protected:
     const QoreProgramLocation* loc;
     const AbstractStatement* statement;
-    int64 parse_options;
+    QoreParseOptions parse_options;
     bool has_po;
 };
 

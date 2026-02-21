@@ -72,8 +72,7 @@ string LoggerAppender::getName() {
     @throw "LOGGER-ERROR" thrown if appender is opened
 */
 LoggerAppender::setQueue(*LoggerAppenderQueue[QoreLoggerAppenderQueue] queue) {
-    ReferenceHolder<QoreLoggerAppenderQueue> holder(queue, xsink);
-    a->setQueue(xsink, obj_queue, holder);
+    a->setQueue(xsink, obj_queue, queue);
 }
 
 //! Returns async queue or @ref nothing when events are processed synchronously
@@ -113,7 +112,6 @@ bool LoggerAppender::isOpen() {
     @throw "LOGGER-ERROR" thrown if the filter is already in the list
 */
 LoggerAppender::addFilter(LoggerFilter[QoreLoggerFilter] filter, bool top = False) {
-    ReferenceHolder<QoreLoggerFilter> holder(filter, xsink);
     a->addFilter(xsink, obj_filter, top);
 }
 
@@ -122,7 +120,6 @@ LoggerAppender::addFilter(LoggerFilter[QoreLoggerFilter] filter, bool top = Fals
     @param filter the filter to remove
 */
 LoggerAppender::removeFilter(LoggerFilter[QoreLoggerFilter] filter) {
-    ReferenceHolder<QoreLoggerFilter> holder(filter, xsink);
     a->removeFilter(xsink, obj_filter);
 }
 
@@ -167,7 +164,6 @@ private bool LoggerAppender::pushEvent(int type, auto params) {
     event not accepted on queue, etc)
 */
  bool LoggerAppender::post(LoggerEvent[QoreLoggerEvent] event) {
-    ReferenceHolder<QoreLoggerEvent> holder(event, xsink);
     return a->post(xsink, obj_event);
 }
 

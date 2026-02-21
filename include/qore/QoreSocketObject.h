@@ -403,6 +403,28 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+            ExceptionSink* xsink);
+
+    //! Check if an HTTP/2 stream has received END_STREAM
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
+
+    //! Flush all pending HTTP/2 outgoing data (blocking)
+    /** @param timeout_ms send timeout in milliseconds; -1 for infinite
+        @since %Qore 2.3
+    */
+    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
+
+    //! Remove an HTTP/2 stream from the session
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
+
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);

@@ -145,7 +145,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop)
     : tid(0), autostop_flag(autostop), shutting_down(false), force_poll(false),
-      io_waiting(false), io_exiting(false), ready_flag(false), logger(nullptr),
+      io_waiting(false), io_exiting(false), ready_flag(false),
+      submit_seq(0), processed_seq(0), logger(nullptr),
       loop(nullptr), notifier(nullptr) {
     ExceptionSink xsink;
     loop = new QoreEventLoop(&xsink);
@@ -411,6 +412,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             }
         }
 
+        ++submit_seq;
         do_signal = enqueueCmdLocked(IoCommand::Add, uh);
     }
 
@@ -657,6 +659,37 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
     return ready_flag;
 }
 
+bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsink) {
+    AutoLocker al(m);
+    if (!tid) {
+        return false;
+    }
+    int target = submit_seq;
+    if (processed_seq >= target) {
+        return true;
+    }
+    if (timeout_ms > 0) {
+        int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
+        while (processed_seq < target && tid) {
+            int64 remaining_us = deadline_us - get_epoch_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            int remaining_ms = (int)((remaining_us + 999) / 1000);
+            int rc = processed_cond.wait2(m, remaining_ms);
+            if (rc) {
+                return processed_seq >= target;
+            }
+        }
+        return processed_seq >= target;
+    }
+    // No timeout - wait indefinitely
+    while (processed_seq < target && tid) {
+        processed_cond.wait(m);
+    }
+    return processed_seq >= target;
+}
+
 bool AsyncIoControllerPriv::running() const {
     AutoLocker al(m);
     return tid != 0 && !io_exiting;
@@ -855,6 +888,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
                 ops_to_poll.push_back({key, pinfo.spop_obj, false});
             }
+
+            // Update processed sequence counter
+            processed_seq = submit_seq;
+            processed_cond.broadcast();
         }
 
         // --- PHASE 2: continuePoll outside lock ---
@@ -1127,6 +1164,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         tid = 0;
         io_exiting = false;
         ready_flag = false;
+        processed_seq = 0;
+        submit_seq = 0;
+        processed_cond.broadcast();
         if (io_waiting) {
             io_cond.broadcast();
         }

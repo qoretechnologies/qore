@@ -62,7 +62,6 @@ LoggerInterface::constructor() {
 /**
 */
 bool LoggerInterface::isLogger(LoggerInterface[QoreLoggerInterface] logger) {
-    ReferenceHolder<QoreLoggerInterface> holder(logger, xsink);
     return obj_logger == self;
 }
 

@@ -212,14 +212,13 @@ Logger::constructor(string name, int level) {
     @param level the initial level for the logger
 */
 Logger::constructor(string name, LoggerLevel[QoreLoggerLevel] level) {
-    ReferenceHolder<QoreLoggerLevel> holder(level, xsink);
     QoreStringNodeValueHelper n(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
     }
     ReferenceHolder<QoreLogger> logger(new QoreLogger(self, true, *n), xsink);
     ReferenceHolder<QoreObject> level_holder(obj_level->objectRefSelf(), xsink);
-    logger->setLevelIntern(xsink, level_holder, holder);
+    logger->setLevelIntern(xsink, level_holder, level);
     self->setPrivate(CID_LOGGER, logger.release());
 }
 
@@ -227,10 +226,9 @@ Logger::constructor(string name, LoggerLevel[QoreLoggerLevel] level) {
 /** @param level the initial level for the logger
 */
 Logger::constructor(LoggerLevel[QoreLoggerLevel] level) {
-    ReferenceHolder<QoreLoggerLevel> holder(level, xsink);
     ReferenceHolder<QoreLogger> logger(new QoreLogger(self), xsink);
     ReferenceHolder<QoreObject> level_holder(obj_level->objectRefSelf(), xsink);
-    logger->setLevel(xsink, level_holder, holder);
+    logger->setLevel(xsink, level_holder, level);
     self->setPrivate(CID_LOGGER, logger.release());
 }
 
@@ -255,9 +253,8 @@ string Logger::getName() {
     @throw LOGGER-ERROR in case of circular reference
 */
 Logger::setParent(*Logger[QoreLogger] parent) {
-    ReferenceHolder<QoreLogger> holder(parent, xsink);
     ReferenceHolder<QoreObject> p(obj_parent ? obj_parent->objectRefSelf() : nullptr, xsink);
-    l->setParent(xsink, p, holder);
+    l->setParent(xsink, p, parent);
 }
 
 //! Returns the logging level
@@ -274,9 +271,8 @@ Logger::setParent(*Logger[QoreLogger] parent) {
     @param level if nothing then inherits level from parent
 */
 Logger::setLevel(*LoggerLevel[QoreLoggerLevel] level) {
-    ReferenceHolder<QoreLoggerLevel> lvl(level, xsink);
     ReferenceHolder<QoreObject> level_holder(obj_level ? obj_level->objectRefSelf() : nullptr, xsink);
-    l->setLevel(xsink, level_holder, lvl);
+    l->setLevel(xsink, level_holder, level);
 }
 
 //! Sets the logging level
@@ -351,8 +347,7 @@ bool Logger::getAdditivity() {
     @param event the event to forward
 */
 Logger::callAppenders(LoggerEvent[QoreLoggerEvent] event) {
-    ReferenceHolder<QoreLoggerEvent> e(event, xsink);
-    l->callAppenders(xsink, obj_event, event);
+    l->callAppenders(xsink, obj_event, *event);
 }
 
 //! Adds an appender to the appender list
@@ -361,8 +356,7 @@ Logger::callAppenders(LoggerEvent[QoreLoggerEvent] event) {
     @throw "LOGGER-ERROR" exception if appender is already in list
 */
 Logger::addAppender(LoggerAppender[QoreLoggerAppender] appender) {
-    ReferenceHolder<QoreLoggerAppender> a(appender, xsink);
-    l->addAppender(xsink, obj_appender, a);
+    l->addAppender(xsink, obj_appender, appender);
 }
 
 //! Removes the appender from the list
@@ -370,7 +364,6 @@ Logger::addAppender(LoggerAppender[QoreLoggerAppender] appender) {
     @param appender the appender to remove
 */
 Logger::removeAppender(LoggerAppender[QoreLoggerAppender] appender) {
-    ReferenceHolder<QoreLoggerAppender> a(appender, xsink);
     l->removeAppender(xsink, obj_appender);
 }
 
@@ -398,8 +391,7 @@ list<LoggerAppender> Logger::getAppenders() {
     @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information.
 */
 Logger::log(LoggerLevel[QoreLoggerLevel] level, string message, ...) {
-    ReferenceHolder<QoreLoggerLevel> lvl(level, xsink);
-    l->log(xsink, level, message, args, 2);
+    l->log(xsink, *level, message, args, 2);
 }
 
 //! Logs a message using the provided logging level
@@ -445,8 +437,7 @@ Logger::log(string level, string message, ...) {
     @param margs any format string arguments to the log message
 */
 Logger::logArgs(LoggerLevel[QoreLoggerLevel] level, string message, *softlist<auto> margs) {
-    ReferenceHolder<QoreLoggerLevel> lvl(level, xsink);
-    l->log(xsink, level, message, margs, 0);
+    l->log(xsink, *level, message, margs, 0);
 }
 
 //! Logs a message using the provided logging level and a single argument for any format string arguments.
@@ -490,8 +481,7 @@ Logger::logArgs(string level, string message, *softlist<auto> margs) {
     @param event the event to log
 */
 Logger::logEvent(LoggerEvent[QoreLoggerEvent] event) {
-    ReferenceHolder<QoreLoggerEvent> e(event, xsink);
-    l->logEvent(xsink, obj_event, event);
+    l->logEvent(xsink, obj_event, *event);
 }
 
 //! Logs a message object with the TRACE level
@@ -620,8 +610,7 @@ Logger::debugVar(string var_name, auto value) {
     @param level the log level to check
 */
 bool Logger::isEnabledFor(LoggerLevel[QoreLoggerLevel] level) {
-    ReferenceHolder<QoreLoggerLevel> lvl(level, xsink);
-    return l->isEnabledFor(xsink, level);
+    return l->isEnabledFor(xsink, *level);
 }
 
 //! Checks whether this Logger is enabled for a given Level passed as parameter.

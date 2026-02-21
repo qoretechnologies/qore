@@ -262,7 +262,7 @@ public:
         //printd(5, "ConstantList::ConstantList() this: %p cls: %p ns: %p\n", this, ptr.getClass(), ptr.getNs());
     }
 
-    DLLLOCAL ConstantList(const ConstantList& old, int64 po, ClassNs p);
+    DLLLOCAL ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p);
 
     // do not delete the object returned by this function
     DLLLOCAL cnemap_t::iterator add(const char* name, QoreValue val, const QoreTypeInfo* typeInfo = nullptr,

@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -130,26 +130,21 @@ counter.waitForZero();
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 nothing Counter::waitForZero() {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManagerHelper smh;
-   if (smh) {
-      const int poll_ms = 500;  // 500ms polling interval
-      while (true) {
-         if (smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on counter");
-            return QoreValue();
-         }
-         int rc = c->waitForZero(xsink, poll_ms);
-         if (*xsink) {
-            return QoreValue();  // Error occurred
-         }
-         if (rc == 0) {
-            return QoreValue();  // Counter reached zero
-         }
-         // rc != 0 means timeout, loop and check interrupt again
+   // Always poll for cancel/interrupt checking
+   const int poll_ms = 500;  // 500ms polling interval
+   while (true) {
+      if (qore_check_cancel(xsink, "counter wait")) {
+         return QoreValue();
       }
+      int rc = c->waitForZero(xsink, poll_ms);
+      if (*xsink) {
+         return QoreValue();  // Error occurred
+      }
+      if (rc == 0) {
+         return QoreValue();  // Counter reached zero
+      }
+      // rc != 0 means timeout, loop and check again
    }
-   c->waitForZero(xsink);
 }
 
 //! Blocks a thread until the counter reaches zero
@@ -169,43 +164,38 @@ if (counter.waitForZero(1500))
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int Counter::waitForZero(timeout timeout_ms) {
-   // Check for sandbox interrupt - use polling if sandbox manager exists
-   QoreSandboxManagerHelper smh;
-   if (smh) {
-      const int poll_ms = 500;  // 500ms polling interval
-      int64 remaining = timeout_ms;
-      bool infinite = (timeout_ms <= 0);
+   // Always poll for cancel/interrupt checking
+   const int poll_ms = 500;  // 500ms polling interval
+   int64 remaining = timeout_ms;
+   bool infinite = (timeout_ms <= 0);
 
-      while (true) {
-         if (smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on counter");
-            return -1;
-         }
+   while (true) {
+      if (qore_check_cancel(xsink, "counter wait")) {
+         return -1;
+      }
 
-         int this_timeout;
-         if (infinite) {
-            this_timeout = poll_ms;
-         } else {
-            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-         }
+      int this_timeout;
+      if (infinite) {
+         this_timeout = poll_ms;
+      } else {
+         this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+      }
 
-         int rc = c->waitForZero(xsink, this_timeout);
-         if (*xsink) {
-            return -1;  // Error occurred
-         }
-         if (rc == 0) {
-            return 0;  // Counter reached zero
-         }
+      int rc = c->waitForZero(xsink, this_timeout);
+      if (*xsink) {
+         return -1;  // Error occurred
+      }
+      if (rc == 0) {
+         return 0;  // Counter reached zero
+      }
 
-         if (!infinite) {
-            remaining -= this_timeout;
-            if (remaining <= 0) {
-               return -1;  // Overall timeout exceeded
-            }
+      if (!infinite) {
+         remaining -= this_timeout;
+         if (remaining <= 0) {
+            return -1;  // Overall timeout exceeded
          }
       }
    }
-   return c->waitForZero(xsink, timeout_ms);
 }
 
 //! Returns the current counter value

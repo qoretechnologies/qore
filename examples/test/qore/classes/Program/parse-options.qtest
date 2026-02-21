@@ -1,0 +1,416 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%exec-class ParseOptionsTest
+
+%requires QUnit
+
+class ParseOptionsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParseOptionsTest", "1.0") {
+        addTestCase("constructor tests", \constructorTests());
+        addTestCase("set/clear tests", \setAndClearTests());
+        addTestCase("merge/mask/invert tests", \mergeMaskInvertTests());
+        addTestCase("hasAll/hasAny tests", \hasAllHasAnyTests());
+        addTestCase("toStringList tests", \toStringListTests());
+        addTestCase("toInt tests", \toIntTests());
+        addTestCase("equals tests", \equalsTests());
+        addTestCase("Program constructor tests", \programConstructorTests());
+        addTestCase("Program getFullParseOptions tests", \programGetFullParseOptionsTests());
+        addTestCase("Program setParseOptions(ParseOptions) tests", \programSetParseOptionsTests());
+        addTestCase("extended option tests", \extendedOptionTests());
+        addTestCase("error tests", \errorTests());
+        addTestCase("no-class-defs enforcement", \noClassDefsTests());
+        addTestCase("no-constant-defs enforcement", \noConstantDefsTests());
+        addTestCase("no-namespace-defs enforcement", \noNamespaceDefsTests());
+        addTestCase("no-new enforcement", \noNewTests());
+        addTestCase("parse directive tests", \parseDirectiveTests());
+        set_return_value(main());
+    }
+
+    constructorTests() {
+        # default constructor - no options
+        ParseOptions opts();
+        assertTrue(opts.empty());
+
+        # from integer constant
+        ParseOptions opts2(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        assertFalse(opts2.empty());
+        assertTrue(opts2.hasAll(PO_NO_NETWORK));
+        assertTrue(opts2.hasAll(PO_NO_FILESYSTEM));
+
+        # from string name
+        ParseOptions opts3("no-network");
+        assertTrue(opts3.hasAll(PO_NO_NETWORK));
+        assertFalse(opts3.hasAll(PO_NO_FILESYSTEM));
+
+        # from list of strings
+        ParseOptions opts4(("no-network", "no-filesystem"));
+        assertTrue(opts4.hasAll(PO_NO_NETWORK));
+        assertTrue(opts4.hasAll(PO_NO_FILESYSTEM));
+    }
+
+    setAndClearTests() {
+        ParseOptions opts();
+
+        # set by integer
+        opts.set(PO_NO_NETWORK);
+        assertTrue(opts.hasAll(PO_NO_NETWORK));
+
+        # set by string
+        opts.set("no-filesystem");
+        assertTrue(opts.hasAll(PO_NO_FILESYSTEM));
+
+        # set by ParseOptions object
+        ParseOptions more(PO_NO_GUI);
+        opts.set(more);
+        assertTrue(opts.hasAll(PO_NO_GUI));
+
+        # clear by integer
+        opts.clear(PO_NO_NETWORK);
+        assertFalse(opts.hasAny(PO_NO_NETWORK));
+        assertTrue(opts.hasAll(PO_NO_FILESYSTEM));
+
+        # clear by string
+        opts.clear("no-filesystem");
+        assertFalse(opts.hasAny(PO_NO_FILESYSTEM));
+        assertTrue(opts.hasAll(PO_NO_GUI));
+
+        # clear by ParseOptions object
+        opts.clear(more);
+        assertTrue(opts.empty());
+    }
+
+    mergeMaskInvertTests() {
+        ParseOptions opts1(PO_NO_NETWORK);
+        ParseOptions opts2(PO_NO_FILESYSTEM);
+
+        # merge two ParseOptions
+        ParseOptions merged = opts1.merge(opts2);
+        assertTrue(merged.hasAll(PO_NO_NETWORK));
+        assertTrue(merged.hasAll(PO_NO_FILESYSTEM));
+        # original unchanged
+        assertFalse(opts1.hasAny(PO_NO_FILESYSTEM));
+
+        # merge with integer
+        ParseOptions merged2 = opts1.merge(PO_NO_GUI);
+        assertTrue(merged2.hasAll(PO_NO_NETWORK));
+        assertTrue(merged2.hasAll(PO_NO_GUI));
+
+        # merge with string
+        ParseOptions merged3 = opts1.merge("no-database");
+        assertTrue(merged3.hasAll(PO_NO_NETWORK));
+        assertTrue(merged3.hasAll(PO_NO_DATABASE));
+
+        # mask
+        ParseOptions all(PO_NO_NETWORK | PO_NO_FILESYSTEM | PO_NO_GUI);
+        ParseOptions masked = all.mask(opts1);
+        assertTrue(masked.hasAll(PO_NO_NETWORK));
+        assertFalse(masked.hasAny(PO_NO_FILESYSTEM));
+
+        # mask with integer
+        ParseOptions masked2 = all.mask(PO_NO_NETWORK | PO_NO_GUI);
+        assertTrue(masked2.hasAll(PO_NO_NETWORK));
+        assertTrue(masked2.hasAll(PO_NO_GUI));
+        assertFalse(masked2.hasAny(PO_NO_FILESYSTEM));
+
+        # invert
+        ParseOptions inverted = opts1.invert();
+        assertFalse(inverted.hasAll(PO_NO_NETWORK));
+    }
+
+    hasAllHasAnyTests() {
+        ParseOptions opts(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+
+        # hasAll - both set
+        assertTrue(opts.hasAll(PO_NO_NETWORK | PO_NO_FILESYSTEM));
+        # hasAll - one not set
+        assertFalse(opts.hasAll(PO_NO_NETWORK | PO_NO_GUI));
+        # hasAll with string
+        assertTrue(opts.hasAll("no-network"));
+        # hasAll with ParseOptions
+        ParseOptions check(PO_NO_NETWORK);
+        assertTrue(opts.hasAll(check));
+
+        # hasAny - one set
+        assertTrue(opts.hasAny(PO_NO_NETWORK | PO_NO_GUI));
+        # hasAny - none set
+        assertFalse(opts.hasAny(PO_NO_GUI | PO_NO_DATABASE));
+        # hasAny with string
+        assertTrue(opts.hasAny("no-network"));
+        assertFalse(opts.hasAny("no-gui"));
+        # hasAny with ParseOptions
+        ParseOptions check2(PO_NO_GUI);
+        assertFalse(opts.hasAny(check2));
+    }
+
+    toStringListTests() {
+        ParseOptions opts(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        list<string> names = opts.toStringList();
+        assertTrue(names.size() >= 2);
+        assertTrue(inlist("no-network", names));
+        assertTrue(inlist("no-filesystem", names));
+
+        # empty
+        ParseOptions empty();
+        assertEq((), empty.toStringList());
+    }
+
+    toIntTests() {
+        ParseOptions opts(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        int val = opts.toInt();
+        assertEq(PO_NO_NETWORK | PO_NO_FILESYSTEM, val);
+
+        # empty
+        ParseOptions empty();
+        assertEq(0, empty.toInt());
+    }
+
+    equalsTests() {
+        ParseOptions opts1(PO_NO_NETWORK);
+        ParseOptions opts2(PO_NO_NETWORK);
+        ParseOptions opts3(PO_NO_FILESYSTEM);
+
+        assertTrue(opts1.equals(opts2));
+        assertFalse(opts1.equals(opts3));
+
+        # copy test
+        ParseOptions opts4 = opts1.copy();
+        assertTrue(opts1.equals(opts4));
+    }
+
+    programConstructorTests() {
+        # Program with ParseOptions
+        ParseOptions opts(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        Program pgm(opts);
+        int po = pgm.getParseOptions();
+        assertTrue((po & PO_NO_NETWORK) != 0);
+        assertTrue((po & PO_NO_FILESYSTEM) != 0);
+    }
+
+    programGetFullParseOptionsTests() {
+        Program pgm(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        ParseOptions po = pgm.getFullParseOptions();
+        assertTrue(po.hasAll(PO_NO_NETWORK));
+        assertTrue(po.hasAll(PO_NO_FILESYSTEM));
+        assertTrue(po.hasAll("no-network"));
+    }
+
+    programSetParseOptionsTests() {
+        Program pgm();
+        ParseOptions opts("no-network");
+        pgm.setParseOptions(opts);
+
+        ParseOptions po = pgm.getFullParseOptions();
+        assertTrue(po.hasAny("no-network"));
+
+        # disable with ParseOptions
+        ParseOptions disable("no-network");
+        pgm.disableParseOptions(disable);
+        po = pgm.getFullParseOptions();
+        assertFalse(po.hasAny("no-network"));
+    }
+
+    extendedOptionTests() {
+        # Extended options (bits 64+) via string names
+        ParseOptions opts("no-class-defs");
+        assertFalse(opts.empty());
+        assertTrue(opts.hasAll("no-class-defs"));
+        assertFalse(opts.hasAny("no-constant-defs"));
+
+        # Multiple extended options
+        ParseOptions opts2(("no-class-defs", "no-constant-defs", "no-namespace-defs", "no-new"));
+        assertTrue(opts2.hasAll("no-class-defs"));
+        assertTrue(opts2.hasAll("no-constant-defs"));
+        assertTrue(opts2.hasAll("no-namespace-defs"));
+        assertTrue(opts2.hasAll("no-new"));
+
+        # toStringList includes extended options
+        list<string> names = opts2.toStringList();
+        assertTrue(inlist("no-class-defs", names));
+        assertTrue(inlist("no-constant-defs", names));
+        assertTrue(inlist("no-namespace-defs", names));
+        assertTrue(inlist("no-new", names));
+
+        # toInt only returns lo bits (extended options have lo=0)
+        assertEq(0, opts.toInt());
+
+        # merge legacy + extended
+        ParseOptions mixed = opts.merge(PO_NO_NETWORK);
+        assertTrue(mixed.hasAll("no-class-defs"));
+        assertTrue(mixed.hasAll(PO_NO_NETWORK));
+
+        # set extended option
+        ParseOptions empty();
+        empty.set("no-new");
+        assertTrue(empty.hasAll("no-new"));
+
+        # clear extended option
+        empty.clear("no-new");
+        assertFalse(empty.hasAny("no-new"));
+        assertTrue(empty.empty());
+    }
+
+    noClassDefsTests() {
+        # top-level class definition blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-class-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_CLASS_DEFS", sub() {
+                pgm.parse("class Foo {}", "no-class-defs-test");
+            });
+        }
+
+        # class inside namespace blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-class-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_CLASS_DEFS", sub() {
+                pgm.parse("namespace MyNS { class Foo {} }", "no-class-defs-ns-test");
+            });
+        }
+
+        # class definition works without the option
+        {
+            Program pgm(PO_NEW_STYLE);
+            pgm.parse("class Foo { constructor() {} }", "class-allowed-test");
+        }
+    }
+
+    noConstantDefsTests() {
+        # top-level scoped constant definition blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-constant-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_CONSTANT_DEFS", sub() {
+                pgm.parse("const MY_CONST = 1;", "no-const-defs-test");
+            });
+        }
+
+        # constant inside namespace blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-constant-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_CONSTANT_DEFS", sub() {
+                pgm.parse("namespace MyNS { const MY_CONST = 1; }", "no-const-defs-ns-test");
+            });
+        }
+
+        # constant inside class blocked
+        {
+            Program pgm(PO_NEW_STYLE);
+            pgm.setParseOptions(new ParseOptions("no-constant-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_CONSTANT_DEFS", sub() {
+                pgm.parse("class Foo { const MY_CONST = 1; }", "no-const-defs-class-test");
+            });
+        }
+
+        # constant definition works without the option
+        {
+            Program pgm();
+            pgm.parse("const MY_CONST = 1;", "const-allowed-test");
+        }
+    }
+
+    noNamespaceDefsTests() {
+        # top-level namespace definition blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-namespace-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_NAMESPACE_DEFS", sub() {
+                pgm.parse("namespace MyNS {}", "no-ns-defs-test");
+            });
+        }
+
+        # nested namespace definition blocked
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-namespace-defs"));
+            assertThrows("PARSE-EXCEPTION", "NO_NAMESPACE_DEFS", sub() {
+                pgm.parse("namespace Outer { namespace Inner {} }", "no-ns-defs-nested-test");
+            });
+        }
+
+        # namespace definition works without the option
+        {
+            Program pgm();
+            pgm.parse("namespace MyNS { const X = 1; }", "ns-allowed-test");
+        }
+    }
+
+    noNewTests() {
+        # 'new' with simple identifier blocked
+        {
+            Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+            pgm.parse("class Foo { constructor() {} }", "no-new-class-def");
+            pgm.setParseOptions(new ParseOptions("no-new"));
+            assertThrows("PARSE-EXCEPTION", "NO_NEW", sub() {
+                pgm.parse("Foo f = new Foo();", "no-new-test");
+            });
+        }
+
+        # 'new' with scoped reference blocked
+        {
+            Program pgm(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+            pgm.parse("namespace NS { class Bar { constructor() {} } }", "no-new-scoped-class-def");
+            pgm.setParseOptions(new ParseOptions("no-new"));
+            assertThrows("PARSE-EXCEPTION", "NO_NEW", sub() {
+                pgm.parse("NS::Bar b = new NS::Bar();", "no-new-scoped-test");
+            });
+        }
+
+        # 'new' works without the option
+        {
+            Program pgm(PO_NEW_STYLE);
+            pgm.parse("class Baz { constructor() {} } sub test() { Baz b = new Baz(); }", "new-allowed-test");
+        }
+    }
+
+    parseDirectiveTests() {
+        # %no-class-defs directive
+        {
+            Program pgm();
+            assertThrows("PARSE-EXCEPTION", "NO_CLASS_DEFS", sub() {
+                pgm.parse("%no-class-defs\nclass Foo {}", "no-class-defs-directive-test");
+            });
+        }
+
+        # %no-constant-defs directive
+        {
+            Program pgm();
+            assertThrows("PARSE-EXCEPTION", "NO_CONSTANT_DEFS", sub() {
+                pgm.parse("%no-constant-defs\nconst MY_CONST = 1;", "no-const-defs-directive-test");
+            });
+        }
+
+        # %no-namespace-defs directive
+        {
+            Program pgm();
+            assertThrows("PARSE-EXCEPTION", "NO_NAMESPACE_DEFS", sub() {
+                pgm.parse("%no-namespace-defs\nnamespace MyNS {}", "no-ns-defs-directive-test");
+            });
+        }
+
+        # %no-new directive
+        {
+            Program pgm(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "NO_NEW", sub() {
+                pgm.parse("%no-new\nclass Foo { constructor() {} } Foo f = new Foo();", "no-new-directive-test");
+            });
+        }
+    }
+
+    errorTests() {
+        # unknown option name
+        assertThrows("PARSE-OPTION-ERROR", sub() { new ParseOptions("no-such-option"); });
+        assertThrows("PARSE-OPTION-ERROR", sub() { new ParseOptions(("no-network", "bad-option")); });
+
+        ParseOptions opts();
+        assertThrows("PARSE-OPTION-ERROR", sub() { opts.set("bad-option"); });
+        assertThrows("PARSE-OPTION-ERROR", sub() { opts.clear("bad-option"); });
+        assertThrows("PARSE-OPTION-ERROR", sub() { opts.hasAll("bad-option"); });
+        assertThrows("PARSE-OPTION-ERROR", sub() { opts.hasAny("bad-option"); });
+        assertThrows("PARSE-OPTION-ERROR", sub() { opts.merge("bad-option"); });
+    }
+}

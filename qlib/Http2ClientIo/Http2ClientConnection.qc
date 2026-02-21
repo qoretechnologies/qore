@@ -323,6 +323,14 @@ public class Http2ClientConnection {
 
         log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
         poll_op.sendStreamData(stream_id, data, end_stream);
+
+        # Wake controller if in async mode to ensure the I/O thread flushes pending writes
+        if (controller_ref) {
+            controller_ref.wake();
+        } else {
+            # Sync mode: wake any thread blocked in drivePoll()'s Socket::poll()
+            poll_notifier.notify();
+        }
     }
 
     #! Handles poll result from AsyncSocketIoController
@@ -335,6 +343,8 @@ public class Http2ClientConnection {
         # Update state based on poll operation state
         if (poll_op.isClosed()) {
             state = Http2ClientConnectionState::Closed;
+            # Wake any threads blocked in waitForReady() so they see the error
+            ready_cond.broadcast();
         } else if (poll_op.isReady() && state == Http2ClientConnectionState::Connecting) {
             state = Http2ClientConnectionState::Ready;
             ready_cond.broadcast();

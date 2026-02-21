@@ -143,6 +143,13 @@ public:
     */
     DLLLOCAL bool waitReady(int timeout_ms, ExceptionSink* xsink);
 
+    //! Wait until the I/O thread has processed all currently submitted operations
+    /** @param timeout_ms timeout in ms; 0 = wait forever
+        @param xsink for exception handling
+        @return true if all submitted operations have been processed
+    */
+    DLLLOCAL bool waitForProcessing(int timeout_ms, ExceptionSink* xsink);
+
     //! Returns true if the I/O thread is running
     DLLLOCAL bool running() const;
 
@@ -251,6 +258,9 @@ private:
     bool io_waiting;
     bool io_exiting;
     bool ready_flag;
+    int submit_seq;                       //!< Incremented on each submit() call
+    int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
+    QoreCondition processed_cond;         //!< Signaled when processed_seq advances
     LoggerBridge* logger;                 //!< Referenced or nullptr
 
     // --- I/O thread only state ---

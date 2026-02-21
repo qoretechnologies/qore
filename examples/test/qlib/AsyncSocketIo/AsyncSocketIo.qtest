@@ -38,6 +38,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
         addTestCase("wait ready", \waitReadyTest());
+        addTestCase("wait for processing", \waitForProcessingTest());
         addTestCase("cancelEx", \cancelExTest());
         addTestCase("submit replace", \submitReplaceTest());
         addTestCase("stop clear", \stopClearTest());
@@ -246,6 +247,34 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         io_controller.cancel(rest);
         hash<SocketPollResultInfo> info = q.get(1s);
         assertTrue(info.canceled, "operation should be canceled after waitReady test");
+        spop.abort();
+        SimpleStringHandler::interruptSleep(False);
+    }
+
+    waitForProcessingTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        # waitForProcessing should return False when I/O thread is not started
+        assertFalse(io_controller.waitForProcessing(50ms),
+            "waitForProcessing should return False when not started");
+
+        # Submit an operation and verify waitForProcessing returns True
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": spop,
+            "owner": "wait-processing-owner",
+        });
+
+        assertTrue(io_controller.waitForProcessing(5s),
+            "waitForProcessing should return True after I/O thread processes submitted operation");
+
+        # Cleanup
+        io_controller.cancel(rest);
+        hash<SocketPollResultInfo> info = q.get(1s);
+        assertTrue(info.canceled, "operation should be canceled after waitForProcessing test");
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
     }
@@ -895,11 +924,10 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             push queues, q;
         }
 
-        # Wait until the I/O thread has completed its first poll cycle so that all N sockets
+        # Wait until the I/O thread has processed all N submitted operations so that all sockets
         # are registered in the EventLoop (poll_info is set, sockets are watched).
-        assertTrue(io_controller.waitReady(5s), "I/O thread should start within 5 s");
-        # One extra sleep so the ioThread finishes its first Phase 2+3 (registers all sockets).
-        usleep(200ms);
+        assertTrue(io_controller.waitForProcessing(5s),
+            "I/O thread should process all submissions within 5 s");
 
         # Simultaneously deliver one byte to every server socket so all N become "ready"
         # at the same time.  The ioThread must process all N completions in one Phase 3 pass

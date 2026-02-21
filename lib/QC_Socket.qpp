@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1789,8 +1789,7 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
 */
 nothing Socket::sendFromInputStream(Qore::InputStream[InputStream] input_stream, softint size = -1,
         timeout timeout_ms = -1) {
-    SimpleRefHolder<InputStream> isHolder(input_stream);
-    s->sendFromInputStream(input_stream, size, timeout_ms, xsink);
+    s->sendFromInputStream(*input_stream, size, timeout_ms, xsink);
 }
 
 //! Sends a 1-byte integer over the socket
@@ -2080,8 +2079,7 @@ sock.recvToOutputStream(os, -1); # read all data available
     @since %Qore 0.8.13
 */
 nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] os, softint size = -1, timeout timeout_ms = -1) {
-    SimpleRefHolder<OutputStream> osHolder(os);
-    s->recvToOutputStream(os, size, timeout_ms, xsink);
+    s->recvToOutputStream(*os, size, timeout_ms, xsink);
 }
 
 //! Receives a 1-byte signed integer from the socket
@@ -2772,7 +2770,6 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
         Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096, *reference<hash<auto>> info, timeout timeout_ms = -1, *code tcb) {
-    SimpleRefHolder<InputStream> isHolder(input_stream);
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -2783,7 +2780,7 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers, input_stream,
+    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers, *input_stream,
         max_chunk_size, tcb, QORE_SOURCE_SOCKET, timeout_ms);
 }
 
@@ -2917,13 +2914,12 @@ sock.sendHTTPChunkedBodyFromInputStream(inputStream);
 */
 nothing Socket::sendHTTPChunkedBodyFromInputStream(Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
         timeout timeout_ms = -1, *code tcb) {
-    SimpleRefHolder<InputStream> isHolder(input_stream);
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
         return QoreValue();
     }
-    s->sendHTTPChunkedBodyFromInputStream(input_stream, max_chunk_size, timeout_ms, tcb, xsink);
+    s->sendHTTPChunkedBodyFromInputStream(*input_stream, max_chunk_size, timeout_ms, tcb, xsink);
 }
 
 //! Sends the trialer of an HTTP message body in chunked transfer encoding
@@ -3145,8 +3141,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
 hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
-    SimpleRefHolder<OutputStream> osHolder(os);
-    return s->readHTTPChunkedBodyToOutputStream(os, timeout_ms, xsink);
+    return s->readHTTPChunkedBodyToOutputStream(*os, timeout_ms, xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -3590,7 +3585,7 @@ sock.setCertificate(cert);
 */
 nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] cert) {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificate()
-    s->setCertificate(cert);
+    s->setCertificate(cert.release());
 }
 
 //! Sets the X.509 certificate to use for negotiating encrypted connections from the PEM-encoded string representing the X.509 certificate
@@ -3637,7 +3632,7 @@ sock.setPrivateKey(key);
 */
 nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] key) {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setPrivateKey()
-    s->setPrivateKey(key);
+    s->setPrivateKey(key.release());
 }
 
 //! Sets the private key to use for negotiating encrypted connections along with the X.509 certificate from a PEM-encoded string representing the private key and an optional password
@@ -3685,8 +3680,8 @@ sock.setCertificateAndPrivateKey(cert, key);
     @since %Qore 1.11.0
 */
 nothing Socket::setCertificateAndPrivateKey(SSLCertificate[QoreSSLCertificate] cert, SSLPrivateKey[QoreSSLPrivateKey] key) {
-    // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificate()
-    s->setCertificateAndPrivateKey(cert, key);
+    // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificateAndPrivateKey()
+    s->setCertificateAndPrivateKey(cert.release(), key.release());
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the Socket object so that @ref socket_events "socket events" are no longer added to the @ref Qore::Thread::Queue "Queue"
@@ -3719,14 +3714,13 @@ sock.setEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
 */
 nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which " \
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum " \
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    s->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Sets the boolean \c TCP_NODELAY setting for the socket
@@ -3894,14 +3888,13 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will not result in a warning
 */
 nothing Socket::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setWarningQueue(xsink, warning_ms, warning_bs, q.release(), arg.refSelf(), min_ms);
+    s->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket
@@ -4165,13 +4158,28 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
 
     @note The socket must be a TLS connection that has negotiated HTTP/2 via ALPN
 
+    @param opts optional hash with options:
+    - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
+      (before END_STREAM); the stream stays in the session for incremental reading via
+      @ref readHttp2StreamDataBlock().  After all stream data has been consumed, call
+      @ref cleanupHttp2Stream() to free the stream state.
+
     @see isHttp2()
 
-    @since %Qore 2.1
+    @since %Qore 2.1 (headers_only option added in %Qore 2.3)
 */
-AbstractPollOperation Socket::startPollReadHttp2Request() {
+AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ServerPollOperation(xsink, s), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Always propagate headers_only mode to the session (resets any sticky state
+    // from a previous poll operation on the same connection)
+    bool headers_only = opts ? opts->getKeyValue("headers_only").getAsBool() : false;
+    (reinterpret_cast<SocketHttp2ServerPollOperation*>(*poller))->setHeadersOnly(headers_only);
+
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
     poller->setSelf(*rv);
     poller.release();
@@ -4277,12 +4285,13 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
 */
 AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
-    // body ref is owned by us from QPP; poll operation takes ownership
+    // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
+    InputStream* body_ptr = body.release();
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2SendStreamingResponsePollOperation(xsink, s, stream_id, status_code,
-            headers, body, chunk_size ? chunk_size : 16384),
+            headers, body_ptr, chunk_size ? chunk_size : 16384),
         xsink
     );
     if (*xsink) {
@@ -4291,7 +4300,7 @@ AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id,
 
     // Unassign the stream from the current thread so that the worker thread
     // calling continuePoll() can reassign it to itself
-    body->unassignThread(xsink);
+    body_ptr->unassignThread(xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -4545,6 +4554,99 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 */
 nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
     s->sendHttp2Trailers((int32_t)stream_id, trailers, xsink);
+    return QoreValue();
+}
+
+//! Read HTTP/2 stream data with blocking timeout
+/** Blocks until data is available on the specified stream, the stream
+    completes (END_STREAM), or the timeout expires.
+
+    @par Thread Safety
+    This method intentionally does @b not acquire the Socket object's mutex, because holding
+    the mutex during a blocking I/O wait would prevent other threads from performing write,
+    flush, or cleanup operations on the same socket.  Thread safety for the HTTP/2 session
+    internals is provided by the session's own recursive mutex.
+
+    Callers must observe the following concurrency rules:
+    - Only call this method from the thread that owns the connection (i.e. the handler thread
+      that drives the HTTP/2 session).
+    - Do not call @ref close() or other read operations concurrently on the same socket.
+    - Write-side operations (@ref flushHttp2(), @ref sendHttp2StreamData(),
+      @ref sendHttp2Trailers()) are safe to call from the same thread.
+
+    @par Headers-Only Streams
+    When a stream is dispatched with the \c headers_only option via
+    @ref startPollReadHttp2Request(), the stream remains in the HTTP/2 session after the poll
+    completes so that body data can be read incrementally with this method.  After all data has
+    been consumed (i.e. @ref isHttp2StreamComplete() returns @ref True "True"), call
+    @ref cleanupHttp2Stream() to remove the stream from the session and prevent stream-state
+    accumulation on long-lived connections.
+
+    @param stream_id the HTTP/2 stream ID
+    @param timeout read timeout (default 30s)
+
+    @return binary data from the stream, or @ref nothing on timeout or stream end.
+    Use @ref isHttp2StreamComplete() to distinguish timeout from end-of-stream.
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active
+
+    @since %Qore 2.3
+*/
+*binary Socket::readHttp2StreamDataBlock(int stream_id, timeout timeout = 30s) {
+    return s->readHttp2StreamDataBlock((int32_t)stream_id, timeout, xsink);
+}
+
+//! Check if an HTTP/2 stream has received END_STREAM
+/** @param stream_id the HTTP/2 stream ID
+    @return @ref True if END_STREAM has been received (body_complete) or the stream is not found
+
+    @since %Qore 2.3
+*/
+bool Socket::isHttp2StreamComplete(int stream_id) [flags=CONSTANT] {
+    return s->isHttp2StreamComplete((int32_t)stream_id);
+}
+
+//! Flush all pending HTTP/2 outgoing data (blocking)
+/** Calls sendPendingDataBlocking() to send all queued frames to the socket.
+
+    @param timeout the send timeout; if the socket is not writable within this period, the
+    call fails with an exception; default 5s
+
+    @throw HTTP2-ERROR if flushing fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::flushHttp2(timeout timeout = 5s) {
+    s->flushHttp2(timeout, xsink);
+    return QoreValue();
+}
+
+//! Remove an HTTP/2 stream from the session
+/** Cleans up a dispatched stream after the handler has finished processing.
+    This method must be called after a headers-only dispatched stream is fully handled
+    (i.e. after @ref isHttp2StreamComplete() returns @ref True "True" or the stream is
+    otherwise no longer needed) to free stream state and prevent accumulation of stale
+    streams on long-lived connections.
+
+    @par Typical Usage
+    @code{.py}
+    # Read all data from a headers-only stream
+    while (!sock.isHttp2StreamComplete(stream_id)) {
+        *binary data = sock.readHttp2StreamDataBlock(stream_id, 30s);
+        if (data) {
+            process(data);
+        }
+    }
+    # Remove the stream from the session
+    sock.cleanupHttp2Stream(stream_id);
+    @endcode
+
+    @param stream_id the HTTP/2 stream ID to remove
+
+    @since %Qore 2.3
+*/
+nothing Socket::cleanupHttp2Stream(int stream_id) {
+    s->cleanupHttp2Stream((int32_t)stream_id);
     return QoreValue();
 }
 

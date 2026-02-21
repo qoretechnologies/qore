@@ -717,20 +717,6 @@ private:
 };
 
 
-//! Checks if the current program has been interrupted and raises exception if so
-/** This is a convenience function for I/O operations that need to check
-    for interrupts. It checks if a SandboxManager exists for the current
-    program and if an interrupt has been requested.
-
-    @param xsink Exception sink for error reporting
-    @param operation Description of the operation being interrupted
-
-    @return true if interrupted (exception raised), false otherwise
-
-    @note If no SandboxManager is attached, this returns false (no interrupt).
-*/
-DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation = "I/O operation");
-
 //! Polling interval for blocking I/O operations in milliseconds
 /** This constant defines how frequently blocking I/O operations check for
     interrupt requests. It matches the polling interval used for threading

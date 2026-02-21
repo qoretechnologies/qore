@@ -52,8 +52,6 @@ NormalMethod m(cls, "lock");
     @throw UNKOWN-METHOD cannot find a normal (non-static) method with the given name
  */
 NormalMethod::constructor(Class[QoreReflectionClass] cls, string method) {
-    ReferenceHolder<QoreReflectionClass> holder(cls, xsink);
-
     TempEncodingHelper nmethod(method, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;

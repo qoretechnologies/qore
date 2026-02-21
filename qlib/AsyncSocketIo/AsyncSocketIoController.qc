@@ -153,6 +153,23 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return ctrl.waitReady(to);
     }
 
+    #! Waits until the I/O thread has processed all currently submitted operations
+    /** This method blocks until the I/O thread's Phase 1 cache snapshot has captured all
+        operations that were submitted before the call. This provides a stronger guarantee
+        than waitReady(): not only is the I/O thread running, but it has actually polled
+        all pending operations at least once.
+
+        @param to maximum time to wait; use @ref NOTHING for no timeout
+
+        @return @ref True if all submitted operations have been processed, @ref False if the
+        timeout expired or the I/O thread is not running
+
+        @since %AsyncSocketIo 1.0
+    */
+    bool waitForProcessing(*timeout to) {
+        return ctrl.waitForProcessing(to);
+    }
+
     #! Submits a socket operation to be performed and returns a Queue where the results will be returned
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced

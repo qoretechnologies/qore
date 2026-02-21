@@ -222,8 +222,7 @@ hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo>
     @return @ref True "True" if an operation was found and canceled
 */
 bool AsyncIoController::cancel(Socket[QoreSocketObject] sock) {
-    ReferenceHolder<QoreSocketObject> holder(sock, xsink);
-    return ctrl->cancel(sock, xsink);
+    return ctrl->cancel(*sock, xsink);
 }
 
 //! Cancels an operation by key
@@ -327,6 +326,28 @@ bool AsyncIoController::waitStop() {
 */
 bool AsyncIoController::waitReady(*timeout to) {
     return ctrl->waitReady(to, xsink);
+}
+
+//! Waits until the I/O thread has processed all currently submitted operations
+/** @par Example:
+    @code{.py}
+    bool processed = ctrl.waitForProcessing(5s);
+    @endcode
+
+    This method blocks until the I/O thread's Phase 1 cache snapshot has captured all
+    operations that were submitted before the call. This provides a stronger guarantee
+    than waitReady(): not only is the I/O thread running, but it has actually polled
+    all pending operations at least once.
+
+    @param to timeout for waiting; use 0 to wait indefinitely
+
+    @return @ref True "True" if all submitted operations have been processed, @ref False "False" if the
+    timeout expired or the I/O thread is not running
+
+    @since %Qore 2.3
+*/
+bool AsyncIoController::waitForProcessing(*timeout to) {
+    return ctrl->waitForProcessing(to, xsink);
 }
 
 //! Returns true if the I/O thread is running

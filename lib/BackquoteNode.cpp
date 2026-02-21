@@ -178,7 +178,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
         while (true) {
-            if (qore_check_io_interrupt(xsink, "backquote read")) {
+            if (qore_check_cancel(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 waitpid(pid, &rc, 0);
@@ -274,7 +274,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
         QoreStringNodeHolder s(new QoreStringNode);
         char buf[READ_BLOCK];
         while (true) {
-            if (qore_check_io_interrupt(xsink, "backquote read")) {
+            if (qore_check_cancel(xsink, "backquote read")) {
                 // Use SIGKILL to enforce immediate termination on interrupt.
                 kill((use_pgroup && pgroup_ok) ? -pid : pid, SIGKILL);
                 waitpid(pid, &rc, 0);
@@ -341,7 +341,7 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     // read in result string
     while (true) {
         // check for interrupt before blocking read
-        if (qore_check_io_interrupt(xsink, "backquote read")) {
+        if (qore_check_cancel(xsink, "backquote read")) {
             pclose(p);
             rc = -1;
             return nullptr;

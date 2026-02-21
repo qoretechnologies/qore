@@ -116,7 +116,6 @@ LoggerAppenderQueue::constructor(softint max_bytes) {
 */
 bool LoggerAppenderQueue::push(LoggerAppender[QoreLoggerAppender] appender, int type, auto params,
         timeout timeout_ms = 0) {
-    ReferenceHolder<AbstractPrivateData> holder(appender, xsink);
     return q->push(xsink, obj_appender, type, params, timeout_ms);
 }
 

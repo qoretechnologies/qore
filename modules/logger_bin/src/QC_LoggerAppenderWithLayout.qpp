@@ -79,6 +79,5 @@ LoggerLayout LoggerAppenderWithLayout::getLayout() {
     @return the serialized event
 */
 private auto LoggerAppenderWithLayout::serializeImpl(LoggerEvent[QoreLoggerEvent] event) {
-    ReferenceHolder<QoreLoggerEvent> holder(event, xsink);
-    return a->serializeImpl(xsink, obj_event, event);
+    return a->serializeImpl(xsink, obj_event, *event);
 }

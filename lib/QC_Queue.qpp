@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -192,53 +192,56 @@ auto Queue::get(timeout timeout_ms = 0) {
         return QoreValue();
     }
 
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        // timeout_ms <= 0 means wait indefinitely for data
-        bool infinite = (timeout_ms <= 0);
+    // Negative timeout: immediate timeout if would block (no polling)
+    if (timeout_ms < 0) {
+        bool to;
+        QoreValue rv = q->shift(xsink, self, (int)timeout_ms, &to);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (to) {
+            queue_check_timeout(to, (int)timeout_ms, xsink);
+            return QoreValue();
+        }
+        return rv;
+    }
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on queue");
+    // Always poll for cancel/interrupt checking
+    // timeout_ms == 0 means wait indefinitely; > 0 means timed wait
+    const int poll_ms = 500;  // 500ms polling interval
+    int64 remaining = timeout_ms;
+    bool infinite = (timeout_ms == 0);
+
+    while (true) {
+        if (qore_check_cancel(xsink, "queue get")) {
+            return QoreValue();
+        }
+
+        int this_timeout;
+        if (infinite) {
+            this_timeout = poll_ms;
+        } else {
+            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+        }
+
+        bool to;
+        QoreValue rv = q->shift(xsink, self, this_timeout, &to);
+        if (*xsink) {
+            return QoreValue();  // Error occurred
+        }
+        if (!to) {
+            return rv;  // Got data
+        }
+
+        if (!infinite) {
+            remaining -= this_timeout;
+            if (remaining <= 0) {
+                // Overall timeout exceeded
+                xsink->raiseException("QUEUE-TIMEOUT", "timed out after %d ms", (int)timeout_ms);
                 return QoreValue();
-            }
-
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
-
-            bool to;
-            QoreValue rv = q->shift(xsink, self, this_timeout, &to);
-            if (*xsink) {
-                return QoreValue();  // Error occurred
-            }
-            if (!to) {
-                return rv;  // Got data
-            }
-
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    // Overall timeout exceeded
-                    xsink->raiseException("QUEUE-TIMEOUT", "timed out after %d ms", (int)timeout_ms);
-                    return QoreValue();
-                }
             }
         }
     }
-
-    QoreValue rv{};
-    bool to;
-    rv = q->shift(xsink, self, timeout_ms, &to);
-    queue_check_timeout(to, timeout_ms, xsink);
-
-    return rv;
 }
 
 //! Blocks until at least one entry is available on the queue, then returns the last entry in the queue. If a timeout occurs, an exception is thrown. If the timeout is less than or equal to zero, then the call does not timeout until data is available
@@ -268,52 +271,56 @@ auto Queue::pop(timeout timeout_ms = 0) {
         return QoreValue();
     }
 
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        bool infinite = (timeout_ms <= 0);
+    // Negative timeout: immediate timeout if would block (no polling)
+    if (timeout_ms < 0) {
+        bool to;
+        QoreValue rv = q->pop(xsink, self, (int)timeout_ms, &to);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (to) {
+            queue_check_timeout(to, (int)timeout_ms, xsink);
+            return QoreValue();
+        }
+        return rv;
+    }
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting on queue");
+    // Always poll for cancel/interrupt checking
+    // timeout_ms == 0 means wait indefinitely; > 0 means timed wait
+    const int poll_ms = 500;  // 500ms polling interval
+    int64 remaining = timeout_ms;
+    bool infinite = (timeout_ms == 0);
+
+    while (true) {
+        if (qore_check_cancel(xsink, "queue pop")) {
+            return QoreValue();
+        }
+
+        int this_timeout;
+        if (infinite) {
+            this_timeout = poll_ms;
+        } else {
+            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+        }
+
+        bool to;
+        QoreValue rv = q->pop(xsink, self, this_timeout, &to);
+        if (*xsink) {
+            return QoreValue();  // Error occurred
+        }
+        if (!to) {
+            return rv;  // Got data
+        }
+
+        if (!infinite) {
+            remaining -= this_timeout;
+            if (remaining <= 0) {
+                // Overall timeout exceeded
+                xsink->raiseException("QUEUE-TIMEOUT", "timed out after %d ms", (int)timeout_ms);
                 return QoreValue();
-            }
-
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
-
-            bool to;
-            QoreValue rv = q->pop(xsink, self, this_timeout, &to);
-            if (*xsink) {
-                return QoreValue();  // Error occurred
-            }
-            if (!to) {
-                return rv;  // Got data
-            }
-
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    // Overall timeout exceeded
-                    xsink->raiseException("QUEUE-TIMEOUT", "timed out after %d ms", (int)timeout_ms);
-                    return QoreValue();
-                }
             }
         }
     }
-
-    QoreValue rv{};
-    bool to;
-    rv = q->pop(xsink, self, timeout_ms, &to);
-    queue_check_timeout(to, timeout_ms, xsink);
-
-    return rv;
 }
 
 //! Clears the Queue of all data

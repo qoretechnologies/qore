@@ -305,6 +305,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
         addTestCase("async mode HTTPS HTTP/1.1", \asyncModeHttpsHttp1Test());
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
+        addTestCase("async mode HEAD body suppression", \asyncModeHeadBodySuppressionTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
@@ -967,6 +968,44 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         # Connection should still work after errors
         assertEq("GET, aftererror, /aftererror", client.get("/aftererror"));
+    }
+
+    asyncModeHeadBodySuppressionTest() {
+        # Test that HEAD responses don't include a body in async mode
+        # This verifies the fix for the bug where sendReply() stripped the body for HEAD,
+        # but then re-added a default error body for 4xx+ responses. In async mode, the
+        # controller would send this body on the wire, corrupting the HTTP/1.1 keep-alive
+        # connection because clients don't read bodies for HEAD responses.
+        HTTPClient client({"url": asyncUrl, "timeout": 5s, "error_passthru": True});
+        client.connect();
+        on_exit client.disconnect();
+
+        # HEAD on a 400 endpoint - should get headers but no body on the wire
+        hash<auto> resp = client.send(NOTHING, "HEAD", "/test400/path");
+        assertEq(400, resp.status_code, "HEAD 400 status");
+
+        # Verify the connection still works after HEAD 4xx (no leftover body bytes)
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 400 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 400 body");
+
+        # HEAD on a 501 endpoint
+        resp = client.send(NOTHING, "HEAD", "/test501/path");
+        assertEq(501, resp.status_code, "HEAD 501 status");
+
+        # Verify the connection still works
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 501 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 501 body");
+
+        # HEAD on a 500 endpoint
+        resp = client.send(NOTHING, "HEAD", "/test500/path");
+        assertEq(500, resp.status_code, "HEAD 500 status");
+
+        # Verify the connection still works
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 500 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 500 body");
     }
 
     asyncModeConnectionCloseTest() {
