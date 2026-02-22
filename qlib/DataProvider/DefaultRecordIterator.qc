@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DefaultRecordIterator class definition
 
-/** DefaultRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DefaultRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,10 @@ public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
         *hash<string, AbstractDataField> record_type;
         int count = 0;
         *string subrecord;
+        #! Optional template context for template reference resolution
+        /** @since DataProvider 3.3
+        */
+        *hash<auto> template_context;
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -43,13 +47,16 @@ public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
         @param search_options the search options after processing by validateSearchOptions()
         @param record_type the record type
         @param subrecord the optional name of a key of the record hash storing record data
+        @param template_context optional context hash for template reference resolution
     */
     constructor(AbstractIterator i, *hash<auto> where_cond, *hash<auto> search_options,
-            *hash<string, AbstractDataField> record_type, *string subrecord)
+            *hash<string, AbstractDataField> record_type, *string subrecord,
+            *hash<auto> template_context)
             : AbstractDataProviderRecordIterator(search_options.requires_result,
                 search_options.max_records) {
         self.i = i;
         self.where_cond = where_cond;
+        self.template_context = template_context;
         if (exists search_options.columns && search_options.columns.typeCode() != NT_LIST) {
             search_options.columns = list(search_options.columns);
         }
@@ -105,7 +112,7 @@ public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
     */
     private bool nextImpl() {
         while (i.next()) {
-            if (!where_cond || (where_cond && matchGeneric(i.getValue(), where_cond))) {
+            if (!where_cond || (where_cond && matchGeneric(i.getValue(), where_cond, template_context))) {
                 if (search_options.offset > 0) {
                     if (exists search_options.limit && search_options.limit >= 0
                         && (count - search_options.offset) == search_options.limit) {

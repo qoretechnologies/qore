@@ -159,6 +159,11 @@ public class DpqlSerializer {
                 result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
                 break;
 
+            case DP_EXPR_TEMPLATE:
+                # Template expression - serialize the template reference
+                result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
+                break;
+
             case DP_FUNC_INDEX:
                 # Render as sugar: base[n] only if index arg is a literal
                 if (isAccessorArgLiteral(exp.args[1])) {
@@ -305,10 +310,13 @@ public class DpqlSerializer {
 
         switch (arg.typeCode()) {
             case NT_HASH:
-                if (arg.hasKey("field")) {
+                if (arg instanceof hash<DataProviderTemplateReference>) {
+                    return serializeTemplateRef(arg);
+                }
+                if (arg instanceof hash<DataProviderFieldReference>) {
                     return serializeFieldRef(arg);
                 }
-                if (arg.hasKey("exp")) {
+                if (arg instanceof hash<DataProviderExpression>) {
                     return serializeExpr(arg, context_prec);
                 }
                 # Structured hash literal
@@ -321,6 +329,26 @@ public class DpqlSerializer {
             default:
                 return serializeLiteral(arg);
         }
+    }
+
+    #! Serializes a template reference
+    /** Uses the \c raw field for perfect round-trip fidelity. Falls back to reconstruction
+        from parts if \c raw is empty.
+
+        @since DataProvider 3.3
+    */
+    private string serializeTemplateRef(hash<auto> ref) {
+        if (ref.raw) {
+            return ref.raw;
+        }
+        # Reconstruct from parts
+        string result = "$" + ref.tmpl_context + ":";
+        if (ref.tmpl_value =~ /[^a-zA-Z0-9_.*]/) {
+            result += "{" + ref.tmpl_value + "}";
+        } else {
+            result += ref.tmpl_value;
+        }
+        return result;
     }
 
     #! Serializes a field reference
