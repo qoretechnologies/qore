@@ -1182,6 +1182,10 @@ bool QoreObject::isValid() const {
     return priv->status != OS_DELETED;
 }
 
+bool QoreObject::isCurrent() const {
+    return priv->status == OS_OK;
+}
+
 QoreProgram* QoreObject::getProgram() const {
     return priv->pgm;
 }
