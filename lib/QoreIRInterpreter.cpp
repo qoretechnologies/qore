@@ -1241,6 +1241,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     values.reserve(reserve_size);
     std::vector<uint32_t> cleanup;
     std::unordered_map<const void*, QoreValue> locals;
+
+    // Phase 3 optimization: Flat array for fast local variable cache access
+    // Maps slot IDs to cached values for O(1) direct array access (vs O(1) hash lookup)
+    // This cache supplements the traditional locals map for hot paths (LoadLocal/StoreLocal)
+    std::vector<QoreValue> locals_slot_cache;
+    if (func.max_local_slot_id > 0) {
+        locals_slot_cache.resize(func.max_local_slot_id + 1);
+    }
+
     std::unordered_set<const LocalVar*> instantiated_locals;
     // Track which value slots hold VarRefNewObjectNode results for each LocalVar
     // Used to cleanup references when UninstantiateLocal is processed
@@ -2217,29 +2226,51 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                     // eval() returns a referenced value; use it directly for the value slot
                 } else {
-                    auto it = locals.find(local_inst->local);
-                    if (it != locals.end() && it->second.getType() != NT_REFERENCE) {
-                        // Cache hit: val is shared with cache, needs refSelf for value slot.
-                        // ReferenceNode values are NOT cached because eval() must follow
-                        // the reference chain to return the target value, not the reference
-                        // itself.  Without this, lvalue references stored in containers
-                        // (e.g. list[n] = \var) would be passed through as raw references
-                        // instead of being transparently dereferenced.
-                        QoreValue val = it->second;
-                        out = val.hasNode() ? val.refSelf() : val;
-                    } else if (local_inst->local) {
-                        bool needs_deref = true;
-                        QoreValue val = local_inst->local->eval(needs_deref, xsink);
-                        if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
-                            return false;
+                    // Phase 3 optimization: Try fast path with slot cache first
+                    QoreValue cached_val;
+                    bool found_in_slot_cache = false;
+                    if (local_inst->local) {
+                        auto slot_it = func.local_var_slots.find(local_inst->local);
+                        if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
+                            cached_val = locals_slot_cache[slot_it->second];
+                            if (!cached_val.isNothing() && cached_val.getType() != NT_REFERENCE) {
+                                found_in_slot_cache = true;
+                                out = cached_val.hasNode() ? cached_val.refSelf() : cached_val;
+                            }
                         }
-                        storeValue(locals, local_inst->local, val, nullptr);
-                        out = val.hasNode() ? val.refSelf() : val;
+                    }
+
+                    if (!found_in_slot_cache) {
+                        // Fallback to traditional map-based cache lookup
+                        auto it = locals.find(local_inst->local);
+                        if (it != locals.end() && it->second.getType() != NT_REFERENCE) {
+                            // Cache hit: val is shared with cache, needs refSelf for value slot.
+                            // ReferenceNode values are NOT cached because eval() must follow
+                            // the reference chain to return the target value, not the reference
+                            // itself.  Without this, lvalue references stored in containers
+                            // (e.g. list[n] = \var) would be passed through as raw references
+                            // instead of being transparently dereferenced.
+                            QoreValue val = it->second;
+                            out = val.hasNode() ? val.refSelf() : val;
+                        } else if (local_inst->local) {
+                            bool needs_deref = true;
+                            QoreValue val = local_inst->local->eval(needs_deref, xsink);
+                            if (xsink && *xsink) {
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupStoredValues(locals, nullptr);
+                                cleanupStoredValues(globals, nullptr);
+                                cleanupStoredValues(threadlocals, nullptr);
+                                cleanupStoredValues(closures, nullptr);
+                                return false;
+                            }
+                            storeValue(locals, local_inst->local, val, nullptr);
+                            // Also store in slot cache for fast access on next load
+                            auto slot_it = func.local_var_slots.find(local_inst->local);
+                            if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
+                                locals_slot_cache[slot_it->second] = val.hasNode() ? val.refSelf() : val;
+                            }
+                            out = val.hasNode() ? val.refSelf() : val;
+                        }
                     }
                 }
                 setValueSlot(values, local_inst->result.id, out, xsink);
@@ -2864,6 +2895,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cache_it->second.discard(xsink);
                         locals.erase(cache_it);
                     }
+                    // Also invalidate slot cache (Phase 3 optimization)
+                    if (local_inst->local) {
+                        auto slot_it = func.local_var_slots.find(local_inst->local);
+                        if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
+                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second] = QoreValue();
+                        }
+                    }
                 }
                 assignLocalVarValue(local_inst->local, val, xsink);
                 // If the variable holds a reference, assignLocalVarValue wrote through
@@ -2912,6 +2951,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (locals_it != locals.end()) {
                         locals_it->second.discard(xsink);
                         locals.erase(locals_it);
+                    }
+                    // Also drop from slot cache (Phase 3 optimization)
+                    auto slot_it = func.local_var_slots.find(local_inst->local);
+                    if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
+                        locals_slot_cache[slot_it->second].discard(xsink);
+                        locals_slot_cache[slot_it->second] = QoreValue();
                     }
 
                     // Helper lambda: drop all value slots associated with this local
