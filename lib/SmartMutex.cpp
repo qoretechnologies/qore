@@ -108,8 +108,18 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
     // release lock
     release_intern();
 
+    // record signal generation before waiting to detect signals fired during
+    // the gap between returning from pthread_cond_timedwait and reacquiring
+    // the Qore-level mutex in grabImpl
+    uint64_t gen = cond->getSignalGen();
+
     // wait for condition
     int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+
+    // detect signals/broadcasts that were fired while this thread was waiting
+    // (before we erase from the condition map); save result before erasing so we
+    // don't access cond after it's no longer tracked (another thread might delete it)
+    bool signal_fired = (rc == ETIMEDOUT && cond->getSignalGen() != gen);
 
     // decrement cond count and delete from map if 0
     if (!--(i->second)) {
@@ -122,6 +132,13 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
     }
 
     grab_intern(mtid, nvl);
+
+    // if a signal/broadcast was fired during the gap when we weren't listening
+    // (while reacquiring the Qore-level mutex in grabImpl), treat as success
+    if (signal_fired) {
+        rc = 0;
+    }
+
     return rc;
 }
 
