@@ -42,6 +42,10 @@ class AsyncIoControllerTest inherits QUnit::Test {
         addTestCase("direct cancel when I/O thread not running", \testDirectCancel());
         addTestCase("setLogger validation", \testSetLoggerValidation());
         addTestCase("continuePoll exception", \testContinuePollException());
+        addTestCase("controller timer callback fires", \testControllerTimer());
+        addTestCase("controller timer cancel", \testControllerTimerCancel());
+        addTestCase("controller timer cleanup on stop", \testControllerTimerCleanupOnStop());
+        addTestCase("controller timer with I/O", \testControllerTimerWithIo());
         set_return_value(main());
     }
 
@@ -826,6 +830,121 @@ class AsyncIoControllerTest inherits QUnit::Test {
 
         # Passing NOTHING again should succeed (idempotent clear)
         ctrl.setLogger();
+    }
+
+    #! Test that a timer fires and the callback is invoked
+    testControllerTimer() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Track callback invocation
+        Counter cnt(1);
+        hash<auto> received_info;
+
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            received_info = info;
+            cnt.dec();
+        });
+
+        int id = ctrl.addTimer(now_us() + 100ms, {"key": "heartbeat"});
+        assertTrue(id > 0);
+
+        # Wait for callback to fire
+        int rc = cnt.waitForZero(5s);
+        assertEq(0, rc);
+        assertEq(id, received_info.id);
+        assertEq({"key": "heartbeat"}, received_info.udata);
+    }
+
+    #! Test that canceling a timer prevents callback
+    testControllerTimerCancel() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        Counter fired_cnt(1);
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            fired_cnt.dec();
+        });
+
+        # Use a very long timeout so it won't fire even under valgrind
+        int id = ctrl.addTimer(now_us() + 60s, NOTHING);
+        assertTrue(id > 0);
+
+        bool canceled = ctrl.cancelTimer(id);
+        assertTrue(canceled);
+
+        # Second cancel should return False
+        assertFalse(ctrl.cancelTimer(id));
+
+        # Verify the timer doesn't fire — wait a short time (the timer had a 60s deadline
+        # so even under valgrind it shouldn't fire before cancellation takes effect)
+        int rc = fired_cnt.waitForZero(500ms);
+        assertNeq(0, rc);  # counter never reached zero (timer didn't fire)
+    }
+
+    #! Test that timers are cleaned up when controller is stopped
+    testControllerTimerCleanupOnStop() {
+        AsyncIoController ctrl(False);
+        ctrl.start();
+
+        bool callback_fired = False;
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            callback_fired = True;
+        });
+
+        ctrl.addTimer(now_us() + 5s, "timer1");
+        ctrl.addTimer(now_us() + 5s, "timer2");
+
+        # Stop the controller — timers should be cleaned up
+        ctrl.stop();
+        assertFalse(callback_fired);
+        # If we get here without a crash or leak, the test passes
+        assertTrue(True);
+    }
+
+    #! Test that timers and I/O operations work together
+    testControllerTimerWithIo() {
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        AsyncIoController ctrl(False);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Set up timer callback
+        Counter timer_cnt(1);
+        int timer_id_received;
+        ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+            timer_id_received = info.id;
+            timer_cnt.dec();
+        });
+
+        # Submit a connect operation (will complete quickly)
+        Socket client();
+        AbstractPollOperation spop = client.startPollConnect("localhost:" + port);
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": spop,
+            "owner": "test",
+            "to": ConnectTimeout,
+        });
+
+        # Add a timer too
+        int tid = ctrl.addTimer(now_us() + 100ms, "timer-with-io");
+
+        # Wait for both: I/O should complete first, then timer fires
+        hash<SocketPollResultInfo> result = q.get(ShortTimeout);
+        assertEq(True, exists result);
+        assertFalse(result.canceled ?? False);
+
+        # Wait for timer to fire
+        int rc = timer_cnt.waitForZero(5s);
+        assertEq(0, rc);
+        assertEq(tid, timer_id_received);
     }
 
     testContinuePollException() {

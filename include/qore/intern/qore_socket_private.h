@@ -90,9 +90,10 @@
 #define DEFAULT_SOCKET_MIN_THRESHOLD_BYTES 1024
 #endif
 
-static constexpr int SOCK_POLLIN  = (1 << 0);
-static constexpr int SOCK_POLLOUT = (1 << 1);
-static constexpr int SOCK_POLLERR = (1 << 2);
+static constexpr int SOCK_POLLIN    = (1 << 0);
+static constexpr int SOCK_POLLOUT   = (1 << 1);
+static constexpr int SOCK_POLLERR   = (1 << 2);
+static constexpr int SOCK_POLLTIMER = (1 << 3);
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
@@ -506,6 +507,75 @@ private:
     size_t matched = 0;
 
     DLLLOCAL int doRecv(ExceptionSink* xsink);
+};
+
+//! Non-blocking recvfrom() for UDP datagram sockets
+/** Receives a single datagram and captures the source address.
+    Returns data as a BinaryNode and source address info as a QoreHashNode
+    via takeOutput() (returns a list: [binary data, hash address_info]).
+
+    @since %Qore 2.3
+*/
+class SocketRecvFromPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketRecvFromPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t max_size);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the received data as a hash: {data: binary, address: string, port: int, family: int, familystr: string}
+    DLLLOCAL virtual QoreValue takeOutput();
+
+    //! Returns the number of bytes received
+    DLLLOCAL size_t getBytesReceived() const {
+        return received;
+    }
+
+private:
+    qore_socket_private* sock;
+    SimpleRefHolder<BinaryNode> bin;
+    size_t max_size;
+    size_t received = 0;
+    struct sockaddr_storage src_addr;
+    socklen_t src_addr_len = sizeof(struct sockaddr_storage);
+    bool io = false;
+};
+
+//! Non-blocking sendto() for UDP datagram sockets
+/** Sends a datagram to the specified address.
+
+    @since %Qore 2.3
+*/
+class SocketSendToPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data, size_t size,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the number of bytes sent so far
+    DLLLOCAL size_t getBytesSent() const {
+        return sent;
+    }
+
+private:
+    qore_socket_private* sock;
+    const char* data;
+    size_t size;
+    size_t sent = 0;
+    struct sockaddr_storage dest_addr;
+    socklen_t dest_addr_len;
 };
 
 

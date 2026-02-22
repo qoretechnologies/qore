@@ -66,6 +66,8 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
+    friend class SocketRecvFromPollOperation;
+    friend class SocketSendToPollOperation;
 
 public:
     DLLEXPORT QoreSocketObject();

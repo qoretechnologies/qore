@@ -1862,6 +1862,167 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
     return 0;
 }
 
+SocketRecvFromPollState::SocketRecvFromPollState(ExceptionSink* xsink, qore_socket_private* sock, size_t max_size)
+        : sock(sock), max_size(max_size) {
+    if (sock->sock == QORE_INVALID_SOCKET) {
+        xsink->raiseException("SOCKET-NOT-OPEN", "socket is not open");
+        return;
+    }
+    if (sock->stype != SOCK_DGRAM) {
+        xsink->raiseException("SOCKET-RECVFROM-ERROR", "recvfrom() is only valid for UDP (SOCK_DGRAM) sockets");
+        return;
+    }
+    bin = new BinaryNode();
+    if (bin->preallocate(max_size)) {
+        xsink->outOfMemory();
+        return;
+    }
+    memset(&src_addr, 0, sizeof(src_addr));
+}
+
+int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
+    if (io) {
+        return 0;
+    }
+
+    OptionalNonBlockingHelper nbh(*sock, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    unsigned loop = 0;
+
+    while (true) {
+        src_addr_len = sizeof(src_addr);
+        ssize_t rc = ::recvfrom(sock->sock,
+#ifdef _Q_WINDOWS
+            const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr())),
+#else
+            reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()))),
+#endif
+            max_size, 0, (struct sockaddr*)&src_addr, &src_addr_len);
+
+        if (rc >= 0) {
+            bin->setSize(rc);
+            received = rc;
+            io = true;
+            return 0;
+        }
+
+        sock_get_error();
+        if (errno == EINTR) {
+            if (++loop >= max_nonblock_ops) {
+                return SOCK_POLLIN;
+            }
+            continue;
+        }
+        if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+            || errno == EWOULDBLOCK
+#endif
+        ) {
+            return SOCK_POLLIN;
+        }
+        xsink->raiseErrnoException("SOCKET-RECVFROM-ERROR", errno, "error while executing recvfrom()");
+        return -1;
+    }
+    return 0;
+}
+
+QoreValue SocketRecvFromPollState::takeOutput() {
+    if (!io) {
+        return QoreValue();
+    }
+
+    // Build result hash with data and source address info
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
+
+    // Set the binary data
+    h->setKeyValue("data", bin.release(), nullptr);
+
+    // Extract source address info
+    if (src_addr.ss_family == AF_INET || src_addr.ss_family == AF_INET6) {
+        char ifname[INET6_ADDRSTRLEN];
+        if (inet_ntop(src_addr.ss_family, qore_get_in_addr((struct sockaddr*)&src_addr),
+                ifname, sizeof(ifname))) {
+            h->setKeyValue("address", new QoreStringNode(ifname), nullptr);
+        }
+
+        int port;
+        if (src_addr.ss_family == AF_INET) {
+            struct sockaddr_in* s = (struct sockaddr_in*)&src_addr;
+            port = ntohs(s->sin_port);
+        } else {
+            struct sockaddr_in6* s = (struct sockaddr_in6*)&src_addr;
+            port = ntohs(s->sin6_port);
+        }
+        h->setKeyValue("port", port, nullptr);
+    }
+
+    h->setKeyValue("family", (int64)src_addr.ss_family, nullptr);
+    h->setKeyValue("familystr", new QoreStringNode(QoreAddrInfo::getFamilyName(src_addr.ss_family)), nullptr);
+
+    return h.release();
+}
+
+SocketSendToPollState::SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data,
+        size_t size, const struct sockaddr* dest_addr, socklen_t dest_addr_len)
+        : sock(sock), data(data), size(size), dest_addr_len(dest_addr_len) {
+    if (sock->sock == QORE_INVALID_SOCKET) {
+        xsink->raiseException("SOCKET-NOT-OPEN", "socket is not open");
+        return;
+    }
+    if (sock->stype != SOCK_DGRAM) {
+        xsink->raiseException("SOCKET-SENDTO-ERROR", "sendto() is only valid for UDP (SOCK_DGRAM) sockets");
+        return;
+    }
+    memcpy(&this->dest_addr, dest_addr, dest_addr_len);
+}
+
+int SocketSendToPollState::continuePoll(ExceptionSink* xsink) {
+    OptionalNonBlockingHelper nbh(*sock, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    unsigned loop = 0;
+
+    while (true) {
+        ssize_t rc = ::sendto(sock->sock, data + sent, size - sent, 0,
+            (const struct sockaddr*)&dest_addr, dest_addr_len);
+
+        if (rc >= 0) {
+            sent += rc;
+            if (sent == size) {
+                return 0;
+            }
+            // For UDP, partial sends are unusual but handle them
+            if (++loop >= max_nonblock_ops) {
+                return SOCK_POLLOUT;
+            }
+            continue;
+        }
+
+        sock_get_error();
+        if (errno == EINTR) {
+            if (++loop >= max_nonblock_ops) {
+                return SOCK_POLLOUT;
+            }
+            continue;
+        }
+        if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+            || errno == EWOULDBLOCK
+#endif
+        ) {
+            return SOCK_POLLOUT;
+        }
+        xsink->raiseErrnoException("SOCKET-SENDTO-ERROR", errno, "error while executing sendto()");
+        return -1;
+    }
+    return 0;
+}
+
 int qore_socket_private::send(int fd, qore_offset_t size, int timeout_ms, ExceptionSink* xsink) {
     assert(xsink);
 
@@ -3605,6 +3766,25 @@ AbstractPollState* QoreSocket::startRecvPacket(ExceptionSink* xsink) {
     }
 
     return new SocketRecvPacketPollState(xsink, priv);
+}
+
+AbstractPollState* QoreSocket::startRecvFrom(ExceptionSink* xsink, size_t max_size) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startRecvFrom", xsink);
+        return nullptr;
+    }
+
+    return new SocketRecvFromPollState(xsink, priv, max_size);
+}
+
+AbstractPollState* QoreSocket::startSendTo(ExceptionSink* xsink, const char* data, size_t size,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startSendTo", xsink);
+        return nullptr;
+    }
+
+    return new SocketSendToPollState(xsink, priv, data, size, dest_addr, dest_addr_len);
 }
 
 AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
@@ -7019,4 +7199,120 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 return nullptr;
         }
     }
+}
+
+SocketRecvFromPollOperation::SocketRecvFromPollOperation(ExceptionSink* xsink, size_t max_size,
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), max_size(max_size), output(xsink) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        poll_state.reset(sock->priv->socket->startRecvFrom(xsink, max_size));
+        if (!poll_state) {
+            sock->priv->clearNonBlock();
+        } else {
+            set_non_block = true;
+        }
+    }
+}
+
+QoreHashNode* SocketRecvFromPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return nullptr;
+    }
+
+    if (!poll_state) {
+        return nullptr;
+    }
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    if (*xsink || !rc) {
+        if (!*xsink) {
+            // get output (hash with data + address info)
+            output = poll_state->takeOutput().get<QoreHashNode>();
+            received = true;
+        }
+        // release the AbstractPollState value
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return nullptr;
+    }
+    return getSocketPollInfoHash(xsink, rc);
+}
+
+SocketSendToPollOperation::SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
+        BinaryNode* data, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock), data_holder(data) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    // Resolve the destination address
+    QoreAddrInfo ai;
+    QoreString service_str;
+    service_str.sprintf("%d", port);
+    if (ai.getInfo(xsink, host, service_str.c_str(), family, 0, SOCK_DGRAM, 0)) {
+        return;
+    }
+
+    struct addrinfo* aip = ai.getAddrInfo();
+    if (!aip) {
+        xsink->raiseException("SOCKET-SENDTO-ERROR", "could not resolve destination address '%s:%d'", host, port);
+        return;
+    }
+
+    // Copy resolved address
+    memcpy(&dest_addr, aip->ai_addr, aip->ai_addrlen);
+    dest_addr_len = aip->ai_addrlen;
+    resolved = true;
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        poll_state.reset(sock->priv->socket->startSendTo(xsink,
+            reinterpret_cast<const char*>(data_holder->getPtr()), data_holder->size(),
+            (const struct sockaddr*)&dest_addr, dest_addr_len));
+        if (!poll_state) {
+            sock->priv->clearNonBlock();
+        } else {
+            set_non_block = true;
+        }
+    }
+}
+
+QoreHashNode* SocketSendToPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    // throw an exception and exit if the object is no longer open or valid
+    if (sock->priv->checkOpen(xsink)) {
+        return nullptr;
+    }
+
+    if (!poll_state) {
+        return nullptr;
+    }
+
+    // see if we are able to continue
+    int rc = poll_state->continuePoll(xsink);
+    if (*xsink || !rc) {
+        // release the AbstractPollState value
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        if (!*xsink) {
+            sent = true;
+        }
+        return nullptr;
+    }
+    return getSocketPollInfoHash(xsink, rc);
 }

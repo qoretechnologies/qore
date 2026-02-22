@@ -1,0 +1,291 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class UdpPollTest
+
+#! Comprehensive tests for UDP datagram poll operations
+class UdpPollTest inherits QUnit::Test {
+    constructor() : Test("UdpPollTest", "1.0") {
+        addTestCase("basic sendto/recvfrom", \testBasicSendRecv());
+        addTestCase("sendto/recvfrom via EventLoop", \testEventLoopIntegration());
+        addTestCase("sendto/recvfrom via AsyncIoController", \testAsyncIoControllerIntegration());
+        addTestCase("multiple datagrams", \testMultipleDatagrams());
+        addTestCase("large datagram", \testLargeDatagram());
+        addTestCase("recvfrom timeout", \testRecvFromTimeout());
+        addTestCase("error: recvfrom on TCP socket", \testRecvFromTcpError());
+        addTestCase("error: sendto on TCP socket", \testSendToTcpError());
+        addTestCase("ipv6 sendto/recvfrom", \testIpv6SendRecv());
+        addTestCase("DatagramInfo hashdecl", \testDatagramInfoHashdecl());
+        set_return_value(main());
+    }
+
+    #! Create a bound UDP socket on loopback, return the socket and bound port
+    private hash<auto> createBoundUdpSocket(int family = AF_INET) {
+        Socket sock();
+        string iface = family == AF_INET6 ? "::1" : "127.0.0.1";
+        sock.bindINET(iface, "0", True, family, SOCK_DGRAM);
+        hash<auto> info = sock.getSocketInfo();
+        return {
+            "sock": sock,
+            "port": info.port,
+            "address": iface,
+        };
+    }
+
+    #! Drive a poll operation to completion using continuePoll + Socket::poll
+    private drivePollOp(AbstractPollOperation op) {
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) {
+                Socket::poll(list(pi), 5s);
+            }
+        }
+    }
+
+    #! Test basic sendto/recvfrom using poll operations
+    testBasicSendRecv() {
+        # Create receiver
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        # Create sender
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        # Set up and drive send operation
+        binary msg = binary("Hello UDP!");
+        AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+        assertFalse(send_op.goalReached());
+        drivePollOp(send_op);
+        assertTrue(send_op.goalReached());
+        assertEq("sent", send_op.getState());
+
+        # Set up and drive receive operation
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        assertFalse(recv_op.goalReached());
+        drivePollOp(recv_op);
+        assertTrue(recv_op.goalReached());
+        assertEq("received", recv_op.getState());
+
+        # Verify output
+        auto output = recv_op.getOutput();
+        assertEq(Type::Hash, output.type());
+        assertEq(msg, output.data);
+        assertEq("127.0.0.1", output.address);
+        assertTrue(output.port > 0);
+        assertEq(AF_INET, output.family);
+    }
+
+    #! Test UDP with EventLoop for raw socket polling
+    testEventLoopIntegration() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        # Send a datagram first using the poll operation
+        binary msg = binary("EventLoop UDP test");
+        AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+        drivePollOp(send_op);
+        assertTrue(send_op.goalReached());
+
+        # Now use EventLoop to wait for data on the recv socket
+        EventLoop loop();
+        loop.add(recv_sock, SOCK_POLLIN);
+
+        *list<hash<EventPollInfo>> events = loop.poll(5s);
+        assertTrue(exists events);
+        assertEq(1, events.size());
+        assertEq(SOCK_POLLIN, events[0].events & SOCK_POLLIN);
+
+        # Now drive the recv poll operation to completion
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        drivePollOp(recv_op);
+        assertTrue(recv_op.goalReached());
+
+        auto output = recv_op.getOutput();
+        assertEq(msg, output.data);
+        assertEq("127.0.0.1", output.address);
+    }
+
+    #! Test UDP with AsyncIoController
+    testAsyncIoControllerIntegration() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        # Create controller
+        AsyncIoController ctrl(True);
+        ctrl.start();
+        on_exit ctrl.stop();
+
+        # Submit send operation
+        binary msg = binary("AsyncIoController UDP test");
+        AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+        hash<SocketPollOperationInfo> send_info_h({
+            "sock": send_sock,
+            "spop": send_op,
+            "owner": "test-send",
+        });
+        Queue send_q = ctrl.submit(send_info_h);
+        hash<auto> send_result = send_q.get(10s);
+        assertNothing(send_result.ex);
+
+        # Submit recv operation
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        hash<SocketPollOperationInfo> recv_info_h({
+            "sock": recv_sock,
+            "spop": recv_op,
+            "owner": "test-recv",
+        });
+        Queue recv_q = ctrl.submit(recv_info_h);
+        hash<auto> recv_result = recv_q.get(10s);
+        assertNothing(recv_result.ex);
+
+        # Verify recv got the data
+        auto output = recv_op.getOutput();
+        assertEq(msg, output.data);
+        assertEq("127.0.0.1", output.address);
+    }
+
+    #! Test multiple datagrams in sequence
+    testMultipleDatagrams() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        int count = 10;
+        for (int i = 0; i < count; ++i) {
+            binary msg = binary(sprintf("msg-%d", i));
+
+            # Send
+            AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+            drivePollOp(send_op);
+
+            # Receive
+            AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+            drivePollOp(recv_op);
+
+            auto output = recv_op.getOutput();
+            assertEq(msg, output.data);
+        }
+    }
+
+    #! Test with a large datagram (close to max UDP size)
+    testLargeDatagram() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        # Create a large payload (8KB - well within UDP limits on loopback)
+        binary msg = binary();
+        for (int i = 0; i < 8192; ++i) {
+            msg += <41>;  # 'A'
+        }
+        assertEq(8192, msg.size());
+
+        # Send
+        AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+        drivePollOp(send_op);
+
+        # Receive
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        drivePollOp(recv_op);
+
+        auto output = recv_op.getOutput();
+        assertEq(msg, output.data);
+    }
+
+    #! Test recvfrom with timeout (nothing sent)
+    testRecvFromTimeout() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+
+        # Start recv operation - nothing will be sent
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        assertFalse(recv_op.goalReached());
+
+        # continuePoll should return poll info (waiting for data)
+        *hash<SocketPollInfo> pi = recv_op.continuePoll();
+        assertTrue(exists pi);
+        assertEq(SOCK_POLLIN, pi.events & SOCK_POLLIN);
+    }
+
+    #! Test error: recvfrom on TCP socket should fail
+    testRecvFromTcpError() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_STREAM);
+        sock.listen();
+        assertThrows("SOCKET-RECVFROM-ERROR", \sock.startPollRecvFrom());
+    }
+
+    #! Test error: sendto on TCP socket should fail
+    testSendToTcpError() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_STREAM);
+        sock.listen();
+        assertThrows("SOCKET-SENDTO-ERROR", \sock.startPollSendTo(), ("127.0.0.1", 12345, binary("test")));
+    }
+
+    #! Test IPv6 sendto/recvfrom
+    testIpv6SendRecv() {
+        # Skip if IPv6 is not available
+        try {
+            hash<auto> recv_info = createBoundUdpSocket(AF_INET6);
+            Socket recv_sock = recv_info.sock;
+            int recv_port = recv_info.port;
+
+            hash<auto> send_info = createBoundUdpSocket(AF_INET6);
+            Socket send_sock = send_info.sock;
+
+            binary msg = binary("IPv6 UDP test");
+            AbstractPollOperation send_op = send_sock.startPollSendTo("::1", recv_port, msg, AF_INET6);
+            drivePollOp(send_op);
+
+            AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+            drivePollOp(recv_op);
+
+            auto output = recv_op.getOutput();
+            assertEq(msg, output.data);
+            assertEq("::1", output.address);
+            assertEq(AF_INET6, output.family);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-BIND-ERROR") {
+                testSkip("IPv6 not available");
+            }
+            rethrow;
+        }
+    }
+
+    #! Test DatagramInfo hashdecl accessibility
+    testDatagramInfoHashdecl() {
+        hash<DatagramInfo> di({
+            "data": binary("test"),
+            "address": "127.0.0.1",
+            "port": 1234,
+            "family": AF_INET,
+            "familystr": "ipv4",
+        });
+        assertEq(binary("test"), di.data);
+        assertEq("127.0.0.1", di.address);
+        assertEq(1234, di.port);
+        assertEq(AF_INET, di.family);
+        assertEq("ipv4", di.familystr);
+    }
+}

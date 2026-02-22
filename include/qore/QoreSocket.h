@@ -248,6 +248,30 @@ public:
     */
     DLLEXPORT AbstractPollState* startRecvPacket(ExceptionSink* xsink);
 
+    //! Starts a non-blocking recvfrom operation for UDP datagram sockets
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param max_size maximum datagram size to receive
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startRecvFrom(ExceptionSink* xsink, size_t max_size);
+
+    //! Starts a non-blocking sendto operation for UDP datagram sockets
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param data the data to send
+        @param size the size of the data
+        @param dest_addr the destination address
+        @param dest_addr_len the size of the destination address structure
+
+        @return a socket poll state object or nullptr in case of an exception
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startSendTo(ExceptionSink* xsink, const char* data, size_t size,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len);
+
 #if 0
     //! Starts a non-blocking accept operation on the socket
     /**

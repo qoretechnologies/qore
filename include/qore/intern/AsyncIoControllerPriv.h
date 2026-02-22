@@ -39,6 +39,7 @@
 #include "qore/intern/QoreEventLoop.h"
 #include "qore/intern/QoreEventNotifier.h"
 
+#include <atomic>
 #include <deque>
 #include <string>
 #include <unordered_map>
@@ -172,6 +173,27 @@ public:
     */
     DLLLOCAL void setLogger(QoreObject* logger_obj, ExceptionSink* xsink);
 
+    //! Adds a timer to fire at the given deadline
+    /** @param deadline the absolute deadline
+        @param udata Qore user data to associate with the timer (referenced)
+        @param xsink for exception handling
+        @return the timer ID (> 0)
+    */
+    DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink);
+
+    //! Cancels a timer
+    /** @param id the timer ID returned by addTimer()
+        @param xsink for exception handling
+        @return true if the timer was found and canceled
+    */
+    DLLLOCAL bool cancelTimer(int64_t id, ExceptionSink* xsink);
+
+    //! Sets the timer callback
+    /** @param cb the callback to call when a timer fires (or nullptr to clear)
+        @param xsink for exception handling
+    */
+    DLLLOCAL void setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
+
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
 
@@ -183,6 +205,8 @@ private:
         CancelOwner,
         Quit,
         Wake,
+        AddTimer,
+        CancelTimer,
     };
 
     //! Command queue entry
@@ -191,6 +215,8 @@ private:
         std::string key;                //!< For Cancel: the cache key
         std::string owner;              //!< For CancelOwner: the owner string
         QoreCondition* done_cond;       //!< For CancelOwner: signaled when all canceled
+        int64_t timer_deadline_us;      //!< For AddTimer: absolute deadline in microseconds
+        int64_t timer_id;               //!< For AddTimer/CancelTimer: timer ID
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -245,6 +271,11 @@ private:
         const QoreMethod* isEnabledForMethod; //!< isEnabledFor(int) method pointer
     };
 
+    //! Timer info stored under lock
+    struct TimerInfo {
+        QoreValue udata;                //!< Referenced Qore user data
+    };
+
     // --- Mutex-protected state ---
     mutable QoreThreadLock m;
     std::unordered_map<std::string, PollInfo> cache;
@@ -263,6 +294,11 @@ private:
     int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
     QoreCondition processed_cond;         //!< Signaled when processed_seq advances
     LoggerBridge* logger;                 //!< Referenced or nullptr
+    std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
+    ResolvedCallReferenceNode* timer_callback; //!< Timer callback (referenced, or nullptr)
+
+    //! Atomic counter for pre-allocating timer IDs across threads
+    std::atomic<int64_t> next_ctrl_timer_id{1};
 
     // --- I/O thread only state ---
     QoreEventLoop* loop;

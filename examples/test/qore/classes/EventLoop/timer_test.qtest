@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class EventLoopTimerTest
+
+#! Comprehensive tests for EventLoop timer support
+class EventLoopTimerTest inherits QUnit::Test {
+    constructor() : Test("EventLoopTimerTest", "1.0") {
+        addTestCase("basic timer", \testBasicTimer());
+        addTestCase("timer ordering", \testTimerOrdering());
+        addTestCase("timer cancel", \testTimerCancel());
+        addTestCase("expired timer fires immediately", \testExpiredTimer());
+        addTestCase("timer-only mode", \testTimerOnlyMode());
+        addTestCase("many timers", \testManyTimers());
+        addTestCase("timer udata", \testTimerUdata());
+        addTestCase("timer count", \testTimerCount());
+        addTestCase("double cancel returns false", \testDoubleCancelReturnsFalse());
+        addTestCase("timer cleanup on destroy", \testTimerCleanupOnDestroy());
+        set_return_value(main());
+    }
+
+    #! Collect all timer events from the event loop until timerCount is 0
+    private list<hash<EventPollInfo>> collectAllTimers(EventLoop loop, timeout to = 5s) {
+        list<hash<EventPollInfo>> all_events = ();
+        while (loop.timerCount() > 0) {
+            *list<hash<EventPollInfo>> events = loop.poll(to);
+            if (events) {
+                all_events += events;
+            }
+        }
+        return all_events;
+    }
+
+    #! Test that a basic timer fires within expected range
+    testBasicTimer() {
+        EventLoop loop();
+        assertEq(0, loop.timerCount());
+
+        # Set timer 100ms from now
+        date deadline = now_us() + 100ms;
+        int id = loop.addTimer(deadline, NOTHING);
+        assertEq(1, loop.timerCount());
+        assertTrue(id > 0);
+
+        # Poll — should fire within reasonable time
+        list<hash<EventPollInfo>> events = collectAllTimers(loop);
+        assertEq(1, events.size());
+        assertEq(SOCK_POLLTIMER, events[0].events & SOCK_POLLTIMER);
+        assertEq(id, events[0].timer_id);
+        assertEq(0, loop.timerCount());
+    }
+
+    #! Test that multiple timers fire in deadline order
+    testTimerOrdering() {
+        EventLoop loop();
+
+        date now = now_us();
+        int id1 = loop.addTimer(now + 300ms, "third");
+        int id2 = loop.addTimer(now + 100ms, "first");
+        int id3 = loop.addTimer(now + 200ms, "second");
+        assertEq(3, loop.timerCount());
+
+        # Collect all timer events
+        list<hash<EventPollInfo>> all_events = collectAllTimers(loop);
+
+        assertEq(3, all_events.size());
+        assertEq(id2, all_events[0].timer_id);
+        assertEq("first", all_events[0].timer_udata);
+        assertEq(id3, all_events[1].timer_id);
+        assertEq("second", all_events[1].timer_udata);
+        assertEq(id1, all_events[2].timer_id);
+        assertEq("third", all_events[2].timer_udata);
+    }
+
+    #! Test that cancel before expiry works
+    testTimerCancel() {
+        EventLoop loop();
+
+        int id = loop.addTimer(now_us() + 5s, NOTHING);
+        assertEq(1, loop.timerCount());
+
+        bool canceled = loop.cancelTimer(id);
+        assertTrue(canceled);
+        assertEq(0, loop.timerCount());
+
+        # Loop should now be empty
+        assertTrue(loop.empty());
+    }
+
+    #! Test that a timer with deadline in the past fires immediately
+    testExpiredTimer() {
+        EventLoop loop();
+
+        # Set timer in the past
+        int id = loop.addTimer(now_us() - 1s, "expired");
+        assertEq(1, loop.timerCount());
+
+        # Should fire immediately (0ms poll)
+        *list<hash<EventPollInfo>> events = loop.poll(0ms);
+        assertEq(1, events.size());
+        assertEq(id, events[0].timer_id);
+        assertEq("expired", events[0].timer_udata);
+        assertEq(0, loop.timerCount());
+    }
+
+    #! Test timer-only mode (no fds registered, only timers)
+    testTimerOnlyMode() {
+        EventLoop loop();
+        assertTrue(loop.empty());
+
+        int id = loop.addTimer(now_us() + 50ms, "timer-only");
+        assertFalse(loop.empty());
+
+        list<hash<EventPollInfo>> events = collectAllTimers(loop);
+        assertEq(1, events.size());
+        assertEq(id, events[0].timer_id);
+        assertEq("timer-only", events[0].timer_udata);
+        assertTrue(loop.empty());
+    }
+
+    #! Stress test with many timers
+    testManyTimers() {
+        EventLoop loop();
+
+        int count = 100;
+        date now = now_us();
+        for (int i = 0; i < count; ++i) {
+            loop.addTimer(now + milliseconds(10 + i), i);
+        }
+        assertEq(count, loop.timerCount());
+
+        # Collect all timer events
+        list<hash<EventPollInfo>> all_events = collectAllTimers(loop);
+
+        assertEq(count, all_events.size());
+        # Verify all unique IDs
+        hash<string, bool> seen;
+        for (int i = 0; i < all_events.size(); ++i) {
+            string key = string(all_events[i].timer_id);
+            assertFalse(seen{key} ?? False);
+            seen{key} = True;
+        }
+    }
+
+    #! Test that user data is correctly preserved and returned
+    testTimerUdata() {
+        EventLoop loop();
+
+        # Test various types of user data
+        loop.addTimer(now_us() + 10ms, 42);
+        loop.addTimer(now_us() + 20ms, "hello");
+        loop.addTimer(now_us() + 30ms, {"key": "value", "num": 123});
+        loop.addTimer(now_us() + 40ms, NOTHING);
+
+        list<hash<EventPollInfo>> all_events = collectAllTimers(loop);
+
+        assertEq(4, all_events.size());
+        assertEq(42, all_events[0].timer_udata);
+        assertEq("hello", all_events[1].timer_udata);
+        assertEq({"key": "value", "num": 123}, all_events[2].timer_udata);
+        assertNothing(all_events[3].timer_udata);
+    }
+
+    #! Test timerCount reflects state
+    testTimerCount() {
+        EventLoop loop();
+        assertEq(0, loop.timerCount());
+
+        int id1 = loop.addTimer(now_us() + 10s, NOTHING);
+        assertEq(1, loop.timerCount());
+
+        int id2 = loop.addTimer(now_us() + 10s, NOTHING);
+        assertEq(2, loop.timerCount());
+
+        loop.cancelTimer(id1);
+        assertEq(1, loop.timerCount());
+
+        loop.cancelTimer(id2);
+        assertEq(0, loop.timerCount());
+    }
+
+    #! Test that canceling the same timer twice returns False
+    testDoubleCancelReturnsFalse() {
+        EventLoop loop();
+
+        int id = loop.addTimer(now_us() + 10s, NOTHING);
+        assertTrue(loop.cancelTimer(id));
+        assertFalse(loop.cancelTimer(id));
+    }
+
+    #! Test that timers are cleaned up when EventLoop is destroyed
+    testTimerCleanupOnDestroy() {
+        {
+            EventLoop loop();
+            loop.addTimer(now_us() + 10s, "cleanup1");
+            loop.addTimer(now_us() + 10s, "cleanup2");
+            assertEq(2, loop.timerCount());
+            # EventLoop goes out of scope — should clean up without leaking
+        }
+        # If we get here without a crash or leak, the test passes
+        assertTrue(True);
+    }
+}

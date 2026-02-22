@@ -146,7 +146,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : tid(0), autostop_flag(autostop), shutting_down(false), force_poll(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
-      submit_seq(0), processed_seq(0), logger(nullptr),
+      submit_seq(0), processed_seq(0), logger(nullptr), timer_callback(nullptr),
       loop(nullptr), notifier(nullptr) {
     loop = new QoreEventLoop(xsink);
     if (*xsink) {
@@ -177,6 +177,14 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
             logger->deref(xsink);
             logger = nullptr;
         }
+        if (timer_callback) {
+            timer_callback->deref(xsink);
+            timer_callback = nullptr;
+        }
+        for (auto& [id, tinfo] : timer_info_map) {
+            tinfo.udata.discard(xsink);
+        }
+        timer_info_map.clear();
         delete this;
     }
 }
@@ -797,6 +805,103 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
     }
 }
 
+int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
+        ExceptionSink* xsink) {
+    // Pre-allocate ID from atomic counter (no lock needed)
+    int64_t id = next_ctrl_timer_id.fetch_add(1);
+
+    // Convert deadline to absolute microseconds since epoch
+    int64_t deadline_us = deadline->getEpochMicrosecondsUTC();
+
+    bool do_signal = false;
+    {
+        AutoLocker al(m);
+
+        if (shutting_down) {
+            xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
+            return -1;
+        }
+
+        // Store user data under lock (add a reference for our storage)
+        TimerInfo tinfo;
+        tinfo.udata = udata.refSelf();
+        timer_info_map[id] = tinfo;
+
+        // Enqueue command
+        Command cmd;
+        cmd.cmd = IoCommand::AddTimer;
+        cmd.timer_deadline_us = deadline_us;
+        cmd.timer_id = id;
+        cmd.done_cond = nullptr;
+
+        if (io_exiting || !tid) {
+            startIntern(xsink);
+            if (*xsink) {
+                // Clean up our reference on error
+                timer_info_map[id].udata.discard(xsink);
+                timer_info_map.erase(id);
+                return -1;
+            }
+        }
+        cmdq.push_back(cmd);
+        do_signal = true;
+    }
+
+    if (do_signal) {
+        notifier->notify();
+    }
+
+    return id;
+}
+
+bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
+    bool do_signal = false;
+    bool found = false;
+    QoreValue discard_udata;
+
+    {
+        AutoLocker al(m);
+
+        auto it = timer_info_map.find(id);
+        if (it == timer_info_map.end()) {
+            return false;
+        }
+        found = true;
+
+        // Always remove from timer_info_map immediately (so a second cancel returns False)
+        discard_udata = it->second.udata;
+        timer_info_map.erase(it);
+
+        if (tid && !io_exiting) {
+            // I/O thread running — enqueue cancel command to remove from EventLoop
+            Command cmd;
+            cmd.cmd = IoCommand::CancelTimer;
+            cmd.timer_id = id;
+            cmd.done_cond = nullptr;
+            cmd.timer_deadline_us = 0;
+            cmdq.push_back(cmd);
+            do_signal = true;
+        }
+    }
+
+    discard_udata.discard(xsink);
+
+    if (do_signal) {
+        notifier->notify();
+    }
+
+    return found;
+}
+
+void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+    AutoLocker al(m);
+    if (timer_callback) {
+        timer_callback->deref(xsink);
+    }
+    // Takes ownership of the caller's reference
+    timer_callback = cb;
+}
+
 // --- Internal methods ---
 
 void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
@@ -1181,10 +1286,29 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Build ready socket hash set: always clear first, then populate from poll results
         ready_socket_hashes.clear();
+
+        // Collect timer events and socket events from poll results
+        struct TimerEvent {
+            int64_t id;
+            QoreValue udata;
+        };
+        std::vector<TimerEvent> timer_events;
+        ResolvedCallReferenceNode* cb_snapshot = nullptr;
+
         if (count > 0) {
             AutoLocker al(m);
             for (int i = 0; i < count; ++i) {
-                if (events[i].fd >= 0 && events[i].udata) {
+                if (events[i].events & QORE_EV_TIMER) {
+                    // Timer event — extract user data under lock
+                    int64_t tid_val = events[i].timer_id;
+                    QoreValue udata;
+                    auto it = timer_info_map.find(tid_val);
+                    if (it != timer_info_map.end()) {
+                        udata = it->second.udata;
+                        timer_info_map.erase(it);
+                    }
+                    timer_events.push_back({tid_val, udata});
+                } else if (events[i].fd >= 0 && events[i].udata) {
                     QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
                     // Find the socket hash for this object
                     for (auto& [key, sock_obj] : registered_sockets) {
@@ -1200,6 +1324,40 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
                 }
             }
+            // Snapshot timer callback under lock
+            if (!timer_events.empty() && timer_callback) {
+                cb_snapshot = timer_callback;
+                cb_snapshot->ref();
+            }
+        }
+
+        // Deliver timer events outside lock
+        for (auto& te : timer_events) {
+            if (cb_snapshot) {
+                // Build TimerEventInfo hash
+                ReferenceHolder<QoreHashNode> timer_hash(
+                    new QoreHashNode(hashdeclTimerEventInfo, xsink), xsink);
+                if (!*xsink) {
+                    timer_hash->setKeyValue("id", te.id, xsink);
+                    if (te.udata.hasNode()) {
+                        timer_hash->setKeyValue("udata", te.udata.refSelf(), xsink);
+                    }
+                    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                    args->push(timer_hash.release(), xsink);
+
+                    ExceptionSink cb_xsink;
+                    ValueHolder rv(cb_snapshot->execValue(*args, &cb_xsink), &cb_xsink);
+                    if (cb_xsink) {
+                        log(LOGGER_LEVEL_ERROR, "timer callback exception for timer %lld",
+                            (long long)te.id);
+                        cb_xsink.clear();
+                    }
+                }
+            }
+            te.udata.discard(xsink);
+        }
+        if (cb_snapshot) {
+            cb_snapshot->deref(xsink);
         }
     }
 
@@ -1226,6 +1384,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         key_events.clear();
         sock_hash_to_keys.clear();
         socket_refcounts.clear();
+
+        // Clean up any remaining timers
+        for (auto& [id, tinfo] : timer_info_map) {
+            loop->cancelTimer(id);
+            tinfo.udata.discard(xsink);
+        }
+        timer_info_map.clear();
 
         // Signal any pending CancelOwner done_cond waiters in the command queue
         // so cancelByOwner() doesn't hang when the I/O thread exits
@@ -1405,6 +1570,19 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                 case IoCommand::Wake: {
                     AutoLocker al(m);
                     force_poll = true;
+                    break;
+                }
+
+                case IoCommand::AddTimer: {
+                    // Register timer in EventLoop with pre-allocated ID
+                    loop->addTimer(cmd.timer_deadline_us, nullptr, cmd.timer_id);
+                    break;
+                }
+
+                case IoCommand::CancelTimer: {
+                    // Cancel timer in EventLoop; user data was already cleaned up
+                    // in cancelTimer() when the entry was removed from timer_info_map
+                    loop->cancelTimer(cmd.timer_id);
                     break;
                 }
 
@@ -1643,7 +1821,7 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
             return false;
         }
     }
-    cmdq.push_back({cmd, key, owner, done_cond});
+    cmdq.push_back({cmd, key, owner, done_cond, 0, 0});
     return true;
 }
 

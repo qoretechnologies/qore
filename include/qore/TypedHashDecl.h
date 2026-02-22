@@ -266,6 +266,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclFtpResponseInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollInfo;
 
+//! DatagramInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclDatagramInfo;
+
 //! PipeInfo hashdecl
 /** @since %Qore 1.12
 */
@@ -310,5 +315,15 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 /** @since %Qore 2.3
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
+
+//! EventPollInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclEventPollInfo;
+
+//! TimerEventInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclTimerEventInfo;
 
 #endif

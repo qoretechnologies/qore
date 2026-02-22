@@ -205,6 +205,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclUrlInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclSocketPollInfo,
+    * hashdeclDatagramInfo,
     * hashdeclPipeInfo,
     * hashdeclSseMessageInfo,
     * hashdeclPortRangeInfo,
@@ -213,7 +214,9 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclNetworkSecurityConfigInfo,
     * hashdeclSandboxConfigInfo,
     * hashdeclSocketPollOperationInfo,
-    * hashdeclSocketPollResultInfo;
+    * hashdeclSocketPollResultInfo,
+    * hashdeclEventPollInfo,
+    * hashdeclTimerEventInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
 
@@ -1213,6 +1216,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
     hashdeclSocketPollInfo = init_hashdecl_SocketPollInfo(qns);
+    hashdeclDatagramInfo = init_hashdecl_DatagramInfo(qns);
     preinitReadOnlyFileClass();
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);
@@ -1271,6 +1275,11 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     qns.addSystemClass(initSocketClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));
+    // EventPollInfo/TimerEventInfo must be initialized before initEventLoopClass which uses them
+    // EventPollInfo references AbstractPollableIoObject; must be after initSocketClass
+    hashdeclEventPollInfo = init_hashdecl_EventPollInfo(qns);
+    // TimerEventInfo has no special dependencies
+    hashdeclTimerEventInfo = init_hashdecl_TimerEventInfo(qns);
     qns.addSystemClass(initEventLoopClass(qns));
     // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes
     // Must be after initSocketClass, initAbstractPollOperationClass, and get_thread_ns (Queue)

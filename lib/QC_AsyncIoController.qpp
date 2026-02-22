@@ -421,3 +421,63 @@ hash<auto> AsyncIoController::getInfo() {
 nothing AsyncIoController::setLogger(*object logger) {
     ctrl->setLogger(logger, xsink);
 }
+
+//! Adds a timer that fires at the given deadline
+/** @par Example:
+    @code{.py}
+    int timer_id = ctrl.addTimer(now_us() + 1000000, {"key": "heartbeat"});
+    @endcode
+
+    @param deadline the absolute deadline for the timer; when the deadline is reached,
+    the timer callback will be called with a @ref TimerEventInfo hash
+    @param udata user data to associate with the timer; will be returned in the
+    @ref TimerEventInfo::udata field when the timer fires
+
+    @return the unique timer ID that can be used to cancel the timer
+
+    @throw ASYNC-IO-ERROR if the controller is shutting down
+
+    @note A timer callback must be set via @ref setTimerCallback() before timers will deliver events
+
+    @since %Qore 2.3
+*/
+int AsyncIoController::addTimer(date deadline, auto udata) {
+    return ctrl->addTimer(deadline, udata, xsink);
+}
+
+//! Cancels a timer
+/** @par Example:
+    @code{.py}
+    bool canceled = ctrl.cancelTimer(timer_id);
+    @endcode
+
+    @param timer_id the timer ID returned by @ref addTimer()
+
+    @return @ref True "True" if the timer was found and canceled, @ref False "False" if the
+    timer was not found (already fired or invalid ID)
+
+    @since %Qore 2.3
+*/
+bool AsyncIoController::cancelTimer(int timer_id) {
+    return ctrl->cancelTimer(timer_id, xsink);
+}
+
+//! Sets the timer callback for the controller
+/** @par Example:
+    @code{.py}
+    ctrl.setTimerCallback(sub (hash<TimerEventInfo> info) {
+        printf("Timer %d fired with data: %y\n", info.id, info.udata);
+    });
+    @endcode
+
+    @param callback a callback that accepts a @ref TimerEventInfo hash argument, or @ref nothing
+    to disable timer event delivery
+
+    @note The callback is called in the I/O thread context. It should complete quickly to avoid
+    blocking other I/O operations.
+
+    @since %Qore 2.3
+*/
+nothing AsyncIoController::setTimerCallback(*code callback) {
+    ctrl->setTimerCallback(callback ? callback->refRefSelf() : nullptr, xsink);
+}

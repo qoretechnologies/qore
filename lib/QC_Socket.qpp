@@ -115,6 +115,28 @@ hashdecl Qore::SocketPollInfo {
     Qore::AbstractPollableIoObject socket;
 }
 
+//! UDP datagram receive result info
+/** Contains the data and source address information from a recvfrom() operation.
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::DatagramInfo {
+    //! The received datagram data
+    binary data;
+
+    //! The source IP address as a string
+    *string address;
+
+    //! The source port number
+    *int port;
+
+    //! The address family (e.g. AF_INET, AF_INET6)
+    *int family;
+
+    //! The address family as a string (e.g. "ipv4", "ipv6")
+    *string familystr;
+}
+
 /** @defgroup socket_poll_constants Socket Poll Constants
 */
 ///@{
@@ -126,6 +148,11 @@ const SOCK_POLLOUT = SOCK_POLLOUT;
 
 //! (output only) indicates that the socket or connection is closed
 const SOCK_POLLERR = SOCK_POLLERR;
+
+//! (output only) indicates a timer event
+/** @since %Qore 2.3
+*/
+const SOCK_POLLTIMER = SOCK_POLLTIMER;
 ///@}
 
 /** @defgroup ssl_mode_constants SSL Verification Mode Constants
@@ -973,6 +1000,77 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to receive a UDP datagram in non-blocking mode
+/** @param max_size the maximum datagram size to receive; default is 65535 (max UDP datagram size)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to receive a UDP datagram in
+    non-blocking mode
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" call will return a hash
+    with the following keys after a successful receive:
+    - \c data: the received datagram data as @ref binary
+    - \c address: the source IP address as a string
+    - \c port: the source port number
+    - \c family: the address family (e.g. @ref AF_INET, @ref AF_INET6)
+    - \c familystr: the address family as a string (e.g. \c "ipv4", \c "ipv6")
+
+    @throw SOCKET-RECVFROM-ERROR socket is not a UDP (SOCK_DGRAM) socket
+
+    @note The socket must be bound to a local address with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
+    size_t ms = max_size ? (size_t)max_size : 65535;
+    if (ms == 0 || ms > 65535) {
+        ms = 65535;
+    }
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvFromPollOperation(xsink, ms, s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a UDP datagram in non-blocking mode
+/** @param host the destination host name or IP address
+    @param port the destination port number
+    @param data the data to send as @ref binary
+    @param family the address family to use for name resolution; default is @ref AF_UNSPEC
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a UDP datagram in
+    non-blocking mode
+
+    @throw SOCKET-SENDTO-ERROR socket is not a UDP (SOCK_DGRAM) socket or address resolution failed
+
+    @note The socket must be bound to a local address with @ref bindINET() before calling this method
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendTo(string host, int port, binary data, *int family) [dom=NETWORK] {
+    int fam = family ? (int)family : AF_UNSPEC;
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketSendToPollOperation(xsink,
+        host->c_str(), port, fam, data->binRefSelf(), s), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("sent"), xsink);
     }
     return rv.release();
 }

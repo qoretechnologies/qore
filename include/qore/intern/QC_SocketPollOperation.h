@@ -960,6 +960,104 @@ private:
     DLLLOCAL void onStreamComplete(int32_t stream_id, Http2StreamInfo* stream, ExceptionSink* xsink);
 };
 
+//! Poll operation for non-blocking UDP recvfrom()
+/** Receives a single UDP datagram and captures the source address.
+    Output is a hash with: data (binary), address (string), port (int),
+    family (int), familystr (string).
+
+    @since %Qore 2.3
+*/
+class SocketRecvFromPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketRecvFromPollOperation(ExceptionSink* xsink, size_t max_size, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return received;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        return received ? "received" : "receiving";
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const {
+        return output ? output->hashRefSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        output = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    size_t max_size;
+    bool received = false;
+    mutable ReferenceHolder<QoreHashNode> output;
+
+    DLLLOCAL virtual bool abortNeedsClose() const {
+        return false;  // UDP is connectionless, no need to close on abort
+    }
+};
+
+//! Poll operation for non-blocking UDP sendto()
+/** Sends a datagram to the specified destination address.
+
+    @since %Qore 2.3
+*/
+class SocketSendToPollOperation : public SocketPollSocketOperationBase {
+public:
+    //! "data" must be passed already referenced
+    DLLLOCAL SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
+        BinaryNode* data, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const {
+        return sent;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const {
+        return sent ? "sent" : "sending";
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        data_holder = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    SimpleRefHolder<BinaryNode> data_holder;
+    struct sockaddr_storage dest_addr;
+    socklen_t dest_addr_len = 0;
+    bool sent = false;
+    bool resolved = false;  //!< Whether address resolution has completed
+
+    DLLLOCAL virtual bool abortNeedsClose() const {
+        return false;  // UDP is connectionless, no need to close on abort
+    }
+};
+
 DLLLOCAL QoreClass* initSocketPollOperationClass(QoreNamespace& qorens);
 
 #endif // _QORE_CLASS_SOCKETPOLLOPERATION_H
