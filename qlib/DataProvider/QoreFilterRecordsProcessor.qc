@@ -61,7 +61,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.where_cond) {
-            where_expr = cast<hash<DataProviderExpression>>(copts.where_cond);
+            where_expr = DataProvider::deserializeExpressionFromJson(copts.where_cond);
         }
     }
 

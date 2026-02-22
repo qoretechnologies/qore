@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProviderRecordIterator class definition
 
-/** AbstractDataProviderRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProviderRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -132,6 +132,22 @@ public const DP_FUNC_KEY = "key";
     @since DataProvider 3.3
 */
 public const DP_EXPR_VALUE = "value";
+
+#! Template expression operator
+/** Used to wrap a standalone template reference as an expression.
+
+    @par Example
+    @code{.py}
+    # "$static:name" parses to:
+    {
+        "exp": "template",
+        "args": (<DataProviderTemplateReference>{"tmpl_context": "static", "tmpl_value": "name", "raw": "$static:name"},),
+    }
+    @endcode
+
+    @since DataProvider 3.3
+*/
+public const DP_EXPR_TEMPLATE = "template";
 #/@}
 
 #! Operator alias map; maps from old operator names to canonical ones
@@ -546,8 +562,9 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */
-    private static bool matchGeneric(hash<auto> record, hash<DataProviderExpression> where_cond) {
-        return AbstractDataProvider::evalGenericExpression(record, where_cond);
+    private static bool matchGeneric(hash<auto> record, hash<DataProviderExpression> where_cond,
+            *hash<auto> template_context) {
+        return AbstractDataProvider::evalGenericExpression(record, where_cond, template_context);
     }
 
     #! Checks if the current record matches the search criteria
@@ -556,14 +573,19 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */
-    private static bool matchGeneric(hash<auto> record, *hash<auto> where_cond) {
+    private static bool matchGeneric(hash<auto> record, *hash<auto> where_cond,
+            *hash<auto> template_context) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
-            if (elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
-                ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
-                if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record)) {
+            # Template references and other typed hashdecls are matched directly as values
+            if (!(elem.value instanceof hash<DataProviderTemplateReference>)
+                && elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
+                    ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
+                if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record,
+                        template_context)) {
                     return False;
                 }
-            } else if (!AbstractDataProviderRecordIterator::matchGenericValue(record{elem.key}, elem.value)) {
+            } else if (!AbstractDataProviderRecordIterator::matchGenericValue(record{elem.key}, elem.value,
+                    template_context)) {
                 return False;
             }
         }
@@ -571,25 +593,56 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     }
 
     #! Evaluates a generic search operator on the field value and record and returns the result
-    private static bool evalOperator(string field, hash<auto> cmd, hash<auto> op, hash<auto> record) {
+    private static bool evalOperator(string field, hash<auto> cmd, hash<auto> op, hash<auto> record,
+            *hash<auto> template_context) {
         auto field_value = record{field};
         if (op.recursive && cmd.arg.op
             && (*hash<auto> op0 = (DefaultGenericSearchOpMap{cmd.arg.op}
                 ?? DefaultGenericSearchOpMap{OperatorAliasMap{cmd.arg.op}}))) {
-            field_value = AbstractDataProviderRecordIterator::evalOperator(field, cmd.arg, op0, record);
+            field_value = AbstractDataProviderRecordIterator::evalOperator(field, cmd.arg, op0, record,
+                template_context);
         }
-        return op.code(cmd, field_value, field, record);
+        # Resolve template references in the operator argument
+        hash<auto> resolved_cmd = cmd;
+        resolved_cmd.arg = AbstractDataProviderRecordIterator::resolveTemplateValue(cmd.arg, template_context);
+        return op.code(resolved_cmd, field_value, field, record);
+    }
+
+    #! Resolves template references in a value
+    /** Recursively resolves any @ref DataProviderTemplateReference values found in the input.
+        For lists, each element is resolved individually.
+
+        @param val the value to resolve
+        @param template_context optional context hash passed through to template callbacks
+
+        @return the resolved value
+
+        @since DataProvider 3.3
+    */
+    private static auto resolveTemplateValue(auto val, *hash<auto> template_context) {
+        if (val instanceof hash<DataProviderTemplateReference>) {
+            return AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        }
+        if (val.typeCode() == NT_LIST) {
+            return map AbstractDataProviderRecordIterator::resolveTemplateValue($1, template_context), val;
+        }
+        return val;
     }
 
     #! Match a single value
     /** in case of a hash value, a recursive partial match with only the keys given in the value to be checked is
         performed
     */
-    private static bool matchGenericValue(auto expects, auto val) {
+    private static bool matchGenericValue(auto expects, auto val, *hash<auto> template_context) {
+        # Resolve template references in the value
+        if (val instanceof hash<DataProviderTemplateReference>) {
+            val = AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        }
         if (val.typeCode() == NT_HASH) {
             # in case of a hash, do a recursive partial match with only the given keys
             foreach hash<auto> i in (val.pairIterator()) {
-                if (!AbstractDataProviderRecordIterator::matchGenericValue(expects{i.key}, i.value)) {
+                if (!AbstractDataProviderRecordIterator::matchGenericValue(expects{i.key}, i.value,
+                        template_context)) {
                     return False;
                 }
             }
