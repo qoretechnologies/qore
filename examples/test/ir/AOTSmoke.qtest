@@ -2315,8 +2315,9 @@ printf(\"%d %d\\n\", h.x, h.y);
         }
 
         # Run with debug enabled to see warnings
-        string run_cmd = sprintf("QORE_LIBDIR=%s %s --enable-debug %s 2>&1",
-            libqore_dir, qore_bin, paths.out);
+        # Run the binary directly as a standalone executable, not through the interpreter
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1",
+            libqore_dir, paths.out);
         string run_out = backquote(run_cmd);
 
         # Stale detection is a warning, not an error - binary should still run

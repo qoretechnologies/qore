@@ -4694,6 +4694,18 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         return id;
     }
 
+    // VarRefNewObjectNode: variable declaration with constructor call (e.g., SelfAccum a())
+    // MUST check before VarRefNode since VarRefNewObjectNode inherits from VarRefNode
+    if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+        if (qc) {
+            id.kind = AOTExprKind::NEW_OBJECT;
+            id.ref1 = qc->getPath();
+            return id;
+        }
+        // Non-class VarRefNewObjectNode (hashdecl, complex hash/list) falls through to GENERIC_EVAL
+    }
+
     // VarRefNode: local variable reference (for lvalue operations)
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||

@@ -3519,7 +3519,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
         xsink->raiseException("AOT-ERROR", "invalid expression for static method direct AOT call");
         return toBits(QoreValue());
     }
-    return qore_rt_call_static_method_direct(call->getMethod(), call->getVariant(), args, nargs, xsink);
+    const QoreMethod* method = call->getMethod();
+    if (!method) {
+        xsink->raiseException("AOT-ERROR", "null method in static method direct AOT call");
+        return toBits(QoreValue());
+    }
+    // For AOT-deserialized nodes, always pass nullptr as variant to force the slow path
+    // that dynamically looks up the method, avoiding garbage variant pointers from compilation
+    return qore_rt_call_static_method_direct(method, nullptr, args, nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
