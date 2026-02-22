@@ -731,6 +731,22 @@ public hashdecl DataProviderFieldReference {
     string field;
 }
 
+#! Data provider template reference
+/** Represents a contextual data reference resolved at runtime via callback.
+    @par Syntax
+    - Simple: \c $context:value (e.g., \c $static:account.id)
+    - Bracketed: \c $context:{value with special chars}
+    @since DataProvider 3.3
+*/
+public hashdecl DataProviderTemplateReference {
+    #! Template context name (e.g., "static", "dynamic", "config")
+    string tmpl_context;
+    #! Template value path (e.g., "account.id", "threshold")
+    string tmpl_value;
+    #! Original raw text for round-trip serialization
+    string raw;
+}
+
 #! Data provider expression
 public hashdecl DataProviderExpression {
     #! Expression name
@@ -1242,9 +1258,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
                     foreach auto arg in (exp.args) {
-                        if (!AbstractDataProvider::evalGenericExpressionValue(rec, arg)) {
+                        if (!AbstractDataProvider::evalGenericExpressionValue(rec, arg, template_context)) {
                             return False;
                         }
                     }
@@ -1273,9 +1289,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
                     foreach auto arg in (exp.args) {
-                        if (AbstractDataProvider::evalGenericExpressionValue(rec, arg)) {
+                        if (AbstractDataProvider::evalGenericExpressionValue(rec, arg, template_context)) {
                             return True;
                         }
                     }
@@ -1302,8 +1318,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]));
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return (!AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context));
                 },
             },
             DP_SEARCH_OP_EQ: {
@@ -1335,9 +1351,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    auto arg1 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
+                    auto arg1 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                     # for backwards compatibility, if the first argument is a field reference, and the second is a
                     # hash
                     return arg0 == arg1;
@@ -1370,9 +1386,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0])
-                        != AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
+                        != AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                 },
             },
             DP_SEARCH_OP_LT: {
@@ -1403,9 +1419,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0])
-                        < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
+                        < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                 },
             },
             DP_SEARCH_OP_LE: {
@@ -1436,9 +1452,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0])
-                        <= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
+                        <= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                 },
             },
             DP_SEARCH_OP_GT: {
@@ -1469,9 +1485,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0])
-                        > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
+                        > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                 },
             },
             DP_SEARCH_OP_GE: {
@@ -1502,9 +1518,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0])
-                        >= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context)
+                        >= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                 },
             },
             DP_SEARCH_OP_BETWEEN: {
@@ -1545,10 +1561,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1])
-                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
+                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context)
+                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context);
                 },
             },
             DP_SEARCH_OP_IN: {
@@ -1578,9 +1594,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     ),
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return inlist(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]),
-                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]));
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return inlist(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
                 },
             },
             DP_SEARCH_OP_REGEX: {
@@ -1601,11 +1617,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "arg_info": RegularExpressionArgInfo,
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    string str = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    string pattern = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    string str = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
+                    string pattern = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                     int opts;
-                    if (*list<auto> options = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2])) {
+                    if (*list<auto> options = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context)) {
                         opts = foldl $1 | $2, (map RegexOpts{$1}, options);
                     }
                     return regex(str, pattern, opts);
@@ -1623,8 +1639,24 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "args": (DataProviderSignatureAnyType,),
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
+                },
+            },
+            DP_EXPR_TEMPLATE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_EXPR_TEMPLATE,
+                    "display_name": "template",
+                    "short_desc": "Evaluates and returns a template reference value",
+                    "desc": "Evaluates the given template reference via the registered callback and returns "
+                        "its value. This allows template references to be used as standalone expressions.",
+                    "symbol": "",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
                 },
             },
             DP_FUNC_INDEX: {
@@ -1638,9 +1670,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureIntType),
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
-                    int index = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
+                    int index = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context);
                     if (value.typeCode() != NT_LIST) {
                         throw "INVALID-OPERATION", sprintf("index accessor [%d] applied to non-list value of "
                             "type %y", index, value.fullType());
@@ -1666,8 +1698,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
                     if (value.typeCode() != NT_LIST) {
                         throw "INVALID-OPERATION", sprintf("slice accessor applied to non-list value of "
                             "type %y", value.fullType());
@@ -1675,7 +1707,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     int len = value.size();
                     list<auto> result = ();
                     for (int i = 1; i < exp.args.size(); ++i) {
-                        auto item = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                        auto item = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i], template_context);
                         if (item.typeCode() == NT_HASH) {
                             hash<auto> range = item;
                             int start = exists range.start
@@ -1710,11 +1742,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "varargs": True,
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
-                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp) {
-                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0]);
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    auto value = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
                     list<string> key_list = ();
                     for (int i = 1; i < exp.args.size(); ++i) {
-                        key_list += AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i]);
+                        key_list += AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[i], template_context);
                     }
                     return AbstractDataProvider::applyKeyAccessorImpl(value, key_list);
                 },
@@ -1795,6 +1827,29 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         #! static callback for dynamic value resolution
         static code cb_resolve_value;
+
+        #! static callback for template reference expansion
+        /** @since DataProvider 3.3
+        */
+        static *code<auto(string, string, *hash<auto>)> cb_expand_template;
+
+        #! static callback for resolving template reference types
+        /** @since DataProvider 3.3
+        */
+        static *code<*AbstractDataProviderType(string, string, *hash<auto>)> cb_resolve_template_type;
+
+        #! static callback for listing available template contexts
+        /** @since DataProvider 3.3
+        */
+        static *code<auto(*hash<auto>)> cb_list_template_contexts;
+
+        #! static callback for listing available template values for a context
+        /** @since DataProvider 3.3
+        */
+        static *code<auto(string, string, *hash<auto>)> cb_list_template_values;
+
+        #! flag if template callbacks are locked
+        static bool template_callbacks_locked = False;
     }
 
     private:internal {
@@ -4737,10 +4792,13 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Evaluates the given expression with the generic internal implementation and returns the result
-    /**
+    /** @param rec the record hash to evaluate against
+        @param val the value to evaluate (field reference, template reference, expression, or literal)
+        @param template_context optional context hash passed through to template callbacks
+
         @since DataProvider 2.3
     */
-    static auto evalGenericExpressionValue(hash<auto> rec, auto val) {
+    static auto evalGenericExpressionValue(hash<auto> rec, auto val, *hash<auto> template_context) {
         if (val instanceof hash<DataProviderFieldReference>) {
             # allow for dotted references to be respected; allow escaping of dots
             list<string> f = map regex_subst($1, "\\\\.", ".", RE_Global), val.field.splitRegex("(?<!\\\\)\\.");
@@ -4765,8 +4823,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             }
             return rv;
         }
+        if (val instanceof hash<DataProviderTemplateReference>) {
+            if (!cb_expand_template) {
+                throw "TEMPLATE-RESOLUTION-ERROR",
+                    sprintf("template reference %y cannot be resolved: no template callback registered", val.raw);
+            }
+            return call_function_args(cb_expand_template,
+                (val.tmpl_context, val.tmpl_value, template_context));
+        }
         if (val instanceof hash<DataProviderExpression>) {
-            return AbstractDataProvider::evalGenericExpression(rec, val);
+            return AbstractDataProvider::evalGenericExpression(rec, val, template_context);
         }
         return val;
     }
@@ -4808,10 +4874,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Evaluates the given expression with the generic internal implementation and returns the result
-    /**
+    /** @param rec the record hash to evaluate against
+        @param exp the expression to evaluate
+        @param template_context optional context hash passed through to template callbacks
+
         @since DataProvider 2.3
     */
-    static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp) {
+    static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp,
+            *hash<auto> template_context) {
         *hash<auto> expinfo = AbstractDataProvider::GenericExpressionImplementations{exp.exp}
             ?? AbstractDataProvider::GenericExpressionImplementations{OperatorAliasMap{exp.exp}};
         if (!expinfo) {
@@ -4820,7 +4890,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         on_error rethrow $1.err, sprintf("error in return value type %y for %y expression: %s",
             expinfo.exp.return_type.getName(), expinfo.exp.name, $1.desc);
-        return expinfo.exp.return_type.acceptsValue(expinfo.impl(rec, exp));
+        return expinfo.exp.return_type.acceptsValue(expinfo.impl(rec, exp, template_context));
     }
 
     #! Set callbacks for dynamic URI resolution to allow for variable URI path elements to be resolved at runtime
@@ -4841,6 +4911,101 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         cb_value_needs_resolution = value_needs_resolution;
         cb_resolve_value = resolve_value;
         return True;
+    }
+
+    #! Sets callbacks for template reference resolution
+    /** @param expand resolves a template reference to its value
+        @param resolve_type optional; returns the expected type for a template reference
+        @param list_contexts optional; returns available template contexts for completion
+        @param list_values optional; returns available template values for a context for completion
+
+        @return @ref True if callbacks were successfully set (first call) or if the same callbacks are being
+        re-registered; @ref False if different callbacks are already locked
+
+        @note
+        - After this call, template callbacks are locked and cannot be changed (except via @ref clearTemplateCallbacks)
+        - When locked, re-registration with the same callbacks returns @ref True; with different callbacks returns
+          @ref False. The comparison uses Qore's \c == operator on closures, which performs identity comparison
+          (same closure reference), not semantic equality
+        - This method is designed to be called once at startup before any concurrent access; the static callback
+          variables are not protected by a lock, following the same pattern as @ref setDynamicValueCallbacks().
+          Concurrent modification after initialization is not supported
+
+        @since DataProvider 3.3
+    */
+    static bool setTemplateCallbacks(
+            code<auto(string, string, *hash<auto>)> expand,
+            *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
+            *code<auto(*hash<auto>)> list_contexts,
+            *code<auto(string, string, *hash<auto>)> list_values) {
+        if (template_callbacks_locked) {
+            return expand == cb_expand_template && resolve_type == cb_resolve_template_type
+                && list_contexts == cb_list_template_contexts && list_values == cb_list_template_values;
+        }
+        template_callbacks_locked = True;
+        cb_expand_template = expand;
+        cb_resolve_template_type = resolve_type;
+        cb_list_template_contexts = list_contexts;
+        cb_list_template_values = list_values;
+        return True;
+    }
+
+    #! Clears all template callbacks and resets the lock
+    /** This method is primarily for testing purposes.
+
+        @since DataProvider 3.3
+    */
+    static clearTemplateCallbacks() {
+        template_callbacks_locked = False;
+        delete cb_expand_template;
+        delete cb_resolve_template_type;
+        delete cb_list_template_contexts;
+        delete cb_list_template_values;
+    }
+
+    #! Returns the list of available template contexts, if a callback is registered
+    /** @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
+        @return a list of template context info hashes, or NOTHING if no callback is registered
+
+        @since DataProvider 3.3
+    */
+    static *list<hash<auto>> getTemplateContexts(*hash<auto> template_context) {
+        if (!cb_list_template_contexts) {
+            return NOTHING;
+        }
+        return call_function_args(cb_list_template_contexts, (template_context,));
+    }
+
+    #! Returns the list of available template values for a context, if a callback is registered
+    /** @param ctx the template context name
+        @param prefix the value prefix to filter by
+        @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
+        @return a list of template value info hashes, or NOTHING if no callback is registered
+
+        @since DataProvider 3.3
+    */
+    static *list<hash<auto>> getTemplateValues(string ctx, string prefix,
+            *hash<auto> template_context) {
+        if (!cb_list_template_values) {
+            return NOTHING;
+        }
+        return call_function_args(cb_list_template_values, (ctx, prefix, template_context));
+    }
+
+    #! Resolves the type of a template reference using the registered callback
+    /** @param ctx the template context name (e.g., "env", "timestamp")
+        @param value the template value path (e.g., "HOME", "timegm")
+        @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
+        @return the resolved type, or NOTHING if no callback is registered or the type cannot be determined
+
+        @since DataProvider 3.3
+    */
+    static *AbstractDataProviderType resolveTemplateType(string ctx, string value,
+            *hash<auto> template_context) {
+        if (!cb_resolve_template_type) {
+            return NOTHING;
+        }
+        return call_function_args(cb_resolve_template_type, (ctx, value, template_context));
     }
 
     #! processes an expression in a certain context
@@ -4902,15 +5067,16 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         auto val = values[pos];
         bool is_exp = val instanceof hash<DataProviderExpression>;
         bool is_ref = is_exp ? False : val instanceof hash<DataProviderFieldReference>;
+        bool is_tmpl = !is_exp && !is_ref && val instanceof hash<DataProviderTemplateReference>;
 
         switch (arginfo.type_code) {
             case ST_Any:
                 return;
             case ST_Value:
-                if (is_exp || is_ref) {
+                if (is_exp || is_ref || is_tmpl) {
                     throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y argument %d/%d expects a value; "
                         "got %y instead", expinfo.name, pos + 1, values.size(),
-                        is_exp ? "nested expression" : "field reference");
+                        is_exp ? "nested expression" : (is_ref ? "field reference" : "template reference"));
                 }
                 if (!arginfo.type.isAssignableFrom(Type::getType(val))) {
                     throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("argument %d expects type %y; got %y instead",
@@ -4921,7 +5087,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 if (!is_ref) {
                     throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y argument %d/%d expects a field "
                         "reference; got %y instead", expinfo.name, pos + 1, values.size(),
-                        is_exp ? "nested expression" : "value");
+                        is_exp ? "nested expression" : (is_tmpl ? "template reference" : "value"));
                 }
                 return;
         }

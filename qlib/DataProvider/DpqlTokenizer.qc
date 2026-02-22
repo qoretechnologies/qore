@@ -90,6 +90,8 @@ public const DPQL_TOK_RBRACE = 36;
 public const DPQL_TOK_RANGE = 37;
 #! Dot (for member access after accessor)
 public const DPQL_TOK_DOT = 38;
+#! Template reference ($context:value)
+public const DPQL_TOK_TEMPLATE = 39;
 #! Whitespace (spaces, tabs)
 public const DPQL_TOK_WHITESPACE = 40;
 #! Newline character
@@ -133,6 +135,7 @@ public const DpqlTokenTypeNames = {
     DPQL_TOK_RBRACE: "}",
     DPQL_TOK_RANGE: "..",
     DPQL_TOK_DOT: ".",
+    DPQL_TOK_TEMPLATE: "template",
     DPQL_TOK_WHITESPACE: "whitespace",
     DPQL_TOK_NEWLINE: "newline",
     DPQL_TOK_EOF: "eof",
@@ -569,6 +572,12 @@ public class DpqlTokenizer {
             return makeToken(DPQL_TOK_COMMA, ",", start_line, start_column);
         }
 
+        # Template reference ($context:value)
+        if (c == "$") {
+            in_field_ref_context = False;
+            return scanTemplateRef();
+        }
+
         # Identifier (function names, keywords)
         if (c =~ /[a-zA-Z_]/) {
             # Only reset field-ref context if NOT in an accessor chain (i.e., not after a dot)
@@ -664,6 +673,178 @@ public class DpqlTokenizer {
         addError(sprintf("Invalid field reference: expected identifier or quoted string after '@', got '%s'", c),
             "DPQL-E003", start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+    }
+
+    #! Scans a template reference ($context:value, $context:{bracketed}, $context:value::type)
+    /** Template references follow the pattern:
+        - \c $context:value — simple template
+        - \c $context:{value} — bracketed value (allows special chars)
+        - \c $context:value::type — with type assertion
+        - \c $context:A??{$ctx:B} — fallback syntax (passed through raw)
+
+        @return a DPQL_TOK_TEMPLATE token with the raw template text as the value
+
+        @since DataProvider 3.3
+    */
+    private:internal hash<DpqlTokenInfo> scanTemplateRef() {
+        int start_line = line;
+        int start_column = column;
+        string value = "$";
+        advance();  # skip $
+
+        if (pos >= len) {
+            addError("Incomplete template reference: expected context identifier after '$'", "DPQL-E030",
+                start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+        }
+
+        *string c = currentChar();
+
+        # Context identifier: letters, digits, underscores, hyphens (for qore-expr etc.)
+        if (c !~ /[a-zA-Z_]/) {
+            addError(sprintf("Invalid template reference: expected context identifier after '$', got '%s'", c),
+                "DPQL-E031", start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+        }
+
+        # Scan context identifier
+        while (pos < len) {
+            c = currentChar();
+            if (c !~ /[a-zA-Z0-9_\-]/) {
+                break;
+            }
+            value += c;
+            advance();
+        }
+
+        # Expect ':' separator
+        if (pos >= len || currentChar() != ":") {
+            addError("Invalid template reference: expected ':' after context identifier", "DPQL-E032",
+                start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+        }
+        value += ":";
+        advance();  # skip ':'
+
+        if (pos >= len) {
+            addError("Incomplete template reference: expected value after ':'", "DPQL-E033",
+                start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+        }
+
+        c = currentChar();
+
+        # Bracketed value: $context:{...}
+        if (c == "{") {
+            value += c;
+            advance();
+            int depth = 1;
+            while (pos < len && depth > 0) {
+                c = currentChar();
+                value += c;
+                advance();
+                if (c == "\\") {
+                    # Escaped character — consume next char without interpreting it
+                    if (pos < len) {
+                        value += currentChar();
+                        advance();
+                    }
+                } else if (c == '"' || c == "'") {
+                    # String literal inside brackets — scan until matching unescaped quote
+                    string quote = c;
+                    while (pos < len) {
+                        c = currentChar();
+                        value += c;
+                        advance();
+                        if (c == "\\") {
+                            if (pos < len) {
+                                value += currentChar();
+                                advance();
+                            }
+                        } else if (c == quote) {
+                            break;
+                        }
+                    }
+                } else if (c == "{") {
+                    ++depth;
+                } else if (c == "}") {
+                    --depth;
+                }
+            }
+            if (depth > 0) {
+                addError("Unterminated bracketed template value", "DPQL-E034",
+                    start_line, start_column, line, column);
+                return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+            }
+        } else {
+            # Unbracketed value: alphanumeric, dots, underscores, *, and ??{...} fallback
+            while (pos < len) {
+                c = currentChar();
+                if (c =~ /[a-zA-Z0-9_.*]/) {
+                    value += c;
+                    advance();
+                } else if (c == "?" && peekChar() == "?") {
+                    # Fallback syntax: ??{...}
+                    value += "??";
+                    advance(2);
+                    if (pos < len && currentChar() == "{") {
+                        value += "{";
+                        advance();
+                        int depth = 1;
+                        while (pos < len && depth > 0) {
+                            c = currentChar();
+                            value += c;
+                            advance();
+                            if (c == "\\") {
+                                if (pos < len) {
+                                    value += currentChar();
+                                    advance();
+                                }
+                            } else if (c == '"' || c == "'") {
+                                string quote = c;
+                                while (pos < len) {
+                                    c = currentChar();
+                                    value += c;
+                                    advance();
+                                    if (c == "\\") {
+                                        if (pos < len) {
+                                            value += currentChar();
+                                            advance();
+                                        }
+                                    } else if (c == quote) {
+                                        break;
+                                    }
+                                }
+                            } else if (c == "{") {
+                                ++depth;
+                            } else if (c == "}") {
+                                --depth;
+                            }
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        # Check for optional ::type suffix
+        if (pos + 1 < len && currentChar() == ":" && peekChar() == ":") {
+            value += "::";
+            advance(2);
+            # Scan type identifier: alphanumeric, *, <, >
+            while (pos < len) {
+                c = currentChar();
+                if (c =~ /[a-zA-Z0-9_*<>]/) {
+                    value += c;
+                    advance();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        return makeToken(DPQL_TOK_TEMPLATE, value, start_line, start_column);
     }
 
     #! Scans a string literal

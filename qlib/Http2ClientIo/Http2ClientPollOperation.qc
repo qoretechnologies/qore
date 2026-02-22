@@ -92,6 +92,17 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
         #! Flag set when a stream callback is dispatched during continuePoll()
         /** Allows callers to skip blocking on Socket::poll() when a response
             was already delivered to a callback during the same continuePoll() call.
+
+            @par Thread Safety
+            This flag is reset at the top of continuePoll() and set (never cleared)
+            within handleReading()'s output loop. It is read externally only by
+            checkAndClearCallbackDispatched(). Thread safety is guaranteed because
+            the two access paths are mutually exclusive:
+            - Controller mode: the I/O thread calls continuePoll();
+              checkAndClearCallbackDispatched() is never called (streams wait on
+              response_cond instead).
+            - Sync mode: drivePoll() calls continuePoll() then
+              checkAndClearCallbackDispatched() sequentially in the same thread.
         */
         bool callback_dispatched = False;
 
@@ -524,8 +535,19 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
             # sets goalReached=True. Instead, responses are available via getOutput()
             # even when poll_info is returned (indicating more work to do).
             # Check for output BEFORE returning poll_info.
-            *hash<auto> output = current_op.getOutput();
-            if (output) {
+            #
+            # Process ALL available outputs from the C++ layer in a loop.
+            # A single socket read may produce multiple complete HTTP/2 responses
+            # when responses from different streams arrive in the same TCP segment(s).
+            # We must dispatch all of them before returning to the poll loop,
+            # because the AsyncSocketIoController only calls continuePoll() when
+            # the kernel reports the socket as ready, and there may be no new data
+            # on the socket for the remaining buffered responses.
+            while (True) {
+                *hash<auto> output = current_op.getOutput();
+                if (!output) {
+                    break;
+                }
                 empty_read_count = 0;
 
                 # Get the stream ID from the response
@@ -570,18 +592,16 @@ public class Http2ClientPollOperation inherits AbstractPollOperation {
                         log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
                             ex.err, ex.desc);
                     }
-                    # Callback handled the response - continue reading for more frames
-                    state = STATE_WAIT_READ;
-                    return <SocketPollInfo>{
-                        "events": SOCK_POLLIN,
-                        "socket": sock,
-                    };
+                } else {
+                    # No callback found - stream was cancelled after response arrived;
+                    # discard the orphaned response and continue to drain remaining
+                    # outputs to avoid stalling other streams
+                    log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
                 }
+            }
 
-                # No callback found - stream was cancelled after response arrived;
-                # discard the orphaned response and continue reading to avoid a
-                # livelock where STATE_RESPONSE_READY is never consumed
-                log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
+            if (callback_dispatched) {
+                # One or more callbacks were dispatched - continue reading for more frames
                 state = STATE_WAIT_READ;
                 return <SocketPollInfo>{
                     "events": SOCK_POLLIN,

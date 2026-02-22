@@ -159,6 +159,15 @@ class DpqlActionSessionTest inherits QUnit::Test {
         assertTrue(tok.hasKey("type"), "Token should have type");
         assertTrue(tok.hasKey("start"), "Token should have start");
         assertTrue(tok.hasKey("end"), "Token should have end");
+
+        # Test template token mapping
+        result = session.handleAction("dpql-get-tokens", {
+            "text": "@name == $static:value",
+        });
+        # Find the template token
+        *hash<auto> tmpl_tok = (map $1, result.tokens, $1.type == "variable")[0];
+        assertTrue(exists tmpl_tok, "Should have a template token mapped to 'variable'");
+        assertEq("$static:value", tmpl_tok.text, "Template token text should match");
     }
 
     testFormatInvalid() {
