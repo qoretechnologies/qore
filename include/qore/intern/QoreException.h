@@ -36,6 +36,15 @@
 #include <cstdarg>
 #include <string>
 
+// Forward declaration for loc_builtin fallback
+DLLLOCAL extern const class QoreProgramLocation loc_builtin;
+
+// Helper to safely get runtime location with fallback to loc_builtin
+static inline const QoreProgramLocation& get_runtime_location_safe() {
+    const QoreProgramLocation* loc = get_runtime_location();
+    return loc ? *loc : loc_builtin;
+}
+
 struct QoreExceptionBase {
     qore_call_t type;
     QoreListNode* callStack = new QoreListNode(autoTypeInfo);
@@ -112,12 +121,12 @@ public:
     // called for runtime exceptions
     DLLLOCAL QoreException(const char *n_err, QoreValue n_desc, QoreValue n_arg = QoreValue())
         : QoreExceptionBase(new QoreStringNode(n_err), n_desc, n_arg),
-          QoreExceptionLocation(*get_runtime_location()) {
+          QoreExceptionLocation(get_runtime_location_safe()) {
     }
 
     DLLLOCAL QoreException(QoreStringNode *n_err, QoreValue n_desc, QoreValue n_arg = QoreValue())
         : QoreExceptionBase(n_err, n_desc, n_arg),
-          QoreExceptionLocation(*get_runtime_location()) {
+          QoreExceptionLocation(get_runtime_location_safe()) {
     }
 
     DLLLOCAL QoreException(const QoreException& old) : QoreExceptionBase(old),
@@ -126,7 +135,7 @@ public:
 
     // called for user exceptions
     DLLLOCAL QoreException(const QoreListNode* n) : QoreExceptionBase(0, 0, 0, CT_USER),
-        QoreExceptionLocation(*get_runtime_location()) {
+        QoreExceptionLocation(get_runtime_location_safe()) {
         if (n) {
             err = n->getReferencedEntry(0);
             desc = n->getReferencedEntry(1);
