@@ -2438,6 +2438,14 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     func->computeIROnlyLocals();
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
+
+    // Conservative approach: assume argv and self are used if they exist
+    // This allows the framework to skip ArgvContextHelper and SelfFunctionCallHelper
+    // instantiation when both flags are false, but for now both default to the presence
+    // of argv/self in the function signature. More precise analysis can be added later
+    // to detect when they're actually unused in the IR body.
+    uses_argv = signature.argvid != nullptr;
+    uses_self = signature.selfid != nullptr;
     // Initialize type profiling for guards
     func->initGuardProfiles();
 
@@ -2788,16 +2796,29 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             name, exec_count.load(), (void*)cached_aot_ctx);
 
         // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid) {
+        // Only instantiate if actually used in the function body
+        if (uses_self && self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
         }
 
-        assert(signature.argvid);
-        signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+        // Only instantiate argv if actually used in the function body
+        if (uses_argv) {
+            assert(signature.argvid);
+            signature.argvid->instantiate(argv ? argv->refSelf() : nullptr);
+        }
 
         QoreValue val{};
         {
-            ArgvContextHelper argv_helper(argv.release(), xsink);
+            // Only create ArgvContextHelper if argv is used
+            std::optional<ArgvContextHelper> argv_helper;
+            if (uses_argv) {
+                argv_helper.emplace(argv.release(), xsink);
+            } else {
+                // argv not used - just discard the reference without creating context
+                if (argv) {
+                    argv->deref(xsink);
+                }
+            }
 
             if (!gate || (gate->enter(xsink) >= 0)) {
                 // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
@@ -2880,8 +2901,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             }
         }
 
-        signature.argvid->uninstantiate(xsink);
-        if (self && signature.selfid) {
+        // Only uninstantiate if we instantiated them
+        if (uses_argv) {
+            signature.argvid->uninstantiate(xsink);
+        }
+        if (uses_self && self && signature.selfid) {
             signature.selfid->uninstantiateSelf();
         }
 
