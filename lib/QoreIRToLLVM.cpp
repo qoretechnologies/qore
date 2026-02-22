@@ -7422,9 +7422,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!operand) { return false; }
             llvm::Value* operand_boxed = boxValue(operand, regex_inst->operands[0].id);
 
-            // Pass the CaseNodeRegex pointer directly to the runtime helper
-            llvm::Value* regex_case_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(regex_inst->regex_case));
+            // In AOT mode, use slot-based indirection; in JIT mode, embed pointer directly
+            llvm::Value* regex_case_ptr;
+            if (aot_mode) {
+                // AOT: use slot-based indirection via context array
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getRegexCaseSlot(
+                        reinterpret_cast<const void*>(regex_inst->regex_case));
+                auto get_helper = module.getOrInsertFunction("qore_rt_get_regex_case_aot",
+                        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
+                llvm::Value* rc_ptr = builder->CreateCall(get_helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot)});
+                // qore_rt_switch_regex_match takes i64 for first arg — cast
+                regex_case_ptr = builder->CreatePtrToInt(rc_ptr, i64_type);
+            } else {
+                // JIT: embed pointer directly (valid — same process)
+                regex_case_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(regex_inst->regex_case));
+            }
 
             auto helper = module.getOrInsertFunction("qore_rt_switch_regex_match",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));

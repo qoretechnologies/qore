@@ -230,6 +230,7 @@ QoreAOTContext::~QoreAOTContext() {
     free(exprs);
     free(call_targets);
     free(stmts);
+    free(regex_cases);
 }
 
 //! Descriptor for a function that was successfully compiled to LLVM IR
@@ -240,6 +241,7 @@ struct AOTCompiledFunc {
     int num_globals = 0;            //!< number of global variable slots in AOT context
     int num_exprs = 0;              //!< number of expression slots in AOT context
     int num_stmts = 0;              //!< number of statement slots in AOT context (OnBlockExit)
+    int num_regex_cases = 0;        //!< number of regex case slots (SwitchRegexMatch)
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
 };
@@ -514,6 +516,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
+                    cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
                     // Scan IR function for required features
@@ -631,6 +634,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_globals = static_cast<int>(slots.global_slots.size());
                         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
+                        cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids);
                         // Scan IR function for required features
@@ -1127,6 +1131,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
+                    cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     // Extract slot identities (no uvb for toplevel)
                     extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids);
                     // Scan IR function for required features
@@ -1228,6 +1233,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_globals = cf.num_globals;
             fws.num_exprs = cf.num_exprs;
             fws.num_stmts = cf.num_stmts;
+            fws.num_regex_cases = cf.num_regex_cases;
             fws.slot_ids = cf.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -2282,6 +2288,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_globals = cf.num_globals;
             fws.num_exprs = cf.num_exprs;
             fws.num_stmts = cf.num_stmts;
+            fws.num_regex_cases = cf.num_regex_cases;
             fws.slot_ids = cf.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -2956,6 +2963,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getStmtSlot(reinterpret_cast<const void*>(fi->stmt));
                     break;
                 }
+                case QoreIROpcode::SwitchRegexMatch: {
+                    auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
+                    if (ri->regex_case) {
+                        slots.getRegexCaseSlot(reinterpret_cast<const void*>(ri->regex_case));
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -2963,7 +2977,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     }
 }
 
-QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts) {
+QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts, int num_regex_cases) {
     // Two-pass approach to avoid ref/deref issues on mismatch:
     // Pass 1: Count slots without taking refs
     // Pass 2: If counts match, take refs and fill context
@@ -2973,10 +2987,12 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int global_count = 0;
     int expr_count = 0;
     int stmt_count = 0;
+    int regex_count = 0;
     std::unordered_set<const void*> seen_locals;
     std::unordered_set<const void*> seen_globals;
     std::unordered_set<uint64_t> seen_exprs;
     std::unordered_set<const void*> seen_stmts;
+    std::unordered_set<const void*> seen_regex_cases;
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -3317,6 +3333,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::SwitchRegexMatch: {
+                    auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
+                    if (ri->regex_case) {
+                        const void* key = reinterpret_cast<const void*>(ri->regex_case);
+                        if (seen_regex_cases.insert(key).second) {
+                            ++regex_count;
+                        }
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -3325,14 +3351,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
     // Check if counts match before taking any refs
     if (local_count != num_locals || global_count != num_globals ||
-            expr_count != num_exprs || stmt_count != num_stmts) {
+            expr_count != num_exprs || stmt_count != num_stmts ||
+            regex_count != num_regex_cases) {
         // Slot count mismatch between compile time and runtime - this can happen due to
-        // expression object sharing differences in the parser (e.g., ?? operator chains).
+        // expression object sharing differences in the parser (e.g., ?? operator chains),
+        // or (during Phase 6b transition) regex cases not being fully serialized/deserialized.
         // Return nullptr to fall back to AST interpretation for this function.
-        printd(1, "buildAOTContext: slot mismatch for '%s' (expected l=%d g=%d e=%d s=%d, "
-            "actual l=%d g=%d e=%d s=%d) - falling back to AST\n",
-            func.name.c_str(), num_locals, num_globals, num_exprs, num_stmts,
-            local_count, global_count, expr_count, stmt_count);
+        printd(1, "buildAOTContext: slot mismatch for '%s' (expected l=%d g=%d e=%d s=%d r=%d, "
+            "actual l=%d g=%d e=%d s=%d r=%d) - falling back to AST\n",
+            func.name.c_str(), num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
+            local_count, global_count, expr_count, stmt_count, regex_count);
         return nullptr;
     }
 
@@ -3342,6 +3370,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->num_globals = num_globals;
     ctx->num_exprs = num_exprs;
     ctx->num_stmts = num_stmts;
+    ctx->num_regex_cases = num_regex_cases;
     ctx->allocate();
 
     // Copy all_body_locals from the fresh IR
@@ -3355,10 +3384,12 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int global_idx = 0;
     int expr_idx = 0;
     int stmt_idx = 0;
+    int regex_idx = 0;
     seen_locals.clear();
     seen_globals.clear();
     seen_exprs.clear();
     seen_stmts.clear();
+    seen_regex_cases.clear();
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -3737,6 +3768,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     const void* key = reinterpret_cast<const void*>(fi->stmt);
                     if (seen_stmts.insert(key).second) {
                         ctx->stmts[stmt_idx++] = fi->stmt;
+                    }
+                    break;
+                }
+                case QoreIROpcode::SwitchRegexMatch: {
+                    auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
+                    if (ri->regex_case) {
+                        const void* key = reinterpret_cast<const void*>(ri->regex_case);
+                        if (seen_regex_cases.insert(key).second) {
+                            ctx->regex_cases[regex_idx++] = const_cast<CaseNodeRegex*>(ri->regex_case);
+                        }
                     }
                     break;
                 }

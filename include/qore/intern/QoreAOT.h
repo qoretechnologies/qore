@@ -41,6 +41,7 @@
 #include <vector>
 
 class AbstractQoreFunctionVariant;
+class CaseNodeRegex;
 class ExceptionSink;
 class LocalVar;
 class QoreFunction;
@@ -73,6 +74,8 @@ struct QoreAOTContext {
     int num_exprs = 0;
     const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers
     int num_stmts = 0;
+    CaseNodeRegex** regex_cases = nullptr;       //!< Regex case objects for SwitchRegexMatch
+    int num_regex_cases = 0;
 
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
     std::vector<LocalVar*> all_body_locals;
@@ -105,6 +108,9 @@ struct QoreAOTContext {
         if (num_stmts > 0) {
             stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
         }
+        if (num_regex_cases > 0) {
+            regex_cases = static_cast<CaseNodeRegex**>(calloc(num_regex_cases, sizeof(CaseNodeRegex*)));
+        }
     }
 };
 
@@ -119,6 +125,7 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
     std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
+    std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
 
     //! Get or assign a slot for a LocalVar*
     int32_t getLocalSlot(const void* local) {
@@ -163,6 +170,17 @@ struct AOTSlotMap {
         stmt_slots[stmt] = slot;
         return slot;
     }
+
+    //! Get or assign a slot for a CaseNodeRegex* (SwitchRegexMatch)
+    int32_t getRegexCaseSlot(const void* regex_case) {
+        auto it = regex_case_slots.find(regex_case);
+        if (it != regex_case_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(regex_case_slots.size());
+        regex_case_slots[regex_case] = slot;
+        return slot;
+    }
 };
 
 //! AOT function pointer type: takes QoreAOTContext* and ExceptionSink*
@@ -176,6 +194,7 @@ struct QoreAOTFunc {
     int num_globals;                            //!< number of global variable slots
     int num_exprs;                              //!< number of expression slots
     int num_stmts;                              //!< number of statement slots (OnBlockExit)
+    int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
 };
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()
@@ -410,7 +429,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
     @param slots the slot map from compile time (used only for validation)
     @return heap-allocated context (caller takes ownership), or nullptr on mismatch
 */
-QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts);
+QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int num_globals, int num_exprs, int num_stmts, int num_regex_cases);
 
 class AbstractStatement;
 class StatementBlock;

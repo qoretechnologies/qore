@@ -3086,6 +3086,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_exec_foreach_aot(QoreAOTContext* ctx, int3
     return toBits(return_value);
 }
 
+extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
+    assert(ctx && slot >= 0 && slot < ctx->num_regex_cases);
+    return ctx->regex_cases[slot];
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);

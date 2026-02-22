@@ -1878,7 +1878,7 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
     collectAllStatementLocals(statements, ir_func->all_body_locals);
 
     // Build the context from the fresh IR (same walk order → same slot indices)
-    QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts);
+    QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
     delete ir_func;
 
     return ctx;
@@ -2557,7 +2557,7 @@ extern "C" DLLEXPORT int qore_aot_run(
                         if (QoreIRVerifier::verify(*ir_func, verify_error)) {
                             QoreAOTContext* ctx = buildAOTContext(*ir_func,
                                 toplevel_func->num_locals, toplevel_func->num_globals,
-                                toplevel_func->num_exprs, toplevel_func->num_stmts);
+                                toplevel_func->num_exprs, toplevel_func->num_stmts, toplevel_func->num_regex_cases);
                             if (ctx) {
                                 sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
                                 ++registered;
@@ -2878,7 +2878,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         if (QoreIRVerifier::verify(*ir_func, verify_error)) {
                             QoreAOTContext* ctx = buildAOTContext(*ir_func,
                                 toplevel_func->num_locals, toplevel_func->num_globals,
-                                toplevel_func->num_exprs, toplevel_func->num_stmts);
+                                toplevel_func->num_exprs, toplevel_func->num_stmts, toplevel_func->num_regex_cases);
                             if (ctx) {
                                 pp->sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
                                 // Set LVList so doTopLevelInstantiation() can instantiate the locals
@@ -3495,7 +3495,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         if (QoreIRVerifier::verify(*ir_func, verify_error)) {
                             QoreAOTContext* ctx = buildAOTContext(*ir_func,
                                 toplevel_func->num_locals, toplevel_func->num_globals,
-                                toplevel_func->num_exprs, toplevel_func->num_stmts);
+                                toplevel_func->num_exprs, toplevel_func->num_stmts, toplevel_func->num_regex_cases);
                             if (ctx) {
                                 pp->sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
                                 // Set LVList so doTopLevelInstantiation() can instantiate the locals

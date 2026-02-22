@@ -758,6 +758,7 @@ struct AOTCompiledFuncWithSlots {
     int num_globals = 0;             //!< number of global variable slots
     int num_exprs = 0;               //!< number of expression slots
     int num_stmts = 0;               //!< number of statement slots (OnBlockExit)
+    int num_regex_cases = 0;         //!< number of regex case slots (SwitchRegexMatch)
     AOTSlotIdentities slot_ids;      //!< extracted slot identities
 };
 
