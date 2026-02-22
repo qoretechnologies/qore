@@ -65,7 +65,6 @@
 #include <qore/intern/ForEachStatement.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
-
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
 // Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
@@ -2093,10 +2092,24 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
         }
     }
 
+    // Isolate from outer AST stack location chain — the outer chain may contain
+    // pointers to destroyed RAII objects if JIT is called from deep AST context.
+    // Nulling before execution prevents dangling-pointer crashes in
+    // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
+    const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
+    if (saved_stack_loc) {
+        update_runtime_stack_location(nullptr);
+    }
+
     uint64_t result_bits = exec_fn(xsink);
 
     // Check for JIT guard failure requesting deopt to AST
     if (!*xsink && qore_jit_deopt_requested()) {
+        // Isolate the chain for deopt AST execution as well, since it might throw exceptions
+        if (saved_stack_loc) {
+            update_runtime_stack_location(nullptr);
+        }
+
         // Ensure body locals are on thread stack for AST execution
         if (skip_body_locals) {
             const QoreParseOptions& po = uvb->pgm->getParseOptions();
@@ -2113,7 +2126,17 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
                 body_locals[i]->uninstantiate(xsink);
             }
         }
+
+        // Restore the chain after deopt execution
+        if (saved_stack_loc) {
+            update_runtime_stack_location(saved_stack_loc);
+        }
     } else {
+        // Restore the chain for normal (non-deopt) execution
+        if (saved_stack_loc) {
+            update_runtime_stack_location(saved_stack_loc);
+        }
+
         QoreValue result;
         std::memcpy(&result, &result_bits, sizeof(result));
         val = result;

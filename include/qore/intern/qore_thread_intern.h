@@ -474,6 +474,7 @@ protected:
     qore_call_t call_type;
 };
 
+
 class QoreProgramLocationHelper {
 public:
     DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, const QoreProgramLocation* loc,

@@ -35,6 +35,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRBuilder.h"
@@ -783,7 +784,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             return 0;
         }
         if (cached_toplevel_jit_fn) {
+            // Isolate from outer AST stack location chain — the outer chain may contain
+            // pointers to destroyed RAII objects if JIT is called from deep AST context.
+            // Nulling before execution prevents dangling-pointer crashes in
+            // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
+            const QoreStackLocation* saved = get_runtime_stack_location();
+            if (saved) update_runtime_stack_location(nullptr);
+
             uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+
+            if (saved) update_runtime_stack_location(saved);
+
             QoreValue result;
             std::memcpy(&result, &result_bits, sizeof(result));
             if (!*xsink) {
@@ -907,8 +918,18 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
 
                 std::string error;
                 if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                    // Isolate from outer AST stack location chain — the outer chain may contain
+                    // pointers to destroyed RAII objects if JIT is called from deep AST context.
+                    // Nulling before execution prevents dangling-pointer crashes in
+                    // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
+                    const QoreStackLocation* saved = get_runtime_stack_location();
+                    if (saved) update_runtime_stack_location(nullptr);
+
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
+
+                    if (saved) update_runtime_stack_location(saved);
+
                     // Clear any pending deopt request from top-level JIT execution.
                     // Top-level code handles guard failures internally (e.g., via
                     // try-catch) and must not propagate deopt to subsequent calls.

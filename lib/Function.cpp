@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/StatementBlock.h"
@@ -2823,6 +2824,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreParseOptions old_po;
                 swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
+                // Isolate from outer AST stack location chain — the outer chain may contain
+                // pointers to destroyed RAII objects if JIT is called from deep AST context.
+                // Nulling before execution prevents dangling-pointer crashes in
+                // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
+                const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
+                update_runtime_stack_location(nullptr);
+
                 uint64_t result_bits;
                 if (cached_aot_ctx && cached_aot_fn) {
                     result_bits = cached_aot_fn(cached_aot_ctx, xsink);
@@ -2843,7 +2851,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     if (statements) {
                         val = statements->exec(xsink);
                     }
+                    // Restore chain after successful deopt
+                    update_runtime_stack_location(saved_stack_loc);
                 } else {
+                    // Restore chain on success
+                    update_runtime_stack_location(saved_stack_loc);
+
                     QoreValue result;
                     std::memcpy(&result, &result_bits, sizeof(result));
                     val = result;
@@ -3032,7 +3045,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         ArgvContextHelper argv_helper(argv.release(), xsink);
 
         if (!gate || (gate->enter(xsink) >= 0)) {
+            // Isolate from outer AST stack location chain for AST execution too
+            // (not just for JIT) to prevent dangling-pointer crashes in
+            // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown.
+            const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
+            update_runtime_stack_location(nullptr);
+
             val = statements->exec(xsink);
+
+            update_runtime_stack_location(saved_stack_loc);
+
             if (gate) {
                 gate->exit();
             }
