@@ -665,6 +665,10 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
     inst->operands = args;
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
+    // Check if this is a self-recursive call (callee has same name as current function)
+    if (qf && func && func->name == qf->getName()) {
+        inst->is_self_recursive = true;
+    }
     return inst;
 }
 
