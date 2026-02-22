@@ -467,6 +467,7 @@ public:
         finalizing : 1;
 
     DLLLOCAL ThreadData(int ptid, QoreProgram* p, bool n_foreign = false) :
+            runtime_po(),
             tid(ptid),
             vlock(ptid),
             current_pgm(p),
