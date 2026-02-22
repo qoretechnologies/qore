@@ -4628,34 +4628,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             if (aot_mode) {
-                // AOT: embed method + variant pointers directly for fast path
-                // This bypasses the null-variant slow path in qore_rt_call_static_method_direct
-                if (direct_inst->variant != nullptr) {
-                    // Fast path: embedded variant pointer available at compile time
-                    llvm::Value* method_ptr = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
-                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                } else {
-                    // Fallback: variant not resolved, use expression slot (slow path)
-                    QoreValue expr_val = direct_inst->expr;
-                    uint64_t expr_bits;
-                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                }
+                // AOT mode: always use expression slot — embedded pointer optimization is only valid
+                // in JIT mode (same process). In AOT, compile-time pointers are invalid at runtime.
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
