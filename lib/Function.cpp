@@ -2829,7 +2829,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Nulling before execution prevents dangling-pointer crashes in
                 // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
                 const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-                update_runtime_stack_location(nullptr);
+                if (saved_stack_loc) {
+                    update_runtime_stack_location(nullptr);
+                }
 
                 uint64_t result_bits;
                 if (cached_aot_ctx && cached_aot_fn) {
@@ -2896,8 +2898,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
             // Apply return type coercion (e.g. softlist wrapping) to match
-            // ReturnStatement::execImpl behavior
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            // ReturnStatement::execImpl behavior.
+            // Skip for untyped functions and autoType as acceptAssignment is a no-op
+            if (rt && QoreTypeInfo::hasType(rt)) {
+                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            }
         }
         return val;
     }
@@ -3006,8 +3011,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
             // Apply return type coercion (e.g. softlist wrapping) to match
-            // ReturnStatement::execImpl behavior
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            // ReturnStatement::execImpl behavior.
+            // Skip for untyped functions and autoType as acceptAssignment is a no-op
+            if (rt && QoreTypeInfo::hasType(rt)) {
+                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            }
         }
         return val;
     }
@@ -3049,11 +3057,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             // (not just for JIT) to prevent dangling-pointer crashes in
             // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown.
             const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-            update_runtime_stack_location(nullptr);
+            if (saved_stack_loc) {
+                update_runtime_stack_location(nullptr);
+            }
 
             val = statements->exec(xsink);
 
-            update_runtime_stack_location(saved_stack_loc);
+            if (saved_stack_loc) {
+                update_runtime_stack_location(saved_stack_loc);
+            }
 
             if (gate) {
                 gate->exit();

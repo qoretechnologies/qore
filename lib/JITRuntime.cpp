@@ -32,6 +32,7 @@
 #include "qore/intern/JITRuntime.h"
 
 #include <cstring>
+#include <optional>
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
@@ -2209,10 +2210,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
 
-    // Set up program thread context
-    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
-    if (*xsink) {
-        return toBits(QoreValue());
+    // Set up program thread context (only if program differs from caller's program)
+    std::optional<ProgramThreadCountContextHelper> ptcch;
+    if (uvb->pgm != pgm) {
+        ptcch.emplace(xsink, uvb->pgm, true);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
     }
     // NOTE: ThreadFrameBoundaryHelper intentionally skipped here for performance.
     // Frame boundaries are only used by debugger introspection (get_local_vars/set_local_var_value),
