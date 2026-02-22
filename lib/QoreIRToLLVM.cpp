@@ -3596,15 +3596,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
-                    // AOT CallStaticDirect: resolve method from expression slot
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_call_static_method_direct_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    // AOT CallStaticDirect: try to embed method+variant pointers directly,
+                    // fallback to expression slot if variant is not available
+                    const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                            inv->expr.getInternalNode());
+                    if (static_call && static_call->getVariant() != nullptr) {
+                        // Fast path: embedded variant pointer available at compile time
+                        llvm::Value* method_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(static_call->getMethod())), ptr_type);
+                        llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(static_call->getVariant())), ptr_type);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_call_static_method_direct",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    } else {
+                        // Fallback: variant not resolved, use expression slot (slow path)
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_call_static_method_direct_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 } else if (inv->invoke_opcode == QoreIROpcode::CallClosureDirect) {
                     // CallClosureDirect invoke: call closure/callref directly
                     // operands[0] = closure value, operands[1..] = args
@@ -4398,6 +4418,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
                             args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
+            } else if (direct_inst->is_self_recursive && direct_inst->variant != nullptr) {
+                // Lightweight path for self-recursive calls: skip ProgramThreadCountContextHelper,
+                // ArgvContextHelper, and return type coercion overhead
+                llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_call_self_recursive",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {variant_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
                 // JIT: call function directly with embedded pointers
                 llvm::Value* func_ptr = builder->CreateIntToPtr(
@@ -4616,16 +4647,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             if (aot_mode) {
-                QoreValue expr_val = direct_inst->expr;
-                uint64_t expr_bits;
-                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), args_array,
-                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                // AOT: embed method + variant pointers directly for fast path
+                // This bypasses the null-variant slow path in qore_rt_call_static_method_direct
+                if (direct_inst->variant != nullptr) {
+                    // Fast path: embedded variant pointer available at compile time
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    // Fallback: variant not resolved, use expression slot (slow path)
+                    QoreValue expr_val = direct_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), args_array,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             } else {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,

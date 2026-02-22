@@ -2324,6 +2324,47 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     return toBits(val);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunctionVariant* variant,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    // Lightweight helper for self-recursive calls: skips ArgvContextHelper and return type coercion
+    // overhead, but keeps ProgramThreadCountContextHelper for proper context setup.
+    // Only keeps: check_stack, program context, param instantiation, actual call, param uninstantiation.
+    assert(variant);
+
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        xsink->raiseException("JIT-ERROR", "non-user variant in self-recursive call");
+        return toBits(QoreValue());
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+
+    // Set up program thread context (program is already correct from parent call)
+    ProgramThreadCountContextHelper ptcch(xsink, uvb->pgm, true);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+
+    // Instantiate parameter locals directly from NaN-boxed args
+    if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        return toBits(QoreValue());
+    }
+
+    uint64_t result = uvb->execCachedFunction(xsink);
+
+    // Uninstantiate parameter locals in reverse order
+    for (int i = (int)num_params - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+
+    return result;
+}
+
 // --- Direct method call for devirtualized calls (final classes) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
@@ -3458,6 +3499,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     }
 
     return toBits(val);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_v2(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    // Fast path for AOT: delegates to qore_rt_call_static_method_direct with guaranteed
+    // non-null variant embedded as integer constant at compile time.
+    // This allows the fast path (direct variant access without null check) to be taken.
+    return qore_rt_call_static_method_direct(method, variant, args, nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
