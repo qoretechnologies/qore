@@ -1308,6 +1308,7 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool pseudo = false;                    //!< True if this is a pseudo-method call
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -1335,6 +1336,7 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool pseudo = false;                        //!< True if this is a pseudo-method call
+    bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     //!< operands[0] is the base expression, operands[1..n-1] are arguments

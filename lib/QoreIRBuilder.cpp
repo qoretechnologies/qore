@@ -717,6 +717,8 @@ QoreIRDotEvalMethodDirectInstruction* QoreIRBuilder::createDotEvalMethodDirect(c
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 
@@ -730,6 +732,8 @@ QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMe
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
+    // Check if any argument is a reference type (may be modified by callee)
+    inst->has_ref_args = checkRefArgs(variant);
     return inst;
 }
 

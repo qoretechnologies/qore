@@ -4586,8 +4586,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Reload locals only if callee may modify them through reference parameters
+            if (invoke_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4719,8 +4721,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         xsink_arg});
             }
 
-            // DotEval method calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Reload locals only if callee may modify them through reference parameters
+            if (direct_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -4782,8 +4786,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         xsink_arg});
             }
 
-            // DotEval method calls can modify local variables through side effects
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Reload locals only if callee may modify them through reference parameters
+            if (invoke_inst->has_ref_args) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
