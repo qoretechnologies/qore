@@ -485,38 +485,23 @@ llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
 }
 
 // Phase 4: Inline qore_rt_ref - reference count a value if it's a node
-// Emits: if (hasNode(val)) return qore_rt_refself(val); else return val;
+// Emits: has_node ? qore_rt_refself(val) : val
 // This avoids external function call overhead for the type check
+// Uses LLVM select to avoid extra basic blocks - inline conditional evaluation
 llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
-    // Check if value has a node (inline check)
+    // Check if value has a node (inline check using NaN-boxing)
     llvm::Value* has_node = hasNodeInline(val);
 
-    // Get the function being built
-    llvm::Function* func = builder->GetInsertBlock()->getParent();
-
-    // Create basic blocks for the conditional
-    llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "ref_node", func);
-    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ref_merge", func);
-
-    // Branch based on has_node check
-    llvm::BasicBlock* entry_bb = builder->GetInsertBlock();
-    builder->CreateCondBr(has_node, ref_bb, merge_bb);
-
-    // Ref path: call qore_rt_refself to increment reference count
-    builder->SetInsertPoint(ref_bb);
+    // Get refself function
     auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
+
+    // Call refself (will only be used if has_node is true)
     llvm::Value* ref_result = builder->CreateCall(refself_fn, {val});
-    builder->CreateBr(merge_bb);
-    llvm::BasicBlock* ref_bb_end = builder->GetInsertBlock();
 
-    // Merge: phi between refself_result and original val
-    builder->SetInsertPoint(merge_bb);
-    llvm::PHINode* result = builder->CreatePHI(i64_type, 2);
-    result->addIncoming(ref_result, ref_bb_end);
-    result->addIncoming(val, entry_bb);
-
-    return result;
+    // Use select: if has_node then ref_result else val
+    // This is more efficient than branching for simple cases
+    return builder->CreateSelect(has_node, ref_result, val);
 }
 
 // Ensure a value is a native int64_t for typed int operations.
@@ -8569,11 +8554,10 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
         llvm::Value* lhs_is_nothing = builder->CreateICmpEQ(lhs, nothing_val);
         builder->CreateCondBr(lhs_is_nothing, nothing_bb, check_int_bb);
 
-        // Nothing path: call qore_rt_ref to increment reference count (equivalent to refSelf)
+        // Nothing path: Phase 4 - inline qore_rt_ref using select
+        // Checks if rhs has a node inline via NaN-boxing, selects refself result or original value
         builder->SetInsertPoint(nothing_bb);
-        auto ref_fn = module.getOrInsertFunction("qore_rt_ref",
-                llvm::FunctionType::get(i64_type, {i64_type}, false));
-        nothing_result = builder->CreateCall(ref_fn, {rhs});
+        nothing_result = emitHelperRef(module, rhs);
         builder->CreateBr(merge_bb);
     }
 
