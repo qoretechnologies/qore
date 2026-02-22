@@ -69,6 +69,8 @@
 // NaN-boxing constants matching QoreValue.h
 static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
 static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
+static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
+static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
 static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
 static constexpr uint64_t VAL_NOTHING        = 0;
 static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
@@ -462,6 +464,59 @@ llvm::Value* QoreIRToLLVM::unboxFloat(llvm::Value* qv) {
 // Unbox: extract native bool from NaN-boxed QoreValue
 llvm::Value* QoreIRToLLVM::unboxBool(llvm::Value* qv) {
     return builder->CreateICmpEQ(qv, llvm::ConstantInt::get(i64_type, VAL_TRUE));
+}
+
+// Phase 4: Check if value has a node (inline NaN-boxing check)
+// Returns true if the value is a pointer (tag == TAG_POINTER) with non-null address
+// Uses bit operations to extract tag and check for pointer type
+llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
+    // Extract tag: tag = qv & 0xFFFF000000000000
+    llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
+    // Check if tag == TAG_POINTER (0xFFFA000000000000)
+    llvm::Value* is_pointer = builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER));
+
+    // Extract pointer: ptr = qv & 0x0000FFFFFFFFFFFF
+    llvm::Value* payload = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+    // Check if pointer is non-null
+    llvm::Value* ptr_not_null = builder->CreateICmpNE(payload, llvm::ConstantInt::get(i64_type, 0));
+
+    // Return (is_pointer && ptr_not_null)
+    return builder->CreateAnd(is_pointer, ptr_not_null);
+}
+
+// Phase 4: Inline qore_rt_ref - reference count a value if it's a node
+// Emits: if (hasNode(val)) return qore_rt_refself(val); else return val;
+// This avoids external function call overhead for the type check
+llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
+    // Check if value has a node (inline check)
+    llvm::Value* has_node = hasNodeInline(val);
+
+    // Get the function being built
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+
+    // Create basic blocks for the conditional
+    llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "ref_node", func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx, "ref_merge", func);
+
+    // Branch based on has_node check
+    llvm::BasicBlock* entry_bb = builder->GetInsertBlock();
+    builder->CreateCondBr(has_node, ref_bb, merge_bb);
+
+    // Ref path: call qore_rt_refself to increment reference count
+    builder->SetInsertPoint(ref_bb);
+    auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    llvm::Value* ref_result = builder->CreateCall(refself_fn, {val});
+    builder->CreateBr(merge_bb);
+    llvm::BasicBlock* ref_bb_end = builder->GetInsertBlock();
+
+    // Merge: phi between refself_result and original val
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* result = builder->CreatePHI(i64_type, 2);
+    result->addIncoming(ref_result, ref_bb_end);
+    result->addIncoming(val, entry_bb);
+
+    return result;
 }
 
 // Ensure a value is a native int64_t for typed int operations.

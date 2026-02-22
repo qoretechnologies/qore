@@ -300,6 +300,14 @@ private:
     llvm::Value* unboxFloat(llvm::Value* qv);
     llvm::Value* unboxBool(llvm::Value* qv);
 
+    // Phase 4: LLVM IR helper inlining helpers
+    // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
+    llvm::Value* hasNodeInline(llvm::Value* qv);
+
+    // Inline qore_rt_ref - reference count a value if it's a node
+    // Returns the value unchanged if not a node, or qore_rt_refself result if node
+    llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
+
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
