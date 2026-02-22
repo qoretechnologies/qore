@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -1585,6 +1586,14 @@ public:
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
     uint32_t max_value_id = 0;
+
+    // Maximum local variable slot ID (used to right-size locals array in interpreter)
+    // Maps LocalVar* pointers to their slot IDs for flat array access instead of hash maps
+    uint32_t max_local_slot_id = 0;
+
+    // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
+    // Used by the IR interpreter to convert unordered_map lookups to direct array access
+    std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),

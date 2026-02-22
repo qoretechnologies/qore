@@ -2419,7 +2419,11 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         return;
     }
     // Compute max value ID for right-sizing interpreter value vector
+    // AND compute local variable slot IDs for flat array access in interpreter
     uint32_t max_vid = 0;
+    std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+    uint32_t next_local_slot = 0;
+
     for (const auto& block : func->blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->result.isValid() && inst->result.id > max_vid) {
@@ -2430,9 +2434,21 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
                     max_vid = operand.id;
                 }
             }
+
+            // Track LocalVar* pointers in LoadLocal/StoreLocal/UninstantiateLocal instructions
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                inst->opcode == QoreIROpcode::StoreLocal ||
+                inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+                if (local_inst->local && local_var_slots.find(local_inst->local) == local_var_slots.end()) {
+                    local_var_slots[local_inst->local] = next_local_slot++;
+                }
+            }
         }
     }
     func->max_value_id = max_vid;
+    func->local_var_slots = local_var_slots;
+    func->max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
 
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
