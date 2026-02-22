@@ -73,6 +73,9 @@ extern "C" DLLEXPORT uint64_t qore_fast_now_us(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_now_ms(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_tolower(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_toupper(uint64_t arg_bits, ExceptionSink* xsink);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -2044,6 +2047,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_
             else if (nargs == 1) {
                 if (!strcmp(fname, "strlen")) {
                     return qore_fast_strlen(args[0], xsink);
+                } else if (!strcmp(fname, "length")) {
+                    return qore_fast_length(args[0], xsink);
+                } else if (!strcmp(fname, "tolower") || !strcmp(fname, "lwr")) {
+                    return qore_fast_tolower(args[0], xsink);
+                } else if (!strcmp(fname, "toupper") || !strcmp(fname, "upr")) {
+                    return qore_fast_toupper(args[0], xsink);
                 }
             }
         }
@@ -2180,6 +2189,102 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
     int64_t timestamp = dt->getEpochSeconds();
     dt->deref(xsink);
     return toBits(timestamp);
+}
+
+// --- Phase 5.2b: Single-argument string functions ---
+
+extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns length of string or binary data
+    // Equivalent to: int length(softstring str) { return str->length(); }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(0);
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle string
+    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        return toBits(static_cast<int64_t>(str->length()));
+    }
+
+    // Handle binary
+    if (auto* bin = dynamic_cast<const BinaryNode*>(node)) {
+        return toBits(static_cast<int64_t>(bin->size()));
+    }
+
+    // For other types, try string conversion length
+    QoreString temp;
+    int err = 0;
+    node->getAsString(temp, -1, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(static_cast<int64_t>(temp.length()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_tolower(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns lowercase version of string
+    // Equivalent to: softstring tolower(softstring str) { return str->tolower(); }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle string directly
+    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        QoreStringNode* result = str->copy();
+        result->tolwr();
+        return toBits(result);
+    }
+
+    // For non-string types, convert to string first
+    QoreStringNode* temp = new QoreStringNode;
+    int err = 0;
+    node->getAsString(*temp, -1, xsink);
+    if (*xsink) {
+        temp->deref(xsink);
+        return toBits(QoreValue());
+    }
+    temp->tolwr();
+    return toBits(temp);
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_toupper(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns uppercase version of string
+    // Equivalent to: softstring toupper(softstring str) { return str->toupper(); }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle string directly
+    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        QoreStringNode* result = str->copy();
+        result->toupr();
+        return toBits(result);
+    }
+
+    // For non-string types, convert to string first
+    QoreStringNode* temp = new QoreStringNode;
+    int err = 0;
+    node->getAsString(*temp, -1, xsink);
+    if (*xsink) {
+        temp->deref(xsink);
+        return toBits(QoreValue());
+    }
+    temp->toupr();
+    return toBits(temp);
 }
 
 // --- Direct function call (resolved at parse time, skips AST round-trip) ---
