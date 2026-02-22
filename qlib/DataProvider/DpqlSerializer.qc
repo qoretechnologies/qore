@@ -310,13 +310,18 @@ public class DpqlSerializer {
 
         switch (arg.typeCode()) {
             case NT_HASH:
-                if (arg instanceof hash<DataProviderTemplateReference>) {
+                # Use instanceof for typed hashdecls (from parser), fall back to
+                # hasKey for plain hashes (from JSON deserialization via WebSocket)
+                if (arg instanceof hash<DataProviderTemplateReference>
+                    || (arg.hasKey("tmpl_context") && arg.hasKey("raw"))) {
                     return serializeTemplateRef(arg);
                 }
-                if (arg instanceof hash<DataProviderFieldReference>) {
+                if (arg instanceof hash<DataProviderFieldReference>
+                    || (arg.hasKey("field") && arg.size() == 1)) {
                     return serializeFieldRef(arg);
                 }
-                if (arg instanceof hash<DataProviderExpression>) {
+                if (arg instanceof hash<DataProviderExpression>
+                    || arg.hasKey("exp")) {
                     return serializeExpr(arg, context_prec);
                 }
                 # Structured hash literal
