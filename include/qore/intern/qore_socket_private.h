@@ -1148,11 +1148,12 @@ struct qore_socket_private {
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
-        if (event_queue) {
-            // close the socket before the delete message is put on the queue
-            // the socket would be closed anyway in the destructor
-            close_internal();
+        // always close the socket when the Qore object is destroyed; the socket
+        // must be closed here because poll operations may still hold references to
+        // the QoreSocketObject, preventing the C++ destructor from running
+        close_internal();
 
+        if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_DELETED));
 
             // deref and remove event queue
