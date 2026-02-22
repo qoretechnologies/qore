@@ -1199,7 +1199,6 @@ public:
     QoreProgram* pgm = nullptr;             //!< The program context
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
-    bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
     //!< operands[0..n-1] are the function arguments
 };
 
