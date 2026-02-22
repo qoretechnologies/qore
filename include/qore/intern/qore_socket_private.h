@@ -528,7 +528,7 @@ public:
     */
     DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
 
-    //! Returns the received data as a hash: {data: binary, address: string, port: int, family: int, familystr: string}
+    //! Returns the received data as a DatagramInfo hash
     DLLLOCAL virtual QoreValue takeOutput();
 
     //! Returns the number of bytes received
@@ -539,11 +539,15 @@ public:
 private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
+    QoreHashNode* output = nullptr;     //!< Built in continuePoll() with the caller's xsink
     size_t max_size;
     size_t received = 0;
     struct sockaddr_storage src_addr;
     socklen_t src_addr_len = sizeof(struct sockaddr_storage);
     bool io = false;
+
+    //! Build the typed DatagramInfo output hash (requires valid xsink)
+    DLLLOCAL void buildOutput(ExceptionSink* xsink);
 };
 
 //! Non-blocking sendto() for UDP datagram sockets
@@ -553,7 +557,8 @@ private:
 */
 class SocketSendToPollState : public AbstractPollState {
 public:
-    DLLLOCAL SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data, size_t size,
+    //! "bin" must be passed already referenced; this class takes ownership of the reference
+    DLLLOCAL SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, BinaryNode* bin,
         const struct sockaddr* dest_addr, socklen_t dest_addr_len);
 
     /** returns:
@@ -571,6 +576,7 @@ public:
 
 private:
     qore_socket_private* sock;
+    SimpleRefHolder<BinaryNode> bin;    //!< Owns a reference to the data being sent
     const char* data;
     size_t size;
     size_t sent = 0;

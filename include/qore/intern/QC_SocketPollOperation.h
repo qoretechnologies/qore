@@ -1017,7 +1017,7 @@ private:
 */
 class SocketSendToPollOperation : public SocketPollSocketOperationBase {
 public:
-    //! "data" must be passed already referenced
+    //! "data" must be passed already referenced; ownership transfers to the poll state
     DLLLOCAL SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
         BinaryNode* data, QoreSocketObject* sock);
 
@@ -1041,17 +1041,10 @@ public:
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        data_holder = nullptr;
-        SocketPollSocketOperationBase::abort(xsink);
-    }
-
 private:
-    SimpleRefHolder<BinaryNode> data_holder;
     struct sockaddr_storage dest_addr;
     socklen_t dest_addr_len = 0;
     bool sent = false;
-    bool resolved = false;  //!< Whether address resolution has completed
 
     DLLLOCAL virtual bool abortNeedsClose() const {
         return false;  // UDP is connectionless, no need to close on abort

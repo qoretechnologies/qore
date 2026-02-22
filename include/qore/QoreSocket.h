@@ -260,8 +260,7 @@ public:
 
     //! Starts a non-blocking sendto operation for UDP datagram sockets
     /** @param xsink if an error occurs, the Qore-language exception information will be added here
-        @param data the data to send
-        @param size the size of the data
+        @param bin the data to send; must be passed already referenced, this method takes ownership
         @param dest_addr the destination address
         @param dest_addr_len the size of the destination address structure
 
@@ -269,7 +268,7 @@ public:
 
         @since %Qore 2.3
     */
-    DLLEXPORT AbstractPollState* startSendTo(ExceptionSink* xsink, const char* data, size_t size,
+    DLLEXPORT AbstractPollState* startSendTo(ExceptionSink* xsink, BinaryNode* bin,
         const struct sockaddr* dest_addr, socklen_t dest_addr_len);
 
 #if 0

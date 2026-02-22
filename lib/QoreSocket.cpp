@@ -1880,6 +1880,9 @@ SocketRecvFromPollState::SocketRecvFromPollState(ExceptionSink* xsink, qore_sock
     memset(&src_addr, 0, sizeof(src_addr));
 }
 
+// NOTE: Unlike TCP poll states that start by returning SOCK_POLLIN and do I/O on the second call,
+// this may return 0 (completed) on the first call if a datagram is already available.
+// This is correct because UDP recvfrom() is atomic — one call = one datagram, no partial reads.
 int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
     if (io) {
         return 0;
@@ -1906,7 +1909,8 @@ int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
             bin->setSize(rc);
             received = rc;
             io = true;
-            return 0;
+            buildOutput(xsink);
+            return *xsink ? -1 : 0;
         }
 
         sock_get_error();
@@ -1926,26 +1930,33 @@ int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
         xsink->raiseErrnoException("SOCKET-RECVFROM-ERROR", errno, "error while executing recvfrom()");
         return -1;
     }
-    return 0;
 }
 
 QoreValue SocketRecvFromPollState::takeOutput() {
-    if (!io) {
+    if (!output) {
         return QoreValue();
     }
+    QoreHashNode* rv = output;
+    output = nullptr;
+    return rv;
+}
 
-    // Build result hash with data and source address info
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
+void SocketRecvFromPollState::buildOutput(ExceptionSink* xsink) {
+    assert(!output);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclDatagramInfo, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
 
     // Set the binary data
-    h->setKeyValue("data", bin.release(), nullptr);
+    h->setKeyValue("data", bin.release(), xsink);
 
     // Extract source address info
     if (src_addr.ss_family == AF_INET || src_addr.ss_family == AF_INET6) {
         char ifname[INET6_ADDRSTRLEN];
         if (inet_ntop(src_addr.ss_family, qore_get_in_addr((struct sockaddr*)&src_addr),
                 ifname, sizeof(ifname))) {
-            h->setKeyValue("address", new QoreStringNode(ifname), nullptr);
+            h->setKeyValue("address", new QoreStringNode(ifname), xsink);
         }
 
         int port;
@@ -1956,18 +1967,21 @@ QoreValue SocketRecvFromPollState::takeOutput() {
             struct sockaddr_in6* s = (struct sockaddr_in6*)&src_addr;
             port = ntohs(s->sin6_port);
         }
-        h->setKeyValue("port", port, nullptr);
+        h->setKeyValue("port", port, xsink);
     }
 
-    h->setKeyValue("family", (int64)src_addr.ss_family, nullptr);
-    h->setKeyValue("familystr", new QoreStringNode(QoreAddrInfo::getFamilyName(src_addr.ss_family)), nullptr);
+    h->setKeyValue("family", (int64)src_addr.ss_family, xsink);
+    h->setKeyValue("familystr", new QoreStringNode(QoreAddrInfo::getFamilyName(src_addr.ss_family)), xsink);
 
-    return h.release();
+    if (!*xsink) {
+        output = h.release();
+    }
 }
 
-SocketSendToPollState::SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data,
-        size_t size, const struct sockaddr* dest_addr, socklen_t dest_addr_len)
-        : sock(sock), data(data), size(size), dest_addr_len(dest_addr_len) {
+SocketSendToPollState::SocketSendToPollState(ExceptionSink* xsink, qore_socket_private* sock, BinaryNode* bin,
+        const struct sockaddr* dest_addr, socklen_t dest_addr_len)
+        : sock(sock), bin(bin), data(reinterpret_cast<const char*>(bin->getPtr())), size(bin->size()),
+        dest_addr_len(dest_addr_len) {
     if (sock->sock == QORE_INVALID_SOCKET) {
         xsink->raiseException("SOCKET-NOT-OPEN", "socket is not open");
         return;
@@ -3880,14 +3894,14 @@ AbstractPollState* QoreSocket::startRecvFrom(ExceptionSink* xsink, size_t max_si
     return new SocketRecvFromPollState(xsink, priv, max_size);
 }
 
-AbstractPollState* QoreSocket::startSendTo(ExceptionSink* xsink, const char* data, size_t size,
+AbstractPollState* QoreSocket::startSendTo(ExceptionSink* xsink, BinaryNode* bin,
         const struct sockaddr* dest_addr, socklen_t dest_addr_len) {
     if (priv->sock == QORE_INVALID_SOCKET) {
         se_not_open("Socket", "startSendTo", xsink);
         return nullptr;
     }
 
-    return new SocketSendToPollState(xsink, priv, data, size, dest_addr, dest_addr_len);
+    return new SocketSendToPollState(xsink, priv, bin, dest_addr, dest_addr_len);
 }
 
 AbstractPollState* QoreSocket::startAccept(ExceptionSink* xsink) {
@@ -7354,11 +7368,12 @@ QoreHashNode* SocketRecvFromPollOperation::continuePoll(ExceptionSink* xsink) {
 
 SocketSendToPollOperation::SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
         BinaryNode* data, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), data_holder(data) {
+        : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
     if (sock->priv->checkOpen(xsink)) {
+        data->deref();
         return;
     }
 
@@ -7367,29 +7382,32 @@ SocketSendToPollOperation::SocketSendToPollOperation(ExceptionSink* xsink, const
     QoreString service_str;
     service_str.sprintf("%d", port);
     if (ai.getInfo(xsink, host, service_str.c_str(), family, 0, SOCK_DGRAM, 0)) {
+        data->deref();
         return;
     }
 
     struct addrinfo* aip = ai.getAddrInfo();
     if (!aip) {
         xsink->raiseException("SOCKET-SENDTO-ERROR", "could not resolve destination address '%s:%d'", host, port);
+        data->deref();
         return;
     }
 
-    // Copy resolved address
+    // Copy resolved address for error reporting
     memcpy(&dest_addr, aip->ai_addr, aip->ai_addrlen);
     dest_addr_len = aip->ai_addrlen;
-    resolved = true;
 
     if (!sock->priv->setNonBlock(xsink)) {
-        poll_state.reset(sock->priv->socket->startSendTo(xsink,
-            reinterpret_cast<const char*>(data_holder->getPtr()), data_holder->size(),
+        // startSendTo takes ownership of the BinaryNode reference
+        poll_state.reset(sock->priv->socket->startSendTo(xsink, data,
             (const struct sockaddr*)&dest_addr, dest_addr_len));
         if (!poll_state) {
             sock->priv->clearNonBlock();
         } else {
             set_non_block = true;
         }
+    } else {
+        data->deref();
     }
 }
 

@@ -211,12 +211,12 @@ private:
 
     //! Command queue entry
     struct Command {
-        IoCommand cmd;
+        IoCommand cmd = IoCommand::Wake;
         std::string key;                //!< For Cancel: the cache key
         std::string owner;              //!< For CancelOwner: the owner string
-        QoreCondition* done_cond;       //!< For CancelOwner: signaled when all canceled
-        int64_t timer_deadline_us;      //!< For AddTimer: absolute deadline in microseconds
-        int64_t timer_id;               //!< For AddTimer/CancelTimer: timer ID
+        QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
+        int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
+        int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)

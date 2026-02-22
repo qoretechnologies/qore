@@ -1300,14 +1300,14 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             for (int i = 0; i < count; ++i) {
                 if (events[i].events & QORE_EV_TIMER) {
                     // Timer event — extract user data under lock
+                    // If the entry is not found, it was already canceled by cancelTimer();
+                    // silently drop the event to avoid delivering a stale callback
                     int64_t tid_val = events[i].timer_id;
-                    QoreValue udata;
                     auto it = timer_info_map.find(tid_val);
                     if (it != timer_info_map.end()) {
-                        udata = it->second.udata;
+                        timer_events.push_back({tid_val, it->second.udata});
                         timer_info_map.erase(it);
                     }
-                    timer_events.push_back({tid_val, udata});
                 } else if (events[i].fd >= 0 && events[i].udata) {
                     QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
                     // Find the socket hash for this object
@@ -1821,7 +1821,12 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
             return false;
         }
     }
-    cmdq.push_back({cmd, key, owner, done_cond, 0, 0});
+    Command c;
+    c.cmd = cmd;
+    c.key = key;
+    c.owner = owner;
+    c.done_cond = done_cond;
+    cmdq.push_back(std::move(c));
     return true;
 }
 
