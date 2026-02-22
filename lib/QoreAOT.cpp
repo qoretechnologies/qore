@@ -4706,6 +4706,29 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         // Non-class VarRefNewObjectNode (hashdecl, complex hash/list) falls through to GENERIC_EVAL
     }
 
+    // NewHashDeclNode: hashdecl construction (new MyHashDecl(...))
+    if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        if (nhd->hd) {
+            id.kind = AOTExprKind::HASHDECL_NEW;
+            id.ref1 = nhd->hd->getNamespacePath();
+            return id;
+        }
+    }
+
+    // NewComplexHashNode: complex typed hash construction (new hash<string, int>(...))
+    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        id.kind = AOTExprKind::COMPLEX_HASH_NEW;
+        id.ref1 = QoreTypeInfo::getPath(nch->typeInfo);
+        return id;
+    }
+
+    // NewComplexListNode: complex typed list construction (new list<string>(...))
+    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+        id.kind = AOTExprKind::COMPLEX_LIST_NEW;
+        id.ref1 = QoreTypeInfo::getPath(ncl->typeInfo);
+        return id;
+    }
+
     // VarRefNode: local variable reference (for lvalue operations)
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||

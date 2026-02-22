@@ -569,6 +569,9 @@ enum class AOTExprKind : uint8_t {
     OBJ_METHOD_REF     = 12,  //!< Object method reference: ref1=method_name
     STATIC_VARREF      = 13,  //!< Static class variable: ref1=class_name, ref2=var_name
     SCOPED_NEW_OBJECT  = 14,  //!< Scoped new object: ref1=class_name
+    HASHDECL_NEW       = 15,  //!< Hashdecl construction: ref1=hashdecl_path
+    COMPLEX_HASH_NEW   = 16,  //!< Complex hash construction: ref1=type_path
+    COMPLEX_LIST_NEW   = 17,  //!< Complex list construction: ref1=type_path
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };

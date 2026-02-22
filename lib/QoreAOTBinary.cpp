@@ -1533,7 +1533,10 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 case AOTExprKind::LOCAL_VARREF:
                 case AOTExprKind::CONST_NUMBER:
                 case AOTExprKind::CONST_BINARY:
-                    // ref1 = name/value/index
+                case AOTExprKind::HASHDECL_NEW:
+                case AOTExprKind::COMPLEX_HASH_NEW:
+                case AOTExprKind::COMPLEX_LIST_NEW:
+                    // ref1 = name/value/index/path
                     writer.writeStringRef(expr.ref1.c_str());
                     break;
                 case AOTExprKind::SELF_METHOD_CALL:

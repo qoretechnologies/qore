@@ -346,6 +346,30 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // Handled inline in buildContextFromSlotMap
             return 0;
 
+        case AOTExprKind::HASHDECL_NEW: {
+            if (!ref1 || !*ref1) {
+                return 0;
+            }
+            // Look up hashdecl by namespace-qualified path
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+                *pp->RootNS, ref1, found_ns);
+            if (!hd) {
+                printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
+                return 0;
+            }
+            // Create a NewHashDeclNode with no args (args handled by native code)
+            NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, (QoreParseListNode*)nullptr, false);
+            return toBitsNB(QoreValue(nhd));
+        }
+
+        case AOTExprKind::COMPLEX_HASH_NEW:
+        case AOTExprKind::COMPLEX_LIST_NEW:
+            // Complex types require full AST context for type reconstruction
+            // Fall through to generic evaluation for now
+            printd(1, "AOT v2: complex typed construction needs source fallback\n");
+            return 0;
+
         case AOTExprKind::GENERIC_EVAL:
         default:
             // Unsupported — function needs source fallback
@@ -1601,6 +1625,9 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CONST_NUMBER:
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::SELF_VARREF:
+            case AOTExprKind::HASHDECL_NEW:
+            case AOTExprKind::COMPLEX_HASH_NEW:
+            case AOTExprKind::COMPLEX_LIST_NEW:
                 ref1 = reader.readStringRef(ptr);
                 break;
             case AOTExprKind::SELF_METHOD_CALL:
