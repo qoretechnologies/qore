@@ -664,6 +664,10 @@ protected:
     mutable std::atomic<int> jit_recompile_state{0};
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     mutable bool all_body_locals_ir_only = false;
+    //! True if argv is actually referenced in the function body (set during IR lowering)
+    mutable bool uses_argv = true;  // Conservative: assume used unless proven otherwise
+    //! True if self is actually referenced in the function body (set during IR lowering)
+    mutable bool uses_self = true;  // Conservative: assume used unless proven otherwise
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -771,6 +775,16 @@ public:
     //! Returns true if this variant has a cached AOT function
     DLLLOCAL bool hasCachedAOT() const {
         return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
+    }
+
+    //! Returns true if argv is actually used in the function body
+    DLLLOCAL bool usesArgv() const {
+        return uses_argv;
+    }
+
+    //! Returns true if self is actually used in the function body
+    DLLLOCAL bool usesSelf() const {
+        return uses_self;
     }
 
     //! Returns the cached IR function (if at IR tier or higher), or nullptr
