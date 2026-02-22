@@ -38,8 +38,9 @@ SmartMutex::~SmartMutex() {
 }
 
 int SmartMutex::releaseImpl() {
-    if (tid < 0)
+    if (tid < 0) {
         return -1;
+    }
     return 0;
 }
 
@@ -53,8 +54,9 @@ int SmartMutex::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeo
         waiting++;
         int rc =  nvl->waitOn((AbstractSmartLock *)this, vl, xsink, timeout_ms);
         waiting--;
-        if (rc)
+        if (rc) {
             return -1;
+        }
     }
     if (tid == Lock_Deleted) {
         // getName() for possible inheritance
@@ -80,8 +82,9 @@ int SmartMutex::releaseImpl(ExceptionSink *xsink) {
 }
 
 int SmartMutex::tryGrabImpl(int mtid, VLock *nvl) {
-    if (tid != Lock_Unlocked)
+    if (tid != Lock_Unlocked) {
         return -1;
+    }
     return 0;
 }
 
@@ -93,40 +96,52 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
 
     // insert into cond map
     cond_map_t::iterator i = cmap.find(cond);
-    if (i == cmap.end())
+    if (i == cmap.end()) {
         i = cmap.insert(std::make_pair(cond, 1)).first;
-    else
+    } else {
         ++(i->second);
+    }
 
     // save vlock
     VLock *nvl = vl;
 
+    // record signal generation before releasing the lock so we can detect
+    // signals fired at any point after this (during release, before wait,
+    // during wait, or during lock reacquisition in grabImpl)
+    uint64_t gen = cond->getSignalGen();
+
     // release lock
     release_intern();
 
-    // record signal generation before waiting to detect signals fired during
-    // the gap between returning from pthread_cond_timedwait and reacquiring
-    // the Qore-level mutex in grabImpl
-    uint64_t gen = cond->getSignalGen();
+    int rc;
+    // check if a signal/broadcast was already fired before we start waiting
+    if (cond->getSignalGen() != gen) {
+        rc = 0;
+    } else {
+        // wait for condition
+        rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+    }
 
-    // wait for condition
-    int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+    // detect signals/broadcasts that were fired while this thread was waiting
+    // (before we erase from the condition map); save result before erasing so we
+    // don't access cond after it's no longer tracked (another thread might delete it)
+    bool signal_fired = (rc == ETIMEDOUT && cond->getSignalGen() != gen);
 
     // decrement cond count and delete from map if 0
-    if (!--(i->second))
+    if (!--(i->second)) {
         cmap.erase(i);
+    }
 
     // reacquire the lock
-    if (grabImpl(mtid, nvl, xsink))
+    if (grabImpl(mtid, nvl, xsink)) {
         return -1;
+    }
 
     grab_intern(mtid, nvl);
 
-    // detect signals/broadcasts that were fired while this thread was
-    // reacquiring the Qore-level mutex (waiting on asl_cond in grabImpl);
-    // during that window the thread is not listening on the user's condition,
-    // so the signal would otherwise be permanently lost
-    if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
+    // if a signal/broadcast was fired during the gap when we weren't listening
+    // (while reacquiring the Qore-level mutex in grabImpl), treat as success
+    if (signal_fired) {
         rc = 0;
     }
 
@@ -139,8 +154,9 @@ void SmartMutex::destructorImpl(ExceptionSink *xsink) {
         xsink->raiseException("LOCK-ERROR", "%s object deleted in TID %d while one or more Condition variables were "
             "waiting on it", getName(), q_gettid());
         // wake up all condition variables waiting on this mutex
-        for (; i != e; i++)
-        i->first->broadcast();
+        for (; i != e; i++) {
+            i->first->broadcast();
+        }
     }
 }
 
