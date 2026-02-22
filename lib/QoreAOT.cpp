@@ -4756,6 +4756,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         // Thread-local and other types fall through to GENERIC_EVAL for now
     }
 
+    // QoreClosureParseNode: closure/lambda creation
+    // Phase 7: Serialize closure body via EXPR_TREE serialization (complex expression)
+    // Falls through to ExprTreeSerializer below
+
     // QoreNumberNode: number literal constant
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
         id.kind = AOTExprKind::CONST_NUMBER;

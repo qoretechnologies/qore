@@ -66,6 +66,10 @@
 #include <qore/intern/ForEachStatement.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
+
+// --- Forward declarations for Phase 5 fast-call builtins ---
+extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink);
+
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
 // Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
@@ -2015,6 +2019,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_
         return toBits(QoreValue());
     }
 
+    // Phase 5: Fast-call detection for strlen
+    // Skip QoreListNode allocation for single-argument builtins with fast-call variants
+    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+        const char* fname = call->getName();
+        if (fname && nargs == 1 && !strcmp(fname, "strlen")) {
+            return qore_fast_strlen(args[0], xsink);
+        }
+    }
+
     // Build QoreListNode from the NaN-boxed args array
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
@@ -2084,6 +2097,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_
     }
 
     return toBits(result);
+}
+
+// --- Phase 5: Fast-call builtin variants (skip QoreListNode allocation) ---
+
+extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink) {
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(0);
+    }
+
+    // Get string value (softstring auto-converts to string)
+    const QoreStringNode* str = nullptr;
+    if (auto* s = dynamic_cast<const QoreStringNode*>(arg.getInternalNode())) {
+        str = s;
+    } else {
+        // For non-string types, try to convert via string conversion
+        // This matches the behavior of the QPP strlen(softstring) function
+        QoreString temp;
+        int err = 0;
+        arg.getInternalNode()->getAsString(temp, -1, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        // For non-string-like values, return 0 (matches NOOP variant behavior)
+        return toBits(0);
+    }
+
+    // Return string length as a 64-bit integer
+    int64_t len = static_cast<int64_t>(str->strlen());
+    return toBits(len);
 }
 
 // --- Direct function call (resolved at parse time, skips AST round-trip) ---
