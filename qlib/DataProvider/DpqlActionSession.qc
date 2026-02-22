@@ -287,7 +287,7 @@ public class DpqlActionSession {
         }
         hash<DataProviderExpression> dp_exp;
         try {
-            dp_exp = cast<hash<DataProviderExpression>>(args.expression);
+            dp_exp = DataProvider::deserializeExpressionFromJson(args.expression);
         } catch (hash<ExceptionInfo> ex) {
             throw "INVALID-PARAMETER", sprintf("Invalid 'expression' value: %s", ex.desc);
         }

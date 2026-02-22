@@ -109,6 +109,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("template evaluation tests", \templateEvaluationTests());
         addTestCase("template completion tests", \templateCompletionTests());
         addTestCase("template validation tests", \templateValidationTests());
+        addTestCase("JSON expression serialization tests", \jsonExpressionSerializationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -4121,6 +4122,298 @@ public class DpqlTest inherits QUnit::Test {
             };
             # Should not throw — ST_Any accepts template references
             AbstractDataProvider::verifyExpressionArgValue(ER_All, 0, expinfo, (tmpl_ref,), 0);
+        }
+    }
+
+    jsonExpressionSerializationTests() {
+        # ---- Deserialize tests ----
+
+        # Basic expression with field ref and value wrapper
+        {
+            hash<auto> json = {
+                "exp": "==",
+                "args": ({"field": "name"}, {"value": "John"}),
+            };
+            hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(json);
+            assertEq("==", exp.exp);
+            assertEq(2, exp.args.size());
+            assertTrue(exp.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq("name", exp.args[0].field);
+            assertEq("John", exp.args[1]);
+        }
+
+        # Nested expression: AND(== , !=)
+        {
+            hash<auto> json = {
+                "exp": "and",
+                "args": (
+                    {
+                        "exp": "==",
+                        "args": ({"field": "name"}, {"value": "John"}),
+                    },
+                    {
+                        "exp": "!=",
+                        "args": ({"field": "age"}, {"value": 30}),
+                    },
+                ),
+            };
+            hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(json);
+            assertEq("and", exp.exp);
+            assertEq(2, exp.args.size());
+            assertTrue(exp.args[0] instanceof hash<DataProviderExpression>);
+            assertTrue(exp.args[1] instanceof hash<DataProviderExpression>);
+            hash<DataProviderExpression> left = exp.args[0];
+            assertEq("==", left.exp);
+            assertTrue(left.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq("John", left.args[1]);
+        }
+
+        # Template reference with raw
+        {
+            hash<auto> json_arg = {
+                "tmpl_context": "static",
+                "tmpl_value": "id",
+                "raw": "$static:id",
+            };
+            auto result = DataProvider::deserializeExpressionArgFromJson(json_arg);
+            assertTrue(result instanceof hash<DataProviderTemplateReference>);
+            assertEq("static", result.tmpl_context);
+            assertEq("id", result.tmpl_value);
+            assertEq("$static:id", result.raw);
+        }
+
+        # Template reference without raw: raw reconstructed
+        {
+            hash<auto> json_arg = {
+                "tmpl_context": "dynamic",
+                "tmpl_value": "count",
+            };
+            auto result = DataProvider::deserializeExpressionArgFromJson(json_arg);
+            assertTrue(result instanceof hash<DataProviderTemplateReference>);
+            assertEq("dynamic", result.tmpl_context);
+            assertEq("count", result.tmpl_value);
+            assertEq("$dynamic:count", result.raw);
+        }
+
+        # Plain value unwrap
+        {
+            assertEq(42, DataProvider::deserializeExpressionArgFromJson({"value": 42}));
+            assertEq("hello", DataProvider::deserializeExpressionArgFromJson({"value": "hello"}));
+            assertEq(NOTHING, DataProvider::deserializeExpressionArgFromJson({"value": NOTHING}));
+        }
+
+        # Non-hash scalars pass through
+        {
+            assertEq(42, DataProvider::deserializeExpressionArgFromJson(42));
+            assertEq("str", DataProvider::deserializeExpressionArgFromJson("str"));
+            assertEq(True, DataProvider::deserializeExpressionArgFromJson(True));
+        }
+
+        # Range spec: {"start": ..., "end": ...}
+        {
+            hash<auto> json_arg = {"start": 0, "end": 5};
+            auto result = DataProvider::deserializeExpressionArgFromJson(json_arg);
+            assertTrue(result instanceof hash<DataProviderRangeSpec>);
+            assertEq(0, result.start);
+            assertEq(5, result.end);
+        }
+
+        # Range spec: already typed passes through
+        {
+            hash<DataProviderRangeSpec> range = <DataProviderRangeSpec>{"start": 1, "end": 3};
+            auto result = DataProvider::deserializeExpressionArgFromJson(range);
+            assertTrue(result instanceof hash<DataProviderRangeSpec>);
+            assertEq(1, result.start);
+            assertEq(3, result.end);
+        }
+
+        # Idempotent: already-typed expression passes through
+        {
+            hash<DataProviderExpression> typed = <DataProviderExpression>{
+                "exp": "==",
+                "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+            };
+            hash<DataProviderExpression> result = DataProvider::deserializeExpressionFromJson(typed);
+            assertEq("==", result.exp);
+            assertTrue(result.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq("John", result.args[1]);
+        }
+
+        # Error: missing exp key
+        {
+            assertThrows("EXPRESSION-DESERIALIZE-ERROR", sub () {
+                DataProvider::deserializeExpressionFromJson({"args": (1, 2)});
+            });
+        }
+
+        # Error: exp is not a string
+        {
+            assertThrows("EXPRESSION-DESERIALIZE-ERROR", sub () {
+                DataProvider::deserializeExpressionFromJson({"exp": 123});
+            });
+        }
+
+        # Error: unknown hash arg
+        {
+            assertThrows("EXPRESSION-ARG-ERROR", sub () {
+                DataProvider::deserializeExpressionArgFromJson({"unknown_key": "val", "other": 1});
+            });
+        }
+
+        # ---- Serialize tests ----
+
+        # Basic typed expression to JSON
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "==",
+                "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+            };
+            hash<auto> json = DataProvider::serializeExpressionToJson(exp);
+            assertEq("==", json.exp);
+            assertEq(2, json.args.size());
+            assertEq({"field": "name"}, json.args[0]);
+            assertEq({"value": "John"}, json.args[1]);
+        }
+
+        # Field ref serialization
+        {
+            auto result = DataProvider::serializeExpressionArgToJson(
+                <DataProviderFieldReference>{"field": "age"});
+            assertEq({"field": "age"}, result);
+        }
+
+        # Template ref serialization preserves all fields
+        {
+            hash<DataProviderTemplateReference> tmpl = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "id",
+                "raw": "$static:id",
+            };
+            auto result = DataProvider::serializeExpressionArgToJson(tmpl);
+            assertEq("static", result.tmpl_context);
+            assertEq("id", result.tmpl_value);
+            assertEq("$static:id", result.raw);
+        }
+
+        # Nested expression serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": "and",
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": "==",
+                        "args": (<DataProviderFieldReference>{"field": "a"}, 1),
+                    },
+                    <DataProviderExpression>{
+                        "exp": ">",
+                        "args": (<DataProviderFieldReference>{"field": "b"}, 10),
+                    },
+                ),
+            };
+            hash<auto> json = DataProvider::serializeExpressionToJson(exp);
+            assertEq("and", json.exp);
+            assertEq("==", json.args[0].exp);
+            assertEq({"field": "a"}, json.args[0].args[0]);
+            assertEq({"value": 1}, json.args[0].args[1]);
+            assertEq(">", json.args[1].exp);
+        }
+
+        # Range spec serialization
+        {
+            hash<DataProviderRangeSpec> range = <DataProviderRangeSpec>{"start": 0, "end": 2};
+            auto result = DataProvider::serializeExpressionArgToJson(range);
+            assertEq(0, result.start);
+            assertEq(2, result.end);
+        }
+
+        # Plain value wrapping
+        {
+            assertEq({"value": 42}, DataProvider::serializeExpressionArgToJson(42));
+            assertEq({"value": "str"}, DataProvider::serializeExpressionArgToJson("str"));
+            assertEq({"value": True}, DataProvider::serializeExpressionArgToJson(True));
+        }
+
+        # ---- Round-trip tests ----
+
+        # deserialize(serialize(exp)) == exp
+        {
+            hash<DataProviderExpression> original = <DataProviderExpression>{
+                "exp": "and",
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": "==",
+                        "args": (
+                            <DataProviderFieldReference>{"field": "name"},
+                            <DataProviderTemplateReference>{
+                                "tmpl_context": "static",
+                                "tmpl_value": "expected_name",
+                                "raw": "$static:expected_name",
+                            },
+                        ),
+                    },
+                    <DataProviderExpression>{
+                        "exp": ">",
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 18),
+                    },
+                ),
+            };
+            hash<auto> json = DataProvider::serializeExpressionToJson(original);
+            hash<DataProviderExpression> restored = DataProvider::deserializeExpressionFromJson(json);
+            assertEq(original.exp, restored.exp);
+            assertEq(original.args.size(), restored.args.size());
+            # Verify nested expression typing preserved
+            assertTrue(restored.args[0] instanceof hash<DataProviderExpression>);
+            hash<DataProviderExpression> left = restored.args[0];
+            assertTrue(left.args[0] instanceof hash<DataProviderFieldReference>);
+            assertTrue(left.args[1] instanceof hash<DataProviderTemplateReference>);
+            assertEq("static", left.args[1].tmpl_context);
+            assertEq("expected_name", left.args[1].tmpl_value);
+            hash<DataProviderExpression> right = restored.args[1];
+            assertTrue(right.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq(18, right.args[1]);
+        }
+
+        # serialize(deserialize(json)) produces valid JSON format
+        {
+            hash<auto> original_json = {
+                "exp": "or",
+                "args": (
+                    {
+                        "exp": "==",
+                        "args": ({"field": "status"}, {"value": "active"}),
+                    },
+                    {
+                        "exp": "==",
+                        "args": (
+                            {"field": "role"},
+                            {"tmpl_context": "config", "tmpl_value": "admin_role", "raw": "$config:admin_role"},
+                        ),
+                    },
+                ),
+            };
+            hash<DataProviderExpression> typed = DataProvider::deserializeExpressionFromJson(original_json);
+            hash<auto> reserialized = DataProvider::serializeExpressionToJson(typed);
+            assertEq("or", reserialized.exp);
+            assertEq(2, reserialized.args.size());
+            # First sub-expression
+            assertEq("==", reserialized.args[0].exp);
+            assertEq({"field": "status"}, reserialized.args[0].args[0]);
+            assertEq({"value": "active"}, reserialized.args[0].args[1]);
+            # Second sub-expression with template ref
+            assertEq("==", reserialized.args[1].exp);
+            assertEq({"field": "role"}, reserialized.args[1].args[0]);
+            assertEq("config", reserialized.args[1].args[1].tmpl_context);
+            assertEq("admin_role", reserialized.args[1].args[1].tmpl_value);
+        }
+
+        # Expression with no args
+        {
+            hash<auto> json = {"exp": "true"};
+            hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(json);
+            assertEq("true", exp.exp);
+            assertEq(0, exp.args.size());
+            hash<auto> reserialized = DataProvider::serializeExpressionToJson(exp);
+            assertEq("true", reserialized.exp);
         }
     }
 }
