@@ -45,8 +45,8 @@ class QoreProgram;
 class QoreTypeInfo;
 class qore_ns_private;
 
-//! Magic number: "QORD" in big-endian (0x514F5244)
-constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x514F5244;
+//! Magic number: "QORD" in little-endian (0x44524F51)
+constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 
 //! Current binary format version (clean v1 format with full 128-bit parse options + source hash)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 1;
