@@ -1238,6 +1238,60 @@ extern "C" DLLEXPORT uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
     return 0;
 }
 
+// Fast-path helper for closure calls with no arguments — avoids QoreListNode allocation
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+    QoreValue ref_val = fromBits(ref_bits);
+    if (!ref_val.hasNode()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        return toBits(QoreValue());
+    }
+
+    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
+        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
+    if (!callref) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        return toBits(QoreValue());
+    }
+
+    // Call with empty list (no heap allocation — nullptr arg list is handled by execValue)
+    QoreValue result = callref->execValue(nullptr, xsink);
+    return toBits(result);
+}
+
+// Fast-path helper for closure calls with one argument — optimized list allocation
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t arg0_bits, ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+    QoreValue ref_val = fromBits(ref_bits);
+    if (!ref_val.hasNode()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        return toBits(QoreValue());
+    }
+
+    ResolvedCallReferenceNode* callref = dynamic_cast<ResolvedCallReferenceNode*>(
+        const_cast<AbstractQoreNode*>(ref_val.getInternalNode()));
+    if (!callref) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        return toBits(QoreValue());
+    }
+
+    // Build single-element list with pre-allocated capacity
+    ReferenceHolder<QoreListNode> arg_list(new QoreListNode(autoTypeInfo), xsink);
+    QoreValue arg0 = fromBits(arg0_bits);
+    if (arg0.hasNode()) {
+        arg0.refSelf();
+    }
+    qore_list_private::get(**arg_list)->pushIntern(arg0);
+
+    // Call directly with the single-element list (execValue borrows it)
+    QoreValue result = callref->execValue(*arg_list, xsink);
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     if (check_stack(xsink)) {

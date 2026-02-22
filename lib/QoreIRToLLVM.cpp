@@ -3613,18 +3613,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!ref) { return false; }
                     llvm::Value* ref_boxed = boxValue(ref, inv->operands[0].id);
 
-                    // Build args array from operands[1..]
-                    llvm::Value* closure_args_array;
-                    int closure_nargs;
-                    if (!buildArgsArray(inst, 1, llvm_func, closure_args_array, closure_nargs, error)) {
-                        return false;
-                    }
+                    // Compute number of arguments from operand count (known at compile time)
+                    int closure_nargs = static_cast<int>(inst->operands.size()) - 1;
 
-                    auto helper = module.getOrInsertFunction("qore_rt_call_closure_fast",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {ref_boxed, closure_args_array,
-                            llvm::ConstantInt::get(i32_type, closure_nargs), xsink_arg});
+                    if (closure_nargs == 0) {
+                        // Fast path for 0-argument closure calls (no QoreListNode allocation)
+                        auto helper = module.getOrInsertFunction("qore_rt_call_closure_0",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {ref_boxed, xsink_arg});
+                    } else if (closure_nargs == 1) {
+                        // Fast path for 1-argument closure calls (stack-allocated QoreListNode)
+                        auto* arg_val = getVal(inst->operands[1].id, error);
+                        if (!arg_val) { return false; }
+                        llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
+                        auto helper = module.getOrInsertFunction("qore_rt_call_closure_1",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {ref_boxed, arg_boxed, xsink_arg});
+                    } else {
+                        // Standard path for >1 arguments
+                        llvm::Value* closure_args_array;
+                        if (!buildArgsArray(inst, 1, llvm_func, closure_args_array, closure_nargs, error)) {
+                            return false;
+                        }
+
+                        auto helper = module.getOrInsertFunction("qore_rt_call_closure_fast",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {ref_boxed, closure_args_array,
+                                llvm::ConstantInt::get(i32_type, closure_nargs), xsink_arg});
+                    }
                 } else if (aot_mode) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_call_with_args_aot",
