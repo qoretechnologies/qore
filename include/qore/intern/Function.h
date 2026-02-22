@@ -703,6 +703,13 @@ public:
         return init;
     }
 
+    //! Public wrapper for evalTiered() - allows IR interpreter cross-function dispatch
+    //! without building AST fallback nodes.
+    DLLLOCAL QoreValue callTieredPublic(const char* name, ReferenceHolder<QoreListNode>& argv,
+            QoreObject* self, ExceptionSink* xsink) const {
+        return evalTiered(name, argv, self, xsink);
+    }
+
     DLLLOCAL bool hasBody() const {
         return (bool)statements;
     }
