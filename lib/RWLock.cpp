@@ -63,11 +63,26 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         // save vlock
         VLock *nvl = vl;
 
+        // record signal generation before releasing the lock so we can detect
+        // signals fired at any point after this
+        uint64_t gen = cond->getSignalGen();
+
         // release lock
         release_intern();
 
-        // wait for condition
-        int rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+        int rc;
+        // check if a signal/broadcast was already fired before we start waiting
+        if (cond->getSignalGen() != gen) {
+            rc = 0;
+        } else {
+            // wait for condition
+            rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+        }
+
+        // detect signals/broadcasts that were fired while this thread was waiting
+        // (before we erase from the condition map); save result before erasing so we
+        // don't access cond after it's no longer tracked (another thread might delete it)
+        bool signal_fired = (rc == ETIMEDOUT && cond->getSignalGen() != gen);
 
         // decrement cond count and delete from map if 0
         if (!--(i->second)) {
@@ -80,6 +95,13 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         }
 
         grab_intern(mtid, nvl);
+
+        // if a signal/broadcast was fired during the gap when we weren't listening
+        // (while reacquiring the Qore-level mutex in grabImpl), treat as success
+        if (signal_fired) {
+            rc = 0;
+        }
+
         return rc;
     }
 
@@ -110,14 +132,29 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
     // save vlock
     VLock *nvl = vmap[mtid];
 
+    // record signal generation before releasing the lock so we can detect
+    // signals fired at any point after this
+    uint64_t gen = cond->getSignalGen();
+
     // release lock
     // issue #2817: handle the case when the read lock is held recursively
     for (int j = 0; j < read_count; ++j) {
         release_read_lock_intern(i);
     }
 
-    // wait for condition
-    int rc = timeout_ms ? cond->wait(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+    int rc;
+    // check if a signal/broadcast was already fired before we start waiting
+    if (cond->getSignalGen() != gen) {
+        rc = 0;
+    } else {
+        // wait for condition
+        rc = timeout_ms ? cond->wait(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
+    }
+
+    // detect signals/broadcasts that were fired while this thread was waiting
+    // (before we erase from the condition map); save result before erasing so we
+    // don't access cond after it's no longer tracked (another thread might delete it)
+    bool signal_fired = (rc == ETIMEDOUT && cond->getSignalGen() != gen);
 
     // decrement cond count and delete from map if 0
     if (!--(ci->second)) {
@@ -130,6 +167,12 @@ int RWLock::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsink, 
         if (grab_read_lock_intern(mtid, nvl, 0, xsink)) {
             return -1;
         }
+    }
+
+    // if a signal/broadcast was fired during the gap when we weren't listening
+    // (while reacquiring the read lock), treat as success
+    if (signal_fired) {
+        rc = 0;
     }
 
     return rc;

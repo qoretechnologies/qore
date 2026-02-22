@@ -705,6 +705,16 @@ struct qore_socket_private {
     */
     std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> h2_stream_complete_callback;
 
+#ifdef DARWIN
+    //! Write end of a notification pipe used by Socket::poll() on macOS
+    /** When a socket FD is closed during a kqueue poll, macOS silently removes
+        the kqueue filter without delivering an event. Writing to this pipe wakes
+        up the kevent() call so it can detect the closed socket.
+        -1 when no poll is active.
+    */
+    std::atomic<int> poll_notify_fd{-1};
+#endif
+
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
             sock(n_sock), sfamily(n_sfamily), port(-1), stype(n_stype), sprot(n_prot), enc(n_enc) {
@@ -902,7 +912,22 @@ struct qore_socket_private {
             // it's closed
             ++connection_id;
 
-            return close_and_reset();
+            int rc = close_and_reset();
+
+#ifdef DARWIN
+            // Signal any active kqueue poll that this socket was closed;
+            // on macOS, closing a monitored FD silently removes its kqueue
+            // filter without delivering an event.
+            // Use exchange to atomically claim and clear the fd, ensuring
+            // only one thread writes to the pipe for this socket.
+            int nfd = poll_notify_fd.exchange(-1, std::memory_order_acq_rel);
+            if (nfd >= 0) {
+                char c = 1;
+                while (::write(nfd, &c, 1) == -1 && errno == EINTR) {}
+            }
+#endif
+
+            return rc;
         } else {
             return 0;
         }
@@ -1218,11 +1243,12 @@ struct qore_socket_private {
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
-        if (event_queue) {
-            // close the socket before the delete message is put on the queue
-            // the socket would be closed anyway in the destructor
-            close_internal();
+        // always close the socket when the Qore object is destroyed; the socket
+        // must be closed here because poll operations may still hold references to
+        // the QoreSocketObject, preventing the C++ destructor from running
+        close_internal();
 
+        if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_DELETED));
 
             // deref and remove event queue
