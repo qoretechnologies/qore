@@ -742,12 +742,20 @@ struct AOTBodyLocalId {
     bool is_closure = false; //!< true if closure variable
 };
 
+//! Identity for a regex case slot
+struct AOTRegexCaseSlotId {
+    std::string pattern;     //!< regex pattern string (from re->getPatternCStr())
+    int64_t options = 0;     //!< PCRE2 options (from re->getOptions())
+    bool is_negated = false; //!< true for CaseNodeNegRegex (~! match)
+};
+
 //! Complete slot identity set for a single compiled function
 struct AOTSlotIdentities {
     std::vector<AOTLocalSlotId> locals;   //!< indexed by local slot index
     std::vector<AOTGlobalSlotId> globals; //!< indexed by global slot index
     std::vector<AOTExprSlotId> exprs;     //!< indexed by expression slot index
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
+    std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
     bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL
 };
 

@@ -138,6 +138,7 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
 #include <qore/QoreNumberNode.h>
@@ -224,6 +225,10 @@ QoreAOTContext::~QoreAOTContext() {
         QoreValue v;
         memcpy(&v, &exprs[i], sizeof(v));
         v.discard(nullptr);
+    }
+    // Delete regex case objects
+    for (int i = 0; i < num_regex_cases; ++i) {
+        delete regex_cases[i];
     }
     free(locals);
     free(globals);
@@ -926,7 +931,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         label_data, "qore_aot_label");
 
     // Build the function table (same as v1)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
 
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
@@ -948,7 +953,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_locals),
             llvm::ConstantInt::get(i32_type, cf.num_globals),
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
-            llvm::ConstantInt::get(i32_type, cf.num_stmts)
+            llvm::ConstantInt::get(i32_type, cf.num_stmts),
+            llvm::ConstantInt::get(i32_type, cf.num_regex_cases)
         });
         func_entries.push_back(entry);
     }
@@ -1951,7 +1957,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         modname_data, "qore_aot_mod_name");
 
     // Build function table (same format as executable AOT)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
         llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
@@ -1967,7 +1973,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_locals),
             llvm::ConstantInt::get(i32_type, cf.num_globals),
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
-            llvm::ConstantInt::get(i32_type, cf.num_stmts)
+            llvm::ConstantInt::get(i32_type, cf.num_stmts),
+            llvm::ConstantInt::get(i32_type, cf.num_regex_cases)
         });
         func_entries.push_back(entry);
     }
@@ -4953,6 +4960,18 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         blid.type_path = getSlotTypePath(lv->getTypeInfo());
         blid.is_closure = lv->closureUse();
         out.body_locals.push_back(std::move(blid));
+    }
+
+    // Extract regex case identities
+    out.regex_cases.resize(slots.regex_case_slots.size());
+    for (auto& [ptr, slot] : slots.regex_case_slots) {
+        const CaseNodeRegex* cnode = reinterpret_cast<const CaseNodeRegex*>(ptr);
+        AOTRegexCaseSlotId& rcid = out.regex_cases[slot];
+        QoreRegex* re = cnode->getRegex();
+        rcid.pattern = re->getPatternCStr();
+        rcid.options = re->getOptions();
+        // Check if it's a negated regex case
+        rcid.is_negated = dynamic_cast<const CaseNodeNegRegex*>(cnode) != nullptr;
     }
 
     // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
