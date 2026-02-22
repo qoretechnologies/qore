@@ -2198,8 +2198,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             if (result_events.count(info.index)) {
                 continue;
             }
-            // Check if the Qore object was deleted (e.g. via "delete")
-            if (!info.obj->isValid()) {
+            // Check if the Qore object was deleted or is being destroyed
+            // (e.g. via "delete"); isCurrent() returns false both when the
+            // object is fully deleted (OS_DELETED) and when the destructor
+            // is currently running (status == thread ID), which is important
+            // because cleanup() closes the FD during destructor execution
+            // before status is set to OS_DELETED
+            if (!info.obj->isCurrent()) {
                 result_events[info.index] = SOCK_POLLERR;
                 continue;
             }
