@@ -3405,6 +3405,16 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("$static:price * $static:qty", ref.tmpl_value);
         }
 
+        # Bracketed value with type assertion
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$qore-expr:{1 + 2}::int');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("qore-expr", ref.tmpl_context);
+            assertEq("1 + 2", ref.tmpl_value);
+            assertEq("int", ref.type_assertion);
+        }
+
         # Template with dotted value path
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:account.id');

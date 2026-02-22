@@ -753,6 +753,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
         @param position cursor position (0-based character offset)
         @param fields available fields for completion
         @param expressions optional map of expression names to their info
+        @param template_context optional context hash forwarded to template completion callbacks for filtering
 
         @return a list of completion items sorted by priority
 

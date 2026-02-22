@@ -718,8 +718,41 @@ public class DpqlParser {
         string val;
 
         if (rest[0] == "{") {
-            # Bracketed value: extract content between { and last }
-            val = substr(rest, 1, rest.size() - 2);
+            # Bracketed value: find matching closing '}' and then (optionally) a trailing ::type
+            int depth = 0;
+            int close_pos = -1;
+            for (int i = 0; i < rest.size(); ++i) {
+                string ch = rest[i];
+                if (ch == "{") {
+                    ++depth;
+                } else if (ch == "}") {
+                    --depth;
+                    if (depth == 0) {
+                        close_pos = i;
+                        break;
+                    }
+                }
+            }
+
+            if (close_pos > 0) {
+                # Content between the outermost { and }
+                val = substr(rest, 1, close_pos - 1);
+
+                # Check for ::type suffix after the closing '}'
+                int suffix_start = close_pos + 1;
+                if (suffix_start + 1 < rest.size()
+                    && rest[suffix_start] == ":"
+                    && rest[suffix_start + 1] == ":") {
+                    type_assertion = substr(rest, suffix_start + 2);
+                }
+            } else {
+                # Fallback: no matching '}' found; strip outer braces as best effort
+                if (rest.size() > 1 && rest[rest.size() - 1] == "}") {
+                    val = substr(rest, 1, rest.size() - 2);
+                } else {
+                    val = substr(rest, 1);
+                }
+            }
         } else {
             # Check for ::type suffix — find the last occurrence of ::
             int type_pos = rindex(rest, "::");

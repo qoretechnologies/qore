@@ -255,6 +255,10 @@ public class DpqlActionSession {
         if (!use_fields) {
             throw "NO-CONTEXT", "Context must be set before completion";
         }
+        if (exists args.template_context && args.template_context.typeCode() != NT_HASH) {
+            throw "INVALID-PARAMETER", sprintf("Parameter 'template_context' must be a hash, got %s",
+                args.template_context.type());
+        }
         list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(text, position, use_fields,
             expressions, args.template_context);
         return {

@@ -42,18 +42,21 @@ application startup via `AbstractDataProvider::setTemplateCallbacks()`:
 ```qore
 static bool setTemplateCallbacks(
     code<auto(string, string, *string, *hash<auto>)> expand,
-    *code<*AbstractDataProviderType(string, string)> resolve_type,
-    *code<auto()> list_contexts,
-    *code<auto(string, string)> list_values,
+    *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
+    *code<auto(*hash<auto>)> list_contexts,
+    *code<auto(string, string, *hash<auto>)> list_values,
 );
 ```
 
 | Parameter | Signature | Purpose |
 |-----------|-----------|---------|
 | `expand` | `auto(string tmpl_context, string tmpl_value, *string type_assertion, *hash<auto> template_context)` | Resolve a template reference to a concrete value |
-| `resolve_type` | `*AbstractDataProviderType(string tmpl_context, string tmpl_value)` | Return the type of a template reference (for validation) |
-| `list_contexts` | `auto()` | List available template contexts (for completions) |
-| `list_values` | `auto(string context, string prefix)` | List values within a context matching a prefix |
+| `resolve_type` | `*AbstractDataProviderType(string tmpl_context, string tmpl_value, *hash<auto> template_context)` | Return the type of a template reference (for validation) |
+| `list_contexts` | `auto(*hash<auto> template_context)` | List available template contexts (for completions) |
+| `list_values` | `auto(string context, string prefix, *hash<auto> template_context)` | List values within a context matching a prefix |
+
+All callbacks receive an optional `template_context` hash that is threaded through from
+the query context (see [Expression Evaluation](#expression-evaluation)).
 
 **Locking semantics**: The first call locks the callbacks. Subsequent calls succeed only
 if the passed closures are identity-equal to the already-registered ones (returns `True`),
@@ -80,13 +83,13 @@ DataProvider::setTemplateCallbacks(
         throw "TEMPLATE-RESOLUTION-ERROR", sprintf("unknown context %y", ctx);
     },
     # resolve_type: return the type for validation (optional)
-    *AbstractDataProviderType sub (string ctx, string val) {
+    *AbstractDataProviderType sub (string ctx, string val, *hash<auto> tctx) {
         if (ctx == "config") {
             return config.getType(val);
         }
     },
     # list_contexts: for completions (optional)
-    auto sub () {
+    auto sub (*hash<auto> tctx) {
         return (
             {"name": "static",  "description": "Static values",  "sort_priority": 1},
             {"name": "config",  "description": "Configuration",  "sort_priority": 2},
@@ -94,7 +97,7 @@ DataProvider::setTemplateCallbacks(
         );
     },
     # list_values: for completions within a context (optional)
-    auto sub (string ctx, string prefix) {
+    auto sub (string ctx, string prefix, *hash<auto> tctx) {
         if (ctx == "env") {
             return map {"name": $1, "description": "env var"}, keys ENV,
                 $1.lwr().find(prefix.lwr()) == 0;
@@ -225,7 +228,7 @@ The `resolve_type` callback returns an `*AbstractDataProviderType` for a templat
 reference, enabling type compatibility checking during `validateDpqlExpression()`:
 
 ```qore
-*AbstractDataProviderType sub (string ctx, string val) {
+*AbstractDataProviderType sub (string ctx, string val, *hash<auto> tctx) {
     if (ctx == "config") {
         *string type_name = config_store.getTypeName(val);
         switch (type_name) {
@@ -508,13 +511,14 @@ All methods are static on the `DataProvider` class:
 | `parseDpqlExpressionWithInfo` | `hash<DpqlParseResult>(string text, *hash<string, hash<DataProviderExpressionInfo>> expressions)` | Parse with full result (expression, diagnostics, tokens, success flag) |
 | `serializeDpqlExpression` | `string(hash<DataProviderExpression> exp, *hash<string, hash<DataProviderExpressionInfo>> expressions)` | Serialize an expression tree back to DPQL text |
 | `getDpqlTokens` | `list<hash<DpqlTokenInfo>>(string text)` | Tokenize DPQL text for syntax highlighting |
-| `getDpqlCompletions` | `list<hash<DpqlCompletionItem>>(string text, int position, hash<string, AbstractDataField> fields, *hash<string, hash<DataProviderExpressionInfo>> expressions)` | Get completions at a cursor position |
+| `getDpqlCompletions` | `list<hash<DpqlCompletionItem>>(string text, int position, hash<string, AbstractDataField> fields, *hash<string, hash<DataProviderExpressionInfo>> expressions, *hash<auto> template_context)` | Get completions at a cursor position |
 | `validateDpqlExpression` | `list<hash<DpqlDiagnostic>>(string text, hash<string, AbstractDataField> fields, *hash<string, hash<DataProviderExpressionInfo>> expressions)` | Validate expression against field schema; returns diagnostics |
-| `setTemplateCallbacks` | `bool(code expand, *code resolve_type, *code list_contexts, *code list_values)` | Register template resolution callbacks |
+| `setTemplateCallbacks` | `bool(code expand, *code resolve_type, *code list_contexts, *code list_values)` | Register template resolution callbacks; all callbacks receive a trailing `*hash<auto> template_context` argument |
 | `clearTemplateCallbacks` | `(none)` | Clear and unlock template callbacks |
 
 The optional `expressions` parameter defaults to `DataProviderGenericExpressions` (the
-built-in operator set) when not provided.
+built-in operator set) when not provided. The `template_context` hash is passed through
+unchanged to each registered template callback.
 
 ### Hashdecl Summary
 
