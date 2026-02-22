@@ -2018,13 +2018,14 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return rv.release();
     }
 
-    PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
-
     // Structure to track fd -> poll_list index mapping and requested events
     struct FdInfo {
         int fd;
         int64 events;  // SOCK_POLLIN, SOCK_POLLOUT
         size_t index;  // index in poll_list
+        // borrowed reference from poll_list; safe because poll_list is alive for
+        // the entire duration of this function call
+        QoreObject* obj;
     };
     std::vector<FdInfo> fd_info;
 
@@ -2077,7 +2078,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return nullptr;
         }
 
-        fd_info.push_back({fd, events, li.index()});
+        fd_info.push_back({fd, events, li.index(), obj});
     }
 
 #ifdef DARWIN
@@ -2189,18 +2190,33 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     // Check for fds that were closed during the kqueue wait.
     // On macOS, closing a monitored fd removes its kqueue registration
     // without delivering an event, so we need to detect this case.
-    // NOTE: This means callers may receive SOCK_POLLERR results even when
-    // kevent() itself returned 0 (timeout).  All current callers handle this:
-    // - AsyncSocketIoController treats any socket in ready_list as "ready"
-    //   and calls continuePoll(), which handles error states
-    // - Http2ClientConnection ignores the poll() return value entirely
-    // - Test code checks for result presence, not event types
+    // We check the socket object's state rather than using fcntl(fd, F_GETFD)
+    // because on macOS, the closed FD can be immediately reused by another
+    // thread, making the EBADF check unreliable.
     if (!*xsink) {
         for (const auto& info : fd_info) {
             if (result_events.count(info.index)) {
                 continue;
             }
-            if (fcntl(info.fd, F_GETFD) == -1 && errno == EBADF) {
+            // Check if the Qore object was deleted (e.g. via "delete")
+            if (!info.obj->isValid()) {
+                result_events[info.index] = SOCK_POLLERR;
+                continue;
+            }
+            // Object is still valid; check if the FD has changed (e.g. socket
+            // was closed or reconnected while we were polling)
+            ExceptionSink fd_xsink;
+            TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+                info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &fd_xsink);
+            if (fd_xsink) {
+                fd_xsink.clear();
+                result_events[info.index] = SOCK_POLLERR;
+            } else if (io) {
+                if (io->getPollableDescriptor() != info.fd) {
+                    result_events[info.index] = SOCK_POLLERR;
+                }
+            } else if (fcntl(info.fd, F_GETFD) == -1 && errno == EBADF) {
+                // Fallback for non-AbstractPollableIoObjectBase objects
                 result_events[info.index] = SOCK_POLLERR;
             }
         }
