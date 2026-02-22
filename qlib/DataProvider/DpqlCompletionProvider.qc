@@ -66,6 +66,7 @@ const DPQL_CTX_IN_PAREN = "in_paren";        # Inside parentheses
 const DPQL_CTX_IN_INDEX = "in_index";        # Inside index accessor [...]
 const DPQL_CTX_IN_KEY = "in_key";            # Inside key accessor {...}
 const DPQL_CTX_AFTER_ACCESSOR = "after_acc"; # After ] or } - can add more accessors
+const DPQL_CTX_IN_TEMPLATE = "in_template"; # Inside a template reference (after $)
 
 #! Completion provider for DPQL expressions
 /** This class provides context-aware code completion for DPQL query expressions.
@@ -141,6 +142,28 @@ public class DpqlCompletionProvider {
                 "documentation": "Member access", "sort_priority": 7},
         );
 
+        #! Well-known template contexts with descriptions
+        const DefaultTemplateContexts = (
+            {"label": "$static:", "kind": "template", "insert_text": "$static:",
+                "documentation": "Static context values", "sort_priority": 1},
+            {"label": "$dynamic:", "kind": "template", "insert_text": "$dynamic:",
+                "documentation": "Dynamic runtime values", "sort_priority": 2},
+            {"label": "$config:", "kind": "template", "insert_text": "$config:",
+                "documentation": "Configuration values", "sort_priority": 3},
+            {"label": "$var:", "kind": "template", "insert_text": "$var:",
+                "documentation": "Variable values", "sort_priority": 4},
+            {"label": "$transient:", "kind": "template", "insert_text": "$transient:",
+                "documentation": "Transient context values", "sort_priority": 5},
+            {"label": "$env:", "kind": "template", "insert_text": "$env:",
+                "documentation": "Environment variables", "sort_priority": 6},
+            {"label": "$timestamp:", "kind": "template", "insert_text": "$timestamp:",
+                "documentation": "Timestamp values", "sort_priority": 7},
+            {"label": "$qore-expr:", "kind": "template", "insert_text": "$qore-expr:{",
+                "documentation": "Qore expression evaluation", "sort_priority": 8},
+            {"label": "$rest:", "kind": "template", "insert_text": "$rest:",
+                "documentation": "REST context values", "sort_priority": 9},
+        );
+
         #! Index accessor suggestions
         const IndexSuggestions = (
             {"label": "0", "kind": "value", "insert_text": "0",
@@ -189,10 +212,11 @@ public class DpqlCompletionProvider {
             case DPQL_CTX_START:
             case DPQL_CTX_AFTER_OP:
             case DPQL_CTX_IN_PAREN:
-                # Can start with field, literal, function, or NOT
+                # Can start with field, literal, function, template, or NOT
                 items += getFieldCompletions(ctx.fields, analysis.prefix);
                 items += getValueCompletions(analysis.prefix);
                 items += getFunctionCompletions(analysis.prefix);
+                items += getTemplateCompletions(analysis.prefix);
                 if (!analysis.prefix || index("!", analysis.prefix) == 0) {
                     items += <DpqlCompletionItem>{
                         "label": "!",
@@ -202,6 +226,11 @@ public class DpqlCompletionProvider {
                         "sort_priority": 5,
                     };
                 }
+                break;
+
+            case DPQL_CTX_IN_TEMPLATE:
+                # Completing template context or value after $
+                items += getTemplateCompletions(analysis.prefix);
                 break;
 
             case DPQL_CTX_IN_FIELD:
@@ -293,6 +322,14 @@ public class DpqlCompletionProvider {
             return {
                 "ctx": DPQL_CTX_IN_FIELD,
                 "prefix": prefix.size() > 1 ? substr(prefix, 1) : "",
+            };
+        }
+
+        # Check if we're in a template reference (after $)
+        if (prefix =~ /^\$/) {
+            return {
+                "ctx": DPQL_CTX_IN_TEMPLATE,
+                "prefix": prefix,
             };
         }
 
@@ -608,6 +645,100 @@ public class DpqlCompletionProvider {
             }
         }
 
+        return items;
+    }
+
+    #! Gets template completions based on prefix
+    /** Dispatches to context or value completions depending on whether the prefix
+        contains a colon separator.
+
+        @param prefix the current prefix (starting with \c $)
+        @return a list of template completion items
+
+        @since DataProvider 3.3
+    */
+    private list<hash<DpqlCompletionItem>> getTemplateCompletions(string prefix) {
+        if (!prefix || prefix == "$") {
+            # Just $ typed — show template context completions
+            return getTemplateContextCompletions("");
+        }
+        if (prefix =~ /^\$/) {
+            # Check if we have a colon separator
+            string rest = substr(prefix, 1);
+            int colon_pos = index(rest, ":");
+            if (colon_pos >= 0) {
+                # After $ctx: — show template value completions
+                string ctx = substr(rest, 0, colon_pos);
+                string value_prefix = substr(rest, colon_pos + 1);
+                return getTemplateValueCompletions(ctx, value_prefix);
+            }
+            # Still typing context name — filter context completions
+            return getTemplateContextCompletions(rest);
+        }
+        return ();
+    }
+
+    #! Gets template context completions
+    /** @param prefix the context name prefix to filter by
+        @return a list of template context completion items
+
+        @since DataProvider 3.3
+    */
+    private list<hash<DpqlCompletionItem>> getTemplateContextCompletions(string prefix) {
+        # Use registered callback if available
+        if (*list<hash<auto>> contexts = AbstractDataProvider::getTemplateContexts()) {
+            list<hash<DpqlCompletionItem>> items = ();
+            string lwr_prefix = prefix.lwr();
+            foreach hash<auto> ctx in (contexts) {
+                string label = "$" + ctx.name + ":";
+                if (!prefix || index(ctx.name.lwr(), lwr_prefix) == 0) {
+                    items += <DpqlCompletionItem>{
+                        "label": label,
+                        "kind": "template",
+                        "insert_text": label,
+                        "documentation": ctx.description ?? sprintf("Template context: %s", ctx.name),
+                        "sort_priority": ctx.sort_priority ?? 10,
+                    };
+                }
+            }
+            return items;
+        }
+
+        # Fall back to default well-known contexts
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+        foreach hash<auto> tmpl in (DefaultTemplateContexts) {
+            # Match against context name (strip leading $ and trailing :)
+            string ctx_name = substr(tmpl.label, 1, tmpl.label.size() - 2);
+            if (!prefix || index(ctx_name.lwr(), lwr_prefix) == 0) {
+                items += cast<hash<DpqlCompletionItem>>(tmpl);
+            }
+        }
+        return items;
+    }
+
+    #! Gets template value completions for a given context
+    /** @param ctx the template context name
+        @param prefix the value prefix to filter by
+        @return a list of template value completion items
+
+        @since DataProvider 3.3
+    */
+    private list<hash<DpqlCompletionItem>> getTemplateValueCompletions(string ctx, string prefix) {
+        *list<hash<auto>> values = AbstractDataProvider::getTemplateValues(ctx, prefix);
+        if (!values) {
+            return ();
+        }
+        list<hash<DpqlCompletionItem>> items = ();
+        foreach hash<auto> val in (values) {
+            items += <DpqlCompletionItem>{
+                "label": "$" + ctx + ":" + val.name,
+                "kind": "template",
+                "insert_text": "$" + ctx + ":" + val.name,
+                "documentation": val.description ?? sprintf("Template value: %s", val.name),
+                "sort_priority": val.sort_priority ?? 10,
+            };
+        }
         return items;
     }
 

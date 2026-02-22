@@ -103,6 +103,12 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("field dot edge case tests", \fieldDotEdgeCaseTests());
         addTestCase("DPQL string search API tests", \dpqlStringSearchTests());
         addTestCase("stress tests", \stressTests());
+        addTestCase("template tokenizer tests", \templateTokenizerTests());
+        addTestCase("template parser tests", \templateParserTests());
+        addTestCase("template serializer tests", \templateSerializerTests());
+        addTestCase("template evaluation tests", \templateEvaluationTests());
+        addTestCase("template completion tests", \templateCompletionTests());
+        addTestCase("template validation tests", \templateValidationTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -3126,6 +3132,906 @@ public class DpqlTest inherits QUnit::Test {
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
             assertEq(DP_SEARCH_OP_EQ, exp.exp);  # Not DP_EXPR_VALUE
+        }
+    }
+
+    templateTokenizerTests() {
+        # Simple template reference
+        {
+            DpqlTokenizer tok('$static:value');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(1, tokens.size());
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:value", tokens[0].value);
+        }
+
+        # Template with dotted value
+        {
+            DpqlTokenizer tok('$static:account.id');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:account.id", tokens[0].value);
+        }
+
+        # Template with hyphenated context (qore-expr)
+        {
+            DpqlTokenizer tok('$qore-expr:{1 + 2}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$qore-expr:{1 + 2}", tokens[0].value);
+        }
+
+        # Template with type assertion
+        {
+            DpqlTokenizer tok('$config:threshold::int');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$config:threshold::int", tokens[0].value);
+        }
+
+        # Template with wildcard
+        {
+            DpqlTokenizer tok('$static:*');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:*", tokens[0].value);
+        }
+
+        # Template with fallback syntax
+        {
+            DpqlTokenizer tok('$static:A??{$static:B}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:A??{$static:B}", tokens[0].value);
+        }
+
+        # Template in string is NOT a template token
+        {
+            DpqlTokenizer tok('"$static:value"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_STRING, tokens[0].type);
+        }
+
+        # Template as part of comparison expression
+        {
+            DpqlTokenizer tok('@name == $static:expected');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            # @name, whitespace, ==, whitespace, $static:expected, EOF
+            int template_count = 0;
+            int field_count = 0;
+            foreach hash<DpqlTokenInfo> t in (tokens) {
+                if (t.type == DPQL_TOK_TEMPLATE) {
+                    ++template_count;
+                } else if (t.type == DPQL_TOK_FIELD) {
+                    ++field_count;
+                }
+            }
+            assertEq(1, template_count, "one template token");
+            assertEq(1, field_count, "one field token");
+        }
+
+        # Error: bare $ at end
+        {
+            DpqlTokenizer tok('$');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_ERROR, tokens[0].type);
+            list<hash<DpqlDiagnostic>> errors = tok.getErrors();
+            assertEq(1, errors.size());
+            assertEq("DPQL-E030", errors[0].code);
+        }
+
+        # Error: $ followed by non-identifier
+        {
+            DpqlTokenizer tok('$:value');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_ERROR, tokens[0].type);
+            list<hash<DpqlDiagnostic>> errors = tok.getErrors();
+            assertEq("DPQL-E031", errors[0].code);
+        }
+
+        # Error: $ctx without colon
+        {
+            DpqlTokenizer tok('$ctx ');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_ERROR, tokens[0].type);
+            list<hash<DpqlDiagnostic>> errors = tok.getErrors();
+            assertEq("DPQL-E032", errors[0].code);
+        }
+
+        # Error: $ctx: with no value
+        {
+            DpqlTokenizer tok('$ctx:');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_ERROR, tokens[0].type);
+            list<hash<DpqlDiagnostic>> errors = tok.getErrors();
+            assertEq("DPQL-E033", errors[0].code);
+        }
+
+        # Error: unterminated bracketed value
+        {
+            DpqlTokenizer tok('$ctx:{unterminated');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_ERROR, tokens[0].type);
+            list<hash<DpqlDiagnostic>> errors = tok.getErrors();
+            assertEq("DPQL-E034", errors[0].code);
+        }
+
+        # Nested bracketed value
+        {
+            DpqlTokenizer tok('$qore-expr:{hash{key}}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$qore-expr:{hash{key}}", tokens[0].value);
+        }
+
+        # Multiple templates in expression
+        {
+            DpqlTokenizer tok('$static:a == $config:b');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            int tmpl_count = 0;
+            foreach hash<DpqlTokenInfo> t in (tokens) {
+                if (t.type == DPQL_TOK_TEMPLATE) {
+                    ++tmpl_count;
+                }
+            }
+            assertEq(2, tmpl_count, "two template tokens");
+        }
+
+        # Complex type assertion
+        {
+            DpqlTokenizer tok('$config:limit::*softint');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$config:limit::*softint", tokens[0].value);
+        }
+
+        # Bracketed value with string containing braces (Issue 5)
+        {
+            DpqlTokenizer tok('$qore-expr:{"hello}world"}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq('$qore-expr:{"hello}world"}', tokens[0].value);
+        }
+
+        # Bracketed value with single-quoted string containing braces
+        {
+            DpqlTokenizer tok("$qore-expr:{'hello}world'}");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$qore-expr:{'hello}world'}", tokens[0].value);
+        }
+
+        # Bracketed value with escaped brace
+        {
+            DpqlTokenizer tok('$qore-expr:{a\}b}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq('$qore-expr:{a\}b}', tokens[0].value);
+        }
+
+        # Empty bracketed value
+        {
+            DpqlTokenizer tok('$ctx:{}');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$ctx:{}", tokens[0].value);
+        }
+
+        # Value followed by [ — tokenizer stops at [
+        {
+            DpqlTokenizer tok('$static:value[0]');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:value", tokens[0].value, "tokenizer stops at '['");
+            # [0] follows as separate tokens
+            bool has_bracket = False;
+            for (int i = 1; i < tokens.size(); ++i) {
+                if (tokens[i].type == DPQL_TOK_LBRACKET) {
+                    has_bracket = True;
+                    break;
+                }
+            }
+            assertEq(True, has_bracket, "'[' is a separate token after template");
+        }
+
+        # :: in value path — parsed as type assertion (last ::)
+        {
+            DpqlTokenizer tok('$static:ns::class');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_TEMPLATE, tokens[0].type);
+            assertEq("$static:ns::class", tokens[0].value);
+        }
+    }
+
+    templateParserTests() {
+        # Simple template as comparison operand
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:id == "123"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderTemplateReference>);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("static", ref.tmpl_context);
+            assertEq("id", ref.tmpl_value);
+            assertEq(NOTHING, ref.type_assertion);
+            assertEq("$static:id", ref.raw);
+            assertEq("123", exp.args[1]);
+        }
+
+        # Standalone template wraps in DP_EXPR_TEMPLATE
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$config:threshold');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderTemplateReference>);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("config", ref.tmpl_context);
+            assertEq("threshold", ref.tmpl_value);
+        }
+
+        # Template on right side of comparison
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@age > $config:min_age');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq(True, exp.args[1] instanceof hash<DataProviderTemplateReference>);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[1]);
+            assertEq("config", ref.tmpl_context);
+            assertEq("min_age", ref.tmpl_value);
+        }
+
+        # Mixed template + field with logical operators
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '$static:active == true && @age > $config:min_age');
+            assertEq(DP_OP_AND, exp.exp);
+            assertEq(2, exp.args.size());
+        }
+
+        # Type assertion
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$config:limit::int');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("config", ref.tmpl_context);
+            assertEq("limit", ref.tmpl_value);
+            assertEq("int", ref.type_assertion);
+        }
+
+        # Bracketed value
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$qore-expr:{$static:price * $static:qty}');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("qore-expr", ref.tmpl_context);
+            assertEq("$static:price * $static:qty", ref.tmpl_value);
+        }
+
+        # Template with dotted value path
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:account.id');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("static", ref.tmpl_context);
+            assertEq("account.id", ref.tmpl_value);
+        }
+
+        # Two templates in comparison
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '$static:left == $config:right');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderTemplateReference>);
+            assertEq(True, exp.args[1] instanceof hash<DataProviderTemplateReference>);
+        }
+
+        # Template in parenthesized sub-expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '(@name == $static:n) && @age > 18');
+            assertEq(DP_OP_AND, exp.exp);
+        }
+
+        # :: in value path — last :: is type assertion
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:ns::class');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("static", ref.tmpl_context);
+            assertEq("ns", ref.tmpl_value);
+            assertEq("class", ref.type_assertion, "last :: interpreted as type assertion");
+        }
+
+        # To get :: in value, use brackets
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:{ns::class}');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("ns::class", ref.tmpl_value, "bracketed form preserves :: in value");
+            assertEq(NOTHING, ref.type_assertion);
+        }
+
+        # Empty brackets parse to empty value
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$ctx:{}');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+            hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
+            assertEq("ctx", ref.tmpl_context);
+            assertEq("", ref.tmpl_value, "empty brackets yield empty value");
+        }
+    }
+
+    templateSerializerTests() {
+        # Round-trip: simple template
+        {
+            string input = '$static:account.id';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "simple template round-trip");
+        }
+
+        # Round-trip: bracketed template with type assertion
+        {
+            string input = '$qore-expr:{1 + 2}';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "bracketed template round-trip");
+        }
+
+        # Round-trip: template with type assertion
+        {
+            string input = '$config:threshold::int';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "type-asserted template round-trip");
+        }
+
+        # Round-trip: comparison with template
+        {
+            string input = '@name == $static:name';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "comparison with template round-trip");
+        }
+
+        # Round-trip: mixed expression
+        {
+            string input = '@name == $static:name && @age > $config:min_age::int';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "mixed expression round-trip");
+        }
+
+        # Round-trip: template with fallback
+        {
+            string input = '$static:A??{$static:B}';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "fallback template round-trip");
+        }
+
+        # Round-trip: template with wildcard
+        {
+            string input = '$static:*';
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(input);
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq(input, serialized, "wildcard template round-trip");
+        }
+
+        # Serializer handles template ref constructed from parts (no raw)
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_EXPR_TEMPLATE,
+                "args": (<DataProviderTemplateReference>{
+                    "tmpl_context": "static",
+                    "tmpl_value": "test",
+                    "raw": "",
+                },),
+            };
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq("$static:test", serialized, "template serialized from parts");
+        }
+
+        # Serializer reconstructs bracketed form for special chars
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_EXPR_TEMPLATE,
+                "args": (<DataProviderTemplateReference>{
+                    "tmpl_context": "qore-expr",
+                    "tmpl_value": "1 + 2",
+                    "raw": "",
+                },),
+            };
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq("$qore-expr:{1 + 2}", serialized, "template bracketed from parts");
+        }
+    }
+
+    templateEvaluationTests() {
+        # Ensure clean state
+        AbstractDataProvider::clearTemplateCallbacks();
+
+        # Register a simple callback
+        hash<auto> callback_log();
+        code expand_cb = auto sub (string ctx, string val, *string type_assertion,
+                *hash<auto> template_context) {
+            callback_log = {
+                "ctx": ctx,
+                "val": val,
+                "type_assertion": type_assertion,
+                "template_context": template_context,
+            };
+            if (ctx == "static") {
+                if (template_context && template_context.hasKey(val)) {
+                    return template_context{val};
+                }
+                return "resolved_" + val;
+            }
+            if (ctx == "config") {
+                if (val == "min_age") {
+                    return 25;
+                }
+                if (val == "max_age") {
+                    return 65;
+                }
+                if (val == "threshold") {
+                    if (type_assertion == "int") {
+                        return 100;
+                    }
+                    return "100";
+                }
+                if (val == "status_active") {
+                    return "active";
+                }
+                if (val == "status_pending") {
+                    return "pending";
+                }
+                if (val == "valid_statuses") {
+                    return ("active", "pending");
+                }
+                return NOTHING;
+            }
+            return NOTHING;
+        };
+
+        assertEq(True, AbstractDataProvider::setTemplateCallbacks(expand_cb));
+
+        # Evaluate simple template
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:name');
+            auto result = AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp);
+            assertEq("resolved_name", result, "simple template evaluation");
+            assertEq("static", callback_log.ctx);
+            assertEq("name", callback_log.val);
+        }
+
+        # Template with type assertion passes type_assertion to callback
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$config:threshold::int');
+            auto result = AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp);
+            assertEq(100, result, "type assertion passed to callback");
+            assertEq("int", callback_log.type_assertion);
+        }
+
+        # Mixed: field ref and template in comparison
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@age > $config:min_age');
+            # Test with record age=30, callback returns 25 for min_age
+            auto result = AbstractDataProvider::evalGenericExpression({"age": 30}, exp);
+            assertEq(True, result, "mixed field ref + template comparison (True)");
+
+            # Test with record age=20, callback returns 25 for min_age
+            result = AbstractDataProvider::evalGenericExpression({"age": 20}, exp);
+            assertEq(False, result, "mixed field ref + template comparison (False)");
+        }
+
+        # Template context passed through
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:key');
+            hash<auto> tmpl_ctx = {"key": "custom_value"};
+            auto result = AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp, tmpl_ctx);
+            assertEq("custom_value", result, "template_context passed through");
+            assertEq(tmpl_ctx, callback_log.template_context);
+        }
+
+        # Clean up and test missing callback error
+        AbstractDataProvider::clearTemplateCallbacks();
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:value');
+            assertThrows("TEMPLATE-RESOLUTION-ERROR", sub () {
+                AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp);
+            });
+        }
+
+        # Re-register for template in AND expression
+        assertEq(True, AbstractDataProvider::setTemplateCallbacks(expand_cb));
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name == $static:expected && @age > $config:min_age');
+            hash<auto> rec = {"name": "resolved_expected", "age": 30};
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(True, result, "template in AND expression");
+        }
+
+        # Template in OR expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name == "wrong" || @age > $config:min_age');
+            hash<auto> rec = {"name": "John", "age": 30};
+            auto result = AbstractDataProvider::evalGenericExpression(rec, exp);
+            assertEq(True, result, "template in OR expression");
+        }
+
+        # Template in equality
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '$static:left == $static:right');
+            hash<auto> tmpl_ctx = {"left": "hello", "right": "hello"};
+            auto result = AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp, tmpl_ctx);
+            assertEq(True, result, "two templates in equality");
+        }
+
+        # Template in between expression — parse structure
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@age between $config:min_age and $config:max_age');
+            assertEq(DP_SEARCH_OP_BETWEEN, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq(True, exp.args[1] instanceof hash<DataProviderTemplateReference>);
+            assertEq(True, exp.args[2] instanceof hash<DataProviderTemplateReference>);
+        }
+
+        # Template in between expression — evaluation
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@age between $config:min_age and $config:max_age');
+            # Callback returns 25 for min_age, 65 for max_age
+            # age=30 is between 25 and 65
+            auto result = AbstractDataProvider::evalGenericExpression({"age": 30}, exp);
+            assertEq(True, result, "template in between: 30 between 25 and 65");
+
+            # age=20 is NOT between 25 and 65
+            result = AbstractDataProvider::evalGenericExpression({"age": 20}, exp);
+            assertEq(False, result, "template in between: 20 not between 25 and 65");
+
+            # age=70 is NOT between 25 and 65
+            result = AbstractDataProvider::evalGenericExpression({"age": 70}, exp);
+            assertEq(False, result, "template in between: 70 not between 25 and 65");
+        }
+
+        # Template in in expression — parse structure
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@status in ($config:status_active, $config:status_pending)');
+            assertEq(DP_SEARCH_OP_IN, exp.exp);
+            assertEq(True, exp.args[0] instanceof hash<DataProviderFieldReference>);
+            assertEq(True, exp.args[1] instanceof hash<DataProviderTemplateReference>);
+            assertEq(True, exp.args[2] instanceof hash<DataProviderTemplateReference>);
+        }
+
+        # Template in in expression — evaluation with list haystack
+        # The "in" operator expects args[1] to be a list (haystack); construct the expression directly
+        {
+            hash<DataProviderTemplateReference> haystack_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "config",
+                "tmpl_value": "valid_statuses",
+                "raw": "$config:valid_statuses",
+            };
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_IN,
+                "args": (
+                    <DataProviderFieldReference>{"field": "status"},
+                    haystack_ref,
+                ),
+            };
+
+            # Callback returns ("active", "pending") list for config:valid_statuses
+            auto result = AbstractDataProvider::evalGenericExpression({"status": "active"}, exp);
+            assertEq(True, result, "template in 'in': status active matches");
+
+            result = AbstractDataProvider::evalGenericExpression({"status": "pending"}, exp);
+            assertEq(True, result, "template in 'in': status pending matches");
+
+            result = AbstractDataProvider::evalGenericExpression({"status": "closed"}, exp);
+            assertEq(False, result, "template in 'in': status closed does not match");
+        }
+
+        # Old-style matching with template refs in operator args via DefaultRecordIterator (Issue 1)
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "config",
+                "tmpl_value": "min_age",
+                "raw": "$config:min_age",
+            };
+            list<hash<auto>> data = ({"age": 30}, {"age": 20}, {"age": 40});
+            ListIterator li(data);
+            hash<auto> where_cond = {"age": dp_op_gt(tmpl_ref)};
+            DefaultRecordIterator di(li, where_cond);
+            list<hash<auto>> results = ();
+            while (di.next()) {
+                push results, di.getValue();
+            }
+            # Callback returns 25 for config:min_age, so age > 25 matches 30 and 40
+            assertEq(2, results.size(), "old-style matching with template ref in operator arg");
+            assertEq(30, results[0].age);
+            assertEq(40, results[1].age);
+        }
+
+        # Old-style matching with template ref as direct value via DefaultRecordIterator
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "expected",
+                "raw": "$static:expected",
+            };
+            list<hash<auto>> data = ({"name": "resolved_expected"}, {"name": "other"});
+            ListIterator li(data);
+            hash<auto> where_cond = {"name": tmpl_ref};
+            DefaultRecordIterator di(li, where_cond);
+            list<hash<auto>> results = ();
+            while (di.next()) {
+                push results, di.getValue();
+            }
+            # Callback returns "resolved_expected" for static:expected
+            assertEq(1, results.size(), "old-style matching with template ref as direct value");
+            assertEq("resolved_expected", results[0].name);
+        }
+
+        # Old-style matching with template_context via DefaultRecordIterator
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "key",
+                "raw": "$static:key",
+            };
+            list<hash<auto>> data = ({"name": "custom_value"}, {"name": "other"});
+            ListIterator li(data);
+            hash<auto> where_cond = {"name": tmpl_ref};
+            hash<auto> tmpl_ctx = {"key": "custom_value"};
+            DefaultRecordIterator di(li, where_cond, NOTHING, NOTHING, NOTHING, tmpl_ctx);
+            list<hash<auto>> results = ();
+            while (di.next()) {
+                push results, di.getValue();
+            }
+            # With template_context, callback returns "custom_value" for static:key
+            assertEq(1, results.size(), "old-style matching passes template_context");
+            assertEq("custom_value", results[0].name);
+        }
+
+        # renderExpressionArg fallback when raw is empty (Issue 9)
+        {
+            hash<DataProviderTemplateReference> ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "test",
+                "raw": "",
+            };
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_EXPR_TEMPLATE,
+                "args": (ref,),
+            };
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq("$static:test", serialized, "serializer reconstructs from parts when raw empty");
+        }
+
+        # renderExpressionArg fallback for special chars uses brackets
+        {
+            hash<DataProviderTemplateReference> ref = <DataProviderTemplateReference>{
+                "tmpl_context": "qore-expr",
+                "tmpl_value": "1 + 2",
+                "type_assertion": "int",
+                "raw": "",
+            };
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_EXPR_TEMPLATE,
+                "args": (ref,),
+            };
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq("$qore-expr:{1 + 2}::int", serialized, "serializer reconstructs bracketed with type assertion");
+        }
+
+        # Clean up
+        AbstractDataProvider::clearTemplateCallbacks();
+    }
+
+    templateCompletionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+
+        # $ at start triggers template completions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$', 1, fields);
+            bool has_template = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.kind == "template") {
+                    has_template = True;
+                    break;
+                }
+            }
+            assertEq(True, has_template, "$ triggers template completions");
+        }
+
+        # $sta filters to matching contexts
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$sta', 4, fields);
+            bool has_static = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.label == "$static:") {
+                    has_static = True;
+                    break;
+                }
+            }
+            assertEq(True, has_static, "$sta filters to $static:");
+        }
+
+        # Template completions in value position (after operator)
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name == $', 10, fields);
+            bool has_template = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.kind == "template") {
+                    has_template = True;
+                    break;
+                }
+            }
+            assertEq(True, has_template, "template completions after operator");
+        }
+
+        # No template completions inside string
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('"$sta', 5, fields);
+            bool has_template = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.kind == "template") {
+                    has_template = True;
+                    break;
+                }
+            }
+            assertEq(False, has_template, "no template completions inside string");
+        }
+
+        # Template context value completions with callback
+        {
+            code list_values = list<hash<auto>> sub (string ctx, string prefix) {
+                if (ctx == "static") {
+                    return (
+                        {"name": "account.id", "description": "Account ID"},
+                        {"name": "user.name", "description": "User name"},
+                    );
+                }
+                return ();
+            };
+            AbstractDataProvider::clearTemplateCallbacks();
+            assertEq(True, AbstractDataProvider::setTemplateCallbacks(
+                auto sub (string ctx, string val, *string ta, *hash<auto> tc) { return NOTHING; },
+                NOTHING,
+                NOTHING,
+                list_values,
+            ));
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$static:', 8, fields);
+            bool has_value = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.label =~ /account/) {
+                    has_value = True;
+                    break;
+                }
+            }
+            assertEq(True, has_value, "template value completions from callback");
+
+            AbstractDataProvider::clearTemplateCallbacks();
+        }
+
+        # Empty position also offers templates (in start context)
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('', 0, fields);
+            bool has_template = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.kind == "template") {
+                    has_template = True;
+                    break;
+                }
+            }
+            assertEq(True, has_template, "templates offered at start position");
+        }
+    }
+
+    templateValidationTests() {
+        # Template ref accepted in general positions (ST_Any)
+        {
+            # This should parse without errors - template is valid as a comparison operand
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name == $static:expected');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(True, exp.args[1] instanceof hash<DataProviderTemplateReference>);
+        }
+
+        # Template ref as standalone expression
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:value');
+            assertEq(DP_EXPR_TEMPLATE, exp.exp);
+        }
+
+        # Verify that existing non-template expressions still work
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name == "John"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq("John", exp.args[1]);
+        }
+
+        # Verify field reference still works standalone
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name');
+            assertEq(DP_EXPR_VALUE, exp.exp);
+        }
+
+        # verifyExpressionArgValue: template ref rejected in ST_Value position
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "test",
+                "raw": "$static:test",
+            };
+            # Construct an expression with a template ref where a literal value is expected
+            # ST_Value positions require literal values
+            hash<DataProviderExpressionInfo> expinfo = <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "test_op",
+                "display_name": "test",
+                "short_desc": "test",
+                "desc": "test operator",
+                "args": (<DataProviderSignatureTypeInfo>{
+                    "type_code": ST_Value,
+                    "type": AbstractDataProviderTypeMap."string",
+                },),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            };
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "template reference", sub () {
+                AbstractDataProvider::verifyExpressionArgValue(ER_All, 0, expinfo, (tmpl_ref,), 0);
+            });
+        }
+
+        # verifyExpressionArgValue: template ref rejected in ST_Field position
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "test",
+                "raw": "$static:test",
+            };
+            hash<DataProviderExpressionInfo> expinfo = <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "test_op",
+                "display_name": "test",
+                "short_desc": "test",
+                "desc": "test operator",
+                "args": (<DataProviderSignatureTypeInfo>{
+                    "type_code": ST_Field,
+                },),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            };
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "template reference", sub () {
+                AbstractDataProvider::verifyExpressionArgValue(ER_All, 0, expinfo, (tmpl_ref,), 0);
+            });
+        }
+
+        # verifyExpressionArgValue: template ref accepted in ST_Any position
+        {
+            hash<DataProviderTemplateReference> tmpl_ref = <DataProviderTemplateReference>{
+                "tmpl_context": "static",
+                "tmpl_value": "test",
+                "raw": "$static:test",
+            };
+            hash<DataProviderExpressionInfo> expinfo = <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": "test_op",
+                "display_name": "test",
+                "short_desc": "test",
+                "desc": "test operator",
+                "args": (<DataProviderSignatureTypeInfo>{
+                    "type_code": ST_Any,
+                    "type": AbstractDataProviderTypeMap."string",
+                },),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            };
+            # Should not throw — ST_Any accepts template references
+            AbstractDataProvider::verifyExpressionArgValue(ER_All, 0, expinfo, (tmpl_ref,), 0);
         }
     }
 }

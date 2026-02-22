@@ -3,6 +3,9 @@
 This document describes the syntax of DPQL (Data Provider Query Language), a domain-specific
 language for filtering and querying data in the Qore DataProvider framework.
 
+For integration guidance (callback registration, session lifecycle, expression evaluation),
+see [DPQL Integration Guide](dpql-integration.md).
+
 ## Field References
 
 Field references are prefixed with `@`:
@@ -247,6 +250,66 @@ Expressions can be grouped with parentheses:
 (@status == "active" || @status == "pending") && @age >= 18
 !(@deleted == true)
 ```
+
+## Template References
+
+Template references allow DPQL expressions to reference contextual values that are resolved
+at runtime via registered callbacks. This enables expressions like configuration values,
+environment variables, and dynamic context without hardcoding values.
+
+### Syntax
+
+| Form | Example | Description |
+|------|---------|-------------|
+| Simple | `$static:account.id` | Context `static`, value `account.id` |
+| Bracketed | `$qore-expr:{1 + 2}` | Bracketed value (allows special characters) |
+| Type-asserted | `$config:threshold::int` | With type assertion `int` |
+| Fallback | `$static:A??{$static:B}` | Fallback syntax (raw passthrough) |
+
+### Template Contexts
+
+Template contexts identify the source of the value. Well-known contexts include:
+
+| Context | Description |
+|---------|-------------|
+| `static` | Static context values |
+| `dynamic` | Dynamic runtime values |
+| `config` | Configuration values |
+| `var` | Variable values |
+| `transient` | Transient context values |
+| `env` | Environment variables |
+| `timestamp` | Timestamp values |
+| `qore-expr` | Qore expression evaluation |
+| `rest` | REST context values |
+
+### Usage in Expressions
+
+Template references can appear anywhere a value is expected:
+
+```dpql
+# As a comparison operand
+@name == $static:expected_name
+
+# In logical expressions
+@age > $config:min_age::int && @status == $static:required_status
+
+# As a standalone expression
+$static:name
+
+# Mixed with field references
+@price > $config:threshold && @category in ($static:allowed_categories)
+```
+
+### Resolution
+
+Template references are resolved at runtime via callbacks registered with
+`DataProvider::setTemplateCallbacks()`. If no callback is registered and a template
+reference is evaluated, a `TEMPLATE-RESOLUTION-ERROR` is thrown. See
+[DPQL Integration Guide — Template Resolution](dpql-integration.md#template-resolution)
+for callback implementation details.
+
+Array indexing, fallback syntax (`??{}`), and dot navigation within template values
+are passed as raw strings to the callback for handling.
 
 ## Examples
 

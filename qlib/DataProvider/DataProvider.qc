@@ -775,6 +775,32 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         return provider.getCompletions(text, position, fields);
     }
 
+    #! Sets callbacks for template reference resolution
+    /** Delegates to @ref AbstractDataProvider::setTemplateCallbacks()
+
+        @see AbstractDataProvider::setTemplateCallbacks() for full documentation
+
+        @since DataProvider 3.3
+    */
+    static bool setTemplateCallbacks(
+            code<auto(string, string, *string, *hash<auto>)> expand,
+            *code<*AbstractDataProviderType(string, string)> resolve_type,
+            *code<auto()> list_contexts,
+            *code<auto(string, string)> list_values) {
+        return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
+    }
+
+    #! Clears all template callbacks and resets the lock
+    /** Delegates to @ref AbstractDataProvider::clearTemplateCallbacks()
+
+        @see AbstractDataProvider::clearTemplateCallbacks() for full documentation
+
+        @since DataProvider 3.3
+    */
+    static clearTemplateCallbacks() {
+        AbstractDataProvider::clearTemplateCallbacks();
+    }
+
     #! Validates a DPQL expression against available fields
     /** @param text the DPQL expression to validate
         @param fields available fields
@@ -1187,6 +1213,28 @@ if (errors) {
     static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
             hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
         return sprintf("{%s}", ref.field);
+    }
+
+    #! Returns a descriptive string for the given template reference argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderTemplateReference> ref,
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
+        if (ref.raw) {
+            return ref.raw;
+        }
+        # Reconstruct from parts
+        string result = "$" + ref.tmpl_context + ":";
+        if (ref.tmpl_value =~ /[^a-zA-Z0-9_.*]/) {
+            result += "{" + ref.tmpl_value + "}";
+        } else {
+            result += ref.tmpl_value;
+        }
+        if (ref.type_assertion) {
+            result += "::" + ref.type_assertion;
+        }
+        return result;
     }
 
     #! Returns a descriptive string for the given expression argument

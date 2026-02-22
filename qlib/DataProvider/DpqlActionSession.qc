@@ -368,6 +368,7 @@ public class DpqlActionSession {
             case DPQL_TOK_LPAREN: return "punctuation";
             case DPQL_TOK_RPAREN: return "punctuation";
             case DPQL_TOK_COMMA: return "punctuation";
+            case DPQL_TOK_TEMPLATE: return "variable";
             case DPQL_TOK_ERROR: return "error";
         }
         return "identifier";
