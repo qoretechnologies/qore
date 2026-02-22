@@ -307,6 +307,15 @@ public:
     */
     DLLEXPORT int getPollableDescriptor() const;
 
+#ifdef DARWIN
+    //! Sets the write end of a notification pipe for kqueue poll on macOS
+    /** @see AbstractPollableIoObjectBase::setPollNotifyFd()
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setPollNotifyFd(int fd) override;
+#endif
+
     DLLEXPORT int setSendTimeout(int ms);
     DLLEXPORT int setRecvTimeout(int ms);
     DLLEXPORT int getSendTimeout();

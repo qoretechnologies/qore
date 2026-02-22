@@ -985,7 +985,7 @@ class SocketTest inherits QUnit::Test {
             );
             cnt.dec();
             try {
-                q.push(Socket::poll(new_poll_list, 30s));
+                q.push(Socket::poll(new_poll_list, 5s));
             } catch (hash<ExceptionInfo> ex) {
                 q.push(ex);
             }
