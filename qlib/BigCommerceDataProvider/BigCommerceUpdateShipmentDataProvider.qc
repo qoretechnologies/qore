@@ -74,7 +74,7 @@ public class BigCommerceUpdateShipmentRequestDataType inherits HashDataType {
             "items": {
                 "display_name": "Items",
                 "type": AutoListOrNothingType,
-                "desc": "Array of items in the shipment with order_product_id and quantity",
+                "desc": "Array of items in the shipment with `order_product_id` and `quantity`",
             },
         };
     }

@@ -88,7 +88,11 @@ public class BigCommerceUpdateCustomerAddressRequestDataType inherits HashDataTy
             "address_type": {
                 "display_name": "Address Type",
                 "type": StringOrNothingType,
-                "desc": "Type of address (residential or commercial)",
+                "desc": "Type of address",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "residential", "desc": "Residential address"},
+                    <AllowedValueInfo>{"value": "commercial", "desc": "Commercial address"},
+                ),
             },
         };
     }

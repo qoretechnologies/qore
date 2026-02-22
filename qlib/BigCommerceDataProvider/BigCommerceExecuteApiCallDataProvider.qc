@@ -45,14 +45,20 @@ public class BigCommerceExecuteApiCallDataProvider inherits BigCommerceDataProvi
             "method": {
                 "display_name": "HTTP Method",
                 "type": StringType,
-                "desc": "The HTTP method to use (GET, POST, PUT, DELETE)",
+                "desc": "The HTTP method to use",
                 "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "GET", "desc": "Retrieve data"},
+                    <AllowedValueInfo>{"value": "POST", "desc": "Create a new resource"},
+                    <AllowedValueInfo>{"value": "PUT", "desc": "Update a resource"},
+                    <AllowedValueInfo>{"value": "DELETE", "desc": "Delete a resource"},
+                ),
             },
             "path": {
                 "display_name": "API Path",
                 "type": StringType,
-                "desc": "The API path relative to the store URL (e.g., 'v3/catalog/products' "
-                    "or 'v2/orders')",
+                "desc": "The API path relative to the store URL (e.g., `v3/catalog/products` "
+                    "or `v2/orders`)",
                 "required": True,
             },
             "body": {

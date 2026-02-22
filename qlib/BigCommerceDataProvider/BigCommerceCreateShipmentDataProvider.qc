@@ -44,7 +44,7 @@ public class BigCommerceCreateShipmentRequestDataType inherits HashDataType {
             "items": {
                 "display_name": "Items",
                 "type": AutoListType,
-                "desc": "Array of items to ship, each with order_product_id and quantity",
+                "desc": "Array of items to ship, each with `order_product_id` and `quantity`",
                 "required": True,
             },
             "tracking_number": {

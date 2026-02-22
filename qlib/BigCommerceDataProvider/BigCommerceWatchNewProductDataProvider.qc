@@ -58,7 +58,7 @@ public class BigCommerceWatchNewProductDataProvider inherits BigCommerceWatchDat
         hash<auto> params = {
             "sort": "date_created",
             "direction": "desc",
-            "date_modified:min": formatDateTimeV3(since),
+            "date_created:min": formatDateTimeV3(since),
             "limit": string(DefaultPageSize),
         };
         hash<auto> response = doGetV3("catalog/products", params);

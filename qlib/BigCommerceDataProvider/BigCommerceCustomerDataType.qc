@@ -108,7 +108,7 @@ public class BigCommerceCustomerDataType inherits HashDataType {
             "addresses": {
                 "display_name": "Addresses",
                 "type": AutoListOrNothingType,
-                "desc": "Customer address records (when included via include=addresses)",
+                "desc": "Customer address records (when included via `include=addresses`)",
             },
         };
     }

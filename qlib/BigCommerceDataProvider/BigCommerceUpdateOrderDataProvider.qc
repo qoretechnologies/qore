@@ -38,11 +38,24 @@ public class BigCommerceUpdateOrderRequestDataType inherits HashDataType {
             "status_id": {
                 "display_name": "Status ID",
                 "type": IntOrNothingType,
-                "desc": "Numeric ID of the new order status (0=Incomplete, 1=Pending, "
-                    "2=Shipped, 3=Partially Shipped, 4=Refunded, 5=Cancelled, "
-                    "6=Declined, 7=Awaiting Payment, 8=Awaiting Pickup, "
-                    "9=Awaiting Shipment, 10=Completed, 11=Awaiting Fulfillment, "
-                    "12=Manual Verification Required, 13=Disputed, 14=Partially Refunded)",
+                "desc": "The new order status ID",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "desc": "Incomplete"},
+                    <AllowedValueInfo>{"value": 1, "desc": "Pending"},
+                    <AllowedValueInfo>{"value": 2, "desc": "Shipped"},
+                    <AllowedValueInfo>{"value": 3, "desc": "Partially Shipped"},
+                    <AllowedValueInfo>{"value": 4, "desc": "Refunded"},
+                    <AllowedValueInfo>{"value": 5, "desc": "Cancelled"},
+                    <AllowedValueInfo>{"value": 6, "desc": "Declined"},
+                    <AllowedValueInfo>{"value": 7, "desc": "Awaiting Payment"},
+                    <AllowedValueInfo>{"value": 8, "desc": "Awaiting Pickup"},
+                    <AllowedValueInfo>{"value": 9, "desc": "Awaiting Shipment"},
+                    <AllowedValueInfo>{"value": 10, "desc": "Completed"},
+                    <AllowedValueInfo>{"value": 11, "desc": "Awaiting Fulfillment"},
+                    <AllowedValueInfo>{"value": 12, "desc": "Manual Verification Required"},
+                    <AllowedValueInfo>{"value": 13, "desc": "Disputed"},
+                    <AllowedValueInfo>{"value": 14, "desc": "Partially Refunded"},
+                ),
             },
             "staff_notes": {
                 "display_name": "Staff Notes",

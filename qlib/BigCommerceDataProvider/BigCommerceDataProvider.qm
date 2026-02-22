@@ -76,6 +76,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Customer first name",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "First name of the customer",
                     "example_value": "John",
                 },
@@ -84,6 +85,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Customer last name",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "Last name of the customer",
                     "example_value": "Smith",
                 },
@@ -92,6 +94,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Customer email address",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "Email address of the customer",
                     "example_value": "john@example.com",
                 },
@@ -121,6 +124,7 @@ module BigCommerceDataProvider {
                     "ref_data": "customer_groups",
                 },
             },
+            "output_type": new BigCommerceCustomerDataType(),
         });
 
         # Update a Customer
@@ -179,6 +183,7 @@ module BigCommerceDataProvider {
                     "ref_data": "customer_groups",
                 },
             },
+            "output_type": new BigCommerceCustomerDataType(),
         });
 
         # Delete a Customer
@@ -201,6 +206,7 @@ module BigCommerceDataProvider {
                     "ref_data": "customers",
                 },
             },
+            "output_type": new BigCommerceDeleteResponseDataType(),
         });
 
         # Get a Customer
@@ -223,6 +229,7 @@ module BigCommerceDataProvider {
                     "ref_data": "customers",
                 },
             },
+            "output_type": new BigCommerceCustomerDataType(),
         });
 
         # Search Customers
@@ -240,6 +247,7 @@ module BigCommerceDataProvider {
                     "display_name": "Customer ID",
                     "short_desc": "Filter by customer ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customers",
                 },
                 "company": <ActionOptionInfo>{
                     "display_name": "Company",
@@ -250,16 +258,19 @@ module BigCommerceDataProvider {
                     "display_name": "Customer Group ID",
                     "short_desc": "Filter by customer group",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customer_groups",
                 },
                 "email": <ActionOptionInfo>{
                     "display_name": "Email",
                     "short_desc": "Filter by email",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "name": <ActionOptionInfo>{
                     "display_name": "Name",
                     "short_desc": "Filter by exact name",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "name_like": <ActionOptionInfo>{
                     "display_name": "Name (Like)",
@@ -280,6 +291,7 @@ module BigCommerceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -334,18 +346,21 @@ module BigCommerceDataProvider {
                     "short_desc": "Recipient first name",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "last_name": <ActionOptionInfo>{
                     "display_name": "Last Name",
                     "short_desc": "Recipient last name",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "address1": <ActionOptionInfo>{
                     "display_name": "Address Line 1",
                     "short_desc": "Street address",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "example_value": "123 Main St",
                 },
                 "city": <ActionOptionInfo>{
@@ -353,24 +368,28 @@ module BigCommerceDataProvider {
                     "short_desc": "City",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "state_or_province": <ActionOptionInfo>{
                     "display_name": "State/Province",
                     "short_desc": "State or province",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "postal_code": <ActionOptionInfo>{
                     "display_name": "Postal Code",
                     "short_desc": "ZIP/postal code",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "country_code": <ActionOptionInfo>{
                     "display_name": "Country Code",
                     "short_desc": "ISO country code",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "example_value": "US",
                 },
                 "address2": <ActionOptionInfo>{
@@ -400,6 +419,7 @@ module BigCommerceDataProvider {
                     ),
                 },
             },
+            "output_type": new BigCommerceCustomerAddressDataType(),
         });
 
         # Search Customer Addresses
@@ -417,6 +437,8 @@ module BigCommerceDataProvider {
                     "display_name": "Customer ID",
                     "short_desc": "Filter by customer ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "customers",
                 },
                 "company": <ActionOptionInfo>{
                     "display_name": "Company",
@@ -432,11 +454,13 @@ module BigCommerceDataProvider {
                     "display_name": "Address ID",
                     "short_desc": "Filter by address ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "customer_addresses",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -463,6 +487,7 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "customer_addresses",
                 },
                 "first_name": <ActionOptionInfo>{
                     "display_name": "First Name",
@@ -526,6 +551,7 @@ module BigCommerceDataProvider {
                     ),
                 },
             },
+            "output_type": new BigCommerceCustomerAddressDataType(),
         });
 
         # Delete a Customer Address
@@ -545,8 +571,10 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
                     "preselected": True,
+                    "ref_data": "customer_addresses",
                 },
             },
+            "output_type": new BigCommerceDeleteResponseDataType(),
         });
 
         # ========== PRODUCT ACTIONS ==========
@@ -567,6 +595,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Product name",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "example_value": "My Product",
                 },
                 "type": <ActionOptionInfo>{
@@ -574,6 +603,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Product type",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "Product type",
                     "example_value": "physical",
                     "allowed_values": (
@@ -586,12 +616,14 @@ module BigCommerceDataProvider {
                     "short_desc": "Product weight",
                     "type": AbstractDataProviderTypeMap."float",
                     "required": True,
+                    "preselected": True,
                 },
                 "price": <ActionOptionInfo>{
                     "display_name": "Price",
                     "short_desc": "Product price",
                     "type": AbstractDataProviderTypeMap."float",
                     "required": True,
+                    "preselected": True,
                 },
                 "sku": <ActionOptionInfo>{
                     "display_name": "SKU",
@@ -637,6 +669,7 @@ module BigCommerceDataProvider {
                     ),
                 },
             },
+            "output_type": new BigCommerceProductDataType(),
         });
 
         # Update a Product
@@ -770,6 +803,7 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."*float",
                 },
             },
+            "output_type": new BigCommerceProductDataType(),
         });
 
         # Delete a Product
@@ -792,6 +826,7 @@ module BigCommerceDataProvider {
                     "ref_data": "products",
                 },
             },
+            "output_type": new BigCommerceDeleteResponseDataType(),
         });
 
         # Get a Product
@@ -814,6 +849,7 @@ module BigCommerceDataProvider {
                     "ref_data": "products",
                 },
             },
+            "output_type": new BigCommerceProductDataType(),
         });
 
         # Search Products
@@ -831,11 +867,13 @@ module BigCommerceDataProvider {
                     "display_name": "Product ID",
                     "short_desc": "Filter by product ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "products",
                 },
                 "name": <ActionOptionInfo>{
                     "display_name": "Name",
                     "short_desc": "Filter by exact name",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "name_like": <ActionOptionInfo>{
                     "display_name": "Name (Like)",
@@ -851,6 +889,7 @@ module BigCommerceDataProvider {
                     "display_name": "Keyword",
                     "short_desc": "Search keyword",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                 },
                 "brand_id": <ActionOptionInfo>{
                     "display_name": "Brand ID",
@@ -888,6 +927,7 @@ module BigCommerceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -947,6 +987,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Blog post title",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "example_value": "My Blog Post",
                 },
                 "body": <ActionOptionInfo>{
@@ -954,6 +995,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Blog post content (HTML)",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                 },
                 "url": <ActionOptionInfo>{
                     "display_name": "URL",
@@ -996,6 +1038,7 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new BigCommerceBlogPostDataType(),
         });
 
         # Get a Blog Post
@@ -1018,6 +1061,7 @@ module BigCommerceDataProvider {
                     "ref_data": "blog_posts",
                 },
             },
+            "output_type": new BigCommerceBlogPostDataType(),
         });
 
         # Update a Blog Post
@@ -1090,6 +1134,7 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new BigCommerceBlogPostDataType(),
         });
 
         # Delete a Blog Post
@@ -1112,6 +1157,7 @@ module BigCommerceDataProvider {
                     "ref_data": "blog_posts",
                 },
             },
+            "output_type": new BigCommerceDeleteResponseDataType(),
         });
 
         # Search Blog Posts
@@ -1129,6 +1175,7 @@ module BigCommerceDataProvider {
                     "display_name": "Is Published",
                     "short_desc": "Filter by published status",
                     "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
                 },
                 "tag": <ActionOptionInfo>{
                     "display_name": "Tag",
@@ -1139,6 +1186,7 @@ module BigCommerceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -1170,6 +1218,7 @@ module BigCommerceDataProvider {
                     "ref_data": "orders",
                 },
             },
+            "output_type": new BigCommerceOrderDataType(),
         });
 
         # Update an Order
@@ -1231,6 +1280,7 @@ module BigCommerceDataProvider {
                     "desc": "Billing address object for the order",
                 },
             },
+            "output_type": new BigCommerceOrderDataType(),
         });
 
         # Search Orders
@@ -1248,17 +1298,38 @@ module BigCommerceDataProvider {
                     "display_name": "Order ID",
                     "short_desc": "Filter by order ID",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "orders",
                 },
                 "customer_id": <ActionOptionInfo>{
                     "display_name": "Customer ID",
                     "short_desc": "Filter by customer",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                     "ref_data": "customers",
                 },
                 "status_id": <ActionOptionInfo>{
                     "display_name": "Status ID",
                     "short_desc": "Filter by status",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "desc": "Filter orders by status ID",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": 0, "desc": "Incomplete"},
+                        <AllowedValueInfo>{"value": 1, "desc": "Pending"},
+                        <AllowedValueInfo>{"value": 2, "desc": "Shipped"},
+                        <AllowedValueInfo>{"value": 3, "desc": "Partially Shipped"},
+                        <AllowedValueInfo>{"value": 4, "desc": "Refunded"},
+                        <AllowedValueInfo>{"value": 5, "desc": "Cancelled"},
+                        <AllowedValueInfo>{"value": 6, "desc": "Declined"},
+                        <AllowedValueInfo>{"value": 7, "desc": "Awaiting Payment"},
+                        <AllowedValueInfo>{"value": 8, "desc": "Awaiting Pickup"},
+                        <AllowedValueInfo>{"value": 9, "desc": "Awaiting Shipment"},
+                        <AllowedValueInfo>{"value": 10, "desc": "Completed"},
+                        <AllowedValueInfo>{"value": 11, "desc": "Awaiting Fulfillment"},
+                        <AllowedValueInfo>{"value": 12, "desc": "Manual Verification Required"},
+                        <AllowedValueInfo>{"value": 13, "desc": "Disputed"},
+                        <AllowedValueInfo>{"value": 14, "desc": "Partially Refunded"},
+                    ),
                 },
                 "min_date_created": <ActionOptionInfo>{
                     "display_name": "Min Date Created",
@@ -1314,6 +1385,7 @@ module BigCommerceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -1349,6 +1421,7 @@ module BigCommerceDataProvider {
                     "short_desc": "Shipping address ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "preselected": True,
                     "desc": "ID of the shipping address for this shipment",
                 },
                 "items": <ActionOptionInfo>{
@@ -1356,7 +1429,8 @@ module BigCommerceDataProvider {
                     "short_desc": "Items to ship",
                     "type": AbstractDataProviderTypeMap."list",
                     "required": True,
-                    "desc": "Array of items to ship, each with order_product_id and quantity",
+                    "preselected": True,
+                    "desc": "Array of items to ship, each with `order_product_id` and `quantity`",
                 },
                 "tracking_number": <ActionOptionInfo>{
                     "display_name": "Tracking Number",
@@ -1384,6 +1458,7 @@ module BigCommerceDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "output_type": new BigCommerceShipmentDataType(),
         });
 
         # Get a Shipment
@@ -1410,8 +1485,10 @@ module BigCommerceDataProvider {
                     "short_desc": "The shipment to retrieve",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "preselected": True,
                 },
             },
+            "output_type": new BigCommerceShipmentDataType(),
         });
 
         # Update a Shipment
@@ -1438,6 +1515,7 @@ module BigCommerceDataProvider {
                     "short_desc": "The shipment to update",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "preselected": True,
                 },
                 "tracking_number": <ActionOptionInfo>{
                     "display_name": "Tracking Number",
@@ -1473,9 +1551,10 @@ module BigCommerceDataProvider {
                     "display_name": "Items",
                     "short_desc": "Shipment items",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "Array of items in the shipment with order_product_id and quantity",
+                    "desc": "Array of items in the shipment with `order_product_id` and `quantity`",
                 },
             },
+            "output_type": new BigCommerceShipmentDataType(),
         });
 
         # Delete a Shipment
@@ -1502,8 +1581,10 @@ module BigCommerceDataProvider {
                     "short_desc": "The shipment to delete",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "preselected": True,
                 },
             },
+            "output_type": new BigCommerceDeleteResponseDataType(),
         });
 
         # Search Shipments
@@ -1522,12 +1603,14 @@ module BigCommerceDataProvider {
                     "short_desc": "Order to list shipments for",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "preselected": True,
                     "ref_data": "orders",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "page": <ActionOptionInfo>{
                     "display_name": "Page",
@@ -1555,6 +1638,7 @@ module BigCommerceDataProvider {
                     "short_desc": "The HTTP method",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "The HTTP method to use",
                     "example_value": "GET",
                     "allowed_values": (
@@ -1569,8 +1653,9 @@ module BigCommerceDataProvider {
                     "short_desc": "The API path",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "preselected": True,
                     "desc": "The API path relative to the store URL "
-                        "(e.g., v3/catalog/products or v2/orders)",
+                        "(e.g., `v3/catalog/products` or `v2/orders`)",
                     "example_value": "v3/catalog/summary",
                 },
                 "body": <ActionOptionInfo>{
@@ -1580,6 +1665,7 @@ module BigCommerceDataProvider {
                     "desc": "Request body for POST/PUT requests",
                 },
             },
+            "output_type": AbstractDataProviderTypeMap."hash",
         });
 
         # ========== TRIGGERS ==========

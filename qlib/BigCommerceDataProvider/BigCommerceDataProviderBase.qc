@@ -420,6 +420,7 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         return {
             "blog_posts": True,
             "brands": True,
+            "customer_addresses": True,
             "customers": True,
             "orders": True,
             "products": True,
@@ -433,6 +434,7 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         switch (type) {
             case "blog_posts": return getReferenceBlogPosts();
             case "brands": return getReferenceBrands();
+            case "customer_addresses": return getReferenceCustomerAddresses();
             case "customers": return getReferenceCustomers();
             case "orders": return getReferenceOrders();
             case "products": return getReferenceProducts();
@@ -507,6 +509,33 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             }
         } catch (hash<ExceptionInfo> ex) {
             # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available customer addresses for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceCustomerAddresses() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGetV3("customers/addresses",
+                {"limit": DefaultPageSize});
+            if (response.data.typeCode() == NT_LIST) {
+                foreach hash<auto> addr in (response.data) {
+                    string display_name = trim(sprintf("%s %s, %s",
+                        addr.first_name ?? "", addr.last_name ?? "",
+                        addr.city ?? ""));
+                    if (!display_name.val()) {
+                        display_name = sprintf("Address %d", addr.id);
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": addr.address1 ?? "",
+                        "desc": sprintf("%s (ID: %d)", display_name, addr.id),
+                        "value": addr.id,
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
         }
         return rv;
     }

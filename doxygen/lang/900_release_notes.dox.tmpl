@@ -708,7 +708,8 @@ cargo install tree-sitter-cli@0.26.5
       - connection support with \c unleashed:// URL scheme
     - @ref bigcommercerestclientintro "BigCommerceRestClient" module
       - new module providing a REST client for BigCommerce's e-commerce API
-      - supports access token authentication with X-Auth-Token header
+      - supports OAuth2 authentication (authorization_code grant) and manual X-Auth-Token mode
+      - overrides \c gotOAuth2LoginInfo() to apply OAuth2 tokens as X-Auth-Token headers
       - provides BigCommerceRestConnection for connection management with \c bigcommerceres:// URL scheme
     - @ref bigcommercedataproviderintro "BigCommerceDataProvider" module
       - new module providing a data provider API for BigCommerce e-commerce

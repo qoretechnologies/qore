@@ -157,7 +157,7 @@ public class BigCommerceProductDataType inherits HashDataType {
             "custom_url": {
                 "display_name": "Custom URL",
                 "type": AutoHashOrNothingType,
-                "desc": "Custom URL for the product with 'url' and 'is_customized' keys",
+                "desc": "Custom URL for the product with `url` and `is_customized` keys",
             },
             "images": {
                 "display_name": "Images",

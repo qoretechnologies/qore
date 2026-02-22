@@ -52,6 +52,8 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         const MyOpts = Opts + {
             "access_token": "t,access-token=s",
             "store_hash": "H,store-hash=s",
+            "oauth2_client_id": "I,client-id=s",
+            "oauth2_client_secret": "S,client-secret=s",
             "conn": "c,connection=s",
         };
 
@@ -74,6 +76,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("OAuth2 option tests", \oAuth2OptionTests());
 
         # Integration tests (require BigCommerce credentials)
         addTestCase("integration tests", \integrationTests());
@@ -102,16 +105,36 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string access_token = m_options.access_token ?? ENV.BIGCOMMERCE_ACCESS_TOKEN;
         *string store_hash = m_options.store_hash ?? ENV.BIGCOMMERCE_STORE_HASH;
+        *string access_token = m_options.access_token ?? ENV.BIGCOMMERCE_ACCESS_TOKEN;
+        *string client_id = m_options.oauth2_client_id ?? ENV.BIGCOMMERCE_CLIENT_ID;
+        *string client_secret = m_options.oauth2_client_secret ?? ENV.BIGCOMMERCE_CLIENT_SECRET;
 
+        # OAuth2 mode
+        if (client_id && client_secret && store_hash) {
+            if (m_options.verbose) {
+                printf("Connecting to BigCommerce store (OAuth2): %s\n", store_hash);
+            }
+            client = new BigCommerceRestClient::BigCommerceRestClient({
+                "oauth2_client_id": client_id,
+                "oauth2_client_secret": client_secret,
+                "store_hash": store_hash,
+            });
+            return;
+        }
+
+        # Manual token mode
         if (!access_token || !store_hash) {
             if (m_options.verbose) {
                 printf("Missing BigCommerce credentials. Required:\n");
                 printf("  - BIGCOMMERCE_CONNECTION or -c option (Qorus connection name)\n");
-                printf("Or:\n");
-                printf("  - BIGCOMMERCE_ACCESS_TOKEN or -t option (access token)\n");
-                printf("  - BIGCOMMERCE_STORE_HASH or -H option (store hash)\n");
+                printf("Or OAuth2:\n");
+                printf("  - BIGCOMMERCE_CLIENT_ID or -I option\n");
+                printf("  - BIGCOMMERCE_CLIENT_SECRET or -S option\n");
+                printf("  - BIGCOMMERCE_STORE_HASH or -H option\n");
+                printf("Or manual token:\n");
+                printf("  - BIGCOMMERCE_ACCESS_TOKEN or -t option\n");
+                printf("  - BIGCOMMERCE_STORE_HASH or -H option\n");
             }
             return;
         }
@@ -439,6 +462,13 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             # Verify event type has a data type
             assertTrue(eventTypes{triggerName}.type instanceof AbstractDataProviderType,
                 sprintf("%s event type should have a data type", triggerName));
+
+            # Verify example event data
+            auto exampleData = triggerProvider.getExampleEventData(triggerName);
+            assertTrue(exampleData instanceof hash,
+                sprintf("%s should return example event data as a hash", triggerName));
+            assertTrue(exampleData.hasKey("id"),
+                sprintf("%s example data should have 'id' field", triggerName));
         }
     }
 
@@ -474,6 +504,86 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         # Verify scheme has required options
         assertTrue(scheme.options.hasKey("access_token"));
         assertTrue(scheme.options.hasKey("store_hash"));
+
+        # Verify scheme has OAuth2 options with correct defaults
+        assertTrue(scheme.options.hasKey("oauth2_auth_url"));
+        assertTrue(scheme.options.hasKey("oauth2_token_url"));
+        assertTrue(scheme.options.hasKey("oauth2_grant_type"));
+        assertTrue(scheme.options.hasKey("oauth2_scopes"));
+        assertTrue(scheme.options.hasKey("oauth2_auth_args"));
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultAuthUrl,
+            scheme.options.oauth2_auth_url.default_value);
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultTokenUrl,
+            scheme.options.oauth2_token_url.default_value);
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultGrantType,
+            scheme.options.oauth2_grant_type.default_value);
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultScopes,
+            scheme.options.oauth2_scopes.default_value);
+
+        # Verify connection messages are present
+        assertTrue(scheme.hasKey("messages"));
+        assertTrue(scheme.messages.size() >= 1);
+
+        # Verify required_options - OAuth2 only
+        assertTrue(scheme.required_options.regex("oauth2_client_id"));
+        assertTrue(scheme.required_options.regex("oauth2_client_secret"));
+        assertTrue(scheme.required_options.regex("store_hash"));
+    }
+
+    #! OAuth2 option tests - verify getOptions() routes tokens correctly
+    oAuth2OptionTests() {
+        checkJson();
+
+        # Test OAuth2 mode: sets OAuth2Options
+        hash<auto> opts = BigCommerceRestClient::BigCommerceRestClient::getOptions({
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+            "store_hash": "testhash",
+        });
+        assertEq("https://api.bigcommerce.com/stores/testhash", opts.url);
+        assertEq("authorization_code", opts.oauth2_grant_type);
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultAuthUrl,
+            opts.oauth2_auth_url);
+        assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultTokenUrl,
+            opts.oauth2_token_url);
+        # OAuth2 mode without access_token: no X-Auth-Token header
+        assertFalse(opts.headers.hasKey("X-Auth-Token"));
+
+        # Test OAuth2 mode without store_hash: no URL set
+        hash<auto> opts_no_hash = BigCommerceRestClient::BigCommerceRestClient::getOptions({
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+        });
+        assertFalse(opts_no_hash.hasKey("url"));
+        assertEq("authorization_code", opts_no_hash.oauth2_grant_type);
+
+        # Test OAuth2 mode with existing access_token: applies as X-Auth-Token
+        hash<auto> opts2 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
+            "oauth2_client_id": "test-id",
+            "oauth2_client_secret": "test-secret",
+            "store_hash": "testhash",
+            "access_token": "existing-token",
+        });
+        assertEq("existing-token", opts2.headers."X-Auth-Token");
+        assertFalse(opts2.hasKey("access_token"));
+
+        # Test manual token mode: sets X-Auth-Token directly
+        hash<auto> opts3 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
+            "access_token": "my-token",
+            "store_hash": "testhash",
+        });
+        assertEq("my-token", opts3.headers."X-Auth-Token");
+        assertFalse(opts3.hasKey("access_token"));
+        # Manual mode should NOT set OAuth2 options
+        assertFalse(opts3.hasKey("oauth2_grant_type"));
+
+        # Test token-from-connection mode: routes to X-Auth-Token
+        hash<auto> opts4 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
+            "token": "connection-token",
+            "store_hash": "testhash",
+        });
+        assertEq("connection-token", opts4.headers."X-Auth-Token");
+        assertFalse(opts4.hasKey("token"));
     }
 
     #! Integration tests - require real BigCommerce credentials

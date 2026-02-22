@@ -34,7 +34,7 @@ public class BigCommerceWatchDataProviderBase inherits BigCommerceDataProviderBa
             "poll_interval": <DataProviderOptionInfo>{
                 "display_name": "Poll Interval",
                 "short_desc": "How often to poll for new records (seconds)",
-                "type": AbstractDataProviderType::get(SoftIntType),
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "Polling interval in seconds (minimum " + MinPollInterval + ")",
                 "default_value": DefaultPollInterval,
             },
