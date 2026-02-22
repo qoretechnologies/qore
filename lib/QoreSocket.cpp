@@ -2089,16 +2089,76 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return nullptr;
     }
 
-    // RAII cleanup for kqueue fd
+    // Create notification pipe: on macOS, closing a monitored FD silently removes
+    // its kqueue filter without delivering an event. The notification pipe provides
+    // a deterministic wakeup mechanism: close_internal() writes to it, which wakes
+    // up kevent(). The pipe read also provides an acquire memory barrier on ARM,
+    // ensuring the polling thread sees all changes (status, sock) made before the
+    // pipe write.
+    int notify_pipe[2] = {-1, -1};
+    if (pipe(notify_pipe) == -1) {
+        ::close(kq);
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "pipe() failed for kqueue notification");
+        return nullptr;
+    }
+    // Set pipe read end to non-blocking for draining after kevent
+    if (fcntl(notify_pipe[0], F_SETFL, O_NONBLOCK) == -1) {
+        ::close(notify_pipe[0]);
+        ::close(notify_pipe[1]);
+        ::close(kq);
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "fcntl(O_NONBLOCK) failed on notification pipe");
+        return nullptr;
+    }
+
+    // RAII cleanup for kqueue fd and notification pipe
     struct KqueueGuard {
         int kq;
-        KqueueGuard(int k) : kq(k) {}
-        ~KqueueGuard() { if (kq != -1) ::close(kq); }
-    } guard(kq);
+        int pipe_read;
+        int pipe_write;
+        std::vector<FdInfo>& fd_info;
 
-    // Build kevent change list - need up to 2 events per fd (read + write)
+        ~KqueueGuard() {
+            // Clear poll_notify_fd on surviving sockets BEFORE closing the pipe
+            // to prevent fd-reuse races (a concurrent close_internal() could write
+            // to a reused fd number if we closed the pipe first)
+            for (const auto& info : fd_info) {
+                ExceptionSink tmp_xsink;
+                TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+                    info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &tmp_xsink);
+                if (tmp_xsink) {
+                    tmp_xsink.clear();
+                } else if (io) {
+                    io->setPollNotifyFd(-1);
+                }
+            }
+            // Now safe to close the pipe - no socket can write to it
+            if (pipe_write >= 0) {
+                ::close(pipe_write);
+            }
+            if (pipe_read >= 0) {
+                ::close(pipe_read);
+            }
+            if (kq >= 0) {
+                ::close(kq);
+            }
+        }
+    } guard{kq, notify_pipe[0], notify_pipe[1], fd_info};
+
+    // Set notification pipe on each polled socket so close_internal() can wake up kevent
+    for (const auto& info : fd_info) {
+        ExceptionSink tmp_xsink;
+        TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+            info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &tmp_xsink);
+        if (tmp_xsink) {
+            tmp_xsink.clear();
+        } else if (io) {
+            io->setPollNotifyFd(notify_pipe[1]);
+        }
+    }
+
+    // Build kevent change list - need up to 2 events per fd (read + write) + notification pipe
     std::vector<struct kevent> changes;
-    changes.reserve(fd_info.size() * 2);
+    changes.reserve(fd_info.size() * 2 + 1);
 
     for (const auto& info : fd_info) {
         if (info.events & SOCK_POLLIN) {
@@ -2113,6 +2173,15 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 reinterpret_cast<void*>(info.index));
             changes.push_back(ev);
         }
+    }
+
+    // Register notification pipe read end in kqueue; use SIZE_MAX as sentinel
+    // to distinguish pipe events from socket events in the result processing
+    {
+        struct kevent ev;
+        EV_SET(&ev, notify_pipe[0], EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0,
+            reinterpret_cast<void*>(SIZE_MAX));
+        changes.push_back(ev);
     }
 
     // Convert timeout to timespec (like nginx: NULL for infinite timeout)
@@ -2154,6 +2223,15 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         }
     }
 
+    // Drain the notification pipe; this serves two purposes:
+    // 1. Provides an acquire memory barrier on ARM, ensuring we see all writes
+    //    (status, sock) made by close_internal() before its pipe write
+    // 2. Consumes the pipe data so the fd can be cleanly closed
+    {
+        char drain_buf[16];
+        while (::read(notify_pipe[0], drain_buf, sizeof(drain_buf)) > 0) {}
+    }
+
     // Track which poll_list indices have events and what events they have
     // Use std::map to preserve order (sorted by index) for consistent output order
     std::map<size_t, int> result_events;
@@ -2162,6 +2240,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     if (rc > 0) {
         for (int i = 0; i < rc; ++i) {
             size_t idx = reinterpret_cast<size_t>(events[i].udata);
+            // Skip notification pipe events
+            if (idx == SIZE_MAX) {
+                continue;
+            }
             if (events[i].flags & EV_ERROR) {
                 result_events[idx] = SOCK_POLLERR;
                 continue;
@@ -2190,9 +2272,9 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     // Check for fds that were closed during the kqueue wait.
     // On macOS, closing a monitored fd removes its kqueue registration
     // without delivering an event, so we need to detect this case.
-    // We check the socket object's state rather than using fcntl(fd, F_GETFD)
-    // because on macOS, the closed FD can be immediately reused by another
-    // thread, making the EBADF check unreliable.
+    // The notification pipe wakes up kevent() when a socket is closed,
+    // and the pipe drain above provides the necessary memory barriers
+    // to see the updated state on ARM.
     if (!*xsink) {
         for (const auto& info : fd_info) {
             if (result_events.count(info.index)) {

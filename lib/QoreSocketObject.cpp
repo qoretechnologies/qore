@@ -827,6 +827,12 @@ int QoreSocketObject::getPollableDescriptor() const {
     return priv->socket->getSocket();
 }
 
+#ifdef DARWIN
+void QoreSocketObject::setPollNotifyFd(int fd) {
+    qore_socket_private::get(*priv->socket)->poll_notify_fd.store(fd, std::memory_order_release);
+}
+#endif
+
 int QoreSocketObject::getSocket() {
     return priv->socket->getSocket();
 }
