@@ -69,6 +69,10 @@
 
 // --- Forward declarations for Phase 5 fast-call builtins ---
 extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_now_us(ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_now_ms(ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -2019,12 +2023,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_
         return toBits(QoreValue());
     }
 
-    // Phase 5: Fast-call detection for strlen
-    // Skip QoreListNode allocation for single-argument builtins with fast-call variants
+    // Phase 5: Fast-call detection for builtins
+    // Skip QoreListNode allocation for builtins with fast-call variants
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
         const char* fname = call->getName();
-        if (fname && nargs == 1 && !strcmp(fname, "strlen")) {
-            return qore_fast_strlen(args[0], xsink);
+        if (fname) {
+            // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
+            if (nargs == 0) {
+                if (!strcmp(fname, "now_us")) {
+                    return qore_fast_now_us(xsink);
+                } else if (!strcmp(fname, "now_ms")) {
+                    return qore_fast_now_ms(xsink);
+                } else if (!strcmp(fname, "now")) {
+                    return qore_fast_now(xsink);
+                } else if (!strcmp(fname, "time")) {
+                    return qore_fast_time(xsink);
+                }
+            }
+            // Single-argument fast-call functions
+            else if (nargs == 1) {
+                if (!strcmp(fname, "strlen")) {
+                    return qore_fast_strlen(args[0], xsink);
+                }
+            }
         }
     }
 
@@ -2129,6 +2150,36 @@ extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink*
     // Return string length as a 64-bit integer
     int64_t len = static_cast<int64_t>(str->strlen());
     return toBits(len);
+}
+
+// --- Phase 5.2a: Zero-argument fast-call functions (highest impact) ---
+
+extern "C" DLLEXPORT uint64_t qore_fast_now_us(ExceptionSink* xsink) {
+    // Returns current date/time with microsecond precision
+    // Equivalent to: date now_us() { return DateTimeNode::makeNow(); }
+    DateTimeNode* dt = DateTimeNode::makeNow();
+    return toBits(dt);
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_now_ms(ExceptionSink* xsink) {
+    // Returns current date/time with millisecond precision (same as now_us in practice)
+    DateTimeNode* dt = DateTimeNode::makeNow();
+    return toBits(dt);
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_now(ExceptionSink* xsink) {
+    // Returns current date/time with second precision (same as now_us in practice)
+    DateTimeNode* dt = DateTimeNode::makeNow();
+    return toBits(dt);
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
+    // Returns Unix timestamp as integer (seconds since epoch)
+    // Equivalent to: int time() { return (int64)now_us()->getEpoch(); }
+    DateTimeNode* dt = DateTimeNode::makeNow();
+    int64_t timestamp = dt->getEpochSeconds();
+    dt->deref(xsink);
+    return toBits(timestamp);
 }
 
 // --- Direct function call (resolved at parse time, skips AST round-trip) ---
