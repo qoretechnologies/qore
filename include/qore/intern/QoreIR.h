@@ -1629,6 +1629,11 @@ public:
     // (enabling reloadAllLocalsFromRuntime to be skipped entirely).
     size_t total_local_count = 0;
 
+    // Map from call instruction pointer → set of LocalVar* live immediately after
+    // Used by liveness analysis to determine which locals need reloading after each call
+    std::unordered_map<const QoreIRInstruction*, std::unordered_set<const LocalVar*>>
+        live_locals_after_call;
+
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
