@@ -256,7 +256,7 @@ public class DpqlActionSession {
             throw "NO-CONTEXT", "Context must be set before completion";
         }
         list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(text, position, use_fields,
-            expressions);
+            expressions, args.template_context);
         return {
             "completions": items,
         };

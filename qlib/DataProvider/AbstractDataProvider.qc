@@ -1839,17 +1839,17 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         #! static callback for resolving template reference types
         /** @since DataProvider 3.3
         */
-        static *code<*AbstractDataProviderType(string, string)> cb_resolve_template_type;
+        static *code<*AbstractDataProviderType(string, string, *hash<auto>)> cb_resolve_template_type;
 
         #! static callback for listing available template contexts
         /** @since DataProvider 3.3
         */
-        static *code<auto()> cb_list_template_contexts;
+        static *code<auto(*hash<auto>)> cb_list_template_contexts;
 
         #! static callback for listing available template values for a context
         /** @since DataProvider 3.3
         */
-        static *code<auto(string, string)> cb_list_template_values;
+        static *code<auto(string, string, *hash<auto>)> cb_list_template_values;
 
         #! flag if template callbacks are locked
         static bool template_callbacks_locked = False;
@@ -4938,9 +4938,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     static bool setTemplateCallbacks(
             code<auto(string, string, *string, *hash<auto>)> expand,
-            *code<*AbstractDataProviderType(string, string)> resolve_type,
-            *code<auto()> list_contexts,
-            *code<auto(string, string)> list_values) {
+            *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
+            *code<auto(*hash<auto>)> list_contexts,
+            *code<auto(string, string, *hash<auto>)> list_values) {
         if (template_callbacks_locked) {
             return expand == cb_expand_template && resolve_type == cb_resolve_template_type
                 && list_contexts == cb_list_template_contexts && list_values == cb_list_template_values;
@@ -4967,43 +4967,48 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Returns the list of available template contexts, if a callback is registered
-    /** @return a list of template context info hashes, or NOTHING if no callback is registered
+    /** @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
+        @return a list of template context info hashes, or NOTHING if no callback is registered
 
         @since DataProvider 3.3
     */
-    static *list<hash<auto>> getTemplateContexts() {
+    static *list<hash<auto>> getTemplateContexts(*hash<auto> template_context) {
         if (!cb_list_template_contexts) {
             return NOTHING;
         }
-        return call_function(cb_list_template_contexts);
+        return call_function_args(cb_list_template_contexts, (template_context,));
     }
 
     #! Returns the list of available template values for a context, if a callback is registered
     /** @param ctx the template context name
         @param prefix the value prefix to filter by
+        @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
         @return a list of template value info hashes, or NOTHING if no callback is registered
 
         @since DataProvider 3.3
     */
-    static *list<hash<auto>> getTemplateValues(string ctx, string prefix) {
+    static *list<hash<auto>> getTemplateValues(string ctx, string prefix,
+            *hash<auto> template_context) {
         if (!cb_list_template_values) {
             return NOTHING;
         }
-        return call_function_args(cb_list_template_values, (ctx, prefix));
+        return call_function_args(cb_list_template_values, (ctx, prefix, template_context));
     }
 
     #! Resolves the type of a template reference using the registered callback
     /** @param ctx the template context name (e.g., "env", "timestamp")
         @param value the template value path (e.g., "HOME", "timegm")
+        @param template_context optional context data for filtering (e.g., sandboxed, interface_type)
         @return the resolved type, or NOTHING if no callback is registered or the type cannot be determined
 
         @since DataProvider 3.3
     */
-    static *AbstractDataProviderType resolveTemplateType(string ctx, string value) {
+    static *AbstractDataProviderType resolveTemplateType(string ctx, string value,
+            *hash<auto> template_context) {
         if (!cb_resolve_template_type) {
             return NOTHING;
         }
-        return call_function_args(cb_resolve_template_type, (ctx, value));
+        return call_function_args(cb_resolve_template_type, (ctx, value, template_context));
     }
 
     #! processes an expression in a certain context

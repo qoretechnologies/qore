@@ -770,9 +770,10 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
     */
     static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
             hash<string, AbstractDataField> fields,
-            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<auto> template_context) {
         DpqlCompletionProvider provider(expressions ?? DataProviderGenericExpressions);
-        return provider.getCompletions(text, position, fields);
+        return provider.getCompletions(text, position, fields, template_context);
     }
 
     #! Sets callbacks for template reference resolution
@@ -784,9 +785,9 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
     */
     static bool setTemplateCallbacks(
             code<auto(string, string, *string, *hash<auto>)> expand,
-            *code<*AbstractDataProviderType(string, string)> resolve_type,
-            *code<auto()> list_contexts,
-            *code<auto(string, string)> list_values) {
+            *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
+            *code<auto(*hash<auto>)> list_contexts,
+            *code<auto(string, string, *hash<auto>)> list_values) {
         return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
     }
 

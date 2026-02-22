@@ -3889,7 +3889,7 @@ public class DpqlTest inherits QUnit::Test {
 
         # Template context value completions with callback
         {
-            code list_values = list<hash<auto>> sub (string ctx, string prefix) {
+            code list_values = list<hash<auto>> sub (string ctx, string prefix, *hash<auto> template_context) {
                 if (ctx == "static") {
                     return (
                         {"name": "account.id", "description": "Account ID"},
@@ -3930,6 +3930,104 @@ public class DpqlTest inherits QUnit::Test {
                 }
             }
             assertEq(True, has_template, "templates offered at start position");
+        }
+
+        # template_context is passed through to list_contexts, list_values, and resolve_type callbacks
+        {
+            *hash<auto> received_ctx_context;
+            *hash<auto> received_val_context;
+            *hash<auto> received_type_context;
+
+            code list_contexts = list<hash<auto>> sub (*hash<auto> template_context) {
+                received_ctx_context = template_context;
+                if (template_context.sandboxed) {
+                    # Filter out "env" when sandboxed
+                    return (
+                        {"name": "static", "description": "Static data"},
+                        {"name": "config", "description": "Config data"},
+                    );
+                }
+                return (
+                    {"name": "static", "description": "Static data"},
+                    {"name": "config", "description": "Config data"},
+                    {"name": "env", "description": "Environment variables"},
+                );
+            };
+            code list_values = list<hash<auto>> sub (string ctx, string prefix,
+                    *hash<auto> template_context) {
+                received_val_context = template_context;
+                if (ctx == "static") {
+                    return (
+                        {"name": "account.id", "description": "Account ID"},
+                    );
+                }
+                return ();
+            };
+            code resolve_type = *AbstractDataProviderType sub (string ctx, string val,
+                    *hash<auto> template_context) {
+                received_type_context = template_context;
+                if (ctx == "env" && !template_context.sandboxed) {
+                    return AbstractDataProviderTypeMap."*string";
+                }
+                return NOTHING;
+            };
+            AbstractDataProvider::clearTemplateCallbacks();
+            assertEq(True, AbstractDataProvider::setTemplateCallbacks(
+                auto sub (string ctx, string val, *string ta, *hash<auto> tc) { return NOTHING; },
+                resolve_type,
+                list_contexts,
+                list_values,
+            ));
+
+            # Test without template_context - should get all contexts including env
+            hash<auto> tc = {"sandboxed": False};
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$', 1, fields,
+                NOTHING, tc);
+            assertEq(tc, received_ctx_context,
+                "template_context passed to list_contexts callback");
+            bool has_env = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.label == "\$env:") {
+                    has_env = True;
+                    break;
+                }
+            }
+            assertEq(True, has_env, "env present when not sandboxed");
+
+            # Test with sandboxed template_context - should filter out env
+            tc = {"sandboxed": True};
+            items = DataProvider::getDpqlCompletions('$', 1, fields, NOTHING, tc);
+            assertEq(tc, received_ctx_context,
+                "sandboxed template_context passed to list_contexts");
+            has_env = False;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.label == "\$env:") {
+                    has_env = True;
+                    break;
+                }
+            }
+            assertEq(False, has_env, "env filtered out when sandboxed");
+
+            # Test template_context passed to list_values
+            items = DataProvider::getDpqlCompletions('$static:', 8, fields, NOTHING, tc);
+            assertEq(tc, received_val_context,
+                "template_context passed to list_values callback");
+
+            # Test template_context passed to resolve_type
+            tc = {"sandboxed": False};
+            *AbstractDataProviderType env_type = AbstractDataProvider::resolveTemplateType("env", "HOME", tc);
+            assertEq(tc, received_type_context,
+                "template_context passed to resolve_type callback");
+            assertTrue(exists env_type, "resolve_type returns type when not sandboxed");
+            assertEq("*string", env_type.getName(), "resolve_type returns *string for env");
+
+            tc = {"sandboxed": True};
+            *AbstractDataProviderType env_type_sb = AbstractDataProvider::resolveTemplateType("env", "HOME", tc);
+            assertEq(tc, received_type_context,
+                "sandboxed template_context passed to resolve_type");
+            assertNothing(env_type_sb, "resolve_type returns NOTHING when sandboxed");
+
+            AbstractDataProvider::clearTemplateCallbacks();
         }
     }
 

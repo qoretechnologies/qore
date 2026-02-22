@@ -53,6 +53,8 @@ public hashdecl DpqlCompletionContext {
     hash<string, AbstractDataField> fields;
     #! Available expressions
     *hash<string, hash<DataProviderExpressionInfo>> expressions;
+    #! Optional template context data for filtering (e.g., sandboxed, interface_type)
+    *hash<auto> template_context;
 }
 
 #! Completion context types
@@ -186,15 +188,17 @@ public class DpqlCompletionProvider {
     /** @param text the DPQL expression text
         @param position cursor position (0-based character offset)
         @param fields available fields for completion
+        @param template_context optional template context data for filtering
         @return a list of completion items
     */
     list<hash<DpqlCompletionItem>> getCompletions(string text, int position,
-            hash<string, AbstractDataField> fields) {
+            hash<string, AbstractDataField> fields, *hash<auto> template_context) {
         return getCompletionsWithContext(<DpqlCompletionContext>{
             "text": text,
             "position": position,
             "fields": fields,
             "expressions": expressions,
+            "template_context": template_context,
         });
     }
 
@@ -216,7 +220,7 @@ public class DpqlCompletionProvider {
                 items += getFieldCompletions(ctx.fields, analysis.prefix);
                 items += getValueCompletions(analysis.prefix);
                 items += getFunctionCompletions(analysis.prefix);
-                items += getTemplateCompletions(analysis.prefix);
+                items += getTemplateCompletions(analysis.prefix, ctx.template_context);
                 if (!analysis.prefix || index("!", analysis.prefix) == 0) {
                     items += <DpqlCompletionItem>{
                         "label": "!",
@@ -230,7 +234,7 @@ public class DpqlCompletionProvider {
 
             case DPQL_CTX_IN_TEMPLATE:
                 # Completing template context or value after $
-                items += getTemplateCompletions(analysis.prefix);
+                items += getTemplateCompletions(analysis.prefix, ctx.template_context);
                 break;
 
             case DPQL_CTX_IN_FIELD:
@@ -653,14 +657,16 @@ public class DpqlCompletionProvider {
         contains a colon separator.
 
         @param prefix the current prefix (starting with \c $)
+        @param template_context optional template context data for filtering
         @return a list of template completion items
 
         @since DataProvider 3.3
     */
-    private list<hash<DpqlCompletionItem>> getTemplateCompletions(string prefix) {
+    private list<hash<DpqlCompletionItem>> getTemplateCompletions(string prefix,
+            *hash<auto> template_context) {
         if (!prefix || prefix == "$") {
             # Just $ typed — show template context completions
-            return getTemplateContextCompletions("");
+            return getTemplateContextCompletions("", template_context);
         }
         if (prefix =~ /^\$/) {
             # Check if we have a colon separator
@@ -670,23 +676,25 @@ public class DpqlCompletionProvider {
                 # After $ctx: — show template value completions
                 string ctx = substr(rest, 0, colon_pos);
                 string value_prefix = substr(rest, colon_pos + 1);
-                return getTemplateValueCompletions(ctx, value_prefix);
+                return getTemplateValueCompletions(ctx, value_prefix, template_context);
             }
             # Still typing context name — filter context completions
-            return getTemplateContextCompletions(rest);
+            return getTemplateContextCompletions(rest, template_context);
         }
         return ();
     }
 
     #! Gets template context completions
     /** @param prefix the context name prefix to filter by
+        @param template_context optional template context data for filtering
         @return a list of template context completion items
 
         @since DataProvider 3.3
     */
-    private list<hash<DpqlCompletionItem>> getTemplateContextCompletions(string prefix) {
+    private list<hash<DpqlCompletionItem>> getTemplateContextCompletions(string prefix,
+            *hash<auto> template_context) {
         # Use registered callback if available
-        if (*list<hash<auto>> contexts = AbstractDataProvider::getTemplateContexts()) {
+        if (*list<hash<auto>> contexts = AbstractDataProvider::getTemplateContexts(template_context)) {
             list<hash<DpqlCompletionItem>> items = ();
             string lwr_prefix = prefix.lwr();
             foreach hash<auto> ctx in (contexts) {
@@ -720,12 +728,14 @@ public class DpqlCompletionProvider {
     #! Gets template value completions for a given context
     /** @param ctx the template context name
         @param prefix the value prefix to filter by
+        @param template_context optional template context data for filtering
         @return a list of template value completion items
 
         @since DataProvider 3.3
     */
-    private list<hash<DpqlCompletionItem>> getTemplateValueCompletions(string ctx, string prefix) {
-        *list<hash<auto>> values = AbstractDataProvider::getTemplateValues(ctx, prefix);
+    private list<hash<DpqlCompletionItem>> getTemplateValueCompletions(string ctx, string prefix,
+            *hash<auto> template_context) {
+        *list<hash<auto>> values = AbstractDataProvider::getTemplateValues(ctx, prefix, template_context);
         if (!values) {
             return ();
         }
