@@ -95,8 +95,6 @@ bool b = v1.isEqual(v2);
     @ref Qore::Program "Program" containers, it will return @ref False
 */
 bool AbstractVariant::isEqual(AbstractVariant[QoreReflectionVariant] variant) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionVariant> holder(variant, xsink);
-
     return variant->variant == v->variant;
 }
 

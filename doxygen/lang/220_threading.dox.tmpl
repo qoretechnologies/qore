@@ -106,6 +106,8 @@ x=null@endverbatim
     @par Functions Useful With Threading
     The following functions assist writing safe and efficient multi-threaded %Qore programs:\n
     |!Function|!Description
+    |@ref Qore::cancel_thread() "cancel_thread()"|Requests cooperative cancellation of another thread
+    |@ref Qore::clear_thread_cancel() "clear_thread_cancel()"|Clears the cancellation flag for the current thread
     |@ref Qore::delete_all_thread_data() "delete_all_thread_data()"|Deletes the entire thread-local data hash
     |@ref Qore::delete_thread_data() "delete_thread_data()"|Delete the value of a key in the thread-local data hash
     |@ref Qore::get_all_thread_data() "get_all_thread_data()"|Retrieves the entire thread-local hash
@@ -120,6 +122,8 @@ x=null@endverbatim
         @ref call_reference "call reference" to run every time a new thread is started in a \
         @ref Qore::Program "Program" object
     |@ref Qore::set_thread_resource() "set_thread_resource()"|sets a thread resource against the current thread
+    |@ref Qore::thread_cancelled() "thread_cancelled()"|Returns @ref True if cancellation has been requested for the \
+        current thread
     |@ref Qore::thread_list() "thread_list()"|Returns a list of TIDs of running threads
     |@ref Qore::throw_thread_resource_exceptions() "throw_thread_resource_exceptions()"|runs thread-resource cleanup \
         routines and throws the associated exceptions
@@ -183,4 +187,119 @@ x=null@endverbatim
     @ref Qore::Thread::Mutex::lock() "Mutex::lock()" calls are caught in %Qore and exceptions are thrown.
     Additionally, locks are tracked as thread resources, so if a thread terminates while holding a lock, an exception
     will be thrown and the lock will be automatically released.
+
+    @section thread_cancellation Cooperative Thread Cancellation
+
+    %Qore supports cooperative thread cancellation, which allows one thread to request that another thread terminate
+    gracefully. Unlike forceful thread termination (which is unsafe and not supported), cooperative cancellation sets a
+    flag that the target thread checks at well-defined @ref cancel_check_points "check points", raising a
+    \c THREAD-CANCELLED exception when the flag is detected.
+
+    @subsection cancel_api Cancellation API
+
+    The thread cancellation API consists of three functions:
+
+    |!Function|!Description
+    |@ref Qore::cancel_thread() "cancel_thread(int tid, *string reason)"|Sets the cancellation flag on the target \
+        thread identified by TID; an optional reason string is included in the \c THREAD-CANCELLED exception; returns \
+        @ref True if the thread was found and the flag was set, @ref False if the thread has already exited
+    |@ref Qore::thread_cancelled() "thread_cancelled()"|Returns @ref True if cancellation has been requested for the \
+        current thread; this is a lightweight check (one atomic load) that does not raise an exception
+    |@ref Qore::clear_thread_cancel() "clear_thread_cancel()"|Clears the cancellation flag for the current thread, \
+        allowing the thread to continue running and pass through check points without triggering the exception again
+
+    @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::clear_thread_cancel() "clear_thread_cancel()" require
+    the \c THREAD_CONTROL functional domain. @ref Qore::thread_cancelled() "thread_cancelled()" only requires
+    \c THREAD_INFO, so any code can poll its own cancellation status.
+
+    @note Attempting to cancel the current thread raises a \c THREAD-CANCEL-ERROR exception. Cancelling an
+    already-cancelled thread updates the reason string.
+
+    @anchor cancel_check_points
+    @subsection cancel_check_points_section Cancellation Check Points
+
+    A cancellation check point is a location in program execution where the %Qore runtime checks the thread's
+    cancellation flag. When cancellation is detected at a check point, a \c THREAD-CANCELLED exception is raised. The
+    following operations are cancellation check points:
+
+    - <b>Language-level loops:</b> \c while, \c for, \c foreach, and \c do-while check at the start of each iteration
+    - <b>Sleep operations:</b> @ref Qore::sleep() "sleep()" and @ref Qore::usleep() "usleep()"
+    - <b>Threading primitive waits:</b>
+      - @ref Qore::Thread::Gate "Gate"::enter()
+      - @ref Qore::Thread::Mutex "Mutex"::lock()
+      - @ref Qore::Thread::Counter "Counter"::waitForZero()
+      - @ref Qore::Thread::Condition "Condition"::wait()
+      - @ref Qore::Thread::RWLock "RWLock"::readLock() and writeLock()
+    - <b>Auto-lock constructors:</b> @ref Qore::Thread::AutoLock "AutoLock",
+      @ref Qore::Thread::AutoGate "AutoGate", @ref Qore::Thread::AutoReadLock "AutoReadLock", and
+      @ref Qore::Thread::AutoWriteLock "AutoWriteLock"
+    - <b>Queue operations:</b> @ref Qore::Thread::Queue "Queue"::get() and pop() (both timed and untimed)
+    - <b>I/O operations:</b> pipe reads/writes, file locking, and backquote command execution
+
+    Blocking check points (threading primitives, I/O) use a 500ms polling interval; the thread does not respond to
+    cancellation instantly but will detect it within 500ms of the flag being set.
+
+    @subsection cancel_handling Handling Cancellation
+
+    When a \c THREAD-CANCELLED exception is raised, the thread can handle it like any other exception. The cancellation
+    flag remains set after the exception is thrown, so any subsequent check point will raise the exception again unless
+    the flag is cleared with @ref Qore::clear_thread_cancel() "clear_thread_cancel()".
+
+    @par Example: Basic cancellation
+    @code{.py}
+%modern
+Counter done();
+int tid = background sub() {
+    on_exit {
+        done.dec();
+    }
+    done.inc();
+    try {
+        while (True) {
+            do_work();  # cancellation checked at start of each iteration
+        }
+    } catch (hash<auto> ex) {
+        if (ex.err == "THREAD-CANCELLED") {
+            logger.info("cancelled: %s", ex.desc);
+        }
+    }
+}();
+sleep(5);
+cancel_thread(tid, "timeout");
+done.waitForZero();
+    @endcode
+
+    @par Example: Cleanup after cancellation
+    @code{.py}
+%modern
+try {
+    mutex.lock();
+    on_exit {
+        mutex.unlock();
+    }
+    process_data();
+} catch (hash<auto> ex) {
+    if (ex.err == "THREAD-CANCELLED") {
+        # clear the flag so cleanup code can use check points without re-triggering
+        clear_thread_cancel();
+        save_partial_results();
+        close_connections();
+    }
+}
+    @endcode
+
+    @subsection cancel_security Cancellation and Sandboxing
+
+    Thread cancellation integrates with the @ref Qore::SandboxManager "SandboxManager" interrupt mechanism. Internally,
+    both thread-level cancellation and program-level interrupt requests are checked by the same mechanism at check
+    points. This means that when a @ref Qore::SandboxManager "SandboxManager" is attached to a
+    @ref Qore::Program "Program" and
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called, all threads
+    executing in that program will receive a \c PROGRAM-INTERRUPTED exception at the next check point.
+
+    Sandboxed code that does not have the \c THREAD_CONTROL functional domain cannot call
+    @ref Qore::clear_thread_cancel() "clear_thread_cancel()", making cancellation effectively unavoidable. This is
+    intentional: it ensures that untrusted code cannot ignore cancellation requests from the host environment.
+
+    @since %Qore 2.3
 */

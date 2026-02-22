@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,8 @@
 
 #include <qore/QoreRWLock.h>
 
+#include <atomic>
+
 // FIXME: move to config.h or something like that
 // not more than this number of threads can be running at the same time
 #ifndef MAX_QORE_THREADS
@@ -42,6 +44,7 @@
 #endif
 
 class ThreadData;
+class QoreStringNode;
 
 #define QTS_AVAIL    0
 #define QTS_NA       1
@@ -76,6 +79,12 @@ public:
     ThreadData* thread_data;
     unsigned char status;
     bool joined; // if set to true then pthread_detach should not be called on exit
+
+    //! per-thread cooperative cancellation flag (set by cancel_thread(), checked at cancellation points)
+    std::atomic<bool> cancel_requested{false};
+
+    //! optional cancellation reason string
+    QoreStringNode* cancel_reason = nullptr;
 
     DLLLOCAL void cleanup();
 
@@ -220,6 +229,22 @@ public:
     DLLLOCAL QoreListNode* getCallStack(const QoreStackLocation* stack_location) const;
 
     DLLLOCAL QoreHashNode* getParentCallerLocation(const QoreStackLocation* stack_location, size_t offset) const;
+
+    //! Check if the given thread has cancellation requested (lock-free, atomic read)
+    DLLLOCAL bool isCancelRequested(int tid) const {
+        return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_acquire);
+    }
+
+    //! Get the cancel reason for the given thread (caller must hold lck or be the owning thread)
+    DLLLOCAL QoreStringNode* getCancelReason(int tid) const {
+        return (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_reason : nullptr;
+    }
+
+    //! Request cancellation of a thread; acquires lock internally
+    DLLLOCAL int cancelThread(int tid, const char* reason);
+
+    //! Clear cancellation for the given thread
+    DLLLOCAL void clearCancel(int tid);
 
 protected:
     // lock for reading the thread list

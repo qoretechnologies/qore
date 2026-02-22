@@ -945,7 +945,7 @@ static bool parse_evaluate_condition(YYLTYPE* yylloc, const char* expr, bool& re
 }
 
 static bool is_identifier(const char *str) {
-    if (!(getProgram()->getParseOptions64() & PO_REQUIRE_BARE_REFS)) {
+    if (!(getProgram()->getParseOptions() & PO_REQUIRE_BARE_REFS)) {
         if (*str++ != '$') {
             return false;
         }
@@ -961,11 +961,11 @@ static bool is_identifier(const char *str) {
     return true;
 }
 
-static void parse_set_parse_options(YYLTYPE* yylloc, int64 po) {
+static void parse_set_parse_options(YYLTYPE* yylloc, const QoreParseOptions& po) {
     qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po);
 }
 
-static void parse_disable_parse_options(YYLTYPE* yylloc, int64 po) {
+static void parse_disable_parse_options(YYLTYPE* yylloc, const QoreParseOptions& po) {
     qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po);
 }
 
@@ -1108,6 +1108,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%no-transient{WS}*$                    parse_set_parse_options(yylloc, PO_NO_TRANSIENT);
 ^%no-typedef{WS}*$                      parse_set_parse_options(yylloc, PO_NO_TYPEDEF);
 ^%no-enum{WS}*$                         parse_set_parse_options(yylloc, PO_NO_ENUM);
+^%no-class-defs{WS}*$                   parse_set_parse_options(yylloc, QoreParseOptions::NO_CLASS_DEFS);
+^%no-constant-defs{WS}*$                parse_set_parse_options(yylloc, QoreParseOptions::NO_CONSTANT_DEFS);
+^%no-namespace-defs{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::NO_NAMESPACE_DEFS);
+^%no-new{WS}*$                          parse_set_parse_options(yylloc, QoreParseOptions::NO_NEW);
 ^%push-parse-options{WS}*$              push_parse_options();
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);
@@ -1221,7 +1225,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            } else {
                                               str.trim();
                                               QoreString var;
-                                              bool require_dollar = !(getProgram()->getParseOptions64() & PO_REQUIRE_BARE_REFS);
+                                              bool require_dollar = !(getProgram()->getParseOptions() & PO_REQUIRE_BARE_REFS);
                                               if (str.empty()) {
                                                  parse_error(*get_loc(yylloc), "missing argument to %%try-module");
                                                  ok = false;
@@ -1273,7 +1277,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     QoreProgram* pgm = getProgram();
                                                     ExceptionSink xsink;
-                                                    if (pgm->getParseOptions64() & PO_NO_MODULES) {
+                                                    if (pgm->getParseOptions() & PO_NO_MODULES) {
                                                         // this exception will not be visible to the caller
                                                         xsink.raiseException("NOPE", "nope");
                                                     } else {
@@ -1334,7 +1338,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            QoreProgram* pgm = getProgram();
                                            if (!cn) {
                                               parse_error(*get_loc(yylloc), "missing argument to %%requires");
-                                           } else if (pgm->getParseOptions64() & PO_NO_MODULES) {
+                                           } else if (pgm->getParseOptions() & PO_NO_MODULES) {
                                               parse_error(*get_loc(yylloc), "cannot load modules when PO_NO_MODULES "
                                                 "is set");
                                            } else {
@@ -1690,7 +1694,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 
                                            QoreProgram* pgm = getProgram();
 
-                                           if (pgm->getParseOptions64() & PO_NO_FILESYSTEM) {
+                                           if (pgm->getParseOptions() & PO_NO_FILESYSTEM) {
                                               parse_error(*get_loc(yylloc), "cannot use the %%include parse directive when PO_NO_FILESYSTEM is in force");
                                               BEGIN(INITIAL);
                                            } else if (fname->empty()) {
@@ -2036,19 +2040,19 @@ on_success                              return TOK_ON_SUCCESS;
 on_error                                return TOK_ON_ERROR;
 hashdecl                                return TOK_HASHDECL;
 transient                               {
-                                            if (getProgram()->getParseOptions64() & PO_NO_TRANSIENT) {
+                                            if (getProgram()->getParseOptions() & PO_NO_TRANSIENT) {
                                                 yylval->string = strdup("transient"); return IDENTIFIER;
                                             }
                                             return TOK_TRANSIENT;
                                         }
 typedef                                 {
-                                            if (getProgram()->getParseOptions64() & PO_NO_TYPEDEF) {
+                                            if (getProgram()->getParseOptions() & PO_NO_TYPEDEF) {
                                                 yylval->string = strdup("typedef"); return IDENTIFIER;
                                             }
                                             return TOK_TYPEDEF;
                                         }
 enum                                    {
-                                            if (getProgram()->getParseOptions64() & PO_NO_ENUM) {
+                                            if (getProgram()->getParseOptions() & PO_NO_ENUM) {
                                                 yylval->string = strdup("enum"); return IDENTIFIER;
                                             }
                                             return TOK_ENUM;
@@ -2192,7 +2196,7 @@ cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->stri
 @[Nn][Aa][Nn]@n                         yylval->num = new QoreNumberNode("@nan@"); return NUMBER;
 @[Ii][Nn][Ff]@n                         yylval->num = new QoreNumberNode("@inf@"); return NUMBER;
 @assert/{WS}*\(                         {
-                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                           if (getProgram()->getParseOptions() & PO_ENABLE_DEBUG) {
                                                return TOK_ASSERT;
                                            }
                                            // skip assert when disabled - enter skip state
@@ -2200,7 +2204,7 @@ cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->stri
                                            BEGIN(p_skip_assert);
                                         }
 @debug/{WS}*\(                          {
-                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                           if (getProgram()->getParseOptions() & PO_ENABLE_DEBUG) {
                                                return TOK_DEBUG;
                                            }
                                            // skip debug when disabled - enter skip state
@@ -2208,7 +2212,7 @@ cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->stri
                                            BEGIN(p_skip_assert);
                                         }
 @debug/{WS}*\{                          {
-                                           if (getProgram()->getParseOptions64() & PO_ENABLE_DEBUG) {
+                                           if (getProgram()->getParseOptions() & PO_ENABLE_DEBUG) {
                                                return TOK_DEBUG_BLOCK;
                                            }
                                            // skip debug block when disabled - enter skip state
@@ -2363,9 +2367,9 @@ hash\<{WORD}\>\{                        {
 :=                                      return WEAK_ASSIGNMENT;
 \<=\>                                   return LOGICAL_CMP;
 &&                                      return LOGICAL_AND;
-\|\|                                    return (getProgram()->getParseOptions64() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_LOGICAL_OR : LOGICAL_OR;
-\|                                      return (getProgram()->getParseOptions64() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_BINARY_OR : '|';
-\^                                      return (getProgram()->getParseOptions64() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_BINARY_XOR : '^';
+\|\|                                    return (getProgram()->getParseOptions() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_LOGICAL_OR : LOGICAL_OR;
+\|                                      return (getProgram()->getParseOptions() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_BINARY_OR : '|';
+\^                                      return (getProgram()->getParseOptions() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_BINARY_XOR : '^';
 \>\>                                    return SHIFT_RIGHT;
 \<\<                                    return SHIFT_LEFT;
 \+\+                                    return P_INCREMENT;
@@ -2397,7 +2401,7 @@ hash\<{WORD}\>\{                        {
 \<{WS}*={WS}+\>                         check_broken_op(yylloc, yytext, "<=>"); return LOGICAL_CMP;
 
 &{WS}+&                                 check_broken_op(yylloc, yytext, "&&"); return LOGICAL_AND;
-\|{WS}+\|                               check_broken_op(yylloc, yytext, "||"); return (getProgram()->getParseOptions64() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_LOGICAL_OR : LOGICAL_OR;
+\|{WS}+\|                               check_broken_op(yylloc, yytext, "||"); return (getProgram()->getParseOptions() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_LOGICAL_OR : LOGICAL_OR;
 \>{WS}+\>                               check_broken_op(yylloc, yytext, ">>"); return SHIFT_RIGHT;
 \<{WS}+\<                               check_broken_op(yylloc, yytext, "<<"); return SHIFT_LEFT;
 \+{WS}+=                                check_broken_op(yylloc, yytext, "+="); return PLUS_EQUALS;

@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,6 @@
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ForEachStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/AbstractIteratorHelper.h"
@@ -65,10 +64,8 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "foreach loop")) {
             break;
         }
 
@@ -126,10 +123,8 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
     int rc_state = 0;
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "foreach loop")) {
             break;
         }
 
@@ -203,10 +198,8 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     //printd(5, "ForEachStatement::execRef() l_tlist: %p ln: %s\n", l_tlist, ln->getFullTypeName());
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "foreach loop")) {
             break;
         }
 
@@ -316,10 +309,8 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
     }
 
     while (true) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "foreach loop")) {
             break;
         }
 

@@ -307,6 +307,15 @@ public:
     */
     DLLEXPORT int getPollableDescriptor() const;
 
+#ifdef DARWIN
+    //! Sets the write end of a notification pipe for kqueue poll on macOS
+    /** @see AbstractPollableIoObjectBase::setPollNotifyFd()
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setPollNotifyFd(int fd) override;
+#endif
+
     DLLEXPORT int setSendTimeout(int ms);
     DLLEXPORT int setRecvTimeout(int ms);
     DLLEXPORT int getSendTimeout();
@@ -403,6 +412,28 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+            ExceptionSink* xsink);
+
+    //! Check if an HTTP/2 stream has received END_STREAM
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
+
+    //! Flush all pending HTTP/2 outgoing data (blocking)
+    /** @param timeout_ms send timeout in milliseconds; -1 for infinite
+        @since %Qore 2.3
+    */
+    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
+
+    //! Remove an HTTP/2 stream from the session
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
+
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);
@@ -439,6 +470,18 @@ public:
     DLLEXPORT bool captureRemoteCertificates(bool set);
     DLLEXPORT QoreObject* getRemoteCertificate() const;
     DLLEXPORT int64 getConnectionId() const;
+
+    //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
+    DLLEXPORT void setMaxChunkedBodySize(int64 size);
+
+    //! Returns the maximum body size for chunked HTTP reads
+    DLLEXPORT int64 getMaxChunkedBodySize() const;
+
+    //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
+    DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
+
+    //! Returns the maximum request body size for HTTP/2 streams
+    DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
     //! Sets the non-blocking connection flag
     DLLEXPORT int setNonBlock(ExceptionSink* xsink);

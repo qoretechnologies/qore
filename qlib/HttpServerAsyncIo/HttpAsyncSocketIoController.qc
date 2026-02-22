@@ -365,7 +365,7 @@ public class HttpAsyncSocketIoController {
     addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, auto cert = NOTHING,
             auto key = NOTHING, string http_version = HttpVersionMode::Auto,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            bool get_remote_certs = False) {
+            bool get_remote_certs = False, int max_request_body_size = 0) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
@@ -388,6 +388,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_verify_flags": ssl_verify_flags,
                 "ssl_accept_all_certs": ssl_accept_all_certs,
                 "get_remote_certs": get_remote_certs,
+                "max_request_body_size": max_request_body_size,
             };
         }
 
@@ -629,6 +630,12 @@ public class HttpAsyncSocketIoController {
                 try { sock.close(); } catch () {}
                 return;
             }
+        }
+
+        # Set body size limits on accepted socket before HTTP/2 session setup
+        if (linfo.max_request_body_size > 0) {
+            sock.setMaxChunkedBodySize(linfo.max_request_body_size);
+            sock.setHttp2MaxRequestBodySize(linfo.max_request_body_size);
         }
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
@@ -2078,6 +2085,9 @@ hashdecl HttpListenerInfo {
 
     #! True to capture remote (client) certificates
     bool get_remote_certs = False;
+
+    #! Maximum request body size in bytes (0 = unlimited)
+    int max_request_body_size = 0;
 }
 
 #! Internal hashdecl for active connection info

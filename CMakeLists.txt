@@ -217,6 +217,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_TermIOS.qpp
     lib/QC_TimeZone.qpp
     lib/QC_TreeMap.qpp
+    lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
     lib/QC_ThreadPool.qpp
@@ -731,6 +732,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreHTTPClient.cpp
     lib/QoreHttpClientObject.cpp
     lib/ParseOptionMap.cpp
+    lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
     lib/ReferenceArgumentHelper.cpp
@@ -1010,6 +1012,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHTTPClient.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ParseOptionMap.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
@@ -1195,6 +1198,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSmartLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_TimeZone.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_TreeMap.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_QoreParseOptions.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractThreadResource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_InputStream.cpp\"

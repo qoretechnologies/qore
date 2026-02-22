@@ -73,6 +73,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/QC_SandboxManager.h"
+#include "qore/intern/QC_QoreParseOptions.h"
 
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
@@ -238,7 +239,7 @@ void GVEntryBase::clear() {
 QoreNamespace::QoreNamespace(const char* n) : priv(new qore_ns_private(this, n)) {
 }
 
-QoreNamespace::QoreNamespace(const QoreNamespace& old, int64 po) : priv(new qore_ns_private(*old.priv, po, this)) {
+QoreNamespace::QoreNamespace(const QoreNamespace& old, const QoreParseOptions& po) : priv(new qore_ns_private(*old.priv, po, this)) {
 }
 
 QoreNamespace::QoreNamespace(qore_ns_private* p) : priv(p) {
@@ -774,12 +775,12 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
     priv->deleteData(true, xsink);
 }
 
-QoreNamespace* QoreNamespace::copy(int64 po) const {
+QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
     //printd(5, "QoreNamespace::copy() this: %p po: %lld %s\n", this, po, priv->name.c_str());
     return new QoreNamespace(*this, po);
 }
 
-QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, int64 po, const qore_ns_private& parent) {
+QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QoreParseOptions& po, const qore_ns_private& parent) {
     if ((po & PO_NO_API) == PO_NO_API) {
         return;
     }
@@ -1269,6 +1270,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initEventNotifierClass(qns));
     qns.addSystemClass(initEventLoopClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
+    qns.addSystemClass(initParseOptionsClass(qns));  // must be before Program class
     preinitProgramClass();  // to resolve circular dependency Program/Expression class
     qns.addSystemClass(initExpressionClass(qns));
     preinitBreakpointClass();  // to resolve circular dependency Program/Breakpoint class
@@ -2539,7 +2541,7 @@ void qore_ns_private::deleteData(bool deref_vars, ExceptionSink* xsink) {
 
 int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
     int err = 0;
-    int64 po = parse_get_parse_options();
+    QoreParseOptions po = parse_get_parse_options();
     if ((po & PO_NO_GLOBAL_VARS) && v->isGlobal()) {
         parse_error(*v->getParseLocation(), "illegal reference to new global variable '%s' (conflicts with parse " \
             "option NO_GLOBAL_VARS)", vname.ostr);
@@ -2683,7 +2685,7 @@ Var* qore_root_ns_private::parseCheckImplicitGlobalVarIntern(const QoreProgramLo
     //  vname.ostr, rv, parseFindGlobalVarIntern("omq"));
     if (!rv) {
         // check for errors & warnings for implicit global variables
-        int64 po = parse_get_parse_options();
+        QoreParseOptions po = parse_get_parse_options();
 
         // check if unflagged global vars are allowed
         if (po & PO_REQUIRE_OUR) {

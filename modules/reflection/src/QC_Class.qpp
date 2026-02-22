@@ -89,7 +89,7 @@ static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNod
 }
 
 int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
-    if (getProgram()->getParseOptions64() & cls->getDomain()) {
+    if (getProgram()->getParseOptions() & cls->getDomain()) {
         xsink->raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to the " \
             "'%s' class", cls->getName());
         return -1;
@@ -1503,8 +1503,6 @@ if (!cls.getInheritanceAccess(base_class)) {
     @ref access_constants for possible return values (plus \c 0 meaning no inheritance)
 */
 int Class::getInheritanceAccess(Class[QoreReflectionClass] base_class) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionClass> base_cls_holder(base_class, xsink);
-
     // get read access to program object
     QoreExternalProgramContextHelper tch1(xsink, c->pgm);
     if (*xsink) {
@@ -1566,18 +1564,17 @@ Class cls = Class::forName(pgm, "Thread::Mutex");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink, npath->c_str(), pgm), xsink);
+    ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink, npath->c_str(), *pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_CLASS, pgm, cls.release());
+    return new QoreObject(QC_CLASS, *pgm, cls.release());
 }
 
 //! Returns the class for the object
@@ -1625,6 +1622,5 @@ list<Class> l = Class::findAllRegex(pgm, "^T");
     @return a list of classes matching the regular expression pattern argument or an empty list if no classes match
 */
 static list<Class> Class::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_classes(*pattern, re_opts, pgm, xsink);
+    return find_all_classes(*pattern, re_opts, *pgm, xsink);
 }

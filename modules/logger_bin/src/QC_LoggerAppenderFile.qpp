@@ -113,8 +113,7 @@ LoggerAppenderFile::closeFile() {
 /**
 */
 static LoggerAppenderFile::closeFileStatic(File[File] file) {
-    ReferenceHolder<File> f(file, xsink);
-    QoreLoggerAppenderFile::closeFileStatic(file, xsink);
+    QoreLoggerAppenderFile::closeFileStatic(*file, xsink);
 }
 
 //! Reopens the file atomically

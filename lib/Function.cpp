@@ -132,7 +132,7 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     return true;
 }
 
-int64 AbstractQoreFunctionVariant::getParseOptions(int64 po) const {
+QoreParseOptions AbstractQoreFunctionVariant::getParseOptions(const QoreParseOptions& po) const {
     return is_user ? getUserVariantBase()->getParseOptions(po) : po;
 }
 
@@ -425,14 +425,14 @@ int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFun
     unsigned nparams = sig->numParams();
 
     //printd(5, "processDefaultArgs() %s nargs: %d nparams: %d flags: %lld po: %d\n", func->getName(), nargs, nparams,
-    //  variant->getFlags(), (bool)(getProgram()->getParseOptions64() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)));
-    //if (nargs > nparams && (getProgram()->getParseOptions64() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS))) {
+    //  variant->getFlags(), (bool)(getProgram()->getParseOptions() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)));
+    //if (nargs > nparams && (getProgram()->getParseOptions() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS))) {
     if (nargs > nparams) {
         // use the target program (if different than the current pgm) to check for argument errors
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        int64 po;
+        QoreParseOptions po;
         if (uvb)
-            po = uvb->pgm->getParseOptions64();
+            po = uvb->pgm->getParseOptions();
         else
             po = runtime_get_parse_options();
 
@@ -491,7 +491,7 @@ void AbstractFunctionSignature::addDefaultArgument(std::string& str, QoreValue a
     str.append("<exp>");
 }
 
-UserSignature::UserSignature(int first_line, int last_line, QoreValue params, RetTypeInfo* retTypeInfo, int64 po) :
+UserSignature::UserSignature(int first_line, int last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po) :
         AbstractFunctionSignature(retTypeInfo ? retTypeInfo->getTypeInfo() : nullptr),
         parseReturnTypeInfo(retTypeInfo ? retTypeInfo->takeParseTypeInfo() : nullptr),
         loc(qore_program_private::get(*getProgram())->getLocation(first_line, last_line)),
@@ -948,7 +948,7 @@ static int warn_excess_args(const QoreProgramLocation* loc, const QoreFunction* 
     unsigned diff = nargs - nparams;
     desc->sprintf(" (with %d excess argument%s)", diff, diff == 1 ? "" : "s");
     // raise warning if require-types is not set
-    //if (getProgram()->getParseOptions64() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)) {
+    //if (getProgram()->getParseOptions() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)) {
     if (parse_get_parse_options() & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)) {
         desc->concat("; this is an error when PO_REQUIRE_TYPES or PO_STRICT_ARGS is set");
         qore_program_private::makeParseException(getProgram(), *loc, "CALL-WITH-TYPE-ERRORS", desc);
@@ -977,7 +977,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoHashTypeInfo), nullptr);
 
     const char* class_name = className();
-    int64 ppo = runtime_get_parse_options();
+    QoreParseOptions ppo = runtime_get_parse_options();
 
     printd(5, "QoreFunction::runtimeGetCallVariants() this: %p, class_name: %s\n", this, class_name);
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
@@ -985,9 +985,9 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
         int64 vflags = (*i)->getFlags();
 
         // get parse options
-        int64 po = (*i)->getParseOptions(ppo);
+        QoreParseOptions po = (*i)->getParseOptions(ppo);
         // if we should ignore "noop" variants
-        bool strict_args = po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+        bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
         // ignore "runtime noop" variants if necessary
         if (strict_args && (vflags & QCF_RUNTIME_NOOP)) {
@@ -1037,7 +1037,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         bool only_user, const qore_class_private* class_ctx) const {
     unsigned nargs = args ? args->size() : 0;
-    int64 ppo = runtime_get_parse_options();
+    QoreParseOptions ppo = runtime_get_parse_options();
 
     // the lowest score length with the highest score wins
     int score_len = -1;
@@ -1089,9 +1089,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             }
 
             // get runtime parse options
-            int64 po = (*i)->getParseOptions(ppo);
+            QoreParseOptions po = (*i)->getParseOptions(ppo);
             // if we should ignore "noop" variants
-            bool strict_args = po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+            bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             int64 vflags = (*i)->getFlags();
 
@@ -1252,7 +1252,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         // pgm could be zero if called from a foreign thread with no current Program
         if (pgm) {
             // get runtime parse options
-            int64 po = variant->getParseOptions(ppo);
+            QoreParseOptions po = variant->getParseOptions(ppo);
 
             // check parse options
             int64 vflags = variant->getFunctionality();
@@ -1261,7 +1261,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //    " neg: " QLLD "\n", this, getName(), variant, getName(),
             //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
             if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS) && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
-                //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions64(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions64(), variant->getFunctionality());
+                //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(), variant->getFunctionality());
                 if (!only_user) {
                     std::string class_path = classPath();
                     xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to builtin " \
@@ -1299,7 +1299,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
 
-    int64 ppo = runtime_get_parse_options();
+    QoreParseOptions ppo = runtime_get_parse_options();
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -1324,9 +1324,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             }
 
             // get runtime parse options
-            int64 po = (*i)->getParseOptions(ppo);
+            QoreParseOptions po = (*i)->getParseOptions(ppo);
             // if we should ignore "noop" variants
-            bool strict_args = po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+            bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             int64 vflags = (*i)->getFlags();
 
@@ -1381,10 +1381,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant);
 }
 
-DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink, int64 ppo,
-        const AbstractQoreFunctionVariant* variant) const {
+DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
+        const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const {
     // get runtime parse options
-    int64 po = variant->getParseOptions(ppo);
+    QoreParseOptions po = variant->getParseOptions(ppo);
 
     // check parse options
     int64 vflags = variant->getFunctionality();
@@ -1395,8 +1395,8 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
     if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS)
         && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
         //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p "
-        //    "getProgram()->getParseOptions64(): %x variant->getFunctionality(): %x\n", this, getName(),
-        //    variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions64(),
+        //    "getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(),
+        //    variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(),
         //    variant->getFunctionality());
         std::string class_path = classPath();
         xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to %s " \
@@ -1412,7 +1412,7 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
 
 const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-        bool internal_access, int64 ppo, const AbstractQoreFunctionVariant* variant) const {
+        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const {
     if (!variant) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args);
@@ -1475,7 +1475,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
 
-    int64 ppo = runtime_get_parse_options();
+    QoreParseOptions ppo = runtime_get_parse_options();
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -1502,9 +1502,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
             }
 
             // get runtime parse options
-            int64 po = (*i)->getParseOptions(ppo);
+            QoreParseOptions po = (*i)->getParseOptions(ppo);
             // if we should ignore "noop" variants
-            bool strict_args = po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+            bool strict_args = static_cast<bool>(po & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             int64 vflags = (*i)->getFlags();
 
@@ -1582,7 +1582,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
 
-    int64 po = parse_get_parse_options();
+    QoreParseOptions po = parse_get_parse_options();
 
     int cnt = 0;
 
@@ -1613,7 +1613,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             int64 vflags = (*i)->getFlags();
 
             // if we should ignore "noop" variants
-            bool strict_args = (*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+            bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
             // ignore "noop" variants if necessary
             if (strict_args && (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
@@ -1825,7 +1825,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     }
 
                     // if we should ignore "noop" variants
-                    bool strict_args = (*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS);
+                    bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
 
                     // ignore "noop" variants if necessary
                     if (strict_args && ((*i)->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
@@ -2021,7 +2021,7 @@ UserVariantBase::~UserVariantBase() {
     delete statements;
 }
 
-int64 UserVariantBase::getParseOptions(int64 po) const {
+QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
     return statements ? statements->pwo.parse_options : po;
 }
 

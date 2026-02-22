@@ -42,7 +42,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";

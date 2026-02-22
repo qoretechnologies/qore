@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2023 David Nichols
+    Copyright (C) 2003 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -82,32 +82,23 @@ AutoWriteLock awl(rwlock);
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoWriteLock::constructor(RWLock[RWLock] rwl) {
-    ReferenceHolder<RWLock> holder(rwl, xsink);
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for write lock");
-                return;
-            }
-            int rc = rwl->grab(xsink, poll_ms);
-            if (*xsink) {
-                return;  // Error occurred
-            }
-            if (rc == 0) {
-                // Lock acquired - create the AutoWriteLock object with already-locked rwl
-                QoreAutoWriteLock *arwl = new QoreAutoWriteLock(holder.release());
-                self->setPrivate(CID_AUTOWRITELOCK, arwl);
-                return;
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "write lock")) {
+            return;
         }
-    }
-    ReferenceHolder<QoreAutoWriteLock> arwl(new QoreAutoWriteLock(holder.release(), xsink), xsink);
-    if (!*xsink) {
-        self->setPrivate(CID_AUTOWRITELOCK, arwl.release());
+        int rc = rwl->grab(xsink, poll_ms);
+        if (*xsink) {
+            return;  // Error occurred
+        }
+        if (rc == 0) {
+            // Lock acquired - create the AutoWriteLock object with already-locked rwl
+            QoreAutoWriteLock *arwl = new QoreAutoWriteLock(rwl.release());
+            self->setPrivate(CID_AUTOWRITELOCK, arwl);
+            return;
+        }
+        // rc != 0 means timeout, loop and check again
     }
 }
 

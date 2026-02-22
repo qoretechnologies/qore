@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Program.h"
+#include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QC_ProgramControl.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QC_Breakpoint.h"
@@ -371,14 +372,36 @@ const PO_NO_MODULES = PO_NO_MODULES;
 const PO_NO_CHILD_PO_RESTRICTIONS = PO_NO_CHILD_PO_RESTRICTIONS;
 
 //! Disallows class definitions
-/**
+/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
+    Use @ref ParseOptions with the string name \c "no-class-defs" or the @ref no-class-defs "%no-class-defs"
+    parse directive to enable this option.
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-class-defs");
+Program pgm(opts);
+    @endcode
+
     @see @ref no-class-defs "%no-class-defs"
+
+    @since %Qore 2.3
 */
 const PO_NO_CLASS_DEFS = PO_NO_CLASS_DEFS;
 
 //! Disallows constant definitions
-/**
+/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
+    Use @ref ParseOptions with the string name \c "no-constant-defs" or the @ref no-constant-defs "%no-constant-defs"
+    parse directive to enable this option.
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-constant-defs");
+Program pgm(opts);
+    @endcode
+
     @see @ref no-constant-defs "%no-constant-defs"
+
+    @since %Qore 2.3
 */
 const PO_NO_CONSTANT_DEFS = PO_NO_CONSTANT_DEFS;
 
@@ -444,8 +467,19 @@ const PO_NO_IO = PO_NO_IO;
 const PO_NO_LOCALE_CONTROL = PO_NO_LOCALE_CONTROL;
 
 //! Disallows new namespace definitions
-/**
+/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
+    Use @ref ParseOptions with the string name \c "no-namespace-defs" or the @ref no-namespace-defs "%no-namespace-defs"
+    parse directive to enable this option.
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-namespace-defs");
+Program pgm(opts);
+    @endcode
+
     @see @ref no-namespace-defs "%no-namespace-defs"
+
+    @since %Qore 2.3
 */
 const PO_NO_NAMESPACE_DEFS = PO_NO_NAMESPACE_DEFS;
 
@@ -461,7 +495,19 @@ const PO_NO_NETWORK = PO_NO_NETWORK;
 Mutex m();
     @endcode
 
+    @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
+    Use @ref ParseOptions with the string name \c "no-new" or the @ref no-new "%no-new"
+    parse directive to enable this option.
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-new");
+Program pgm(opts);
+    @endcode
+
     @see @ref no-new "%no-new"
+
+    @since %Qore 2.3
  */
 const PO_NO_NEW = PO_NO_NEW;
 
@@ -1108,6 +1154,30 @@ Program::constructor(softint po = PO_DEFAULT, *bool independent) [dom=EMBEDDED_L
     printd(5, "Program::constructor() pgm: %p, pgmid: %d, self: %p\n", pgm, pgm->getProgramId(), self);
 }
 
+//! Creates a new Program object with parse options from a ParseOptions object
+/** @param opts A @ref ParseOptions object specifying parse options (supports extended options beyond 64 bits)
+    @param independent create an independent Program object with no connection or imports from the calling context
+
+    @par Example:
+    @code{.py}
+ParseOptions opts(PO_LOCKDOWN);
+opts.set("no-class-defs");
+opts.set("no-new");
+Program pgm(opts);
+    @endcode
+
+    @throw PROGRAM-OPTION-ERROR invalid parse options used
+
+    @since %Qore 2.1
+ */
+Program::constructor(ParseOptions[QoreParseOptionsData] opts, *bool independent) [dom=EMBEDDED_LOGIC] {
+    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), opts->get());
+    assert(!xsink->isEvent());
+
+    self->setPrivate(CID_PROGRAM, pgm);
+    printd(5, "Program::constructor() pgm: %p, pgmid: %d, self: %p\n", pgm, pgm->getProgramId(), self);
+}
+
 //! Throws an exception to prevent objects of this class from being copied
 /**
     @throw PROGRAM-COPY-ERROR copying Program objects is currently unsupported
@@ -1744,7 +1814,26 @@ int mask = pgm.getParseOptions();
     @endcode
  */
 int Program::getParseOptions() [flags=CONSTANT] {
-   return p->getParseOptions64();
+   return p->getParseOptions().getLo();
+}
+
+//! Returns the full parse options as a ParseOptions object (including extended options beyond 64 bits)
+/** @return a @ref ParseOptions object with all parse options
+
+    @par Example:
+    @code{.py}
+ParseOptions po = pgm.getFullParseOptions();
+if (po.hasAny("no-class-defs")) {
+    printf("class definitions disabled\n");
+}
+    @endcode
+
+    @since %Qore 2.1
+*/
+ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(p->getParseOptions()));
+    return obj;
 }
 
 //! returns a list of parse option strings for the program object
@@ -1758,7 +1847,7 @@ list<string> l = pgm.getParseOptionStringList();
     @since %Qore 0.9
 */
 list<string> Program::getParseOptionStringList() [flags=CONSTANT] {
-    return parse_option_bitfield_to_string_list(p->getParseOptions64(), xsink);
+    return parse_option_bitfield_to_string_list(p->getParseOptions().getLo(), xsink);
 }
 
 //! Sets parse options in the parse option mask for the Program object
@@ -1784,6 +1873,23 @@ nothing Program::setParseOptions(softint opt = PO_DEFAULT) {
    p->setParseOptions(opt, xsink);
 }
 
+//! Sets parse options from a ParseOptions object
+/** @param opts A @ref ParseOptions object with the parse options to set
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-class-defs");
+pgm.setParseOptions(opts);
+    @endcode
+
+    @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+
+    @since %Qore 2.1
+*/
+nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] opts) {
+    p->setParseOptions(opts->get(), xsink);
+}
+
 //! Removes the given parse options to the current parse option mask
 /** An \c OPTIONS-LOCKED exception is thrown if parse options have been locked (for example with Program::lockOptions())
 
@@ -1805,6 +1911,23 @@ nothing Program::disableParseOptions(softint opt) {
       return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that can only be set by the system", opt);
 
    p->disableParseOptions(opt, xsink);
+}
+
+//! Disables parse options from a ParseOptions object
+/** @param opts A @ref ParseOptions object with the parse options to disable
+
+    @par Example:
+    @code{.py}
+ParseOptions opts("no-class-defs");
+pgm.disableParseOptions(opts);
+    @endcode
+
+    @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
+
+    @since %Qore 2.1
+*/
+nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] opts) {
+    p->disableParseOptions(opts->get(), xsink);
 }
 
 //! Replaces the parse options for the Program object
@@ -2008,9 +2131,8 @@ pgm.setSandboxManager(sm);
     @since Qore 2.1
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sm) {
-   // setSandboxManager() takes its own strong reference; use ReferenceHolder for the arg ref
-   ReferenceHolder<QoreSandboxManager> holder(sm, xsink);
-   p->setSandboxManager(sm);
+   // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
+   p->setSandboxManager(*sm);
 }
 
 //! Returns the sandbox manager for this program if set
@@ -2769,7 +2891,7 @@ list<string> Program::getFeatureList() [flags=RET_VALUE_ONLY] {
     @since %Qore 2.0
 */
 int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
-    return p->getParseOptions64();
+    return p->getParseOptions().getLo();
 }
 
 //! Returns the capability mask of the program n calls above this call
@@ -2786,8 +2908,8 @@ static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY;dom
         return -1;
     }
     return !n
-        ? runtime_get_parse_options()
-        : runtime_get_parse_options_stack(xsink, (size_t)n);
+        ? runtime_get_parse_options().getLo()
+        : runtime_get_parse_options_stack(xsink, (size_t)n).getLo();
 }
 
 //! Issues a module command for the given module in the current Program object
@@ -2828,7 +2950,7 @@ static nothing Program::issueModuleCmd(string module, string cmd) [dom=MODULES] 
     @since %Qore 2.0
 */
 static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
-    return runtime_get_parse_options();
+    return runtime_get_parse_options().getLo();
 }
 
 //! Retrieves all @ref conditional_parsing "parse defines" in the current Program

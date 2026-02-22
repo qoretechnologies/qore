@@ -86,7 +86,7 @@ const TypedHashDecl* HashDeclList::find(const char* name) const {
     return i != hm.end() ? i->second : nullptr;
 }
 
-HashDeclList::HashDeclList(const HashDeclList& old, int64 po, qore_ns_private* ns) {
+HashDeclList::HashDeclList(const HashDeclList& old, const QoreParseOptions& po, qore_ns_private* ns) {
     for (auto& i : old.hm) {
         //printd(5, "HashDeclList::HashDeclList() this: %p hd: %p '%s' po & PO_NO_INHERIT_USER_HASHDECLS: %s sys: %s pub: %s\n", this, i.second, i.second->getName(), po & PO_NO_INHERIT_USER_HASHDECLS ? "true": "false", i.second->isSystem() ? "true": "false", typed_hash_decl_private::get(*i.second)->isPublic() ? "true": "false");
         if (!i.second->isSystem()) {

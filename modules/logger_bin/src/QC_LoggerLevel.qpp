@@ -103,8 +103,7 @@ string LoggerLevel::getStr() {
     @return True if level is greater or equal to the \a other level
 */
 bool LoggerLevel::isGreaterOrEqual(LoggerLevel[QoreLoggerLevel] other) {
-    ReferenceHolder<AbstractPrivateData> holder(other, xsink);
-    return level->isGreaterOrEqual(other);
+    return level->isGreaterOrEqual(*other);
 }
 
 //! Compares two logger levels
@@ -112,8 +111,7 @@ bool LoggerLevel::isGreaterOrEqual(LoggerLevel[QoreLoggerLevel] other) {
     @param other the other level to compares
 */
 bool LoggerLevel::isEqual(LoggerLevel[QoreLoggerLevel] other) {
-    ReferenceHolder<AbstractPrivateData> holder(other, xsink);
-    return level->isEqual(other);
+    return level->isEqual(*other);
 }
 
 //! Converts the input argument to a level
@@ -126,7 +124,6 @@ bool LoggerLevel::isEqual(LoggerLevel[QoreLoggerLevel] other) {
     @throw LOGGER-ERROR if defaultLevel is nothing and level not found
 */
 static LoggerLevel LoggerLevel::getLevel(int level, *LoggerLevel[QoreLoggerLevel] default_level) {
-    ReferenceHolder<AbstractPrivateData> holder(default_level, xsink);
     return QoreLoggerLevel::getLevel(xsink, level, obj_default_level);
 }
 
@@ -140,7 +137,6 @@ static LoggerLevel LoggerLevel::getLevel(int level, *LoggerLevel[QoreLoggerLevel
     @throw LOGGER-ERROR if default_level is nothing and level_str not found
 */
 static LoggerLevel LoggerLevel::getLevel(string level_str, *LoggerLevel[QoreLoggerLevel] default_level) {
-    ReferenceHolder<AbstractPrivateData> holder(default_level, xsink);
     return QoreLoggerLevel::getLevel(xsink, level_str, obj_default_level);
 }
 

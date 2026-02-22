@@ -398,6 +398,7 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     Http2StreamInfo* stream = getOrCreateStream(stream_id);
     if (stream) {
         stream->is_connect = (method_str == "CONNECT");
+        stream->streaming = streaming;
         if (!protocol.empty()) {
             stream->connect_protocol = protocol;
         }
@@ -1052,6 +1053,7 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
         return it->second.get();
     }
     auto info = std::make_unique<Http2StreamInfo>(stream_id);
+    info->max_body_size = max_request_body_size;
     Http2StreamInfo* ptr = info.get();
     streams[stream_id] = std::move(info);
     return ptr;
@@ -1076,6 +1078,28 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
         }
         it->second->marked_complete = true;
         stream_ptr = it->second.get();
+
+        // If stream was dispatched via headers-only mode, the handler is reading DATA
+        // incrementally. Keep stream in map for continued DATA accumulation; don't push
+        // to completed_streams or erase.
+        if (it->second->dispatched) {
+            printd(5, "markStreamComplete(%d) dispatched stream, keeping in map\n", stream_id);
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d dispatched, keeping in map\n",
+                    stream_id);
+                fflush(stderr);
+            }
+            return;
+        }
+
+        // In headers-only mode, if headers are complete but the stream hasn't been
+        // dispatched yet (e.g., HEADERS + DATA + END_STREAM arrived in one batch),
+        // keep the stream in the map so takeHeadersReadyStreamCopy() can find it.
+        if (headers_only_mode && it->second->headers_complete) {
+            printd(5, "markStreamComplete(%d) headers-only mode, keeping in map for dispatch\n",
+                stream_id);
+            return;
+        }
 
         bool is_connect = it->second->is_connect;
 
@@ -1146,6 +1170,65 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeCompletedStream() {
         fflush(stderr);
     }
     return stream;
+}
+
+void Http2Session::setHeadersOnlyMode(bool v) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    headers_only_mode = v;
+}
+
+
+std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [id, info] : streams) {
+        if (info->headers_complete && !info->dispatched) {
+            // Copy stream info for the caller (headers, method, path, etc.)
+            auto copy = std::make_unique<Http2StreamInfo>(*info);
+            // Clear body on the COPY: any DATA that arrived with HEADERS stays
+            // in the original for readHttp2StreamDataBlock() to return.
+            // getOutput() skips body for H2S_HEADERS_READY mode to prevent
+            // duplicate data delivery.
+            copy->body.clear();
+            info->dispatched = true;
+            printd(5, "takeHeadersReadyStreamCopy(%d)\n", id);
+            return copy;
+        }
+    }
+    return nullptr;
+}
+
+bool Http2Session::isStreamComplete(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it == streams.end()) {
+        return true;  // Stream not found, treat as complete
+    }
+    return it->second->body_complete;
+}
+
+void Http2Session::cleanupStream(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it != streams.end()) {
+        printd(5, "cleanupStream(%d) removing dispatched stream\n", stream_id);
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d removing dispatched stream\n",
+                stream_id);
+            fflush(stderr);
+        }
+        streams.erase(it);
+    }
+}
+
+bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& it : streams) {
+        if (it.second->streaming && it.second->headers_complete && !it.second->body.empty()) {
+            out_stream_id = it.first;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Http2Session::wantRead() const {
@@ -1428,6 +1511,17 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
+        // Check body size against limit
+        if (stream->max_body_size > 0
+                && (int64)stream->body.size() > stream->max_body_size) {
+            printd(1, "onDataChunkRecvCallback: body too large (%zu > " QLLD ") stream %d\n",
+                stream->body.size(), stream->max_body_size, stream_id);
+            // Send RST_STREAM with REFUSED_STREAM
+            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
+                NGHTTP2_REFUSED_STREAM);
+            stream->body.clear();
+            return 0;
+        }
     }
     if (len) {
         int rv = h2->submitWindowUpdate(stream_id, len, nullptr);

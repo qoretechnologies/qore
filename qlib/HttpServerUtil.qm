@@ -641,6 +641,15 @@ public hashdecl HttpListenerOptionInfo {
         @since HttpServer 1.7
     */
     bool sync = True;
+
+    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    /** Requests with Content-Length exceeding this value, or chunked/HTTP/2 bodies
+        that grow beyond this value, receive HTTP 413 (Content Too Large) and the
+        connection is closed.
+
+        @since HttpServer 1.8
+    */
+    int max_request_body_size = 0;
 }
 
 #! hash providing HTTP handler configuration info

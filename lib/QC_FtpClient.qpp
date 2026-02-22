@@ -369,8 +369,7 @@ ftp.put(new FileInputStream("/tmp/file-1.txt"), "file.txt");
     @see FtpClient::putData()
 */
 nothing FtpClient::put(Qore::InputStream[InputStream] is, string remote_path) {
-    SimpleRefHolder<InputStream> isHolder(is);
-    f->put(is, remote_path->c_str(), xsink);
+    f->put(*is, remote_path->c_str(), xsink);
 }
 
 //! Renames/moves a file or directory; if any errors occur, an exception is thrown
@@ -442,8 +441,7 @@ ftp.get("file.txt", new FileOutputStream("/tmp/file-1.txt"));
     @since %Qore 0.8.13
 */
 nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] os) {
-    SimpleRefHolder<OutputStream> osHolder(os);
-    f->get(remote_path->c_str(), os, xsink);
+    f->get(remote_path->c_str(), *os, xsink);
 }
 
 //! Transfers string data to the FTP server and saves it as a file on the remote machine; if any errors occur, an exception is thrown
@@ -1071,14 +1069,13 @@ ftp.setEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
 */
 nothing FtpClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    f->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the data connection
@@ -1109,14 +1106,13 @@ ftp.setDataEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
  */
 nothing FtpClient::setDataEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setDataEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    f->setDataEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the control connection
@@ -1147,14 +1143,13 @@ ftp.setControlEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
 */
 nothing FtpClient::setControlEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setControlEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    f->setControlEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -1205,14 +1200,13 @@ ftp.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will not result in a warning
  */
 nothing FtpClient::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setWarningQueue(xsink, warning_ms, warning_bs, q.release(), arg.refSelf(), min_ms);
+    f->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket

@@ -94,6 +94,9 @@ struct Http2StreamInfo {
     // Body data
     std::vector<char> body;
 
+    //! Maximum body size in bytes (0 = unlimited)
+    int64 max_body_size = 0;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;
@@ -104,6 +107,8 @@ struct Http2StreamInfo {
     bool body_complete = false;
     bool reset = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
+    bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
+    bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -164,6 +169,12 @@ public:
 
     //! Returns true if this is a server-side session
     DLLLOCAL bool isServer() const { return is_server; }
+
+    //! Sets the maximum request body size for new streams (0 = unlimited)
+    DLLLOCAL void setMaxRequestBodySize(int64 size) { max_request_body_size = size; }
+
+    //! Returns the maximum request body size
+    DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
 
     //! Send the connection preface (client) or SETTINGS (server)
     DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
@@ -393,6 +404,54 @@ public:
     //! Returns true if there are completed streams waiting
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
 
+    //! Enable/disable headers-only mode
+    /** When enabled, markStreamComplete() keeps streams with headers_complete in the
+        map instead of moving them to completed_streams. This allows
+        takeHeadersReadyStreamCopy() to find them even when END_STREAM arrives in the
+        same batch as HEADERS.
+
+        @param v True to enable headers-only mode
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setHeadersOnlyMode(bool v);
+
+    //! Atomically find a headers-ready stream, copy it, and mark dispatched
+    /** Finds the first stream with headers_complete && !dispatched, copies it, clears the
+        body on the copy, and marks the original as dispatched — all under a single lock to
+        prevent TOCTOU races.
+
+        The body is cleared on the copy (not the original) so that DATA frames that arrived
+        with HEADERS remain in the original for readHttp2StreamDataBlock() to return.
+        getOutput() skips the body field for H2S_HEADERS_READY mode to prevent duplication.
+
+        @return a copy of the stream info (with empty body), or nullptr if no headers-ready
+        stream exists
+        @since %Qore 2.3
+    */
+    DLLLOCAL std::unique_ptr<Http2StreamInfo> takeHeadersReadyStreamCopy();
+
+    //! Check if stream's body is complete (END_STREAM received)
+    /** @param stream_id the stream to check
+        @return True if END_STREAM has been received (body_complete), or if the
+        stream is not found (a cleaned-up stream is effectively complete)
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
+
+    //! Remove stream from map (cleanup after handler finishes)
+    /** @param stream_id the stream to remove
+        @since %Qore 2.3
+    */
+    DLLLOCAL void cleanupStream(int32_t stream_id);
+
+    //! Check if any streaming client streams have body data available
+    /** Used by client multiplex to deliver intermediate body data for streaming streams.
+        @param stream_id [out] set to the stream ID with data, if found
+        @return true if a streaming stream with body data was found
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasStreamingData(int32_t& stream_id);
+
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
     /** Callback arguments:
         - \c stream_id: the completed stream ID
@@ -490,6 +549,8 @@ private:
     // NOTE: recursive mutex is required because nghttp2 callbacks can re-enter
     // Http2Session methods that also lock the session state.
     mutable std::recursive_mutex m;
+    //! When true, markStreamComplete() keeps undispatched headers-complete streams in the map
+    bool headers_only_mode = false;
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);
 
@@ -542,6 +603,9 @@ private:
     Http2Settings local_settings;
     Http2Settings remote_settings;
     bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
+
+    //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
+    int64 max_request_body_size = 0;
 
     // GOAWAY state
     bool goaway_received = false;

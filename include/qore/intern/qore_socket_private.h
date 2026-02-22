@@ -614,6 +614,19 @@ struct qore_socket_private {
     */
     bool h2_stream_read_external = false;
 
+    //! Maximum size for chunked HTTP body reads (0 = unlimited)
+    /** When set, readHttpChunkedBodyBinary() and readHttpChunkedBody() will
+        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds
+        this limit.
+    */
+    int64 max_chunked_body_size = 0;
+
+    //! Maximum request body size for HTTP/2 streams (0 = unlimited)
+    /** Propagated to Http2Session when created; DATA frame accumulation exceeding
+        this limit causes the stream to be reset with REFUSED_STREAM.
+    */
+    int64 max_http2_body_size = 0;
+
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
         (RFC 8441), so clients will not attempt WebSocket over HTTP/2 CONNECT.
@@ -634,6 +647,16 @@ struct qore_socket_private {
         Set by Http2ClientMultiplexPollOperation for response routing.
     */
     std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> h2_stream_complete_callback;
+
+#ifdef DARWIN
+    //! Write end of a notification pipe used by Socket::poll() on macOS
+    /** When a socket FD is closed during a kqueue poll, macOS silently removes
+        the kqueue filter without delivering an event. Writing to this pipe wakes
+        up the kevent() call so it can detect the closed socket.
+        -1 when no poll is active.
+    */
+    std::atomic<int> poll_notify_fd{-1};
+#endif
 
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
@@ -832,7 +855,22 @@ struct qore_socket_private {
             // it's closed
             ++connection_id;
 
-            return close_and_reset();
+            int rc = close_and_reset();
+
+#ifdef DARWIN
+            // Signal any active kqueue poll that this socket was closed;
+            // on macOS, closing a monitored FD silently removes its kqueue
+            // filter without delivering an event.
+            // Use exchange to atomically claim and clear the fd, ensuring
+            // only one thread writes to the pipe for this socket.
+            int nfd = poll_notify_fd.exchange(-1, std::memory_order_acq_rel);
+            if (nfd >= 0) {
+                char c = 1;
+                while (::write(nfd, &c, 1) == -1 && errno == EINTR) {}
+            }
+#endif
+
+            return rc;
         } else {
             return 0;
         }
@@ -1005,6 +1043,16 @@ struct qore_socket_private {
 
             int rc = ::accept(sock, addr, size);
             if (rc != QORE_INVALID_SOCKET) {
+                // On macOS/Darwin, accept() inherits O_NONBLOCK from the listening socket;
+                // the accepted socket must be returned in blocking mode so that
+                // subsequent blocking operations (e.g., SSL handshake) work correctly.
+                // Without this, async I/O listener sockets (set non-blocking for poll)
+                // produce accepted sockets that fail SSL negotiation with errors like
+                // SSL_R_PACKET_LENGTH_TOO_LONG due to partial TLS record reads.
+                int arg = fcntl(rc, F_GETFL, 0);
+                if (arg >= 0 && (arg & O_NONBLOCK)) {
+                    fcntl(rc, F_SETFL, arg & ~O_NONBLOCK);
+                }
                 return rc;
             }
 
@@ -1138,11 +1186,12 @@ struct qore_socket_private {
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
-        if (event_queue) {
-            // close the socket before the delete message is put on the queue
-            // the socket would be closed anyway in the destructor
-            close_internal();
+        // always close the socket when the Qore object is destroyed; the socket
+        // must be closed here because poll operations may still hold references to
+        // the QoreSocketObject, preventing the C++ destructor from running
+        close_internal();
 
+        if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_DELETED));
 
             // deref and remove event queue
@@ -3921,6 +3970,13 @@ struct qore_socket_private {
                         return nullptr;
                 } else {
                     b->append(buf, rc);
+                    // Check cumulative body size against limit
+                    if (max_chunked_body_size > 0 && (int64)b->size() > max_chunked_body_size) {
+                        xsink->raiseException("HTTP-BODY-TOO-LARGE",
+                            "chunked body size " QLLD " exceeds maximum " QLLD,
+                            (int64)b->size(), max_chunked_body_size);
+                        return nullptr;
+                    }
                 }
                 br += rc;
 
@@ -4103,6 +4159,14 @@ struct qore_socket_private {
 
                 br += rc;
                 buf->concat(tbuf, rc);
+
+                // Check cumulative body size against limit
+                if (max_chunked_body_size > 0 && (int64)buf->size() > max_chunked_body_size) {
+                    xsink->raiseException("HTTP-BODY-TOO-LARGE",
+                        "chunked body size " QLLD " exceeds maximum " QLLD,
+                        (int64)buf->size(), max_chunked_body_size);
+                    return nullptr;
+                }
 
                 do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, tbuf, (size_t)rc);
 

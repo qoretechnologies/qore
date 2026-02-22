@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -103,61 +103,49 @@ void ManagedDatasource::deref() {
 int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
     int ctid = q_gettid();
 
-    if (tid == ctid)
+    if (tid == ctid) {
         return 0;
+    }
 
-    // Check for sandbox interrupt support
-    QoreSandboxManagerHelper smh;
     const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
     int64 remaining_timeout = tl_timeout_ms;
 
     while (tid != -1) {
-        // Check for interrupt
-        if (smh && xsink && smh->checkIOInterrupt(xsink, "datasource lock acquisition")) {
+        // Check for cancellation or program interrupt
+        if (xsink && qore_check_cancel(xsink, "datasource lock acquisition")) {
             return -2;  // -2 indicates interrupt
         }
 
         ++waiting;
-        if (tl_timeout_ms > 0 || (tl_timeout_ms < 0 && smh)) {
-            // Positive timeout or infinite timeout with sandbox manager: use polling
+        if (tl_timeout_ms != 0) {
+            // Non-zero timeout: always poll at intervals for cancel/interrupt checking
             int effective_timeout;
-            if (smh) {
-                // With sandbox manager, poll at intervals for interrupt checking
-                effective_timeout = (tl_timeout_ms < 0 || remaining_timeout > poll_interval)
-                    ? poll_interval : remaining_timeout;
+            if (tl_timeout_ms < 0 || remaining_timeout > poll_interval) {
+                effective_timeout = poll_interval;
             } else {
-                // No sandbox manager: use full timeout
-                effective_timeout = tl_timeout_ms;
+                effective_timeout = remaining_timeout;
             }
 
             int rc = cond.wait(&ds_lock, effective_timeout);
             --waiting;
-            if (!rc)
+            if (!rc) {
                 continue;
+            }
 
-            // Timeout occurred
-            if (smh && tl_timeout_ms > 0) {
+            // Timeout occurred - check if real timeout expired
+            if (tl_timeout_ms > 0) {
                 remaining_timeout -= effective_timeout;
                 if (remaining_timeout <= 0) {
                     printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
                     return -1;
                 }
-            } else if (smh && tl_timeout_ms < 0) {
-                // Infinite timeout with sandbox manager - continue polling
-                continue;
-            } else {
-                printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
-                return -1;
             }
-        } else if (tl_timeout_ms == 0) {
+            // For infinite timeout, continue polling
+        } else {
             // Zero timeout means try once without waiting - fail immediately if lock not available
             printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
             --waiting;
             return -1;
-        } else {
-            // Infinite timeout without sandbox manager
-            cond.wait(&ds_lock);
-            --waiting;
         }
     }
 

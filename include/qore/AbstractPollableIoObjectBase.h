@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,19 @@
 class AbstractPollableIoObjectBase : public AbstractPrivateData {
 public:
     virtual int getPollableDescriptor() const = 0;
+
+#ifdef DARWIN
+    //! Sets the write end of a notification pipe for kqueue poll on macOS
+    /** On macOS, closing a monitored FD silently removes its kqueue filter without
+        delivering an event. This method allows Socket::poll() to register a notification
+        pipe so that close_internal() can wake up kevent() when the FD is closed.
+
+        @param fd the write end of the notification pipe, or -1 to clear
+
+        @since %Qore 2.3
+    */
+    virtual void setPollNotifyFd(int fd) {}
+#endif
 };
 
 #endif

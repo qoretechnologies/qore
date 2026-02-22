@@ -142,6 +142,11 @@ public class DpqlParser {
                 # This only happens at the top level, not for nested expressions or function args
                 if (parsed instanceof hash<DataProviderExpression>) {
                     exp = parsed;
+                } else if (parsed instanceof hash<DataProviderTemplateReference>) {
+                    exp = <DataProviderExpression>{
+                        "exp": DP_EXPR_TEMPLATE,
+                        "args": (parsed,),
+                    };
                 } else {
                     exp = <DataProviderExpression>{
                         "exp": DP_EXPR_VALUE,
@@ -577,6 +582,9 @@ public class DpqlParser {
             case DPQL_TOK_FIELD:
                 return parseFieldRef();
 
+            case DPQL_TOK_TEMPLATE:
+                return parseTemplateRef();
+
             case DPQL_TOK_STRING:
                 return parseStringLiteral();
 
@@ -676,6 +684,74 @@ public class DpqlParser {
 
         # Parse optional accessor chain, wrapping in expression nodes
         return parseAccessorChain(result);
+    }
+
+    #! Parses a template reference token into a DataProviderTemplateReference hashdecl
+    /** Extracts context, value, and optional type assertion from the raw template token text.
+
+        @par Supported forms
+        - Simple: \c $context:value
+        - Bracketed: \c $context:{value}
+        - Type-asserted: \c $context:value::type
+        - Fallback: \c $context:A??{$ctx:B}
+
+        @return a DataProviderTemplateReference hashdecl
+
+        @since DataProvider 3.3
+    */
+    private hash<DataProviderTemplateReference> parseTemplateRef() {
+        hash<DpqlTokenInfo> tok = nextToken();
+        string raw = tok.value;
+
+        # Strip leading '$'
+        string rest = substr(raw, 1);
+
+        # Extract context (up to first ':')
+        int colon_pos = index(rest, ":");
+        # The tokenizer guarantees ':' exists in a DPQL_TOK_TEMPLATE token (validated by DPQL-E032)
+        @assert(colon_pos >= 0);
+        string ctx = substr(rest, 0, colon_pos);
+        rest = substr(rest, colon_pos + 1);
+
+        string val;
+
+        if (rest[0] == "{") {
+            # Bracketed value: find matching closing '}'
+            int depth = 0;
+            int close_pos = -1;
+            for (int i = 0; i < rest.size(); ++i) {
+                string ch = rest[i];
+                if (ch == "{") {
+                    ++depth;
+                } else if (ch == "}") {
+                    --depth;
+                    if (depth == 0) {
+                        close_pos = i;
+                        break;
+                    }
+                }
+            }
+
+            if (close_pos > 0) {
+                # Content between the outermost { and }
+                val = substr(rest, 1, close_pos - 1);
+            } else {
+                # Fallback: no matching '}' found; strip outer braces as best effort
+                if (rest.size() > 1 && rest[rest.size() - 1] == "}") {
+                    val = substr(rest, 1, rest.size() - 2);
+                } else {
+                    val = substr(rest, 1);
+                }
+            }
+        } else {
+            val = rest;
+        }
+
+        return <DataProviderTemplateReference>{
+            "tmpl_context": ctx,
+            "tmpl_value": val,
+            "raw": raw,
+        };
     }
 
     #! Parses accessor chain and wraps the base expression in nested operator nodes

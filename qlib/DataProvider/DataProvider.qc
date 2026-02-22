@@ -53,11 +53,19 @@ public const DPO_DisableOnDemandInitialization  = (1 << 1);
 */
 public const DPO_EnableOnDemandActions          = (1 << 2);
 
+#! Enable in-process servers
+/** If this is set (and \c DPO_EnableServers is NOT set), then in-process JavaScript program pools will be used for
+    data provider functionality instead of external server processes; this eliminates IPC overhead while supporting
+    concurrent access through multiple in-process program instances
+*/
+public const DPO_EnableInProcessServers         = (1 << 3);
+
 #! The mask of all data provider options
 public const DPO_AllOptions = (
     DPO_EnableServers
     | DPO_DisableOnDemandInitialization
     | DPO_EnableOnDemandActions
+    | DPO_EnableInProcessServers
 );
 #/@}
 
@@ -102,6 +110,10 @@ public class DataProvider {
             "gcal": "GoogleCalendarDataProvider",
             "generator": "GeneratorDataProvider",
             "gmail": "GmailDataProvider",
+
+            # provided by the grpc module
+            "grpc": "GrpcDataProvider",
+
             "httpclient": "HttpClientDataProvider",
 
             # provided by the imagemagick module
@@ -725,6 +737,174 @@ string dpql = DataProvider::serializeDpqlExpression(exp);
         return serializer.serialize(exp);
     }
 
+    #! Deserializes an expression from JSON/YAML transport format to typed DataProviderExpression
+    /** Converts an untyped hash (as received from JSON/YAML) to a properly typed
+        @ref DataProviderExpression with all nested nodes typed.
+
+        @param h the untyped expression hash; must contain an \c exp string key
+        @return the typed DataProviderExpression
+
+        @throw EXPRESSION-DESERIALIZE-ERROR if \c exp is missing or not a string
+        @throw EXPRESSION-ARG-ERROR if an argument hash has an unrecognized format
+
+        @par Example:
+        @code{.py}
+# From JSON: {"exp": "==", "args": [{"field": "name"}, {"value": "John"}]}
+hash<auto> json_exp = {
+    "exp": "==",
+    "args": ({"field": "name"}, {"value": "John"}),
+};
+hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(json_exp);
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static hash<DataProviderExpression> deserializeExpressionFromJson(hash<auto> h) {
+        if (!h.hasKey("exp") || h.exp.typeCode() != NT_STRING) {
+            throw "EXPRESSION-DESERIALIZE-ERROR", sprintf("expression hash missing \"exp\" string key; got: %y",
+                h);
+        }
+        return <DataProviderExpression>{
+            "exp": h.exp,
+            "args": h.args
+                ? (map DataProvider::deserializeExpressionArgFromJson($1), h.args)
+                : NOTHING,
+        };
+    }
+
+    #! Deserializes an expression argument from JSON/YAML transport format
+    /** Handles all argument types:
+        - Non-hash scalars: returned as-is (plain values)
+        - Already-typed hashdecls: passed through (expressions are recursed)
+        - \c {"tmpl_context": ..., "tmpl_value": ...}: converted to @ref DataProviderTemplateReference
+        - \c {"field": ...} (single key): converted to @ref DataProviderFieldReference
+        - \c {"exp": ...}: recursively deserialized via @ref deserializeExpressionFromJson()
+        - \c {"value": val}: unwrapped to \c val
+        - \c {"start": ..., "end": ...}: converted to @ref DataProviderRangeSpec
+        - Unknown hash: throws \c EXPRESSION-ARG-ERROR
+
+        @param arg the argument to deserialize
+        @return the typed argument
+
+        @throw EXPRESSION-ARG-ERROR if a hash argument has an unrecognized format
+
+        @since DataProvider 3.4
+    */
+    static auto deserializeExpressionArgFromJson(auto arg) {
+        if (arg.typeCode() != NT_HASH) {
+            # Non-hash scalar or list: return as-is
+            return arg;
+        }
+
+        # Already-typed hashdecls pass through (recurse into expressions)
+        if (arg instanceof hash<DataProviderExpression>) {
+            return DataProvider::deserializeExpressionFromJson(arg);
+        }
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return arg;
+        }
+        if (arg instanceof hash<DataProviderTemplateReference>) {
+            return arg;
+        }
+        if (arg instanceof hash<DataProviderRangeSpec>) {
+            return arg;
+        }
+
+        # Untyped hash: determine format from keys
+        if (arg.hasKey("tmpl_context") && arg.hasKey("tmpl_value")) {
+            return <DataProviderTemplateReference>{
+                "tmpl_context": arg.tmpl_context,
+                "tmpl_value": arg.tmpl_value,
+                "raw": arg.raw ?? ("$" + arg.tmpl_context + ":" + arg.tmpl_value),
+            };
+        }
+        if (arg.hasKey("field") && arg.size() == 1) {
+            return <DataProviderFieldReference>{
+                "field": arg.field,
+            };
+        }
+        if (arg.hasKey("exp")) {
+            return DataProvider::deserializeExpressionFromJson(arg);
+        }
+        if (arg.hasKey("value")) {
+            return arg.value;
+        }
+        # Range spec: {"start": ..., "end": ...}
+        if (arg.size() <= 2 && (arg.hasKey("start") || arg.hasKey("end"))
+                && !arg.hasKey("field") && !arg.hasKey("exp") && !arg.hasKey("value")) {
+            return <DataProviderRangeSpec>{
+                "start": arg.start,
+                "end": arg.end,
+            };
+        }
+
+        throw "EXPRESSION-ARG-ERROR", sprintf("unrecognized expression argument hash format: %y", arg);
+    }
+
+    #! Serializes a typed DataProviderExpression to JSON/YAML transport format
+    /** Converts a typed expression to an untyped hash suitable for JSON/YAML serialization,
+        wrapping plain values in \c {"value": val} to preserve type information.
+
+        @param exp the typed expression to serialize
+        @return the untyped hash in transport format
+
+        @par Example:
+        @code{.py}
+hash<DataProviderExpression> exp = <DataProviderExpression>{
+    "exp": "==",
+    "args": (<DataProviderFieldReference>{"field": "name"}, "John"),
+};
+hash<auto> json = DataProvider::serializeExpressionToJson(exp);
+# Result: {"exp": "==", "args": ({"field": "name"}, {"value": "John"})}
+        @endcode
+
+        @since DataProvider 3.4
+    */
+    static hash<auto> serializeExpressionToJson(hash<DataProviderExpression> exp) {
+        return {
+            "exp": exp.exp,
+            "args": exp.args
+                ? (map DataProvider::serializeExpressionArgToJson($1), exp.args)
+                : NOTHING,
+        };
+    }
+
+    #! Serializes an expression argument to JSON/YAML transport format
+    /** Handles all argument types:
+        - @ref DataProviderFieldReference: \c {"field": name}
+        - @ref DataProviderTemplateReference: \c {"tmpl_context": ..., "tmpl_value": ..., "raw": ...}
+        - @ref DataProviderRangeSpec: \c {"start": ..., "end": ...}
+        - @ref DataProviderExpression: recursively serialized
+        - Plain value: wrapped in \c {"value": val}
+
+        @param arg the argument to serialize
+        @return the serialized argument
+
+        @since DataProvider 3.4
+    */
+    static auto serializeExpressionArgToJson(auto arg) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return {"field": arg.field};
+        }
+        if (arg instanceof hash<DataProviderTemplateReference>) {
+            return {
+                "tmpl_context": arg.tmpl_context,
+                "tmpl_value": arg.tmpl_value,
+                "raw": arg.raw,
+            };
+        }
+        if (arg instanceof hash<DataProviderRangeSpec>) {
+            return {
+                "start": arg.start,
+                "end": arg.end,
+            };
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return DataProvider::serializeExpressionToJson(arg);
+        }
+        return {"value": arg};
+    }
+
     #! Gets all tokens from a DPQL expression for syntax highlighting
     /** @param text the DPQL expression to tokenize
 
@@ -750,6 +930,7 @@ foreach hash<DpqlTokenInfo> tok in (tokens) {
         @param position cursor position (0-based character offset)
         @param fields available fields for completion
         @param expressions optional map of expression names to their info
+        @param template_context optional context hash forwarded to template completion callbacks for filtering
 
         @return a list of completion items sorted by priority
 
@@ -767,9 +948,36 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
     */
     static list<hash<DpqlCompletionItem>> getDpqlCompletions(string text, int position,
             hash<string, AbstractDataField> fields,
-            *hash<string, hash<DataProviderExpressionInfo>> expressions) {
+            *hash<string, hash<DataProviderExpressionInfo>> expressions,
+            *hash<auto> template_context) {
         DpqlCompletionProvider provider(expressions ?? DataProviderGenericExpressions);
-        return provider.getCompletions(text, position, fields);
+        return provider.getCompletions(text, position, fields, template_context);
+    }
+
+    #! Sets callbacks for template reference resolution
+    /** Delegates to @ref AbstractDataProvider::setTemplateCallbacks()
+
+        @see AbstractDataProvider::setTemplateCallbacks() for full documentation
+
+        @since DataProvider 3.3
+    */
+    static bool setTemplateCallbacks(
+            code<auto(string, string, *hash<auto>)> expand,
+            *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
+            *code<auto(*hash<auto>)> list_contexts,
+            *code<auto(string, string, *hash<auto>)> list_values) {
+        return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
+    }
+
+    #! Clears all template callbacks and resets the lock
+    /** Delegates to @ref AbstractDataProvider::clearTemplateCallbacks()
+
+        @see AbstractDataProvider::clearTemplateCallbacks() for full documentation
+
+        @since DataProvider 3.3
+    */
+    static clearTemplateCallbacks() {
+        AbstractDataProvider::clearTemplateCallbacks();
     }
 
     #! Validates a DPQL expression against available fields
@@ -1184,6 +1392,25 @@ if (errors) {
     static private string renderExpressionArg(hash<DataProviderFieldReference> ref,
             hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
         return sprintf("{%s}", ref.field);
+    }
+
+    #! Returns a descriptive string for the given template reference argument
+    /**
+        @since DataProvider 3.3
+    */
+    static private string renderExpressionArg(hash<DataProviderTemplateReference> ref,
+            hash<string, hash<DataProviderExpressionInfo>> emap, *hash<DataProviderArgInfo> arg_info) {
+        if (ref.raw) {
+            return ref.raw;
+        }
+        # Reconstruct from parts
+        string result = "$" + ref.tmpl_context + ":";
+        if (ref.tmpl_value =~ /[^a-zA-Z0-9_.*]/) {
+            result += "{" + ref.tmpl_value + "}";
+        } else {
+            result += ref.tmpl_value;
+        }
+        return result;
     }
 
     #! Returns a descriptive string for the given expression argument

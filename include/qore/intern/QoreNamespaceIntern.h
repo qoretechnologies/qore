@@ -171,7 +171,7 @@ public:
     // called when parsing
     DLLLOCAL qore_ns_private(const QoreProgramLocation* loc);
 
-    DLLLOCAL qore_ns_private(const qore_ns_private& old, int64 po, QoreNamespace* ns)
+    DLLLOCAL qore_ns_private(const qore_ns_private& old, const QoreParseOptions& po, QoreNamespace* ns)
         : name(old.name),
             path(old.path),
             ns(ns),
@@ -1975,7 +1975,7 @@ public:
         nsmap.update(this);
     }
 
-    DLLLOCAL qore_root_ns_private(const qore_root_ns_private& old, int64 po, QoreProgram* pgm, RootQoreNamespace* ns)
+    DLLLOCAL qore_root_ns_private(const qore_root_ns_private& old, const QoreParseOptions& po, QoreProgram* pgm, RootQoreNamespace* ns)
             : qore_ns_private(old, po, ns), pgm(pgm) {
         assert(pgm);
         if ((po & PO_SYSTEM_INHERITANCE_OPTIONS) == PO_SYSTEM_INHERITANCE_OPTIONS) {
@@ -1998,7 +1998,7 @@ public:
     DLLLOCAL ~qore_root_ns_private() {
     }
 
-    DLLLOCAL RootQoreNamespace* copy(int64 po, QoreProgram* pgm) {
+    DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
         RootQoreNamespace* rv = new RootQoreNamespace(nullptr);
         qore_root_ns_private* rpriv = new qore_root_ns_private(*this, po, pgm, rv);
         rv->priv = rv->rpriv = rpriv;
@@ -2255,7 +2255,7 @@ public:
         return rns.rpriv->runtimeFindCreateNamespacePath(nspath, pub, user);
     }
 
-    DLLLOCAL static RootQoreNamespace* copy(const RootQoreNamespace& rns, int64 po, QoreProgram* pgm) {
+    DLLLOCAL static RootQoreNamespace* copy(const RootQoreNamespace& rns, const QoreParseOptions& po, QoreProgram* pgm) {
         return rns.rpriv->copy(po, pgm);
     }
 
@@ -2517,11 +2517,11 @@ public:
 
 private:
     DLLLOCAL bool useBrokenNamespaceResolutionParse() const {
-        return parse_get_parse_options() & PO_BROKEN_NAMESPACE_RESOLUTION;
+        return static_cast<bool>(parse_get_parse_options() & PO_BROKEN_NAMESPACE_RESOLUTION);
     }
 
     DLLLOCAL bool useBrokenNamespaceResolutionRuntime() const {
-        return getProgram()->getParseOptions64() & PO_BROKEN_NAMESPACE_RESOLUTION;
+        return static_cast<bool>(getProgram()->getParseOptions() & PO_BROKEN_NAMESPACE_RESOLUTION);
     }
 
     DLLLOCAL bool isUnderQoreNamespace(const qore_ns_private* ns, const qore_ns_private* qore_ns) const {

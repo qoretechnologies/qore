@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,6 @@
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/StatementBlock.h"
 
@@ -61,10 +60,8 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
     // execute "for" body
     while (!*xsink) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "for loop")) {
             break;
         }
 
@@ -119,10 +116,8 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
 
     // execute "for" body
     while (!*xsink) {
-        // Check for sandbox interrupt
-        QoreSandboxManagerHelper smh;
-        if (smh && smh->isInterruptRequested()) {
-            xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted");
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "for loop")) {
             break;
         }
 

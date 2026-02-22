@@ -46,9 +46,7 @@ qclass Expression [arg=QoreExpression* e];
     @param label the label for the expression
  */
 Expression::constructor(Program[QoreProgram] pgm, string source, string label) {
-    ReferenceHolder<QoreProgram> holder(pgm, xsink);
-
-    ReferenceHolder<QoreExpression> exp(new QoreExpression(*pgm, *source, *label, xsink), xsink);
+    ReferenceHolder<QoreExpression> exp(new QoreExpression(**pgm, *source, *label, xsink), xsink);
     if (!*xsink) {
         self->setPrivate(CID_EXPRESSION, exp.release());
     }

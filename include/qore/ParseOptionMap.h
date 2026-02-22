@@ -1,11 +1,11 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   ParseOptionMap.h
- 
+
   Qore Programming language
- 
+
   Copyright (C) 2003 - 2026 David Nichols
- 
+
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
   to deal in the Software without restriction, including without limitation
@@ -34,8 +34,8 @@
 
 #include <qore/Restrictions.h>
 
-typedef std::map<const char *, int64, ltstr> opt_map_t;
-typedef std::map<int64, const char *> rev_opt_map_t;
+typedef std::map<const char*, QoreParseOptions, ltstr> opt_map_t;
+typedef std::map<QoreParseOptions, const char*> rev_opt_map_t;
 
 //! provides access to parse option information
 class ParseOptionMap {
@@ -46,22 +46,18 @@ class ParseOptionMap {
       // not implemented
       DLLLOCAL ParseOptionMap(const ParseOptionMap&);
       DLLLOCAL ParseOptionMap& operator=(const ParseOptionMap&);
-      
+
    public:
       DLLLOCAL ParseOptionMap();
       DLLLOCAL static void static_init();
 
       //! find a parse option name from its code
-      DLLEXPORT static const char *find_name(int code);
+      DLLEXPORT static const char* find_name(const QoreParseOptions& code);
 
       //! find a parse option code from its name
-      /** @deprecated do not use; uses the wrong return type; use find_code64() instead */
-      DLLEXPORT static int find_code(const char *name);
+      DLLEXPORT static QoreParseOptions find_code(const char* name);
 
-      //! find a parse option code from its name
-      DLLEXPORT static int64 find_code64(const char *name);
-
-      //! print out all parse optionsto stdout
+      //! print out all parse options to stdout
       DLLEXPORT static void list_options();
 
       DLLLOCAL static QoreHashNode* getCodeToStringMap();

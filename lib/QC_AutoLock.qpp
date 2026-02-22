@@ -83,32 +83,23 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 AutoLock::constructor(Mutex[SmartMutex] mutex) {
-    ReferenceHolder<SmartMutex> holder(mutex, xsink);
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
-                return;
-            }
-            int rc = mutex->grab(xsink, poll_ms);
-            if (*xsink) {
-                return;  // Error occurred
-            }
-            if (rc == 0) {
-                // Lock acquired - create the AutoLock object with already-locked mutex
-                QoreAutoLock *qsl = new QoreAutoLock(holder.release());
-                self->setPrivate(CID_AUTOLOCK, qsl);
-                return;
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "mutex lock")) {
+            return;
         }
-    }
-    ReferenceHolder<QoreAutoLock> qsl(new QoreAutoLock(holder.release(), xsink), xsink);
-    if (!*xsink) {
-        self->setPrivate(CID_AUTOLOCK, qsl.release());
+        int rc = mutex->grab(xsink, poll_ms);
+        if (*xsink) {
+            return;  // Error occurred
+        }
+        if (rc == 0) {
+            // Lock acquired - create the AutoLock object with already-locked mutex
+            QoreAutoLock *qsl = new QoreAutoLock(mutex.release());
+            self->setPrivate(CID_AUTOLOCK, qsl);
+            return;
+        }
+        // rc != 0 means timeout, loop and check again
     }
 }
 

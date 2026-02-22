@@ -501,7 +501,6 @@ bool b = t1.isEqual(t2);
     @return @ref True if the Type object passed as an argument is equal to the current object; @ref False if not
 */
 bool Type::isEqual(Type[QoreType] type) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     return qore_type_equal(t->typeInfo, type->typeInfo);
 }
 
@@ -519,7 +518,6 @@ bool b = t1.isOutputCompatible(t2);
     @see isCompatible()
 */
 bool Type::isOutputCompatible(Type[QoreType] type) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     return qore_type_is_output_compatible(t->typeInfo, type->typeInfo);
 }
 
@@ -538,7 +536,6 @@ bool b = t1.isCompatible(t2);
     @since %Qore 0.9.4
 */
 bool Type::isCompatible(Type[QoreType] type) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     return qore_type_is_input_output_compatible(t->typeInfo, type->typeInfo);
 }
 
@@ -558,7 +555,6 @@ int v = t1.isAssignableFrom(t2);
     @since %Qore 0.9.4
 */
 bool Type::isAssignableFrom(Type[QoreType] type, reference<bool> may_not_match) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     QoreTypeSafeReferenceHelper r(may_not_match, xsink);
     if (!r) {
         return QoreValue();
@@ -602,7 +598,6 @@ bool b = t1.isAssignableFrom(t2);
     @since %Qore 0.9.4
 */
 bool Type::isAssignableFrom(Type[QoreType] type) [flags=CONSTANT] {
-    ReferenceHolder<QoreType> holder(type, xsink);
     return qore_type_is_assignable_from(t->typeInfo, type->typeInfo);
 }
 

@@ -129,8 +129,8 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
         return QoreValue();
     }
 
-    int64 po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-    bool broken_list_range = po & PO_BROKEN_LIST_RANGE;
+    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+    bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
 
     qore_type_t seq_type = seq->getType();
     int64 start, stop, seq_size;
@@ -214,8 +214,8 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
         return nullptr;
 
     if (seq->getType() == NT_LIST) {
-        int64 po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-        bool broken_list_range = po & PO_BROKEN_LIST_RANGE;
+        QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
+        bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
         int64 start, stop, seq_size;
         ValueEvalRefHolder start_index(rc, e[1], xsink);
         if (*xsink)

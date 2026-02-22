@@ -2014,6 +2014,48 @@ public:
     */
     DLLEXPORT int32_t getHttp2ActiveStream() const;
 
+    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
+    /** Blocks until data is available on the specified stream, the stream completes
+        (END_STREAM), or the timeout expires.
+
+        @param stream_id the HTTP/2 stream ID
+        @param timeout_ms read timeout in milliseconds
+        @param xsink exception sink for error reporting
+
+        @return binary data from the stream, or nullptr on timeout or stream end.
+        Use isHttp2StreamComplete() to distinguish timeout from end-of-stream.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+            ExceptionSink* xsink);
+
+    //! Check if an HTTP/2 stream has received END_STREAM
+    /** @param stream_id the HTTP/2 stream ID
+        @return true if END_STREAM has been received (body_complete) or stream not found
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
+
+    //! Flush all pending HTTP/2 outgoing data (blocking)
+    /** Calls sendPendingDataBlocking() to send all queued frames to the socket.
+
+        @param timeout_ms send timeout in milliseconds; -1 for infinite
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
+
+    //! Remove an HTTP/2 stream from the session (cleanup after handler finishes)
+    /** @param stream_id the HTTP/2 stream ID to remove
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
+
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;
 
@@ -2200,6 +2242,40 @@ public:
         @since %Qore 0.9.3.1
     */
     DLLEXPORT int64 getConnectionId() const;
+
+    //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
+    /** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
+        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setMaxChunkedBodySize(int64 size);
+
+    //! Returns the maximum body size for chunked HTTP reads
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getMaxChunkedBodySize() const;
+
+    //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
+    /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
+        the stream to be reset with REFUSED_STREAM.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
+
+    //! Returns the maximum request body size for HTTP/2 streams
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
     DLLLOCAL static void doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink);
 

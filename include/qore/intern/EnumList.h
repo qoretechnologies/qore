@@ -63,7 +63,7 @@ private:
 public:
     DLLLOCAL EnumList() {}
     DLLLOCAL ~EnumList();
-    DLLLOCAL EnumList(const EnumList& old, int64 po, qore_ns_private* ns);
+    DLLLOCAL EnumList(const EnumList& old, const QoreParseOptions& po, qore_ns_private* ns);
 
     DLLLOCAL void mergeUserPublic(const EnumList& old, qore_ns_private* ns);
 
