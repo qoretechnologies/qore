@@ -104,13 +104,20 @@ static inline int fast_string_compare(const QoreStringNode* ls, const QoreString
 // QoreValue is NaN-boxed and has the same size as uint64_t.
 static_assert(sizeof(QoreValue) == sizeof(uint64_t), "QoreValue must be 64 bits for JIT ABI");
 
-static inline QoreValue fromBits(uint64_t bits) {
+// Macro for always-inline attribute (portable across GCC, Clang, MSVC)
+#ifdef _MSC_VER
+    #define QORE_ALWAYS_INLINE __forceinline
+#else
+    #define QORE_ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+
+static QORE_ALWAYS_INLINE QoreValue fromBits(uint64_t bits) {
     QoreValue v;
     std::memcpy(&v, &bits, sizeof(v));
     return v;
 }
 
-static inline uint64_t toBits(const QoreValue& v) {
+static QORE_ALWAYS_INLINE uint64_t toBits(const QoreValue& v) {
     uint64_t bits;
     std::memcpy(&bits, &v, sizeof(bits));
     return bits;

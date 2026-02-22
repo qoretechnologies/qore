@@ -1328,6 +1328,9 @@ set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS
 string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
+# Add LLVM library directory since LLVM libs may not be on the standard linker search path
+# (e.g. MacPorts installs to /opt/local/libexec/llvm-XX/lib/)
+target_link_directories(libqore PRIVATE ${LLVM_LIBRARY_DIR})
 target_link_libraries(libqore ${QORE_LIBS})
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
