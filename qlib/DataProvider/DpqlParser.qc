@@ -713,12 +713,10 @@ public class DpqlParser {
         string ctx = substr(rest, 0, colon_pos);
         rest = substr(rest, colon_pos + 1);
 
-        # Check for type assertion (last :: in the string, outside brackets)
-        *string type_assertion;
         string val;
 
         if (rest[0] == "{") {
-            # Bracketed value: find matching closing '}' and then (optionally) a trailing ::type
+            # Bracketed value: find matching closing '}'
             int depth = 0;
             int close_pos = -1;
             for (int i = 0; i < rest.size(); ++i) {
@@ -737,14 +735,6 @@ public class DpqlParser {
             if (close_pos > 0) {
                 # Content between the outermost { and }
                 val = substr(rest, 1, close_pos - 1);
-
-                # Check for ::type suffix after the closing '}'
-                int suffix_start = close_pos + 1;
-                if (suffix_start + 1 < rest.size()
-                    && rest[suffix_start] == ":"
-                    && rest[suffix_start + 1] == ":") {
-                    type_assertion = substr(rest, suffix_start + 2);
-                }
             } else {
                 # Fallback: no matching '}' found; strip outer braces as best effort
                 if (rest.size() > 1 && rest[rest.size() - 1] == "}") {
@@ -754,20 +744,12 @@ public class DpqlParser {
                 }
             }
         } else {
-            # Check for ::type suffix — find the last occurrence of ::
-            int type_pos = rindex(rest, "::");
-            if (type_pos >= 0) {
-                type_assertion = substr(rest, type_pos + 2);
-                val = substr(rest, 0, type_pos);
-            } else {
-                val = rest;
-            }
+            val = rest;
         }
 
         return <DataProviderTemplateReference>{
             "tmpl_context": ctx,
             "tmpl_value": val,
-            "type_assertion": type_assertion,
             "raw": raw,
         };
     }

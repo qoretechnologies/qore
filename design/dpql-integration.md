@@ -41,7 +41,7 @@ application startup via `AbstractDataProvider::setTemplateCallbacks()`:
 
 ```qore
 static bool setTemplateCallbacks(
-    code<auto(string, string, *string, *hash<auto>)> expand,
+    code<auto(string, string, *hash<auto>)> expand,
     *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
     *code<auto(*hash<auto>)> list_contexts,
     *code<auto(string, string, *hash<auto>)> list_values,
@@ -50,7 +50,7 @@ static bool setTemplateCallbacks(
 
 | Parameter | Signature | Purpose |
 |-----------|-----------|---------|
-| `expand` | `auto(string tmpl_context, string tmpl_value, *string type_assertion, *hash<auto> template_context)` | Resolve a template reference to a concrete value |
+| `expand` | `auto(string tmpl_context, string tmpl_value, *hash<auto> template_context)` | Resolve a template reference to a concrete value |
 | `resolve_type` | `*AbstractDataProviderType(string tmpl_context, string tmpl_value, *hash<auto> template_context)` | Return the type of a template reference (for validation) |
 | `list_contexts` | `auto(*hash<auto> template_context)` | List available template contexts (for completions) |
 | `list_values` | `auto(string context, string prefix, *hash<auto> template_context)` | List values within a context matching a prefix |
@@ -74,7 +74,7 @@ call at process startup before any concurrent access.
 # Example: register template callbacks at startup
 DataProvider::setTemplateCallbacks(
     # expand: resolve a template reference to a value
-    auto sub (string ctx, string val, *string type_assertion, *hash<auto> tctx) {
+    auto sub (string ctx, string val, *hash<auto> tctx) {
         switch (ctx) {
             case "static":  return static_ctx{val};
             case "config":  return config.get(val);
@@ -130,14 +130,13 @@ When `evalGenericExpressionValue()` encounters a `hash<DataProviderTemplateRefer
 it calls the registered `expand` callback:
 
 ```
-expand(tmpl_context, tmpl_value, type_assertion, template_context)
+expand(tmpl_context, tmpl_value, template_context)
 ```
 
 | Parameter | Source |
 |-----------|--------|
 | `tmpl_context` | The context identifier (e.g., `"static"`, `"config"`) |
 | `tmpl_value` | The value path (e.g., `"account.id"`, `"threshold"`) |
-| `type_assertion` | Optional type from `::type` suffix (e.g., `"int"`) |
 | `template_context` | Opaque per-query hash threaded from `DefaultRecordIterator` |
 
 The `template_context` parameter allows per-request state to flow from the iterator
@@ -148,28 +147,16 @@ If no `expand` callback is registered and a template reference is evaluated, a
 `TEMPLATE-RESOLUTION-ERROR` exception is thrown with the raw template text.
 
 ```qore
-# Example: expand callback with type assertion handling
-auto sub (string ctx, string val, *string type_assertion, *hash<auto> tctx) {
-    auto result;
+# Example: expand callback
+auto sub (string ctx, string val, *hash<auto> tctx) {
     switch (ctx) {
         case "static":
-            result = tctx.static_values{val};
-            break;
+            return tctx.static_values{val};
         case "config":
-            result = config_store.get(val);
-            break;
+            return config_store.get(val);
         default:
             throw "TEMPLATE-RESOLUTION-ERROR", sprintf("unknown context %y", ctx);
     }
-    if (type_assertion) {
-        switch (type_assertion) {
-            case "int":    return int(result);
-            case "float":  return float(result);
-            case "string": return string(result);
-            case "bool":   return boolean(result);
-        }
-    }
-    return result;
 }
 ```
 
@@ -526,7 +513,7 @@ unchanged to each registered template callback.
 |----------|------------|-------------|
 | `DataProviderExpression` | `exp` (string), `args` (list) | Parsed expression node |
 | `DataProviderFieldReference` | `field` (string) | Field reference (`@name`) |
-| `DataProviderTemplateReference` | `tmpl_context`, `tmpl_value`, `*type_assertion`, `raw` | Template reference (`$ctx:val`) |
+| `DataProviderTemplateReference` | `tmpl_context`, `tmpl_value`, `raw` | Template reference (`$ctx:val`) |
 | `DpqlParseResult` | `*expression`, `diagnostics`, `success`, `tokens` | Full parse result |
 | `DpqlDiagnostic` | `severity`, `message`, `code`, `line`, `column`, `end_line`, `end_column` | Parse/validation diagnostic (1-based positions) |
 | `DpqlTokenInfo` | `type` (int), `value`, `line`, `column`, `end_line`, `end_column` | Token info (1-based positions) |

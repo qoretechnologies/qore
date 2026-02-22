@@ -785,7 +785,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         @since DataProvider 3.3
     */
     static bool setTemplateCallbacks(
-            code<auto(string, string, *string, *hash<auto>)> expand,
+            code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
             *code<auto(string, string, *hash<auto>)> list_values) {
@@ -1232,9 +1232,6 @@ if (errors) {
             result += "{" + ref.tmpl_value + "}";
         } else {
             result += ref.tmpl_value;
-        }
-        if (ref.type_assertion) {
-            result += "::" + ref.type_assertion;
         }
         return result;
     }

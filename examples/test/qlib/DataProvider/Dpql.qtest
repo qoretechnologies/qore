@@ -3334,7 +3334,7 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(True, has_bracket, "'[' is a separate token after template");
         }
 
-        # :: in value path — parsed as type assertion (last ::)
+        # :: in value path
         {
             DpqlTokenizer tok('$static:ns::class');
             list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
@@ -3352,7 +3352,6 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
             assertEq("static", ref.tmpl_context);
             assertEq("id", ref.tmpl_value);
-            assertEq(NOTHING, ref.type_assertion);
             assertEq("$static:id", ref.raw);
             assertEq("123", exp.args[1]);
         }
@@ -3386,14 +3385,13 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(2, exp.args.size());
         }
 
-        # Type assertion
+        # :: in value is preserved (no type assertion parsing)
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$config:limit::int');
             assertEq(DP_EXPR_TEMPLATE, exp.exp);
             hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
             assertEq("config", ref.tmpl_context);
-            assertEq("limit", ref.tmpl_value);
-            assertEq("int", ref.type_assertion);
+            assertEq("limit::int", ref.tmpl_value);
         }
 
         # Bracketed value
@@ -3405,14 +3403,13 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("$static:price * $static:qty", ref.tmpl_value);
         }
 
-        # Bracketed value with type assertion
+        # Bracketed value — content after closing brace is ignored
         {
-            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$qore-expr:{1 + 2}::int');
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$qore-expr:{1 + 2}');
             assertEq(DP_EXPR_TEMPLATE, exp.exp);
             hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
             assertEq("qore-expr", ref.tmpl_context);
             assertEq("1 + 2", ref.tmpl_value);
-            assertEq("int", ref.type_assertion);
         }
 
         # Template with dotted value path
@@ -3440,23 +3437,21 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(DP_OP_AND, exp.exp);
         }
 
-        # :: in value path — last :: is type assertion
+        # :: in value path preserved without brackets
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:ns::class');
             assertEq(DP_EXPR_TEMPLATE, exp.exp);
             hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
             assertEq("static", ref.tmpl_context);
-            assertEq("ns", ref.tmpl_value);
-            assertEq("class", ref.type_assertion, "last :: interpreted as type assertion");
+            assertEq("ns::class", ref.tmpl_value, ":: preserved in value");
         }
 
-        # To get :: in value, use brackets
+        # :: in value also works with brackets
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$static:{ns::class}');
             assertEq(DP_EXPR_TEMPLATE, exp.exp);
             hash<DataProviderTemplateReference> ref = cast<hash<DataProviderTemplateReference>>(exp.args[0]);
             assertEq("ns::class", ref.tmpl_value, "bracketed form preserves :: in value");
-            assertEq(NOTHING, ref.type_assertion);
         }
 
         # Empty brackets parse to empty value
@@ -3561,12 +3556,10 @@ public class DpqlTest inherits QUnit::Test {
 
         # Register a simple callback
         hash<auto> callback_log();
-        code expand_cb = auto sub (string ctx, string val, *string type_assertion,
-                *hash<auto> template_context) {
+        code expand_cb = auto sub (string ctx, string val, *hash<auto> template_context) {
             callback_log = {
                 "ctx": ctx,
                 "val": val,
-                "type_assertion": type_assertion,
                 "template_context": template_context,
             };
             if (ctx == "static") {
@@ -3583,9 +3576,6 @@ public class DpqlTest inherits QUnit::Test {
                     return 65;
                 }
                 if (val == "threshold") {
-                    if (type_assertion == "int") {
-                        return 100;
-                    }
                     return "100";
                 }
                 if (val == "status_active") {
@@ -3611,14 +3601,6 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("resolved_name", result, "simple template evaluation");
             assertEq("static", callback_log.ctx);
             assertEq("name", callback_log.val);
-        }
-
-        # Template with type assertion passes type_assertion to callback
-        {
-            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('$config:threshold::int');
-            auto result = AbstractDataProvider::evalGenericExpression({"dummy": 1}, exp);
-            assertEq(100, result, "type assertion passed to callback");
-            assertEq("int", callback_log.type_assertion);
         }
 
         # Mixed: field ref and template in comparison
@@ -3827,7 +3809,6 @@ public class DpqlTest inherits QUnit::Test {
             hash<DataProviderTemplateReference> ref = <DataProviderTemplateReference>{
                 "tmpl_context": "qore-expr",
                 "tmpl_value": "1 + 2",
-                "type_assertion": "int",
                 "raw": "",
             };
             hash<DataProviderExpression> exp = <DataProviderExpression>{
@@ -3835,7 +3816,7 @@ public class DpqlTest inherits QUnit::Test {
                 "args": (ref,),
             };
             string serialized = DataProvider::serializeDpqlExpression(exp);
-            assertEq("$qore-expr:{1 + 2}::int", serialized, "serializer reconstructs bracketed with type assertion");
+            assertEq("$qore-expr:{1 + 2}", serialized, "serializer reconstructs bracketed template from parts");
         }
 
         # Clean up
@@ -3910,7 +3891,7 @@ public class DpqlTest inherits QUnit::Test {
             };
             AbstractDataProvider::clearTemplateCallbacks();
             assertEq(True, AbstractDataProvider::setTemplateCallbacks(
-                auto sub (string ctx, string val, *string ta, *hash<auto> tc) { return NOTHING; },
+                auto sub (string ctx, string val, *hash<auto> tc) { return NOTHING; },
                 NOTHING,
                 NOTHING,
                 list_values,
@@ -3983,7 +3964,7 @@ public class DpqlTest inherits QUnit::Test {
             };
             AbstractDataProvider::clearTemplateCallbacks();
             assertEq(True, AbstractDataProvider::setTemplateCallbacks(
-                auto sub (string ctx, string val, *string ta, *hash<auto> tc) { return NOTHING; },
+                auto sub (string ctx, string val, *hash<auto> tc) { return NOTHING; },
                 resolve_type,
                 list_contexts,
                 list_values,

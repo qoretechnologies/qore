@@ -263,7 +263,6 @@ environment variables, and dynamic context without hardcoding values.
 |------|---------|-------------|
 | Simple | `$static:account.id` | Context `static`, value `account.id` |
 | Bracketed | `$qore-expr:{1 + 2}` | Bracketed value (allows special characters) |
-| Type-asserted | `$config:threshold::int` | With type assertion `int` |
 | Fallback | `$static:A??{$static:B}` | Fallback syntax (raw passthrough) |
 
 ### Template Contexts

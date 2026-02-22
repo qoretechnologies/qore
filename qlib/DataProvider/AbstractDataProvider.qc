@@ -736,7 +736,6 @@ public hashdecl DataProviderFieldReference {
     @par Syntax
     - Simple: \c $context:value (e.g., \c $static:account.id)
     - Bracketed: \c $context:{value with special chars}
-    - Type-asserted: \c $context:value::type (e.g., \c $config:threshold::int)
     @since DataProvider 3.3
 */
 public hashdecl DataProviderTemplateReference {
@@ -744,8 +743,6 @@ public hashdecl DataProviderTemplateReference {
     string tmpl_context;
     #! Template value path (e.g., "account.id", "threshold")
     string tmpl_value;
-    #! Optional type assertion (e.g., "int", "string")
-    *string type_assertion;
     #! Original raw text for round-trip serialization
     string raw;
 }
@@ -1834,7 +1831,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         #! static callback for template reference expansion
         /** @since DataProvider 3.3
         */
-        static *code<auto(string, string, *string, *hash<auto>)> cb_expand_template;
+        static *code<auto(string, string, *hash<auto>)> cb_expand_template;
 
         #! static callback for resolving template reference types
         /** @since DataProvider 3.3
@@ -4832,7 +4829,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     sprintf("template reference %y cannot be resolved: no template callback registered", val.raw);
             }
             return call_function_args(cb_expand_template,
-                (val.tmpl_context, val.tmpl_value, val.type_assertion, template_context));
+                (val.tmpl_context, val.tmpl_value, template_context));
         }
         if (val instanceof hash<DataProviderExpression>) {
             return AbstractDataProvider::evalGenericExpression(rec, val, template_context);
@@ -4937,7 +4934,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.3
     */
     static bool setTemplateCallbacks(
-            code<auto(string, string, *string, *hash<auto>)> expand,
+            code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
             *code<auto(string, string, *hash<auto>)> list_values) {

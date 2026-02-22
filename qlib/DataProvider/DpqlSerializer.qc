@@ -348,9 +348,6 @@ public class DpqlSerializer {
         } else {
             result += ref.tmpl_value;
         }
-        if (ref.type_assertion) {
-            result += "::" + ref.type_assertion;
-        }
         return result;
     }
 
