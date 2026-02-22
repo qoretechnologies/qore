@@ -2679,6 +2679,41 @@ void UserVariantBase::attemptJITCompilation() const {
         cached_ir->name.c_str());
 }
 
+void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode_t exec_mode) const {
+    // Eagerly compile to IR when --exec-mode=ir or --exec-mode=jit
+    // This respects the user's explicit request to execute in a specific mode
+    // rather than using the threshold-based promotion mechanism
+
+    if (exec_mode != QEM_IR && exec_mode != QEM_JIT) {
+        return;
+    }
+
+    // Attempt IR lowering (bypasses threshold check via call_once)
+    std::call_once(ir_lower_once, [this, name]() {
+        attemptIRLowering(name);
+    });
+
+    // For JIT mode, synchronously compile to LLVM after IR lowering
+    if (exec_mode == QEM_JIT && cached_ir) {
+        // Acquire compile lock for synchronous compilation
+        // Use compileFunctionLocked which is a public method that handles the lock
+        std::string error;
+        if (QoreJIT::instance().compileFunctionLocked(*cached_ir, error, const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
+            // Mark tier as TIER_JIT so execution uses compiled code
+            current_tier.store(TIER_JIT, std::memory_order_release);
+            printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' compiled to JIT (synchronous)\n", name);
+        } else {
+            printd(2, "UserVariantBase::eagerlyCompileForExecMode() '%s' failed to compile to JIT: %s\n", name, error.c_str());
+            // Stay at IR tier on failure
+            current_tier.store(TIER_IR, std::memory_order_release);
+        }
+    } else if (exec_mode == QEM_IR && cached_ir) {
+        // For IR mode, mark tier as TIER_IR (skip threshold-based promotion)
+        current_tier.store(TIER_IR, std::memory_order_release);
+        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR compilation complete\n", name);
+    }
+}
+
 void UserVariantBase::attemptJITRecompilation() const {
     assert(cached_ir);
 

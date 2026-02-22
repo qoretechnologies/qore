@@ -802,6 +802,40 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 }
 
+// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified
+static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+    // Walk functions in this namespace
+    for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
+        FunctionEntry* fe = i->second;
+        QoreFunction* func = fe->getFunction();
+        if (!func) {
+            continue;
+        }
+
+        // Iterate through all variants of the function
+        QoreFunctionIterator vit(*func);
+        while (vit.next()) {
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+            if (!uvb || !uvb->hasBody()) {
+                continue;
+            }
+
+            // Eagerly compile to IR/JIT as requested
+            uvb->eagerlyCompileForExecMode(func->getName(), exec_mode);
+        }
+    }
+
+    // Recursively compile functions in child namespaces
+    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (child_ns) {
+            qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
+            eagerlyCompileAllFunctions(child_priv, exec_mode);
+        }
+    }
+}
+
 // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
 void qore_program_private::clear(ExceptionSink* xsink) {
     waitForTerminationAndClear(xsink);
@@ -860,6 +894,12 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // update high water marks for atomic rollback support
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
+
+            // Eagerly compile all functions if --exec-mode=ir or --exec-mode=jit was specified
+            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT) && standard_parse) {
+                qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
+                eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
+            }
 
             rc = 0;
         }

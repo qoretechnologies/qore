@@ -784,6 +784,10 @@ public:
         });
     }
 
+    //! Eagerly compile to IR and optionally JIT when --exec-mode is specified
+    //! This respects the user's explicit request to execute in a specific mode
+    DLLLOCAL void eagerlyCompileForExecMode(const char* name, qore_exec_mode_t exec_mode) const;
+
     //! Returns true if this variant is statically eligible for the fast call path
     //! (no default args, not synchronized). Runtime readiness (has cached function)
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
