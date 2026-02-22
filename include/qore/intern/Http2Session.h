@@ -94,6 +94,9 @@ struct Http2StreamInfo {
     // Body data
     std::vector<char> body;
 
+    //! Maximum body size in bytes (0 = unlimited)
+    int64 max_body_size = 0;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;
@@ -166,6 +169,12 @@ public:
 
     //! Returns true if this is a server-side session
     DLLLOCAL bool isServer() const { return is_server; }
+
+    //! Sets the maximum request body size for new streams (0 = unlimited)
+    DLLLOCAL void setMaxRequestBodySize(int64 size) { max_request_body_size = size; }
+
+    //! Returns the maximum request body size
+    DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
 
     //! Send the connection preface (client) or SETTINGS (server)
     DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
@@ -594,6 +603,9 @@ private:
     Http2Settings local_settings;
     Http2Settings remote_settings;
     bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
+
+    //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
+    int64 max_request_body_size = 0;
 
     // GOAWAY state
     bool goaway_received = false;

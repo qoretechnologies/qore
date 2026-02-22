@@ -1053,6 +1053,7 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
         return it->second.get();
     }
     auto info = std::make_unique<Http2StreamInfo>(stream_id);
+    info->max_body_size = max_request_body_size;
     Http2StreamInfo* ptr = info.get();
     streams[stream_id] = std::move(info);
     return ptr;
@@ -1510,6 +1511,17 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
+        // Check body size against limit
+        if (stream->max_body_size > 0
+                && (int64)stream->body.size() > stream->max_body_size) {
+            printd(1, "onDataChunkRecvCallback: body too large (%zu > " QLLD ") stream %d\n",
+                stream->body.size(), stream->max_body_size, stream_id);
+            // Send RST_STREAM with REFUSED_STREAM
+            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
+                NGHTTP2_REFUSED_STREAM);
+            stream->body.clear();
+            return 0;
+        }
     }
     if (len) {
         int rv = h2->submitWindowUpdate(stream_id, len, nullptr);

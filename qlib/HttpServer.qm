@@ -482,6 +482,15 @@ public hashdecl HttpServerOptionInfo {
         @deprecated since HttpServer 1.7
     */
     bool reject_http2_websocket = False;
+
+    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    /** Requests with Content-Length exceeding this value, or chunked/HTTP/2 bodies
+        that grow beyond this value, receive HTTP 413 (Content Too Large) and the
+        connection is closed.
+
+        @since HttpServer 1.8
+    */
+    int max_request_body_size = 0;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -652,6 +661,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Async I/O mode enabled (default: True)
         bool asyncMode = True;
 
+        #! Maximum HTTP request body size in bytes (0 = unlimited)
+        int max_request_body_size = 0;
+
         #! Async I/O controller (when async mode is enabled)
         *HttpServerAsyncIo::HttpAsyncSocketIoController asyncIo;
 
@@ -815,6 +827,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             throw "TTL-ARG-ERROR", sprintf("Idle disconnect (ttl) value is not greater then zero: %y", ttl);
         }
         self.ttl = ttl;
+    }
+
+    #! Returns the maximum request body size in bytes (0 = unlimited)
+    /** @return the maximum request body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.8
+    */
+    int getMaxRequestBodySize() {
+        return max_request_body_size;
+    }
+
+    #! Sets the maximum request body size in bytes (0 = unlimited)
+    /** @param size the maximum request body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.8
+    */
+    setMaxRequestBodySize(int size) {
+        max_request_body_size = size;
     }
 
     #! add a new supported HTTP method
@@ -1837,6 +1867,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # Note: opts.async_mode should be True by default from the hashdecl,
         # but we use ?? True to ensure async mode is enabled even if opts is
         # passed as a hash<auto> instead of hash<HttpServerOptionInfo>
+        max_request_body_size = opts.max_request_body_size ?? 0;
         asyncMode = opts.async_mode ?? True;
         @debug(log("init: asyncMode=%y", asyncMode));
         if (asyncMode) {
@@ -1970,7 +2001,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (asyncMode) {
             asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
                 l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts());
+                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize());
         }
 
         return l;
@@ -2198,9 +2229,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
+            # Get effective max body size for this listener
+            int max_body = listener.getMaxRequestBodySize();
+
+            # Set body size limits on socket before any body reads
+            s.setMaxChunkedBodySize(max_body);
+            s.setHttp2MaxRequestBodySize(max_body);
+
             *data body;
             # For HTTP/2, body is already read by poll operation and stored in header-info
             if (cx."header-info".http2 && cx."header-info".body) {
+                # Check HTTP/2 body size against limit (body was already read by the C++
+                # layer; this is a secondary check in case the C++ limit was not set)
+                if (max_body > 0 && cx."header-info".body.size() > max_body) {
+                    string etxt = sprintf("HTTP/2 request body size %d exceeds maximum allowed body size %d",
+                        cx."header-info".body.size(), max_body);
+                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                    cx.close = True;
+                    sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                        cx."response-encoding", hdr.method == "HEAD");
+                    return;
+                }
                 # HTTP/2 body is always binary - convert to string if text content type
                 if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream) {
                     body = cx."header-info".body;
@@ -2208,12 +2257,23 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     body = cx."header-info".body.toString();
                 }
             } else if (hdr."content-length") {
+                # Pre-read Content-Length check against max body size limit
+                if (max_body > 0 && hdr."content-length" > max_body) {
+                    string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                        hdr."content-length", max_body);
+                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                    cx.close = True;
+                    sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                        cx."response-encoding", hdr.method == "HEAD");
+                    return;
+                }
                 # HTTP/1.x: read body from socket
                 try {
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream)
+                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream) {
                         body = s.recvBinary(hdr."content-length", HttpServer::ReadTimeout);
-                    else
+                    } else {
                         body = s.recv(hdr."content-length", HttpServer::ReadTimeout);
+                    }
                     #printf("HTTP DEBUG: %s\n", body);
                 } catch (hash<ExceptionInfo> ex) {
                     string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
@@ -2372,13 +2432,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             on_exit if (s.pendingHttpChunkedBody())
                 s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
 
+            int err_code = ex.err == "HTTP-BODY-TOO-LARGE" ? 413 : 500;
             if (async_response_out) {
                 # Async mode: capture the error response for the controller to send
                 # Sending synchronously via execHttp2PollOperation from the handler thread
                 # races with the async I/O controller on HTTP/2 connections
-                async_response_out = buildAsyncErrorResponse(500, str, cx, listener, s, !is_http2);
+                async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_http2);
             } else {
-                sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
+                sendHttpError(listener, cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
             }
             logError("%s", str);
         }
@@ -3357,6 +3418,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     bool isSecure() {
         return ssl;
+    }
+
+    #! Returns the effective maximum request body size for this listener
+    /** Returns the listener-specific limit if set, otherwise the server-level default.
+
+        @return the maximum body size in bytes; 0 means unlimited
+
+        @since HttpServer 1.8
+    */
+    int getMaxRequestBodySize() {
+        int rv = opts.max_request_body_size ?? 0;
+        if (!rv) {
+            rv = serv.getMaxRequestBodySize();
+        }
+        return rv;
     }
 
     #! Returns the SSL certificate object if configured
