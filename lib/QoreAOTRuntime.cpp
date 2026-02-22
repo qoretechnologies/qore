@@ -295,6 +295,13 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             return toBitsNB(QoreValue(svn));
         }
 
+        case AOTExprKind::GLOBAL_VARREF: {
+            // Global variable references are normally handled in the loading code
+            // (buildContextFromSlotMap) which has access to ctx->globals. This path is a
+            // fallback for edge cases. Return 0 to indicate it should be handled elsewhere.
+            return 0;
+        }
+
         case AOTExprKind::CONST_NUMBER: {
             if (!ref1 || !*ref1) {
                 return 0;
@@ -1622,6 +1629,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::SCOPED_NEW_OBJECT:
             case AOTExprKind::RUNTIME_CONST_REF:
             case AOTExprKind::LOCAL_VARREF:
+            case AOTExprKind::GLOBAL_VARREF:
             case AOTExprKind::CONST_NUMBER:
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::SELF_VARREF:
@@ -1673,6 +1681,22 @@ static QoreAOTContext* buildContextFromSlotMap(
             } else {
                 printd(0, "AOT v2: invalid local slot %d for LOCAL_VARREF expr slot %d (num_locals=%d)\n",
                     local_slot, i, ctx->num_locals);
+                has_unsupported = true;
+            }
+        }
+
+        // Handle GLOBAL_VARREF directly since it needs ctx->globals
+        if (kind == AOTExprKind::GLOBAL_VARREF && ref1) {
+            int global_slot = std::atoi(ref1);
+            if (global_slot >= 0 && global_slot < ctx->num_globals && ctx->globals[global_slot]) {
+                // Create a GlobalVarRefNode pointing to the global variable
+                Var* gvar = ctx->globals[global_slot];
+                GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
+                ctx->exprs[i] = toBitsNB(QoreValue(vrn));
+                continue;
+            } else {
+                printd(0, "AOT v2: invalid global slot %d for GLOBAL_VARREF expr slot %d (num_globals=%d)\n",
+                    global_slot, i, ctx->num_globals);
                 has_unsupported = true;
             }
         }

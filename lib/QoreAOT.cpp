@@ -4729,7 +4729,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
         return id;
     }
 
-    // VarRefNode: local variable reference (for lvalue operations)
+    // VarRefNode: local and global variable references
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
             varref->getType() == VT_CLOSURE) {
@@ -4741,8 +4741,19 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots) 
                 id.ref1 = std::to_string(it->second); // Store slot index as string
                 return id;
             }
+        } else if (varref->getType() == VT_GLOBAL) {
+            // Phase 6a: Global variable reference - use existing global_slots infrastructure
+            Var* global_var = varref->ref.var;  // Global variables use .var field (Var*)
+            if (global_var) {
+                // Assign a slot for this global variable (const_cast is safe here because we're
+                // building the AOT function and need to track all global variables)
+                int32_t slot = const_cast<AOTSlotMap&>(slots).getGlobalSlot(reinterpret_cast<const void*>(global_var));
+                id.kind = AOTExprKind::GLOBAL_VARREF;
+                id.ref1 = std::to_string(slot);  // Store slot index as string
+                return id;
+            }
         }
-        // Global variables fall through to GENERIC_EVAL for now
+        // Thread-local and other types fall through to GENERIC_EVAL for now
     }
 
     // QoreNumberNode: number literal constant

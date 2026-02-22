@@ -562,16 +562,17 @@ enum class AOTExprKind : uint8_t {
     RUNTIME_CONST_REF  = 5,   //!< Runtime constant reference: ref1=const_name
     SELF_VARREF        = 6,   //!< Self variable reference (self keyword)
     LOCAL_VARREF       = 7,   //!< Local variable reference: ref1=local_slot_index (as string)
-    CONST_NUMBER       = 8,   //!< Number constant: ref1=string representation
-    CONST_BINARY       = 9,   //!< Binary constant: ref1=hex-encoded bytes
-    CLOSURE_CREATE     = 10,  //!< Closure/lambda: ref1=enclosing class name (empty if none)
-    CALL_REF           = 11,  //!< Call reference call: ref1=function_name (if function ref)
-    OBJ_METHOD_REF     = 12,  //!< Object method reference: ref1=method_name
-    STATIC_VARREF      = 13,  //!< Static class variable: ref1=class_name, ref2=var_name
-    SCOPED_NEW_OBJECT  = 14,  //!< Scoped new object: ref1=class_name
-    HASHDECL_NEW       = 15,  //!< Hashdecl construction: ref1=hashdecl_path
-    COMPLEX_HASH_NEW   = 16,  //!< Complex hash construction: ref1=type_path
-    COMPLEX_LIST_NEW   = 17,  //!< Complex list construction: ref1=type_path
+    GLOBAL_VARREF      = 8,   //!< Global variable reference: ref1=global_slot_index (as string)
+    CONST_NUMBER       = 9,   //!< Number constant: ref1=string representation
+    CONST_BINARY       = 10,  //!< Binary constant: ref1=hex-encoded bytes
+    CLOSURE_CREATE     = 11,  //!< Closure/lambda: ref1=enclosing class name (empty if none)
+    CALL_REF           = 12,  //!< Call reference call: ref1=function_name (if function ref)
+    OBJ_METHOD_REF     = 13,  //!< Object method reference: ref1=method_name
+    STATIC_VARREF      = 14,  //!< Static class variable: ref1=class_name, ref2=var_name
+    SCOPED_NEW_OBJECT  = 15,  //!< Scoped new object: ref1=class_name
+    HASHDECL_NEW       = 16,  //!< Hashdecl construction: ref1=hashdecl_path
+    COMPLEX_HASH_NEW   = 17,  //!< Complex hash construction: ref1=type_path
+    COMPLEX_LIST_NEW   = 18,  //!< Complex list construction: ref1=type_path
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
