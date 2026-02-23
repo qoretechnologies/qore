@@ -496,13 +496,21 @@ enum class QoreIROpcode : uint16_t {
     // operands[0] = hash container, operands[1] = value to store
     HashKeyStore        = 335,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (336, 337, ...)
+    // List element access (336) — load list[index] directly (no AST delegation)
+    // operands[0] = list container, operands[1] = index
+    ListIndexAccess     = 336,
+
+    // List element store (337) — write value to list[index] with COW support
+    // operands[0] = list container, operands[1] = value to store, operands[2] = index
+    ListIndexStore      = 337,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (338, 339, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::HashKeyStore);
-static_assert(QORE_IR_MAX_OPCODE == 335, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListIndexStore);
+static_assert(QORE_IR_MAX_OPCODE == 337, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -963,6 +971,30 @@ public:
     std::string key_name;
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
+};
+
+//! List index access instruction - loads list[index] directly (no AST delegation)
+class QoreIRListIndexAccessInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRListIndexAccessInstruction()
+            : QoreIRInstruction(QoreIROpcode::ListIndexAccess) {
+    }
+    // operands[0] = list container
+    // operands[1] = index expression
+};
+
+//! List index store instruction - write value to list[index] with COW support
+class QoreIRListIndexStoreInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRListIndexStoreInstruction(const VarRefNode* n_container)
+            : QoreIRInstruction(QoreIROpcode::ListIndexStore),
+              container(n_container) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    // operands[0] = list value (from LoadLocal on container)
+    // operands[1] = new element value to store
+    // operands[2] = index expression
 };
 
 //! Map hash key instruction - fully specialized map over hash key access

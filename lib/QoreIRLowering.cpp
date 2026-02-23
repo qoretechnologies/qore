@@ -1881,6 +1881,16 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     return true;
 }
 
+// Returns true if expr is $list[index] where $list is a local variable.
+// Sets container_var and index_expr if true.
+// NOTE: Currently disabled pending implementation of proper list subscript detection
+static bool isConstIndexListSubscript(const QoreValue& expr,
+        const VarRefNode*& container_var, QoreValue& index_expr) {
+    // TODO: Implement list subscript detection similar to hash subscript
+    // For now, return false to keep infrastructure in place but unused
+    return false;
+}
+
 bool QoreIRLowering::guaranteedNumberType(const QoreValue* expr) const {
     if (!expr) {
         return false;
@@ -3491,6 +3501,14 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 arith_op, right, expr, op->loc, error);
         }
 
+        // Fast path: list index subscript compound assignment
+        QoreValue index_expr;
+        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
+            return emitListKeyCompoundOp(container_var, index_expr,
+                arith_op, right, expr, op->loc, error);
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for plus-equals IR lowering";
             return QoreIRValue();
@@ -3575,6 +3593,14 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
+                arith_op, right, expr, op->loc, error);
+        }
+
+        // Fast path: list index subscript compound assignment
+        QoreValue index_expr;
+        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
+            return emitListKeyCompoundOp(container_var, index_expr,
                 arith_op, right, expr, op->loc, error);
         }
 
@@ -3663,6 +3689,13 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
 
+        // Fast path: list index subscript compound assignment
+        QoreValue index_expr;
+        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+            return emitListKeyCompoundOp(container_var, index_expr,
+                QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for multiply-equals IR lowering";
             return QoreIRValue();
@@ -3744,6 +3777,13 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         std::string key_name;
         if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
+                QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
+        }
+
+        // Fast path: list index subscript compound assignment
+        QoreValue index_expr;
+        if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
+            return emitListKeyCompoundOp(container_var, index_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
@@ -6032,6 +6072,49 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     store_inst->loc = loc;
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(new_val);
+
+    return new_val;
+}
+
+// Emit LoadLocal → ListIndexAccess → op → ListIndexStore sequence for $list[index] OP= val.
+// arith_op must be one of AddAssignInt/Float/Any, SubAssignInt/Float/Any, etc.
+QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
+        const VarRefNode* container_var, const QoreValue& index_expr,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // Load the list container without refcount inflation (auto_ref=false)
+    // This allows ListIndexStore's is_unique() check to accurately detect if COW is needed
+    QoreIRValue list_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        list_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        list_val = loadVarRef(container_var, error, "list-compound-op", full_expr);
+    }
+    if (!list_val.isValid()) return QoreIRValue();
+
+    // Lower the index expression
+    QoreIRValue index_val = lowerExpression(index_expr, error);
+    if (!index_val.isValid()) return QoreIRValue();
+
+    // Load current element value via ListIndexAccess
+    auto load_inst = builder.getBlock()->appendInstruction<QoreIRListIndexAccessInstruction>();
+    load_inst->loc = loc;
+    load_inst->result = builder.getFunction()->createValue();
+    load_inst->operands.push_back(list_val);
+    load_inst->operands.push_back(index_val);
+    QoreIRValue old_val = load_inst->result;
+
+    // Apply arithmetic
+    QoreIRValue new_val = lowerBinaryOpOrInvoke(arith_op, full_expr, old_val, right, loc, error);
+    if (!new_val.isValid()) return QoreIRValue();
+
+    // Store result back to list element (COW-safe via QoreIRListIndexStoreInstruction)
+    auto store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
+    store_inst->loc = loc;
+    store_inst->operands.push_back(list_val);
+    store_inst->operands.push_back(new_val);
+    store_inst->operands.push_back(index_val);
 
     return new_val;
 }
