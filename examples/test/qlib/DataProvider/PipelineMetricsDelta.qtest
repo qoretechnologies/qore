@@ -252,7 +252,7 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
     #! After waitDone() + forceCallback() snapshot, verify:
     #!   delta.throughput_rps ≈ delta.records_completed / (delta.interval_ms / 1000.0)
-    #! within 1% tolerance.
+    #! within 1% tolerance when interval_ms > 0; 0.0 when interval_ms == 0 (documented behaviour).
     testDeltaThroughputComputation() {
         int n = 100;
         CapturingMetricsCollector collector();
@@ -271,16 +271,23 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertEq(n, delta.records_completed,
             "delta.records_completed must equal n after waitDone()");
-        assertTrue(delta.interval_ms > 0,
-            "delta.interval_ms must be > 0 after processing records");
+        assertTrue(delta.interval_ms >= 0,
+            "delta.interval_ms must be >= 0");
 
-        # Compute expected throughput and verify within 1% tolerance
-        float expected_rps = delta.records_completed / (delta.interval_ms / 1000.0);
-        float actual_rps = delta.throughput_rps;
-        float tolerance = expected_rps * 0.01;
-        assertTrue(abs(actual_rps - expected_rps) <= tolerance,
-            sprintf("delta.throughput_rps %f should be within 1%% of expected %f (tolerance %f)",
-                actual_rps, expected_rps, tolerance));
+        # Verify throughput formula.
+        # When interval_ms == 0 (timing resolution too coarse to measure the interval),
+        # throughput_rps is defined as 0.0 per the PipelineMetricsDelta hashdecl.
+        if (delta.interval_ms == 0) {
+            assertEq(0.0, delta.throughput_rps,
+                "delta.throughput_rps must be 0.0 when interval_ms is 0");
+        } else {
+            float expected_rps = delta.records_completed / (delta.interval_ms / 1000.0);
+            float actual_rps = delta.throughput_rps;
+            float tolerance = expected_rps * 0.01;
+            assertTrue(abs(actual_rps - expected_rps) <= tolerance,
+                sprintf("delta.throughput_rps %f should be within 1%% of expected %f (tolerance %f)",
+                    actual_rps, expected_rps, tolerance));
+        }
     }
 
     # =========================================================================
