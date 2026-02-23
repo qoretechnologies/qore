@@ -89,7 +89,7 @@ printf("Product count: %d\n", result.body.data.product_count);
     @code{.py}
 BigCommerceRestClient bc({
     "store_hash": ENV.BIGCOMMERCE_STORE_HASH,
-    "access_token": ENV.BIGCOMMERCE_ACCESS_TOKEN,
+    "token": ENV.BIGCOMMERCE_ACCESS_TOKEN,
 });
 hash<auto> result = bc.get("v3/catalog/summary");
 printf("Product count: %d\n", result.body.data.product_count);
@@ -211,14 +211,13 @@ BigCommerceRestClient bc({
         @code{.py}
 BigCommerceRestClient bc({
     "store_hash": "g3uz5c7jx",
-    "access_token": "your-access-token",
+    "token": "your-access-token",
 });
         @endcode
 
         @param opts valid options are:
-        - \c store_hash: the BigCommerce store hash (required for manual mode; optional for
-          OAuth2 mode if the token response includes the \c context field)
-        - \c access_token: the API access token (manual mode)
+        - \c store_hash: the BigCommerce store hash
+        - \c token: the API access token (sets \c X-Auth-Token header)
         - \c oauth2_client_id: OAuth2 client ID (OAuth2 mode)
         - \c oauth2_client_secret: OAuth2 client secret (OAuth2 mode)
         - plus all options for the @ref RestClient::RestClient "RestClient" class
@@ -232,6 +231,10 @@ BigCommerceRestClient bc({
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(BigCommerceRestClient::getOptions(opts), do_not_connect) {
         setAssumedEncoding("UTF-8");
+        # Replace Authorization: Bearer with X-Auth-Token (BigCommerce requirement)
+        if (token) {
+            addDefaultHeaders({"X-Auth-Token": token, "Authorization": NOTHING});
+        }
     }
 
     #! Called when OAuth2 login information has been received
@@ -282,22 +285,7 @@ BigCommerceRestClient bc({
         if (opts.oauth2_client_id) {
             # OAuth2 mode: merge OAuth2 options
             rv += OAuth2Options;
-            # If access_token is present (from previous OAuth2 exchange), apply as X-Auth-Token
-            if (opts.access_token) {
-                rv.headers."X-Auth-Token" = opts.access_token;
-                remove rv.access_token;
-            }
-        } else if (opts.access_token) {
-            # Manual access_token mode: set X-Auth-Token header directly
-            rv.headers."X-Auth-Token" = opts.access_token;
-            remove rv.access_token;
-        } else if (opts.token) {
-            # Token from connection storage: route to X-Auth-Token
-            # Remove from opts so RestClient doesn't set Authorization: Bearer
-            rv.headers."X-Auth-Token" = opts.token;
-            remove rv.token;
         }
-
         return rv;
     }
 }
@@ -354,15 +342,6 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                         "https://api.bigcommerce.com/stores/<store_hash>/v3)",
                     "preselected": True,
                 },
-                "access_token": <ConnectionOptionInfo>{
-                    "display_name": "Access Token",
-                    "short_desc": "BigCommerce API access token",
-                    "type": "string",
-                    "desc": "The API access token stored after OAuth2 authorization. "
-                        "This field is managed automatically and does not need to be "
-                        "filled in manually.",
-                    "sensitive": True,
-                },
                 "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
                 + <ConnectionOptionInfo>{
                     "default_value": BigCommerceRestClient::DefaultAuthArgs,
@@ -384,7 +363,7 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
                     "default_value": BigCommerceRestClient::DefaultTokenUrl,
                 },
             },
-            "required_options": "oauth2_client_id,oauth2_client_secret,store_hash",
+            "required_options": "store_hash",
             "messages": (
                 <UiMessageInfo>{
                     "title": "How to Find Your Store Hash",
@@ -495,17 +474,12 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
     }
 
     #! Processes OAuth2 login responses and returns updated options
-    /** Extracts the \c store_hash from the BigCommerce OAuth2 response's \c context field
-        and stores the \c access_token for manual-mode compatibility.
+    /** Extracts the \c store_hash from the BigCommerce OAuth2 response's \c context field.
 
         Also updates the connection URL when \c store_hash is discovered from the response.
     */
     private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
         *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
-        # Store access_token as our custom option for manual-mode compatibility
-        if (resp.access_token && resp.access_token != real_opts.access_token) {
-            new_opts.access_token = resp.access_token;
-        }
         # Extract store_hash from context (e.g., "stores/g5cd38") if available
         # NOTE: BigCommerce requires `context` in the token exchange request body,
         # but the generic OAuth2 proxy may not forward it; in that case BigCommerce

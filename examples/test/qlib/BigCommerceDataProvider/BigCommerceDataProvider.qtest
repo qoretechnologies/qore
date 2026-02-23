@@ -50,7 +50,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
 
         #! Custom command-line options
         const MyOpts = Opts + {
-            "access_token": "t,access-token=s",
+            "token": "t,access-token=s",
             "store_hash": "H,store-hash=s",
             "oauth2_client_id": "I,client-id=s",
             "oauth2_client_secret": "S,client-secret=s",
@@ -106,7 +106,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         }
 
         *string store_hash = m_options.store_hash ?? ENV.BIGCOMMERCE_STORE_HASH;
-        *string access_token = m_options.access_token ?? ENV.BIGCOMMERCE_ACCESS_TOKEN;
+        *string access_token = m_options.token ?? ENV.BIGCOMMERCE_ACCESS_TOKEN;
         *string client_id = m_options.oauth2_client_id ?? ENV.BIGCOMMERCE_CLIENT_ID;
         *string client_secret = m_options.oauth2_client_secret ?? ENV.BIGCOMMERCE_CLIENT_SECRET;
 
@@ -144,7 +144,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         }
 
         client = new BigCommerceRestClient::BigCommerceRestClient({
-            "access_token": access_token,
+            "token": access_token,
             "store_hash": store_hash,
         });
     }
@@ -161,7 +161,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         BigCommerceDataProvider::BigCommerceDataProvider prov({
             "bigcommercerestclient_options": {
-                "access_token": "fake-token",
+                "token": "fake-token",
                 "store_hash": "fake-hash",
             },
         });
@@ -188,7 +188,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         BigCommerceDataProvider::BigCommerceDataProvider prov({
             "bigcommercerestclient_options": {
-                "access_token": "fake-token",
+                "token": "fake-token",
                 "store_hash": "fake-hash",
             },
         });
@@ -209,7 +209,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         BigCommerceDataProvider::BigCommerceDataProvider prov({
             "bigcommercerestclient_options": {
-                "access_token": "fake-token",
+                "token": "fake-token",
                 "store_hash": "fake-hash",
             },
         });
@@ -431,7 +431,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         BigCommerceDataProvider::BigCommerceDataProvider prov({
             "bigcommercerestclient_options": {
-                "access_token": "fake-token",
+                "token": "fake-token",
                 "store_hash": "fake-hash",
             },
         });
@@ -477,7 +477,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         BigCommerceDataProvider::BigCommerceDataProvider prov({
             "bigcommercerestclient_options": {
-                "access_token": "fake-token",
+                "token": "fake-token",
                 "store_hash": "fake-hash",
             },
         });
@@ -502,7 +502,6 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         assertTrue(scheme.auto_url);
 
         # Verify scheme has required options
-        assertTrue(scheme.options.hasKey("access_token"));
         assertTrue(scheme.options.hasKey("store_hash"));
 
         # Verify scheme has OAuth2 options with correct defaults
@@ -524,10 +523,8 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         assertTrue(scheme.hasKey("messages"));
         assertTrue(scheme.messages.size() >= 1);
 
-        # Verify required_options - OAuth2 only
-        assertTrue(scheme.required_options.regex("oauth2_client_id"));
-        assertTrue(scheme.required_options.regex("oauth2_client_secret"));
-        assertTrue(scheme.required_options.regex("store_hash"));
+        # Verify required_options - only store_hash required (OAuth2 credentials from cloud)
+        assertEq("store_hash", scheme.required_options);
     }
 
     #! OAuth2 option tests - verify getOptions() routes tokens correctly
@@ -546,7 +543,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             opts.oauth2_auth_url);
         assertEq(BigCommerceRestClient::BigCommerceRestClient::DefaultTokenUrl,
             opts.oauth2_token_url);
-        # OAuth2 mode without access_token: no X-Auth-Token header
+        # OAuth2 mode without token: no X-Auth-Token header
         assertFalse(opts.headers.hasKey("X-Auth-Token"));
 
         # Test OAuth2 mode without store_hash: no URL set
@@ -557,33 +554,17 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
         assertFalse(opts_no_hash.hasKey("url"));
         assertEq("authorization_code", opts_no_hash.oauth2_grant_type);
 
-        # Test OAuth2 mode with existing access_token: applies as X-Auth-Token
-        hash<auto> opts2 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
-            "oauth2_client_id": "test-id",
-            "oauth2_client_secret": "test-secret",
-            "store_hash": "testhash",
-            "access_token": "existing-token",
-        });
-        assertEq("existing-token", opts2.headers."X-Auth-Token");
-        assertFalse(opts2.hasKey("access_token"));
-
-        # Test manual token mode: sets X-Auth-Token directly
-        hash<auto> opts3 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
-            "access_token": "my-token",
-            "store_hash": "testhash",
-        });
-        assertEq("my-token", opts3.headers."X-Auth-Token");
-        assertFalse(opts3.hasKey("access_token"));
-        # Manual mode should NOT set OAuth2 options
-        assertFalse(opts3.hasKey("oauth2_grant_type"));
-
-        # Test token-from-connection mode: routes to X-Auth-Token
+        # Test token-from-connection mode: token stays in opts for RestClient to handle;
+        # X-Auth-Token header is set in the constructor after RestClient sets self.token
         hash<auto> opts4 = BigCommerceRestClient::BigCommerceRestClient::getOptions({
             "token": "connection-token",
             "store_hash": "testhash",
         });
-        assertEq("connection-token", opts4.headers."X-Auth-Token");
-        assertFalse(opts4.hasKey("token"));
+        assertEq("connection-token", opts4.token);
+        # Verify constructor sets X-Auth-Token and removes Authorization
+        BigCommerceRestClient bc4({"token": "connection-token", "store_hash": "testhash"}, True);
+        assertEq("connection-token", bc4.getDefaultHeaders()."X-Auth-Token");
+        assertNothing(bc4.getDefaultHeaders().Authorization);
     }
 
     #! Integration tests - require real BigCommerce credentials
