@@ -2448,6 +2448,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             return false;
                         }
                         h = new_h;
+                        // CRITICAL FIX: Update IR values[] array with new COW copy.
+                        // Without this, subsequent IR instructions reading operands[0]
+                        // will use the stale hash and lose modifications.
+                        // setValueSlot discards the old ref (from LoadLocal), which is correct.
+                        setValueSlot(values, hks_inst->operands[0].id,
+                            QoreValue(new_h->refSelf()), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
+                        }
                     }
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
                 } else if (hash_val.getType() == NT_OBJECT) {
