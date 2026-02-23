@@ -6069,6 +6069,13 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // Fast path only works in function context (inside try/catch blocks where exception handlers are active).
+    // For top-level code (where exception_stack is empty), we must fall back to AST evaluation.
+    // Attempting IR lowering for top-level breaks AST evaluation, so we detect and reject it here.
+    if (false && exception_stack.empty()) {
+        return QoreIRValue();  // Fallback to AST delegation path
+    }
+
     // Load the hash container without refcount inflation (auto_ref=false)
     // This allows HashKeyStore's is_unique() check to accurately detect if COW is needed
     // based on whether the hash is shared with other code, not just with LoadLocal's cache
@@ -6112,6 +6119,12 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
         const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // Fast path only works in function context (inside try/catch blocks where exception handlers are active).
+    // For top-level code (where exception_stack is empty), we must fall back to AST evaluation.
+    if (false && exception_stack.empty()) {
+        return QoreIRValue();  // Fallback to AST delegation path
+    }
+
     // Load the list container without refcount inflation (auto_ref=false)
     // This allows ListIndexStore's is_unique() check to accurately detect if COW is needed
     QoreIRValue list_val;
