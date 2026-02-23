@@ -3485,13 +3485,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            QoreIROpcode arith_op = QoreIROpcode::AddAssignAny;
-            if (force_int || (isIntConstant(op->getLeft()) && isIntConstant(right_expr))) {
-                arith_op = QoreIROpcode::AddAssignInt;
-            } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))) {
-                arith_op = QoreIROpcode::AddAssignFloat;
-            }
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
         }
@@ -3577,13 +3572,8 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            QoreIROpcode arith_op = QoreIROpcode::SubAssignAny;
-            if (force_int || (isIntConstant(op->getLeft()) && isIntConstant(right_expr))) {
-                arith_op = QoreIROpcode::SubAssignInt;
-            } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))) {
-                arith_op = QoreIROpcode::SubAssignFloat;
-            }
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
         }
@@ -3668,15 +3658,9 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            QoreIROpcode arith_op = QoreIROpcode::MulAssignAny;
-            if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))) {
-                arith_op = QoreIROpcode::MulAssignInt;
-            } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))) {
-                arith_op = QoreIROpcode::MulAssignFloat;
-            }
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
-                arith_op, right, expr, op->loc, error);
+                QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
 
         if (!op->getLeft().hasNode()) {
@@ -3758,15 +3742,9 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            QoreIROpcode arith_op = QoreIROpcode::DivAssignAny;
-            if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))) {
-                arith_op = QoreIROpcode::DivAssignInt;
-            } else if ((isFloatConstant(op->getLeft()) && isFloatConstant(right_expr))) {
-                arith_op = QoreIROpcode::DivAssignFloat;
-            }
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
-                arith_op, right, expr, op->loc, error);
+                QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
         if (!op->getLeft().hasNode()) {
@@ -6044,7 +6022,6 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     auto store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
         container_var, key_name.c_str());
     store_inst->loc = loc;
-    store_inst->result = builder.getFunction()->createValue();
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(new_val);
 

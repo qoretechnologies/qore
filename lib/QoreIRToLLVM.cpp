@@ -5764,6 +5764,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
             llvm::Constant* key_c = builder->CreateGlobalString(hks_inst->key_name, "hks_key");
 
+            llvm::Value* call_result;
             if (aot_mode) {
                 // AOT: pass ctx + pre-registered local slot index for COW update
                 uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
@@ -5772,7 +5773,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow_aot",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, i64_type, ptr_type, i64_type, ptr_type}, false));
-                values[inst->result.id] = builder->CreateCall(fn,
+                call_result = builder->CreateCall(fn,
                         {aot_ctx_arg, slot_val, hash_boxed, key_c, val_boxed, xsink_arg});
             } else {
                 // JIT: pass LocalVar* directly
@@ -5782,10 +5783,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false));
-                values[inst->result.id] = builder->CreateCall(fn, {var_ptr, hash_boxed, key_c, val_boxed, xsink_arg});
+                call_result = builder->CreateCall(fn, {var_ptr, hash_boxed, key_c, val_boxed, xsink_arg});
             }
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
+            if (inst->result.isValid()) {
+                values[inst->result.id] = call_result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

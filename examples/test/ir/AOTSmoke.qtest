@@ -2436,5 +2436,6 @@ printf(\"%d %.1f\\n\", h{\"i\"}, h{\"f\"});
             "hash compound native: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "hash compound native output matches interpreter");
+        assertEq(result.run_out, "28 10.5\n");
     }
 }
