@@ -471,18 +471,6 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_idle_handler_threads = 0;
 
-    #! @deprecated Ignored; all HTTP/2 connections now use the multiplexed path with full
-    #! support for WebSocket (RFC 8441), SSE, and streaming responses.
-    /** This option is kept for backwards compatibility but has no effect.
-        The server always advertises \c ENABLE_CONNECT_PROTOCOL in HTTP/2 SETTINGS
-        and supports WebSocket, SSE, and streaming responses multiplexed on a single
-        HTTP/2 connection.
-
-        @since HttpServer 1.6
-        @deprecated since HttpServer 1.7
-    */
-    bool reject_http2_websocket = False;
-
     #! Maximum HTTP request body size in bytes (0 = unlimited)
     /** Requests with Content-Length exceeding this value, or chunked/HTTP/2 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large) and the
@@ -1885,7 +1873,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
-                "reject_http2_websocket": opts.reject_http2_websocket,
             });
             asyncIo.start();
         }
