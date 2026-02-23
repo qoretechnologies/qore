@@ -1,0 +1,488 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GeneratorDataProvider
+
+%exec-class PipelineMetricsDeltaTest
+
+#! Simple passthrough processor that forwards records without modification
+class DeltaPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        enqueue(_data);
+    }
+}
+
+#! Metrics collector that retains the most recent snapshot passed to reportMetrics().
+#! Used to capture the snapshot delivered during waitDone() -> forceCallback().
+class CapturingMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! Most recent snapshot delivered via reportMetrics()
+        *hash<DataProvider::PipelineMetricsSnapshot> last_snapshot;
+
+        #! All snapshots delivered via reportMetrics(), in order
+        list<hash<DataProvider::PipelineMetricsSnapshot>> all_snapshots();
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        # Very large interval so the collector never fires automatically during test runs;
+        # waitDone() triggers a forceCallback() which delivers the final snapshot.
+        return 10000000;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+        last_snapshot = snapshot;
+        push all_snapshots, snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+#! Metrics collector that fires every N records (for incremental delta tests)
+class IntervalMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    public {
+        #! All snapshots delivered via reportMetrics(), in order
+        list<hash<DataProvider::PipelineMetricsSnapshot>> all_snapshots();
+
+        #! Whether shutdown was called
+        bool shutdown_called = False;
+    }
+
+    private {
+        int record_interval;
+    }
+
+    constructor(int record_interval) {
+        self.record_interval = record_interval;
+    }
+
+    int getIntervalMs() {
+        return 0;
+    }
+
+    int getRecordInterval() {
+        return record_interval;
+    }
+
+    reportMetrics(hash<DataProvider::PipelineMetricsSnapshot> snapshot) {
+        push all_snapshots, snapshot;
+    }
+
+    shutdown() {
+        shutdown_called = True;
+    }
+}
+
+public class PipelineMetricsDeltaTest inherits QUnit::Test {
+    constructor() : Test("PipelineMetricsDelta Test", "1.0") {
+        addTestCase("first snapshot delta equals cumulative", \testFirstSnapshotDeltaEqualsCumulative());
+        addTestCase("sequential snapshots are incremental", \testSequentialSnapshotsAreIncremental());
+        addTestCase("delta throughput computation", \testDeltaThroughputComputation());
+        addTestCase("element delta avg processing time", \testElementDeltaAvgProcessingTime());
+        addTestCase("idle interval delta", \testIdleIntervalDelta());
+        addTestCase("element type filtering in delta", \testElementTypeFilteringInDelta());
+        addTestCase("element alias remapping in delta", \testElementAliasRemappingInDelta());
+
+        set_return_value(main());
+    }
+
+    #! Creates a GeneratorDataProvider record iterator producing the given number of records
+    private DataProvider::AbstractDataProviderRecordIterator getGeneratorIterator(int count) {
+        GeneratorDataProvider::GeneratorGenerateRecordsDataProvider provider({
+            "count": count,
+            "strategy": "sequential",
+        });
+        return provider.searchRecords();
+    }
+
+    # =========================================================================
+    # Test 1: first snapshot delta equals cumulative
+    # =========================================================================
+
+    #! Submit N records, waitDone(), then inspect the snapshot delivered by forceCallback().
+    #! For the first call: delta counts must equal cumulative counts.
+    testFirstSnapshotDeltaEqualsCumulative() {
+        int n = 50;
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-first-snapshot",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        # waitDone() calls forceCallback(), which calls getSnapshotIntern() and delivers the snapshot
+        # to reportMetrics().  shutdown() is called afterwards.
+        pipe.waitDone();
+
+        assertTrue(collector.shutdown_called, "collector shutdown must be called after waitDone()");
+        assertNeq(NOTHING, collector.last_snapshot,
+            "reportMetrics must have been called at least once by waitDone()");
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Cumulative counts must reflect all submitted/completed records
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal n");
+        assertEq(n, snap.total_records_completed,
+            "total_records_completed must equal n");
+
+        # Delta must be populated
+        assertNeq(NOTHING, snap.delta, "delta must be populated in snapshot from forceCallback()");
+        hash<DataProvider::PipelineMetricsDelta> delta = snap.delta;
+
+        # For the first getSnapshotIntern() call, delta counts equal cumulative counts
+        assertEq(snap.total_records_submitted, delta.records_submitted,
+            "first delta.records_submitted must equal cumulative total_records_submitted");
+        assertEq(snap.total_records_completed, delta.records_completed,
+            "first delta.records_completed must equal cumulative total_records_completed");
+
+        # interval_ms must be non-negative (time elapsed since collection_start)
+        assertTrue(delta.interval_ms >= 0, "first delta.interval_ms must be >= 0");
+
+        # throughput must be non-negative
+        assertTrue(delta.throughput_rps >= 0.0,
+            sprintf("first delta.throughput_rps must be >= 0.0, got %n", delta.throughput_rps));
+
+        # delta element_metrics keys must match cumulative element_metrics keys
+        list<string> cumulative_keys = keys snap.element_metrics;
+        list<string> delta_keys = keys delta.element_metrics;
+        assertEq(cumulative_keys.size(), delta_keys.size(),
+            "delta element_metrics key count must match cumulative");
+        foreach string k in (cumulative_keys) {
+            assertTrue(delta.element_metrics.hasKey(k),
+                sprintf("delta must contain element key '%s' present in cumulative", k));
+        }
+    }
+
+    # =========================================================================
+    # Test 2: sequential snapshots are incremental
+    # =========================================================================
+
+    #! Use an interval-based collector that fires every N records within a single pipeline run.
+    #! Submit 2*N records; the collector fires at least twice (once per N records plus forceCallback).
+    #! Verify that the sum of delta.records_completed across all snapshots equals the final total.
+    #! Verify that no individual delta.records_completed exceeds the interval window.
+    testSequentialSnapshotsAreIncremental() {
+        int interval = 20;
+        int total = interval * 2;  # 40 records: guarantees at least 2 intermediate callbacks
+
+        IntervalMetricsCollector collector(interval);
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-sequential-snapshots",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(total));
+        pipe.waitDone();
+
+        # Must have at least 2 snapshots: intermediate callbacks plus the final forceCallback
+        assertTrue(collector.all_snapshots.size() >= 2,
+            sprintf("must have at least 2 snapshots, got %d", collector.all_snapshots.size()));
+
+        # Sum of all delta.records_completed must equal final total_records_completed
+        int last_total = collector.all_snapshots[collector.all_snapshots.size() - 1].total_records_completed;
+        assertEq(total, last_total,
+            "final total_records_completed must equal total records submitted");
+
+        int delta_sum = 0;
+        foreach hash<DataProvider::PipelineMetricsSnapshot> s in (collector.all_snapshots) {
+            assertNeq(NOTHING, s.delta, "every snapshot must have a populated delta");
+            delta_sum += s.delta.records_completed;
+        }
+        assertEq(last_total, delta_sum,
+            "sum of delta.records_completed across all snapshots must equal final total_records_completed");
+
+        # Each intermediate snapshot delta must be <= interval (not all records at once)
+        # (The final forceCallback may mop up fewer, but none should exceed the interval size)
+        int mid_count = collector.all_snapshots.size() - 1;
+        for (int i = 0; i < mid_count; ++i) {
+            int d = collector.all_snapshots[i].delta.records_completed;
+            assertTrue(d <= interval,
+                sprintf("intermediate snapshot %d: delta.records_completed %d must be <= interval %d",
+                    i, d, interval));
+        }
+    }
+
+    # =========================================================================
+    # Test 3: delta throughput computation
+    # =========================================================================
+
+    #! After waitDone() + forceCallback() snapshot, verify:
+    #!   delta.throughput_rps ≈ delta.records_completed / (delta.interval_ms / 1000.0)
+    #! within 1% tolerance when interval_ms > 0; 0.0 when interval_ms == 0 (documented behaviour).
+    testDeltaThroughputComputation() {
+        int n = 100;
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-throughput",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsDelta> delta = collector.last_snapshot.delta;
+        assertNeq(NOTHING, delta);
+
+        assertEq(n, delta.records_completed,
+            "delta.records_completed must equal n after waitDone()");
+        assertTrue(delta.interval_ms >= 0,
+            "delta.interval_ms must be >= 0");
+
+        # Verify throughput formula.
+        # When interval_ms == 0 (timing resolution too coarse to measure the interval),
+        # throughput_rps is defined as 0.0 per the PipelineMetricsDelta hashdecl.
+        if (delta.interval_ms == 0) {
+            assertEq(0.0, delta.throughput_rps,
+                "delta.throughput_rps must be 0.0 when interval_ms is 0");
+        } else {
+            float expected_rps = delta.records_completed / (delta.interval_ms / 1000.0);
+            float actual_rps = delta.throughput_rps;
+            float tolerance = expected_rps * 0.01;
+            assertTrue(abs(actual_rps - expected_rps) <= tolerance,
+                sprintf("delta.throughput_rps %f should be within 1%% of expected %f (tolerance %f)",
+                    actual_rps, expected_rps, tolerance));
+        }
+    }
+
+    # =========================================================================
+    # Test 4: element delta avg_processing_time_us
+    # =========================================================================
+
+    #! For each element in delta.element_metrics from the forceCallback() snapshot, verify:
+    #!   avg_processing_time_us ≈ processing_time_us / records_processed (within 1e-3)
+    #! When records_processed == 0, avg_processing_time_us must be exactly 0.0.
+    testElementDeltaAvgProcessingTime() {
+        int n = 80;
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-avg-proc-time",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+        assertNeq(NOTHING, snap.delta);
+
+        foreach hash<auto> pair in (snap.delta.element_metrics.pairIterator()) {
+            string eid = pair.key;
+            hash<DataProvider::PipelineElementDelta> ed = pair.value;
+
+            if (ed.records_processed == 0) {
+                assertEq(0.0, ed.avg_processing_time_us,
+                    sprintf("element '%s': avg_processing_time_us must be 0.0 when records_processed == 0",
+                        eid));
+            } else {
+                float expected_avg = ed.processing_time_us.toFloat() / ed.records_processed;
+                float actual_avg = ed.avg_processing_time_us;
+                float diff = abs(actual_avg - expected_avg);
+                assertTrue(diff < 1e-3,
+                    sprintf("element '%s': avg_processing_time_us %f should be within 1e-3 of "
+                        "processing_time_us/records_processed = %f (diff: %f)",
+                        eid, actual_avg, expected_avg, diff));
+            }
+        }
+    }
+
+    # =========================================================================
+    # Test 5: idle interval delta
+    # =========================================================================
+
+    #! Call getSnapshot() twice on the collector after waitDone(), with a sleep between them.
+    #! The SECOND manual getSnapshot() should have records_submitted == 0,
+    #! records_completed == 0, and throughput_rps == 0.0 (nothing happened in the interval).
+    #!
+    #! Note: waitDone() fires forceCallback() which advances prev_* state, so the subsequent
+    #! getSnapshot() call only sees activity since that final forceCallback().
+    testIdleIntervalDelta() {
+        int n = 40;
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-idle-interval",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        # waitDone() -> forceCallback() -> getSnapshotIntern() advances prev_* state
+        pipe.waitDone();
+
+        assertEq(n, collector.last_snapshot.total_records_completed);
+
+        # Get the internal PipelineMetricsCollector to call getSnapshot() directly.
+        # The collector is shut down, but getSnapshot() still reads the current state.
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        assertNeq(NOTHING, mc, "metrics collector must be accessible via getMetricsCollector()");
+
+        # Wait at least 100 ms to ensure a measurable idle interval
+        usleep(100 * 1000);
+
+        # Call getSnapshot() on the internal collector: no records processed since forceCallback()
+        hash<DataProvider::PipelineMetricsSnapshot> snap_idle = mc.getSnapshot();
+        assertNeq(NOTHING, snap_idle.delta, "delta must be populated on manual getSnapshot()");
+        hash<DataProvider::PipelineMetricsDelta> delta_idle = snap_idle.delta;
+
+        assertEq(0, delta_idle.records_submitted,
+            "idle delta.records_submitted must be 0");
+        assertEq(0, delta_idle.records_completed,
+            "idle delta.records_completed must be 0");
+        assertEq(0.0, delta_idle.throughput_rps,
+            "idle delta.throughput_rps must be 0.0 when records_completed == 0");
+
+        # The idle interval must reflect at least the sleep duration (with scheduling tolerance)
+        assertTrue(delta_idle.interval_ms > 50,
+            sprintf("idle delta.interval_ms (%d ms) must reflect the sleep gap", delta_idle.interval_ms));
+    }
+
+    # =========================================================================
+    # Test 6: element type filtering in delta
+    # =========================================================================
+
+    #! Verify that delta.element_metrics does NOT contain keys for mapper elements.
+    #! Also verify that the keys in delta.element_metrics match the keys in cumulative element_metrics.
+    testElementTypeFilteringInDelta() {
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-element-filter",
+            "metrics_collector": collector,
+        });
+
+        # Add a regular processor (should appear in output)
+        pipe.append(0, new DeltaPassthroughProcessor(), NOTHING, "processor");
+        # Add a mapper-typed element (should be filtered from output)
+        pipe.append(0, new DeltaPassthroughProcessor(), NOTHING, "mapper");
+        # Add another regular processor (should appear in output)
+        pipe.append(0, new DeltaPassthroughProcessor(), NOTHING, "processor");
+
+        pipe.submit(getGeneratorIterator(20));
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+        assertNeq(NOTHING, snap.delta);
+
+        # Neither cumulative nor delta element_metrics should contain mapper elements
+        foreach hash<auto> pair in (snap.element_metrics.pairIterator()) {
+            assertNeq("mapper", pair.value.element_type,
+                sprintf("cumulative element_metrics must not contain mapper element '%s'", pair.key));
+            assertNeq("queue", pair.value.element_type,
+                sprintf("cumulative element_metrics must not contain queue element '%s'", pair.key));
+        }
+
+        # Delta keys must match cumulative keys exactly
+        list<string> cum_keys = keys snap.element_metrics;
+        list<string> delta_keys = keys snap.delta.element_metrics;
+
+        assertEq(cum_keys.size(), delta_keys.size(),
+            "delta element_metrics key count must match cumulative after filtering");
+        foreach string k in (cum_keys) {
+            assertTrue(snap.delta.element_metrics.hasKey(k),
+                sprintf("delta must contain element key '%s' found in cumulative", k));
+        }
+
+        # Verify exactly two processor elements appear (the mapper is excluded)
+        assertEq(2, cum_keys.size(),
+            "exactly two processor elements should appear (mapper is filtered)");
+    }
+
+    # =========================================================================
+    # Test 7: element alias remapping in delta
+    # =========================================================================
+
+    #! When append() is called with a custom_element_id (alias), verify that
+    #! delta.element_metrics uses the aliased keys — same as cumulative element_metrics.
+    testElementAliasRemappingInDelta() {
+        string alias_name = "my-fsm-state";
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-alias-remap",
+            "metrics_collector": collector,
+        });
+        # Pass alias as custom_element_id (third argument to append())
+        pipe.append(0, new DeltaPassthroughProcessor(), alias_name);
+
+        pipe.submit(getGeneratorIterator(30));
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+        assertNeq(NOTHING, snap.delta);
+
+        # Cumulative element_metrics must use the alias key
+        assertTrue(snap.element_metrics.hasKey(alias_name),
+            sprintf("cumulative element_metrics must contain aliased key '%s'", alias_name));
+
+        # Delta element_metrics must also use the alias key
+        assertTrue(snap.delta.element_metrics.hasKey(alias_name),
+            sprintf("delta element_metrics must contain aliased key '%s'", alias_name));
+
+        # The auto-generated internal key must NOT appear in either output
+        # (auto ID would be "0:0": queue 0, element index 0)
+        string auto_id = "0:0";
+        assertFalse(snap.element_metrics.hasKey(auto_id),
+            sprintf("cumulative element_metrics must NOT contain internal auto-id '%s' when alias is set",
+                auto_id));
+        assertFalse(snap.delta.element_metrics.hasKey(auto_id),
+            sprintf("delta element_metrics must NOT contain internal auto-id '%s' when alias is set",
+                auto_id));
+
+        # Both outputs must have the same set of keys
+        list<string> cum_keys = keys snap.element_metrics;
+        list<string> delta_keys = keys snap.delta.element_metrics;
+        assertEq(cum_keys.size(), delta_keys.size(),
+            "cumulative and delta element_metrics must have the same number of keys");
+        foreach string k in (cum_keys) {
+            assertTrue(snap.delta.element_metrics.hasKey(k),
+                sprintf("delta must contain element key '%s' present in cumulative", k));
+        }
+    }
+}

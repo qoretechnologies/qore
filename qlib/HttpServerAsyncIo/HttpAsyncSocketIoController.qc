@@ -165,9 +165,6 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
-        #! @deprecated Ignored; the multiplexed HTTP/2 path is now always used.
-        #! Kept for backwards compatibility only.
-        bool reject_http2_websocket = False;
     }
 
     #! Creates the HTTP controller with an explicit I/O controller

@@ -420,13 +420,20 @@ bool is_executable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
    struct stat sbuf;
    int rc;
 
-   if ((rc = stat(path->getBuffer(), &sbuf)))
+   if ((rc = stat(path->getBuffer(), &sbuf))) {
       return false;
+   }
 
-   if (sbuf.st_mode & S_IXOTH
+   // only regular files can be executable
+   if (!S_ISREG(sbuf.st_mode)) {
+      return false;
+   }
+
+   if ((sbuf.st_mode & S_IXOTH)
        || (geteuid() == sbuf.st_uid && (sbuf.st_mode & S_IXUSR))
-       || (getegid() == sbuf.st_gid && (sbuf.st_mode & S_IXGRP)))
+       || (getegid() == sbuf.st_gid && (sbuf.st_mode & S_IXGRP))) {
       return true;
+   }
 
    return false;
 #else

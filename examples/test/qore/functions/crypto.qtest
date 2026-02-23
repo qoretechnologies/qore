@@ -17,6 +17,7 @@ public class CryptoTest inherits QUnit::Test {
 
     constructor() : Test("Crypto test", "1.0") {
         addTestCase("Test crypto functions", \test(), NOTHING);
+        addTestCase("PBKDF2 tests", \testPbkdf2(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -140,5 +141,130 @@ public class CryptoTest inherits QUnit::Test {
         # decryption must fail with different AAD
         assertThrows("DECRYPT-ERROR", \decrypt_to_binary(), (alg, x1, Key, NOTHING, mac), alg + " encrypt bin");
         assertThrows("DECRYPT-ERROR", \decrypt_to_string(), (alg, x1, Key, NOTHING, mac), alg + " encrypt bin");
+    }
+
+    testPbkdf2() {
+        # RFC 6070 Test Vector 1: PBKDF2-HMAC-SHA1, 1 iteration
+        assertEq(
+            parse_hex_string("0c60c80f961f0e71f3a9b524af6012062fe037a6"),
+            pbkdf2("sha1", "password", "salt", 1, 20),
+            "RFC 6070 vector 1: SHA1, 1 iter",
+        );
+
+        # RFC 6070 Test Vector 2: PBKDF2-HMAC-SHA1, 2 iterations
+        assertEq(
+            parse_hex_string("ea6c014dc72d6f8ccd1ed92ace1d41f0d8de8957"),
+            pbkdf2("sha1", "password", "salt", 2, 20),
+            "RFC 6070 vector 2: SHA1, 2 iter",
+        );
+
+        # RFC 6070 Test Vector 3: PBKDF2-HMAC-SHA1, 4096 iterations
+        assertEq(
+            parse_hex_string("4b007901b765489abead49d926f721d065a429c1"),
+            pbkdf2("sha1", "password", "salt", 4096, 20),
+            "RFC 6070 vector 3: SHA1, 4096 iter",
+        );
+
+        # RFC 6070 Test Vector 5: PBKDF2-HMAC-SHA1, long password and salt, 4096 iterations
+        assertEq(
+            parse_hex_string("3d2eec4fe41c849b80c8d83662c0e44a8b291a964cf2f07038"),
+            pbkdf2("sha1", "passwordPASSWORDpassword", "saltSALTsaltSALTsaltSALTsaltSALTsalt", 4096, 25),
+            "RFC 6070 vector 5: SHA1, long password+salt",
+        );
+
+        # RFC 6070 Test Vector 6: PBKDF2-HMAC-SHA1, password with null byte
+        assertEq(
+            parse_hex_string("56fa6aa75548099dcc37d7f03425e0c3"),
+            pbkdf2("sha1", "pass\0word", "sa\0lt", 4096, 16),
+            "RFC 6070 vector 6: SHA1, null bytes in password+salt",
+        );
+
+        # PBKDF2-HMAC-SHA256 test vectors (RFC 7914 Section 11)
+        assertEq(
+            parse_hex_string("55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc"
+                "49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783"),
+            pbkdf2("sha256", "passwd", "salt", 1, 64),
+            "PBKDF2-SHA256 vector: 1 iter, 64 bytes",
+        );
+
+        # PBKDF2-SHA256: standard 32-byte key derivation
+        binary salt256 = parse_hex_string("0001020304050607");
+        binary result = pbkdf2("sha256", "password", salt256, 4096, 32);
+        assertEq(32, result.size(), "PBKDF2-SHA256 output length");
+
+        # deterministic: same inputs produce same output
+        assertEq(result, pbkdf2("sha256", "password", salt256, 4096, 32), "PBKDF2 deterministic");
+
+        # different salt produces different output
+        binary result2 = pbkdf2("sha256", "password", parse_hex_string("0706050403020100"), 4096, 32);
+        assertNeq(result, result2, "PBKDF2 different salt");
+
+        # different password produces different output
+        binary result3 = pbkdf2("sha256", "different", salt256, 4096, 32);
+        assertNeq(result, result3, "PBKDF2 different password");
+
+        # different iteration count produces different output
+        binary result4 = pbkdf2("sha256", "password", salt256, 1000, 32);
+        assertNeq(result, result4, "PBKDF2 different iterations");
+
+        # binary password and salt
+        binary bin_pass = get_random_bytes(16);
+        binary bin_salt = get_random_bytes(32);
+        binary result5 = pbkdf2("sha256", bin_pass, bin_salt, 1000, 32);
+        assertEq(32, result5.size(), "PBKDF2 binary password+salt output length");
+        assertEq(result5, pbkdf2("sha256", bin_pass, bin_salt, 1000, 32), "PBKDF2 binary deterministic");
+
+        # different output lengths
+        binary r16 = pbkdf2("sha256", "password", "salt", 1000, 16);
+        binary r64 = pbkdf2("sha256", "password", "salt", 1000, 64);
+        assertEq(16, r16.size(), "PBKDF2 16-byte output");
+        assertEq(64, r64.size(), "PBKDF2 64-byte output");
+
+        # SHA-512 support
+        binary r512 = pbkdf2("sha512", "password", "salt", 1000, 32);
+        assertEq(32, r512.size(), "PBKDF2-SHA512 output length");
+        # SHA-512 should produce different output than SHA-256
+        binary r256 = pbkdf2("sha256", "password", "salt", 1000, 32);
+        assertNeq(r512, r256, "PBKDF2 SHA-512 vs SHA-256 different");
+
+        # error cases: invalid digest (PBKDF2-ERROR on OpenSSL 3+, DIGEST-ERROR on older)
+        try {
+            auto val = pbkdf2("invalid_digest", "pass", "salt", 1000, 32);
+            assertTrue(False, "PBKDF2 invalid digest should throw");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("PBKDF2-ERROR|DIGEST-ERROR", ex.err, "PBKDF2 invalid digest error type");
+        }
+
+        # error cases: zero iterations
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", 0, 32),
+            "PBKDF2 zero iterations");
+
+        # error cases: negative iterations
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", -1, 32),
+            "PBKDF2 negative iterations");
+
+        # error cases: zero key length
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", 1000, 0),
+            "PBKDF2 zero key_len");
+
+        # error cases: negative key length
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", 1000, -1),
+            "PBKDF2 negative key_len");
+
+        # error cases: iterations overflow
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", (1 << 40), 32),
+            "PBKDF2 iterations overflow");
+
+        # error cases: key_len overflow
+        assertThrows("PBKDF2-ERROR", \pbkdf2(), ("sha256", "pass", "salt", 1000, (1 << 40)),
+            "PBKDF2 key_len overflow");
+
+        # empty password (valid edge case)
+        binary empty_pass = pbkdf2("sha256", "", "salt", 1000, 32);
+        assertEq(32, empty_pass.size(), "PBKDF2 empty password");
+
+        # empty salt (valid edge case)
+        binary empty_salt = pbkdf2("sha256", "password", "", 1000, 32);
+        assertEq(32, empty_salt.size(), "PBKDF2 empty salt");
     }
 }
