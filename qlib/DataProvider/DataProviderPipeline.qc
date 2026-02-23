@@ -882,6 +882,18 @@ public class PipelineMetricsCollector {
         total_submitted += count;
     }
 
+    #! Returns the total number of records submitted to the pipeline without advancing the delta window
+    /** Unlike getSnapshot(), this method does not call getSnapshotIntern() and therefore has no
+        side effects on delta computation.
+
+        @return total records submitted so far
+    */
+    int getTotalSubmitted() {
+        metrics_lock.lock();
+        on_exit metrics_lock.unlock();
+        return total_submitted;
+    }
+
     #! Records records completing the pipeline
     /** @param count number of records completed (default: 1)
     */
