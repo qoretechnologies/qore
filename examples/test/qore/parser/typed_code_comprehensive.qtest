@@ -19,6 +19,7 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         addTestCase("Default parameter in closure", \defaultParamTest());
         addTestCase("Closure capturing variables", \closureCapturingTest());
         addTestCase("Type inference edge cases", \typeInferenceEdgeCasesTest());
+        addTestCase("Whitespace in code<> signatures", \whitespaceInSignatureTest());
         set_return_value(main());
     }
 
@@ -244,6 +245,56 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         # Test that regular code type still works
         code genericFunc = int sub () { return 42; };
         assertEq(42, genericFunc());
+    }
+
+    whitespaceInSignatureTest() {
+        # Simple type with space before parens: code<int (string)>
+        code<int (string)> f1 = int sub (string s) { return s.length(); };
+        assertEq(5, f1("hello"));
+
+        # Complex return type with space before parens: code<hash<string, int> (string, int)>
+        code<hash<string, int> (string, int)> f2 = hash<string, int> sub (string s, int i) {
+            return {s: i};
+        };
+        assertEq({"test": 42}, f2("test", 42));
+
+        # Complex return type without space (verify still works)
+        code<hash<string, int>(string, int)> f3 = hash<string, int> sub (string s, int i) {
+            return {s: i};
+        };
+        assertEq({"test": 42}, f3("test", 42));
+
+        # Or-nothing with space
+        *code<int (string)> f4 = int sub (string s) { return s.length(); };
+        assertEq(5, f4("hello"));
+
+        # Complex return type with space in or-nothing
+        *code<list<int> (int)> f5 = list<int> sub (int n) {
+            list<int> result = ();
+            for (int i = 0; i < n; ++i) {
+                result += i;
+            }
+            return result;
+        };
+        assertEq((0, 1, 2), f5(3));
+
+        # Verify types match between space and no-space variants
+        code<int(string)> f6 = int sub (string s) { return s.length(); };
+        assertEq(f1.type(), f6.type());
+
+        # Runtime type string resolution with space
+        {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.parse("
+                sub test() {
+                    code<hash<string, int> (string, int)> f = hash<string, int> sub (string s, int i) {
+                        return {s: i};
+                    };
+                    hash<string, int> result = f('test', 42);
+                }
+            ", "test");
+            p.run();
+        }
     }
 }
 
