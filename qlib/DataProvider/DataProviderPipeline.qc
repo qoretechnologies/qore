@@ -132,6 +132,55 @@ public hashdecl PipelineElementMetrics {
     int error_count = 0;
 }
 
+#! Per-element metrics delta for a single snapshot interval
+/** @since DataProvider 3.1
+*/
+public hashdecl PipelineElementDelta {
+    #! FSM state key (same as hash key in PipelineMetricsDelta.element_metrics)
+    string element_id;
+
+    #! Records that entered this element in this interval
+    int records_processed = 0;
+
+    #! Records that left this element in this interval
+    int records_output = 0;
+
+    #! Total processing time in this interval (microseconds)
+    int processing_time_us = 0;
+
+    #! Total queue-wait time in this interval (microseconds)
+    int queue_wait_time_us = 0;
+
+    #! Errors in this interval
+    int error_count = 0;
+
+    #! Backpressure events in this interval
+    int queue_full_count = 0;
+
+    #! processing_time_us / records_processed; 0.0 if no records processed in this interval
+    float avg_processing_time_us = 0.0;
+}
+
+#! Metrics for the interval since the previous snapshot
+/** @since DataProvider 3.1
+*/
+public hashdecl PipelineMetricsDelta {
+    #! Milliseconds since the previous snapshot (time-since-start for the first snapshot)
+    int interval_ms;
+
+    #! Records submitted to the pipeline in this interval
+    int records_submitted = 0;
+
+    #! Records completed in this interval
+    int records_completed = 0;
+
+    #! Records completed / interval_secs for this interval; 0.0 if interval_ms == 0
+    float throughput_rps = 0.0;
+
+    #! Per-element deltas keyed by FSM state key (same keys as cumulative element_metrics)
+    hash<string, hash<PipelineElementDelta>> element_metrics;
+}
+
 #! Complete pipeline metrics snapshot
 /** @since DataProvider 3.1
 */
@@ -179,6 +228,9 @@ public hashdecl PipelineMetricsSnapshot {
 
     #! Optional context data passed through from pipeline options
     *hash<auto> user_context;
+
+    #! Delta metrics since the previous snapshot (always populated by getSnapshotIntern())
+    hash<PipelineMetricsDelta> delta;
 }
 
 #! Pipeline option info
@@ -644,8 +696,11 @@ public class PipelineMetricsCollector {
         #! Metrics lock for thread-safe updates
         Mutex metrics_lock();
 
-        #! Per-element metrics storage
+        #! Per-element metrics storage (keyed by internal auto-generated "queue_id:elem_index" IDs)
         hash<string, hash<PipelineElementMetrics>> element_metrics;
+
+        #! Optional alias mapping: internal auto-ID → display ID (e.g. FSM state key)
+        hash<string, string> element_id_alias;
 
         #! Total records submitted
         int total_submitted = 0;
@@ -661,6 +716,18 @@ public class PipelineMetricsCollector {
 
         #! Records processed since last callback
         int records_since_callback = 0;
+
+        #! Previous snapshot time (NOTHING until first getSnapshotIntern() call)
+        *date prev_snapshot_time;
+
+        #! Previous total submitted count
+        int prev_submitted = 0;
+
+        #! Previous total completed count
+        int prev_completed = 0;
+
+        #! Previous element metrics snapshot (internal key → field values)
+        hash<string, hash<auto>> prev_element_snap;
 
         #! Abstract metrics collector
         AbstractPipelineMetricsCollector collector;
@@ -686,8 +753,10 @@ public class PipelineMetricsCollector {
     /** @param element_id the unique element identifier (format: "queue_id:element_index")
         @param element_type the element type: "processor", "mapper", or "queue"
         @param class_name optional class name for processor/mapper elements
+        @param display_id optional display identifier; when set, getSnapshot() uses this key
+               instead of element_id in the output (e.g. an FSM state key)
     */
-    initElement(string element_id, string element_type, *string class_name) {
+    initElement(string element_id, string element_type, *string class_name, *string display_id) {
         metrics_lock.lock();
         on_exit metrics_lock.unlock();
 
@@ -697,6 +766,9 @@ public class PipelineMetricsCollector {
                 "element_type": element_type,
                 "class_name": class_name,
             };
+        }
+        if (display_id) {
+            element_id_alias{element_id} = display_id;
         }
     }
 
@@ -960,23 +1032,120 @@ public class PipelineMetricsCollector {
     }
 
     #! Returns a current metrics snapshot (internal, must be called with lock held)
+    /** @note Side effect: advances the delta window — updates \c prev_snapshot_time, \c prev_submitted,
+        \c prev_completed, and \c prev_element_snap so that the next call computes the delta since
+        this call.  Two rapid consecutive calls will therefore produce an empty second delta
+        (zero records, zero throughput).
+    */
     private hash<PipelineMetricsSnapshot> getSnapshotIntern() {
         date now = now_us();
         float duration_secs = (now - collection_start).durationSecondsFloat();
         float throughput = duration_secs > 0 ? (total_completed / duration_secs) : 0.0;
 
-        # Calculate average latency across all elements
+        # Build output element metrics: remap aliases and filter out queue and mapper elements.
+        # Internal element_metrics keys are auto-generated "queue_id:elem_index" IDs.
+        # When element_id_alias contains an entry for a key, the output uses the alias (e.g. FSM state key).
+        # Queue elements (element_type == "queue") and mapper elements (element_type == "mapper") are
+        # always filtered out — they are infrastructure, not meaningful FSM states.
+        hash<string, hash<PipelineElementMetrics>> out_metrics;
+        foreach string k in (keys element_metrics) {
+            hash<PipelineElementMetrics> em = element_metrics{k};
+            if (em.element_type == "queue" || em.element_type == "mapper") {
+                continue;
+            }
+            *string display_id = element_id_alias{k};
+            if (display_id) {
+                # Copy the metrics and update just the element_id field to the display alias.
+                # (Using hashdecl merge via + would reset un-specified numeric fields to 0.)
+                hash<PipelineElementMetrics> remapped = em;
+                remapped.element_id = display_id;
+                out_metrics{display_id} = remapped;
+            } else {
+                out_metrics{k} = em;
+            }
+        }
+
+        # Calculate average latency across reported (non-queue) elements.
+        # Note: total_errors is computed from ALL element_metrics (including queues) because
+        # recordError() is called with the queue ID, which may have element_type "queue" if
+        # recordQueueDepth() created the entry first.
         float total_latency = 0.0;
         int latency_samples = 0;
-        int total_errors = 0;
-        foreach hash<auto> em in (element_metrics.pairIterator()) {
+        foreach hash<auto> em in (out_metrics.pairIterator()) {
             if (em.value.records_processed > 0) {
                 total_latency += em.value.processing_time_us + em.value.queue_wait_time_us;
                 latency_samples += em.value.records_processed;
             }
-            total_errors += em.value.error_count;
         }
         float avg_latency = latency_samples > 0 ? (total_latency / latency_samples) : 0.0;
+
+        int total_errors = 0;
+        foreach hash<PipelineElementMetrics> em in (element_metrics.values()) {
+            total_errors += em.error_count;
+        }
+
+        # Compute delta metrics for the interval since the previous snapshot
+        date effective_prev_time = prev_snapshot_time ?? collection_start;
+        int interval_ms = (now - effective_prev_time).durationMilliseconds();
+        int delta_submitted = total_submitted - prev_submitted;
+        int delta_completed = total_completed - prev_completed;
+        float delta_secs = interval_ms / 1000.0;
+        float delta_throughput = (delta_secs > 0.0) ? (delta_completed / delta_secs) : 0.0;
+
+        hash<string, hash<PipelineElementDelta>> delta_elements;
+        foreach string k in (keys element_metrics) {
+            hash<PipelineElementMetrics> em = element_metrics{k};
+            if (em.element_type == "queue" || em.element_type == "mapper") {
+                continue;
+            }
+            *hash<auto> prev_em = prev_element_snap{k};
+            int d_rp  = em.records_processed  - (prev_em.records_processed  ?? 0);
+            int d_ro  = em.records_output     - (prev_em.records_output     ?? 0);
+            int d_pt  = em.processing_time_us - (prev_em.processing_time_us ?? 0);
+            int d_qw  = em.queue_wait_time_us - (prev_em.queue_wait_time_us ?? 0);
+            int d_ec  = em.error_count        - (prev_em.error_count        ?? 0);
+            int d_qfc = em.queue_full_count   - (prev_em.queue_full_count   ?? 0);
+            string out_key = element_id_alias{k} ?? k;
+            delta_elements{out_key} = <PipelineElementDelta>{
+                "element_id"            : out_key,
+                "records_processed"     : d_rp,
+                "records_output"        : d_ro,
+                "processing_time_us"    : d_pt,
+                "queue_wait_time_us"    : d_qw,
+                "error_count"           : d_ec,
+                "queue_full_count"      : d_qfc,
+                "avg_processing_time_us": d_rp > 0 ? (d_pt.toFloat() / d_rp) : 0.0,
+            };
+        }
+        hash<PipelineMetricsDelta> snapshot_delta = <PipelineMetricsDelta>{
+            "interval_ms"      : interval_ms,
+            "records_submitted": delta_submitted,
+            "records_completed": delta_completed,
+            "throughput_rps"   : delta_throughput,
+            "element_metrics"  : delta_elements,
+        };
+
+        # Update prev_* state (still inside the lock — safe)
+        prev_snapshot_time = now;
+        prev_submitted = total_submitted;
+        prev_completed = total_completed;
+        # Only snapshot elements that appear in delta output (non-queue, non-mapper)
+        hash<string, hash<auto>> new_prev;
+        foreach string k in (keys element_metrics) {
+            hash<PipelineElementMetrics> em = element_metrics{k};
+            if (em.element_type == "queue" || em.element_type == "mapper") {
+                continue;
+            }
+            new_prev{k} = {
+                "records_processed"  : em.records_processed,
+                "records_output"     : em.records_output,
+                "processing_time_us" : em.processing_time_us,
+                "queue_wait_time_us" : em.queue_wait_time_us,
+                "error_count"        : em.error_count,
+                "queue_full_count"   : em.queue_full_count,
+            };
+        }
+        prev_element_snap = new_prev;
 
         return <PipelineMetricsSnapshot>{
             "pipeline_name": parent.getName(),
@@ -988,10 +1157,11 @@ public class PipelineMetricsCollector {
             "records_in_flight": total_submitted - total_completed,
             "throughput_rps": throughput,
             "avg_latency_us": avg_latency,
-            "element_metrics": element_metrics,
+            "element_metrics": out_metrics,
             "num_queues": parent.getInfo().num_queues,
             "bulk_mode": parent.getInfo().bulk,
             "total_errors": total_errors,
+            "delta": snapshot_delta,
         };
     }
 }
@@ -1170,6 +1340,11 @@ public class DataProviderPipeline {
     #! Appends a data processor to a queue
     /** @param id the queue ID as returned from appendQueue()
         @param processor the data processor to append to the pipeline queue
+        @param custom_element_id optional custom element ID for metrics; when provided this ID is used
+               instead of the auto-generated "queue_id:element_index" format, allowing callers to
+               associate pipeline elements with meaningful external identifiers (e.g. FSM state keys)
+        @param element_type element type for metrics; elements with type "mapper" or "queue" are
+               excluded from metrics output snapshots (default: "processor")
 
         @throws PIPELINE-ERROR invalid queue ID or the queue already terminates in additional queues; the pipeline is
         locked
@@ -1178,7 +1353,8 @@ public class DataProviderPipeline {
 
         @see appendQueue()
     */
-    append(int id, AbstractDataProcessor processor) {
+    append(int id, AbstractDataProcessor processor, *string custom_element_id,
+            string element_type = "processor") {
         lck.lock();
         on_exit lck.unlock();
 
@@ -1194,11 +1370,15 @@ public class DataProviderPipeline {
         logDebug("added data processor %y to queue %d (%d element%s)", processor.className(), id,
             pmap{id}.elems.size(), pmap{id}.elems.size() == 1 ? "" : "s");
 
-        # Initialize element metrics if collector is enabled
+        # Initialize element metrics if collector is enabled.
+        # Always use the auto-generated "queue_id:elem_index" ID internally so that the
+        # PipelineQueue recording calls (which also compute this format) align correctly.
+        # When custom_element_id is provided (e.g. an FSM state key), it is stored as a
+        # display alias and applied during getSnapshot() output remapping.
+        # Elements with element_type "mapper" are filtered from getSnapshot() output.
         if (metrics_collector) {
-            # Element ID format: "queue_id:element_index"
-            string element_id = sprintf("%d:%d", id, pmap{id}.elems.size() - 1);
-            metrics_collector.initElement(element_id, "processor", processor.className());
+            string auto_id = sprintf("%d:%d", id, pmap{id}.elems.size() - 1);
+            metrics_collector.initElement(auto_id, element_type, processor.className(), custom_element_id);
         }
 
         if (do_bulk && !processor.supportsBulkApi()) {
