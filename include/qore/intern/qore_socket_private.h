@@ -690,6 +690,19 @@ struct qore_socket_private {
     */
     bool h2_stream_read_external = false;
 
+    //! Maximum size for chunked HTTP body reads (0 = unlimited)
+    /** When set, readHttpChunkedBodyBinary() and readHttpChunkedBody() will
+        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds
+        this limit.
+    */
+    int64 max_chunked_body_size = 0;
+
+    //! Maximum request body size for HTTP/2 streams (0 = unlimited)
+    /** Propagated to Http2Session when created; DATA frame accumulation exceeding
+        this limit causes the stream to be reset with REFUSED_STREAM.
+    */
+    int64 max_http2_body_size = 0;
+
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
         (RFC 8441), so clients will not attempt WebSocket over HTTP/2 CONNECT.
@@ -4033,6 +4046,13 @@ struct qore_socket_private {
                         return nullptr;
                 } else {
                     b->append(buf, rc);
+                    // Check cumulative body size against limit
+                    if (max_chunked_body_size > 0 && (int64)b->size() > max_chunked_body_size) {
+                        xsink->raiseException("HTTP-BODY-TOO-LARGE",
+                            "chunked body size " QLLD " exceeds maximum " QLLD,
+                            (int64)b->size(), max_chunked_body_size);
+                        return nullptr;
+                    }
                 }
                 br += rc;
 
@@ -4215,6 +4235,14 @@ struct qore_socket_private {
 
                 br += rc;
                 buf->concat(tbuf, rc);
+
+                // Check cumulative body size against limit
+                if (max_chunked_body_size > 0 && (int64)buf->size() > max_chunked_body_size) {
+                    xsink->raiseException("HTTP-BODY-TOO-LARGE",
+                        "chunked body size " QLLD " exceeds maximum " QLLD,
+                        (int64)buf->size(), max_chunked_body_size);
+                    return nullptr;
+                }
 
                 do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, tbuf, (size_t)rc);
 

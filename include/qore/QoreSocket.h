@@ -2266,6 +2266,40 @@ public:
     */
     DLLEXPORT int64 getConnectionId() const;
 
+    //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
+    /** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
+        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setMaxChunkedBodySize(int64 size);
+
+    //! Returns the maximum body size for chunked HTTP reads
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getMaxChunkedBodySize() const;
+
+    //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
+    /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
+        the stream to be reset with REFUSED_STREAM.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
+
+    //! Returns the maximum request body size for HTTP/2 streams
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
+
     DLLLOCAL static void doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink);
 
     //! sets the event queue (not part of the library's pubilc API), must be already referenced before call

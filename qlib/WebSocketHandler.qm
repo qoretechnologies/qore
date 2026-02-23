@@ -685,6 +685,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "heartbeat",
             "heartbeat_msg",
             "extensions",
+            "max_message_size",
         );
     }
 
@@ -703,6 +704,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! Send timeout
         date send_timeout = DefaultSocketSendTimeout;
+
+        #! Maximum WebSocket message size in bytes (0 = unlimited)
+        /** Messages (including fragmented message accumulation) exceeding this limit will
+            cause the connection to be closed with status code 1009 (Message Too Big).
+
+            @since WebSocketHandler 2.5
+        */
+        int max_message_size = 0;
 
         #! Extension registry for supported extensions
         /** @since WebSocketHandler 2.3
@@ -804,6 +813,18 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     }
                     break;
                 }
+                case "max_message_size": {
+                    if (!h.value.intp()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y cannot be converted to an "
+                            "integer giving the maximum message size in bytes", h.key, h.value);
+                    }
+                    max_message_size = int(h.value);
+                    if (max_message_size < 0) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %d is negative; expecting "
+                            "non-negative value (0 = unlimited)", h.key, max_message_size);
+                    }
+                    break;
+                }
                 default:
                     throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y is unknown; known options: %y", h.key,
                         Options);
@@ -831,6 +852,24 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 "giving the number of seconds in the heartbeat interval", seconds);
         }
         heartbeat = seconds;
+    }
+
+    #! Returns the maximum WebSocket message size in bytes (0 = unlimited)
+    /** @return the maximum message size in bytes; 0 means unlimited
+
+        @since WebSocketHandler 2.5
+    */
+    int getMaxMessageSize() {
+        return max_message_size;
+    }
+
+    #! Sets the maximum WebSocket message size in bytes (0 = unlimited)
+    /** @param size the maximum message size in bytes; 0 means unlimited
+
+        @since WebSocketHandler 2.5
+    */
+    setMaxMessageSize(int size) {
+        max_message_size = size;
     }
 
     #! returns the heartbeat message as a string
@@ -1127,6 +1166,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     if (incoming) {
                         http2_buf = http2_buf ? http2_buf + incoming : incoming;
                     }
+                    # Check HTTP/2 WebSocket buffer size against limit
+                    if (max_message_size > 0 && http2_buf.size() > max_message_size) {
+                        logError("HTTP/2 WebSocket buffer size %d exceeds maximum %d",
+                            http2_buf.size(), max_message_size);
+                        sendClose(wsc, sock, WSCC_MessageTooBig,
+                            sprintf("message size exceeds %d byte limit", max_message_size));
+                        exit_reason = "message-too-large";
+                        break;
+                    }
                     int frame_len = getWsFrameLength(http2_buf);
                     if (frame_len > 0) {
                         binary frame = http2_buf.substr(0, frame_len);
@@ -1183,7 +1231,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
                         continue;
                     }
-                    h = ws_read_message(sock);
+                    h = ws_read_message(sock, NOTHING, max_message_size);
                     have_frame = True;
                 }
                 if (!have_frame) {
@@ -1313,6 +1361,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             }
                         }
                     }
+                    # Check accumulated message size against limit
+                    if (max_message_size > 0 && buf.size() > max_message_size) {
+                        logError("WebSocket message size %d exceeds maximum %d", buf.size(),
+                            max_message_size);
+                        sendClose(wsc, sock, WSCC_MessageTooBig,
+                            sprintf("message size exceeds %d byte limit", max_message_size));
+                        exit_reason = "message-too-large";
+                        break;
+                    }
                     continue;
                 } else if (exists buf && h.op == WSOP_Continuation) {
                     bool is_text = buf.typeCode() == NT_STRING;
@@ -1371,12 +1428,17 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 # error in websocket handler server, log and close the connection
                 string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                 logError(err);
+                int close_code = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
+                    ? WSCC_MessageTooBig
+                    : WSCC_InternalServerError;
                 try {
-                    sendClose(wsc, sock, WSCC_InternalServerError, err);
+                    sendClose(wsc, sock, close_code, err);
                 } catch (hash<ExceptionInfo> ex2) {
                     logError("failed to send close frame: %s: %s", ex2.err, ex2.desc);
                 }
-                exit_reason = "exception";
+                exit_reason = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
+                    ? "message-too-large"
+                    : "exception";
                 break;
             }
         }

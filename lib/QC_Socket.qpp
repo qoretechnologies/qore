@@ -4175,6 +4175,48 @@ int Socket::getConnectionId() [flags=CONSTANT] {
     return s->getConnectionId();
 }
 
+//! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
+/** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
+    raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
+
+    @param size maximum body size in bytes; 0 means unlimited
+
+    @since %Qore 2.1
+*/
+Socket::setMaxChunkedBodySize(int size) {
+    s->setMaxChunkedBodySize(size);
+}
+
+//! Returns the maximum body size for chunked HTTP reads
+/** @return the maximum body size in bytes; 0 means unlimited
+
+    @since %Qore 2.1
+*/
+int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
+    return s->getMaxChunkedBodySize();
+}
+
+//! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
+/** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
+    the stream to be reset with REFUSED_STREAM.
+
+    @param size maximum body size in bytes; 0 means unlimited
+
+    @since %Qore 2.1
+*/
+Socket::setHttp2MaxRequestBodySize(int size) {
+    s->setHttp2MaxRequestBodySize(size);
+}
+
+//! Returns the maximum request body size for HTTP/2 streams
+/** @return the maximum body size in bytes; 0 means unlimited
+
+    @since %Qore 2.1
+*/
+int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
+    return s->getHttp2MaxRequestBodySize();
+}
+
 //! Parse the given string as a Server Sent Event (SSE) string
 /** @param str the string to parse as a Server Sent Event (SSE) string
 
