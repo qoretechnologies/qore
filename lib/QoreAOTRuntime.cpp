@@ -47,6 +47,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/CaseNodeRegex.h"
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
@@ -1472,34 +1473,37 @@ static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTFunc& aot_func, const char* name) {
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
-    //         num_stmts(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
+    //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
     /*const char* func_name =*/ reader.readStringRef(ptr);
     uint16_t num_locals = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_globals = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_exprs = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_stmts = QoreAOTBinaryReader::readU16(ptr);
+    uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
     QoreAOTBinaryReader::readU8(ptr); // padding
 
     // Validate slot counts match the AOT function descriptor
     if (num_locals != aot_func.num_locals || num_globals != aot_func.num_globals
-            || num_exprs != aot_func.num_exprs || num_stmts != aot_func.num_stmts) {
-        printd(0, "AOT v2: slot count mismatch for '%s': binary(%d,%d,%d,%d) vs func(%d,%d,%d,%d)\n",
-            name, num_locals, num_globals, num_exprs, num_stmts,
-            aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts);
+            || num_exprs != aot_func.num_exprs || num_stmts != aot_func.num_stmts
+            || num_regex_cases != aot_func.num_regex_cases) {
+        printd(0, "AOT v2: slot count mismatch for '%s': binary(%d,%d,%d,%d,%d) vs func(%d,%d,%d,%d,%d)\n",
+            name, num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
+            aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
         return nullptr;
     }
 
-    printd(2, "AOT v2: buildContextFromSlotMap '%s': locals=%d globals=%d exprs=%d stmts=%d body_locals=%d "
-        "has_unsupported=%d uvb=%p\n", name, num_locals, num_globals, num_exprs, num_stmts, num_body_locals,
-        has_unsupported, (void*)uvb);
+    printd(2, "AOT v2: buildContextFromSlotMap '%s': locals=%d globals=%d exprs=%d stmts=%d regex_cases=%d "
+        "body_locals=%d has_unsupported=%d uvb=%p\n", name, num_locals, num_globals, num_exprs, num_stmts,
+        num_regex_cases, num_body_locals, has_unsupported, (void*)uvb);
 
     auto* ctx = new QoreAOTContext();
     ctx->num_locals = num_locals;
     ctx->num_globals = num_globals;
     ctx->num_exprs = num_exprs;
     ctx->num_stmts = num_stmts;
+    ctx->num_regex_cases = num_regex_cases;
     ctx->allocate();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -1764,6 +1768,25 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
+    // Deserialize regex cases
+    if (num_regex_cases > 0) {
+        ExceptionSink xsink;
+        for (int i = 0; i < num_regex_cases; ++i) {
+            const char* pattern = reader.readStringRef(ptr);
+            int64_t options = QoreAOTBinaryReader::readI64(ptr);
+            bool is_negated = QoreAOTBinaryReader::readU8(ptr) != 0;
+            QoreRegex* re = new QoreRegex(pattern, options, &xsink);
+            if (xsink) {
+                delete re;
+                has_unsupported = true;
+                continue;
+            }
+            ctx->regex_cases[i] = is_negated
+                ? new CaseNodeNegRegex(&loc_builtin, re, nullptr)
+                : new CaseNodeRegex(&loc_builtin, re, nullptr);
+        }
+    }
+
     // Resolve stmt_slots from the function's AST (on_block_exit handlers + reference foreach)
     if (num_stmts > 0 && uvb) {
         StatementBlock* sb = uvb->getStatementBlock();
@@ -1799,8 +1822,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     }
 
     printd(2, "AOT v2: built context from slot map for '%s' "
-        "(locals=%d, globals=%d, exprs=%d, stmts=%d, body_locals=%d, unsupported=%d)\n",
-        name, num_locals, num_globals, num_exprs, num_stmts, num_body_locals, has_unsupported);
+        "(locals=%d, globals=%d, exprs=%d, stmts=%d, regex_cases=%d, body_locals=%d, unsupported=%d)\n",
+        name, num_locals, num_globals, num_exprs, num_stmts, num_regex_cases, num_body_locals, has_unsupported);
 
     // If any expression slots have unsupported types (e.g., closures), skip AOT
     // registration for this function — it will fall through to JIT at runtime
@@ -1924,6 +1947,7 @@ static void registerAOTFunctionsFromSlotMaps(
             uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
             uint16_t ne = QoreAOTBinaryReader::readU16(ptr);
             QoreAOTBinaryReader::readU16(ptr); // num_stmts
+            uint16_t nrc = QoreAOTBinaryReader::readU16(ptr); // num_regex_cases
             uint16_t nbl = QoreAOTBinaryReader::readU16(ptr);
             QoreAOTBinaryReader::readU8(ptr); // has_unsupported
             QoreAOTBinaryReader::readU8(ptr); // padding
@@ -1949,9 +1973,13 @@ static void registerAOTFunctionsFromSlotMaps(
                     case AOTExprKind::SCOPED_NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
                     case AOTExprKind::LOCAL_VARREF:
+                    case AOTExprKind::GLOBAL_VARREF:
                     case AOTExprKind::CONST_NUMBER:
                     case AOTExprKind::CONST_BINARY:
                     case AOTExprKind::SELF_VARREF:
+                    case AOTExprKind::HASHDECL_NEW:
+                    case AOTExprKind::COMPLEX_HASH_NEW:
+                    case AOTExprKind::COMPLEX_LIST_NEW:
                         reader.readStringRef(ptr);
                         break;
                     case AOTExprKind::SELF_METHOD_CALL:
@@ -1960,6 +1988,11 @@ static void registerAOTFunctionsFromSlotMaps(
                         reader.readStringRef(ptr);
                         reader.readStringRef(ptr);
                         break;
+                    case AOTExprKind::EXPR_TREE: {
+                        uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                        ptr += blob_size;
+                        break;
+                    }
                     default:
                         break;
                 }
@@ -1968,6 +2001,12 @@ static void registerAOTFunctionsFromSlotMaps(
             for (int i = 0; i < nbl; ++i) {
                 reader.readStringRef(ptr);
                 reader.readStringRef(ptr);
+                QoreAOTBinaryReader::readU8(ptr);
+            }
+            // Skip regex cases: pattern_ref(u32) options(i64) is_negated(u8)
+            for (int i = 0; i < nrc; ++i) {
+                reader.readStringRef(ptr);
+                QoreAOTBinaryReader::readI64(ptr);
                 QoreAOTBinaryReader::readU8(ptr);
             }
             continue;
@@ -1983,6 +2022,7 @@ static void registerAOTFunctionsFromSlotMaps(
             uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
             uint16_t ne = QoreAOTBinaryReader::readU16(ptr);
             QoreAOTBinaryReader::readU16(ptr); // num_stmts
+            uint16_t nrc = QoreAOTBinaryReader::readU16(ptr); // num_regex_cases
             uint16_t nbl = QoreAOTBinaryReader::readU16(ptr);
             QoreAOTBinaryReader::readU8(ptr);
             QoreAOTBinaryReader::readU8(ptr);
@@ -2002,9 +2042,13 @@ static void registerAOTFunctionsFromSlotMaps(
                     case AOTExprKind::SCOPED_NEW_OBJECT:
                     case AOTExprKind::RUNTIME_CONST_REF:
                     case AOTExprKind::LOCAL_VARREF:
+                    case AOTExprKind::GLOBAL_VARREF:
                     case AOTExprKind::CONST_NUMBER:
                     case AOTExprKind::CONST_BINARY:
                     case AOTExprKind::SELF_VARREF:
+                    case AOTExprKind::HASHDECL_NEW:
+                    case AOTExprKind::COMPLEX_HASH_NEW:
+                    case AOTExprKind::COMPLEX_LIST_NEW:
                         reader.readStringRef(ptr); break;
                     case AOTExprKind::SELF_METHOD_CALL:
                     case AOTExprKind::STATIC_METHOD_CALL:
@@ -2020,6 +2064,12 @@ static void registerAOTFunctionsFromSlotMaps(
             }
             for (int i = 0; i < nbl; ++i) {
                 reader.readStringRef(ptr); reader.readStringRef(ptr);
+                QoreAOTBinaryReader::readU8(ptr);
+            }
+            // Skip regex cases: pattern_ref(u32) options(i64) is_negated(u8)
+            for (int i = 0; i < nrc; ++i) {
+                reader.readStringRef(ptr);
+                QoreAOTBinaryReader::readI64(ptr);
                 QoreAOTBinaryReader::readU8(ptr);
             }
             continue;
@@ -2793,6 +2843,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 uint16_t ng = QoreAOTBinaryReader::readU16(sm_ptr);
                                 uint16_t ne = QoreAOTBinaryReader::readU16(sm_ptr);
                                 QoreAOTBinaryReader::readU16(sm_ptr); // num_stmts
+                                uint16_t nrc = QoreAOTBinaryReader::readU16(sm_ptr); // num_regex_cases
                                 uint16_t nbl = QoreAOTBinaryReader::readU16(sm_ptr);
                                 QoreAOTBinaryReader::readU8(sm_ptr);
                                 QoreAOTBinaryReader::readU8(sm_ptr);
@@ -2815,9 +2866,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                         case AOTExprKind::SCOPED_NEW_OBJECT:
                                         case AOTExprKind::RUNTIME_CONST_REF:
                                         case AOTExprKind::LOCAL_VARREF:
+                                        case AOTExprKind::GLOBAL_VARREF:
                                         case AOTExprKind::CONST_NUMBER:
                                         case AOTExprKind::CONST_BINARY:
                                         case AOTExprKind::SELF_VARREF:
+                                        case AOTExprKind::HASHDECL_NEW:
+                                        case AOTExprKind::COMPLEX_HASH_NEW:
+                                        case AOTExprKind::COMPLEX_LIST_NEW:
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
                                         case AOTExprKind::SELF_METHOD_CALL:
@@ -2837,6 +2892,12 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 for (int i = 0; i < nbl; ++i) {
                                     deserializer.getReader().readStringRef(sm_ptr);
                                     deserializer.getReader().readStringRef(sm_ptr);
+                                    QoreAOTBinaryReader::readU8(sm_ptr);
+                                }
+                                // Skip regex cases: pattern_ref(u32) options(i64) is_negated(u8)
+                                for (int i = 0; i < nrc; ++i) {
+                                    deserializer.getReader().readStringRef(sm_ptr);
+                                    QoreAOTBinaryReader::readI64(sm_ptr);
                                     QoreAOTBinaryReader::readU8(sm_ptr);
                                 }
                             }
@@ -3410,6 +3471,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 uint16_t ng = QoreAOTBinaryReader::readU16(sm_ptr);
                                 uint16_t ne = QoreAOTBinaryReader::readU16(sm_ptr);
                                 QoreAOTBinaryReader::readU16(sm_ptr); // num_stmts
+                                uint16_t nrc = QoreAOTBinaryReader::readU16(sm_ptr); // num_regex_cases
                                 uint16_t nbl = QoreAOTBinaryReader::readU16(sm_ptr);
                                 QoreAOTBinaryReader::readU8(sm_ptr);
                                 QoreAOTBinaryReader::readU8(sm_ptr);
@@ -3432,9 +3494,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                         case AOTExprKind::SCOPED_NEW_OBJECT:
                                         case AOTExprKind::RUNTIME_CONST_REF:
                                         case AOTExprKind::LOCAL_VARREF:
+                                        case AOTExprKind::GLOBAL_VARREF:
                                         case AOTExprKind::CONST_NUMBER:
                                         case AOTExprKind::CONST_BINARY:
                                         case AOTExprKind::SELF_VARREF:
+                                        case AOTExprKind::HASHDECL_NEW:
+                                        case AOTExprKind::COMPLEX_HASH_NEW:
+                                        case AOTExprKind::COMPLEX_LIST_NEW:
                                             deserializer.getReader().readStringRef(sm_ptr);
                                             break;
                                         case AOTExprKind::SELF_METHOD_CALL:
@@ -3454,6 +3520,12 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 for (int i = 0; i < nbl; ++i) {
                                     deserializer.getReader().readStringRef(sm_ptr);
                                     deserializer.getReader().readStringRef(sm_ptr);
+                                    QoreAOTBinaryReader::readU8(sm_ptr);
+                                }
+                                // Skip regex cases: pattern_ref(u32) options(i64) is_negated(u8)
+                                for (int i = 0; i < nrc; ++i) {
+                                    deserializer.getReader().readStringRef(sm_ptr);
+                                    QoreAOTBinaryReader::readI64(sm_ptr);
                                     QoreAOTBinaryReader::readU8(sm_ptr);
                                 }
                             }

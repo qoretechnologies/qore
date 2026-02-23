@@ -24,6 +24,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
         addTestCase("AOT string operations", \testStringOps());
+        addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
@@ -351,6 +352,26 @@ printf(\"lower: %s\\n\", s.lwr());
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT string ops output matches interpreter");
+    }
+
+    testSwitchRegex() {
+        string code = "%modern
+string s = \"test123\";
+switch (s) {
+    case /^test\\d+$/:
+        printf(\"matched pattern\\n\");
+        break;
+    case /^[a-z]+$/:
+        printf(\"matched letters\\n\");
+        break;
+    default:
+        printf(\"no match\\n\");
+        break;
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT regex switch output matches interpreter");
     }
 
     testExitCode() {

@@ -1503,6 +1503,7 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         writer.writeU16(static_cast<uint16_t>(func.num_globals));
         writer.writeU16(static_cast<uint16_t>(func.num_exprs));
         writer.writeU16(static_cast<uint16_t>(func.num_stmts));
+        writer.writeU16(static_cast<uint16_t>(func.slot_ids.regex_cases.size()));
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
         writer.writeU8(0); // padding for alignment
@@ -1575,6 +1576,14 @@ void serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(bl.name.c_str());
             writer.writeStringRef(bl.type_path.c_str());
             writer.writeU8(bl.is_closure ? 1 : 0);
+        }
+
+        // Regex case entries (in slot-index order)
+        // Format per case: pattern_ref(u32) options(i64) is_negated(u8)
+        for (auto& rc : func.slot_ids.regex_cases) {
+            writer.writeStringRef(rc.pattern.c_str());
+            writer.writeI64(rc.options);
+            writer.writeU8(rc.is_negated ? 1 : 0);
         }
     }
 
