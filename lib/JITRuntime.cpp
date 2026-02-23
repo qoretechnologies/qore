@@ -80,6 +80,12 @@ extern "C" DLLEXPORT uint64_t qore_fast_toupper(uint64_t arg_bits, ExceptionSink
 extern "C" DLLEXPORT uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_hash_keys(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, ExceptionSink* xsink);
+// Phase 5.3: Additional fast-path optimizations
+extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t key_bits, ExceptionSink* xsink);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -2103,6 +2109,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_
                     return qore_fast_tolower(args[0], xsink);
                 } else if (!strcmp(fname, "toupper") || !strcmp(fname, "upr")) {
                     return qore_fast_toupper(args[0], xsink);
+                } else if (!strcmp(fname, "trim")) {
+                    return qore_fast_trim(args[0], xsink);
+                } else if (!strcmp(fname, "abs")) {
+                    return qore_fast_abs(args[0], xsink);
+                } else if (!strcmp(fname, "first")) {
+                    return qore_fast_first(args[0], xsink);
+                } else if (!strcmp(fname, "last")) {
+                    return qore_fast_last(args[0], xsink);
+                }
+            }
+            // Two-argument fast-call functions
+            else if (nargs == 2) {
+                if (!strcmp(fname, "exists")) {
+                    return qore_fast_hash_exists(args[0], args[1], xsink);
                 }
             }
         }
@@ -2448,6 +2468,157 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_values(uint64_t arg_bits, Exception
     }
 
     return toBits(vals.release());
+}
+
+// --- Phase 5.3: Additional fast-path optimizations ---
+
+extern "C" DLLEXPORT uint64_t qore_fast_trim(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns trimmed version of string (whitespace removed from both ends)
+    // Equivalent to: softstring trim(softstring str) { return str->trim(); }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle string directly
+    if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
+        QoreStringNode* result = str->copy();
+        result->trim();
+        return toBits(result);
+    }
+
+    // For non-string types, convert to string first
+    QoreStringNode* temp = new QoreStringNode;
+    int err = 0;
+    node->getAsString(*temp, -1, xsink);
+    if (*xsink) {
+        temp->deref(xsink);
+        return toBits(QoreValue());
+    }
+    temp->trim();
+    return toBits(temp);
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns absolute value of int or float
+    // Equivalent to: number abs(number n) { return n < 0 ? -n : n; }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    // Handle integers
+    if (arg.getType() == QV_Int) {
+        int64_t val = arg.getAsBigInt();
+        return toBits(val < 0 ? -val : val);
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle floats
+    if (arg.getType() == QV_Float) {
+        double val = arg.getAsFloat();
+        return toBits(val < 0.0 ? -val : val);
+    }
+
+    // Handle number nodes
+    if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
+        return toBits(num->sign() < 0 ? num->negate() : num);
+    }
+
+    // Fallback for other numeric types: try conversion to int then float
+    // This matches the behavior of the abs() builtin
+    return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns first element of list
+    // Equivalent to: any first(list<any> l) { return l.size() ? l[0] : nothing; }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle list
+    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
+        if (list->size() > 0) {
+            QoreValue result = list->retrieveEntry(0);
+            if (result.hasNode()) {
+                result.refSelf();
+            }
+            return toBits(result);
+        }
+    }
+
+    return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* xsink) {
+    // Returns last element of list
+    // Equivalent to: any last(list<any> l) { return l.size() ? l[l.size()-1] : nothing; }
+    QoreValue arg = fromBits(arg_bits);
+
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
+    // Handle list
+    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
+        size_t size = list->size();
+        if (size > 0) {
+            QoreValue result = list->retrieveEntry(size - 1);
+            if (result.hasNode()) {
+                result.refSelf();
+            }
+            return toBits(result);
+        }
+    }
+
+    return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t key_bits, ExceptionSink* xsink) {
+    // Returns true if hash key exists
+    // Equivalent to: bool exists(hash<auto, auto> h, string key) { return h.exists(key); }
+    QoreValue hash_val = fromBits(hash_bits);
+    QoreValue key_val = fromBits(key_bits);
+
+    // Handle null/nothing hash
+    if (!hash_val.hasNode()) {
+        return toBits(false);
+    }
+
+    const AbstractQoreNode* hash_node = hash_val.getInternalNode();
+
+    // Handle hash
+    if (auto* hash = dynamic_cast<const QoreHashNode*>(hash_node)) {
+        // Convert key to string if needed
+        QoreString key_str;
+        if (key_val.hasNode()) {
+            key_val.getInternalNode()->getAsString(key_str, -1, xsink);
+        } else {
+            key_str.concat(key_val.getAsBigInt());
+        }
+        if (*xsink) {
+            return toBits(false);
+        }
+        return toBits(hash->existsKey(key_str.c_str()));
+    }
+
+    return toBits(false);
 }
 
 // --- Direct function call (resolved at parse time, skips AST round-trip) ---

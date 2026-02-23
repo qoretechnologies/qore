@@ -22,6 +22,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT hello world", \testHelloWorld());
         addTestCase("AOT arithmetic", \testArithmetic());
         addTestCase("AOT number literal arithmetic", \testNumberLiteralArithmetic());
+        addTestCase("AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
         addTestCase("AOT string operations", \testStringOps());
@@ -294,6 +295,34 @@ printf(\"%n\\n\", result_div);
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT number literal arithmetic output matches interpreter");
+    }
+
+    testPhase53FastPaths() {
+        string code = "%modern
+# Test Phase 5.3 fast-path builtin functions
+# These use optimized fast-call paths when called from JIT/AOT code
+int result1 = length(\"hello world\");
+printf(\"length: %d\\n\", result1);
+
+string upper = toupper(\"hello world\");
+printf(\"upper: %s\\n\", upper);
+
+string lower = tolower(\"HELLO WORLD\");
+printf(\"lower: %s\\n\", lower);
+
+int len = strlen(\"test string\");
+printf(\"strlen: %d\\n\", len);
+
+# Verify pseudo-method size works
+list l = (1, 2, 3, 4, 5);
+printf(\"list size: %d\\n\", l.size());
+
+hash h = (\"a\": 1, \"b\": 2, \"c\": 3);
+printf(\"hash size: %d\\n\", h.size());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT Phase 5.3 fast-path functions output matches interpreter");
     }
 
     testControlFlow() {
