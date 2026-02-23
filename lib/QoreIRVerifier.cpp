@@ -637,6 +637,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::VrnConstruct:       // Uses QoreIRVrnConstructInstruction, no operands
         case QoreIROpcode::RefForeachInit:     // Uses QoreIRRefForeachInitInstruction with expr field, no operands
             return 0;
+        case QoreIROpcode::HashKeyStore:          // 2 operands: hash container value, new element value
+            return 2;
         case QoreIROpcode::HashKeyAccess:         // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::HashKeyAccessInt:      // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::MapHashKeyValue:      // 1 operand: list (key stored in QoreIRMapHashKeyInstruction)

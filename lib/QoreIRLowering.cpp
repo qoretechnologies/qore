@@ -3485,7 +3485,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3572,7 +3572,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3658,7 +3658,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -3742,7 +3742,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
