@@ -2424,7 +2424,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        // Update thread-local stack with new unique copy
+                        // Invalidate caches (matches StoreLocal pattern)
+                        auto cache_it = locals.find(lv);
+                        if (cache_it != locals.end()) {
+                            cache_it->second.discard(xsink);
+                            locals.erase(cache_it);
+                        }
+                        auto slot_it = func.local_var_slots.find(lv);
+                        if (slot_it != func.local_var_slots.end()
+                                && slot_it->second < locals_slot_cache.size()) {
+                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second] = QoreValue();
+                        }
+                        // Write new_h to thread-local stack
                         assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(nullptr);

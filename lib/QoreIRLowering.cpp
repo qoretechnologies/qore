@@ -1862,9 +1862,9 @@ bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
 }
 
 // Returns true if expr is $hash{"const_key"} where $hash is a local variable.
-// Sets container_var and key_name if true.
+// Sets container_var, key_name, and key_expr if true.
 static bool isConstKeyHashSubscript(const QoreValue& expr,
-        const VarRefNode*& container_var, std::string& key_name) {
+        const VarRefNode*& container_var, std::string& key_name, QoreValue& key_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) return false;
     const auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
@@ -1872,6 +1872,7 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     const QoreValue right = hd->getRight();
     if (!right.hasNode() || right.getType() != NT_STRING) return false;
     key_name = right.get<const QoreStringNode>()->c_str();
+    key_expr = right;  // Also return the QoreValue for lowerExpression
     const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
     if (!vr) return false;
     qore_var_t vtype = vr->getType();
@@ -3516,9 +3517,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
-            return emitHashKeyCompoundOp(container_var, key_name,
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
 
@@ -3611,9 +3613,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
-            return emitHashKeyCompoundOp(container_var, key_name,
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
 
@@ -3705,8 +3708,9 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            return emitHashKeyCompoundOp(container_var, key_name,
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
 
@@ -3796,8 +3800,9 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
-            return emitHashKeyCompoundOp(container_var, key_name,
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
@@ -6061,7 +6066,7 @@ QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue
 // Emit LoadLocal → HashKeyAccess → op → HashKeyStore sequence for $hash{key} OP= val.
 // arith_op must be one of AddAssignInt/Float/Any, SubAssignInt/Float/Any, etc.
 QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
-        const VarRefNode* container_var, const std::string& key_name,
+        const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
     // Load the hash container without refcount inflation (auto_ref=false)
@@ -6075,6 +6080,10 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         hash_val = loadVarRef(container_var, error, "hash-compound-op", full_expr);
     }
     if (!hash_val.isValid()) return QoreIRValue();
+
+    // Lower the key expression (required for consistent AST behavior with top-level evaluation)
+    QoreIRValue key_val = lowerExpression(key_expr, error);
+    if (!key_val.isValid()) return QoreIRValue();
 
     // Load current element value
     auto load_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name.c_str());
