@@ -3518,7 +3518,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -3614,7 +3614,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -3709,7 +3709,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -3801,7 +3801,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
