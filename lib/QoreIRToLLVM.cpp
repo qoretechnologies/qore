@@ -5751,6 +5751,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Result is native int64, NOT nanboxed — no trackResultForCleanup needed
             return true;
         }
+        case QoreIROpcode::HashKeyStore: {
+            const auto* hks_inst = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            std::string err;
+            auto* hash_v = getVal(inst->operands[0].id, err);
+            auto* val_v  = getVal(inst->operands[1].id, err);
+            if (!hash_v || !val_v) {
+                error = err;
+                return false;
+            }
+            llvm::Value* hash_boxed = boxValue(hash_v, inst->operands[0].id);
+            llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
+            llvm::Constant* key_c = builder->CreateGlobalString(hks_inst->key_name, "hks_key");
+
+            if (aot_mode) {
+                // AOT: pass ctx + pre-registered local slot index for COW update
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                        reinterpret_cast<const void*>(hks_inst->container->ref.id));
+                llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
+                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, i64_type, ptr_type}, false));
+                values[inst->result.id] = builder->CreateCall(fn,
+                        {aot_ctx_arg, slot_val, hash_boxed, key_c, val_boxed, xsink_arg});
+            } else {
+                // JIT: pass LocalVar* directly
+                auto var_int = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(hks_inst->container->ref.id));
+                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
+                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_cow",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false));
+                values[inst->result.id] = builder->CreateCall(fn, {var_ptr, hash_boxed, key_c, val_boxed, xsink_arg});
+            }
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::LoadSelfMember: {
             const auto* sminst = static_cast<const QoreIRSelfMemberInstruction*>(inst);
             llvm::Constant* name_const = builder->CreateGlobalString(sminst->member_name,

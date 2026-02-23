@@ -2401,6 +2401,42 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ++ip;
                 break;
             }
+            case QoreIROpcode::HashKeyStore: {
+                auto* hks_inst = static_cast<QoreIRHashKeyStoreInstruction*>(inst);
+                QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
+                QoreValue val      = getIRValue(values, hks_inst->operands[1]);
+                if (hash_val.getType() == NT_HASH) {
+                    QoreHashNode* h = hash_val.get<QoreHashNode>();
+                    if (!h->is_unique()) {
+                        // COW: create unique copy and update local variable slot
+                        QoreHashNode* new_h = h->copy();
+                        const void* lv_ptr = hks_inst->container->ref.id;
+                        auto it = func.local_var_slots.find(reinterpret_cast<const LocalVar*>(lv_ptr));
+                        if (it != func.local_var_slots.end()) {
+                            locals_slot_cache[it->second].discard(nullptr);
+                            locals_slot_cache[it->second] = QoreValue(new_h);
+                        }
+                        h = new_h;
+                    }
+                    h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                } else if (hash_val.getType() == NT_OBJECT) {
+                    const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
+                        hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                if (hks_inst->result.isValid()) {
+                    setValueSlot(values, hks_inst->result.id, val, xsink);
+                }
+                ++ip;
+                break;
+            }
             // Fully specialized hash-key map operations
             case QoreIROpcode::MapHashKeyValue: {
                 const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);

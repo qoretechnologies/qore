@@ -492,13 +492,17 @@ enum class QoreIROpcode : uint16_t {
     MulNumber           = 333,
     DivNumber           = 334,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (335, 336, ...)
+    // Hash element store (335) — write value to hash{const_key} with COW support
+    // operands[0] = hash container, operands[1] = value to store
+    HashKeyStore        = 335,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (336, 337, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::DivNumber);
-static_assert(QORE_IR_MAX_OPCODE == 334, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::HashKeyStore);
+static_assert(QORE_IR_MAX_OPCODE == 335, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
@@ -942,6 +946,20 @@ public:
     }
 
     std::string key_name;
+};
+
+//! Hash element store instruction — write hash{const_key} = value with COW support
+class QoreIRHashKeyStoreInstruction : public QoreIRInstruction {
+public:
+    QoreIRHashKeyStoreInstruction(const VarRefNode* n_container, const char* n_key)
+            : QoreIRInstruction(QoreIROpcode::HashKeyStore),
+              container(n_container), key_name(n_key) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    std::string key_name;
+    // operands[0] = hash value (from LoadLocal on container)
+    // operands[1] = new element value to store
 };
 
 //! Map hash key instruction - fully specialized map over hash key access

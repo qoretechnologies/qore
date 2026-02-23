@@ -1196,6 +1196,56 @@ extern "C" DLLEXPORT int64_t qore_rt_hash_key_access_int(uint64_t hash_val, cons
     return 0;
 }
 
+// JIT path: write hash{key} = value with copy-on-write support.
+// var: container LocalVar* (used to update the local when COW triggers).
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
+        LocalVar* var, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue hv = fromBits(hash_bits);
+    QoreValue val = fromBits(value_bits);
+    if (hv.getType() == NT_HASH) {
+        QoreHashNode* h = hv.get<QoreHashNode>();
+        if (!h->is_unique()) {
+            QoreHashNode* new_h = h->copy();
+            qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
+            if (*xsink) {
+                new_h->deref(nullptr);
+                return toBits(QoreValue());
+            }
+            h = new_h;
+        }
+        h->setKeyValue(key, val.refSelf(), xsink);
+    } else if (hv.getType() == NT_OBJECT) {
+        const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
+    }
+    return value_bits;
+}
+
+// AOT path: same semantics but container is identified by its slot index in QoreAOTContext.
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue hv = fromBits(hash_bits);
+    QoreValue val = fromBits(value_bits);
+    if (hv.getType() == NT_HASH) {
+        QoreHashNode* h = hv.get<QoreHashNode>();
+        if (!h->is_unique()) {
+            QoreHashNode* new_h = h->copy();
+            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
+            if (*xsink) {
+                new_h->deref(nullptr);
+                return toBits(QoreValue());
+            }
+            h = new_h;
+        }
+        h->setKeyValue(key, val.refSelf(), xsink);
+    } else if (hv.getType() == NT_OBJECT) {
+        const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
+    }
+    return value_bits;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() == NT_LIST) {

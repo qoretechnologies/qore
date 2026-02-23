@@ -85,6 +85,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
         addTestCase("AOT v1 source stale detection", \testSourceStaleDetection());
         addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
+        addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
+        addTestCase("AOT hash compound native", \testHashCompoundNative());
         set_return_value(main());
     }
 
@@ -2400,5 +2402,39 @@ printf(\"%d %d\\n\", h.x, h.y);
         # Verify the binary with method calls compiles and executes correctly
         assertFalse(aot_out =~ /error|Error|COMPILE_FAILED/i, "v1 binary with method calls compiles");
         assertTrue(aot_out =~ /len: 5/, "v1 binary with method calls executes correctly");
+    }
+
+    testSubscriptCompoundAssign() {
+        string code = "%modern
+hash<auto> h = {\"a\": 0, \"b\": 100};
+for (int i = 0; i < 10; ++i) {
+    h{\"a\"} += 5;
+    h{\"b\"} -= 3;
+}
+printf(\"%d %d\\n\", h{\"a\"}, h{\"b\"});
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "subscript compound: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "subscript compound output matches interpreter");
+        assertEq(result.run_out, "50 70\n");
+    }
+
+    testHashCompoundNative() {
+        string code = "%modern
+hash<auto> h = {\"i\": 0, \"f\": 1.0};
+h{\"i\"} += 10;
+h{\"i\"} -= 3;
+h{\"i\"} *= 4;
+h{\"f\"} += 2.5;
+h{\"f\"} *= 3.0;
+printf(\"%d %.1f\\n\", h{\"i\"}, h{\"f\"});
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "hash compound native: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "hash compound native output matches interpreter");
     }
 }

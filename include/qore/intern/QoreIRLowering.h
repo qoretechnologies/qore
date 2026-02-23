@@ -206,6 +206,9 @@ private:
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
         const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyCompoundOp(const VarRefNode* container_var, const std::string& key_name,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);

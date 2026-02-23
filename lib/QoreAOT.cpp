@@ -276,6 +276,7 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:   return QORE_AOT_FEAT_HASH_KEY_ACCESS;
+        case QoreIROpcode::HashKeyStore:       return QORE_AOT_FEAT_HASH_KEY_STORE;
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStaticDirect:   return QORE_AOT_FEAT_FAST_CALL;
@@ -2687,6 +2688,38 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     return true;
 }
 
+// Walk a lvalue expression tree and register all inner VarRefNodes in the slot maps.
+// Required so ExprTreeSerializer can serialize subscript lvalue expressions even when the
+// base variable only appears inside a *LValue instruction and not in any LoadLocal/StoreLocal.
+static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    if (!node) return;
+
+    // Handle simple VarRefNode (e.g., $hash, $list)
+    if (auto* vr = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t vtype = vr->getType();
+        if (vtype == VT_LOCAL || vtype == VT_LOCAL_TS || vtype == VT_CLOSURE) {
+            slots.getLocalSlot(reinterpret_cast<const void*>(vr->ref.id));
+        } else if (vtype == VT_GLOBAL) {
+            slots.getGlobalSlot(reinterpret_cast<const void*>(vr->ref.var));
+        }
+        return;
+    }
+
+    // Handle hash dereference (e.g., $obj.member or $hash{key})
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        registerLValueBaseVars(hd->getLeft(), slots);
+        return;
+    }
+
+    // Handle square brackets (e.g., $list[i] or $hash{"key"})
+    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        registerLValueBaseVars(sb->getLeft(), slots);
+        registerLValueBaseVars(sb->getRight(), slots);
+        return;
+    }
+}
+
 void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     // Walk blocks and instructions in deterministic order (same as LLVM lowering)
     // to assign slot indices for each unique process-specific pointer.
@@ -2791,6 +2824,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &lvi->lvalue, sizeof(bits));
                     slots.getExprSlot(bits);
+                    registerLValueBaseVars(lvi->lvalue, slots);  // Pre-register base vars for serialization
                     break;
                 }
                 // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
@@ -2975,6 +3009,12 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     if (ri->regex_case) {
                         slots.getRegexCaseSlot(reinterpret_cast<const void*>(ri->regex_case));
                     }
+                    break;
+                }
+                case QoreIROpcode::HashKeyStore: {
+                    auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
+                    // Register container local slot so COW path can update the variable in AOT mode
+                    slots.getLocalSlot(reinterpret_cast<const void*>(hks->container->ref.id));
                     break;
                 }
                 default:
