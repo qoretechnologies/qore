@@ -146,8 +146,6 @@ bool b = f1.isEqual(f2);
     @ref Qore::Program "Program" containers, it will return @ref False
 */
 bool AbstractReflectionFunction::isEqual(AbstractReflectionFunction[QoreReflectionFunction] func) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionFunction> holder(func, xsink);
-
     return f->f == func->f;
 }
 

@@ -32,7 +32,7 @@ public class RedisHashSetDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "set",
-            "desc": "Redis hash SET API data provider; sets hash field values (HSET, HMSET, HSETNX)",
+            "desc": "Redis hash SET API data provider; sets hash field values (`HSET`, `HMSET`, `HSETNX`)",
             "type": "RedisHashSetDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -151,7 +151,7 @@ public class RedisHashSetRequestDataType inherits DataProvider::HashDataType {
             "nx": {
                 "display_name": "Only If New?",
                 "short_desc": "Set only if field doesn't exist",
-                "desc": "Set to True to only set if the field does not exist (HSETNX)",
+                "desc": "Set to `True` to only set if the field does not exist (`HSETNX`)",
                 "type": SoftBoolOrNothingType,
             },
         };
@@ -178,7 +178,7 @@ public class RedisHashSetResponseDataType inherits DataProvider::HashDataType {
             "created": {
                 "display_name": "Created?",
                 "short_desc": "Field was created",
-                "desc": "True if the field was created (for HSETNX operation)",
+                "desc": "`True` if the field was created (for `HSETNX` operation)",
                 "type": SoftBoolType,
                 "example_value": True,
             },

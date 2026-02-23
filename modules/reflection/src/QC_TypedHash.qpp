@@ -110,8 +110,6 @@ bool b = th1.isEqual(th2);
     @ref Qore::Program "Program" containers, it will return @ref False
 */
 bool TypedHash::isEqual(TypedHash[QoreReflectionTypedHash] th) [flags=CONSTANT] {
-    ReferenceHolder<QoreReflectionTypedHash> holder(th, xsink);
-
     return thd->th == th->th;
 }
 
@@ -432,8 +430,6 @@ bool b = derived.inheritsFrom(base);
     @since %Qore 2.1
 */
 bool TypedHash::inheritsFrom(TypedHash[QoreReflectionTypedHash] parent) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreReflectionTypedHash> holder(parent, xsink);
-
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
@@ -488,13 +484,12 @@ TypedHash th = TypedHash::forName(pgm, "::ENV");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static TypedHash TypedHash::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), pgm), xsink);
+    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), *pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -533,6 +528,5 @@ list<TypedHash> l = TypedHash::findAllRegex(pgm, "^S");
     @return a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match
 */
 static list<TypedHash> TypedHash::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_typedhashes(*pattern, re_opts, pgm, xsink);
+    return find_all_typedhashes(*pattern, re_opts, *pgm, xsink);
 }

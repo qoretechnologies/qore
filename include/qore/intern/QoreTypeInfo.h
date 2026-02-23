@@ -45,7 +45,7 @@
 class LValueHelper;
 class QoreEnumDecl;
 
-DLLLOCAL int64 parse_get_parse_options();
+DLLLOCAL QoreParseOptions parse_get_parse_options();
 
 // adds external types to global type map
 DLLLOCAL void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo);

@@ -165,9 +165,6 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
-        #! @deprecated Ignored; the multiplexed HTTP/2 path is now always used.
-        #! Kept for backwards compatibility only.
-        bool reject_http2_websocket = False;
     }
 
     #! Creates the HTTP controller with an explicit I/O controller
@@ -365,7 +362,7 @@ public class HttpAsyncSocketIoController {
     addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, auto cert = NOTHING,
             auto key = NOTHING, string http_version = HttpVersionMode::Auto,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            bool get_remote_certs = False) {
+            bool get_remote_certs = False, int max_request_body_size = 0) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(!ssl || (cert && key), "SSL mode requires certificate and key");
@@ -388,6 +385,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_verify_flags": ssl_verify_flags,
                 "ssl_accept_all_certs": ssl_accept_all_certs,
                 "get_remote_certs": get_remote_certs,
+                "max_request_body_size": max_request_body_size,
             };
         }
 
@@ -629,6 +627,12 @@ public class HttpAsyncSocketIoController {
                 try { sock.close(); } catch () {}
                 return;
             }
+        }
+
+        # Set body size limits on accepted socket before HTTP/2 session setup
+        if (linfo.max_request_body_size > 0) {
+            sock.setMaxChunkedBodySize(linfo.max_request_body_size);
+            sock.setHttp2MaxRequestBodySize(linfo.max_request_body_size);
         }
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
@@ -1827,14 +1831,33 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     result.input_stream.reassignThread();
                     binary buf;
-                    while (True) {
-                        *binary chunk = result.input_stream.read(65536);
-                        if (!chunk) {
-                            break;
+                    try {
+                        while (True) {
+                            *binary chunk = result.input_stream.read(65536);
+                            if (!chunk) {
+                                break;
+                            }
+                            buf += chunk;
                         }
-                        buf += chunk;
+                        body = buf;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # InputStream read failed (e.g. callback error); send 500 error
+                        # response since no HEADERS have been submitted to nghttp2 yet
+                        log(LoggerLevel::ERROR,
+                            "Error reading InputStream for HTTP/2 stream=%d on %y: %s: %s",
+                            stream_id, uh, ex.err, ex.desc);
+                        try {
+                            cinfo.sock.submitHttp2Response(stream_id, 500,
+                                {"content-type": "text/plain"},
+                                sprintf("Internal Server Error: %s: %s", ex.err, ex.desc));
+                            controllers[cinfo.controller_idx].wake();
+                        } catch (hash<ExceptionInfo> ex2) {
+                            log(LoggerLevel::ERROR,
+                                "Error sending HTTP/2 error response for stream=%d on %y: %s: %s",
+                                stream_id, uh, ex2.err, ex2.desc);
+                        }
+                        return;
                     }
-                    body = buf;
                 }
 
                 # Submit response to nghttp2 session (thread-safe)
@@ -2059,6 +2082,9 @@ hashdecl HttpListenerInfo {
 
     #! True to capture remote (client) certificates
     bool get_remote_certs = False;
+
+    #! Maximum request body size in bytes (0 = unlimited)
+    int max_request_body_size = 0;
 }
 
 #! Internal hashdecl for active connection info

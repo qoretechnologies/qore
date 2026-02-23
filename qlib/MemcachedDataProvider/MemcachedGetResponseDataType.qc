@@ -34,7 +34,7 @@ public class MemcachedGetResponseDataType inherits DataProvider::HashDataType {
                 "type": BoolType,
                 "display_name": "Found",
                 "short_desc": "Key was found",
-                "desc": "True if the key was found in the cache",
+                "desc": "`True` if the key was found in the cache",
                 "example_value": True,
             },
             "key": {
@@ -48,7 +48,7 @@ public class MemcachedGetResponseDataType inherits DataProvider::HashDataType {
                 "type": DataOrNothingType,
                 "display_name": "Value",
                 "short_desc": "Cached value",
-                "desc": "The cached value, or NOTHING if not found",
+                "desc": "The cached value, or `NOTHING` if not found",
             },
             "flags": {
                 "type": IntOrNothingType,

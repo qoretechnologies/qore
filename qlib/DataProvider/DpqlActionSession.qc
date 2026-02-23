@@ -255,8 +255,12 @@ public class DpqlActionSession {
         if (!use_fields) {
             throw "NO-CONTEXT", "Context must be set before completion";
         }
+        if (exists args.template_context && args.template_context.typeCode() != NT_HASH) {
+            throw "INVALID-PARAMETER", sprintf("Parameter 'template_context' must be a hash, got %s",
+                args.template_context.type());
+        }
         list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(text, position, use_fields,
-            expressions);
+            expressions, args.template_context);
         return {
             "completions": items,
         };
@@ -283,7 +287,7 @@ public class DpqlActionSession {
         }
         hash<DataProviderExpression> dp_exp;
         try {
-            dp_exp = cast<hash<DataProviderExpression>>(args.expression);
+            dp_exp = DataProvider::deserializeExpressionFromJson(args.expression);
         } catch (hash<ExceptionInfo> ex) {
             throw "INVALID-PARAMETER", sprintf("Invalid 'expression' value: %s", ex.desc);
         }
@@ -368,6 +372,7 @@ public class DpqlActionSession {
             case DPQL_TOK_LPAREN: return "punctuation";
             case DPQL_TOK_RPAREN: return "punctuation";
             case DPQL_TOK_COMMA: return "punctuation";
+            case DPQL_TOK_TEMPLATE: return "variable";
             case DPQL_TOK_ERROR: return "error";
         }
         return "identifier";

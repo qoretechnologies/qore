@@ -61,7 +61,7 @@ public:
     const AbstractStatement* stmt = nullptr;
 
     //! Current parse options
-    int64_t po = 0;
+    QoreParseOptions po;
 
     //! Thread-local program data (may be nullptr during initialization)
     ThreadLocalProgramData* tlpd = nullptr;
@@ -187,7 +187,7 @@ public:
         const QoreProgramLocation* new_loc,
         const AbstractStatement* new_stmt = nullptr,
         bool has_po = false,
-        int64_t new_po = 0,
+        const QoreParseOptions& new_po = QoreParseOptions(),
         ExceptionSink* xsink = nullptr);
     DLLLOCAL ~RuntimeConfigLocationHelper();
 
@@ -195,10 +195,10 @@ private:
     RuntimeConfig& rc;
     const QoreProgramLocation* old_loc;
     const AbstractStatement* old_stmt;
-    int64 old_po;
+    QoreParseOptions old_po;
     const QoreProgramLocation* tls_old_loc;
     const AbstractStatement* tls_old_stmt;
-    int64 tls_old_po;
+    QoreParseOptions tls_old_po;
     bool restore_po;
     bool used_swap;
 };

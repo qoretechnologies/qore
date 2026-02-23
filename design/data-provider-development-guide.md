@@ -147,7 +147,12 @@ DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
     "name": AppName,
     "display_name": "My Service",
     "short_desc": "Integration with My Service",
-    "desc": "Full description...",
+    "desc": "Provides integration with [My Service](https://myservice.com) for managing "
+        "resources, contacts, and billing.\n\n"
+        "Supported operations:\n"
+        "- **Resources**: create, update, delete, and list\n"
+        "- **Contacts**: create, search, and manage\n"
+        "- **Billing**: invoice creation and payment tracking",
     "scheme": "myservice",
     "logo": MyServiceLogo,
     "logo_file_name": "myservice-logo.svg",
@@ -155,6 +160,62 @@ DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
     "groups": (AppGroup::Finance,),  // Use enum, not strings!
 });
 ```
+
+### Description Formatting
+
+- **`short_desc`**: Plain text, under 80 characters, single sentence — no markdown
+- **`desc`**: Markdown-formatted text rendered in the UI. Use:
+  - Backticks for code/field references: `` `field_name` ``, `` `True` ``, `` `False` ``, `` `NOTHING` ``
+  - Backticks for numeric values with semantic meaning: `` `0` ``–`` `255` ``, `` `-100` ``–`` `100` ``
+  - Backticks for URL schemes: `` `http://` ``, `` `mcp://` ``
+  - Backticks for format/type values: `` `xlsx` ``, `` `csv` ``, `` `json` ``
+  - **Bold** for emphasis on important caveats: `**Note**:`, `**Important**:`
+  - Bullet lists for enumerating options or capabilities
+  - `[links](url)` for documentation references
+  - `\n\n` for paragraph breaks in multi-paragraph descriptions
+  - Capital letter at the start of every sentence
+
+Short descriptions (1-2 simple sentences) don't need markdown — focus formatting effort on longer, complex descriptions.
+
+#### Long Descriptions (>500 chars)
+
+Descriptions for complex options (draw commands, field format specifications, multi-feature configurations) should be structured with bold section headers and bullet lists:
+
+```qore
+"desc": "A hash describing the CSV fields. Keys are field names. Values are "
+    "[field types](url) or a hash with the following keys:\n"
+    "- `type`: a [field type string](url)\n"
+    "- `format`: for `date` types, a [date format](url); for `int`, `float`, or "
+        "`number` types, a number format string\n"
+    "- `timezone`: for `date` types only; overrides any default time zone\n\n"
+    "**Note**: setting this value also sets `headers` if not set automatically.",
+```
+
+For very long descriptions with many items (e.g., 20+ draw commands), group related items under bold section headers:
+
+```qore
+"desc": "List of draw command hashes. Each command has an `op` key.\n\n"
+    "**Color and Style**:\n"
+    "- `set_source_rgb` (r, g, b) — color values 0.0–1.0\n"
+    "- `set_source_rgba` (r, g, b, a)\n\n"
+    "**Paths**:\n"
+    "- `move_to` (x, y)\n"
+    "- `line_to` (x, y)\n\n"
+    "**Drawing**:\n"
+    "- `stroke` — draw the current path outline\n"
+    "- `fill` — fill the current path",
+```
+
+#### Common Description Mistakes
+
+| Mistake | Wrong | Correct |
+|---------|-------|---------|
+| Bare boolean | `If True then...` | `` If `True` then... `` |
+| Bare nothing | `returns nothing` | `` returns `NOTHING` `` |
+| Single quotes for code | `'xlsx' format` | `` `xlsx` format `` |
+| Lowercase sentence start | `if true then...` | `If true then...` |
+| Missing opening backtick | `` field_name` `` | `` `field_name` `` |
+| Bare field reference | `see ssl_key_path` | `` see `ssl_key_path` `` |
 
 ### Base Class Pattern
 
@@ -974,3 +1035,12 @@ Every `registerAction()` call **must** include `options` (generated via `getActi
 
 ### 13. Type classes outside namespace block
 Type classes declared in a `.qc` file **must** be inside the `public namespace ModuleName { ... }` block. If declared outside it (even in the same file), their class constants (e.g., `Fields`) cannot be resolved via `ClassName::ConstantName` from the `.qm` file, causing `PARSE-EXCEPTION: cannot resolve bareword` errors at module load time. See [Request Type Fields Pattern](#request-type-fields-pattern).
+
+### 14. Description formatting issues
+`desc` fields are rendered as markdown in the UI. Common mistakes that degrade readability:
+- **Bare `True`/`False`/`NOTHING`**: Always wrap in backticks — `` `True` ``, `` `False` ``, `` `NOTHING` ``
+- **Bare field/option names**: Use backticks for cross-references — `` `ssl_key_path` ``, `` `header_names` ``
+- **Single quotes for code values**: Use backticks not single quotes — `` `xlsx` `` not `'xlsx'`
+- **Lowercase sentence starts**: Every sentence in `desc` must start with a capital letter
+- **Wall-of-text long descriptions**: Descriptions >500 chars should use bold section headers (`**Section**:`) and bullet lists (`- `item``) — see [Description Formatting](#description-formatting)
+- **Unclosed backticks**: Always verify backtick pairs are matched; a missing opening or closing backtick breaks markdown rendering for the rest of the description

@@ -1430,16 +1430,15 @@ httpclient.send(output_stream, data, "POST", "/path", {"Content-Type": "applicat
     @since %Qore 0.8.13
  */
 nothing HTTPClient::send(Qore::OutputStream[OutputStream] os, *data body, string method, *string path, *hash<auto> headers, timeout timeout_ms = 0, softbool getbody = False, *reference<hash<auto>> info, *code rcb) {
-    SimpleRefHolder<OutputStream> osHolder(os);
     OptHashRefHelper ohrh(info, xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
         client->sendWithOutputStream(method->c_str(), pstr, headers, *static_cast<const QoreStringNode*>(body), getbody,
-            *ohrh, timeout_ms, rcb, self, os, xsink);
+            *ohrh, timeout_ms, rcb, self, *os, xsink);
     } else {
         const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
         client->sendWithOutputStream(method->c_str(), pstr, headers, b ? b->getPtr() : nullptr, b ? b->size() : 0,
-            getbody, *ohrh, timeout_ms, rcb, self, os, xsink);
+            getbody, *ohrh, timeout_ms, rcb, self, *os, xsink);
     }
 }
 
@@ -1513,15 +1512,13 @@ httpclient.sendChunked(output_stream, input_stream, "POST", "/path", {"Content-T
 nothing HTTPClient::sendChunked(Qore::OutputStream[OutputStream] os, Qore::InputStream[InputStream] is, string method,
         int max_chunk_size = 4096, *string path, *hash<auto> headers, timeout timeout_ms = 0,
         softbool getbody = False, *reference<hash<auto>> info, *code rcb, *code tcb) {
-    SimpleRefHolder<OutputStream> osHolder(os);
-    SimpleRefHolder<InputStream> isHolder(is);
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
         return QoreValue();
     }
     OptHashRefHelper ohrh(info, xsink);
-    client->sendChunked(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers, getbody, *ohrh, timeout_ms, rcb, self, os, is, (size_t)max_chunk_size, tcb, xsink);
+    client->sendChunked(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers, getbody, *ohrh, timeout_ms, rcb, self, *os, *is, (size_t)max_chunk_size, tcb, xsink);
 }
 
 //! Sends an HTTP request with the specified method and chunked message body as given by a send callback; headers and any body received are returned through a receive callback
@@ -2141,13 +2138,12 @@ httpclient.setEventQueue(queue);
     @since %Qore 0.9.4 added the \a arg and \a with_data options
 */
 nothing HTTPClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the HttpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    client->setEventQueue(xsink, q.release(), arg.refSelf(), with_data);
+    client->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
 }
 
 //! Sets the connect timeout in milliseconds
@@ -2482,13 +2478,12 @@ httpclient.setWarningQueue(5000, 5000, queue, "socket-1");
       not result in a warning
 */
 nothing HTTPClient::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
-    ReferenceHolder<Queue> q(queue, xsink);
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    client->setWarningQueue(xsink, warning_ms, warning_bs, q.release(), arg.refSelf(), min_ms);
+    client->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket

@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -598,7 +598,6 @@ on_exit set_thread_tz(tz);
     @since %Qore 0.8.5
  */
 nothing set_thread_tz(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
-    ReferenceHolder<TimeZoneData> holder(zone, xsink);
     set_thread_tz(zone->get());
 }
 
@@ -665,8 +664,7 @@ set_thread_resource(obj);
     @since %Qore 0.8.12
  */
 nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
-    ReferenceHolder<AbstractQoreThreadResource> holder(resource, xsink);
-    set_thread_resource(resource);
+    set_thread_resource(*resource);
 }
 
 //! removes a thread resource from the current thread
@@ -690,8 +688,7 @@ remove_thread_resource(obj);
     @since %Qore 0.8.12
  */
 bool remove_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
-    ReferenceHolder<AbstractQoreThreadResource> holder(resource, xsink);
-    return remove_thread_resource(resource) ? false : true;
+    return remove_thread_resource(*resource) ? false : true;
 }
 
 //! sets a callable thread resource for the current thread with an optional argument
@@ -894,5 +891,173 @@ nothing set_thread_name(string name) [dom=THREAD_CONTROL] {
 */
 bool active_exception() [dom=PROCESS] {
     return q_active_exception();
+}
+
+//! Requests cooperative cancellation of a thread
+/** @param tid the thread ID to cancel; must be a positive integer (TID 0 and negative values
+    are invalid and will throw an exception)
+    @param reason optional reason string included in the \c THREAD-CANCELLED exception message
+
+    Cancellation is cooperative: this function sets a flag on the target thread, and the thread
+    will receive a \c THREAD-CANCELLED exception at the next cancellation check point. The
+    following operations are cancellation check points:
+    - Loop iterations: \c while, \c for, \c do-while, \c foreach
+    - Sleep functions: sleep(), usleep()
+    - Threading primitives: Queue::get(), Queue::pop(), Counter::waitForZero(), Gate::enter(),
+      Mutex::lock(), RWLock::readLock(), RWLock::writeLock(), Condition::wait()
+    - Auto-lock constructors: AutoLock, AutoGate, AutoReadLock, AutoWriteLock
+    - Stream I/O: PipeInputStream::read(), PipeOutputStream::write()
+    - File operations: File::lockBlocking()
+    - Backquote (system()) operations
+
+    A thread cannot cancel itself; use \c throw instead. Calling this function with the current
+    thread's TID or with TID <= 0 will throw a \c THREAD-CANCEL-ERROR exception.
+
+    If the target TID does not correspond to an active thread, the function returns @ref False
+    without raising an exception.
+
+    @par Cancellation Guarantees
+    The cancellation flag remains set until explicitly cleared with clear_thread_cancel().
+    This means that even if a thread catches the \c THREAD-CANCELLED exception, the next
+    cancellation check point (e.g., the next loop iteration) will throw again. A thread
+    \b cannot avoid cancellation by simply catching the exception in a try/catch block
+    inside a loop, because the loop's own cancellation check fires outside the try/catch
+    scope at the loop boundary.
+
+    The only way for a thread to continue after cancellation is to call
+    clear_thread_cancel(), which requires the \c THREAD_CONTROL functional domain.
+    Sandboxed programs created with @ref Qore::PO_NO_THREAD_CONTROL cannot call this
+    function, making cancellation effectively unavoidable for sandboxed code.
+
+    Straight-line code without any cancellation check points (no loops, no sleep, no I/O,
+    no blocking calls) will not be interrupted, but such code is inherently finite and
+    will complete on its own.
+
+    @return @ref True if the cancellation request was delivered, @ref False if the thread
+    was not found or not active
+
+    @throw THREAD-CANCEL-ERROR cannot cancel the current thread (use \c throw instead);
+    thrown also when \a tid <= 0
+
+    @par Example:
+    @code{.py}
+    int tid = background long_running_task();
+    sleep(5s);
+    cancel_thread(tid, "timeout exceeded");
+    @endcode
+
+    @par Example: Cancel with reason and timeout
+    @code{.py}
+    int tid = background process_data(dataset);
+    # Wait up to 30 seconds, then cancel
+    if (!done.waitForZero(30000)) {
+        cancel_thread(tid, "processing timeout after 30s");
+    }
+    @endcode
+
+    @since %Qore 2.2
+
+    @see thread_cancelled()
+    @see clear_thread_cancel()
+*/
+bool cancel_thread(int tid, *string reason) [dom=THREAD_CONTROL] {
+    if (tid == q_gettid()) {
+        return xsink->raiseException("THREAD-CANCEL-ERROR",
+            "cannot cancel the current thread; use 'throw' instead"), false;
+    }
+    if (tid <= 0) {
+        return xsink->raiseException("THREAD-CANCEL-ERROR",
+            "cannot cancel TID %d", tid), false;
+    }
+    int rc = qore_cancel_thread(tid, reason ? reason->c_str() : nullptr);
+    return rc == 0;
+}
+
+//! Returns @ref True if cancellation has been requested for the current thread
+/** This is a lightweight check (one atomic load) that does not raise an exception.
+    It allows code to poll for cancellation and perform custom cleanup before
+    acknowledging the cancellation request.
+
+    @note The cancellation flag remains set until explicitly cleared with
+    clear_thread_cancel() or the thread exits. After catching a \c THREAD-CANCELLED
+    exception, the flag is still set, so any subsequent cancellation check point
+    will throw again unless clear_thread_cancel() is called first.
+
+    @return @ref True if cancellation has been requested, @ref False otherwise
+
+    @par Example: Manual cancellation polling
+    @code{.py}
+    while (processing) {
+        if (thread_cancelled()) {
+            cleanup();
+            throw "THREAD-CANCELLED", "shutting down";
+        }
+        do_work();
+    }
+    @endcode
+
+    @par Example: Check after catching exception
+    @code{.py}
+    try {
+        queue.get();
+    } catch (hash<auto> ex) {
+        if (ex.err == "THREAD-CANCELLED") {
+            # flag is still set here
+            assertTrue(thread_cancelled());
+            clear_thread_cancel();
+            assertFalse(thread_cancelled());
+        }
+    }
+    @endcode
+
+    @since %Qore 2.2
+
+    @see cancel_thread()
+    @see clear_thread_cancel()
+*/
+bool thread_cancelled() [dom=THREAD_INFO;flags=CONSTANT] {
+    return qore_is_thread_cancel_requested();
+}
+
+//! Clears the cancellation flag for the current thread
+/** Call this after catching a \c THREAD-CANCELLED exception if the thread
+    should continue running (e.g., to complete cleanup operations that involve
+    cancellation check points without re-triggering the exception).
+
+    This function is safe to call even if no cancellation is pending (it is a no-op
+    in that case).
+
+    @note After clearing, the thread can be cancelled again by another call to
+    cancel_thread(). The flag can be set and cleared multiple times during a
+    thread's lifetime.
+
+    @par Security Note
+    This function requires the \c THREAD_CONTROL functional domain. Without it
+    (e.g., in programs created with @ref Qore::PO_NO_THREAD_CONTROL), the cancellation
+    flag cannot be cleared, making cancellation effectively unavoidable for sandboxed code.
+    This is intentional: it ensures that untrusted code cannot ignore cancellation requests
+    from the host environment.
+
+    @par Example: Cleanup after cancellation
+    @code{.py}
+    try {
+        do_work();
+    } catch (hash<auto> ex) {
+        if (ex.err == "THREAD-CANCELLED") {
+            clear_thread_cancel();
+            # perform cleanup without being re-cancelled at check points
+            save_partial_results();
+            close_connections();
+        }
+    }
+    @endcode
+
+    @since %Qore 2.2
+
+    @see cancel_thread()
+    @see thread_cancelled()
+*/
+nothing clear_thread_cancel() [dom=THREAD_CONTROL] {
+    qore_clear_thread_cancel();
 }
 ///@}

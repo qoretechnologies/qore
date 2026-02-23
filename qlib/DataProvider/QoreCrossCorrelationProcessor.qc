@@ -53,7 +53,7 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
                 "display_name": "Second Field",
                 "short_desc": "Second numeric field name",
                 "desc": "The second numeric field; positive lag means this field is "
-                    "delayed relative to the first field",
+                    "delayed relative to `field_x`",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
@@ -68,8 +68,8 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
                 "display_name": "Maximum Lag",
                 "short_desc": "Maximum lag to compute (0 = auto)",
                 "desc": "The maximum number of time steps to shift one field relative to "
-                    "the other; set to 0 to use window_size / 4 automatically; "
-                    "default: 0 (auto)",
+                    "the other; set to `0` to use `window_size / 4` automatically; "
+                    "default: `0` (auto)",
                 "type": AbstractDataProviderTypeMap."*int",
             },
         };

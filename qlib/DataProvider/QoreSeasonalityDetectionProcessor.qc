@@ -42,17 +42,17 @@ public class QoreSeasonalityDetectionProcessor inherits AbstractAnalyticsProcess
             "max_period": <DataProviderOptionInfo>{
                 "display_name": "Maximum Period",
                 "short_desc": "Maximum seasonal period to search for",
-                "desc": "The maximum period (in records) to search for; set to 0 to "
-                    "use window_size / 3 automatically; the window size should be at least "
-                    "3 times the expected maximum period; default: 0 (auto)",
+                "desc": "The maximum period (in records) to search for; set to `0` to "
+                    "use `window_size / 3` automatically; the window size should be at least "
+                    "3 times the expected maximum period; default: `0` (auto)",
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "min_correlation": <DataProviderOptionInfo>{
                 "display_name": "Minimum Correlation",
                 "short_desc": "Minimum autocorrelation to report as significant",
-                "desc": "The minimum autocorrelation value (0-1) at which a period is "
+                "desc": "The minimum autocorrelation value (`0`-`1`) at which a period is "
                     "considered significant; lower values detect weaker patterns; "
-                    "default: 0.3",
+                    "default: `0.3`",
                 "type": AbstractDataProviderTypeMap."*float",
             },
         };

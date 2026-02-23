@@ -56,7 +56,6 @@ LoggerEvent::constructor(object logger, LoggerLevel[QoreLoggerLevel] level, stri
         *list<auto> msg_args, *hash<CallStackInfo> location_info, *int thread_id, *date time_stamp,
         *hash<ExceptionInfo> throwable) {
     //ReferenceHolder<AbstractPrivateData> hlogger(logger, xsink);
-    ReferenceHolder<AbstractPrivateData> hlevel(level, xsink);
 
     if (!thread_id) {
         thread_id = q_gettid();
@@ -74,7 +73,7 @@ LoggerEvent::constructor(object logger, LoggerLevel[QoreLoggerLevel] level, stri
     assert(v);
     assert(v->getType() == NT_STRING);
 
-    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(logger, v->get<const QoreStringNode>(), obj_level, level,
+    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(logger, v->get<const QoreStringNode>(), obj_level, *level,
         message, msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable));
 
     self->setValue("logger", logger->objectRefSelf(), nullptr);
@@ -95,8 +94,6 @@ LoggerEvent::constructor(object logger, LoggerLevel[QoreLoggerLevel] level, stri
 LoggerEvent::constructor(string fqcn, softstring category, LoggerLevel[QoreLoggerLevel] level, string message,
         *list<auto> msg_args, *hash<CallStackInfo> location_info, *int thread_id, *date time_stamp,
         *hash<ExceptionInfo> throwable) {
-    ReferenceHolder<AbstractPrivateData> hlevel(level, xsink);
-
     if (!thread_id) {
         thread_id = q_gettid();
     }
@@ -106,7 +103,7 @@ LoggerEvent::constructor(string fqcn, softstring category, LoggerLevel[QoreLogge
         ts = DateTimeNode::makeNow();
     }
 
-    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(fqcn->stringRefSelf(), category, obj_level, level, message,
+    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(fqcn->stringRefSelf(), category, obj_level, *level, message,
         msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable));
 }
 

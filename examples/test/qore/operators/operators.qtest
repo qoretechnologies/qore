@@ -34,6 +34,11 @@ class DataTest {
     }
 }
 
+# classes for the instanceof injection isolation test
+class InjBaseClass {}
+class InjChildClass inherits InjBaseClass {}
+class InjProxyClass inherits InjBaseClass {}
+
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("operators", "1.0", \ARGV) {
         addTestCase("minor hash test", \minusHashTest());
@@ -61,6 +66,7 @@ class Test inherits QUnit::Test {
         addTestCase("minus", \minus());
         addTestCase("range test", \rangeAndSlice());
         addTestCase("push & += tests", \pushPlusEqualsTests());
+        addTestCase("instanceof injection isolation", \instanceofInjectionIsolation());
 
         set_return_value(main());
     }
@@ -1469,5 +1475,35 @@ class Test inherits QUnit::Test {
             assertThrows("PARSE-TYPE-ERROR", "slice", \p.parse(), ("sub t() { binary bin = <0102>; auto v = bin[0..1,(0,1)]; }", ""));
             assertThrows("PARSE-TYPE-ERROR", "range", \p.parse(), ("sub t() { binary bin = <0102>; auto v = bin[0..(0,1)]; }", ""));
         }
+    }
+
+    instanceofInjectionIsolation() {
+        # Test that importClass with inject=True does NOT leak injectedClass to the source program
+        # (bug: source class's injectedClass was mutated, causing instanceof to return True in all programs)
+
+        # Create a proxy object in the main program
+        InjProxyClass proxy();
+
+        # Verify: proxy is NOT an instanceof InjChildClass in the main program
+        assertFalse(proxy instanceof InjChildClass,
+            "proxy should not be instanceof InjChildClass before injection");
+
+        # Create a child program and import InjProxyClass as InjChildClass with inject=True
+        # (importClass imports from the calling program into the child program)
+        Program child(PO_NEW_STYLE | PO_ALLOW_INJECTION);
+        child.importClass("InjProxyClass", "InjChildClass", True);
+        child.parse("
+            bool sub check_instanceof_child(auto obj) { return obj instanceof InjChildClass; }
+        ", "child");
+        child.run();
+
+        # KEY TEST: proxy should STILL NOT be instanceof InjChildClass in the main program
+        # (before the fix, this returned True because the source class was mutated)
+        assertFalse(proxy instanceof InjChildClass,
+            "proxy must not be instanceof InjChildClass in source program after injection");
+
+        # Verify: injection works in the child program (proxy IS instanceof InjChildClass there)
+        assertTrue(child.callFunction("check_instanceof_child", proxy),
+            "proxy should be instanceof InjChildClass in child program via injection");
     }
 }

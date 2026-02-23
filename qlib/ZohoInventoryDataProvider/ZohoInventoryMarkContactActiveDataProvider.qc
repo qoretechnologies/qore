@@ -60,7 +60,7 @@ public class ZohoInventoryMarkContactActiveDataProvider inherits ZohoInventoryDa
             "active": {
                 "display_name": "Active",
                 "type": SoftBoolType,
-                "desc": "If True, marks the contact as active; if False, marks as inactive",
+                "desc": "If `True`, marks the contact as active; if `False`, marks as inactive",
                 "required": True,
             },
         });

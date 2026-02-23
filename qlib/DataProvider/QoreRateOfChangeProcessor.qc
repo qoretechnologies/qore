@@ -44,7 +44,7 @@ public class QoreRateOfChangeProcessor inherits AbstractAnalyticsProcessor {
                 "short_desc": "Apply simple moving average smoothing before differentiation",
                 "desc": "When enabled, applies a simple moving average over the window "
                     "before computing derivatives, reducing noise in the rate of change; "
-                    "default: True",
+                    "default: `True`",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };

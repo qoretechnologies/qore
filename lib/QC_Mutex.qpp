@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -115,27 +115,22 @@ mutex.lock();
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 nothing Mutex::lock() {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
-                return QoreValue();
-            }
-            // Try to acquire lock with timeout
-            int rc = m->grab(xsink, poll_ms);
-            if (*xsink) {
-                return QoreValue();  // Error occurred
-            }
-            if (rc == 0) {
-                return QoreValue();  // Lock acquired
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "mutex lock")) {
+            return QoreValue();
         }
+        // Try to acquire lock with timeout
+        int rc = m->grab(xsink, poll_ms);
+        if (*xsink) {
+            return QoreValue();  // Error occurred
+        }
+        if (rc == 0) {
+            return QoreValue();  // Lock acquired
+        }
+        // rc != 0 means timeout, loop and check again
     }
-    m->grab(xsink);
 }
 
 //! Locks the Mutex object; blocks if the lock is already held
@@ -160,45 +155,40 @@ if (mutex.lock(1250ms))
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int Mutex::lock(timeout timeout_ms) {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        bool infinite = (timeout_ms <= 0);
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    int64 remaining = timeout_ms;
+    bool infinite = (timeout_ms <= 0);
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for lock");
-                return -1;
-            }
+    while (true) {
+        if (qore_check_cancel(xsink, "mutex lock")) {
+            return -1;
+        }
 
-            // Calculate this iteration's timeout
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
+        // Calculate this iteration's timeout
+        int this_timeout;
+        if (infinite) {
+            this_timeout = poll_ms;
+        } else {
+            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+        }
 
-            int rc = m->grab(xsink, this_timeout);
-            if (*xsink) {
-                return -1;  // Error occurred
-            }
-            if (rc == 0) {
-                return 0;  // Lock acquired
-            }
+        int rc = m->grab(xsink, this_timeout);
+        if (*xsink) {
+            return -1;  // Error occurred
+        }
+        if (rc == 0) {
+            return 0;  // Lock acquired
+        }
 
-            // Timeout on this iteration
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    return -1;  // Overall timeout exceeded
-                }
+        // Timeout on this iteration
+        if (!infinite) {
+            remaining -= this_timeout;
+            if (remaining <= 0) {
+                return -1;  // Overall timeout exceeded
             }
         }
     }
-    return m->grab(xsink, timeout_ms);
 }
 
 //! Acquires the lock only if it is not already held; returns 0 for success (lock acquired) or -1 if the call would block

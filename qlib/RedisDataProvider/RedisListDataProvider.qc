@@ -30,7 +30,7 @@ public class RedisListDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "lists",
-            "desc": "Redis list data provider; provides access to list operations (LPUSH, RPUSH, LPOP, RPOP, LRANGE, etc.)",
+            "desc": "Redis list data provider; provides access to list operations (`LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LRANGE`, etc.)",
             "type": "RedisListDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_children": True,

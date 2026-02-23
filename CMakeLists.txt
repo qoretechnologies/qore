@@ -217,6 +217,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_TermIOS.qpp
     lib/QC_TimeZone.qpp
     lib/QC_TreeMap.qpp
+    lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
     lib/QC_ThreadPool.qpp
@@ -731,6 +732,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreHTTPClient.cpp
     lib/QoreHttpClientObject.cpp
     lib/ParseOptionMap.cpp
+    lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
     lib/ReferenceArgumentHelper.cpp
@@ -1010,6 +1012,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHTTPClient.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ParseOptionMap.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
@@ -1195,6 +1198,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSmartLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_TimeZone.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_TreeMap.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_QoreParseOptions.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractThreadResource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_InputStream.cpp\"
@@ -1642,6 +1646,7 @@ qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestCl
 qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/TableauRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/BigMLRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -1688,6 +1693,7 @@ qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProv
 qore_user_module("qlib/SquareDataProvider" "SquareRestClient;RestClient;DataProvider" "square-logo.svg")
 qore_user_module("qlib/ChargebeeDataProvider" "ChargebeeRestClient;RestClient;DataProvider" "chargebee-logo.svg")
 qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
+qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/BigMLDataProvider" "BigMLRestClient;RestClient;DataProvider" "bigml-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")

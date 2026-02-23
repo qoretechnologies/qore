@@ -1,0 +1,697 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for HTTP request body size enforcement:
+    - Content-Length pre-check (HTTP/1.1)
+    - Chunked transfer encoding body size limit (HTTP/1.1)
+    - HTTP/2 DATA frame body size limit
+    - WebSocket message size limit
+    - Server-level and listener-level configuration
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+
+%exec-class HttpServerBodySizeLimitTest
+
+#! Echo handler: returns request body as-is
+class BodyEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (body) {
+            return makeResponse(200, body, {"Content-Type": "application/octet-stream"});
+        }
+        return makeResponse(200, "no-body", {"Content-Type": "text/plain"});
+    }
+}
+
+#! WebSocket connection that echoes messages back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+#! WebSocket handler for size limit tests
+class SizeLimitWsHandler inherits WebSocketHandler {
+    public {
+        Queue errs();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        errs.push(vsprintf(fmt, argv));
+        logArgs(LoggerLevel::ERROR, fmt, argv);
+    }
+}
+
+class HttpServerBodySizeLimitTest inherits QUnit::Test {
+    private {
+        # Sync server with body size limit
+        HttpServer mSyncServer;
+        int mSyncPort;
+        string mSyncUrl;
+
+        # Async server with body size limit
+        HttpServer mAsyncServer;
+        int mAsyncPort;
+        string mAsyncUrl;
+
+        # Async HTTPS server for HTTP/2 tests
+        int mAsyncSslPort;
+        string mAsyncSslUrl;
+
+        # WebSocket handler with message size limit
+        SizeLimitWsHandler mWsHandler;
+
+        # Server with no body size limit (for comparison)
+        HttpServer mUnlimitedServer;
+        int mUnlimitedPort;
+        string mUnlimitedUrl;
+
+        Logger mLogger;
+
+        # Body size limit for tests (1024 bytes)
+        const BodySizeLimit = 1024;
+
+        # WebSocket message size limit (512 bytes)
+        const WsMessageSizeLimit = 512;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerBodySizeLimitTest", "1.0") {
+        # HTTP/1.1 sync mode tests
+        addTestCase("sync: Content-Length under limit succeeds",
+            \syncContentLengthUnderLimitTest());
+        addTestCase("sync: Content-Length at limit succeeds",
+            \syncContentLengthAtLimitTest());
+        addTestCase("sync: Content-Length over limit returns 413",
+            \syncContentLengthOverLimitTest());
+        addTestCase("sync: chunked body over limit returns error",
+            \syncChunkedBodyOverLimitTest());
+        addTestCase("sync: zero limit means unlimited",
+            \syncZeroLimitUnlimitedTest());
+        addTestCase("sync: different HTTP methods enforce limit",
+            \syncDifferentMethodsTest());
+
+        # HTTP/1.1 async mode tests
+        addTestCase("async: Content-Length over limit returns 413",
+            \asyncContentLengthOverLimitTest());
+        addTestCase("async: Content-Length under limit succeeds",
+            \asyncContentLengthUnderLimitTest());
+        addTestCase("async: chunked body over limit returns error",
+            \asyncChunkedBodyOverLimitTest());
+
+        # HTTP/2 async tests
+        addTestCase("async: HTTP/2 body over limit rejected",
+            \asyncHttp2BodyOverLimitTest());
+        addTestCase("async: HTTP/2 body under limit succeeds",
+            \asyncHttp2BodyUnderLimitTest());
+
+        # Server-level configuration tests
+        addTestCase("server setMaxRequestBodySize",
+            \serverSetMaxRequestBodySizeTest());
+
+        # WebSocket message size limit tests
+        addTestCase("WebSocket: message under limit succeeds",
+            \wsMessageUnderLimitTest());
+        addTestCase("WebSocket: message over limit closes connection",
+            \wsMessageOverLimitTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("body-size-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        # Sync server with body size limit
+        hash<HttpServerOptionInfo> sync_opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": False,
+            "max_request_body_size": BodySizeLimit,
+        };
+        mSyncServer = new HttpServer(sync_opts);
+        mSyncServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
+        mSyncServer.setDefaultHandler("echo", new BodyEchoHandler());
+        mSyncPort = mSyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mSyncUrl = "http://localhost:" + mSyncPort;
+
+        # Async server with body size limit
+        hash<HttpServerOptionInfo> async_opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+            "max_request_body_size": BodySizeLimit,
+        };
+        mAsyncServer = new HttpServer(async_opts);
+        mAsyncServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
+        mAsyncServer.setDefaultHandler("echo", new BodyEchoHandler());
+        mAsyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mAsyncUrl = "http://localhost:" + mAsyncPort;
+
+        # Add HTTPS listener for HTTP/2 testing
+        mAsyncSslPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mAsyncSslUrl = "https://localhost:" + mAsyncSslPort;
+
+        # Add WebSocket handler with message size limit
+        mWsHandler = new SizeLimitWsHandler({
+            "logger": mLogger,
+            "max_message_size": WsMessageSizeLimit,
+        });
+        mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+
+        mAsyncServer.waitForAsyncIo();
+
+        # Unlimited server for comparison/zero-limit tests
+        hash<HttpServerOptionInfo> unlimited_opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": False,
+        };
+        mUnlimitedServer = new HttpServer(unlimited_opts);
+        mUnlimitedServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
+        mUnlimitedServer.setDefaultHandler("echo", new BodyEchoHandler());
+        mUnlimitedPort = mUnlimitedServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mUnlimitedUrl = "http://localhost:" + mUnlimitedPort;
+    }
+
+    globalTearDown() {
+        delete mSyncServer;
+        delete mAsyncServer;
+        delete mUnlimitedServer;
+    }
+
+    private HTTPClient getSyncClient(*int timeout_ms) {
+        HTTPClient c({"url": mSyncUrl, "timeout": timeout_ms ?? 5000});
+        c.connect();
+        return c;
+    }
+
+    private HTTPClient getAsyncClient(*int timeout_ms) {
+        HTTPClient c({"url": mAsyncUrl, "timeout": timeout_ms ?? 5000});
+        c.connect();
+        return c;
+    }
+
+    private HTTPClient getHttp2Client(*int timeout_ms) {
+        HTTPClient c({
+            "url": mAsyncSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": timeout_ms ?? 10000,
+        });
+        c.connect();
+        return c;
+    }
+
+    private HTTPClient getUnlimitedClient(*int timeout_ms) {
+        HTTPClient c({"url": mUnlimitedUrl, "timeout": timeout_ms ?? 5000});
+        c.connect();
+        return c;
+    }
+
+    # ================================================================
+    # Sync HTTP/1.1 Content-Length Tests
+    # ================================================================
+
+    #! POST with body smaller than limit should succeed
+    syncContentLengthUnderLimitTest() {
+        HTTPClient c = getSyncClient();
+        on_exit c.disconnect();
+
+        binary body = binary(strmul("A", BodySizeLimit - 1));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "body under limit should return 200");
+        assertEq(BodySizeLimit - 1, resp.body.size(), "response body size should match request body size");
+    }
+
+    #! POST with body exactly at limit should succeed
+    syncContentLengthAtLimitTest() {
+        HTTPClient c = getSyncClient();
+        on_exit c.disconnect();
+
+        binary body = binary(strmul("B", BodySizeLimit));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "body at limit should return 200");
+        assertEq(BodySizeLimit, resp.body.size(), "response body size should match request body size");
+    }
+
+    #! POST with body exceeding limit should return HTTP 413
+    syncContentLengthOverLimitTest() {
+        HTTPClient c = getSyncClient();
+        on_exit c.disconnect();
+
+        binary body = binary(strmul("C", BodySizeLimit + 1));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "body over limit should return 413");
+    }
+
+    #! Chunked transfer encoding body exceeding limit should return error
+    syncChunkedBodyOverLimitTest() {
+        # Use a raw socket to send a chunked body that exceeds the limit
+        Socket s();
+        s.connect("localhost:" + mSyncPort);
+        on_exit s.close();
+
+        # Send HTTP request with chunked encoding header
+        hash<auto> info;
+        s.sendHTTPMessage("POST", "/echo", "1.1", {
+            "Host": "localhost:" + mSyncPort,
+            "Transfer-Encoding": "chunked",
+            "Content-Type": "application/octet-stream",
+        }, NOTHING, \info);
+
+        # Send chunks that exceed the body size limit
+        # First chunk: 600 bytes
+        string chunk1_data = strmul("D", 600);
+        s.send(sprintf("%x\r\n", chunk1_data.size()) + chunk1_data + "\r\n");
+
+        # Second chunk: 600 bytes (total exceeds 1024 limit)
+        string chunk2_data = strmul("D", 600);
+        bool got_error = False;
+        try {
+            s.send(sprintf("%x\r\n", chunk2_data.size()) + chunk2_data + "\r\n");
+            # Send final chunk
+            s.send("0\r\n\r\n");
+
+            # Try to read the response
+            hash<auto> rh = s.readHTTPHeader(5s);
+            if (rh.status_code >= 400) {
+                got_error = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Connection closed by server - expected behavior
+            got_error = True;
+        }
+        assertTrue(got_error, "chunked body over limit should return error or close connection");
+    }
+
+    #! Zero limit (unlimited server) should accept large bodies
+    syncZeroLimitUnlimitedTest() {
+        HTTPClient c = getUnlimitedClient();
+        on_exit c.disconnect();
+
+        # Send a body larger than BodySizeLimit — should succeed since limit is 0 (unlimited)
+        binary body = binary(strmul("E", BodySizeLimit * 2));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "unlimited server should accept any body size");
+        assertEq(BodySizeLimit * 2, resp.body.size(), "response body size should match request body size");
+    }
+
+    #! Body size limit should be enforced for PUT and PATCH methods too
+    syncDifferentMethodsTest() {
+        HTTPClient c = getSyncClient();
+        on_exit c.disconnect();
+
+        binary over_limit = binary(strmul("F", BodySizeLimit + 1));
+        c.setErrorPassthru(True);
+
+        # PUT should be rejected
+        hash<auto> resp = c.send(over_limit, "PUT", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "PUT body over limit should return 413");
+
+        # Need a new connection since the server closes after 413
+        c.disconnect();
+        c.connect();
+        c.setErrorPassthru(True);
+
+        # Small body should still succeed after rejection
+        binary under_limit = binary(strmul("G", 100));
+        resp = c.send(under_limit, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "small body should succeed after rejection");
+    }
+
+    # ================================================================
+    # Async HTTP/1.1 Tests
+    # ================================================================
+
+    #! Async mode: Content-Length over limit returns 413
+    asyncContentLengthOverLimitTest() {
+        HTTPClient c = getAsyncClient();
+        on_exit c.disconnect();
+
+        binary body = binary(strmul("H", BodySizeLimit + 1));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "async: body over limit should return 413");
+    }
+
+    #! Async mode: Content-Length under limit succeeds
+    asyncContentLengthUnderLimitTest() {
+        HTTPClient c = getAsyncClient();
+        on_exit c.disconnect();
+
+        binary body = binary(strmul("I", BodySizeLimit - 1));
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "async: body under limit should return 200");
+        assertEq(BodySizeLimit - 1, resp.body.size(), "async: response body size should match request body size");
+    }
+
+    #! Async mode: Chunked body exceeding limit returns error
+    asyncChunkedBodyOverLimitTest() {
+        # Use a raw socket to send chunked body in async mode
+        Socket s();
+        s.connect("localhost:" + mAsyncPort);
+        on_exit s.close();
+
+        hash<auto> info;
+        s.sendHTTPMessage("POST", "/echo", "1.1", {
+            "Host": "localhost:" + mAsyncPort,
+            "Transfer-Encoding": "chunked",
+            "Content-Type": "application/octet-stream",
+        }, NOTHING, \info);
+
+        # Send chunks that exceed the limit
+        string chunk1 = strmul("J", 600);
+        s.send(sprintf("%x\r\n", chunk1.size()) + chunk1 + "\r\n");
+
+        string chunk2 = strmul("J", 600);
+        bool got_error = False;
+        try {
+            s.send(sprintf("%x\r\n", chunk2.size()) + chunk2 + "\r\n");
+            s.send("0\r\n\r\n");
+
+            hash<auto> rh = s.readHTTPHeader(5s);
+            if (rh.status_code >= 400) {
+                got_error = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+        }
+        assertTrue(got_error, "async: chunked body over limit should return error or close connection");
+    }
+
+    # ================================================================
+    # HTTP/2 Tests
+    # ================================================================
+
+    #! HTTP/2: body over limit should be rejected (RST_STREAM)
+    asyncHttp2BodyOverLimitTest() {
+        HTTPClient c = getHttp2Client();
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("K", BodySizeLimit + 1));
+
+        # The HTTP/2 body is sent as DATA frames; the server should RST_STREAM
+        # when the accumulated size exceeds the limit. The client may see:
+        # - A socket/protocol error (RST_STREAM received)
+        # - A 413 response (if the server sends one before RST)
+        # - A connection error
+        bool got_error = False;
+        try {
+            hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+            if (resp.status_code >= 400) {
+                got_error = True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # RST_STREAM or protocol error expected
+            got_error = True;
+        }
+        assertTrue(got_error, "HTTP/2: body over limit should be rejected");
+    }
+
+    #! HTTP/2: body under limit should succeed
+    asyncHttp2BodyUnderLimitTest() {
+        HTTPClient c = getHttp2Client();
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("L", BodySizeLimit - 1));
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "HTTP/2: body under limit should return 200");
+        assertEq(BodySizeLimit - 1, resp.body.size(), "HTTP/2: response body size should match request body size");
+    }
+
+    # ================================================================
+    # Server-level setMaxRequestBodySize Tests
+    # ================================================================
+
+    #! Test setMaxRequestBodySize() runtime configuration
+    serverSetMaxRequestBodySizeTest() {
+        # Create a server without initial limit
+        Logger logger("runtime-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": False,
+        };
+        HttpServer srv(opts);
+        on_exit delete srv;
+        srv.setHandler("echo", "", NOTHING, new BodyEchoHandler());
+        srv.setDefaultHandler("echo", new BodyEchoHandler());
+        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string url = "http://localhost:" + port;
+
+        # Verify initial state: no limit
+        assertEq(0, srv.getMaxRequestBodySize(), "initial max body size should be 0");
+
+        # Large body should succeed with no limit
+        {
+            HTTPClient c({"url": url, "timeout": 5s});
+            c.connect();
+            on_exit c.disconnect();
+            c.setErrorPassthru(True);
+
+            binary body = binary(strmul("M", 2048));
+            hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+            assertEq(200, resp.status_code, "no limit: large body should succeed");
+        }
+
+        # Set a body size limit at runtime
+        srv.setMaxRequestBodySize(512);
+        assertEq(512, srv.getMaxRequestBodySize(), "max body size should be 512 after set");
+
+        # Large body should now be rejected
+        {
+            HTTPClient c({"url": url, "timeout": 5s});
+            c.connect();
+            on_exit c.disconnect();
+            c.setErrorPassthru(True);
+
+            binary body = binary(strmul("N", 513));
+            hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+            assertEq(413, resp.status_code, "after setMaxRequestBodySize: body over limit returns 413");
+        }
+
+        # Small body should still succeed
+        {
+            HTTPClient c({"url": url, "timeout": 5s});
+            c.connect();
+            on_exit c.disconnect();
+            c.setErrorPassthru(True);
+
+            binary body = binary(strmul("O", 512));
+            hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+            assertEq(200, resp.status_code, "after setMaxRequestBodySize: body at limit should succeed");
+        }
+
+        # Remove limit
+        srv.setMaxRequestBodySize(0);
+        assertEq(0, srv.getMaxRequestBodySize(), "max body size should be 0 after reset");
+
+        # Large body should succeed again
+        {
+            HTTPClient c({"url": url, "timeout": 5s});
+            c.connect();
+            on_exit c.disconnect();
+            c.setErrorPassthru(True);
+
+            binary body = binary(strmul("P", 2048));
+            hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+            assertEq(200, resp.status_code, "after removing limit: large body should succeed again");
+        }
+    }
+
+    # ================================================================
+    # WebSocket Message Size Limit Tests
+    # ================================================================
+
+    #! WebSocket: message smaller than limit should be received and echoed
+    wsMessageUnderLimitTest() {
+        Counter msg_cnt(1);
+        *string received_msg;
+
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                received_msg = msg.typeCode() == NT_BINARY ? msg.toString() : msg;
+                if (msg_cnt.getCount()) {
+                    msg_cnt.dec();
+                }
+            }
+        }, {
+            "url": "wss://localhost:" + mAsyncSslPort + "/ws",
+            "logger": mLogger,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+        });
+        on_exit delete wsc;
+
+        wsc.connect();
+
+        # Send a small message (under limit)
+        string small_msg = strmul("Q", WsMessageSizeLimit - 10);
+        wsc.send(small_msg);
+
+        # Wait for echo response
+        msg_cnt.waitForZero(5s);
+        assertEq("ECHO:" + small_msg, received_msg,
+            "WebSocket: message under limit should be echoed");
+    }
+
+    #! WebSocket: oversized message should trigger close with code 1009
+    wsMessageOverLimitTest() {
+        *int close_code;
+
+        # Use a raw socket to send the oversized WebSocket frame
+        # WebSocketClient may not let us send oversized messages easily
+        Socket s();
+        s.connectSSL("localhost:" + mAsyncSslPort);
+
+        # Perform WebSocket upgrade handshake
+        string ws_key = get_random_string(16).toBase64();
+        hash<auto> hdr = {
+            "Host": "localhost:" + mAsyncSslPort,
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": ws_key,
+            "Sec-WebSocket-Version": "13",
+        };
+
+        hash<auto> info;
+        s.sendHTTPMessage("GET", "/ws", "1.1", hdr, NOTHING, \info);
+        hash<auto> rh = s.readHTTPHeader(5s);
+        assertEq(101, rh.status_code, "WebSocket handshake should succeed");
+
+        # Send an oversized text frame
+        string large_msg = strmul("R", WsMessageSizeLimit + 100);
+        s.send(ws_encode_message(large_msg, WSOP_Text, True));
+
+        # Read the server's close frame response
+        bool got_response = False;
+        try {
+            hash<WsMsgInfo> h = ws_read_message(s, 5s);
+            if (h.op == WSOP_Close) {
+                got_response = True;
+                close_code = h.close;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Connection may be closed
+            got_response = True;
+        }
+
+        assertTrue(got_response, "WebSocket: server should respond to oversized message");
+        if (exists close_code) {
+            assertEq(WSCC_MessageTooBig, close_code,
+                "WebSocket: close code should be 1009 (Message Too Big)");
+        }
+    }
+}

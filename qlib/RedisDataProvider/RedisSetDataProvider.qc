@@ -29,7 +29,7 @@ public class RedisSetDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "sets",
-            "desc": "Redis set data provider; provides access to set operations (SADD, SREM, SMEMBERS, etc.)",
+            "desc": "Redis set data provider; provides access to set operations (`SADD`, `SREM`, `SMEMBERS`, etc.)",
             "type": "RedisSetDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_children": True,

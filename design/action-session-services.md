@@ -32,6 +32,9 @@ All sessions should expose a minimal common surface:
 
 ## DPQL Session
 
+For detailed callback setup, field metadata construction, and expression evaluation,
+see [DPQL Integration Guide](dpql-integration.md).
+
 ### New Session Class (Qore)
 
 Suggested name: `DpqlActionSession`.

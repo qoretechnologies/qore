@@ -231,7 +231,7 @@ const QoreValue ConstantEntry::getValue() const {
     }
 }
 
-ConstantList::ConstantList(const ConstantList& old, int64 po, ClassNs p) : ptr(p) {
+ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p) {
     //printd(5, "ConstantList::ConstantList(old: %p, p: %s %s) this: %p cls: %p ns: %p\n", &old, p.getType(),
     //  p.getName(), this, ptr.getClass(), ptr.getNs());
     cnemap_t::iterator last = cnemap.begin();

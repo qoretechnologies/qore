@@ -29,7 +29,7 @@ public class RedisListPushDataProvider inherits RedisDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "push",
-            "desc": "Redis list PUSH API data provider; pushes elements to lists (LPUSH, RPUSH, LPUSHX, RPUSHX)",
+            "desc": "Redis list PUSH API data provider; pushes elements to lists (`LPUSH`, `RPUSH`, `LPUSHX`, `RPUSHX`)",
             "type": "RedisListPushDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -118,7 +118,7 @@ public class RedisListPushRequestDataType inherits DataProvider::HashDataType {
             "right": {
                 "display_name": "Push Right?",
                 "short_desc": "Push to right side (RPUSH)",
-                "desc": "Push to right side (RPUSH) instead of left (LPUSH)",
+                "desc": "Push to right side (`RPUSH`) instead of left (`LPUSH`)",
                 "type": SoftBoolOrNothingType,
             },
             "only_if_exists": {

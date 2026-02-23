@@ -108,14 +108,12 @@ SQLStatement stmt(db);
     @since %Qore 0.8.1
  */
 SQLStatement::constructor(Datasource[ManagedDatasource] ds) {
-   ReferenceHolder<ManagedDatasource> ds_holder(ds, xsink);
-
    if (!ds->getDriver()->hasStatementAPI()) {
       xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API", ds->getDriver()->getName());
       return;
    }
 
-   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(ds));
+   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*ds));
 }
 
 //! Creates the SQLStatement object based on the given DatasourcePool object that provides the connection to the database
@@ -133,14 +131,12 @@ SQLStatement stmt(db);
     @since %Qore 0.8.1
  */
 SQLStatement::constructor(DatasourcePool[DatasourcePool] dsp) {
-   ReferenceHolder<DatasourcePool> dsp_holder(dsp, xsink);
-
    if (!dsp->getDriver()->hasStatementAPI()) {
       xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API", dsp->getDriver()->getName());
       return;
    }
 
-   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(dsp));
+   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*dsp));
 }
 
 //! Closes the statement if it is open and destroys the object

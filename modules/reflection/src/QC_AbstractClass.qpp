@@ -369,8 +369,6 @@ bool b = c1.isEqual(c2);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
 */
 bool AbstractClass::isEqual(AbstractClass[QoreReflectionClass] cls) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreReflectionClass> holder(cls, xsink);
-
     // get read access to program object
     QoreExternalProgramContextHelper tch1(xsink, c->pgm);
     if (*xsink) {

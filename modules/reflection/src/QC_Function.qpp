@@ -264,8 +264,7 @@ Function f = Function::forName(pgm, "Qore::printf");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Function Function::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return get_function_object(xsink, *path, pgm);
+    return get_function_object(xsink, *path, *pgm);
 }
 
 //! Returns a list of functions matching the regular expression pattern argument or an empty list if no functions match
@@ -298,6 +297,5 @@ list<Function> l = Function::findAllRegex(pgm, "^gg");
     @return a list of functions matching the regular expression pattern argument or an empty list if no functions match
 */
 static list<Function> Function::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_funcs(*pattern, re_opts, pgm, xsink);
+    return find_all_funcs(*pattern, re_opts, *pgm, xsink);
 }

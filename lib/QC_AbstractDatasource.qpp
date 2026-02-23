@@ -497,6 +497,6 @@ if (!(caps & DBI_CAP_TRANSACTION_MANAGEMENT))
 
     @since %Qore 2.3
 */
-int AbstractDatasource::getCapabilities() [flags=CONSTANT] {
+int AbstractDatasource::getCapabilities() [flags=RET_VALUE_ONLY] {
     return 0;
 }

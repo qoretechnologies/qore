@@ -379,7 +379,7 @@ Interrupts should be checked:
 ```cpp
 int quickOperation(ExceptionSink* xsink) {
     // Check before starting
-    if (qore_check_io_interrupt(xsink)) {
+    if (qore_check_cancel(xsink)) {
         return -1;  // Exception already raised
     }
 
@@ -517,7 +517,7 @@ grep -rn "connect(\|bind(\|socket(\|accept(\|getaddrinfo\|gethostbyname" src/
 grep -rn "read(\|write(\|recv\|send\|select\|poll\|epoll\|sleep\|usleep\|wait\|lock" src/
 
 # Find existing sandbox checks (should appear near above patterns)
-grep -rn "QoreSandboxManagerHelper\|QoreSandboxManager\|checkAccess\|checkConnect\|qore_check_io_interrupt" src/
+grep -rn "QoreSandboxManagerHelper\|QoreSandboxManager\|checkAccess\|checkConnect\|qore_check_cancel" src/
 
 # Find exception sinks (entry points)
 grep -rn "ExceptionSink" src/*.h
@@ -676,7 +676,7 @@ QoreSandboxManagerHelper smh;          // current program
 QoreSandboxManagerHelper smh(pgm);     // specific program
 
 // Convenience function for interrupt checking
-bool qore_check_io_interrupt(ExceptionSink* xsink = nullptr);
+bool qore_check_cancel(ExceptionSink* xsink = nullptr);
 
 // Constants
 #define QORE_IO_POLL_INTERVAL_MS 500
@@ -698,6 +698,6 @@ bool qore_check_io_interrupt(ExceptionSink* xsink = nullptr);
 
 ## Appendix C: Related Documentation
 
-- `design/interruptible-io-module-guide.md` - Detailed patterns for interrupt support in binary modules
+- `design/cooperative-cancellation.md` - Unified cancellation API, implementation patterns for binary modules, and thread cancellation design
 - `doxygen/lang/222_sandboxing.dox.tmpl` - User-facing sandboxing documentation
 - `examples/test/qore/security/sandbox-manager.qtest` - Test cases demonstrating expected behavior

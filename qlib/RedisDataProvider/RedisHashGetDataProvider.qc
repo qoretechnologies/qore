@@ -32,7 +32,7 @@ public class RedisHashGetDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "get",
-            "desc": "Redis hash GET API data provider; gets hash field values (HGET, HMGET, HGETALL, HKEYS, HVALS)",
+            "desc": "Redis hash GET API data provider; gets hash field values (`HGET`, `HMGET`, `HGETALL`, `HKEYS`, `HVALS`)",
             "type": "RedisHashGetDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -167,14 +167,14 @@ public class RedisHashGetRequestDataType inherits DataProvider::HashDataType {
             "field": {
                 "display_name": "Field",
                 "short_desc": "Field name for HGET",
-                "desc": "The field name for HGET operation",
+                "desc": "The field name for `HGET` operation",
                 "type": StringOrNothingType,
                 "example_value": "username",
             },
             "fields": {
                 "display_name": "Fields",
                 "short_desc": "Field names for HMGET",
-                "desc": "The list of field names for HMGET operation",
+                "desc": "The list of field names for `HMGET` operation",
                 "type": SoftListOrNothingType,
                 "example_value": ("field1", "field2"),
             },
@@ -195,20 +195,20 @@ public class RedisHashGetResponseDataType inherits DataProvider::HashDataType {
             "value": {
                 "display_name": "Value",
                 "short_desc": "Single field value",
-                "desc": "The field value for HGET operation",
+                "desc": "The field value for `HGET` operation",
                 "type": AutoType,
                 "example_value": "john_doe",
             },
             "values": {
                 "display_name": "Values",
                 "short_desc": "Multiple field values",
-                "desc": "The field values for HMGET/HVALS operations",
+                "desc": "The field values for `HMGET`/`HVALS` operations",
                 "type": SoftListOrNothingType,
             },
             "hash": {
                 "display_name": "Hash",
                 "short_desc": "Full hash contents",
-                "desc": "The full hash for HGETALL operation",
+                "desc": "The full hash for `HGETALL` operation",
                 "type": AutoHashOrNothingType,
             },
             "keys": {

@@ -37,7 +37,7 @@
 
 #include <cassert>
 
-QoreClassList::QoreClassList(const QoreClassList& old, int64 po, qore_ns_private* ns) : ns_const(false), ns_vars(false) {
+QoreClassList::QoreClassList(const QoreClassList& old, const QoreParseOptions& po, qore_ns_private* ns) : ns_const(false), ns_vars(false) {
     for (hm_qc_t::const_iterator i = old.hm.begin(), e = old.hm.end(); i != e; ++i) {
         if (!i->second.cls->isSystem()) {
             //printd(5, "QoreClassList::QoreClassList() this: %p c: %p '%s' po & PO_NO_INHERIT_USER_CLASSES: %s

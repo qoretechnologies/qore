@@ -55,7 +55,7 @@ public class MemcachedDeleteResponseDataType inherits DataProvider::HashDataType
                 "type": BoolType,
                 "display_name": "Deleted",
                 "short_desc": "Key was deleted",
-                "desc": "True if the key was successfully deleted",
+                "desc": "`True` if the key was successfully deleted",
                 "example_value": True,
             },
             "status": {

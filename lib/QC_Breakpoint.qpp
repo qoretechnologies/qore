@@ -150,8 +150,7 @@ int Breakpoint::getPolicy() {
  *  @param new_pgm Program to be assigned
  */
 nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] pgm) {
-   ReferenceHolder<QoreProgram> holder(pgm, xsink);
-   bkpt->assignProgram(pgm, xsink);
+   bkpt->assignProgram(*pgm, xsink);
 }
 
 //! Unassign @ref Qore::Program "Program" from breakpoint and deletes all statement references

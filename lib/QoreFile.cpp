@@ -318,59 +318,44 @@ int QoreFile::lockBlocking(struct flock& fl, ExceptionSink* xsink) {
         return -1;
     }
 
-    // Check for sandbox interrupt support
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        // Use polling with interrupt checks
-        const int poll_ms = QORE_IO_POLL_INTERVAL_MS;
+    // We cannot use F_SETLKW because thread cancellation and program interrupts
+    // are cooperative (atomic flags) and don't send signals, so F_SETLKW would
+    // block indefinitely with no way to check for cancellation.
+    // Instead we poll with F_SETLK using a short interval (50ms) to maintain
+    // reasonable fairness under contention while supporting cancellation.
+    while (true) {
+        // Check for cancellation or program interrupt
+        if (qore_check_cancel(xsink, "file lock")) {
+            return -1;
+        }
 
-        while (true) {
-            // Check for interrupt
-            if (smh->checkIOInterrupt(xsink, "file lock")) {
-                return -1;
-            }
+        // Try non-blocking lock
+        int rc = fcntl(priv->fd, F_SETLK, &fl);
+        if (rc == 0) {
+            return 0;  // Lock acquired
+        }
 
-            // Try non-blocking lock
-            int rc = fcntl(priv->fd, F_SETLK, &fl);
-            if (rc == 0) {
-                return 0;  // Lock acquired
-            }
+        // If lock is held by another process, wait and retry
+        if (rc == -1 && (errno == EACCES || errno == EAGAIN)) {
+            // Short poll interval for fairness under contention
+            struct timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = 50000000;  // 50ms
+            nanosleep(&ts, nullptr);
+            continue;
+        }
 
-            // If lock is held by another process, wait and retry
-            if (rc == -1 && (errno == EACCES || errno == EAGAIN)) {
-                // Sleep for poll interval before retrying
-                struct timespec ts;
-                ts.tv_sec = poll_ms / 1000;
-                ts.tv_nsec = (poll_ms % 1000) * 1000000;
-                nanosleep(&ts, nullptr);
-                continue;
-            }
+        // Handle EINTR
+        if (rc == -1 && errno == EINTR) {
+            continue;
+        }
 
-            // Handle EINTR
-            if (rc == -1 && errno == EINTR) {
-                continue;
-            }
-
-            // Other errors
-            if (rc == -1) {
-                xsink->raiseErrnoException("FILE-LOCK-ERROR", errno, "the call to fcntl(F_SETLK) failed");
-                return -1;
-            }
+        // Other errors
+        if (rc == -1) {
+            xsink->raiseErrnoException("FILE-LOCK-ERROR", errno, "the call to fcntl(F_SETLK) failed");
+            return -1;
         }
     }
-
-    // No sandbox manager - use blocking call
-    int rc;
-    while (true) {
-        rc = fcntl(priv->fd, F_SETLKW, &fl);
-        // try again if we are interrupted by a signal
-        if (rc != -1 || errno != EINTR)
-        break;
-    }
-    if (rc == -1)
-        xsink->raiseErrnoException("FILE-LOCK-ERROR", errno, "the call to fcntl(F_SETLKW) failed");
-
-    return rc;
 }
 
 //! perform a file lock operation, does not block

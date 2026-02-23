@@ -305,11 +305,11 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
         addTestCase("async mode HTTPS HTTP/1.1", \asyncModeHttpsHttp1Test());
         addTestCase("async mode error responses", \asyncModeErrorResponsesTest());
+        addTestCase("async mode HEAD body suppression", \asyncModeHeadBodySuppressionTest());
         addTestCase("async mode connection close", \asyncModeConnectionCloseTest());
         addTestCase("async mode WebSocket upgrade", \asyncModeWebSocketTest());
         addTestCase("async mode WebSocket over SSL", \asyncModeWebSocketSslTest());
         addTestCase("async mode WebSocket HTTP/2 status 200", \asyncModeWebSocketHttp2StatusTest());
-        addTestCase("async mode WebSocket HTTP/2 reject", \asyncModeWebSocketHttp2RejectTest());
         addTestCase("async mode WebSocket over SSL HTTP/1.1", \asyncModeWebSocketSslHttp1Test());
         addTestCase("async mode client cert capture", \asyncModeClientCertTest());
         addTestCase("async mode WebSocket 401 then success", \asyncModeWebSocket401ThenSuccessTest());
@@ -969,6 +969,44 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq("GET, aftererror, /aftererror", client.get("/aftererror"));
     }
 
+    asyncModeHeadBodySuppressionTest() {
+        # Test that HEAD responses don't include a body in async mode
+        # This verifies the fix for the bug where sendReply() stripped the body for HEAD,
+        # but then re-added a default error body for 4xx+ responses. In async mode, the
+        # controller would send this body on the wire, corrupting the HTTP/1.1 keep-alive
+        # connection because clients don't read bodies for HEAD responses.
+        HTTPClient client({"url": asyncUrl, "timeout": 5s, "error_passthru": True});
+        client.connect();
+        on_exit client.disconnect();
+
+        # HEAD on a 400 endpoint - should get headers but no body on the wire
+        hash<auto> resp = client.send(NOTHING, "HEAD", "/test400/path");
+        assertEq(400, resp.status_code, "HEAD 400 status");
+
+        # Verify the connection still works after HEAD 4xx (no leftover body bytes)
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 400 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 400 body");
+
+        # HEAD on a 501 endpoint
+        resp = client.send(NOTHING, "HEAD", "/test501/path");
+        assertEq(501, resp.status_code, "HEAD 501 status");
+
+        # Verify the connection still works
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 501 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 501 body");
+
+        # HEAD on a 500 endpoint
+        resp = client.send(NOTHING, "HEAD", "/test500/path");
+        assertEq(500, resp.status_code, "HEAD 500 status");
+
+        # Verify the connection still works
+        resp = client.send(NOTHING, "GET", "/aftererror");
+        assertEq(200, resp.status_code, "GET after HEAD 500 status");
+        assertEq("GET, aftererror, /aftererror", resp.body, "GET after HEAD 500 body");
+    }
+
     asyncModeConnectionCloseTest() {
         # Test client disconnect scenarios with async mode
 
@@ -1099,62 +1137,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2");
         assertTrue(wsc.isOpen(), "WebSocket should be open");
-    }
-
-    asyncModeWebSocketHttp2RejectTest() {
-        # Test that reject_http2_websocket option is deprecated and ignored.
-        # Server now always supports HTTP/2 WebSocket via the multiplexed path.
-
-        Logger rejectLogger("ws-reject-test", LoggerLevel::getLevelInfo());
-        if (m_options.verbose > 2) {
-            rejectLogger.addAppender(new StdoutAppender());
-        }
-        HttpServer rejectServer(<HttpServerOptionInfo>{
-            "logger": rejectLogger,
-            "debug": True,
-            "reject_http2_websocket": True,  # Deprecated, ignored
-        });
-        on_exit rejectServer.stop();
-
-        TestWsHandler rejectWsHandler({"logger": rejectLogger});
-        rejectServer.setHandler("ws", "/ws", NOTHING, rejectWsHandler);
-
-        int rejectSslPort = rejectServer.addListener(<HttpListenerOptionInfo>{
-            "service": 0,
-            "cert": new SSLCertificate(CertPem),
-            "key": new SSLPrivateKey(KeyPem),
-        }).port;
-
-        rejectServer.waitForAsyncIo();
-
-        string wssUrl = "wss://localhost:" + rejectSslPort + "/ws";
-
-        # Since reject_http2_websocket is now deprecated and ignored, HTTP/2 WebSocket
-        # should work normally (server always advertises ENABLE_CONNECT_PROTOCOL)
-        Counter msgReceived(1);
-        string receivedMsg;
-        code callback = sub (*data msg) {
-            if (msg.typeCode() == NT_STRING) {
-                receivedMsg = msg;
-                msgReceived.dec();
-            }
-        };
-        WebSocketClient wsc(callback, {
-            "url": wssUrl,
-            "timeout": 10s,
-            "ssl_verify_cert": False,
-            "http_version": "2.0",  # Explicitly use HTTP/2
-        });
-        wsc.connect();
-        on_exit wsc.disconnect();
-
-        # HTTP/2 WebSocket should work even with deprecated option set
-        assertTrue(wsc.isHttp2(), "WebSocket should use HTTP/2 (deprecated option ignored)");
-        assertTrue(wsc.isOpen(), "WebSocket should be open");
-
-        wsc.send("hello-reject-test");
-        assertEq(0, msgReceived.waitForZero(5s));
-        assertEq("ECHO:hello-reject-test", receivedMsg);
     }
 
     asyncModeWebSocketSslHttp1Test() {

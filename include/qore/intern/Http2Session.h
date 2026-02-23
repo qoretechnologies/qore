@@ -85,8 +85,17 @@ struct Http2StreamInfo {
     // Headers (values stored as vectors to support duplicate header names per RFC 7540 Section 8.1.2.5)
     std::map<std::string, std::vector<std::string>> headers;
 
+    //! Trailer headers (received after body in a trailing HEADERS frame)
+    std::map<std::string, std::vector<std::string>> trailers;
+
+    //! True when receiving trailer headers (after initial headers + body)
+    bool receiving_trailers = false;
+
     // Body data
     std::vector<char> body;
+
+    //! Maximum body size in bytes (0 = unlimited)
+    int64 max_body_size = 0;
 
     // Stream priority
     int32_t weight = 16;
@@ -98,6 +107,8 @@ struct Http2StreamInfo {
     bool body_complete = false;
     bool reset = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
+    bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
+    bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -159,6 +170,12 @@ public:
     //! Returns true if this is a server-side session
     DLLLOCAL bool isServer() const { return is_server; }
 
+    //! Sets the maximum request body size for new streams (0 = unlimited)
+    DLLLOCAL void setMaxRequestBodySize(int64 size) { max_request_body_size = size; }
+
+    //! Returns the maximum request body size
+    DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
+
     //! Send the connection preface (client) or SETTINGS (server)
     DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
 
@@ -176,7 +193,8 @@ public:
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
         const std::map<std::string, std::string>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink);
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming = false);
 
     //! Submit a request with support for duplicate header names (client-side)
     /** Uses a vector of pairs to allow multiple entries with the same header name,
@@ -187,11 +205,13 @@ public:
         @param body Request body (can be nullptr)
         @param body_len Length of request body
         @param xsink Exception sink for error reporting
+        @param streaming If true, keep the stream open for subsequent sendStreamData() calls
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
         const std::vector<std::pair<std::string, std::string>>& headers,
-        const void* body, size_t body_len, ExceptionSink* xsink);
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming = false);
 
     //! Submit a response (server-side)
     /** @param stream_id Stream ID for the response
@@ -282,6 +302,20 @@ public:
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Submit HTTP/2 trailer headers on a stream (server-side)
+    /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
+        The data provider for this stream is configured to signal EOF without
+        END_STREAM on the last DATA frame, so that the trailer HEADERS carries
+        the END_STREAM flag.
+
+        @param stream_id Stream ID to send trailers on
+        @param trailers Trailer header name/value pairs
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitTrailers(int32_t stream_id,
+        const std::map<std::string, std::string>& trailers, ExceptionSink* xsink);
+
     //! Set the stream type (for protocol upgrades like WebSocket/SSE)
     DLLLOCAL void setStreamType(int32_t stream_id, Http2StreamType type);
 
@@ -369,6 +403,54 @@ public:
 
     //! Returns true if there are completed streams waiting
     DLLLOCAL bool hasCompletedStreams() const { return !completed_streams.empty(); }
+
+    //! Enable/disable headers-only mode
+    /** When enabled, markStreamComplete() keeps streams with headers_complete in the
+        map instead of moving them to completed_streams. This allows
+        takeHeadersReadyStreamCopy() to find them even when END_STREAM arrives in the
+        same batch as HEADERS.
+
+        @param v True to enable headers-only mode
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setHeadersOnlyMode(bool v);
+
+    //! Atomically find a headers-ready stream, copy it, and mark dispatched
+    /** Finds the first stream with headers_complete && !dispatched, copies it, clears the
+        body on the copy, and marks the original as dispatched — all under a single lock to
+        prevent TOCTOU races.
+
+        The body is cleared on the copy (not the original) so that DATA frames that arrived
+        with HEADERS remain in the original for readHttp2StreamDataBlock() to return.
+        getOutput() skips the body field for H2S_HEADERS_READY mode to prevent duplication.
+
+        @return a copy of the stream info (with empty body), or nullptr if no headers-ready
+        stream exists
+        @since %Qore 2.3
+    */
+    DLLLOCAL std::unique_ptr<Http2StreamInfo> takeHeadersReadyStreamCopy();
+
+    //! Check if stream's body is complete (END_STREAM received)
+    /** @param stream_id the stream to check
+        @return True if END_STREAM has been received (body_complete), or if the
+        stream is not found (a cleaned-up stream is effectively complete)
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
+
+    //! Remove stream from map (cleanup after handler finishes)
+    /** @param stream_id the stream to remove
+        @since %Qore 2.3
+    */
+    DLLLOCAL void cleanupStream(int32_t stream_id);
+
+    //! Check if any streaming client streams have body data available
+    /** Used by client multiplex to deliver intermediate body data for streaming streams.
+        @param stream_id [out] set to the stream ID with data, if found
+        @return true if a streaming stream with body data was found
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasStreamingData(int32_t& stream_id);
 
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
     /** Callback arguments:
@@ -467,6 +549,8 @@ private:
     // NOTE: recursive mutex is required because nghttp2 callbacks can re-enter
     // Http2Session methods that also lock the session state.
     mutable std::recursive_mutex m;
+    //! When true, markStreamComplete() keeps undispatched headers-complete streams in the map
+    bool headers_only_mode = false;
     DLLLOCAL Http2Session(qore_socket_private* sock, bool is_server, const char* scheme);
     DLLLOCAL int init(ExceptionSink* xsink);
 
@@ -520,6 +604,9 @@ private:
     Http2Settings remote_settings;
     bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
 
+    //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
+    int64 max_request_body_size = 0;
+
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
@@ -545,6 +632,10 @@ private:
         bool defer_on_empty = false;
         bool no_end_stream = false;
         bool remove_on_empty = true;
+        //! Trailers to submit after body EOF (set by submitTrailers())
+        std::vector<std::pair<std::string, std::string>> pending_trailers;
+        //! Error from nghttp2_submit_trailer() failure in data provider callback
+        int trailer_submit_error = 0;
     };
     std::map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
 

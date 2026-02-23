@@ -81,12 +81,11 @@ static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, 
 static bool qore_stream_timed_out(mongoc_stream_t* stream);
 static bool qore_stream_should_retry(mongoc_stream_t* stream);
 
-//! Check if an interrupt has been requested
-/** @return true if interrupted, false otherwise
+//! Check if an interrupt or thread cancel has been requested
+/** @return true if interrupted/cancelled, false otherwise
 */
 static bool check_interrupt() {
-    QoreSandboxManagerHelper smh;
-    if (smh && smh->isInterruptRequested()) {
+    if (qore_check_cancel(nullptr, "MongoDB I/O")) {
         errno = EINTR;
         return true;
     }
@@ -128,13 +127,12 @@ static ssize_t qore_stream_writev(mongoc_stream_t* stream, mongoc_iovec_t* iov, 
         return -1;
     }
 
-    // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManagerHelper smh;
-    if (!smh || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
+    // For short timeouts, use direct call
+    if (timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_writev(s->base, iov, iovcnt, timeout_msec);
     }
 
-    // Use polling with interrupt checking for long timeouts
+    // Always poll with interrupt/cancel checking for long timeouts
     int32_t remaining = timeout_msec;
     while (remaining > 0) {
         if (check_interrupt()) {
@@ -174,13 +172,12 @@ static ssize_t qore_stream_readv(mongoc_stream_t* stream, mongoc_iovec_t* iov, s
         return -1;
     }
 
-    // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManagerHelper smh;
-    if (!smh || timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
+    // For short timeouts, use direct call
+    if (timeout_msec <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_readv(s->base, iov, iovcnt, min_bytes, timeout_msec);
     }
 
-    // Use polling with interrupt checking for long timeouts
+    // Always poll with interrupt/cancel checking for long timeouts
     int32_t remaining = timeout_msec;
     while (remaining > 0) {
         if (check_interrupt()) {
@@ -231,13 +228,12 @@ static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, 
         return -1;
     }
 
-    // For short timeouts or no sandbox manager, use direct call
-    QoreSandboxManagerHelper smh;
-    if (!smh || timeout <= QORE_IO_POLL_INTERVAL_MS) {
+    // For short timeouts, use direct call
+    if (timeout <= QORE_IO_POLL_INTERVAL_MS) {
         return mongoc_stream_poll(streams, nstreams, timeout);
     }
 
-    // Use polling with interrupt checking
+    // Always poll with interrupt/cancel checking
     int32_t remaining = timeout;
     while (remaining > 0) {
         if (check_interrupt()) {
@@ -258,13 +254,27 @@ static ssize_t qore_stream_poll(mongoc_stream_poll_t* streams, size_t nstreams, 
 }
 
 //! Check if stream timed out
+/** Returns false if cancel/interrupt is pending since the operation was
+    interrupted, not timed out.
+*/
 static bool qore_stream_timed_out(mongoc_stream_t* stream) {
+    // Not a timeout if cancel/interrupt is pending
+    if (qore_check_cancel(nullptr, "MongoDB I/O")) {
+        return false;
+    }
     qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
     return s->base ? mongoc_stream_timed_out(s->base) : false;
 }
 
 //! Check if stream should retry
+/** Returns false if cancel/interrupt is pending to prevent mongoc from
+    retrying an operation that was intentionally interrupted.
+*/
 static bool qore_stream_should_retry(mongoc_stream_t* stream) {
+    // Never retry if cancel/interrupt is pending
+    if (qore_check_cancel(nullptr, "MongoDB I/O")) {
+        return false;
+    }
     qore_interruptible_stream_t* s = (qore_interruptible_stream_t*)stream;
     return s->base ? mongoc_stream_should_retry(s->base) : false;
 }
@@ -296,13 +306,14 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     void* user_data,
     bson_error_t* error) {
 
-    // Check for interrupt before starting connection
-    QoreSandboxManagerHelper smh;
-    if (smh && smh->isInterruptRequested()) {
+    // Check for interrupt/cancel before starting connection
+    if (qore_check_cancel(nullptr, "MongoDB connection")) {
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
             "MongoDB connection interrupted");
         return nullptr;
     }
+
+    QoreSandboxManagerHelper smh;
 
     // Resolve the hostname
     struct addrinfo hints;
@@ -328,8 +339,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     struct addrinfo* rp;
 
     for (rp = result; rp != nullptr; rp = rp->ai_next) {
-        // Check for interrupt before each connection attempt
-        if (smh && smh->isInterruptRequested()) {
+        // Check for interrupt/cancel before each connection attempt
+        if (qore_check_cancel(nullptr, "MongoDB connection")) {
             freeaddrinfo(result);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB connection interrupted");
@@ -388,8 +399,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 
     // Check if SSL/TLS is required
     if (mongoc_uri_get_tls(uri)) {
-        // Check for interrupt before TLS setup
-        if (smh && smh->isInterruptRequested()) {
+        // Check for interrupt/cancel before TLS setup
+        if (qore_check_cancel(nullptr, "MongoDB TLS setup")) {
             mongoc_stream_destroy(base);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB TLS setup interrupted");
@@ -405,8 +416,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
             return nullptr;
         }
 
-        // Check for interrupt before TLS handshake
-        if (smh && smh->isInterruptRequested()) {
+        // Check for interrupt/cancel before TLS handshake
+        if (qore_check_cancel(nullptr, "MongoDB TLS handshake")) {
             mongoc_stream_destroy(tls_stream);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB TLS handshake interrupted");

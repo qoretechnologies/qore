@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2005 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2005 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,8 @@
 
 #include <pthread.h>
 #include <sys/time.h>
+
+#include <atomic>
 
 #include <qore/QoreThreadLock.h>
 
@@ -253,9 +255,28 @@ public:
         return waitWithInterrupt(&l, timeout_ms, xsink);
     }
 
+    //! returns the current signal generation counter
+    /** Used by SmartMutex/RWLock to detect signals that were fired while a thread was reacquiring
+        the Qore-level mutex after a timed wait on the underlying condition variable.
+
+        @return the current signal generation counter value
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT uint64_t getSignalGen() const;
+
 private:
     //! the condition thread primitive
     pthread_cond_t c;
+
+    //! generation counter incremented on every signal/broadcast, used to detect missed signals
+    /** The SmartMutex two-level locking (asl_lock + logical tid) creates a window where a thread
+        returning from pthread_cond_timedwait must reacquire the Qore-level mutex via grabImpl().
+        During this window, the thread waits on asl_cond instead of the user's condition, so any
+        broadcast on the user's condition is lost.  The generation counter allows detecting that
+        a signal/broadcast was fired during this window.
+    */
+    std::atomic<uint64_t> signal_gen{0};
 
     //! this function is not implemented; it is here as a private function in order to prohibit it from being used
     DLLLOCAL QoreCondition(const QoreCondition&);

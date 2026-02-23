@@ -49,8 +49,7 @@ qclass HTTPClientPollOperation [private_members=string goal; arg=HTTPClientPollO
     @throw INVALID-GOAL thrown if the goal is invalid
 */
 HTTPClientPollOperation::constructor(HTTPClient[QoreHttpClientObject] client, string goal, *hash<auto> opts) {
-    ReferenceHolder<QoreHttpClientObject> holder(client, xsink);
-    self->setPrivate(CID_HTTPCLIENTPOLLOPERATION, new HTTPClientPollOperation(xsink, goal, obj_client, holder.release()));
+    self->setPrivate(CID_HTTPCLIENTPOLLOPERATION, new HTTPClientPollOperation(xsink, goal, obj_client, client.release()));
     if (!*xsink) {
         self->setValue("goal", goal->stringRefSelf(), xsink);
     }

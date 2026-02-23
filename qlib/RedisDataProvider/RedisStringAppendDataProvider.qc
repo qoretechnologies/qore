@@ -32,7 +32,7 @@ public class RedisStringAppendDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "append",
-            "desc": "Redis string APPEND/STRLEN/GETRANGE/SETRANGE API data provider",
+            "desc": "Redis string `APPEND`/`STRLEN`/`GETRANGE`/`SETRANGE` API data provider",
             "type": "RedisStringAppendDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,
@@ -188,7 +188,7 @@ public class RedisStringAppendResponseDataType inherits DataProvider::HashDataTy
             "length": {
                 "display_name": "Length",
                 "short_desc": "String length after operation",
-                "desc": "The new length of the string after the operation (for APPEND, STRLEN, SETRANGE)",
+                "desc": "The new length of the string after the operation (for `APPEND`, `STRLEN`, `SETRANGE`)",
                 "type": IntOrNothingType,
                 "example_value": 11,
             },

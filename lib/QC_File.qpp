@@ -996,11 +996,10 @@ stdin.getTerminalAttributes(termios);
  */
 nothing File::getTerminalAttributes(TermIOS[QoreTermIOS] termios) {
 #ifdef HAVE_TERMIOS_H
-   ReferenceHolder<QoreTermIOS> holder(termios, xsink);
    if (check_terminal_io(self, "File::getTerminalAttributes", xsink))
       return QoreValue();
 
-   f->getTerminalAttributes(termios, xsink);
+   f->getTerminalAttributes(*termios, xsink);
    return QoreValue();
 #else
    return missing_method_error("File::getTerminalAttributes", "TERMIOS", xsink);
@@ -1080,11 +1079,10 @@ stdin.setTerminalAttributes(TCSADRAIN, termios);
  */
 nothing File::setTerminalAttributes(softint action = TCSANOW, TermIOS[QoreTermIOS] termios) {
 #ifdef HAVE_TERMIOS_H
-   ReferenceHolder<QoreTermIOS> holder(termios, xsink);
    if (check_terminal_io(self, "File::setTerminalAttributes", xsink))
       return QoreValue();
 
-   f->setTerminalAttributes(action, termios, xsink);
+   f->setTerminalAttributes(action, *termios, xsink);
    return QoreValue();
 #else
    return missing_method_error("File::setTerminalAttributes", "TERMIOS", xsink);
@@ -1112,12 +1110,10 @@ stderr.redirect(my_file);
     @since Qore 0.9
 */
 nothing File::redirect(Qore::File[File] file) {
-    ReferenceHolder<File> holder(file, xsink);
-
     if (check_terminal_io(self, "File::redirect", xsink) || check_terminal_io(obj_file, "File::redirect", xsink))
         return QoreValue();
 
-    f->redirect(*file, xsink);
+    f->redirect(**file, xsink);
 }
 
 //! Returns a hash with read and write files on an internal FIFO pipe

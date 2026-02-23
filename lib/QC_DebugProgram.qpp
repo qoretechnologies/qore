@@ -158,8 +158,7 @@ int DebugProgram::getInterruptedCount() [flags=CONSTANT] {
  *
  */
 nothing DebugProgram::addProgram(ProgramControl[QoreProgram] pgm) {
-   ReferenceHolder<QoreProgram> holder(pgm, xsink);
-   dpgm->addProgram(pgm, xsink);
+   dpgm->addProgram(*pgm, xsink);
 }
 
 //! Remove program from debugging
@@ -167,8 +166,7 @@ nothing DebugProgram::addProgram(ProgramControl[QoreProgram] pgm) {
  *
  */
 nothing DebugProgram::removeProgram(ProgramControl[QoreProgram] pgm) {
-   ReferenceHolder<QoreProgram> holder(pgm, xsink);
-   dpgm->removeProgram(pgm);
+   dpgm->removeProgram(*pgm);
 }
 
 //! Get all programs being debugged
@@ -229,8 +227,7 @@ abstract DebugProgram::onExit(ProgramControl[QoreProgram] pgm, int statement, re
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if the given thread is not active in the target program
   */
 int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] pgm, int tid) {
-   ReferenceHolder<QoreProgram> holder(pgm, xsink);
-   return dpgm->breakProgramThread(pgm, tid);
+   return dpgm->breakProgramThread(*pgm, tid);
 }
 
 //! Break program, i.e. all threads
@@ -238,6 +235,5 @@ int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] pgm, int tid) {
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set) or -2 if the program has not been set as a debug target
   */
 int DebugProgram::breakProgram(ProgramControl[QoreProgram] pgm) {
-   ReferenceHolder<QoreProgram> holder(pgm, xsink);
-   return dpgm->breakProgram(pgm);
+   return dpgm->breakProgram(*pgm);
 }

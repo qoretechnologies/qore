@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -65,15 +65,12 @@ public:
       if (count <= 0)
          return;
 
-      // Check for sandbox interrupt support
-      QoreSandboxManagerHelper smh;
-
       const char* current = reinterpret_cast<const char*>(ptr);
       int64 remaining = count;
 
       while (remaining > 0) {
-         // Check for interrupt
-         if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
+         // Check for cancellation or program interrupt
+         if (qore_check_cancel(xsink, "stdout write")) {
             return;
          }
 
@@ -99,16 +96,16 @@ public:
                      break;
                   }
                   if (pret == 0) {
-                     // Timeout - check for interrupt and retry
-                     if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
+                     // Timeout - check for cancel/interrupt and retry
+                     if (qore_check_cancel(xsink, "stdout write")) {
                         return;
                      }
                      break;
                   }
                   // pret < 0: error
                   if (errno == EINTR) {
-                     // Interrupted by signal - check for sandbox interrupt then retry poll
-                     if (smh && smh->checkIOInterrupt(xsink, "stdout write")) {
+                     // Interrupted by signal - check for cancel/interrupt then retry poll
+                     if (qore_check_cancel(xsink, "stdout write")) {
                         return;
                      }
                      continue;

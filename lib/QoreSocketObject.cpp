@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     provides a thread-safe interface to the QoreSocket object
 
@@ -738,9 +738,9 @@ int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_c
 }
 
 int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const void* body,
-        size_t body_len, ExceptionSink* xsink) {
+        size_t body_len, ExceptionSink* xsink, bool streaming) {
     AutoLocker al(priv->m);
-    return priv->socket->submitHttp2Request(headers, body, body_len, xsink);
+    return priv->socket->submitHttp2Request(headers, body, body_len, xsink, streaming);
 }
 
 void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
@@ -764,14 +764,58 @@ int32_t QoreSocketObject::getHttp2ActiveStream() const {
 }
 
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+        bool end_stream, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
-    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, timeout_ms, xsink);
+    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     return priv->socket->readHttp2StreamData(stream_id, max_bytes, xsink);
+}
+
+int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->sendHttp2Trailers(stream_id, trailers, xsink);
+}
+
+int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
+}
+
+// NOTE: readHttp2StreamDataBlock does NOT acquire priv->m because it blocks
+// during I/O (waiting for HTTP/2 stream data with timeout).  Holding the
+// object mutex during a blocking wait would prevent other threads from
+// performing any socket operation (write, flush, cleanup) on this socket.
+// The caller must ensure exclusive socket access (which is the case for
+// server handler threads that own the connection).  Thread safety for the
+// HTTP/2 session internals is provided by Http2Session's own recursive mutex.
+// No concurrent receiveData() calls can occur on the same session because the
+// server connection model is single-threaded per connection: the handler thread
+// that calls readHttp2StreamDataBlock() is the same thread that drives the
+// HTTP/2 session.  flushHttp2()/sendPendingDataBlocking() only sends outgoing
+// frames and does not call receiveData(), so there is no nghttp2 reentrancy risk.
+BinaryNode* QoreSocketObject::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    return priv->socket->readHttp2StreamDataBlock(stream_id, timeout_ms, xsink);
+}
+
+bool QoreSocketObject::isHttp2StreamComplete(int32_t stream_id) const {
+    AutoLocker al(priv->m);
+    return priv->socket->isHttp2StreamComplete(stream_id);
+}
+
+int QoreSocketObject::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    return priv->socket->flushHttp2(timeout_ms, xsink);
+}
+
+void QoreSocketObject::cleanupHttp2Stream(int32_t stream_id) {
+    AutoLocker al(priv->m);
+    priv->socket->cleanupHttp2Stream(stream_id);
 }
 
 long QoreSocketObject::verifyPeerCertificate() {
@@ -782,6 +826,12 @@ long QoreSocketObject::verifyPeerCertificate() {
 int QoreSocketObject::getPollableDescriptor() const {
     return priv->socket->getSocket();
 }
+
+#ifdef DARWIN
+void QoreSocketObject::setPollNotifyFd(int fd) {
+    qore_socket_private::get(*priv->socket)->poll_notify_fd.store(fd, std::memory_order_release);
+}
+#endif
 
 int QoreSocketObject::getSocket() {
     return priv->socket->getSocket();
@@ -1034,6 +1084,26 @@ QoreObject* QoreSocketObject::getRemoteCertificate() const {
 int64 QoreSocketObject::getConnectionId() const {
     AutoLocker al(priv->m);
     return priv->socket->getConnectionId();
+}
+
+void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
+    AutoLocker al(priv->m);
+    priv->socket->setMaxChunkedBodySize(size);
+}
+
+int64 QoreSocketObject::getMaxChunkedBodySize() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getMaxChunkedBodySize();
+}
+
+void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp2MaxRequestBodySize(size);
+}
+
+int64 QoreSocketObject::getHttp2MaxRequestBodySize() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getHttp2MaxRequestBodySize();
 }
 
 int QoreSocketObject::setNonBlock(ExceptionSink* xsink) {

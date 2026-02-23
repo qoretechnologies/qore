@@ -61,7 +61,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
     // if "broken-int-assignments" is set, then set flag if applicable
     if ((ti == bigIntTypeInfo || ti == softBigIntTypeInfo)
-        && (parse_context.pgm->getParseOptions64() & PO_BROKEN_INT_ASSIGNMENTS)) {
+        && (parse_context.pgm->getParseOptions() & PO_BROKEN_INT_ASSIGNMENTS)) {
         broken_int = true;
     }
 
@@ -189,7 +189,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             // Not a direct auto assignment - use normal logic
             raise_exception = parse_context.pgm->getParseExceptionSink() ||
                 (has_narrowed_type &&
-                 !(parse_context.pgm->getParseOptions64() & PO_BROKEN_NARROWED_TYPES));
+                 !(parse_context.pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES));
         }
     }
 

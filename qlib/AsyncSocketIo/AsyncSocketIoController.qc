@@ -156,6 +156,15 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         #! Flag indicating I/O thread is ready
         bool ready_flag = False;
 
+        #! Submit sequence counter; incremented under lock on each submit() call
+        int submit_seq = 0;
+
+        #! Processed sequence counter; updated by I/O thread after Phase 1 cache snapshot
+        int processed_seq = 0;
+
+        #! Condition variable signaled when processed_seq advances
+        Condition processed_cond();
+
         #! Persistent event loop for efficient kqueue/epoll/poll
         EventLoop loop();
 
@@ -172,6 +181,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         /** Used to compute the event union when multiple operations share a socket
         */
         hash<string, int> key_events;
+
+        #! Reverse index: socket unique hash -> set of operation keys using that socket
+        /** Allows O(1) lookup of all keys sharing a socket, making computeEventUnion() O(k)
+            instead of O(N) where k is the number of operations per socket (typically 1).
+        */
+        hash<string, hash<string, bool>> sock_hash_to_keys;
     }
 
     #! Creates the object
@@ -324,6 +339,45 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return ready_flag;
     }
 
+    #! Waits until the I/O thread has processed all currently submitted operations
+    /** This method blocks until the I/O thread's Phase 1 cache snapshot has captured all
+        operations that were submitted before the call. This provides a stronger guarantee
+        than waitReady(): not only is the I/O thread running, but it has actually polled
+        all pending operations at least once.
+
+        @param to maximum time to wait; use @ref NOTHING for no timeout
+
+        @return @ref True if all submitted operations have been processed, @ref False if the
+        timeout expired or the I/O thread is not running
+
+        @since %AsyncSocketIo 1.0
+    */
+    bool waitForProcessing(*timeout to) {
+        AutoLock al(m);
+        if (!tid) {
+            return False;
+        }
+        int target = submit_seq;
+        if (processed_seq >= target) {
+            return True;
+        }
+        if (to) {
+            date deadline = now_us() + to;
+            while (processed_seq < target && tid) {
+                timeout remaining = deadline - now_us();
+                if (remaining <= 0s) {
+                    return False;
+                }
+                processed_cond.wait(m, remaining);
+            }
+            return processed_seq >= target;
+        }
+        while (processed_seq < target && tid) {
+            processed_cond.wait(m);
+        }
+        return processed_seq >= target;
+    }
+
     #! Submits a socket operation to be performed and returns a Queue where the results will be returned
     /** @param info a hash with the socket operation and supporting info
         @param replace if True, then any operation currently in place for the given socket will be replaced
@@ -402,6 +456,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     log(LoggerLevel::DEBUG, "submit: info=%y", info);
                 }
             }
+            ++submit_seq;
             if (io_exiting || !tid) {
                 startIntern();
             }
@@ -670,6 +725,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             {
                 AutoLock al(m);
                 ready_flag = False;
+                processed_seq = 0;
+                submit_seq = 0;
+                processed_cond.broadcast();
                 io_exiting = False;
                 int cur_tid = gettid();
                 if (tid == cur_tid) {
@@ -789,6 +847,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                             "cinfo": cinfo,
                         };
                     }
+                    processed_seq = submit_seq;
+                    processed_cond.broadcast();
                 }
 
                 # ── PHASE 2: continuePoll outside the lock ────────────────────
@@ -1265,14 +1325,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param sock_hash the unique hash of the socket to compute the event union for
 
         @return the union of all event masks for operations on the given socket
+
+        @note Uses the reverse index sock_hash_to_keys for O(k) lookup where k is the
+        number of operations per socket (typically 1), avoiding the former O(N) full scan.
     */
     private int computeEventUnion(string sock_hash) {
         int result = 0;
-        foreach string k in (keys key_events) {
-            *Socket s = registered_sockets{k};
-            if (s && s.uniqueHash() == sock_hash) {
-                result |= key_events{k};
-            }
+        foreach string k in (keys sock_hash_to_keys{sock_hash}) {
+            result |= key_events{k};
         }
         return result;
     }
@@ -1310,6 +1370,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             # Remove registration for this key
             remove key_events{key};
             if (prev_sock) {
+                # Update reverse index
+                remove sock_hash_to_keys{prev_sock_hash}{key};
+                if (!sock_hash_to_keys{prev_sock_hash}) {
+                    remove sock_hash_to_keys{prev_sock_hash};
+                }
                 remove registered_sockets{key};
                 # Decrement reference count
                 int refcount = socket_refcounts{prev_sock_hash} ?? 0;
@@ -1351,11 +1416,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         key_events{key} = events;
 
         if (new_sock_hash == prev_sock_hash) {
-            # Same socket - recompute event union
+            # Same socket - recompute event union; reverse index already correct
             applyEventUnion(socket, new_sock_hash);
         } else {
             # Different socket or new registration
             if (prev_sock) {
+                # Remove key from previous socket's reverse index entry
+                remove sock_hash_to_keys{prev_sock_hash}{key};
+                if (!sock_hash_to_keys{prev_sock_hash}) {
+                    remove sock_hash_to_keys{prev_sock_hash};
+                }
                 # Decrement refcount for previous socket
                 int old_refcount = socket_refcounts{prev_sock_hash} ?? 0;
                 if (old_refcount <= 1) {
@@ -1375,6 +1445,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
                     applyEventUnion(prev_sock, prev_sock_hash);
                 }
             }
+            # Add key to new socket's reverse index entry
+            sock_hash_to_keys{new_sock_hash}{key} = True;
             # Add/update new socket
             registered_sockets{key} = socket;
             int new_refcount = socket_refcounts{new_sock_hash} ?? 0;

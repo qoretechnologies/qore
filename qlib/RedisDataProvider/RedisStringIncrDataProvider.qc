@@ -32,7 +32,7 @@ public class RedisStringIncrDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "incr",
-            "desc": "Redis string INCR/DECR API data provider; increments or decrements a numeric value",
+            "desc": "Redis string `INCR`/`DECR` API data provider; increments or decrements a numeric value",
             "type": "RedisStringIncrDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,

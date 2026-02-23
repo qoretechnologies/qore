@@ -114,7 +114,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         }
 
         if (rc == RC_BREAK
-            || ((getProgram()->getParseOptions64() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc == RC_CONTINUE)) {
+            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc == RC_CONTINUE)) {
             rc = 0;
         }
     }
@@ -152,7 +152,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
         }
 
         if (rc_state == RC_BREAK
-            || ((getProgram()->getParseOptions64() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc_state == RC_CONTINUE)) {
+            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc_state == RC_CONTINUE)) {
             rc_state = 0;
         }
     }

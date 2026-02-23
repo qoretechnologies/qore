@@ -33,6 +33,7 @@
 #define _QORE_RUNTIMECONFIG_H
 
 #include <qore/common.h>
+#include <qore/QoreParseOptions.h>
 #include <cstdint>
 
 class QoreProgram;
@@ -66,8 +67,8 @@ public:
     DLLEXPORT const AbstractStatement* getStatement() const;
     DLLEXPORT void setStatement(const AbstractStatement* stmt);
 
-    DLLEXPORT int64_t getParseOptions() const;
-    DLLEXPORT void setParseOptions(int64_t po);
+    DLLEXPORT QoreParseOptions getParseOptions() const;
+    DLLEXPORT void setParseOptions(const QoreParseOptions& po);
 
     DLLEXPORT ThreadLocalProgramData* getThreadLocalProgramData() const;
     DLLEXPORT void setThreadLocalProgramData(ThreadLocalProgramData* tlpd);

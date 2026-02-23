@@ -823,7 +823,7 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
 
     bool broken_sprintf = ignore_broken_sprintf
         ? false
-        : getProgram()->getParseOptions64() & PO_BROKEN_SPRINTF;
+        : static_cast<bool>(getProgram()->getParseOptions() & PO_BROKEN_SPRINTF);
 
     const char* pstr = fmt->c_str();
     size_t l = fmt->strlen();

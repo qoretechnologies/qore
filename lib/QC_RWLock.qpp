@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -119,26 +119,21 @@ rwl.readLock();
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 nothing RWLock::readLock() {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
-                return QoreValue();
-            }
-            int rc = rwl->readLock(xsink, poll_ms);
-            if (*xsink) {
-                return QoreValue();  // Error occurred
-            }
-            if (rc == 0) {
-                return QoreValue();  // Lock acquired
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "read lock")) {
+            return QoreValue();
         }
+        int rc = rwl->readLock(xsink, poll_ms);
+        if (*xsink) {
+            return QoreValue();  // Error occurred
+        }
+        if (rc == 0) {
+            return QoreValue();  // Lock acquired
+        }
+        // rc != 0 means timeout, loop and check again
     }
-    rwl->readLock(xsink);
 }
 
 //! Acquires the read lock with a timeout value; blocks if the write lock is already acquired by another thread
@@ -164,43 +159,38 @@ if (rwl.readLock(1500ms))
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int RWLock::readLock(timeout timeout_ms) {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        bool infinite = (timeout_ms <= 0);
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    int64 remaining = timeout_ms;
+    bool infinite = (timeout_ms <= 0);
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for read lock");
-                return -1;
-            }
+    while (true) {
+        if (qore_check_cancel(xsink, "read lock")) {
+            return -1;
+        }
 
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
+        int this_timeout;
+        if (infinite) {
+            this_timeout = poll_ms;
+        } else {
+            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+        }
 
-            int rc = rwl->readLock(xsink, this_timeout);
-            if (*xsink) {
-                return -1;  // Error occurred
-            }
-            if (rc == 0) {
-                return 0;  // Lock acquired
-            }
+        int rc = rwl->readLock(xsink, this_timeout);
+        if (*xsink) {
+            return -1;  // Error occurred
+        }
+        if (rc == 0) {
+            return 0;  // Lock acquired
+        }
 
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    return -1;  // Overall timeout exceeded
-                }
+        if (!infinite) {
+            remaining -= this_timeout;
+            if (remaining <= 0) {
+                return -1;  // Overall timeout exceeded
             }
         }
     }
-    return rwl->readLock(xsink, timeout_ms);
 }
 
 //! Decrements the read lock counter and releases the read lock if the counter is zero. If at least one thread is blocked trying to acquire the write lock and the read counter reaches zero, then one thread waiting on the write lock is woken up
@@ -239,43 +229,38 @@ if (rwl.writeLock(1500ms))
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int RWLock::writeLock(timeout timeout_ms) {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        int64 remaining = timeout_ms;
-        bool infinite = (timeout_ms <= 0);
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    int64 remaining = timeout_ms;
+    bool infinite = (timeout_ms <= 0);
 
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for write lock");
-                return -1;
-            }
+    while (true) {
+        if (qore_check_cancel(xsink, "write lock")) {
+            return -1;
+        }
 
-            int this_timeout;
-            if (infinite) {
-                this_timeout = poll_ms;
-            } else {
-                this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
-            }
+        int this_timeout;
+        if (infinite) {
+            this_timeout = poll_ms;
+        } else {
+            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+        }
 
-            int rc = rwl->grab(xsink, this_timeout);
-            if (*xsink) {
-                return -1;  // Error occurred
-            }
-            if (rc == 0) {
-                return 0;  // Lock acquired
-            }
+        int rc = rwl->grab(xsink, this_timeout);
+        if (*xsink) {
+            return -1;  // Error occurred
+        }
+        if (rc == 0) {
+            return 0;  // Lock acquired
+        }
 
-            if (!infinite) {
-                remaining -= this_timeout;
-                if (remaining <= 0) {
-                    return -1;  // Overall timeout exceeded
-                }
+        if (!infinite) {
+            remaining -= this_timeout;
+            if (remaining <= 0) {
+                return -1;  // Overall timeout exceeded
             }
         }
     }
-    return rwl->grab(xsink, timeout_ms);
 }
 
 //! Acquires the write lock; blocks if the read lock is already acquired by another thread
@@ -292,26 +277,21 @@ rwl.writeLock();
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 nothing RWLock::writeLock() {
-    // Check for sandbox interrupt - use polling if sandbox manager exists
-    QoreSandboxManagerHelper smh;
-    if (smh) {
-        const int poll_ms = 500;  // 500ms polling interval
-        while (true) {
-            if (smh->isInterruptRequested()) {
-                xsink->raiseException("PROGRAM-INTERRUPTED", "program execution was interrupted while waiting for write lock");
-                return QoreValue();
-            }
-            int rc = rwl->grab(xsink, poll_ms);
-            if (*xsink) {
-                return QoreValue();  // Error occurred
-            }
-            if (rc == 0) {
-                return QoreValue();  // Lock acquired
-            }
-            // rc != 0 means timeout, loop and check interrupt again
+    // Always poll for cancel/interrupt checking
+    const int poll_ms = 500;  // 500ms polling interval
+    while (true) {
+        if (qore_check_cancel(xsink, "write lock")) {
+            return QoreValue();
         }
+        int rc = rwl->grab(xsink, poll_ms);
+        if (*xsink) {
+            return QoreValue();  // Error occurred
+        }
+        if (rc == 0) {
+            return QoreValue();  // Lock acquired
+        }
+        // rc != 0 means timeout, loop and check again
     }
-    rwl->grab(xsink);
 }
 
 //! Releases the write lock, if any readers are waiting, wakes up all readers, otherwise if any writers are waiting, then wakes one up

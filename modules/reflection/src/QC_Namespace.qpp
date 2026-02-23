@@ -180,8 +180,6 @@ bool b = n1.isEqual(n2);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
 */
 bool Namespace::isEqual(Namespace[QoreReflectionNamespace] ns) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreReflectionNamespace> holder(ns, xsink);
-
     // get read access to program object
     QoreExternalProgramContextHelper tnh1(xsink, n->pgm);
     if (*xsink) {
@@ -940,18 +938,17 @@ Namespace n = Namespace::forName(pgm, "Thread::Mutex");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Namespace Namespace::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionNamespace> n(new QoreReflectionNamespace(xsink, **npath, pgm), xsink);
+    ReferenceHolder<QoreReflectionNamespace> n(new QoreReflectionNamespace(xsink, **npath, *pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_NAMESPACE, pgm, n.release());
+    return new QoreObject(QC_NAMESPACE, *pgm, n.release());
 }
 
 //! Returns a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match
@@ -984,6 +981,5 @@ list<Namespace> l = Namespace::findAllRegex(pgm, "^g");
     @return a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match
 */
 static list<Namespace> Namespace::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<QoreProgram> pgm_holder(pgm, xsink);
-    return find_all_namespaces(*pattern, re_opts, pgm, xsink);
+    return find_all_namespaces(*pattern, re_opts, *pgm, xsink);
 }

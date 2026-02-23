@@ -2018,13 +2018,14 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return rv.release();
     }
 
-    PrivateDataListHolder<QoreSocketObject> pdlh(xsink);
-
     // Structure to track fd -> poll_list index mapping and requested events
     struct FdInfo {
         int fd;
         int64 events;  // SOCK_POLLIN, SOCK_POLLOUT
         size_t index;  // index in poll_list
+        // borrowed reference from poll_list; safe because poll_list is alive for
+        // the entire duration of this function call
+        QoreObject* obj;
     };
     std::vector<FdInfo> fd_info;
 
@@ -2077,7 +2078,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return nullptr;
         }
 
-        fd_info.push_back({fd, events, li.index()});
+        fd_info.push_back({fd, events, li.index(), obj});
     }
 
 #ifdef DARWIN
@@ -2088,16 +2089,76 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return nullptr;
     }
 
-    // RAII cleanup for kqueue fd
+    // Create notification pipe: on macOS, closing a monitored FD silently removes
+    // its kqueue filter without delivering an event. The notification pipe provides
+    // a deterministic wakeup mechanism: close_internal() writes to it, which wakes
+    // up kevent(). The pipe read also provides an acquire memory barrier on ARM,
+    // ensuring the polling thread sees all changes (status, sock) made before the
+    // pipe write.
+    int notify_pipe[2] = {-1, -1};
+    if (pipe(notify_pipe) == -1) {
+        ::close(kq);
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "pipe() failed for kqueue notification");
+        return nullptr;
+    }
+    // Set pipe read end to non-blocking for draining after kevent
+    if (fcntl(notify_pipe[0], F_SETFL, O_NONBLOCK) == -1) {
+        ::close(notify_pipe[0]);
+        ::close(notify_pipe[1]);
+        ::close(kq);
+        qore_socket_error(xsink, "SOCKET-POLL-ERROR", "fcntl(O_NONBLOCK) failed on notification pipe");
+        return nullptr;
+    }
+
+    // RAII cleanup for kqueue fd and notification pipe
     struct KqueueGuard {
         int kq;
-        KqueueGuard(int k) : kq(k) {}
-        ~KqueueGuard() { if (kq != -1) ::close(kq); }
-    } guard(kq);
+        int pipe_read;
+        int pipe_write;
+        std::vector<FdInfo>& fd_info;
 
-    // Build kevent change list - need up to 2 events per fd (read + write)
+        ~KqueueGuard() {
+            // Clear poll_notify_fd on surviving sockets BEFORE closing the pipe
+            // to prevent fd-reuse races (a concurrent close_internal() could write
+            // to a reused fd number if we closed the pipe first)
+            for (const auto& info : fd_info) {
+                ExceptionSink tmp_xsink;
+                TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+                    info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &tmp_xsink);
+                if (tmp_xsink) {
+                    tmp_xsink.clear();
+                } else if (io) {
+                    io->setPollNotifyFd(-1);
+                }
+            }
+            // Now safe to close the pipe - no socket can write to it
+            if (pipe_write >= 0) {
+                ::close(pipe_write);
+            }
+            if (pipe_read >= 0) {
+                ::close(pipe_read);
+            }
+            if (kq >= 0) {
+                ::close(kq);
+            }
+        }
+    } guard{kq, notify_pipe[0], notify_pipe[1], fd_info};
+
+    // Set notification pipe on each polled socket so close_internal() can wake up kevent
+    for (const auto& info : fd_info) {
+        ExceptionSink tmp_xsink;
+        TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+            info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &tmp_xsink);
+        if (tmp_xsink) {
+            tmp_xsink.clear();
+        } else if (io) {
+            io->setPollNotifyFd(notify_pipe[1]);
+        }
+    }
+
+    // Build kevent change list - need up to 2 events per fd (read + write) + notification pipe
     std::vector<struct kevent> changes;
-    changes.reserve(fd_info.size() * 2);
+    changes.reserve(fd_info.size() * 2 + 1);
 
     for (const auto& info : fd_info) {
         if (info.events & SOCK_POLLIN) {
@@ -2112,6 +2173,15 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 reinterpret_cast<void*>(info.index));
             changes.push_back(ev);
         }
+    }
+
+    // Register notification pipe read end in kqueue; use SIZE_MAX as sentinel
+    // to distinguish pipe events from socket events in the result processing
+    {
+        struct kevent ev;
+        EV_SET(&ev, notify_pipe[0], EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0,
+            reinterpret_cast<void*>(SIZE_MAX));
+        changes.push_back(ev);
     }
 
     // Convert timeout to timespec (like nginx: NULL for infinite timeout)
@@ -2153,14 +2223,27 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         }
     }
 
+    // Drain the notification pipe; this serves two purposes:
+    // 1. Provides an acquire memory barrier on ARM, ensuring we see all writes
+    //    (status, sock) made by close_internal() before its pipe write
+    // 2. Consumes the pipe data so the fd can be cleanly closed
+    {
+        char drain_buf[16];
+        while (::read(notify_pipe[0], drain_buf, sizeof(drain_buf)) > 0) {}
+    }
+
+    // Track which poll_list indices have events and what events they have
+    // Use std::map to preserve order (sorted by index) for consistent output order
+    std::map<size_t, int> result_events;
+
     // Process events if we have any
     if (rc > 0) {
-        // Track which poll_list indices have events and what events they have
-        // Use std::map to preserve order (sorted by index) for consistent output order
-        std::map<size_t, int> result_events;
-
         for (int i = 0; i < rc; ++i) {
             size_t idx = reinterpret_cast<size_t>(events[i].udata);
+            // Skip notification pipe events
+            if (idx == SIZE_MAX) {
+                continue;
+            }
             if (events[i].flags & EV_ERROR) {
                 result_events[idx] = SOCK_POLLERR;
                 continue;
@@ -2184,8 +2267,50 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
             result_events[idx] = evt;
         }
+    }
 
-        // Build result list
+    // Check for fds that were closed during the kqueue wait.
+    // On macOS, closing a monitored fd removes its kqueue registration
+    // without delivering an event, so we need to detect this case.
+    // The notification pipe wakes up kevent() when a socket is closed,
+    // and the pipe drain above provides the necessary memory barriers
+    // to see the updated state on ARM.
+    if (!*xsink) {
+        for (const auto& info : fd_info) {
+            if (result_events.count(info.index)) {
+                continue;
+            }
+            // Check if the Qore object was deleted or is being destroyed
+            // (e.g. via "delete"); isCurrent() returns false both when the
+            // object is fully deleted (OS_DELETED) and when the destructor
+            // is currently running (status == thread ID), which is important
+            // because cleanup() closes the FD during destructor execution
+            // before status is set to OS_DELETED
+            if (!info.obj->isCurrent()) {
+                result_events[info.index] = SOCK_POLLERR;
+                continue;
+            }
+            // Object is still valid; check if the FD has changed (e.g. socket
+            // was closed or reconnected while we were polling)
+            ExceptionSink fd_xsink;
+            TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(
+                info.obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, &fd_xsink);
+            if (fd_xsink) {
+                fd_xsink.clear();
+                result_events[info.index] = SOCK_POLLERR;
+            } else if (io) {
+                if (io->getPollableDescriptor() != info.fd) {
+                    result_events[info.index] = SOCK_POLLERR;
+                }
+            } else if (fcntl(info.fd, F_GETFD) == -1 && errno == EBADF) {
+                // Fallback for non-AbstractPollableIoObjectBase objects
+                result_events[info.index] = SOCK_POLLERR;
+            }
+        }
+    }
+
+    // Build result list
+    if (!*xsink) {
         for (const auto& [idx, evt] : result_events) {
             if (evt) {
                 const QoreHashNode* orig = poll_list->retrieveEntry(idx).get<const QoreHashNode>();
@@ -3209,7 +3334,7 @@ int QoreSocket::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
 }
 
 int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* body,
-        size_t body_len, ExceptionSink* xsink) {
+        size_t body_len, ExceptionSink* xsink, bool streaming) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
@@ -3257,7 +3382,7 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
         return -1;
     }
 
-    return priv->h2_session->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink);
+    return priv->h2_session->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink, streaming);
 }
 
 void QoreSocket::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
@@ -3273,8 +3398,7 @@ void QoreSocket::setHttp2ConnectProtocolEnabled(bool enable) {
 }
 
 int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
-    (void)timeout_ms;
+        bool end_stream, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
@@ -3298,6 +3422,50 @@ int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
     return 0;
 }
 
+int QoreSocket::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert QoreHashNode to map
+    std::map<std::string, std::string> header_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+}
+
+int QoreSocket::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    // Convert QoreHashNode to map
+    std::map<std::string, std::string> trailer_map;
+    if (trailers) {
+        ConstHashIterator hi(trailers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    return priv->h2_session->submitTrailers(stream_id, trailer_map, xsink);
+}
+
 BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
     if (!priv->h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
@@ -3317,6 +3485,115 @@ void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
 
 int32_t QoreSocket::getHttp2ActiveStream() const {
     return priv->getH2ActiveStreamId();
+}
+
+// RAII guard for saving/restoring the HTTP/2 active stream ID
+namespace {
+struct Http2ActiveStreamGuard {
+    qore_socket_private& priv;
+    int32_t old_id;
+    Http2ActiveStreamGuard(qore_socket_private& p, int32_t new_id)
+        : priv(p), old_id(p.getH2ActiveStreamId()) {
+        p.setH2ActiveStreamId(new_id);
+    }
+    ~Http2ActiveStreamGuard() { priv.setH2ActiveStreamId(old_id); }
+    Http2ActiveStreamGuard(const Http2ActiveStreamGuard&) = delete;
+    Http2ActiveStreamGuard& operator=(const Http2ActiveStreamGuard&) = delete;
+};
+} // anonymous namespace
+
+// Thread safety: this method must only be called from a single thread per socket.
+// The server connection model enforces this — each connection has one handler thread
+// that drives the HTTP/2 session exclusively.  Concurrent calls on the same socket
+// would cause nghttp2 reentrancy issues (receiveData is not reentrant).
+BinaryNode* QoreSocket::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return nullptr;
+    }
+
+    // RAII guard saves/restores active stream ID on all exit paths
+    Http2ActiveStreamGuard id_guard(*priv, stream_id);
+
+    // Use a deadline to avoid timeout reset when control frames arrive
+    int64 deadline_ms = timeout_ms >= 0
+        ? q_clock_getmillis() + timeout_ms
+        : -1;
+
+    while (true) {
+        // 1. Check stream buffer for available data
+        BinaryNode* data = priv->h2_session->takeStreamData(stream_id, 0, xsink);
+        if (data) {
+            return data;
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // 2. Check body_complete (END_STREAM received)
+        if (priv->h2_session->isStreamComplete(stream_id)) {
+            return nullptr;
+        }
+
+        // 3. Calculate remaining timeout from deadline
+        int remaining_ms;
+        if (deadline_ms >= 0) {
+            remaining_ms = (int)(deadline_ms - q_clock_getmillis());
+            if (remaining_ms < 0) {
+                remaining_ms = 0;
+            }
+        } else {
+            remaining_ms = -1;
+        }
+
+        // 4. Wait for raw socket data with timeout
+        bool has_data = priv->h2_session->hasSocketBufferedData();
+        if (!has_data) {
+            has_data = priv->isSocketDataAvailable(remaining_ms, "readHttp2StreamDataBlock", xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (!has_data) {
+                // Timeout
+                return nullptr;
+            }
+        }
+
+        // 5. Process HTTP/2 frames
+        priv->h2_receiving_frames = true;
+        int rv = priv->h2_session->receiveData(0, xsink);
+        priv->h2_receiving_frames = false;
+        if (*xsink || rv == 1) {
+            return nullptr;
+        }
+
+        // 6. Flush pending protocol frames (WINDOW_UPDATE, SETTINGS_ACK)
+        priv->h2_session->sendPendingDataBlocking(100, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+}
+
+bool QoreSocket::isHttp2StreamComplete(int32_t stream_id) const {
+    if (!priv->h2_session) {
+        return true;
+    }
+    return priv->h2_session->isStreamComplete(stream_id);
+}
+
+int QoreSocket::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
+    if (!priv->h2_session) {
+        return 0;
+    }
+    return priv->h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+}
+
+void QoreSocket::cleanupHttp2Stream(int32_t stream_id) {
+    if (priv->h2_session) {
+        priv->h2_session->cleanupStream(stream_id);
+    }
 }
 
 long QoreSocket::verifyPeerCertificate() const {
@@ -4632,6 +4909,26 @@ int QoreSocket::getRecvTimeout() const {
     return priv->getRecvTimeout();
 }
 
+void QoreSocket::setMaxChunkedBodySize(int64 size) {
+    priv->max_chunked_body_size = size;
+}
+
+int64 QoreSocket::getMaxChunkedBodySize() const {
+    return priv->max_chunked_body_size;
+}
+
+void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
+    priv->max_http2_body_size = size;
+    AutoLocker al(priv->h2_session_lock);
+    if (priv->h2_session) {
+        priv->h2_session->setMaxRequestBodySize(size);
+    }
+}
+
+int64 QoreSocket::getHttp2MaxRequestBodySize() const {
+    return priv->max_http2_body_size;
+}
+
 void QoreSocket::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
     priv->setEventQueue(xsink, q, arg, with_data);
 }
@@ -5627,6 +5924,8 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     if (sock->priv->socket->priv->h2_session) {
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
+        // Update max body size limit in case it changed since session was created
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
         reused_session = true;
     } else {
         // Initialize new HTTP/2 session and store it on the socket
@@ -5658,9 +5957,44 @@ int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     }
     // Apply socket-level HTTP/2 settings before the connection preface is sent
     h2_session->setEnableConnectProtocol(sock->priv->socket->priv->h2_enable_connect_protocol);
+    // Propagate max request body size limit to the HTTP/2 session
+    if (sock->priv->socket->priv->max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+    }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
     return 0;
+}
+
+QoreHashNode* SocketHttp2ServerPollOperation::checkHeadersOnlyDispatch(bool& handled,
+        ExceptionSink* xsink) {
+    handled = false;
+    if (!headers_only) {
+        return nullptr;
+    }
+    // Flush pending protocol responses (SETTINGS_ACK, WINDOW_UPDATE) so the
+    // client can proceed with sending HEADERS/DATA
+    int srv = h2_session->sendPendingData(0, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
+        handled = true;
+        return getSocketPollInfoHash(xsink, srv);
+    }
+    // Atomically find a headers-ready stream, copy it, and mark dispatched
+    cached_stream = h2_session->takeHeadersReadyStreamCopy();
+    if (!cached_stream) {
+        // No headers-ready stream yet
+        return nullptr;
+    }
+    handled = true;
+    h2_state = H2S_HEADERS_READY;
+    if (set_non_block) {
+        set_non_block = false;
+        sock->priv->clearNonBlock();
+    }
+    return nullptr;
 }
 
 QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -5684,6 +6018,18 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 
             case H2S_RECV_PREFACE:
             case H2S_READING: {
+                // Headers-only mode: check for streams with HEADERS complete but not yet dispatched
+                {
+                    bool handled = false;
+                    QoreHashNode* rv = checkHeadersOnlyDispatch(handled, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (handled) {
+                        return rv;
+                    }
+                }
+
                 // If another thread already completed a stream, return it immediately
                 if (h2_session->hasCompletedStreams()) {
                     // Flush any pending output (RST_STREAM, SETTINGS_ACK, etc.) before returning
@@ -5741,6 +6087,18 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         return nullptr;
                     }
                     // Fall through to handle the completed request
+                }
+
+                // Headers-only mode: check for headers-ready streams after receiving data
+                {
+                    bool handled = false;
+                    QoreHashNode* hrv = checkHeadersOnlyDispatch(handled, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (handled) {
+                        return hrv;
+                    }
                 }
 
                 // Check if we have a completed request
@@ -5817,6 +6175,19 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 }
                 continue;
 
+            case H2S_HEADERS_READY:
+                // Headers-only dispatch complete - transition back to reading
+                // so the operation can be reused for the next request
+                cached_stream.reset();
+                h2_state = H2S_READING;
+                if (!set_non_block) {
+                    if (sock->priv->setNonBlock(xsink)) {
+                        return nullptr;
+                    }
+                    set_non_block = true;
+                }
+                continue;
+
             default:
                 xsink->raiseException("HTTP2-ERROR", "unexpected state: %d", h2_state);
                 return nullptr;
@@ -5825,7 +6196,7 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
 }
 
 QoreValue SocketHttp2ServerPollOperation::getOutput() const {
-    if (h2_state != H2S_REQUEST_READY) {
+    if (h2_state != H2S_REQUEST_READY && h2_state != H2S_HEADERS_READY) {
         return QoreValue();
     }
     if (peer_closed) {
@@ -5870,6 +6241,17 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     // RFC 8441: Add :protocol pseudo-header for extended CONNECT
     if (!cached_stream->connect_protocol.empty()) {
         headers->setKeyValue(":protocol", new QoreStringNode(cached_stream->connect_protocol), nullptr);
+    }
+
+    // Include trailers from client if present (e.g., gRPC client-streaming)
+    if (!cached_stream->trailers.empty()) {
+        QoreHashNode* trailers_hash = h2HeadersToQoreHash(cached_stream->trailers, true);
+        result->setKeyValue("trailers", trailers_hash, nullptr);
+    }
+
+    // Indicate headers-only dispatch (stream still in map for incremental reading)
+    if (h2_state == H2S_HEADERS_READY) {
+        result->setKeyValue("hdr", true, nullptr);
     }
 
     return result;
@@ -6187,6 +6569,12 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                     if (poll_rv < 0) {
                         xsink->raiseException("HTTP2-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
                         return nullptr;
                     }
                     if (poll_rv == 0) {
@@ -6200,7 +6588,15 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                     chunk->preallocate(chunk_size);
                     int64 count = input_stream->readNonBlock(
                         const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
-                    if (*xsink) return nullptr;
+                    if (*xsink) {
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        return nullptr;
+                    }
                     if (count == 0) {
                         // poll said readable but read returned 0 → EOF
                         eof = true;
@@ -6211,7 +6607,15 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                 } else {
                     // Non-pollable (memory) streams - read() never blocks
                     current_chunk = input_stream->readHelper(chunk_size, xsink);
-                    if (*xsink) return nullptr;
+                    if (*xsink) {
+                        // Send RST_STREAM to notify client of the error
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        return nullptr;
+                    }
                     if (!current_chunk) {
                         eof = true;
                         continue;
@@ -6327,6 +6731,66 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
     }
 }
 
+// HTTP/2 Flush Poll Operation implementation
+
+SocketHttp2FlushPollOperation::SocketHttp2FlushPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+}
+
+QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
+        return nullptr;
+    }
+
+    while (true) {
+        switch (h2f_state) {
+            case H2F_FLUSHING: {
+                int rv = session->sendPendingData(0, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
+                }
+
+                if (session->hasPendingData()) {
+                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                }
+
+                if (session->wantWrite()) {
+                    continue;
+                }
+
+                // All pending data flushed
+                h2f_state = H2F_DONE;
+                if (set_non_block) {
+                    set_non_block = false;
+                    sock->priv->clearNonBlock();
+                }
+                return nullptr;
+            }
+
+            default:
+                xsink->raiseException("HTTP2-ERROR", "unexpected flush state: %d", h2f_state);
+                return nullptr;
+        }
+    }
+}
+
 // HTTP/2 Client Multiplex Poll Operation implementation
 
 SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation(ExceptionSink* xsink,
@@ -6350,6 +6814,8 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
     if (sock->priv->socket->priv->h2_session) {
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
+        // Update max body size limit in case it changed since session was created
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
         reused_session = true;
     } else {
         // Initialize new HTTP/2 client session and store it on the socket
@@ -6435,6 +6901,10 @@ int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
     if (!h2_session) {
         return -1;
     }
+    // Propagate max request body size limit to the HTTP/2 session
+    if (sock->priv->socket->priv->max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+    }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
     return 0;
@@ -6496,6 +6966,14 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
             response->setKeyValue("body", body.release(), xsink);
         }
     }
+
+    // Include trailers if present
+    if (!stream->trailers.empty()) {
+        response->setKeyValue("trailers", h2HeadersToQoreHash(stream->trailers, true), xsink);
+    }
+
+    // Mark that the stream has ended (END_STREAM was received)
+    response->setKeyValue("end_stream", true, xsink);
 
     // Queue the response
     {
@@ -6603,6 +7081,42 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     // Responses are dispatched via callback mechanism
                     // Continue the loop to process more frames
                     continue;
+                }
+
+                // Check for intermediate body data on streaming streams.
+                // Batch limit prevents monopolizing the poll loop when many streams
+                // have data; remaining data will be picked up on the next poll cycle.
+                {
+                    int32_t streaming_id = 0;
+                    int batch = 0;
+                    static const int MAX_STREAMING_BATCH = 16;
+                    while (batch < MAX_STREAMING_BATCH
+                            && h2_session->hasStreamingData(streaming_id)) {
+                        // Take body data from the streaming stream
+                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        if (!body) {
+                            break;
+                        }
+                        // Create a partial response with just the body
+                        ReferenceHolder<QoreHashNode> partial(new QoreHashNode(autoTypeInfo), xsink);
+                        partial->setKeyValue("stream_id", streaming_id, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        partial->setKeyValue("body", body, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        // No end_stream flag - this is intermediate data
+                        {
+                            AutoLocker rl(response_lock);
+                            completed_responses.push_back(partial.release());
+                        }
+                        ++batch;
+                    }
                 }
 
                 // No completed streams yet - check if we're past the preface stage

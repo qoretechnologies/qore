@@ -32,7 +32,7 @@ public class RedisHashIncrDataProvider inherits RedisDataProviderBase {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "incr",
-            "desc": "Redis hash INCR API data provider; increments hash field values (HINCRBY, HINCRBYFLOAT)",
+            "desc": "Redis hash INCR API data provider; increments hash field values (`HINCRBY`, `HINCRBYFLOAT`)",
             "type": "RedisHashIncrDataProvider",
             "constructor_options": RedisDataProvider::ConstructorOptions,
             "supports_request": True,

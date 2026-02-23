@@ -1,0 +1,788 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    HTTP/2 trailer round-trip tests — exercises trailer send/receive via
+    Http2Session::submitTrailers() and trailer detection in onHeaderCallback.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Http2ClientIo
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class Http2TrailersTest
+
+# HTTP/2 test certificate and key (self-signed for localhost)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUdeELntWEJ1tNb3cfHjPgnh9rtJowDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMDA0NDc0OFoXDTI3MDIy
+MDA0NDc0OFowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAnX75+o86yk7vZsm9BYbcF6gE/98E0gGkPD4UgBHJqW5A
+/M4wpehNs0U2BsD9YjKT2D7ODdbCLWWqlUxrB5iMZHHE/4MY9Jb6SeJOnO25Hg1/
+OZRMZuWaoO3zGyT9NVURmOPQoDOFadF16KVJTMQ1kyviaI52oZy7ey+JePnlrRDk
+LQA8BfJrC6zHbWVD3Plj4zzATT5ITYgPKI/qA3eDJEwS2bQ1RY0FElDLjZ2YeloG
+o0S+FcAHlPC/jALRVziW5rrwol2QTko9U+Br4zemwIiiT2HZGmgm7dQ4K4y7+wKL
+G/a+CxoiwYbLCUar0esD8RmUFJLSHgKcqpFFn9o6vQIDAQABo1MwUTAdBgNVHQ4E
+FgQUT2EWfVH6MeeikqbbrlaqD3wveLMwHwYDVR0jBBgwFoAUT2EWfVH6Meeikqbb
+rlaqD3wveLMwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAF6Op
+0wC8ekp2J3QkEv92LGkk3wqUSub7sI3tVN4Dk4uCElcu5iZH7+AYQ/UEA71mDiz6
+PTyVnIxdHMZlsJrZYAYmbAldS7LLrWACBh0mj7KGRn/Hxjfw/0DQ9VLC2jg+q0yL
+wdyEgYdwr7qk0rKj8r5Tdvmk+V5tl1nkA3//zHMxa5IO1Ira/ZGB/hyKzXtCRmpw
+sIAhXWtTUS8ywtd9+AfPS3iDgPdJmxTL7iXkyV8NddI6N9ZcuNXkN8WWtwXLRGOe
+ZM71H8mLCVdWvUNMEgXbYSkpIPvoBsUsRFF/fr49iTnQ7umFsPqBKGZilRNNZRlD
+mTvg3S0LQYcYShm1rw==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCdfvn6jzrKTu9m
+yb0FhtwXqAT/3wTSAaQ8PhSAEcmpbkD8zjCl6E2zRTYGwP1iMpPYPs4N1sItZaqV
+TGsHmIxkccT/gxj0lvpJ4k6c7bkeDX85lExm5Zqg7fMbJP01VRGY49CgM4Vp0XXo
+pUlMxDWTK+JojnahnLt7L4l4+eWtEOQtADwF8msLrMdtZUPc+WPjPMBNPkhNiA8o
+j+oDd4MkTBLZtDVFjQUSUMuNnZh6WgajRL4VwAeU8L+MAtFXOJbmuvCiXZBOSj1T
+4GvjN6bAiKJPYdkaaCbt1DgrjLv7Aosb9r4LGiLBhssJRqvR6wPxGZQUktIeApyq
+kUWf2jq9AgMBAAECggEADGDxhucBCOuhV2PdznRmEhnroqzFtTfZz75VYCeFwSJg
+Sz5thmy2xrNW5rr+b1xoUGPHUEEj6+uEt81U0DkGN9LVV/vW10qSi4IVCbKJjTok
+WMM2KhQ7zhBFvklu+WUhR/IH8L976fBDozByjW0ShOm7FtqzqkomVi1LUc3aZnrA
+05E7TfKa5KprhRuZlIHMNDUqelJtup7IYNhBOA9UTO9O46pxXjfbI7QT+6upySnj
+mc3uwMsJt9V1eLjYgpfKZtuFG+7JdhVKc/5Z5r4j4hh+8imHHwVjCR98Oz6hE1vT
+HdUhyDAoxB8jA/WNU32DjUP/liOpF/pP80vgC+ok4QKBgQDKtB43pWlyMzwfOW1B
+/WXvfmgGg3qJ7GU/0XNhGs054OaOyFxAXVcQR9BLwcYQSi9WoHxcBuzYLiBuY1jC
+Bp4CDdhLHfxWfyBwLNZxCvok4KiaC0MtjbEMQA44SxifXaNcX4pgjTWI+vjSYSZL
+FtDGmdYdX6S5DcqD7hVXz+oJtQKBgQDG5/UboJoG2N8tt908KkFESO5vkCsEDhzy
+DHtOy4Om7tQBdbgfaqjkdkBNtkpDth84ALf0Yro19+Bng7J/Q92s60cjx61x05lM
+qo1wbZV+SNIdTkjZvhdE5c7gx1AQY60WTRXCQ/8Xsvpbs8cN7hoJ6cx9zpABhiKH
+4gP87mTx6QKBgBValDRYgJs/On4vlor1Ht/z+RF2mFofRStL7VO1dxk50BAKm21M
+Z/eXGSJh73OX3RTLI06ujBTaByCZ5qfJ+qtMuhRvvD2AdvJaRtzxwxhPcnOH7DPI
+UXZw6Q6VGqrvOl5o0jMJrTIY/k1rXpVaefPyENRXVwsHoOX1FtqBVK5hAoGAYIp7
+FCK6P7KJeEYykh4sOXlwiSOfTUOQVwcp3k+3IZHvwpmheVYqjWC7yzw8BWti8aqf
+nnVAzir2dyebvltxP5memMY07/d1A5oQNk5p7bZojSLPByhVYPJtm/oBaUMH4rgd
+ZIHeUWFkVJgIeEFl0APzZeiZSrQRFITlzKDky+kCgYABRSnC9NqeN9kzfH6A+QbY
+U17a6fKhM2C3xX0Lwn6w/9FNeScOVJrg/w7CclZuAXfTb2avTlDN5rwR+p3TLF6B
+lCBQ2/eugDktASsiOs11UWnivF07lp21MOA+hX9u8S9GZ1Q4bNL6f3ql6hIIMUAx
+/mKuGztJONd4/cz+ZKufKA==
+-----END PRIVATE KEY-----";
+
+class Http2TrailersTest inherits QUnit::Test {
+    constructor() : Test("Http2TrailersTest", "1.0") {
+        addTestCase("trailer round-trip: server sends trailers, client receives them",
+            \testTrailerRoundTrip());
+        addTestCase("trailer round-trip with body: streaming body + trailers",
+            \testTrailerWithBody());
+        addTestCase("empty trailers: no trailer headers sent",
+            \testNoTrailers());
+        addTestCase("multiple trailer headers",
+            \testMultipleTrailers());
+        addTestCase("trailer case sensitivity: mixed-case names lowercased",
+            \testTrailerCaseSensitivity());
+        addTestCase("getTrailers() API returns trailers after request()",
+            \testStreamingGetTrailers());
+        addTestCase("Http2StreamContext::sendTrailers() wrapper",
+            \testStreamContextSendTrailers());
+        addTestCase("negative: sendHttp2Trailers on non-HTTP/2 socket",
+            \testSendTrailersNoHttp2Session());
+        addTestCase("getTrailers() returns NOTHING when no trailers",
+            \testGetTrailersNoTrailers());
+
+        set_return_value(main());
+    }
+
+    #! Helper: drive a poll operation to completion
+    private drivePoll(AbstractPollOperation op, int max_iterations = 500) {
+        int i = 0;
+        while (!op.goalReached() && i < max_iterations) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 10s);
+            ++i;
+        }
+    }
+
+    #! Helper: set up a TLS server socket
+    private Socket setupServer(reference<int> port) {
+        Socket server_sock();
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        server_sock.setCertificate(cert);
+        server_sock.setPrivateKey(key);
+        server_sock.bind("localhost:0");
+        server_sock.listen();
+        port = server_sock.getPort();
+        return server_sock;
+    }
+
+    #! Helper: accept and upgrade server connection to HTTP/2
+    private Socket acceptHttp2(Socket server_sock) {
+        Socket client = server_sock.accept();
+        client.setNoDelay(True);
+        client.setAlpnProtocols(("h2",));
+        client.upgradeServerToSSL();
+        return client;
+    }
+
+    #! Helper: create client connection manager with accept_all_certs
+    private Http2ClientIo::Http2ClientConnectionManager createClientMgr() {
+        return new Http2ClientIo::Http2ClientConnectionManager(
+            <Http2ClientIo::Http2ClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+            });
+    }
+
+    #! Test that server can send trailers and client receives them in the response hash
+    testTrailerRoundTrip() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server thread: accept, read request, send streaming response + trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                # Read HTTP/2 request
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached(), "server: read goal reached");
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers (no END_STREAM)
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/grpc+proto"});
+
+                # Send body data
+                client.sendHttp2StreamData(stream_id, binary("hello-grpc"));
+
+                # Send trailers (grpc-status, grpc-message)
+                client.sendHttp2Trailers(stream_id, {
+                    "grpc-status": "0",
+                    "grpc-message": "OK",
+                    "custom-trailer": "test-value",
+                });
+
+                # Flush all pending data
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached(), "server: flush goal reached");
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client thread: connect, send request, read response with trailers
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("POST", "/test.Service/Method",
+                    {"content-type": "application/grpc+proto", "te": "trailers"},
+                    binary("request-data"));
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+
+        # Verify body is present
+        assertEq(True, exists results.response.body, "body exists");
+
+        # Verify trailers are present in response
+        assertEq(True, exists results.response.trailers, "trailers exist in response");
+        assertEq("0", results.response.trailers."grpc-status", "grpc-status trailer");
+        assertEq("OK", results.response.trailers."grpc-message", "grpc-message trailer");
+        assertEq("test-value", results.response.trailers."custom-trailer", "custom trailer");
+    }
+
+    #! Test trailers with a body - verify body + trailers round-trip
+    testTrailerWithBody() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: streaming response with body + trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/octet-stream"});
+
+                # Send multiple body chunks
+                client.sendHttp2StreamData(stream_id, binary("chunk1"));
+                client.sendHttp2StreamData(stream_id, binary("chunk2"));
+
+                # Send trailers
+                client.sendHttp2Trailers(stream_id, {
+                    "checksum": "abc123",
+                });
+
+                # Flush
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("GET", "/data");
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+
+        # Verify body contains both chunks
+        assertEq(True, exists results.response.body, "body exists");
+        if (results.response.body.typeCode() == NT_BINARY) {
+            assertEq("chunk1chunk2", results.response.body.toString(), "body content");
+        } else {
+            assertEq("chunk1chunk2", results.response.body, "body content");
+        }
+
+        # Verify trailers
+        assertEq(True, exists results.response.trailers, "trailers exist");
+        assertEq("abc123", results.response.trailers.checksum, "checksum trailer");
+    }
+
+    #! Test that responses without trailers still work (no regression)
+    testNoTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: normal response without trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Send normal response (no trailers)
+                AbstractPollOperation send_op = client.startPollSendHttp2Response(
+                    stream_id, 200, {"content-type": "text/plain"}, "no-trailers");
+                drivePoll(send_op);
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("GET", "/no-trailers");
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+        assertEq("no-trailers", results.response.body, "body content");
+        # No trailers key should be present
+        assertFalse(exists results.response.trailers, "no trailers in response");
+    }
+
+    #! Test multiple trailer headers
+    testMultipleTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/grpc+proto"});
+
+                # Send trailers-only (no body data — gRPC error-only response)
+                client.sendHttp2Trailers(stream_id, {
+                    "grpc-status": "2",
+                    "grpc-message": "UNKNOWN: something went wrong",
+                    "x-debug-info": "server=node1",
+                    "x-request-id": "abc-123-def",
+                });
+
+                # Flush
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("POST", "/test.Service/Method",
+                    {"content-type": "application/grpc+proto", "te": "trailers"});
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+        assertEq(True, exists results.response.trailers, "trailers exist");
+        assertEq("2", results.response.trailers."grpc-status", "grpc-status");
+        assertEq("UNKNOWN: something went wrong", results.response.trailers."grpc-message", "grpc-message");
+        assertEq("server=node1", results.response.trailers."x-debug-info", "x-debug-info");
+        assertEq("abc-123-def", results.response.trailers."x-request-id", "x-request-id");
+    }
+
+    #! Test that mixed-case trailer names are lowercased per HTTP/2 spec
+    testTrailerCaseSensitivity() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "text/plain"});
+
+                client.sendHttp2StreamData(stream_id, binary("data"));
+
+                # Send trailers with mixed-case names — HTTP/2 lowercases them
+                client.sendHttp2Trailers(stream_id, {
+                    "Grpc-Status": "0",
+                    "X-Custom-Trailer": "mixed-case-value",
+                    "UPPERCASE": "upper-value",
+                });
+
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("GET", "/case-test");
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(True, exists results.response.trailers, "trailers exist");
+        # Verify all trailer names are lowercase
+        assertEq("0", results.response.trailers."grpc-status", "lowercased grpc-status");
+        assertEq("mixed-case-value", results.response.trailers."x-custom-trailer",
+            "lowercased x-custom-trailer");
+        assertEq("upper-value", results.response.trailers."uppercase", "lowercased uppercase");
+    }
+
+    #! Test getTrailers() API on Http2ClientStreamHandle after request()
+    testStreamingGetTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: streaming response with body + trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/grpc+proto"});
+
+                # Send body data
+                client.sendHttp2StreamData(stream_id, binary("streaming-body"));
+
+                # Send trailers
+                client.sendHttp2Trailers(stream_id, {
+                    "grpc-status": "0",
+                    "grpc-message": "OK",
+                });
+
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client: use request() then verify getTrailers() returns the same trailers
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("POST", "/test.Service/StreamMethod",
+                    {"content-type": "application/grpc+proto", "te": "trailers"},
+                    binary("request-data"));
+
+                # After request(), getTrailers() should return the same trailers
+                *hash<string, string> trailers = stream.getTrailers();
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                    results.trailers_from_api = trailers;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+        assertEq(True, exists results.response.body, "body exists");
+
+        # Verify trailers from response hash
+        assertEq(True, exists results.response.trailers, "trailers in response");
+        assertEq("0", results.response.trailers."grpc-status", "response grpc-status");
+
+        # Verify getTrailers() API returns the same trailers
+        assertEq(True, exists results.trailers_from_api, "getTrailers() returned trailers");
+        assertEq("0", results.trailers_from_api."grpc-status", "getTrailers grpc-status");
+        assertEq("OK", results.trailers_from_api."grpc-message", "getTrailers grpc-message");
+    }
+
+    #! Test Http2StreamContext::sendTrailers() wrapper
+    testStreamContextSendTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: use Http2StreamContext to send trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/grpc+proto"});
+
+                # Create Http2StreamContext and use it for sending
+                AsyncSocketIo::Http2StreamContext ctx(client, stream_id);
+
+                # Send body via context
+                ctx.sendData(binary("context-body"));
+
+                # Send trailers via context wrapper
+                ctx.sendTrailers({
+                    "grpc-status": "0",
+                    "grpc-message": "OK",
+                    "x-context": "wrapped",
+                });
+
+                # Flush
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("POST", "/test.Service/ContextMethod",
+                    {"content-type": "application/grpc+proto", "te": "trailers"},
+                    binary("request-data"));
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+        assertEq(True, exists results.response.body, "body exists");
+
+        # Verify trailers sent via Http2StreamContext wrapper
+        assertEq(True, exists results.response.trailers, "trailers exist");
+        assertEq("0", results.response.trailers."grpc-status", "grpc-status");
+        assertEq("OK", results.response.trailers."grpc-message", "grpc-message");
+        assertEq("wrapped", results.response.trailers."x-context", "x-context trailer");
+    }
+
+    #! Negative test: sendHttp2Trailers on a socket without HTTP/2 session
+    testSendTrailersNoHttp2Session() {
+        Socket sock();
+        assertThrows("HTTP2-ERROR", sub() {
+            sock.sendHttp2Trailers(1, {"grpc-status": "0"});
+        }, NOTHING, "sendHttp2Trailers without HTTP/2 session throws");
+    }
+
+    #! Test getTrailers() returns NOTHING when response has no trailers
+    testGetTrailersNoTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: normal response without trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Send normal response (no trailers)
+                AbstractPollOperation send_op = client.startPollSendHttp2Response(
+                    stream_id, 200, {"content-type": "text/plain"}, "plain-response");
+                drivePoll(send_op);
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client: use streaming + getTrailers to verify NOTHING
+        background sub() {
+            try {
+                Http2ClientIo::Http2ClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                Http2ClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+                hash<auto> response = stream.request("GET", "/no-trailers-get");
+
+                # getTrailers() should return NOTHING
+                auto trailers = stream.getTrailers();
+
+                {
+                    AutoLock al(mx);
+                    results.response = response;
+                    results.has_trailers = exists trailers;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        assertEq(200, results.response.status_code, "status code");
+        assertEq("plain-response", results.response.body, "body content");
+        # Verify getTrailers() returned NOTHING
+        assertFalse(results.has_trailers, "getTrailers() returns NOTHING when no trailers sent");
+    }
+}

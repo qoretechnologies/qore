@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ConditionSignalLossTest
+
+#! Tests that condition variable signals are never lost when used with Mutex/RWLock
+#! This specifically tests the race condition where a broadcast can be missed when
+#! a thread's internal poll timeout expires at the same time as a broadcast fires,
+#! and the thread transitions from waiting on the user condition to waiting on
+#! asl_cond (to reacquire the Qore-level mutex) in the SmartMutex two-level locking.
+public class ConditionSignalLossTest inherits QUnit::Test {
+    private {
+        Mutex m();
+        Condition cond();
+
+        int counter = 0;
+        int threads_ready = 0;
+
+        RWLock rwl();
+        Condition rw_cond();
+        int rw_counter = 0;
+        int rw_threads_ready = 0;
+    }
+
+    constructor() : Test("ConditionSignalLossTest", "1.0") {
+        addTestCase("mutex condition broadcast stress", \testMutexCondBroadcastStress());
+        addTestCase("mutex condition signal stress", \testMutexCondSignalStress());
+        addTestCase("mutex timed wait broadcast stress", \testMutexTimedWaitBroadcastStress());
+        addTestCase("rwlock condition broadcast stress", \testRWLockCondBroadcastStress());
+        set_return_value(main());
+    }
+
+    #! Stress test: multiple threads waiting on a condition with Mutex, rapid broadcast cycles
+    testMutexCondBroadcastStress() {
+        int num_threads = 4;
+        int num_iterations = 200;
+
+        for (int iter = 0; iter < num_iterations; ++iter) {
+            counter = 0;
+            threads_ready = 0;
+
+            # start waiter threads
+            list<int> tids = ();
+            Counter thread_counter(num_threads);
+            for (int i = 0; i < num_threads; ++i) {
+                tids += background waiterThread(iter, thread_counter);
+            }
+
+            # wait for all threads to be ready (waiting on the condition)
+            {
+                m.lock();
+                on_exit m.unlock();
+                while (threads_ready < num_threads) {
+                    cond.wait(m, 100ms);
+                }
+            }
+
+            # signal all threads by changing the predicate and broadcasting
+            {
+                m.lock();
+                on_exit m.unlock();
+                counter = 1;
+                cond.broadcast();
+            }
+
+            # wait for all threads to finish with a timeout
+            int completed = thread_counter.waitForZero(5s);
+            assertEq(0, completed, sprintf("iter %d: all threads completed (no missed signals)", iter));
+            if (completed) {
+                # kill any stuck threads to allow test to continue
+                foreach int tid in (tids) {
+                    try { cancel_thread(tid); } catch (hash<ExceptionInfo> ex) {}
+                }
+                thread_counter.waitForZero(2s);
+                break;
+            }
+        }
+    }
+
+    private waiterThread(int iter, Counter thread_counter) {
+        on_exit thread_counter.dec();
+        m.lock();
+        on_exit m.unlock();
+
+        # signal that we're ready
+        ++threads_ready;
+        cond.broadcast();
+
+        # wait for counter to change
+        while (counter == 0) {
+            cond.wait(m);
+        }
+    }
+
+    #! Stress test: single signal (wake one thread at a time)
+    testMutexCondSignalStress() {
+        int num_iterations = 200;
+
+        for (int iter = 0; iter < num_iterations; ++iter) {
+            counter = 0;
+            threads_ready = 0;
+
+            Counter thread_counter(1);
+            int tid = background singleWaiterThread(iter, thread_counter);
+
+            # wait for thread to be ready
+            {
+                m.lock();
+                on_exit m.unlock();
+                while (threads_ready < 1) {
+                    cond.wait(m, 100ms);
+                }
+            }
+
+            # signal the waiting thread
+            {
+                m.lock();
+                on_exit m.unlock();
+                counter = 1;
+                cond.signal();
+            }
+
+            int completed = thread_counter.waitForZero(5s);
+            assertEq(0, completed, sprintf("iter %d: thread completed (signal not lost)", iter));
+            if (completed) {
+                try { cancel_thread(tid); } catch (hash<ExceptionInfo> ex) {}
+                thread_counter.waitForZero(2s);
+                break;
+            }
+        }
+    }
+
+    private singleWaiterThread(int iter, Counter thread_counter) {
+        on_exit thread_counter.dec();
+        m.lock();
+        on_exit m.unlock();
+
+        ++threads_ready;
+        cond.broadcast();
+
+        while (counter == 0) {
+            cond.wait(m);
+        }
+    }
+
+    #! Stress test: waiter threads use cond.wait(m, timeout) in a predicate loop
+    #! This directly exercises the externWaitImpl fix path where a timed wait returns
+    #! ETIMEDOUT from pthread_cond_timedwait while a broadcast is in progress
+    testMutexTimedWaitBroadcastStress() {
+        int num_threads = 4;
+        int num_iterations = 200;
+
+        for (int iter = 0; iter < num_iterations; ++iter) {
+            counter = 0;
+            threads_ready = 0;
+
+            list<int> tids = ();
+            Counter thread_counter(num_threads);
+            for (int i = 0; i < num_threads; ++i) {
+                tids += background timedWaiterThread(iter, thread_counter);
+            }
+
+            # wait for all threads to be ready
+            {
+                m.lock();
+                on_exit m.unlock();
+                while (threads_ready < num_threads) {
+                    cond.wait(m, 100ms);
+                }
+            }
+
+            # signal all threads by changing the predicate and broadcasting
+            {
+                m.lock();
+                on_exit m.unlock();
+                counter = 1;
+                cond.broadcast();
+            }
+
+            int completed = thread_counter.waitForZero(5s);
+            assertEq(0, completed, sprintf("iter %d: all timed-wait threads completed", iter));
+            if (completed) {
+                foreach int tid in (tids) {
+                    try { cancel_thread(tid); } catch (hash<ExceptionInfo> ex) {}
+                }
+                thread_counter.waitForZero(2s);
+                break;
+            }
+        }
+    }
+
+    private timedWaiterThread(int iter, Counter thread_counter) {
+        on_exit thread_counter.dec();
+        m.lock();
+        on_exit m.unlock();
+
+        ++threads_ready;
+        cond.broadcast();
+
+        # Use a timed wait in the predicate loop — this passes a positive timeout_ms
+        # to externWaitImpl, directly exercising the signal generation counter check
+        while (counter == 0) {
+            cond.wait(m, 30s);
+        }
+    }
+
+    #! Stress test: RWLock write lock with condition broadcast
+    testRWLockCondBroadcastStress() {
+        int num_threads = 4;
+        int num_iterations = 200;
+
+        for (int iter = 0; iter < num_iterations; ++iter) {
+            rw_counter = 0;
+            rw_threads_ready = 0;
+
+            list<int> tids = ();
+            Counter thread_counter(num_threads);
+            for (int i = 0; i < num_threads; ++i) {
+                tids += background rwlWaiterThread(iter, thread_counter);
+            }
+
+            # wait for all threads to be ready
+            {
+                rwl.writeLock();
+                on_exit rwl.writeUnlock();
+                while (rw_threads_ready < num_threads) {
+                    rw_cond.wait(rwl, 100ms);
+                }
+            }
+
+            # signal all threads
+            {
+                rwl.writeLock();
+                on_exit rwl.writeUnlock();
+                rw_counter = 1;
+                rw_cond.broadcast();
+            }
+
+            int completed = thread_counter.waitForZero(5s);
+            assertEq(0, completed, sprintf("iter %d: all RWLock threads completed", iter));
+            if (completed) {
+                foreach int tid in (tids) {
+                    try { cancel_thread(tid); } catch (hash<ExceptionInfo> ex) {}
+                }
+                thread_counter.waitForZero(2s);
+                break;
+            }
+        }
+    }
+
+    private rwlWaiterThread(int iter, Counter thread_counter) {
+        on_exit thread_counter.dec();
+        rwl.writeLock();
+        on_exit rwl.writeUnlock();
+
+        ++rw_threads_ready;
+        rw_cond.broadcast();
+
+        while (rw_counter == 0) {
+            rw_cond.wait(rwl);
+        }
+    }
+}

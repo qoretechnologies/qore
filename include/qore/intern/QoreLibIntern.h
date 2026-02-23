@@ -263,13 +263,13 @@ DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
 DLLLOCAL AbstractQoreNode* missing_openssl_feature(const char* f, ExceptionSink* xsink);
 
 struct ParseWarnOptions {
-    int64 parse_options = 0;
+    QoreParseOptions parse_options;
     int warn_mask = 0;
 
     DLLLOCAL ParseWarnOptions() {
     }
 
-    DLLLOCAL ParseWarnOptions(int64 n_parse_options, int n_warn_mask = 0)
+    DLLLOCAL ParseWarnOptions(const QoreParseOptions& n_parse_options, int n_warn_mask = 0)
             : parse_options(n_parse_options), warn_mask(n_warn_mask) {
     }
 

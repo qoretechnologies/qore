@@ -142,6 +142,7 @@ class QoreSocket {
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;
+    friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
 
 public:
@@ -1941,7 +1942,7 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
-            size_t body_len, ExceptionSink* xsink);
+            size_t body_len, ExceptionSink* xsink, bool streaming = false);
 
     //! Cancels a pending HTTP/2 stream by sending RST_STREAM
     /** @param stream_id the stream ID to cancel
@@ -1964,8 +1965,39 @@ public:
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
-            bool end_stream, int timeout_ms, ExceptionSink* xsink);
+            bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+
+    //! Sends HTTP/2 trailer headers on a stream
+    /** Submits a trailing HEADERS frame with END_STREAM on the specified stream.
+        The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
+        on the last DATA frame so trailers carry the END_STREAM flag.
+
+        @param stream_id the HTTP/2 stream ID
+        @param trailers trailer header name/value pairs
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
+            ExceptionSink* xsink);
+
+    //! Submits HTTP/2 streaming response headers without body or END_STREAM
+    /** Calls Http2Session::submitResponseStreaming() to send response HEADERS
+        without END_STREAM. A deferred data provider is created so that body data
+        can be sent later via sendHttp2StreamData() and trailers via sendHttp2Trailers().
+
+        @param stream_id the HTTP/2 stream ID
+        @param status_code HTTP status code (e.g., 200)
+        @param headers response headers
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
 
     //! Sets the active HTTP/2 stream ID for transparent send/recv operations
     /** @param stream_id the stream ID to use for subsequent send/recv operations
@@ -1981,6 +2013,48 @@ public:
         @since Qore 2.3
     */
     DLLEXPORT int32_t getHttp2ActiveStream() const;
+
+    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
+    /** Blocks until data is available on the specified stream, the stream completes
+        (END_STREAM), or the timeout expires.
+
+        @param stream_id the HTTP/2 stream ID
+        @param timeout_ms read timeout in milliseconds
+        @param xsink exception sink for error reporting
+
+        @return binary data from the stream, or nullptr on timeout or stream end.
+        Use isHttp2StreamComplete() to distinguish timeout from end-of-stream.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+            ExceptionSink* xsink);
+
+    //! Check if an HTTP/2 stream has received END_STREAM
+    /** @param stream_id the HTTP/2 stream ID
+        @return true if END_STREAM has been received (body_complete) or stream not found
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
+
+    //! Flush all pending HTTP/2 outgoing data (blocking)
+    /** Calls sendPendingDataBlocking() to send all queued frames to the socket.
+
+        @param timeout_ms send timeout in milliseconds; -1 for infinite
+        @param xsink exception sink for error reporting
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
+
+    //! Remove an HTTP/2 stream from the session (cleanup after handler finishes)
+    /** @param stream_id the HTTP/2 stream ID to remove
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
 
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;
@@ -2168,6 +2242,40 @@ public:
         @since %Qore 0.9.3.1
     */
     DLLEXPORT int64 getConnectionId() const;
+
+    //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
+    /** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
+        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setMaxChunkedBodySize(int64 size);
+
+    //! Returns the maximum body size for chunked HTTP reads
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getMaxChunkedBodySize() const;
+
+    //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
+    /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
+        the stream to be reset with REFUSED_STREAM.
+
+        @param size maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
+
+    //! Returns the maximum request body size for HTTP/2 streams
+    /** @return the maximum body size in bytes; 0 means unlimited
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT int64 getHttp2MaxRequestBodySize() const;
 
     DLLLOCAL static void doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink);
 

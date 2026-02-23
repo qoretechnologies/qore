@@ -641,9 +641,7 @@ class SocketTest inherits QUnit::Test {
                         *hash<SocketPollInfo> info_recv = spop_recv.continuePoll();
                         #printf("recv info: %y (s3: %y)\n", info_recv, exists s3);
                         if (info_recv) {
-                            if (s3) {
-                                poll_list += info_recv;
-                            }
+                            poll_list += info_recv;
                         } else {
                             binary b = spop_recv.getOutput();
                             #printf("got %d bytes\n", b.size());
@@ -987,7 +985,7 @@ class SocketTest inherits QUnit::Test {
             );
             cnt.dec();
             try {
-                q.push(Socket::poll(new_poll_list, 500ms));
+                q.push(Socket::poll(new_poll_list, 5s));
             } catch (hash<ExceptionInfo> ex) {
                 q.push(ex);
             }

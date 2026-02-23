@@ -64,7 +64,7 @@ typedef safe_dslist<std::string> cl_mod_list_t;
 static cl_mod_list_t cl_mod_list;
 
 // global parse_option
-static int64 parse_options = PO_DEFAULT;
+static QoreParseOptions parse_options = PO_DEFAULT;
 static int warnings = QP_WARN_DEFAULT;
 static int qore_lib_options = QLO_NONE;
 
@@ -198,6 +198,8 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "      --no-external-info       disallow access to external info\n"
    "  -E, --no-external-process    make access to external processes illegal\n"
    "  -F, --no-filesystem          disallow access to the local filesystem\n"
+   "      --no-class-defs           disallow class definitions\n"
+   "      --no-constant-defs       disallow constant definitions\n"
    "      --no-global-vars         make global variable definitions illegal\n"
    "      --no-gui                 do not allow access to GUI functionality\n"
    "      --no-io                  do not allow any I/O of any sort,\n"
@@ -213,6 +215,8 @@ static const char parseopts[] =    "qore options controlling parse options:\n"
    "      --require-prototypes     require type declarations in method and function\n"
    "                               signatures\n"
    "      --no-locale-control      make locale control illegal (time zone, etc)\n"
+   "      --no-namespace-defs      disallow namespace definitions\n"
+   "  -N, --no-new                 disallow use of the 'new' operator\n"
    "  -P, --no-process-control     make process control illegal (fork(), exit(),\n"
    "                               etc)\n"
    "      --strict-args            do not ignore type errors or excess args in\n"
@@ -287,8 +291,8 @@ static void show_latest_module_api(const char* arg) {
 }
 
 static void set_parse_option(const char* arg) {
-   int64 code = ParseOptionMap::find_code64(arg);
-   if (code == -1) {
+   QoreParseOptions code = ParseOptionMap::find_code(arg);
+   if (code == QoreParseOptions(-1)) {
       fprintf(stderr, "unknown parse option '%s', use -o or --list-parse-options\n", arg);
       exit(1);
    }
@@ -364,8 +368,19 @@ static void do_no_gui(const char* arg) {
 }
 
 static void do_no_class_defs(const char* arg) {
-   fprintf(stderr, "WARNING: --no-class-defs is deprecated and has no effect (PO_NO_CLASS_DEFS was never enforced)\n");
-   parse_options |= PO_NO_CLASS_DEFS;
+   parse_options |= QoreParseOptions::NO_CLASS_DEFS;
+}
+
+static void do_no_constant_defs(const char* arg) {
+   parse_options |= QoreParseOptions::NO_CONSTANT_DEFS;
+}
+
+static void do_no_namespace_defs(const char* arg) {
+   parse_options |= QoreParseOptions::NO_NAMESPACE_DEFS;
+}
+
+static void do_no_new(const char* arg) {
+   parse_options |= QoreParseOptions::NO_NEW;
 }
 
 static void do_no_database(const char* arg) {
@@ -1058,6 +1073,7 @@ static struct opt_struct_s {
    { 'M', "modern",                ARG_NONE, do_modern },
    { 'n', "new-style",             ARG_NONE, new_style },
    { '\0', "no-class-defs",        ARG_NONE, do_no_class_defs },
+   { '\0', "no-constant-defs",    ARG_NONE, do_no_constant_defs },
    { 'G', "enable-debug",          ARG_NONE, do_enable_debug },
    { '\0', "no-database",          ARG_NONE, do_no_database },
    { 'D', "define",                ARG_MAND, set_define },
@@ -1073,6 +1089,8 @@ static struct opt_struct_s {
    { 'O', "require-our",           ARG_NONE, do_require_our },
    { '\0', "require-types",        ARG_NONE, do_require_types },
    { '\0', "no-locale-controle",   ARG_NONE, do_no_locale_control },
+   { '\0', "no-namespace-defs",   ARG_NONE, do_no_namespace_defs },
+   { 'N', "no-new",               ARG_NONE, do_no_new },
    { '\0', "require-prototypes",   ARG_NONE, do_require_prototypes },
    { '\0', "strict-args",          ARG_NONE, do_strict_args },
    { 'P', "no-process-control",    ARG_NONE, do_no_process_control },

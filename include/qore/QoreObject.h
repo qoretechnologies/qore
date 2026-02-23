@@ -438,6 +438,17 @@ public:
     */
     DLLEXPORT bool isValid() const;
 
+    //! returns true if the object is valid and not being destroyed
+    /** Unlike isValid(), this method returns false while the destructor is running.
+        This is useful for detecting objects that are in the process of being deleted
+        but whose isValid() would still return true.
+
+        @return true if the object is valid and not in the process of being destroyed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isCurrent() const;
+
     //! returns the QoreProgram object associated with this object
     /** for system objects only (created with the system constructor) this will be 0
         @return the QoreProgram object associated with this object

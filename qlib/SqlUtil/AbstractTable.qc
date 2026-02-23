@@ -3506,6 +3506,58 @@ upsert(row_hash);
         };
     }
 
+    #! returns a closure for performing bulk update operations
+    /** The closure accepts two hash arguments: set data and condition data, each as a hash-of-lists
+        (one list per column). Returns the number of rows affected.
+
+        The default implementation iterates over rows using a prepared statement.
+        Drivers that support more efficient bulk operations (e.g. PostgreSQL UNNEST) can override this.
+
+        @param example_set an example single-row hash of SET column values
+        @param example_cond an example single-row hash of WHERE condition values
+        @return a closure that accepts (hash<auto> set_data, hash<auto> cond_data) and returns the affected row count
+
+        @see getBulkUpsertClosure()
+    */
+    code<int(hash<auto>, hash<auto>)> getBulkUpdateClosure(hash<auto> example_set, hash<auto> example_cond) {
+        # execute the first row to generate and prepare the SQL
+        *AbstractSQLStatement stmt;
+        bool first = True;
+        return int sub (hash<auto> set_data, hash<auto> cond_data) {
+            int uc = 0;
+            if (set_data.firstValue().typeCode() == NT_LIST) {
+                # hash-of-lists: iterate over rows
+                foreach hash<auto> row in (set_data.contextIterator()) {
+                    int row_idx = $#;
+                    hash<auto> row_cond = (map {$1.key: $1.value[row_idx]}, cond_data.pairIterator());
+                    if (first) {
+                        string sql;
+                        uc += self.update(row, row_cond, \sql);
+                        stmt = self.getStatement();
+                        stmt.prepare(sql);
+                        first = False;
+                    } else {
+                        stmt.execArgs(row.values() + row_cond.values());
+                        uc += stmt.affectedRows();
+                    }
+                }
+            } else {
+                # single row
+                if (first) {
+                    string sql;
+                    uc += self.update(set_data, cond_data, \sql);
+                    stmt = self.getStatement();
+                    stmt.prepare(sql);
+                    first = False;
+                } else {
+                    stmt.execArgs(set_data.values() + cond_data.values());
+                    uc += stmt.affectedRows();
+                }
+            }
+            return uc;
+        };
+    }
+
     #! returns a closure that can be executed given a hash argument representing a single row that will be updated or inserted in the database with the given upsert strategy; the table must have a unique key to do this; the closure returned checks the input hash for validity
     /** @par Example:
         @code{.py}
@@ -3860,43 +3912,42 @@ int cnt = table.rowCount();
         return ds.selectRow("select count(1) cnt from %s", getSqlName()).cnt;
     }
 
-    #! returns an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
+    #! returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
     /** @par Example:
         @code{.py}
-SQLStatement i = table.getRowIterator(sh);
+AbstractSQLStatement i = table.getRowIterator(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
-        @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
+        @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
         @throw OPTION-ERROR invalid or unsupported select option
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
 
         @note
         - if \c "offset" is supplied and no \c "orderby" is supplied, then if any primary key exists, the primary key columns will be used for the \c "orderby" option automatically
-        - the @ref Qore::SQL::SQLStatement "SQLStatement" object created by a successful call to this method acquires a thread resource for the underlying @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object that must be released by calling @ref Qore::SQL::AbstractDatasource::commit() "commit()" or @ref Qore::SQL::AbstractDatasource::rollback() "rollback()", even if the statement does not acquire any database locks
+        - the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object created by a successful call to this method acquires a thread resource for the underlying @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object that must be released by calling @ref Qore::SQL::AbstractDatasource::commit() "commit()" or @ref Qore::SQL::AbstractDatasource::rollback() "rollback()", even if the statement does not acquire any database locks
 
-        @deprecated for getStatement(); if the underlying database connection object returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" instead of an
-        @ref Qore::SQL::SQLStatement "SQLStatement", then an exception will be raised; use getStatement() instead
+        @deprecated use getStatement() instead; this method is a legacy alias
     */
-    Qore::SQL::SQLStatement getRowIterator(*hash<auto> sh, *reference<string> sql, *hash<auto> opt) {
-        return cast<SQLStatement>(getStatementIntern(sh, \sql, opt));
+    Qore::SQL::AbstractSQLStatement getRowIterator(*hash<auto> sh, *reference<string> sql, *hash<auto> opt) {
+        return getStatementIntern(sh, \sql, opt);
     }
 
-    #! returns an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments without executing the statement itself; the statement is only prepared
+    #! returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments without executing the statement itself; the statement is only prepared
     /** @par Example:
         @code{.py}
-SQLStatement i = table.getRowIteratorNoExec(sh);
+AbstractSQLStatement i = table.getRowIteratorNoExec(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
-        @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
+        @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
         @throw OPTION-ERROR invalid or unsupported select option
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
@@ -3907,36 +3958,34 @@ SQLStatement i = table.getRowIteratorNoExec(sh);
 
         @see getRowIterator()
 
-        @deprecated for getStatementNoExec(); if the underlying database connection object returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" instead of an
-        @ref Qore::SQL::SQLStatement "SQLStatement", then an exception will be raised; use getStatementNoExec() instead
+        @deprecated use getStatementNoExec() instead; this method is a legacy alias
     */
-    Qore::SQL::SQLStatement getRowIteratorNoExec(*hash<auto> sh, *reference<string> sql, *hash<auto> opt) {
+    Qore::SQL::AbstractSQLStatement getRowIteratorNoExec(*hash<auto> sh, *reference<string> sql, *hash<auto> opt) {
         return getStatementIntern(sh, \sql, opt, True);
     }
 
-    #! returns an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
+    #! returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
     /** @par Example:
         @code{.py}
-SQLStatement i = table.getRowIterator();
+AbstractSQLStatement i = table.getRowIterator();
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param opt optional SQL data operation callback options; see \c AbstractTable::SqlDataCallbackOptions for more info
 
-        @return an @ref Qore::SQL::SQLStatement "SQLStatement" object that will iterate the results of a select statement matching the arguments
+        @return an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
         @throw OPTION-ERROR invalid or unsupported select option
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
 
         @note
         - if \c "offset" is supplied and no \c "orderby" is supplied, then if any primary key exists, the primary key columns will be used for the \c "orderby" option automatically
-        - the @ref Qore::SQL::SQLStatement "SQLStatement" object created by a successful call to this method acquires a thread resource for the underlying @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object that must be released by calling @ref Qore::SQL::AbstractDatasource::commit() "commit()" or @ref Qore::SQL::AbstractDatasource::rollback() "rollback()", even if the statement does not acquire any database locks
+        - the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object created by a successful call to this method acquires a thread resource for the underlying @ref Qore::SQL::AbstractDatasource "AbstractDatasource" object that must be released by calling @ref Qore::SQL::AbstractDatasource::commit() "commit()" or @ref Qore::SQL::AbstractDatasource::rollback() "rollback()", even if the statement does not acquire any database locks
 
-        @deprecated for getStatement(); if the underlying database connection object returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" instead of an
-        @ref Qore::SQL::SQLStatement "SQLStatement", then an exception will be raised; use getStatement() instead
+        @deprecated use getStatement() instead; this method is a legacy alias
     */
-    Qore::SQL::SQLStatement getRowIterator(*hash<auto> sh, *hash<auto> opt) {
-        return cast<SQLStatement>(getStatementIntern(sh, NOTHING, opt));
+    Qore::SQL::AbstractSQLStatement getRowIterator(*hash<auto> sh, *hash<auto> opt) {
+        return getStatementIntern(sh, NOTHING, opt);
     }
 
     #! returns an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments

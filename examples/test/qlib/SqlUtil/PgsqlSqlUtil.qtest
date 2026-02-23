@@ -109,6 +109,47 @@ class Bug2963Schema inherits SqlUtilTestSchema {
     }
 } # class Bug2963Schema
 
+#! Proxy class for testing bulk upsert with non-DatasourcePool AbstractDatasource subclasses
+/** This simulates remote datasource proxies (e.g. QdspClient in Qorus) that inherit
+    AbstractDatasource but are not Datasource or DatasourcePool instances.
+*/
+class DatasourceProxy inherits AbstractDatasource {
+    private {
+        AbstractDatasource real_ds;
+    }
+
+    constructor(AbstractDatasource ds) {
+        real_ds = ds;
+    }
+
+    nothing commit() { real_ds.commit(); }
+    nothing rollback() { real_ds.rollback(); }
+    auto exec(string sql, ...) { return call_function_args(\real_ds.vexec(), (sql, argv)); }
+    auto vexec(string sql, *softlist<auto> vargs) { return real_ds.vexec(sql, vargs); }
+    auto execRaw(string sql) { return real_ds.execRaw(sql); }
+    auto select(string sql, ...) { return call_function_args(\real_ds.vselect(), (sql, argv)); }
+    auto selectRow(string sql, ...) { return call_function_args(\real_ds.vselectRow(), (sql, argv)); }
+    auto selectRows(string sql, ...) { return call_function_args(\real_ds.vselectRows(), (sql, argv)); }
+    auto vselect(string sql, *softlist<auto> vargs) { return real_ds.vselect(sql, vargs); }
+    auto vselectRow(string sql, *softlist<auto> vargs) { return real_ds.vselectRow(sql, vargs); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { return real_ds.vselectRows(sql, vargs); }
+    nothing beginTransaction() { real_ds.beginTransaction(); }
+    *string getUserName() { return real_ds.getUserName(); }
+    *string getPassword() { return real_ds.getPassword(); }
+    *string getDBName() { return real_ds.getDBName(); }
+    *string getDBEncoding() { return real_ds.getDBEncoding(); }
+    *string getOSEncoding() { return real_ds.getOSEncoding(); }
+    *string getHostName() { return real_ds.getHostName(); }
+    *int getPort() { return real_ds.getPort(); }
+    string getDriverName() { return real_ds.getDriverName(); }
+    auto getServerVersion() { return real_ds.getServerVersion(); }
+    auto getClientVersion() { return real_ds.getClientVersion(); }
+    bool inTransaction() { return real_ds.inTransaction(); }
+    hash<auto> getConfigHash() { return real_ds.getConfigHash(); }
+    string getConfigString() { return real_ds.getConfigString(); }
+    int getCapabilities() { return real_ds.getCapabilities(); }
+}
+
 class PgsqlTest inherits SqlTestBase {
     public {
         hash<SchemaAlignmentInfo> schema_info;
@@ -229,6 +270,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("default value", \testDefaultValue());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
+            addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
         }
 
         set_return_value(main());
@@ -294,6 +336,74 @@ class PgsqlTest inherits SqlTestBase {
         # 1 = drop trigger
         # 2 = drop function
         assertEq(2, res, "2 actions must be performed");
+    }
+
+    #! Tests that bulk upsert UNNEST works with non-DatasourcePool AbstractDatasource subclasses
+    /** When the datasource is not a Datasource or DatasourcePool, getBulkUpsertClosure() should
+        fall back to using ds.vexec() instead of SQLStatement for the UNNEST path.
+    */
+    private proxyBulkUpsertTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource real_ds = getDatasource();
+        DatasourceProxy proxy(real_ds);
+
+        # verify proxy is NOT a Datasource or DatasourcePool
+        assertEq(False, proxy instanceof Datasource);
+        assertEq(False, proxy instanceof DatasourcePool);
+        # verify proxy reports array bind capability
+        assertEq(True, (proxy.getCapabilities() & DBI_CAP_HAS_ARRAY_BIND) != 0);
+
+        # create the table with the real datasource, then swap in the proxy for the upsert
+        AbstractTable proxy_table = (new Table(real_ds, "pgsql_test")).getTable();
+        proxy_table.setDatasource(proxy);
+
+        on_error real_ds.rollback();
+        on_success real_ds.commit();
+
+        # insert seed rows via real_ds so all NOT NULL columns are satisfied
+        proxy_table.setDatasource(real_ds);
+        proxy_table.del({"id": op_in((500, 501, 502))});
+        real_ds.commit();
+        map proxy_table.insert({"id": $1, "id_": $1 + 100, "blob_f": <cafe>, "clob_f": "test"}),
+            (500, 501, 502);
+        real_ds.commit();
+
+        # swap to proxy datasource for the bulk upsert test
+        proxy_table.setDatasource(proxy);
+
+        # test UpsertAuto: update existing rows with new id_ values via UNNEST through vexec()
+        code upsert = proxy_table.getBulkUpsertClosure(
+            {"id": 500, "id_": 900, "blob_f": <cafe>, "clob_f": "test"},
+            AbstractTable::UpsertAuto);
+
+        int result = upsert({
+            "id": (500, 501, 502),
+            "id_": (900, 901, 902),
+            "blob_f": (<cafe>, <cafe>, <cafe>),
+            "clob_f": ("test", "test", "test"),
+        });
+        assertEq(AbstractTable::UR_Verified, result);
+        proxy.commit();
+
+        # verify the upsert updated the rows through the proxy
+        proxy_table.setDatasource(real_ds);
+        assertEq(900, proxy_table.selectRow({"where": {"id": 500}}).id_);
+        assertEq(901, proxy_table.selectRow({"where": {"id": 501}}).id_);
+        assertEq(902, proxy_table.selectRow({"where": {"id": 502}}).id_);
+
+        # clean up
+        proxy_table.del({"id": op_in((500, 501, 502))});
+
+        # negative test: prove that SQLStatement cannot be used with a proxy datasource;
+        # this is the runtime failure that the vexec() fallback above is designed to prevent.
+        # we pass the proxy typed as AbstractDatasource (as in real Qorus usage) so the
+        # parse-time type checker accepts it; at runtime, overload resolution rejects the
+        # proxy because it is not a Datasource or DatasourcePool
+        AbstractDatasource ads = proxy;
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { new SQLStatement(ads); });
     }
 
     private string getResultSetSql() {

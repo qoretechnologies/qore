@@ -266,7 +266,7 @@ public class Http2ClientConnection {
         @throw HTTP2-CAPACITY-ERROR if the connection cannot accept more streams
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            code callback, *hash<auto> ctx) {
+            code callback, *hash<auto> ctx, bool streaming = False) {
         {
             AutoLock al(lock);
             if (state != Http2ClientConnectionState::Ready) {
@@ -282,7 +282,7 @@ public class Http2ClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx);
+        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx, streaming);
 
         # Wake controller if in async mode to ensure the I/O thread processes the request
         if (controller_ref) {
@@ -323,6 +323,14 @@ public class Http2ClientConnection {
 
         log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
         poll_op.sendStreamData(stream_id, data, end_stream);
+
+        # Wake controller if in async mode to ensure the I/O thread flushes pending writes
+        if (controller_ref) {
+            controller_ref.wake();
+        } else {
+            # Sync mode: wake any thread blocked in drivePoll()'s Socket::poll()
+            poll_notifier.notify();
+        }
     }
 
     #! Handles poll result from AsyncSocketIoController
@@ -335,6 +343,8 @@ public class Http2ClientConnection {
         # Update state based on poll operation state
         if (poll_op.isClosed()) {
             state = Http2ClientConnectionState::Closed;
+            # Wake any threads blocked in waitForReady() so they see the error
+            ready_cond.broadcast();
         } else if (poll_op.isReady() && state == Http2ClientConnectionState::Connecting) {
             state = Http2ClientConnectionState::Ready;
             ready_cond.broadcast();
