@@ -1314,12 +1314,20 @@ public:
                     }
                     buf.concat(p, e - p + 1);
                     //printd(5, "ST: '%s' (str: '%s') p: %p '%s'\n", buf.c_str(), str, p, p);
-                    // Check if next character is '(' - if so, continue accumulating for callable type syntax
-                    // e.g., hash<string, int>(list<string>) should be a single subtype
-                    if (*(e + 1) == '(') {
-                        // Don't push yet - continue accumulating
-                        p = e;
-                        break;
+                    // Check if next non-whitespace character is '(' - if so, continue accumulating
+                    // for callable type syntax
+                    // e.g., hash<string, int>(list<string>) or hash<string, int> (string) should
+                    // be a single subtype
+                    {
+                        const char* next = e + 1;
+                        while (*next == ' ' || *next == '\t') {
+                            ++next;
+                        }
+                        if (*next == '(') {
+                            // Don't push yet - continue accumulating
+                            p = e;
+                            break;
+                        }
                     }
                     subtypes.push_back(getParseType(loc, buf.giveBuffer(), or_nothing));
                     buf.reset();
