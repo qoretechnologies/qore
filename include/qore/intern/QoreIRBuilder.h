@@ -84,7 +84,7 @@ public:
     QoreIRInstruction* createQuaternaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second, QoreIRValue third,
         QoreIRValue fourth, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createUnaryOp(QoreIROpcode op, QoreIRValue value, const QoreProgramLocation* loc = nullptr);
-    QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
+    QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr, bool auto_ref = true);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);

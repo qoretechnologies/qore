@@ -913,11 +913,14 @@ public:
 
 class QoreIRLocalInstruction : public QoreIRInstruction {
 public:
-    QoreIRLocalInstruction(QoreIROpcode op, LocalVar* n_local) : QoreIRInstruction(op), local(n_local) {
+    QoreIRLocalInstruction(QoreIROpcode op, LocalVar* n_local, bool n_auto_ref = true)
+            : QoreIRInstruction(op), local(n_local), auto_ref(n_auto_ref) {
     }
 
     LocalVar* local = nullptr;
+    bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
 };
+
 
 class QoreIRVarInstruction : public QoreIRInstruction {
 public:

@@ -3485,7 +3485,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3572,7 +3572,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3658,7 +3658,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -3742,7 +3742,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
@@ -6003,8 +6003,16 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         const VarRefNode* container_var, const std::string& key_name,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
-    // Load the hash container
-    QoreIRValue hash_val = loadVarRef(container_var, error, "hash-compound-op", full_expr);
+    // Load the hash container without refcount inflation (auto_ref=false)
+    // This allows HashKeyStore's is_unique() check to accurately detect if COW is needed
+    // based on whether the hash is shared with other code, not just with LoadLocal's cache
+    QoreIRValue hash_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        hash_val = loadVarRef(container_var, error, "hash-compound-op", full_expr);
+    }
     if (!hash_val.isValid()) return QoreIRValue();
 
     // Load current element value

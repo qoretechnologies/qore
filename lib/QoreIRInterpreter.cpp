@@ -2225,7 +2225,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         return false;
                     }
                     // eval() returns a referenced value; use it directly for the value slot
-                } else {
+                } else if (local_inst->auto_ref) {
+                    // Normal path: caching with refcount inflation (auto_ref=true)
                     // Phase 3 optimization: Try fast path with slot cache first
                     QoreValue cached_val;
                     bool found_in_slot_cache = false;
@@ -2244,12 +2245,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // Fallback to traditional map-based cache lookup
                         auto it = locals.find(local_inst->local);
                         if (it != locals.end() && it->second.getType() != NT_REFERENCE) {
-                            // Cache hit: val is shared with cache, needs refSelf for value slot.
-                            // ReferenceNode values are NOT cached because eval() must follow
-                            // the reference chain to return the target value, not the reference
-                            // itself.  Without this, lvalue references stored in containers
-                            // (e.g. list[n] = \var) would be passed through as raw references
-                            // instead of being transparently dereferenced.
                             QoreValue val = it->second;
                             out = val.hasNode() ? val.refSelf() : val;
                         } else if (local_inst->local) {
@@ -2270,6 +2265,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 locals_slot_cache[slot_it->second] = val.hasNode() ? val.refSelf() : val;
                             }
                             out = val.hasNode() ? val.refSelf() : val;
+                        }
+                    }
+                } else {
+                    // Lvalue path: load without refcount inflation (auto_ref=false)
+                    // Do NOT cache to avoid interfering with COW logic
+                    if (local_inst->local) {
+                        bool needs_deref = true;
+                        out = local_inst->local->eval(needs_deref, xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
                         }
                     }
                 }
@@ -2407,28 +2417,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
+                    // The hash was loaded with auto_ref=false for lvalue operations,
+                    // so is_unique() accurately reflects whether COW is needed
                     if (!h->is_unique()) {
-                        // COW: create unique copy
+                        // COW: create unique copy and update the local variable
                         QoreHashNode* new_h = h->copy();
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-
-                        // Invalidate caches to force reload on next iteration
-                        if (lv) {
-                            auto cache_it = locals.find(lv);
-                            if (cache_it != locals.end()) {
-                                cache_it->second.discard(xsink);
-                                locals.erase(cache_it);
-                            }
-                            auto slot_it = func.local_var_slots.find(lv);
-                            if (slot_it != func.local_var_slots.end()
-                                    && slot_it->second < locals_slot_cache.size()) {
-                                locals_slot_cache[slot_it->second].discard(nullptr);
-                                locals_slot_cache[slot_it->second] = QoreValue();
-                            }
-                        }
-
-                        // Update thread-local stack to point to new_h
+                        // Update thread-local stack with new unique copy
                         assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(nullptr);
@@ -2439,7 +2435,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             cleanupStoredValues(closures, nullptr);
                             return false;
                         }
-
                         h = new_h;
                     }
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
