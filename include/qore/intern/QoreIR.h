@@ -484,13 +484,21 @@ enum class QoreIROpcode : uint16_t {
     RefForeachFinalize  = 329,  // Write back to reference and cleanup: (state) -> void
     RefForeachCleanup   = 330,  // Cleanup without write-back: (state) -> void
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (331, 332, ...)
+    // Number arithmetic (331-334) — typed QoreNumberNode operations
+    // Both operands guaranteed NT_NUMBER; no tag-check branches needed.
+    // Compile to direct qore_rt_number_* helper calls.
+    AddNumber           = 331,
+    SubNumber           = 332,
+    MulNumber           = 333,
+    DivNumber           = 334,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (335, 336, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
 //! Maximum opcode ID supported by this build (derived from the last enum value)
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::RefForeachCleanup);
-static_assert(QORE_IR_MAX_OPCODE == 330, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::DivNumber);
+static_assert(QORE_IR_MAX_OPCODE == 334, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)

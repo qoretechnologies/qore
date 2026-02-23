@@ -2055,6 +2055,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === Number arithmetic operations ===
+        case QoreIROpcode::AddNumber:
+        case QoreIROpcode::SubNumber:
+        case QoreIROpcode::MulNumber:
+        case QoreIROpcode::DivNumber: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            const char* helper_name = nullptr;
+            switch (inst->opcode) {
+                case QoreIROpcode::AddNumber: helper_name = "qore_rt_number_add"; break;
+                case QoreIROpcode::SubNumber: helper_name = "qore_rt_number_sub"; break;
+                case QoreIROpcode::MulNumber: helper_name = "qore_rt_number_mul"; break;
+                case QoreIROpcode::DivNumber: helper_name = "qore_rt_number_div"; break;
+                default: return false;
+            }
+            auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+
         // === Bitwise integer operations ===
         case QoreIROpcode::AndInt: {
             auto* lhs = getVal(inst->operands[0].id, error);

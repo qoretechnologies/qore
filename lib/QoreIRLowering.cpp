@@ -1784,6 +1784,10 @@ static bool isFloatConstant(const QoreValue& value) {
     return value.isFloat();
 }
 
+static bool isNumberConstant(const QoreValue& value) {
+    return value.getInternalNode() && dynamic_cast<const QoreNumberNode*>(value.getInternalNode());
+}
+
 QoreIROpcode QoreIRLowering::selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op) {
     if (isIntConstant(left) && isIntConstant(right)) {
@@ -1843,6 +1847,26 @@ bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
     }
     const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
     if (!type || !QoreTypeInfo::isType(type, NT_FLOAT)) {
+        return false;
+    }
+    if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
+        return false;
+    }
+    if (expr->hasNode()) {
+        QoreParseAnalysis analysis;
+        if (getAnalysis(*expr, analysis) && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            return true;
+        }
+    }
+    return true;
+}
+
+bool QoreIRLowering::guaranteedNumberType(const QoreValue* expr) const {
+    if (!expr) {
+        return false;
+    }
+    const QoreTypeInfo* type = getGuaranteedTypeForValue(expr, nullptr);
+    if (!type || !QoreTypeInfo::isType(type, NT_NUMBER)) {
         return false;
     }
     if (QoreTypeInfo::parseReturns(type, NT_NOTHING) == QTI_IDENT) {
@@ -1943,6 +1967,14 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
         }
     }
     return any_op;
+}
+
+QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op,
+        QoreIROpcode number_op) {
+    // Number type selection will be implemented in a future phase
+    // For now, delegate to the original selectNumericOpcode for int/float/any
+    return selectNumericOpcode(left, right, int_op, float_op, any_op);
 }
 
 QoreIROpcode QoreIRLowering::selectFoldOpcode(const QoreParseAnalysis& analysis,
@@ -4350,8 +4382,9 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectNumericOpcode(left_expr, right_expr,
-        QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny);
+    QoreIROpcode op = selectNumericOpcode(plus->getLeft(), plus->getRight(),
+        QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny,
+        QoreIROpcode::AddNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, plus->loc, error);
 }
 
@@ -4371,7 +4404,8 @@ QoreIRValue QoreIRLowering::lowerMinus(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreIROpcode op = selectNumericOpcode(minus->getLeft(), minus->getRight(),
-        QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny);
+        QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny,
+        QoreIROpcode::SubNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, minus->loc, error);
 }
 
@@ -4691,7 +4725,8 @@ QoreIRValue QoreIRLowering::lowerMultiplication(const QoreValue& expr, std::stri
         return QoreIRValue();
     }
     QoreIROpcode op = selectNumericOpcode(mul->getLeft(), mul->getRight(),
-        QoreIROpcode::MulInt, QoreIROpcode::MulFloat, QoreIROpcode::MulAny);
+        QoreIROpcode::MulInt, QoreIROpcode::MulFloat, QoreIROpcode::MulAny,
+        QoreIROpcode::MulNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, mul->loc, error);
 }
 
@@ -4711,7 +4746,8 @@ QoreIRValue QoreIRLowering::lowerDivision(const QoreValue& expr, std::string& er
         return QoreIRValue();
     }
     QoreIROpcode op = selectNumericOpcode(div->getLeft(), div->getRight(),
-        QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny);
+        QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny,
+        QoreIROpcode::DivNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, div->loc, error);
 }
 

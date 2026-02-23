@@ -177,11 +177,15 @@ private:
     bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
     bool guaranteedIntType(const QoreValue* expr) const;
     bool guaranteedFloatType(const QoreValue* expr) const;
+    bool guaranteedNumberType(const QoreValue* expr) const;
     bool guaranteedStringType(const QoreValue* expr) const;
     bool guaranteedDateType(const QoreValue* expr) const;
     const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
     QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+    QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op,
+        QoreIROpcode number_op);
     QoreIROpcode selectFoldOpcode(const QoreParseAnalysis& analysis,
         QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const;
     bool ensureBuilderContext(std::string& error) const;

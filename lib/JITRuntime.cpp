@@ -186,6 +186,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_mod_any(uint64_t left, uint64_t right, Exc
     return toBits(result);
 }
 
+// --- Number arithmetic (QoreNumberNode operations) ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_number_add(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreNumberNode* ln = lv.getType() == NT_NUMBER ? lv.get<const QoreNumberNode>() : nullptr;
+    const QoreNumberNode* rn = rv.getType() == NT_NUMBER ? rv.get<const QoreNumberNode>() : nullptr;
+    if (!ln || !rn) {
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(ln->doPlus(*rn)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_number_sub(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreNumberNode* ln = lv.getType() == NT_NUMBER ? lv.get<const QoreNumberNode>() : nullptr;
+    const QoreNumberNode* rn = rv.getType() == NT_NUMBER ? rv.get<const QoreNumberNode>() : nullptr;
+    if (!ln || !rn) {
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(ln->doMinus(*rn)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_number_mul(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreNumberNode* ln = lv.getType() == NT_NUMBER ? lv.get<const QoreNumberNode>() : nullptr;
+    const QoreNumberNode* rn = rv.getType() == NT_NUMBER ? rv.get<const QoreNumberNode>() : nullptr;
+    if (!ln || !rn) {
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(ln->doMultiply(*rn)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_number_div(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    const QoreNumberNode* ln = lv.getType() == NT_NUMBER ? lv.get<const QoreNumberNode>() : nullptr;
+    const QoreNumberNode* rn = rv.getType() == NT_NUMBER ? rv.get<const QoreNumberNode>() : nullptr;
+    if (!ln || !rn) {
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(ln->doDivideBy(*rn, xsink)));
+}
+
 // --- Integer/float division with zero check ---
 
 extern "C" DLLEXPORT int64_t qore_rt_div_int(int64_t left, int64_t right, ExceptionSink* xsink) {

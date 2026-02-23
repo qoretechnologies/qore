@@ -5131,6 +5131,26 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::DivAny:
             return QoreDivisionOperatorNode::doDivision(left, right, xsink);
+        case QoreIROpcode::AddNumber: {
+            const QoreNumberNode* ln = left.get<const QoreNumberNode>();
+            const QoreNumberNode* rn = right.get<const QoreNumberNode>();
+            return ln && rn ? QoreValue(ln->doPlus(*rn)) : QoreValue();
+        }
+        case QoreIROpcode::SubNumber: {
+            const QoreNumberNode* ln = left.get<const QoreNumberNode>();
+            const QoreNumberNode* rn = right.get<const QoreNumberNode>();
+            return ln && rn ? QoreValue(ln->doMinus(*rn)) : QoreValue();
+        }
+        case QoreIROpcode::MulNumber: {
+            const QoreNumberNode* ln = left.get<const QoreNumberNode>();
+            const QoreNumberNode* rn = right.get<const QoreNumberNode>();
+            return ln && rn ? QoreValue(ln->doMultiply(*rn)) : QoreValue();
+        }
+        case QoreIROpcode::DivNumber: {
+            const QoreNumberNode* ln = left.get<const QoreNumberNode>();
+            const QoreNumberNode* rn = right.get<const QoreNumberNode>();
+            return ln && rn ? QoreValue(ln->doDivideBy(*rn, xsink)) : QoreValue();
+        }
         case QoreIROpcode::ModInt:
         case QoreIROpcode::ModAny: {
             int64_t divisor = right.getAsBigInt();
