@@ -2356,6 +2356,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                     }
                 }
+                fprintf(stderr, "    LoadLocal: result.id=%d auto_ref=%s type=%s hash_addr=%p\n",
+                    local_inst->result.id, local_inst->auto_ref ? "true" : "false",
+                    out.getTypeName(),
+                    out.getType() == NT_HASH ? (void*)out.get<QoreHashNode>() : nullptr);
                 setValueSlot(values, local_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
@@ -2366,6 +2370,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::HashKeyAccess: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 QoreValue base = getIRValue(values, hka_inst->operands[0]);
+                fprintf(stderr, "      HashKeyAccess: result.id=%d operands[0]=%d key='%s' hash_addr=%p\n",
+                    hka_inst->result.id, hka_inst->operands[0].id, hka_inst->key_name.c_str(),
+                    base.getType() == NT_HASH ? (void*)base.get<const QoreHashNode>() : nullptr);
                 QoreValue out;
                 if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -2392,6 +2399,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 // else: NOTHING for non-hash/non-object values
+                fprintf(stderr, "      HashKeyAccess returned: %s value=%lld from hash_addr=%p\n",
+                    out.getTypeName(), out.getAsBigInt(), base.getType() == NT_HASH ? (void*)base.get<const QoreHashNode>() : nullptr);
                 setValueSlot(values, hka_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(hka_inst->result.id);
@@ -2415,13 +2424,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 auto* hks_inst = static_cast<QoreIRHashKeyStoreInstruction*>(inst);
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
+                fprintf(stderr, "      HashKeyStore: operands[0]=%d operands[1]=%d key='%s'\n",
+                    hks_inst->operands[0].id, hks_inst->operands[1].id, hks_inst->key_name.c_str());
+                fprintf(stderr, "        hash_addr=%p is_unique=%d val_type=%s\n",
+                    hash_val.getType() == NT_HASH ? (void*)hash_val.get<QoreHashNode>() : nullptr,
+                    hash_val.getType() == NT_HASH ? hash_val.get<QoreHashNode>()->is_unique() : -1,
+                    val.getTypeName());
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
                     // The hash was loaded with auto_ref=false for lvalue operations,
                     // so is_unique() accurately reflects whether COW is needed
                     if (!h->is_unique()) {
+                        fprintf(stderr, "        COW triggered: copying hash\n");
                         // COW: create unique copy and update the local variable
                         QoreHashNode* new_h = h->copy();
+                        fprintf(stderr, "        COW: new_h_addr=%p\n", (void*)new_h);
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
                         // Invalidate caches (matches StoreLocal pattern)
@@ -2452,8 +2469,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // Without this, subsequent IR instructions reading operands[0]
                         // will use the stale hash and lose modifications.
                         // setValueSlot discards the old ref (from LoadLocal), which is correct.
+                        fprintf(stderr, "        setValueSlot: operands[0].id=%d\n", hks_inst->operands[0].id);
                         setValueSlot(values, hks_inst->operands[0].id,
                             QoreValue(new_h->refSelf()), xsink);
+                        fprintf(stderr, "        setValueSlot: done\n");
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupStoredValues(locals, nullptr);
@@ -2463,7 +2482,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             return false;
                         }
                     }
+                    fprintf(stderr, "        setKeyValue: key='%s' hash_addr=%p\n",
+                        hks_inst->key_name.c_str(), (void*)h);
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                    fprintf(stderr, "        setKeyValue done\n");
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);

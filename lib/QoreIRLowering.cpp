@@ -3518,7 +3518,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -3614,7 +3614,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
@@ -3709,7 +3709,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -3801,7 +3801,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
@@ -6069,11 +6069,13 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // TRACE: emitHashKeyCompoundOp entry
+
     // Fast path only works in function context (inside try/catch blocks where exception handlers are active).
     // For top-level code that's evaluated as pure AST (fallback), we must NOT use the fast path.
     // However, top-level code that's being IR-compiled (in a "_toplevel" function) can use fast path.
     // We distinguish by checking: empty exception_stack AND NOT in a _toplevel function.
-    if (false && exception_stack.empty() && builder.getFunction()) {
+    if (exception_stack.empty() && builder.getFunction()) {
         const std::string& func_name = builder.getFunction()->name;
         // Allow fast path for _toplevel functions (top-level IR compilation)
         // Reject fast path for pure AST evaluation (no _toplevel wrapper)

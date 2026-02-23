@@ -161,6 +161,10 @@ private:
     // Local variable allocas (LocalVar* address → alloca)
     std::unordered_map<const void*, llvm::Value*> local_allocas;
 
+    // Track LocalVars that underwent COW in HashKeyStore/ListIndexStore
+    // These need fresh reload from runtime stack on next LoadLocal to get updated value
+    std::unordered_set<LocalVar*> cow_modified_locals;
+
     // Ordered list of unique LocalVar* pointers that need instantiation/uninstantiation
     std::vector<LocalVar*> function_locals;
 

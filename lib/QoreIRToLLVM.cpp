@@ -1309,6 +1309,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     initTypes();
     declareRuntimeHelpers(module);
 
+    // Clear COW tracking for new function
+    cow_modified_locals.clear();
+
     // Determine function name: use fast_entry_name if set (Approach B)
     const std::string& fn_name = fast_entry_name.empty() ? func.name : fast_entry_name;
     bool is_fast_entry = !fast_entry_name.empty();
@@ -2317,6 +2320,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
 
+
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
             // The alloca cache becomes stale after any call that may invoke a closure.
@@ -2365,6 +2369,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // after any call that modifies the outer variable).
             if (linst->local && pre_instantiated_locals
                     && !pre_instantiated_locals->count(key)) {
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                return true;
+            }
+
+
+            // If this local underwent COW, reload fresh from runtime stack instead of
+            // using cached alloca, which may have the old pre-COW value.
+            if (linst->local && cow_modified_locals.count(linst->local)) {
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -5791,6 +5820,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
             emitExceptionCheck(module, llvm_func, inst);
+
+            // CRITICAL: After HashKeyStore COW, reload the hash from the LocalVar.
+            // qore_rt_hash_key_store_cow updates the LocalVar, but the hash value
+            // in values[] array might be stale if COW created a copy. For single-pass
+            // operations like `h{"x"} += 3`, we must update values[] immediately.
+            uint32_t hash_operand_id = inst->operands[0].id;
+            if (aot_mode) {
+                // AOT: reload from context slot
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                        reinterpret_cast<const void*>(hks_inst->container->ref.id));
+                llvm::Value* updated_hash = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                values[hash_operand_id] = updated_hash;
+                nanboxed_values.insert(hash_operand_id);
+                trackResultForCleanup(updated_hash, hash_operand_id, llvm_func);
+            } else {
+                // JIT: reload from LocalVar pointer
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                auto var_int = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(hks_inst->container->ref.id));
+                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
+                llvm::Value* updated_hash = builder->CreateCall(load_fn, {var_ptr, xsink_arg});
+                values[hash_operand_id] = updated_hash;
+                nanboxed_values.insert(hash_operand_id);
+                trackResultForCleanup(updated_hash, hash_operand_id, llvm_func);
+            }
+
             return true;
         }
         case QoreIROpcode::LoadSelfMember: {
