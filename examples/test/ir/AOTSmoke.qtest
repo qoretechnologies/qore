@@ -21,6 +21,7 @@ class AOTSmokeTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("AOT hello world", \testHelloWorld());
         addTestCase("AOT arithmetic", \testArithmetic());
+        addTestCase("AOT number literal arithmetic", \testNumberLiteralArithmetic());
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
         addTestCase("AOT string operations", \testStringOps());
@@ -277,6 +278,22 @@ printf(\"mod: %d\\n\", a % b);
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT arithmetic output matches interpreter");
+    }
+
+    testNumberLiteralArithmetic() {
+        string code = "%modern
+number result_add = 3.14159n + 2.71828n;
+number result_sub = 3.14159n - 2.71828n;
+number result_mul = 3.14159n * 2.71828n;
+number result_div = 3.14159n / 2.71828n;
+printf(\"%n\\n\", result_add);
+printf(\"%n\\n\", result_sub);
+printf(\"%n\\n\", result_mul);
+printf(\"%n\\n\", result_div);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT number literal arithmetic output matches interpreter");
     }
 
     testControlFlow() {

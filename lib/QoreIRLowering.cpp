@@ -1972,8 +1972,13 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
 QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op,
         QoreIROpcode number_op) {
-    // Number type selection will be implemented in a future phase
-    // For now, delegate to the original selectNumericOpcode for int/float/any
+    // Use number opcode for number literal constants (confirmed to work)
+    // Variable type detection requires further investigation of type info availability
+    if (isNumberConstant(left) && isNumberConstant(right)) {
+        return number_op;
+    }
+
+    // Delegate to existing selectNumericOpcode for int/float/any
     return selectNumericOpcode(left, right, int_op, float_op, any_op);
 }
 
