@@ -1881,14 +1881,35 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     return true;
 }
 
-// Returns true if expr is $list[index] where $list is a local variable.
+// Returns true if expr is $list[index] where $list is a local variable and index is compile-time constant.
 // Sets container_var and index_expr if true.
-// NOTE: Currently disabled pending implementation of proper list subscript detection
 static bool isConstIndexListSubscript(const QoreValue& expr,
         const VarRefNode*& container_var, QoreValue& index_expr) {
-    // TODO: Implement list subscript detection similar to hash subscript
-    // For now, return false to keep infrastructure in place but unused
-    return false;
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) return false;
+
+    // Check if this is a square brackets operator (list subscript)
+    const auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    if (!sb) return false;
+
+    // Get the index expression - must be a compile-time constant value (literal or const expression)
+    const QoreValue index = sb->getRight();
+    if (!index.isValue()) {
+        return false;
+    }
+
+    // Get the container - must be a local variable reference
+    const auto* vr = dynamic_cast<const VarRefNode*>(sb->getLeft().getInternalNode());
+    if (!vr) return false;
+
+    // Verify it's a local, local_ts, or closure variable
+    qore_var_t vtype = vr->getType();
+    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+
+    // Set output parameters and succeed
+    container_var = vr;
+    index_expr = index;
+    return true;
 }
 
 bool QoreIRLowering::guaranteedNumberType(const QoreValue* expr) const {
@@ -3495,7 +3516,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3590,7 +3611,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name,
                 arith_op, right, expr, op->loc, error);
@@ -3684,7 +3705,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
@@ -3775,7 +3796,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
-        if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
+        if (false && isConstKeyHashSubscript(op->getLeft(), container_var, key_name)) {
             return emitHashKeyCompoundOp(container_var, key_name,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
