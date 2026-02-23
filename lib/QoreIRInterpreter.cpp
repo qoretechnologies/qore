@@ -2408,14 +2408,38 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
                     if (!h->is_unique()) {
-                        // COW: create unique copy and update local variable slot
+                        // COW: create unique copy
                         QoreHashNode* new_h = h->copy();
-                        const void* lv_ptr = hks_inst->container->ref.id;
-                        auto it = func.local_var_slots.find(reinterpret_cast<const LocalVar*>(lv_ptr));
-                        if (it != func.local_var_slots.end()) {
-                            locals_slot_cache[it->second].discard(nullptr);
-                            locals_slot_cache[it->second] = QoreValue(new_h);
+                        LocalVar* lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
+
+                        // Invalidate caches to force reload on next iteration
+                        if (lv) {
+                            auto cache_it = locals.find(lv);
+                            if (cache_it != locals.end()) {
+                                cache_it->second.discard(xsink);
+                                locals.erase(cache_it);
+                            }
+                            auto slot_it = func.local_var_slots.find(lv);
+                            if (slot_it != func.local_var_slots.end()
+                                    && slot_it->second < locals_slot_cache.size()) {
+                                locals_slot_cache[slot_it->second].discard(nullptr);
+                                locals_slot_cache[slot_it->second] = QoreValue();
+                            }
                         }
+
+                        // Update thread-local stack to point to new_h
+                        assignLocalVarValue(lv, QoreValue(new_h), xsink);
+                        if (xsink && *xsink) {
+                            new_h->deref(nullptr);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
+                        }
+
                         h = new_h;
                     }
                     h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
