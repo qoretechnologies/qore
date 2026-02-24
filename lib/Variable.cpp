@@ -501,6 +501,18 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+    } else if (getType() == NT_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<QoreHashNode>();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_WEAKREF_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
     } else {
         if (for_remove)
             return -1;
@@ -580,6 +592,18 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+    } else if (getType() == NT_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<QoreHashNode>();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_WEAKREF_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
     } else {
         if (for_remove)
             return -1;

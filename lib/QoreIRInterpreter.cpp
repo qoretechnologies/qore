@@ -2471,11 +2471,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Without this, subsequent IR instructions reading operands[0]
                         // will use the stale hash and lose modifications.
-                        // Use direct assignment (not setValueSlot) to avoid discarding
-                        // the un-ref'd old slot. The new_h has been taken into the LocalVar,
-                        // so we add a +1 reference for the IR slot and schedule cleanup.
-                        values[hks_inst->operands[0].id] = QoreValue(new_h->refSelf());
-                        cleanup.push_back(hks_inst->operands[0].id);
+                        // The hash was originally loaded with auto_ref=false (for lvalue),
+                        // so values[] contains a borrowed reference. We update it to point
+                        // to new_h (still borrowed), without taking an extra reference.
+                        // The LocalVar owns the reference to new_h.
+                        values[hks_inst->operands[0].id] = QoreValue(new_h);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupStoredValues(locals, nullptr);
