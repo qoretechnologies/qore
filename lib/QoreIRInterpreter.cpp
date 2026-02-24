@@ -529,7 +529,8 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
 
 static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
-        const std::unordered_set<const void*>* function_own_locals = nullptr) {
+        const std::unordered_set<const void*>* function_own_locals = nullptr,
+        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr) {
     if (!var) {
         return;
     }
@@ -543,9 +544,21 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
         return;
     }
     if (locals.insert(var).second) {
-        // Skip instantiation for locals that are already instantiated by the caller
-        if (!pre_instantiated || pre_instantiated->find(var) == pre_instantiated->end()) {
+        // Check if this was pre_instantiated AND has been explicitly uninstantiated
+        // during this execution (e.g., loop-scope variable on 2nd+ iteration)
+        bool was_locally_uninstantiated = locally_uninstantiated
+            && locally_uninstantiated->count(var);
+
+        bool skip_instantiation = pre_instantiated
+            && pre_instantiated->find(var) != pre_instantiated->end()
+            && !was_locally_uninstantiated;  // Don't skip if it was uninstantiated mid-execution
+
+        if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
+        }
+        // Clear the "locally uninstantiated" flag - it's now re-instantiated
+        if (was_locally_uninstantiated) {
+            locally_uninstantiated->erase(var);
         }
     }
 }
@@ -674,7 +687,8 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
         std::unordered_set<const LocalVar*>& instantiated_locals, const QoreValue& lvalue,
         const QoreValue& value, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
-        const std::unordered_set<const void*>* function_own_locals = nullptr) {
+        const std::unordered_set<const void*>* function_own_locals = nullptr,
+        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr) {
     if (!lvalue.hasNode()) {
         return;
     }
@@ -686,7 +700,7 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
     qore_var_t type = var_ref->getType();
     if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
         ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, pre_instantiated,
-                function_own_locals);
+                function_own_locals, locally_uninstantiated);
         // Invalidate the cache entry (don't pre-populate) because
         // assignLocalVarValue() → acceptAssignment() may coerce the value type.
         // The next LoadLocal cache miss will read the actual coerced value.
@@ -1251,6 +1265,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
 
     std::unordered_set<const LocalVar*> instantiated_locals;
+    // Track pre_instantiated variables that have been explicitly uninstantiated by
+    // UninstantiateLocal during execution (e.g., loop-scope variables).
+    // These must be re-instantiated by ensureLocalInstantiated on next use, even though
+    // they appear in pre_instantiated (the caller won't re-instantiate them per-iteration).
+    std::unordered_set<const LocalVar*> locally_uninstantiated;
     // Track which value slots hold VarRefNewObjectNode results for each LocalVar
     // Used to cleanup references when UninstantiateLocal is processed
     std::unordered_map<const LocalVar*, uint32_t> local_init_slots;
@@ -2209,7 +2228,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::LoadLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 ensureLocalInstantiated(local_inst->local, instantiated_locals, pre_instantiated,
-                        function_own_locals);
+                        function_own_locals, &locally_uninstantiated);
                 QoreValue out;
                 // Closure-bound locals must always be read from the runtime stack
                 // because closures can modify the value between IR instructions
@@ -3031,7 +3050,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 ensureLocalInstantiated(local_inst->local, instantiated_locals, pre_instantiated,
-                        function_own_locals);
+                        function_own_locals, &locally_uninstantiated);
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
                 // Don't cache closure-bound locals — closures can modify the value.
@@ -3093,6 +3112,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     // Remove from instantiated_locals since we're explicitly cleaning it up
                     instantiated_locals.erase(local_inst->local);
                     bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+
+                    // Track any variable that we're explicitly uninstantiating mid-execution
+                    // (both pre-instantiated loop variables AND block-local variables).
+                    // These must be re-instantiated on next use by ensureLocalInstantiated.
+                    // For pre-instantiated: the caller won't re-instantiate them per-iteration.
+                    // For non-pre-instantiated: we need to ensure they're instantiated before next use.
+                    locally_uninstantiated.insert(local_inst->local);
 
                     // Drop the locals cache reference FIRST (before lvar->del) so that
                     // lvar->del() is the final deref and triggers the destructor.
@@ -4191,7 +4217,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
                 ++ip;
                 break;
             }
@@ -4217,7 +4243,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         qore_var_t type = var_ref->getType();
                         if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
                             ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, pre_instantiated,
-                                    function_own_locals);
+                                    function_own_locals, &locally_uninstantiated);
                         }
                     }
                 }
@@ -4302,7 +4328,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated, function_own_locals);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
                 // discard the reload value if not used as result (for post ops, it's only for cache update)
                 if (is_post) {
                     updated.discard(xsink);
@@ -4374,7 +4400,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
                 ++ip;
                 break;
             }
@@ -4412,7 +4438,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
                 ++ip;
                 break;
             }
@@ -4507,7 +4533,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         if ((vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
                                 && var_new_obj->ref.id) {
                             ensureLocalInstantiated(var_new_obj->ref.id, instantiated_locals, pre_instantiated,
-                                    function_own_locals);
+                                    function_own_locals, &locally_uninstantiated);
                             // Track the result slot for this local's initialization
                             // so we can clean it up when UninstantiateLocal is processed
                             local_init_slots[var_new_obj->ref.id] = inst->result.id;
