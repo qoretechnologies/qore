@@ -19,27 +19,27 @@
 
     |Algorithm|Type|Use Case|
     |---|---|---|
-    |@ref ML::IsolationForest "IsolationForest"|Anomaly Detection|Flag fraudulent transactions, sensor malfunctions, or intrusions|
-    |@ref ML::LOF "LOF"|Anomaly Detection|Find purchases unusual for a specific customer segment or region|
-    |@ref ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots|
-    |@ref ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories|
-    |@ref ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)|
-    |@ref ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features|
-    |@ref ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory|
-    |@ref ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise|
-    |@ref ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis|
-    |@ref ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python|
+    |@ref Qore::ML::IsolationForest "IsolationForest"|Anomaly Detection|Flag fraudulent transactions, sensor malfunctions, or intrusions|
+    |@ref Qore::ML::LOF "LOF"|Anomaly Detection|Find purchases unusual for a specific customer segment or region|
+    |@ref Qore::ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots|
+    |@ref Qore::ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories|
+    |@ref Qore::ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)|
+    |@ref Qore::ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features|
+    |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory|
+    |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise|
+    |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis|
+    |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python|
 
     @subsection mlalgo_anomaly Anomaly Detection
 
     Catch fraudulent transactions, equipment failures, and security breaches by automatically
     identifying data points that don't fit normal patterns.
 
-    - @ref ML::IsolationForest "IsolationForest" — Detects globally unusual records by measuring
+    - @ref Qore::ML::IsolationForest "IsolationForest" — Detects globally unusual records by measuring
       how easy they are to separate from the rest. A \$50,000 transaction when most are under \$500
       is isolated quickly and scores near 1.0 (highly anomalous). Best for broad screening across
       all data. Uses random partitioning; anomalous points are isolated in fewer splits.
-    - @ref ML::LOF "LOF" — Detects records that are unusual relative to their local neighborhood.
+    - @ref Qore::ML::LOF "LOF" — Detects records that are unusual relative to their local neighborhood.
       A \$200 purchase may be normal for premium customers but anomalous for budget customers; LOF
       catches this by comparing local density. Best when "unusual" depends on context. Uses
       k-nearest neighbors to measure local density deviation.
@@ -49,15 +49,15 @@
     Discover customer segments, group related events, and classify data points — either into
     hard groups or with probability scores reflecting genuine uncertainty.
 
-    - @ref ML::DBSCAN "DBSCAN" — Discovers natural groups without requiring you to specify how
+    - @ref Qore::ML::DBSCAN "DBSCAN" — Discovers natural groups without requiring you to specify how
       many exist. Groups can have any shape: geographic delivery zones, clusters of related
       support tickets, or network traffic hotspots. Points that don't belong to any group are
       labeled as noise.
-    - @ref ML::KMeans "KMeans" — Segments data into a specified number of groups — e.g., divide
+    - @ref Qore::ML::KMeans "KMeans" — Segments data into a specified number of groups — e.g., divide
       10,000 customers into 5 spending tiers or classify products into 3 price categories. Uses
       k-means++ initialization and supports online (mini-batch) updates so segments evolve as
       new data arrives.
-    - @ref ML::GMM "GMM" — Assigns each record a probability for each group rather than a hard
+    - @ref Qore::ML::GMM "GMM" — Assigns each record a probability for each group rather than a hard
       label. A customer might be 70%% "budget shopper" and 30%% "impulse buyer," reflecting
       genuine overlap. Uses Gaussian mixtures (EM algorithm) and supports full, diagonal, and
       spherical covariance types.
@@ -67,7 +67,7 @@
     Predict prices, estimate delivery times, and forecast demand by learning relationships
     between input features and a target value.
 
-    - @ref ML::LinearRegression "LinearRegression" — Learns the best straight-line relationship
+    - @ref Qore::ML::LinearRegression "LinearRegression" — Learns the best straight-line relationship
       between inputs and a target. For example, predict a property's price from square footage,
       number of bedrooms, and neighborhood — the model reports which features matter most
       (coefficients), the baseline (intercept), and prediction accuracy (R-squared).
@@ -77,10 +77,10 @@
     Forecast future values and understand what drives change in data with seasonal patterns,
     such as monthly revenue, daily server load, or weekly inventory levels.
 
-    - @ref ML::HoltWinters "HoltWinters" — Forecasts values by learning trend (going up or down)
+    - @ref Qore::ML::HoltWinters "HoltWinters" — Forecasts values by learning trend (going up or down)
       and seasonal patterns (e.g., revenue peaks every December, server load spikes Monday
       mornings). Supports additive and multiplicative seasonality with optional damped trends.
-    - @ref ML::SeasonalDecomposition "SeasonalDecomposition" — Separates a time series into three
+    - @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition" — Separates a time series into three
       parts: the underlying growth trend, the repeating seasonal pattern (e.g., holiday shopping
       cycles), and random fluctuations. Helps answer "is this increase due to real growth or just
       a seasonal spike?" Supports additive and multiplicative models.
@@ -89,7 +89,7 @@
 
     Simplify complex data for visualization, noise removal, and faster downstream analysis.
 
-    - @ref ML::PCA "PCA" — Compresses many fields into fewer combined values that capture the
+    - @ref Qore::ML::PCA "PCA" — Compresses many fields into fewer combined values that capture the
       most important patterns. For example, reduce 50 sensor readings to 3 key values that
       explain 95%% of the variance, making it practical to visualize equipment health on a 3D
       plot. Supports fixed component count or automatic selection via variance threshold.
@@ -100,16 +100,16 @@
     other frameworks without needing those tools at runtime.
 
     When compiled with ONNX Runtime support, the module provides:
-    - @ref ML::OnnxModel "OnnxModel" — Loads and runs pre-trained ONNX models for inference.
+    - @ref Qore::ML::OnnxModel "OnnxModel" — Loads and runs pre-trained ONNX models for inference.
       For example, a credit scoring model trained in scikit-learn can be exported to ONNX and
       deployed in a %Qore pipeline for real-time scoring. Supports float, double, int32, and
       int64 tensor types. ONNX Runtime sessions are thread-safe for concurrent inference.
 
     To check ONNX availability at runtime:
     @code{.py}
-hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+hash<Qore::ML::MLCapabilities> caps = Qore::ML::ml_get_capabilities();
 if (caps.has_onnx) {
-    ML::OnnxModel model("/path/to/model.onnx");
+    Qore::ML::OnnxModel model("/path/to/model.onnx");
     hash<auto> result = model.run({"input": data});
 }
     @endcode
@@ -118,31 +118,31 @@ if (caps.has_onnx) {
 
     <b>"I need to find bad or unusual records"</b>
     - Do you want to catch records that are unusual across <i>all</i> your data?
-      → Use @ref ML::IsolationForest "IsolationForest"
+      → Use @ref Qore::ML::IsolationForest "IsolationForest"
     - Do you want to catch records that are unusual <i>compared to similar records</i>?
-      → Use @ref ML::LOF "LOF"
+      → Use @ref Qore::ML::LOF "LOF"
 
     <b>"I need to group or segment my data"</b>
     - Do you know how many groups you want?
-      - Yes → Use @ref ML::KMeans "KMeans"
-      - No → Use @ref ML::DBSCAN "DBSCAN"
+      - Yes → Use @ref Qore::ML::KMeans "KMeans"
+      - No → Use @ref Qore::ML::DBSCAN "DBSCAN"
     - Do records need probability scores for multiple groups (soft assignment)?
-      → Use @ref ML::GMM "GMM"
+      → Use @ref Qore::ML::GMM "GMM"
 
     <b>"I need to predict or forecast values"</b>
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
-      → Use @ref ML::HoltWinters "HoltWinters"
+      → Use @ref Qore::ML::HoltWinters "HoltWinters"
     - Do you want to predict a value from input features (price from size, time from distance)?
-      → Use @ref ML::LinearRegression "LinearRegression"
+      → Use @ref Qore::ML::LinearRegression "LinearRegression"
 
     <b>"I need to understand or simplify my data"</b>
     - Do you want to separate trend, seasonality, and noise in a time series?
-      → Use @ref ML::SeasonalDecomposition "SeasonalDecomposition"
+      → Use @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"
     - Do you want to compress many fields into fewer meaningful values?
-      → Use @ref ML::PCA "PCA"
+      → Use @ref Qore::ML::PCA "PCA"
 
     <b>"I have a pre-trained model from Python or R"</b>
-    - Export it to ONNX format and use @ref ML::OnnxModel "OnnxModel"
+    - Export it to ONNX format and use @ref Qore::ML::OnnxModel "OnnxModel"
 
     This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
     more information). The module is tagged as such in the module's header (meaning it can be loaded
@@ -168,11 +168,11 @@ if (caps.has_onnx) {
 %requires ml
 
 # Train on 30 days of legitimate transactions
-ML::IsolationForest fraud_detector({"n_trees": 100, "sample_size": 256, "threshold": 0.6});
+Qore::ML::IsolationForest fraud_detector({"n_trees": 100, "sample_size": 256, "threshold": 0.6});
 fraud_detector.fit(legitimate_transactions);
 
 # Score an incoming transaction: {amount: 49500.0, hour: 3, merchant_category: 12}
-hash<ML::IsolationForestResult> result = fraud_detector.score(transaction);
+hash<Qore::ML::IsolationForestResult> result = fraud_detector.score(transaction);
 if (result.is_anomaly) {
     printf("Suspicious transaction! Score: %f\n", result.anomaly_score);
     # score near 1.0 = highly unusual; flag for review
@@ -185,11 +185,11 @@ if (result.is_anomaly) {
 %requires ml
 
 # Train on historical sales: square_footage, bedrooms, distance_to_center -> sale_price
-ML::LinearRegression price_model({"fit_intercept": True});
+Qore::ML::LinearRegression price_model({"fit_intercept": True});
 price_model.fit(historical_sales, "sale_price");
 
 # Predict price for a new listing
-hash<ML::LinearRegressionResult> result = price_model.predict(
+hash<Qore::ML::LinearRegressionResult> result = price_model.predict(
     {"square_footage": 1850, "bedrooms": 3, "distance_to_center": 4.2}
 );
 printf("Estimated price: $%.0f (model accuracy R²: %f)\n", result.prediction, result.r_squared);
@@ -201,10 +201,10 @@ printf("Estimated price: $%.0f (model accuracy R²: %f)\n", result.prediction, r
 %requires ml
 
 # Segment customers by monthly_spend, visit_frequency, avg_order_value
-ML::GMM segmenter({"n_components": 3, "seed": 42});
+Qore::ML::GMM segmenter({"n_components": 3, "seed": 42});
 segmenter.fit(customer_profiles);
 
-hash<ML::GMMResult> result = segmenter.predict(
+hash<Qore::ML::GMMResult> result = segmenter.predict(
     {"monthly_spend": 150.0, "visit_frequency": 8, "avg_order_value": 18.75}
 );
 printf("Segment: %d (confidence: %.0f%%)\n", result.cluster, result.max_probability * 100);
@@ -218,11 +218,11 @@ printf("Segment probabilities: %y\n", result.probabilities);
 %requires ml
 
 # Train on normal sensor readings grouped by equipment type
-ML::LOF sensor_monitor({"k": 20, "threshold": 1.5});
+Qore::ML::LOF sensor_monitor({"k": 20, "threshold": 1.5});
 sensor_monitor.fit(normal_sensor_readings);
 
 # A reading of 90°F is normal outdoors but anomalous for a server room
-hash<ML::LOFResult> result = sensor_monitor.score(
+hash<Qore::ML::LOFResult> result = sensor_monitor.score(
     {"temperature": 90.0, "humidity": 45.0, "equipment_type": 3}
 );
 if (result.is_anomaly) {
@@ -235,14 +235,14 @@ if (result.is_anomaly) {
     @code{.py}
 %requires ml
 
-hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+hash<Qore::ML::MLCapabilities> caps = Qore::ML::ml_get_capabilities();
 if (!caps.has_onnx) {
     printf("ONNX Runtime not available\n");
 } else {
     # Load a gradient-boosted model trained in Python/scikit-learn
-    ML::OnnxModel credit_model("/models/credit_score_v2.onnx");
+    Qore::ML::OnnxModel credit_model("/models/credit_score_v2.onnx");
 
-    hash<ML::OnnxModelInfo> info = credit_model.getModelInfo();
+    hash<Qore::ML::OnnxModelInfo> info = credit_model.getModelInfo();
     printf("Model: %s (version %d)\n", info.producer_name, info.version);
 
     # Score a loan application: income, debt_ratio, credit_history_months, ...
@@ -255,16 +255,16 @@ if (!caps.has_onnx) {
 
     @subsection ml_1_0 ml Module Version 1.0
     - Initial release with 9 native ML algorithms:
-      - @ref ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
-      - @ref ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
-      - @ref ML::DBSCAN "DBSCAN" — density-based clustering
-      - @ref ML::KMeans "KMeans" — k-means clustering with online updates
-      - @ref ML::GMM "GMM" — Gaussian Mixture Model probabilistic clustering
-      - @ref ML::LinearRegression "LinearRegression" — ordinary least squares regression
-      - @ref ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
-      - @ref ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
-      - @ref ML::PCA "PCA" — principal component analysis
-    - Optional @ref ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
+      - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
+      - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
+      - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
+      - @ref Qore::ML::KMeans "KMeans" — k-means clustering with online updates
+      - @ref Qore::ML::GMM "GMM" — Gaussian Mixture Model probabilistic clustering
+      - @ref Qore::ML::LinearRegression "LinearRegression" — ordinary least squares regression
+      - @ref Qore::ML::HoltWinters "HoltWinters" — triple exponential smoothing forecasting
+      - @ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition" — time series decomposition
+      - @ref Qore::ML::PCA "PCA" — principal component analysis
+    - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
     - All algorithms use Eigen3 for efficient matrix operations
     - \c ml_get_capabilities() function for runtime capability and ONNX support discovery
 */
