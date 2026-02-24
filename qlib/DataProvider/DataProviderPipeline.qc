@@ -159,6 +159,9 @@ public hashdecl PipelineElementDelta {
 
     #! processing_time_us / records_processed; 0.0 if no records processed in this interval
     float avg_processing_time_us = 0.0;
+
+    #! records_processed / interval_secs for this interval; 0.0 if interval is zero or no records
+    float throughput_rps = 0.0;
 }
 
 #! Metrics for the interval since the previous snapshot
@@ -325,6 +328,16 @@ class PipelineQueue {
         */
         bool processing = False;
 
+        #! Local stop flag — set by the pipeline's stopInternUnlocked()
+        /** Avoids evaluating the weak \c parent reference in the hot loop, which
+            could trigger the pipeline destructor in this thread and deadlock on
+            \c cnt.waitForZero().
+        */
+        bool queue_stop = False;
+
+        #! Local abort flag — set by the pipeline's abort()/reportError()
+        bool queue_abort = False;
+
         #! Parent object
         DataProviderPipeline parent;
     }
@@ -358,7 +371,7 @@ class PipelineQueue {
         @throws PIPELINE-SUBMISSION-ABORTED cannot submit data; the pipeline is shutting down or has aborted
     */
     submit(auto qdata) {
-        if (parent.aborting()) {
+        if (queue_abort) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
         }
 
@@ -371,7 +384,7 @@ class PipelineQueue {
             lck.unlock();
         }
 
-        while (!parent.stopping() && queue.lsize() == size) {
+        while (!queue_stop && queue.lsize() == size) {
             # Record backpressure event when queue is full
             *PipelineMetricsCollector mc = parent.getMetricsCollector();
             if (mc) {
@@ -382,7 +395,7 @@ class PipelineQueue {
             --queue_waiting;
         }
 
-        if (parent.stopping()) {
+        if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
                 "down", parent.getName());
         }
@@ -403,9 +416,6 @@ class PipelineQueue {
 
     #! Processing thread
     run(Counter run_cnt) {
-        on_exit {
-            cnt.dec();
-        }
         run_cnt.dec();
 
         parent.registerThread(self);
@@ -424,7 +434,7 @@ class PipelineQueue {
         the last record but is still submitting it to child queues during fan-out.
     */
     waitDone() {
-        while (!parent.stopping() && (queue || processing)) {
+        while (!queue_stop && (queue || processing)) {
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
@@ -435,7 +445,7 @@ class PipelineQueue {
         }
 
         do_flush = True;
-        while (!id && !parent.stopping() && do_flush) {
+        while (!id && !queue_stop && do_flush) {
             if (data_waiting) {
                 cond.broadcast();
             }
@@ -455,8 +465,18 @@ class PipelineQueue {
     /** @note Called in the pipeline lock
     */
     private runIntern() {
+        # Decrement the thread counter on exit.  This MUST happen inside
+        # runIntern() (while the caller still holds lck) rather than in
+        # run()'s on_exit, because after runIntern() returns the run()
+        # stack cleanup can drop the last strong reference to the pipeline
+        # (via the weak "parent" member), which would fire the pipeline
+        # destructor in this thread.  The destructor calls
+        # cnt.waitForZero(), so cnt must already be decremented to avoid
+        # self-deadlock.
+        on_exit cnt.dec();
+
         #! wait for an event
-        while (!parent.stopping()) {
+        while (!queue_stop) {
             if (!queue) {
                 if (!id && do_flush) {
                     flushIntern();
@@ -478,7 +498,7 @@ class PipelineQueue {
                 cond.broadcast();
             }
 
-            if (parent.aborting()) {
+            if (queue_abort) {
                 # discard data
                 processing = False;
                 if (queue_waiting) {
@@ -729,6 +749,9 @@ public class PipelineMetricsCollector {
         #! Previous element metrics snapshot (internal key → field values)
         hash<string, hash<auto>> prev_element_snap;
 
+        #! Optional source element ID; when set, recordPipelineSubmit() also updates source element metrics
+        *string source_element_id;
+
         #! Abstract metrics collector
         AbstractPipelineMetricsCollector collector;
 
@@ -770,6 +793,25 @@ public class PipelineMetricsCollector {
         if (display_id) {
             element_id_alias{element_id} = display_id;
         }
+    }
+
+    #! Sets the source element ID so that recordPipelineSubmit() also updates source element metrics
+    /** @param element_id the element identifier for the source element (must already be initialized
+               via initElement())
+
+        When set, each call to recordPipelineSubmit() will increment the source element's
+        records_processed and records_output and trigger maybeGetSnapshot(), so that source
+        element metrics appear in periodic delta snapshots — not only in the final COMPLETE snapshot.
+
+        @since DataProvider 3.1
+    */
+    setSourceElement(string element_id) {
+        metrics_lock.lock();
+        on_exit metrics_lock.unlock();
+        if (!element_metrics.hasKey(element_id)) {
+            throw "PIPELINE-ERROR", sprintf("element %y not initialized; call initElement() first", element_id);
+        }
+        source_element_id = element_id;
     }
 
     #! Records records being submitted to an element for processing
@@ -875,11 +917,68 @@ public class PipelineMetricsCollector {
 
     #! Records records entering the pipeline
     /** @param count number of records submitted (default: 1)
+
+        When a source element has been set via setSourceElement(), this method also updates
+        the source element's records_processed/records_output and triggers maybeGetSnapshot()
+        so that source metrics appear in periodic delta snapshots.
+
+        @note records_since_callback is only incremented when a source element is set, because
+        without a source element there are no element-level metrics to snapshot and the pipeline
+        queue workers handle their own snapshot triggering via recordElementProcessing().
     */
     recordPipelineSubmit(int count = 1) {
-        metrics_lock.lock();
-        on_exit metrics_lock.unlock();
-        total_submitted += count;
+        # First pass: check source_element_id under lock; if set, release lock and fetch thresholds
+        bool has_source;
+        {
+            metrics_lock.lock();
+            on_exit metrics_lock.unlock();
+            total_submitted += count;
+            has_source = exists source_element_id;
+        }
+
+        if (!has_source) {
+            return;
+        }
+
+        # Read collector thresholds outside lock (same pattern as recordElementProcessing)
+        int ri;
+        int ims;
+        try {
+            ri = collector.getRecordInterval();
+            ims = collector.getIntervalMs();
+        } catch (hash<ExceptionInfo> ex) {
+            parent.logError("metrics collector error reading thresholds: %s: %s", ex.err, ex.desc);
+            ri = 0;
+            ims = 0;
+        }
+
+        # Second pass: update source element metrics under lock
+        *hash<PipelineMetricsSnapshot> snapshot;
+        {
+            metrics_lock.lock();
+            on_exit metrics_lock.unlock();
+
+            # Re-check source_element_id under lock (could have been cleared between passes)
+            if (source_element_id) {
+                if (!element_metrics{source_element_id}.first_record_time) {
+                    element_metrics{source_element_id}.first_record_time = now_us();
+                }
+                element_metrics{source_element_id}.last_record_time = now_us();
+                element_metrics{source_element_id}.records_processed += count;
+                element_metrics{source_element_id}.records_output += count;
+
+                records_since_callback += count;
+                snapshot = maybeGetSnapshot(ri, ims);
+            }
+        }
+
+        if (snapshot) {
+            try {
+                collector.reportMetrics(snapshot);
+            } catch (hash<ExceptionInfo> ex) {
+                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
+            }
+        }
     }
 
     #! Returns the total number of records submitted to the pipeline without advancing the delta window
@@ -1127,6 +1226,7 @@ public class PipelineMetricsCollector {
                 "error_count"           : d_ec,
                 "queue_full_count"      : d_qfc,
                 "avg_processing_time_us": d_rp > 0 ? (d_pt.toFloat() / d_rp) : 0.0,
+                "throughput_rps"        : (delta_secs > 0.0 && d_rp > 0) ? (d_rp / delta_secs) : 0.0,
             };
         }
         hash<PipelineMetricsDelta> snapshot_delta = <PipelineMetricsDelta>{
@@ -1551,6 +1651,9 @@ public class DataProviderPipeline {
     abort(*bool ignore_exceptions) {
         # do not grab the lock first to interrupt iterators adding data to the pipeline
         abort_flag = True;
+        foreach PipelineQueue q in (pmap.iterator()) {
+            q.queue_abort = True;
+        }
 
         lck.lock();
         on_exit lck.unlock();
@@ -1637,6 +1740,24 @@ public class DataProviderPipeline {
         return metrics_collector;
     }
 
+    #! Sets the source element for metrics collection
+    /** When set, recordPipelineSubmit() will also update the source element's metrics incrementally,
+        so that source element metrics appear in periodic delta snapshots — not only in the final
+        COMPLETE snapshot.
+
+        @param element_id the element identifier for the source element
+
+        @note This is a no-op if metrics collection is not enabled (i.e. no metrics_collector was
+        configured in PipelineOptionInfo).
+
+        @since DataProvider 3.1
+    */
+    setSourceElement(string element_id) {
+        if (metrics_collector) {
+            metrics_collector.setSourceElement(element_id);
+        }
+    }
+
     #! Called from a pipeline queue object to report a fatal error durring processing
     reportError(PipelineQueue queue, hash<ExceptionInfo> ex) {
         logError("pipeline %d: %s", queue.getId(), get_exception_string(ex));
@@ -1651,6 +1772,9 @@ public class DataProviderPipeline {
 
         error_list += ex;
         abort_flag = True;
+        foreach PipelineQueue q in (pmap.iterator()) {
+            q.queue_abort = True;
+        }
     }
 
     #! Logs to the info log, if set
@@ -1767,10 +1891,16 @@ public class DataProviderPipeline {
 
         if (stop_flag) {
             delete stop_flag;
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_stop = False;
+            }
         }
 
         if (abort_flag) {
             delete abort_flag;
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_abort = False;
+            }
         }
     }
 
@@ -1840,7 +1970,10 @@ public class DataProviderPipeline {
         if (!stop_flag) {
             stop_flag = True;
             logDebug("pipeline %y stopping %d queue thread%s", name, pmap.size(), pmap.size() == 1 ? "" : "s");
-            map $1.cond.broadcast(), pmap.iterator();
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_stop = True;
+                q.cond.broadcast();
+            }
         }
     }
 }
