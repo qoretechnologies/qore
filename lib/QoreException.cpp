@@ -129,7 +129,13 @@ QoreException* QoreException::rethrow() {
     // get function name
     fn = !n ? "<unknown>" : n->getKeyValue("function").get<QoreStringNode>()->c_str();
 
-    l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, *get_runtime_location()), nullptr);
+    const QoreProgramLocation* loc = get_runtime_location();
+    if (loc) {
+        l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, *loc), nullptr);
+    } else {
+        static QoreProgramLocation default_loc;
+        l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, default_loc), nullptr);
+    }
     return e.release();
 }
 

@@ -630,7 +630,9 @@ static void invalidateLvalueRoot(const QoreValue& lvalue,
         std::unordered_map<const void*, QoreValue>& locals,
         std::unordered_map<const void*, QoreValue>& globals,
         std::unordered_map<const void*, QoreValue>& threadlocals,
-        std::unordered_map<const void*, QoreValue>& closures) {
+        std::unordered_map<const void*, QoreValue>& closures,
+        const std::unordered_map<const LocalVar*, uint32_t>* local_var_slots = nullptr,
+        std::vector<QoreValue>* locals_slot_cache_ptr = nullptr) {
     if (!lvalue.hasNode()) {
         return;
     }
@@ -645,6 +647,15 @@ static void invalidateLvalueRoot(const QoreValue& lvalue,
                 if (it != locals.end()) {
                     it->second.discard(nullptr);
                     locals.erase(it);
+                }
+                if (local_var_slots && locals_slot_cache_ptr) {
+                    const LocalVar* lv = reinterpret_cast<const LocalVar*>(var_ref->ref.id);
+                    auto slot_it = local_var_slots->find(lv);
+                    if (slot_it != local_var_slots->end()
+                            && slot_it->second < locals_slot_cache_ptr->size()) {
+                        (*locals_slot_cache_ptr)[slot_it->second].discard(nullptr);
+                        (*locals_slot_cache_ptr)[slot_it->second] = QoreValue();
+                    }
                 }
             } else if (type == VT_GLOBAL) {
                 auto it = globals.find(var_ref->ref.id);
@@ -688,7 +699,9 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
         const QoreValue& value, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
-        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr) {
+        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr,
+        const std::unordered_map<const LocalVar*, uint32_t>* local_var_slots = nullptr,
+        std::vector<QoreValue>* locals_slot_cache_ptr = nullptr) {
     if (!lvalue.hasNode()) {
         return;
     }
@@ -708,6 +721,15 @@ static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>&
         if (cache_it != locals.end()) {
             cache_it->second.discard(xsink);
             locals.erase(cache_it);
+        }
+        if (local_var_slots && locals_slot_cache_ptr) {
+            const LocalVar* lv = reinterpret_cast<const LocalVar*>(var_ref->ref.id);
+            auto slot_it = local_var_slots->find(lv);
+            if (slot_it != local_var_slots->end()
+                    && slot_it->second < locals_slot_cache_ptr->size()) {
+                (*locals_slot_cache_ptr)[slot_it->second].discard(xsink);
+                (*locals_slot_cache_ptr)[slot_it->second] = QoreValue();
+            }
         }
         assignLocalVarValue(var_ref->ref.id, value, xsink);
     }
@@ -4217,7 +4239,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
+                    &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
             }
@@ -4261,7 +4284,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // Invalidate the root variable's cached value — evalLValueStore
                 // may trigger COW on the thread-local stack, making the cached
                 // value stale (the next LoadLocal will re-read from the stack)
-                invalidateLvalueRoot(lval_inst->lvalue, locals, globals, threadlocals, closures);
+                invalidateLvalueRoot(lval_inst->lvalue, locals, globals, threadlocals, closures,
+                    &func.local_var_slots, &locals_slot_cache);
                 // StoreLValue has no result register (result.id == 0); discard
                 // the returned reference to avoid storing into values[0] which
                 // causes double-free when multiple stores accumulate in cleanup
@@ -4328,7 +4352,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
+                    &func.local_var_slots, &locals_slot_cache);
                 // discard the reload value if not used as result (for post ops, it's only for cache update)
                 if (is_post) {
                     updated.discard(xsink);
@@ -4400,7 +4425,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
+                    &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
             }
@@ -4438,7 +4464,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated);
+                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
+                    &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
             }

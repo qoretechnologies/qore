@@ -938,8 +938,13 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // suppress_guard_deopt=true: top-level code must not deopt on
                     // guard failure because re-executing the entire block from the
                     // beginning would duplicate side effects (I/O, mutations).
+                    const QoreStackLocation* saved = get_runtime_stack_location();
+                    if (saved) update_runtime_stack_location(nullptr);
+
                     ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
                         nullptr, nullptr, &pre_instantiated, nullptr, nullptr, nullptr, true);
+
+                    if (saved) update_runtime_stack_location(saved);
                 }
 
                 // Uninstantiate nested locals after JIT execution (reverse order)
