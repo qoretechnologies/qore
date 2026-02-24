@@ -114,6 +114,35 @@ class IntervalMetricsCollector inherits DataProvider::AbstractPipelineMetricsCol
     }
 }
 
+#! Filter processor that drops every other record (passes records where index % 2 == 0)
+class EveryOtherFilterProcessor inherits DataProvider::AbstractDataProcessor {
+    private {
+        int idx = 0;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        if (idx % 2 == 0) {
+            enqueue(_data);
+        }
+        ++idx;
+    }
+}
+
+#! Bulk passthrough processor that supports bulk API
+class BulkPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        enqueue(_data);
+    }
+}
+
 public class PipelineMetricsDeltaTest inherits QUnit::Test {
     constructor() : Test("PipelineMetricsDelta Test", "1.0") {
         addTestCase("first snapshot delta equals cumulative", \testFirstSnapshotDeltaEqualsCumulative());
@@ -123,6 +152,10 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         addTestCase("idle interval delta", \testIdleIntervalDelta());
         addTestCase("element type filtering in delta", \testElementTypeFilteringInDelta());
         addTestCase("element alias remapping in delta", \testElementAliasRemappingInDelta());
+        addTestCase("delta submitted sum equals total", \testDeltaSubmittedSumEqualsTotal());
+        addTestCase("per-element accounting", \testPerElementAccounting());
+        addTestCase("filter processor accounting", \testFilterProcessorAccounting());
+        addTestCase("bulk record accounting", \testBulkRecordAccounting());
 
         set_return_value(main());
     }
@@ -161,6 +194,11 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             "reportMetrics must have been called at least once by waitDone()");
 
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants: records_in_flight must be 0, submitted must equal completed
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
 
         # Cumulative counts must reflect all submitted/completed records
         assertEq(n, snap.total_records_submitted,
@@ -218,6 +256,13 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         pipe.submit(getGeneratorIterator(total));
         pipe.waitDone();
 
+        # Final-snapshot invariants
+        hash<DataProvider::PipelineMetricsSnapshot> final_snap =
+            collector.all_snapshots[collector.all_snapshots.size() - 1];
+        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
         # Must have at least 2 snapshots: intermediate callbacks plus the final forceCallback
         assertTrue(collector.all_snapshots.size() >= 2,
             sprintf("must have at least 2 snapshots, got %d", collector.all_snapshots.size()));
@@ -266,6 +311,14 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         pipe.waitDone();
 
         assertNeq(NOTHING, collector.last_snapshot);
+
+        # Final-snapshot invariants
+        assertEq(0, collector.last_snapshot.records_in_flight,
+            "records_in_flight must be 0 after waitDone()");
+        assertEq(collector.last_snapshot.total_records_submitted,
+            collector.last_snapshot.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
         hash<DataProvider::PipelineMetricsDelta> delta = collector.last_snapshot.delta;
         assertNeq(NOTHING, delta);
 
@@ -311,6 +364,12 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertNeq(NOTHING, collector.last_snapshot);
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
         assertNeq(NOTHING, snap.delta);
 
         foreach hash<auto> pair in (snap.delta.element_metrics.pairIterator()) {
@@ -355,6 +414,13 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         pipe.submit(getGeneratorIterator(n));
         # waitDone() -> forceCallback() -> getSnapshotIntern() advances prev_* state
         pipe.waitDone();
+
+        # Final-snapshot invariants
+        assertEq(0, collector.last_snapshot.records_in_flight,
+            "records_in_flight must be 0 after waitDone()");
+        assertEq(collector.last_snapshot.total_records_submitted,
+            collector.last_snapshot.total_records_completed,
+            "submitted must equal completed after waitDone()");
 
         assertEq(n, collector.last_snapshot.total_records_completed);
 
@@ -408,6 +474,12 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertNeq(NOTHING, collector.last_snapshot);
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
         assertNeq(NOTHING, snap.delta);
 
         # Neither cumulative nor delta element_metrics should contain mapper elements
@@ -455,6 +527,12 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertNeq(NOTHING, collector.last_snapshot);
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
         assertNeq(NOTHING, snap.delta);
 
         # Cumulative element_metrics must use the alias key
@@ -484,5 +562,196 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             assertTrue(snap.delta.element_metrics.hasKey(k),
                 sprintf("delta must contain element key '%s' present in cumulative", k));
         }
+    }
+
+    # =========================================================================
+    # Test 8: delta submitted sum equals total
+    # =========================================================================
+
+    #! Use IntervalMetricsCollector(20), submit 100 records. Sum delta.records_submitted
+    #! across all snapshots, assert equals final total_records_submitted. Same for records_completed.
+    testDeltaSubmittedSumEqualsTotal() {
+        int interval = 20;
+        int total = 100;
+
+        IntervalMetricsCollector collector(interval);
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-submitted-sum",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(total));
+        pipe.waitDone();
+
+        # Final-snapshot invariants
+        hash<DataProvider::PipelineMetricsSnapshot> final_snap =
+            collector.all_snapshots[collector.all_snapshots.size() - 1];
+        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
+        # Sum delta.records_submitted across all snapshots
+        int submitted_sum = 0;
+        int completed_sum = 0;
+        foreach hash<DataProvider::PipelineMetricsSnapshot> s in (collector.all_snapshots) {
+            submitted_sum += s.delta.records_submitted;
+            completed_sum += s.delta.records_completed;
+        }
+
+        assertEq(final_snap.total_records_submitted, submitted_sum,
+            "sum of delta.records_submitted across all snapshots must equal final total_records_submitted");
+        assertEq(final_snap.total_records_completed, completed_sum,
+            "sum of delta.records_completed across all snapshots must equal final total_records_completed");
+    }
+
+    # =========================================================================
+    # Test 9: per-element accounting
+    # =========================================================================
+
+    #! Pipeline with 3 chained DeltaPassthroughProcessor elements. Submit 50 records. Verify:
+    #! - Each element's cumulative records_processed == 50
+    #! - Each element's cumulative records_output == 50
+    #! - Sum of per-element delta.records_processed across all snapshots equals cumulative total
+    testPerElementAccounting() {
+        int n = 50;
+        int interval = 10;
+
+        IntervalMetricsCollector collector(interval);
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-per-element",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor());
+        pipe.append(0, new DeltaPassthroughProcessor());
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> final_snap =
+            collector.all_snapshots[collector.all_snapshots.size() - 1];
+
+        # Final-snapshot invariants
+        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
+        # Each element's cumulative records_processed == n and records_output == n
+        foreach hash<auto> pair in (final_snap.element_metrics.pairIterator()) {
+            assertEq(n, pair.value.records_processed,
+                sprintf("element '%s': cumulative records_processed must equal %d", pair.key, n));
+            assertEq(n, pair.value.records_output,
+                sprintf("element '%s': cumulative records_output must equal %d", pair.key, n));
+        }
+
+        # Sum of per-element delta.records_processed across all snapshots equals cumulative total
+        hash<string, int> delta_processed_sums;
+        foreach hash<DataProvider::PipelineMetricsSnapshot> s in (collector.all_snapshots) {
+            foreach hash<auto> epair in (s.delta.element_metrics.pairIterator()) {
+                delta_processed_sums{epair.key} += epair.value.records_processed;
+            }
+        }
+        foreach hash<auto> pair in (final_snap.element_metrics.pairIterator()) {
+            assertEq(pair.value.records_processed, delta_processed_sums{pair.key},
+                sprintf("element '%s': sum of delta.records_processed must equal cumulative", pair.key));
+        }
+    }
+
+    # =========================================================================
+    # Test 10: filter processor accounting
+    # =========================================================================
+
+    #! Pipeline: EveryOtherFilterProcessor -> DeltaPassthroughProcessor.
+    #! Submit 100 records. Verify:
+    #! - Filter: records_processed == 100, records_output == 50
+    #! - Passthrough: records_processed == 50, records_output == 50
+    #! - Final: total_records_completed == 50
+    testFilterProcessorAccounting() {
+        int n = 100;
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-filter-accounting",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new EveryOtherFilterProcessor());
+        pipe.append(0, new DeltaPassthroughProcessor());
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
+
+        # The pipeline has 2 elements: "0:0" (filter) and "0:1" (passthrough)
+        assertEq(2, snap.element_metrics.size(),
+            "must have exactly 2 element metrics entries");
+
+        # Filter element: processed all 100, output 50
+        hash<DataProvider::PipelineElementMetrics> filter_em = snap.element_metrics."0:0";
+        assertEq(n, filter_em.records_processed,
+            "filter: records_processed must equal total input");
+        assertEq(n / 2, filter_em.records_output,
+            "filter: records_output must equal n/2 (every other record)");
+
+        # Passthrough element: processed 50, output 50
+        hash<DataProvider::PipelineElementMetrics> pass_em = snap.element_metrics."0:1";
+        assertEq(n / 2, pass_em.records_processed,
+            "passthrough: records_processed must equal filter output");
+        assertEq(n / 2, pass_em.records_output,
+            "passthrough: records_output must equal records_processed");
+
+        # After waitDone(), all records are accounted for: filtered records are "completed"
+        # at the filter element, surviving records are "completed" at the terminal element
+        assertEq(n, snap.total_records_completed,
+            "total_records_completed must equal total submitted (including filtered)");
+    }
+
+    # =========================================================================
+    # Test 11: bulk record accounting
+    # =========================================================================
+
+    #! Submit 3 bulk batches of 100 records (300 total) via hash-of-lists format.
+    #! After waitDone(), verify:
+    #! - records_in_flight == 0
+    #! - total_records_submitted == total_records_completed == 300
+    testBulkRecordAccounting() {
+        int batch_size = 100;
+        int num_batches = 3;
+        int total = batch_size * num_batches;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "delta-bulk-accounting",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new BulkPassthroughProcessor());
+
+        for (int i = 0; i < num_batches; ++i) {
+            # Create hash-of-lists bulk data (range is end-exclusive)
+            hash<auto> bulk_data = {
+                "id": (map $1, range(i * batch_size, (i + 1) * batch_size)),
+                "name": (map sprintf("record-%d", $1), range(i * batch_size, (i + 1) * batch_size)),
+            };
+            pipe.submit(bulk_data);
+        }
+        pipe.waitDone();
+
+        assertNeq(NOTHING, collector.last_snapshot);
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Final-snapshot invariants
+        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        assertEq(total, snap.total_records_submitted,
+            "total_records_submitted must equal total bulk records");
+        assertEq(total, snap.total_records_completed,
+            "total_records_completed must equal total bulk records");
+        assertEq(snap.total_records_submitted, snap.total_records_completed,
+            "submitted must equal completed after waitDone()");
     }
 }

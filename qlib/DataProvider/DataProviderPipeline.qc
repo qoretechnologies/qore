@@ -277,6 +277,9 @@ class PipelineQueue {
         #! Queue ID
         int id;
 
+        #! Queue ID as string — pre-computed to avoid toString() per record
+        string id_str;
+
         #! Parent lock
         Mutex lck;
 
@@ -314,6 +317,9 @@ class PipelineQueue {
         */
         list<auto> elems();
 
+        #! Pre-computed element ID strings — avoids sprintf() per record per element
+        list<string> elem_ids();
+
         #! Flush pipeline flag
         bool do_flush;
 
@@ -338,6 +344,17 @@ class PipelineQueue {
         #! Local abort flag — set by the pipeline's abort()/reportError()
         bool queue_abort = False;
 
+        #! Cached flag: True when the pipeline has a metrics collector
+        /** Avoids weak-ref deref per record; set by DataProviderPipeline.checkSubmitIntern()
+        */
+        bool has_metrics = False;
+
+        #! Cached flag: True when the pipeline uses bulk API
+        /** Set by DataProviderPipeline.checkSubmitIntern(); enables fast record counting
+            via lsize() instead of per-record type checks.
+        */
+        bool do_bulk = False;
+
         #! Parent object
         DataProviderPipeline parent;
     }
@@ -354,6 +371,7 @@ class PipelineQueue {
             cnt.dec();
         }
         self.id = id;
+        self.id_str = id.toString();
         Counter run_cnt(1);
         tid = background run(run_cnt);
         # do not return until the background thread is running
@@ -385,11 +403,6 @@ class PipelineQueue {
         }
 
         while (!queue_stop && queue.lsize() == size) {
-            # Record backpressure event when queue is full
-            *PipelineMetricsCollector mc = parent.getMetricsCollector();
-            if (mc) {
-                mc.recordBackpressure(id.toString());
-            }
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
@@ -402,12 +415,6 @@ class PipelineQueue {
 
         # do not use the += operator in case the data is a list
         push queue, qdata;
-
-        # Record queue depth for metrics
-        *PipelineMetricsCollector mc = parent.getMetricsCollector();
-        if (mc) {
-            mc.recordQueueDepth(id.toString(), queue.lsize());
-        }
 
         if (data_waiting) {
             cond.broadcast();
@@ -475,9 +482,25 @@ class PipelineQueue {
         # self-deadlock.
         on_exit cnt.dec();
 
+        # Metrics batch state — flushed at threshold or when the queue goes idle
+        int batch_count = 0;
+        *date last_metrics_flush;
+        int metrics_batch_size = 100;
+        # Per-element accumulators (initialized on first record when metrics enabled)
+        list<int> acc_in();
+        list<int> acc_out();
+        list<int> acc_completed();
+        bool acc_initialized = False;
+
         #! wait for an event
         while (!queue_stop) {
             if (!queue) {
+                # Flush any pending metrics before going idle
+                if (batch_count > 0) {
+                    flushMetricsBatch(\batch_count, \last_metrics_flush, \acc_in, \acc_out,
+                        \acc_completed);
+                }
+
                 if (!id && do_flush) {
                     flushIntern();
                     do_flush = False;
@@ -510,54 +533,69 @@ class PipelineQueue {
             softlist<auto> data_recs;
             push data_recs, qdata;
 
-            # Get metrics collector for this processing run
-            *PipelineMetricsCollector mc = parent.getMetricsCollector();
+            int elem_count = elems.size();
 
             try {
+                # Initialize per-element accumulators on first record
+                if (has_metrics && !acc_initialized) {
+                    for (int i = 0; i < elem_count; ++i) {
+                        push acc_in, 0;
+                        push acc_out, 0;
+                        push acc_completed, 0;
+                    }
+                    acc_initialized = True;
+                }
+
                 # iterate each element in the queue
                 int elem_index = 0;
                 foreach auto elem in (elems) {
                     softlist<auto> new_recs;
-                    # iterate each data element in the current data set and submit it to processors
-                    foreach auto data_elem in (data_recs) {
-                        if (elem instanceof AbstractDataProcessor) {
-                            # Measure processing time
-                            date start_time = now_us();
+                    if (elem instanceof AbstractDataProcessor) {
+                        foreach auto data_elem in (data_recs) {
                             *list<auto> new_elem_recs = elem.submitAndCollect(data_elem);
-                            int processing_us = (now_us() - start_time).durationMicroseconds();
-
-                            # if we have output data, save it for the next processor
                             if (new_elem_recs) {
-                                # here we need to use += to concatenate lists
                                 new_recs += new_elem_recs;
                             }
-                            parent.logDebug("queue %d data processor %y output: %y", id, elem.className(),
-                                new_elem_recs);
+                            parent.logDebug("queue %d data processor %y output: %y", id,
+                                elem.className(), new_elem_recs);
+                        }
 
-                            # Record metrics if collector is enabled
-                            if (mc) {
-                                string element_id = sprintf("%d:%d", id, elem_index);
-                                # Count input records - for bulk hash data, count the list size
-                                int records_in = 1;
-                                if (data_elem.typeCode() == NT_HASH
-                                        && data_elem.firstValue().typeCode() == NT_LIST) {
-                                    records_in = data_elem.firstValue().lsize();
+                        # Per-element accounting
+                        if (has_metrics) {
+                            if (do_bulk) {
+                                # Bulk: count actual records via type inspection
+                                int elem_in_count = 0;
+                                map elem_in_count += ($1.typeCode() == NT_HASH
+                                    && $1.firstValue().typeCode() == NT_LIST)
+                                    ? $1.firstValue().lsize() : 1, data_recs;
+                                int elem_out_count = 0;
+                                map elem_out_count += ($1.typeCode() == NT_HASH
+                                    && $1.firstValue().typeCode() == NT_LIST)
+                                    ? $1.firstValue().lsize() : 1, new_recs;
+                                acc_in[elem_index] += elem_in_count;
+                                acc_out[elem_index] += elem_out_count;
+                                if (elem_index == elem_count - 1) {
+                                    acc_completed[elem_index] += elem_in_count;
+                                } else if (elem_in_count > elem_out_count) {
+                                    acc_completed[elem_index] +=
+                                        elem_in_count - elem_out_count;
                                 }
-                                # Count output records
-                                int records_out = 0;
-                                foreach auto out_rec in (new_elem_recs) {
-                                    if (out_rec.typeCode() == NT_HASH
-                                            && out_rec.firstValue().typeCode() == NT_LIST) {
-                                        records_out += out_rec.firstValue().lsize();
-                                    } else {
-                                        ++records_out;
-                                    }
+                            } else {
+                                # Non-bulk: list sizes are record counts
+                                int in_size = data_recs.lsize();
+                                int out_size = new_recs.lsize();
+                                acc_in[elem_index] += in_size;
+                                acc_out[elem_index] += out_size;
+                                if (elem_index == elem_count - 1) {
+                                    acc_completed[elem_index] += in_size;
+                                } else if (in_size > out_size) {
+                                    acc_completed[elem_index] += in_size - out_size;
                                 }
-                                mc.recordElementProcessing(element_id, processing_us, records_in, records_out);
                             }
-                        } else {
-                            # must be the last entry in the list - submitting to child queues
-                            # Note: this is NOT completion - records continue processing in child queues
+                        }
+                    } else {
+                        # Fan-out to child queues
+                        foreach auto data_elem in (data_recs) {
                             map $1.submit(data_elem), elem;
                         }
                     }
@@ -565,20 +603,24 @@ class PipelineQueue {
                     ++elem_index;
                 }
 
-                # If data reaches the end of the queue without child queues, record completion
-                if (data_recs && mc) {
-                    foreach auto final_rec in (data_recs) {
-                        int records_completed = 1;
-                        if (final_rec.typeCode() == NT_HASH && final_rec.firstValue().typeCode() == NT_LIST) {
-                            records_completed = final_rec.firstValue().lsize();
-                        }
-                        mc.recordPipelineComplete(records_completed);
+                # Increment batch counter; flush at threshold
+                if (has_metrics) {
+                    if (++batch_count >= metrics_batch_size) {
+                        flushMetricsBatch(\batch_count, \last_metrics_flush, \acc_in,
+                            \acc_out, \acc_completed);
                     }
                 }
             } catch (hash<ExceptionInfo> ex) {
-                # Record error for the current queue
-                if (mc) {
-                    mc.recordError(id.toString());
+                # Flush pending metrics batch on error
+                if (batch_count > 0) {
+                    flushMetricsBatch(\batch_count, \last_metrics_flush, \acc_in, \acc_out,
+                        \acc_completed);
+                }
+                if (has_metrics) {
+                    *PipelineMetricsCollector mc = parent.getMetricsCollector();
+                    if (mc) {
+                        mc.recordError(id_str);
+                    }
                 }
                 parent.reportError(self, ex);
             }
@@ -591,18 +633,72 @@ class PipelineQueue {
         }
     }
 
-    private flushIntern() {
-        # Get metrics collector for flush operations
+    #! Flushes accumulated metrics batch to the collector
+    /** Reports per-element processing metrics for all accumulated records and resets
+        the batch counter and accumulators.  Called at batch threshold, on idle, and
+        on error.
+
+        @param batch_count reference to batch counter (reset to 0)
+        @param last_metrics_flush reference to last flush timestamp (updated)
+        @param acc_in per-element input record accumulators (reset to 0)
+        @param acc_out per-element output record accumulators (reset to 0)
+        @param acc_completed per-element completed record accumulators (reset to 0)
+    */
+    private flushMetricsBatch(reference<int> batch_count, reference<*date> last_metrics_flush,
+            reference<list<int>> acc_in, reference<list<int>> acc_out,
+            reference<list<int>> acc_completed) {
         *PipelineMetricsCollector mc = parent.getMetricsCollector();
+        if (mc) {
+            # Report submitted count from the consumer for the primary queue.
+            # Uses acc_in[0] (first element's input count) which equals actual record count
+            # for both bulk (type-inspected) and non-bulk (lsize) modes.
+            if (!id && acc_in && acc_in[0] > 0) {
+                mc.recordPipelineSubmit(acc_in[0]);
+            }
+            date now = now_us();
+            int batch_us = last_metrics_flush
+                ? (now - last_metrics_flush).durationMicroseconds() : 0;
+            last_metrics_flush = now;
+            int n = acc_in.size();
+            int per_elem_us = n > 1 ? (batch_us / n) : batch_us;
+            for (int i = 0; i < n; ++i) {
+                if (acc_in[i] > 0) {
+                    mc.recordElementProcessing(elem_ids[i], per_elem_us,
+                        acc_in[i], acc_out[i], 0, acc_completed[i], now);
+                }
+                acc_in[i] = 0;
+                acc_out[i] = 0;
+                acc_completed[i] = 0;
+            }
+        }
+        batch_count = 0;
+    }
+
+    private flushIntern() {
+        # Get metrics collector only when metrics are enabled (avoids weak-ref deref)
+        *PipelineMetricsCollector mc;
+        if (has_metrics) {
+            mc = parent.getMetricsCollector();
+        }
+
+        int elem_count = elems.size();
 
         try {
             int elem_index = 0;
             foreach auto elem in (elems) {
                 if (elem instanceof AbstractDataProcessor) {
-                    # Measure flush processing time
-                    date start_time = now_us();
+                    # Measure flush processing time (conditional)
+                    *date start_time;
+                    if (mc) {
+                        start_time = now_us();
+                    }
                     *list<auto> flush_results = elem.flushAndCollect();
-                    int processing_us = (now_us() - start_time).durationMicroseconds();
+                    int processing_us = 0;
+                    *date end_time;
+                    if (mc) {
+                        end_time = now_us();
+                        processing_us = (end_time - start_time).durationMicroseconds();
+                    }
 
                     if (!flush_results) {
                         ++elem_index;
@@ -614,7 +710,7 @@ class PipelineQueue {
 
                     # Record flush metrics for the element that produced records
                     if (mc) {
-                        string element_id = sprintf("%d:%d", id, elem_index);
+                        string element_id = elem_ids[elem_index];
                         int records_out = 0;
                         foreach auto out_rec in (flush_results) {
                             if (out_rec.typeCode() == NT_HASH && out_rec.firstValue().typeCode() == NT_LIST) {
@@ -623,8 +719,15 @@ class PipelineQueue {
                                 ++records_out;
                             }
                         }
-                        # Flush produces records without input, so records_in = 0
-                        mc.recordElementProcessing(element_id, processing_us, 0, records_out);
+                        # Flush produces records without input, so records_in = 0.
+                        # For flush output at terminal element, records_out are completed.
+                        # records_in = 0, so no dropped records to count.
+                        int completed = 0;
+                        if (elem_index == elem_count - 1) {
+                            completed = records_out;
+                        }
+                        mc.recordElementProcessing(element_id, processing_us, 0, records_out,
+                            0, completed, end_time);
                     }
 
                     softlist<auto> data_recs = flush_results;
@@ -639,10 +742,16 @@ class PipelineQueue {
                             if (elems[i] instanceof AbstractDataProcessor) {
                                 AbstractDataProcessor elem2 = cast<AbstractDataProcessor>(elems[i]);
 
-                                # Measure processing time
-                                start_time = now_us();
+                                # Measure processing time (conditional)
+                                if (mc) {
+                                    start_time = now_us();
+                                }
                                 *list<auto> new_elem_recs = elem2.submitAndCollect(data_elem);
-                                processing_us = (now_us() - start_time).durationMicroseconds();
+                                processing_us = 0;
+                                if (mc) {
+                                    end_time = now_us();
+                                    processing_us = (end_time - start_time).durationMicroseconds();
+                                }
 
                                 if (new_elem_recs) {
                                     # here we need to use += to concatenate lists
@@ -653,7 +762,7 @@ class PipelineQueue {
 
                                 # Record metrics for processing flushed data
                                 if (mc) {
-                                    string element_id = sprintf("%d:%d", id, i);
+                                    string element_id = elem_ids[i];
                                     int records_in = 1;
                                     if (data_elem.typeCode() == NT_HASH
                                             && data_elem.firstValue().typeCode() == NT_LIST) {
@@ -668,7 +777,16 @@ class PipelineQueue {
                                             ++records_out;
                                         }
                                     }
-                                    mc.recordElementProcessing(element_id, processing_us, records_in, records_out);
+                                    # Completion: terminal gets all records_in; non-terminal
+                                    # gets only dropped (filtered) records
+                                    int completed = 0;
+                                    if (i == elem_size - 1) {
+                                        completed = records_in;
+                                    } else if (records_in > records_out) {
+                                        completed = records_in - records_out;
+                                    }
+                                    mc.recordElementProcessing(element_id, processing_us, records_in, records_out,
+                                        0, completed, end_time);
                                 }
                             } else {
                                 # must be the last entry in the list - submitting to child queues
@@ -676,17 +794,6 @@ class PipelineQueue {
                             }
                         }
                         data_recs = new_recs;
-                    }
-
-                    # Record completion for flushed data that reaches end of queue
-                    if (data_recs && mc) {
-                        foreach auto final_rec in (data_recs) {
-                            int records_completed = 1;
-                            if (final_rec.typeCode() == NT_HASH && final_rec.firstValue().typeCode() == NT_LIST) {
-                                records_completed = final_rec.firstValue().lsize();
-                            }
-                            mc.recordPipelineComplete(records_completed);
-                        }
                     }
                 } else {
                     # must be the last entry in the list - propagate flush to child queues
@@ -697,7 +804,7 @@ class PipelineQueue {
         } catch (hash<ExceptionInfo> ex) {
             # Record error for flush operations
             if (mc) {
-                mc.recordError(id.toString());
+                mc.recordError(id_str);
             }
             parent.reportError(self, ex);
         }
@@ -755,6 +862,12 @@ public class PipelineMetricsCollector {
         #! Abstract metrics collector
         AbstractPipelineMetricsCollector collector;
 
+        #! Cached record interval threshold — avoids virtual method call per record
+        int cached_record_interval;
+
+        #! Cached time interval threshold in ms — avoids virtual method call per record
+        int cached_interval_ms;
+
         #! Flag to ensure shutdown is only called once
         bool shut_down = False;
 
@@ -770,6 +883,15 @@ public class PipelineMetricsCollector {
         self.parent := parent;
         self.collector = collector;
         collection_start = now_us();
+        # Cache collector thresholds to avoid virtual method calls per record
+        try {
+            cached_record_interval = collector.getRecordInterval();
+            cached_interval_ms = collector.getIntervalMs();
+        } catch (hash<ExceptionInfo> ex) {
+            parent.logError("metrics collector error reading thresholds: %s: %s", ex.err, ex.desc);
+            cached_record_interval = 0;
+            cached_interval_ms = 0;
+        }
     }
 
     #! Initializes an element for metrics collection
@@ -846,59 +968,62 @@ public class PipelineMetricsCollector {
         @param records_in number of input records processed in this batch (default: 1)
         @param records_out number of output records produced in this batch (default: same as records_in)
         @param queue_wait_us queue wait time in microseconds (time spent waiting before processing)
+        @param records_completed number of records that completed the pipeline in this batch (default: 0);
+               when > 0, total_completed is incremented atomically before maybeGetSnapshot() so that
+               completion and snapshot are consistent
+        @param timestamp optional timestamp from the caller (avoids redundant now_us() inside the lock)
 
         @note For accurate per-record min/max tracking, the processing_us is divided by records_in
               to compute per-record averages. For bulk operations, this provides approximate
               per-record timing.
     */
     recordElementProcessing(string element_id, int processing_us, int records_in = 1,
-            *int records_out, int queue_wait_us = 0) {
+            *int records_out, int queue_wait_us = 0, int records_completed = 0,
+            *date timestamp) {
         # Default records_out to records_in if not specified
         if (!exists records_out) {
             records_out = records_in;
         }
 
-        # Read collector thresholds before acquiring lock to avoid holding the lock
-        # while calling into collector code that may block or throw
-        int ri;
-        int ims;
-        try {
-            ri = collector.getRecordInterval();
-            ims = collector.getIntervalMs();
-        } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector error reading thresholds: %s: %s", ex.err, ex.desc);
-            ri = 0;
-            ims = 0;
-        }
+        # Use cached thresholds (set in constructor) — avoids virtual method calls per record
+        int ri = cached_record_interval;
+        int ims = cached_interval_ms;
 
         *hash<PipelineMetricsSnapshot> snapshot;
         {
             metrics_lock.lock();
             on_exit metrics_lock.unlock();
 
-            # Update timestamps
-            if (!element_metrics{element_id}.first_record_time) {
-                element_metrics{element_id}.first_record_time = now_us();
+            # Increment completion count atomically before snapshot (Phase 2 accounting fix)
+            if (records_completed > 0) {
+                total_completed += records_completed;
             }
-            element_metrics{element_id}.last_record_time = now_us();
+
+            # Use a reference to the element metrics entry to avoid repeated hash lookups
+            reference<hash<PipelineElementMetrics>> em = \element_metrics{element_id};
+
+            # Update timestamps — use caller's timestamp if available
+            date ts = timestamp ?? now_us();
+            if (!em.first_record_time) {
+                em.first_record_time = ts;
+            }
+            em.last_record_time = ts;
 
             # Update record counts
-            element_metrics{element_id}.records_processed += records_in;
-            element_metrics{element_id}.records_output += records_out;
+            em.records_processed += records_in;
+            em.records_output += records_out;
 
             # Update timing
-            element_metrics{element_id}.processing_time_us += processing_us;
-            element_metrics{element_id}.queue_wait_time_us += queue_wait_us;
+            em.processing_time_us += processing_us;
+            em.queue_wait_time_us += queue_wait_us;
 
             # Calculate per-record processing time for min/max tracking
             int per_record_us = records_in > 0 ? (processing_us / records_in) : processing_us;
-            if (!element_metrics{element_id}.min_processing_time_us
-                    || per_record_us < element_metrics{element_id}.min_processing_time_us) {
-                element_metrics{element_id}.min_processing_time_us = per_record_us;
+            if (!em.min_processing_time_us || per_record_us < em.min_processing_time_us) {
+                em.min_processing_time_us = per_record_us;
             }
-            if (!element_metrics{element_id}.max_processing_time_us
-                    || per_record_us > element_metrics{element_id}.max_processing_time_us) {
-                element_metrics{element_id}.max_processing_time_us = per_record_us;
+            if (!em.max_processing_time_us || per_record_us > em.max_processing_time_us) {
+                em.max_processing_time_us = per_record_us;
             }
 
             records_since_callback += records_in;
@@ -940,17 +1065,9 @@ public class PipelineMetricsCollector {
             return;
         }
 
-        # Read collector thresholds outside lock (same pattern as recordElementProcessing)
-        int ri;
-        int ims;
-        try {
-            ri = collector.getRecordInterval();
-            ims = collector.getIntervalMs();
-        } catch (hash<ExceptionInfo> ex) {
-            parent.logError("metrics collector error reading thresholds: %s: %s", ex.err, ex.desc);
-            ri = 0;
-            ims = 0;
-        }
+        # Use cached thresholds (set in constructor)
+        int ri = cached_record_interval;
+        int ims = cached_interval_ms;
 
         # Second pass: update source element metrics under lock
         *hash<PipelineMetricsSnapshot> snapshot;
@@ -960,12 +1077,14 @@ public class PipelineMetricsCollector {
 
             # Re-check source_element_id under lock (could have been cleared between passes)
             if (source_element_id) {
-                if (!element_metrics{source_element_id}.first_record_time) {
-                    element_metrics{source_element_id}.first_record_time = now_us();
+                reference<hash<PipelineElementMetrics>> em = \element_metrics{source_element_id};
+                date ts = now_us();
+                if (!em.first_record_time) {
+                    em.first_record_time = ts;
                 }
-                element_metrics{source_element_id}.last_record_time = now_us();
-                element_metrics{source_element_id}.records_processed += count;
-                element_metrics{source_element_id}.records_output += count;
+                em.last_record_time = ts;
+                em.records_processed += count;
+                em.records_output += count;
 
                 records_since_callback += count;
                 snapshot = maybeGetSnapshot(ri, ims);
@@ -1065,17 +1184,18 @@ public class PipelineMetricsCollector {
         collector.reportMetrics() outside the lock with the returned snapshot.
     */
     private *hash<PipelineMetricsSnapshot> maybeGetSnapshot(int ri, int ims) {
-        date now = now_us();
         bool should_invoke = False;
+        *date now;
 
-        # Check record interval threshold
+        # Check record interval threshold first (no timestamp needed)
         if (ri > 0 && records_since_callback >= ri) {
             should_invoke = True;
         } else if (ims > 0) {
+            # Only call now_us() when checking time-based thresholds
+            now = now_us();
             # Check time interval threshold
             if (last_callback_time) {
-                int elapsed_ms = (now - last_callback_time).durationMilliseconds();
-                if (elapsed_ms >= ims) {
+                if ((now - last_callback_time).durationMilliseconds() >= ims) {
                     should_invoke = True;
                 }
             } else if ((now - collection_start).durationMilliseconds() >= ims) {
@@ -1084,7 +1204,9 @@ public class PipelineMetricsCollector {
         }
 
         if (should_invoke) {
-            last_callback_time = now;
+            # Reuse 'now' from the time-check branch when available; only call now_us()
+            # when the snapshot was triggered by the record-count threshold alone.
+            last_callback_time = now ?? now_us();
             records_since_callback = 0;
             return getSnapshotIntern();
         }
@@ -1347,6 +1469,7 @@ public class DataProviderPipeline {
         /** @since DataProvider 3.1
         */
         *PipelineMetricsCollector metrics_collector;
+
     }
 
     #! Creates the object with the given options
@@ -1479,6 +1602,10 @@ public class DataProviderPipeline {
 
         pmap{id}.elems += processor;
 
+        # Pre-compute element ID string for this element
+        string auto_id = sprintf("%d:%d", id, pmap{id}.elems.size() - 1);
+        push pmap{id}.elem_ids, auto_id;
+
         logDebug("added data processor %y to queue %d (%d element%s)", processor.className(), id,
             pmap{id}.elems.size(), pmap{id}.elems.size() == 1 ? "" : "s");
 
@@ -1489,7 +1616,6 @@ public class DataProviderPipeline {
         # display alias and applied during getSnapshot() output remapping.
         # Elements with element_type "mapper" are filtered from getSnapshot() output.
         if (metrics_collector) {
-            string auto_id = sprintf("%d:%d", id, pmap{id}.elems.size() - 1);
             metrics_collector.initElement(auto_id, element_type, processor.className(), custom_element_id);
         }
 
@@ -1833,10 +1959,6 @@ public class DataProviderPipeline {
         if (do_bulk && _data.typeCode() == NT_HASH && ((int rec_cnt = _data.firstValue().lsize()) > 1)) {
             logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
             record_count += rec_cnt;
-            # Record metrics for bulk submission
-            if (metrics_collector) {
-                metrics_collector.recordPipelineSubmit(rec_cnt);
-            }
             pmap."0".submit(_data);
         } else {
             submitDataIntern(_data);
@@ -1848,10 +1970,6 @@ public class DataProviderPipeline {
     */
     private:internal submitDataIntern(auto _data) {
         ++record_count;
-        # Record metrics for single record submission
-        if (metrics_collector) {
-            metrics_collector.recordPipelineSubmit();
-        }
         pmap."0".submit(_data);
     }
 
@@ -1865,10 +1983,6 @@ public class DataProviderPipeline {
             int rec_cnt = recs.firstValue().lsize();
             logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
             record_count += rec_cnt;
-            # Record metrics for bulk submission
-            if (metrics_collector) {
-                metrics_collector.recordPipelineSubmit(rec_cnt);
-            }
             pmap."0".submit(recs);
         }
     }
@@ -1920,6 +2034,15 @@ public class DataProviderPipeline {
 
             remove stop_time;
             locked = True;
+
+            # Set cached flags on all queues to avoid per-record overhead
+            if (metrics_collector) {
+                foreach PipelineQueue q in (pmap.iterator()) {
+                    q.has_metrics = True;
+                    q.do_bulk = do_bulk;
+                }
+            }
+
             if (!start_time) {
                 logInfo("started processing %d queue%s", pmap.size(), pmap.size() == 1 ? "" : "s");
                 start_time = now_us();
