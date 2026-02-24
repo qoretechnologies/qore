@@ -1213,6 +1213,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
                 return toBits(QoreValue());
             }
             h = new_h;
+            // After COW, h is owned by LocalVar via qore_rt_assign_local, which called refSelf()
+            // releasing the extra reference added by that call
+            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
     } else if (hv.getType() == NT_OBJECT) {
@@ -1238,6 +1241,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
                 return toBits(QoreValue());
             }
             h = new_h;
+            // After COW, h is owned by the local slot via qore_rt_assign_local_aot, which called refSelf()
+            // releasing the extra reference added by that call
+            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
     } else if (hv.getType() == NT_OBJECT) {
