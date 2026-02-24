@@ -988,6 +988,18 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_3 DataProvider v3.3
+    - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
+      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_submitted
+      always being 0 in fan-out topologies where queue 0's first element is a fan-out list
+    - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
+      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_completed
+      to count records that exited the final pipeline element (previously counted input to the last
+      element, overcounting when the terminal element is a filter)
+    - added @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_dropped
+      and @ref DataProvider::PipelineMetricsDelta "PipelineMetricsDelta".\c records_dropped fields
+      to track records filtered/dropped across all pipeline elements
+    - updated @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c records_in_flight
+      formula to \c total_submitted \c - \c total_completed \c - \c total_dropped
     - added 11 streaming analytics and statistical pipeline processors:
       - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
         (count, sum, avg, min, max, stddev, variance) over windows of records
