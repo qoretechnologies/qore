@@ -2415,6 +2415,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
+            // For non-entry-block locals that are not yet instantiated:
+            // If this is a LoadLocal before the first StoreLocal (which does instantiation),
+            // we must load from the runtime stack directly. This handles OSR tier transitions
+            // and compiler optimizations where LoadLocal may precede StoreLocal.
+            bool is_entry_local = entry_locals_set.count(key) > 0;
+            bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+            bool is_instantiated = instantiated_non_entry_locals.count(key) > 0;
+
+            if (!is_entry_local && !is_pre_instantiated && !is_instantiated) {
+                // Non-entry, non-pre-instantiated, not-yet-instantiated local:
+                // Load from runtime stack (will trigger instantiation on first access)
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                }
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                return true;
+            }
+
             auto it = local_allocas.find(key);
             if (it == local_allocas.end()) {
                 // Create alloca in entry block for this local
