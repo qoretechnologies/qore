@@ -325,6 +325,16 @@ class PipelineQueue {
         */
         bool processing = False;
 
+        #! Local stop flag — set by the pipeline's stopInternUnlocked()
+        /** Avoids evaluating the weak \c parent reference in the hot loop, which
+            could trigger the pipeline destructor in this thread and deadlock on
+            \c cnt.waitForZero().
+        */
+        bool queue_stop = False;
+
+        #! Local abort flag — set by the pipeline's abort()/reportError()
+        bool queue_abort = False;
+
         #! Parent object
         DataProviderPipeline parent;
     }
@@ -358,7 +368,7 @@ class PipelineQueue {
         @throws PIPELINE-SUBMISSION-ABORTED cannot submit data; the pipeline is shutting down or has aborted
     */
     submit(auto qdata) {
-        if (parent.aborting()) {
+        if (queue_abort) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
         }
 
@@ -371,7 +381,7 @@ class PipelineQueue {
             lck.unlock();
         }
 
-        while (!parent.stopping() && queue.lsize() == size) {
+        while (!queue_stop && queue.lsize() == size) {
             # Record backpressure event when queue is full
             *PipelineMetricsCollector mc = parent.getMetricsCollector();
             if (mc) {
@@ -382,7 +392,7 @@ class PipelineQueue {
             --queue_waiting;
         }
 
-        if (parent.stopping()) {
+        if (queue_stop) {
             throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
                 "down", parent.getName());
         }
@@ -403,9 +413,6 @@ class PipelineQueue {
 
     #! Processing thread
     run(Counter run_cnt) {
-        on_exit {
-            cnt.dec();
-        }
         run_cnt.dec();
 
         parent.registerThread(self);
@@ -424,7 +431,7 @@ class PipelineQueue {
         the last record but is still submitting it to child queues during fan-out.
     */
     waitDone() {
-        while (!parent.stopping() && (queue || processing)) {
+        while (!queue_stop && (queue || processing)) {
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
@@ -435,7 +442,7 @@ class PipelineQueue {
         }
 
         do_flush = True;
-        while (!id && !parent.stopping() && do_flush) {
+        while (!id && !queue_stop && do_flush) {
             if (data_waiting) {
                 cond.broadcast();
             }
@@ -455,8 +462,18 @@ class PipelineQueue {
     /** @note Called in the pipeline lock
     */
     private runIntern() {
+        # Decrement the thread counter on exit.  This MUST happen inside
+        # runIntern() (while the caller still holds lck) rather than in
+        # run()'s on_exit, because after runIntern() returns the run()
+        # stack cleanup can drop the last strong reference to the pipeline
+        # (via the weak "parent" member), which would fire the pipeline
+        # destructor in this thread.  The destructor calls
+        # cnt.waitForZero(), so cnt must already be decremented to avoid
+        # self-deadlock.
+        on_exit cnt.dec();
+
         #! wait for an event
-        while (!parent.stopping()) {
+        while (!queue_stop) {
             if (!queue) {
                 if (!id && do_flush) {
                     flushIntern();
@@ -478,7 +495,7 @@ class PipelineQueue {
                 cond.broadcast();
             }
 
-            if (parent.aborting()) {
+            if (queue_abort) {
                 # discard data
                 processing = False;
                 if (queue_waiting) {
@@ -1551,6 +1568,9 @@ public class DataProviderPipeline {
     abort(*bool ignore_exceptions) {
         # do not grab the lock first to interrupt iterators adding data to the pipeline
         abort_flag = True;
+        foreach PipelineQueue q in (pmap.iterator()) {
+            q.queue_abort = True;
+        }
 
         lck.lock();
         on_exit lck.unlock();
@@ -1651,6 +1671,9 @@ public class DataProviderPipeline {
 
         error_list += ex;
         abort_flag = True;
+        foreach PipelineQueue q in (pmap.iterator()) {
+            q.queue_abort = True;
+        }
     }
 
     #! Logs to the info log, if set
@@ -1767,10 +1790,16 @@ public class DataProviderPipeline {
 
         if (stop_flag) {
             delete stop_flag;
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_stop = False;
+            }
         }
 
         if (abort_flag) {
             delete abort_flag;
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_abort = False;
+            }
         }
     }
 
@@ -1840,7 +1869,10 @@ public class DataProviderPipeline {
         if (!stop_flag) {
             stop_flag = True;
             logDebug("pipeline %y stopping %d queue thread%s", name, pmap.size(), pmap.size() == 1 ? "" : "s");
-            map $1.cond.broadcast(), pmap.iterator();
+            foreach PipelineQueue q in (pmap.iterator()) {
+                q.queue_stop = True;
+                q.cond.broadcast();
+            }
         }
     }
 }
