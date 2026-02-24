@@ -5848,6 +5848,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[hash_operand_id] = updated_hash;
                 nanboxed_values.insert(hash_operand_id);
                 trackResultForCleanup(updated_hash, hash_operand_id, llvm_func);
+
+                // JIT: also update the alloca cache so subsequent LoadLocal(h) reads
+                // the post-COW hash, not the stale pre-COW value cached in the alloca.
+                const void* container_key =
+                    reinterpret_cast<const void*>(hks_inst->container->ref.id);
+                reloadLocalFromRuntime(container_key, module, llvm_func);
             }
 
             return true;
@@ -5929,6 +5935,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[list_operand_id] = updated_list;
                 nanboxed_values.insert(list_operand_id);
                 trackResultForCleanup(updated_list, list_operand_id, llvm_func);
+
+                // JIT: also update the alloca cache so subsequent LoadLocal(l) reads
+                // the post-COW list, not the stale pre-COW value cached in the alloca.
+                const void* container_key =
+                    reinterpret_cast<const void*>(lis_inst->container->ref.id);
+                reloadLocalFromRuntime(container_key, module, llvm_func);
             }
 
             return true;
