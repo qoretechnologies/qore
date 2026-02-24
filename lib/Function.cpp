@@ -2976,6 +2976,14 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreParseOptions old_po;
                 swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
+                // Isolate from outer call stack location chain to prevent dangling-pointer crashes
+                // in QoreExceptionBase::QoreExceptionBase() when exceptions are thrown during IR execution.
+                // This mirrors the same isolation done for AST execution (see line 3099-3108).
+                const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
+                if (saved_stack_loc) {
+                    update_runtime_stack_location(nullptr);
+                }
+
                 // Use the cached set of pre-instantiated locals built during IR lowering.
                 // Pass pointer directly to avoid per-call allocation (critical for recursive calls).
                 // If self is null and signature.selfid is present, pass it as excluded_selfid
@@ -3006,7 +3014,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = statements->exec(xsink);
                 }
 
-                // Restore thread-local parse options
+                // Restore call stack location and thread-local parse options
+                if (saved_stack_loc) {
+                    update_runtime_stack_location(saved_stack_loc);
+                }
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
                 // Only uninstantiate pre-instantiated AST-visible locals if we didn't already
