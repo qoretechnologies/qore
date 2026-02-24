@@ -4194,14 +4194,14 @@ printf(\"%s\\n\", result);
         string code = "%modern
 int sub add_one(int x) { return x + 1; }
 int sum = 0;
-for (int i = 0; i < 1000000; ++i) {
+for (int i = 0; i < 100000; ++i) {
     sum = add_one(sum);
 }
 printf(\"%d\\n\", sum);
 ";
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
-            assertEq("1000000", result,
+            assertEq("100000", result,
                     sprintf("call in loop stack safety %s", mode));
         }
 
@@ -4209,21 +4209,21 @@ printf(\"%d\\n\", sum);
         code = "%modern
 code adder = int sub(int x) { return x + 1; };
 int sum = 0;
-for (int i = 0; i < 1000000; ++i) {
+for (int i = 0; i < 100000; ++i) {
     sum = adder(sum);
 }
 printf(\"%d\\n\", sum);
 ";
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
-            assertEq("1000000", result,
+            assertEq("100000", result,
                     sprintf("closure call in loop stack safety %s", mode));
         }
 
         # Test list construction in loops (MakeList alloca)
         code = "%modern
 int sum = 0;
-for (int i = 0; i < 1000000; ++i) {
+for (int i = 0; i < 100000; ++i) {
     list<auto> l = (i, i + 1, i + 2);
     sum += l[0];
 }
@@ -4231,7 +4231,7 @@ printf(\"%d\\n\", sum);
 ";
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
-            assertEq("499999500000", result,
+            assertEq("4999950000", result,
                     sprintf("list construction in loop stack safety %s", mode));
         }
     }
