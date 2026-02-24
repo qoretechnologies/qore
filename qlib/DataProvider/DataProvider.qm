@@ -993,13 +993,17 @@ if (errors) {
       always being 0 in fan-out topologies where queue 0's first element is a fan-out list
     - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
       @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_completed
-      to count records that exited the final pipeline element (previously counted input to the last
-      element, overcounting when the terminal element is a filter)
-    - added @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_dropped
-      and @ref DataProvider::PipelineMetricsDelta "PipelineMetricsDelta".\c records_dropped fields
-      to track records filtered/dropped across all pipeline elements
-    - updated @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c records_in_flight
-      formula to \c total_submitted \c - \c total_completed \c - \c total_dropped
+      to count the sum of output records from the last processor of each terminal queue; in fan-out
+      topologies each child queue contributes its own terminal output to this total
+    - removed \c total_records_dropped from
+      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot" and \c records_dropped
+      from @ref DataProvider::PipelineMetricsDelta "PipelineMetricsDelta" — pipeline processors can
+      add or remove records arbitrarily, so a conservation model does not hold; per-element
+      \c records_processed / \c records_output provides the actual detail
+    - removed \c records_in_flight from
+      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot" — the conservation
+      formula it relied on (\c submitted \c = \c completed \c + \c dropped) does not hold when
+      processors change record counts
     - added 11 streaming analytics and statistical pipeline processors:
       - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
         (count, sum, avg, min, max, stddev, variance) over windows of records

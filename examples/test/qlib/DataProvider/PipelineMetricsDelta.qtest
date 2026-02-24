@@ -194,9 +194,7 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         addTestCase("pipeline reset with source element", \testPipelineResetWithSourceElement());
         addTestCase("fan-out submitted count", \testFanOutSubmittedCount());
         addTestCase("fan-out with processor submitted count", \testFanOutWithProcessorSubmittedCount());
-        addTestCase("chain filtering accounting", \testChainFilteringAccounting());
-        addTestCase("single filter element accounting", \testSingleFilterElementAccounting());
-        addTestCase("delta dropped sum equals total", \testDeltaDroppedSumEqualsTotal());
+        addTestCase("fan-out with filter accounting", \testFanOutWithFilterAccounting());
 
         set_return_value(main());
     }
@@ -236,8 +234,7 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
 
-        # Final-snapshot invariants: records_in_flight must be 0, submitted must equal completed
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
+        # Final-snapshot invariants: submitted must equal completed
         assertEq(snap.total_records_submitted, snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -300,7 +297,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Final-snapshot invariants
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -354,8 +350,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         assertNeq(NOTHING, collector.last_snapshot);
 
         # Final-snapshot invariants
-        assertEq(0, collector.last_snapshot.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
         assertEq(collector.last_snapshot.total_records_submitted,
             collector.last_snapshot.total_records_completed,
             "submitted must equal completed after waitDone()");
@@ -407,7 +401,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
 
         # Final-snapshot invariants
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(snap.total_records_submitted, snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -457,8 +450,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         pipe.waitDone();
 
         # Final-snapshot invariants
-        assertEq(0, collector.last_snapshot.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
         assertEq(collector.last_snapshot.total_records_submitted,
             collector.last_snapshot.total_records_completed,
             "submitted must equal completed after waitDone()");
@@ -517,7 +508,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
 
         # Final-snapshot invariants
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(snap.total_records_submitted, snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -570,7 +560,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
 
         # Final-snapshot invariants
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(snap.total_records_submitted, snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -628,7 +617,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Final-snapshot invariants
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -674,7 +662,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             collector.all_snapshots[collector.all_snapshots.size() - 1];
 
         # Final-snapshot invariants
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -707,7 +694,7 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
     #! Submit 100 records. Verify:
     #! - Filter: records_processed == 100, records_output == 50
     #! - Passthrough: records_processed == 50, records_output == 50
-    #! - Final: total_records_completed == 50
+    #! - total_records_completed == 50
     testFilterProcessorAccounting() {
         int n = 100;
         CapturingMetricsCollector collector();
@@ -723,12 +710,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertNeq(NOTHING, collector.last_snapshot);
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
-
-        # Final-snapshot invariants
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
-        # submitted = completed + dropped (not submitted == completed, since filtering drops records)
-        assertEq(snap.total_records_submitted, snap.total_records_completed + snap.total_records_dropped,
-            "submitted must equal completed + dropped after waitDone()");
 
         # The pipeline has 2 elements: "0:0" (filter) and "0:1" (passthrough)
         assertEq(2, snap.element_metrics.size(),
@@ -751,10 +732,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # total_records_completed counts records that exited the final element
         assertEq(n / 2, snap.total_records_completed,
             "total_records_completed must equal records that exited the final element");
-
-        # total_records_dropped counts records filtered across all elements
-        assertEq(n / 2, snap.total_records_dropped,
-            "total_records_dropped must equal records filtered by the filter processor");
     }
 
     # =========================================================================
@@ -763,7 +740,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
     #! Submit 3 bulk batches of 100 records (300 total) via hash-of-lists format.
     #! After waitDone(), verify:
-    #! - records_in_flight == 0
     #! - total_records_submitted == total_records_completed == 300
     testBulkRecordAccounting() {
         int batch_size = 100;
@@ -791,15 +767,12 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
 
         # Final-snapshot invariants
-        assertEq(0, snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(total, snap.total_records_submitted,
             "total_records_submitted must equal total bulk records");
         assertEq(total, snap.total_records_completed,
             "total_records_completed must equal total bulk records");
         assertEq(snap.total_records_submitted, snap.total_records_completed,
             "submitted must equal completed after waitDone()");
-        assertEq(0, snap.total_records_dropped,
-            "total_records_dropped must be 0 for passthrough pipeline");
     }
 
     # =========================================================================
@@ -834,11 +807,8 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Final-snapshot invariants
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
-        assertEq(0, final_snap.total_records_dropped,
-            "total_records_dropped must be 0 for passthrough pipeline");
 
         # Verify every snapshot with records_submitted > 0 has consistent state
         int i = 0;
@@ -897,7 +867,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Final-snapshot invariants
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -966,7 +935,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Final-snapshot invariants
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(total, final_snap.total_records_submitted,
             "total_records_submitted must equal total");
         assertEq(total, final_snap.total_records_completed,
@@ -1025,7 +993,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             collector.all_snapshots[collector.all_snapshots.size() - 1];
 
         # Final-snapshot invariants
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -1095,7 +1062,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
             collector.all_snapshots[collector.all_snapshots.size() - 1];
 
         # Final-snapshot invariants
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
         assertEq(final_snap.total_records_submitted, final_snap.total_records_completed,
             "submitted must equal completed after waitDone()");
 
@@ -1149,9 +1115,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> final_snap =
             collector.all_snapshots[collector.all_snapshots.size() - 1];
 
-        # Final-snapshot invariants
-        assertEq(0, final_snap.records_in_flight, "records_in_flight must be 0 after waitDone()");
-
         # Sum delta processing_time_us and queue_wait_time_us per element
         hash<string, int> delta_processing_sums;
         hash<string, int> delta_queue_wait_sums;
@@ -1201,7 +1164,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         hash<DataProvider::PipelineMetricsSnapshot> snap1 = collector.last_snapshot;
         assertEq(n1, snap1.total_records_submitted, "run1: submitted");
         assertEq(n1, snap1.total_records_completed, "run1: completed");
-        assertEq(0, snap1.records_in_flight, "run1: no in-flight");
 
         # Reset and run 2
         pipe.reset();
@@ -1219,7 +1181,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Run 2 metrics must reflect ONLY the second run
         assertEq(n2, snap2.total_records_submitted, "run2: submitted must equal n2 (reset)");
         assertEq(n2, snap2.total_records_completed, "run2: completed must equal n2 (reset)");
-        assertEq(0, snap2.records_in_flight, "run2: no in-flight");
 
         # Delta must also reflect only run 2
         assertNeq(NOTHING, snap2.delta, "run2: delta must be populated");
@@ -1274,7 +1235,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Verify run 2 metrics
         assertEq(n2, snap.total_records_submitted, "run2: submitted must equal n2");
         assertEq(n2, snap.total_records_completed, "run2: completed must equal n2");
-        assertEq(0, snap.records_in_flight, "run2: no in-flight");
 
         # forceCallback must have worked (shut_down was cleared)
         assertTrue(collector.shutdown_called, "run2: shutdown must be called after waitDone()");
@@ -1327,7 +1287,6 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Run 2 must reflect only the second run
         assertEq(n2, snap2.total_records_submitted, "run2: submitted must equal n2");
         assertEq(n2, snap2.total_records_completed, "run2: completed must equal n2");
-        assertEq(0, snap2.records_in_flight, "run2: no in-flight");
 
         # Source element metrics must be reset to only run 2 counts
         assertTrue(snap2.element_metrics.hasKey("source-state"),
@@ -1373,14 +1332,9 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # total_records_submitted must equal n (not 0) — this was the bug
         assertEq(n, snap.total_records_submitted,
             "total_records_submitted must equal n for fan-out topology");
-        # In a fan-out, records are "completed" at the fan-out point in queue 0
-        # (successfully dispatched to child queues), so completed == submitted.
-        assertEq(n, snap.total_records_completed,
-            "total_records_completed must equal n (completed at fan-out point)");
-        assertEq(0, snap.total_records_dropped,
-            "total_records_dropped must be 0 for passthrough fan-out");
-        assertEq(0, snap.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
+        # records are completed at each child queue's terminal processor
+        assertEq(2 * n, snap.total_records_completed,
+            "total_records_completed must equal 2*n (sum of both child queue terminal outputs)");
     }
 
     # =========================================================================
@@ -1412,126 +1366,46 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
 
         assertEq(n, snap.total_records_submitted,
             "total_records_submitted must equal n with processor before fan-out");
-        # Records are "completed" at the fan-out point in queue 0
-        assertEq(n, snap.total_records_completed,
-            "total_records_completed must equal n (completed at fan-out point)");
-        assertEq(0, snap.total_records_dropped,
-            "total_records_dropped must be 0 for passthrough pipeline");
-        assertEq(0, snap.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
+        # records are completed at each child queue's terminal processor
+        assertEq(2 * n, snap.total_records_completed,
+            "total_records_completed must equal 2*n (sum of both child queue terminal outputs)");
     }
 
     # =========================================================================
-    # Test 23: chain filtering accounting
+    # Test 23: fan-out with filter accounting
     # =========================================================================
 
-    #! gen(20) -> filter1 (passes 10) -> filter2 (passes 5). Verify:
-    #! - total_records_completed == 5 (records exiting the final element)
-    #! - total_records_dropped == 15 (10 dropped at filter1 + 5 dropped at filter2)
-    #! - records_in_flight == 0
-    testChainFilteringAccounting() {
+    #! Test 23: fan-out topology where child queues have filters
+    #! - Queue 0: fan-out to q1, q2
+    #! - q1: EveryOtherFilterProcessor (passes n/2)
+    #! - q2: passthrough (passes n)
+    #! - total_records_submitted = n
+    #! - total_records_completed = n/2 + n = 3n/2
+    testFanOutWithFilterAccounting() {
         int n = 20;
 
         CapturingMetricsCollector collector();
         DataProviderPipeline pipe(<PipelineOptionInfo>{
-            "name": "delta-chain-filter",
+            "name": "fanout-filter-test",
             "metrics_collector": collector,
         });
-        pipe.append(0, new EveryOtherFilterProcessor());
-        pipe.append(0, new EveryOtherFilterProcessor());
+
+        # Queue 1: every-other filter (passes half)
+        int q1 = pipe.appendQueue(0);
+        pipe.append(q1, new EveryOtherFilterProcessor());
+
+        # Queue 2: passthrough (passes all)
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q2, new DeltaPassthroughProcessor());
 
         pipe.submit(getGeneratorIterator(n));
         pipe.waitDone();
 
-        assertNeq(NOTHING, collector.last_snapshot);
         hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
-
         assertEq(n, snap.total_records_submitted,
-            "total_records_submitted must equal n");
-        assertEq(5, snap.total_records_completed,
-            "total_records_completed must equal 5 (20 -> 10 -> 5)");
-        assertEq(15, snap.total_records_dropped,
-            "total_records_dropped must equal 15 (10 at filter1 + 5 at filter2)");
-        assertEq(0, snap.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
-
-        # Verify the accounting identity: submitted = completed + dropped
-        assertEq(snap.total_records_submitted,
-            snap.total_records_completed + snap.total_records_dropped,
-            "submitted must equal completed + dropped");
-    }
-
-    # =========================================================================
-    # Test 24: single filter element accounting
-    # =========================================================================
-
-    #! gen(100) -> filter (passes 50). Only one element (the filter is also the terminal element).
-    #! Verify completed == 50, dropped == 50.
-    testSingleFilterElementAccounting() {
-        int n = 100;
-
-        CapturingMetricsCollector collector();
-        DataProviderPipeline pipe(<PipelineOptionInfo>{
-            "name": "delta-single-filter",
-            "metrics_collector": collector,
-        });
-        pipe.append(0, new EveryOtherFilterProcessor());
-
-        pipe.submit(getGeneratorIterator(n));
-        pipe.waitDone();
-
-        assertNeq(NOTHING, collector.last_snapshot);
-        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
-
-        assertEq(n, snap.total_records_submitted,
-            "total_records_submitted must equal n");
-        assertEq(n / 2, snap.total_records_completed,
-            "total_records_completed must equal n/2");
-        assertEq(n / 2, snap.total_records_dropped,
-            "total_records_dropped must equal n/2");
-        assertEq(0, snap.records_in_flight,
-            "records_in_flight must be 0 after waitDone()");
-
-        # Verify the accounting identity
-        assertEq(snap.total_records_submitted,
-            snap.total_records_completed + snap.total_records_dropped,
-            "submitted must equal completed + dropped");
-    }
-
-    # =========================================================================
-    # Test 25: delta dropped sum equals total
-    # =========================================================================
-
-    #! Use IntervalMetricsCollector with a filter pipeline. Verify:
-    #! - Sum of delta.records_dropped across all snapshots equals total_records_dropped
-    testDeltaDroppedSumEqualsTotal() {
-        int n = 100;
-        int interval = 20;
-
-        IntervalMetricsCollector collector(interval);
-        DataProviderPipeline pipe(<PipelineOptionInfo>{
-            "name": "delta-dropped-sum",
-            "metrics_collector": collector,
-        });
-        pipe.append(0, new EveryOtherFilterProcessor());
-        pipe.append(0, new DeltaPassthroughProcessor());
-
-        pipe.submit(getGeneratorIterator(n));
-        pipe.waitDone();
-
-        hash<DataProvider::PipelineMetricsSnapshot> final_snap =
-            collector.all_snapshots[collector.all_snapshots.size() - 1];
-
-        # Verify final snapshot has correct dropped count
-        assertEq(n / 2, final_snap.total_records_dropped,
-            "total_records_dropped must equal n/2");
-
-        # Sum of delta.records_dropped across all snapshots must equal total
-        int dropped_sum = 0;
-        foreach hash<DataProvider::PipelineMetricsSnapshot> s in (collector.all_snapshots) {
-            dropped_sum += s.delta.records_dropped;
-        }
-        assertEq(final_snap.total_records_dropped, dropped_sum,
-            "sum of delta.records_dropped across all snapshots must equal final total_records_dropped");
+            "total_records_submitted must be n");
+        # total_records_completed = sum of terminal outputs: q1 passes n/2, q2 passes n
+        assertEq(n / 2 + n, snap.total_records_completed,
+            "total_records_completed must be sum of child queue terminal outputs (n/2 + n)");
     }
 }

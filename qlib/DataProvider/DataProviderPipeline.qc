@@ -177,9 +177,6 @@ public hashdecl PipelineMetricsDelta {
     #! Records completed in this interval (records that exited the final pipeline element)
     int records_completed = 0;
 
-    #! Records dropped (filtered) in this interval across all elements
-    int records_dropped = 0;
-
     #! Records completed / interval_secs for this interval; 0.0 if interval_ms == 0
     float throughput_rps = 0.0;
 
@@ -208,18 +205,14 @@ public hashdecl PipelineMetricsSnapshot {
     #! Total records submitted to the pipeline
     int total_records_submitted = 0;
 
-    #! Total records that have completed processing (exited the final pipeline element)
-    /** In fan-out topologies, a record is "completed" when it is successfully dispatched
-        from queue 0 to child queues.  Errors in child queues are tracked separately via
-        \c total_errors and per-element \c error_count, not reflected in this counter.
+    #! Total records that have completed processing
+    /** Sum of output records from the last processor of each terminal queue (queues whose last
+        element is a processor, not a fan-out list).  In fan-out topologies, each child queue
+        contributes its own terminal output to this total.  Errors in child queues are tracked
+        separately via \c total_errors and per-element \c error_count, not reflected in this
+        counter.
     */
     int total_records_completed = 0;
-
-    #! Total records dropped (filtered) across all pipeline elements
-    int total_records_dropped = 0;
-
-    #! Records currently being processed (in flight): total_submitted - total_completed - total_dropped
-    int records_in_flight = 0;
 
     #! Overall throughput in records per second
     float throughput_rps = 0.0;
@@ -499,12 +492,7 @@ class PipelineQueue {
         list<int> acc_in();
         list<int> acc_out();
         list<int> acc_completed();
-        list<int> acc_dropped();
         list<int> acc_processing_us();
-        # Fan-out completion counter (only queue 0): records successfully dispatched
-        # to child queues; separate from the per-element accumulator because fan-out
-        # elements don't have entries in elem_ids.
-        int acc_fanout_completed = 0;
         bool acc_initialized = False;
 
         #! wait for an event
@@ -513,8 +501,7 @@ class PipelineQueue {
                 # Flush any pending metrics before going idle
                 if (batch_count > 0) {
                     flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                        \acc_completed, \acc_dropped, \acc_fanout_completed,
-                        \acc_processing_us);
+                        \acc_completed, \acc_processing_us);
                 }
 
                 if (!id && do_flush) {
@@ -558,7 +545,6 @@ class PipelineQueue {
                         push acc_in, 0;
                         push acc_out, 0;
                         push acc_completed, 0;
-                        push acc_dropped, 0;
                         push acc_processing_us, 0;
                     }
                     acc_initialized = True;
@@ -602,17 +588,8 @@ class PipelineQueue {
                                     ? $1.firstValue().lsize() : 1, new_recs;
                                 acc_in[elem_index] += elem_in_count;
                                 acc_out[elem_index] += elem_out_count;
-                                # Only queue 0 tracks pipeline-level completion/drops;
-                                # child queues process fan-out copies that are already
-                                # accounted for at the fan-out point in queue 0.
-                                if (!id) {
-                                    if (elem_index == elem_count - 1) {
-                                        acc_completed[elem_index] += elem_out_count;
-                                    }
-                                    if (elem_in_count > elem_out_count) {
-                                        acc_dropped[elem_index] +=
-                                            elem_in_count - elem_out_count;
-                                    }
+                                if (elem_index == elem_count - 1) {
+                                    acc_completed[elem_index] += elem_out_count;
                                 }
                             } else {
                                 # Non-bulk: list sizes are record counts
@@ -620,23 +597,15 @@ class PipelineQueue {
                                 int out_size = new_recs.lsize();
                                 acc_in[elem_index] += in_size;
                                 acc_out[elem_index] += out_size;
-                                # Only queue 0 tracks pipeline-level completion/drops
-                                if (!id) {
-                                    if (elem_index == elem_count - 1) {
-                                        acc_completed[elem_index] += out_size;
-                                    }
-                                    if (in_size > out_size) {
-                                        acc_dropped[elem_index] += in_size - out_size;
-                                    }
+                                if (elem_index == elem_count - 1) {
+                                    acc_completed[elem_index] += out_size;
                                 }
                             }
                         }
                     } else {
-                        # Fan-out to child queues — fan-out elements don't have entries
-                        # in elem_ids (only processors do).  For queue 0 we need:
-                        # - acc_in[elem_index] so flushMetricsBatch can compute submitted
-                        #   (it reads acc_in[0] for the first element)
-                        # - acc_fanout_completed for pipeline-level completion tracking
+                        # Fan-out to child queues
+                        # Queue 0 still needs acc_in[elem_index] so flushMetricsBatch
+                        # can compute submitted (it reads acc_in[0] for the first element)
                         if (has_metrics && !id) {
                             int fanout_count;
                             if (do_bulk) {
@@ -648,7 +617,6 @@ class PipelineQueue {
                                 fanout_count = data_recs.lsize();
                             }
                             acc_in[elem_index] += fanout_count;
-                            acc_fanout_completed += fanout_count;
                         }
                         foreach auto data_elem in (data_recs) {
                             map $1.submit(data_elem), elem;
@@ -662,16 +630,14 @@ class PipelineQueue {
                 if (has_metrics) {
                     if (++batch_count >= metrics_batch_size) {
                         flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                            \acc_completed, \acc_dropped, \acc_fanout_completed,
-                            \acc_processing_us);
+                            \acc_completed, \acc_processing_us);
                     }
                 }
             } catch (hash<ExceptionInfo> ex) {
                 # Flush pending metrics batch on error
                 if (batch_count > 0) {
                     flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                        \acc_completed, \acc_dropped, \acc_fanout_completed,
-                        \acc_processing_us);
+                        \acc_completed, \acc_processing_us);
                 }
                 if (has_metrics) {
                     *PipelineMetricsCollector mc = parent.getMetricsCollector();
@@ -699,14 +665,11 @@ class PipelineQueue {
         @param acc_in per-element input record accumulators (reset to 0)
         @param acc_out per-element output record accumulators (reset to 0)
         @param acc_completed per-element completed record accumulators (reset to 0)
-        @param acc_dropped per-element dropped record accumulators (reset to 0)
-        @param acc_fanout_completed fan-out completion counter for queue 0 (reset to 0)
         @param acc_processing_us per-element processing time accumulators in microseconds (reset to 0)
     */
     private flushMetricsBatch(reference<int> batch_count,
             reference<list<int>> acc_in, reference<list<int>> acc_out,
-            reference<list<int>> acc_completed, reference<list<int>> acc_dropped,
-            reference<int> acc_fanout_completed,
+            reference<list<int>> acc_completed,
             reference<list<int>> acc_processing_us) {
         *PipelineMetricsCollector mc = parent.getMetricsCollector();
         if (mc) {
@@ -720,17 +683,15 @@ class PipelineQueue {
 
             # Atomically update all metrics and trigger at most one snapshot
             mc.recordBatchFlush(submitted, elem_ids, acc_processing_us,
-                acc_in, acc_out, acc_completed, acc_dropped, acc_fanout_completed, now);
+                acc_in, acc_out, acc_completed, now);
 
             # Reset accumulators
             for (int i = 0; i < n; ++i) {
                 acc_in[i] = 0;
                 acc_out[i] = 0;
                 acc_completed[i] = 0;
-                acc_dropped[i] = 0;
                 acc_processing_us[i] = 0;
             }
-            acc_fanout_completed = 0;
         }
         batch_count = 0;
     }
@@ -781,13 +742,12 @@ class PipelineQueue {
                             }
                         }
                         # Flush produces records without input, so records_in = 0.
-                        # Only queue 0 tracks pipeline-level completion/drops.
                         int completed = 0;
-                        if (!id && elem_index == elem_count - 1) {
+                        if (elem_index == elem_count - 1) {
                             completed = records_out;
                         }
                         mc.recordElementProcessing(element_id, processing_us, 0, records_out,
-                            0, completed, 0, end_time);
+                            0, completed, end_time);
                     }
 
                     softlist<auto> data_recs = flush_results;
@@ -837,19 +797,12 @@ class PipelineQueue {
                                             ++records_out;
                                         }
                                     }
-                                    # Only queue 0 tracks pipeline-level completion/drops
                                     int completed = 0;
-                                    int dropped = 0;
-                                    if (!id) {
-                                        if (i == elem_size - 1) {
-                                            completed = records_out;
-                                        }
-                                        if (records_in > records_out) {
-                                            dropped = records_in - records_out;
-                                        }
+                                    if (i == elem_size - 1) {
+                                        completed = records_out;
                                     }
                                     mc.recordElementProcessing(element_id, processing_us, records_in, records_out,
-                                        0, completed, dropped, end_time);
+                                        0, completed, end_time);
                                 }
                             } else {
                                 # must be the last entry in the list - submitting to child queues
@@ -898,9 +851,6 @@ public class PipelineMetricsCollector {
         #! Total records completed
         int total_completed = 0;
 
-        #! Total records dropped (filtered) across all elements
-        int total_dropped = 0;
-
         #! Timestamps for throughput calculation
         date collection_start;
 
@@ -918,9 +868,6 @@ public class PipelineMetricsCollector {
 
         #! Previous total completed count
         int prev_completed = 0;
-
-        #! Previous total dropped count
-        int prev_dropped = 0;
 
         #! Previous element metrics snapshot (internal key → field values)
         hash<string, hash<auto>> prev_element_snap;
@@ -1038,7 +985,6 @@ public class PipelineMetricsCollector {
         @param records_completed number of records that completed the pipeline in this batch (default: 0);
                when > 0, total_completed is incremented atomically before maybeGetSnapshot() so that
                completion and snapshot are consistent
-        @param records_dropped number of records dropped (filtered) in this batch (default: 0)
         @param timestamp optional timestamp from the caller (avoids redundant now_us() inside the lock)
 
         @note For accurate per-record min/max tracking, the processing_us is divided by records_in
@@ -1047,7 +993,7 @@ public class PipelineMetricsCollector {
     */
     recordElementProcessing(string element_id, int processing_us, int records_in = 1,
             *int records_out, int queue_wait_us = 0, int records_completed = 0,
-            int records_dropped = 0, *date timestamp) {
+            *date timestamp) {
         # Default records_out to records_in if not specified
         if (!exists records_out) {
             records_out = records_in;
@@ -1065,9 +1011,6 @@ public class PipelineMetricsCollector {
             # Increment completion count atomically before snapshot (Phase 2 accounting fix)
             if (records_completed > 0) {
                 total_completed += records_completed;
-            }
-            if (records_dropped > 0) {
-                total_dropped += records_dropped;
             }
 
             # Use a reference to the element metrics entry to avoid repeated hash lookups
@@ -1123,15 +1066,11 @@ public class PipelineMetricsCollector {
         @param records_in per-element input record counts
         @param records_out per-element output record counts
         @param records_completed per-element completed record counts (only last element normally > 0)
-        @param records_dropped per-element dropped record counts (records filtered by each element)
-        @param fanout_completed records completed at a fan-out point (dispatched to child queues);
-               separate from per-element records_completed because fan-out elements are not in
-               element_ids
         @param timestamp caller-provided timestamp to avoid redundant now_us() calls
     */
     recordBatchFlush(int submitted_count, list<string> element_ids, list<int> processing_us,
             list<int> records_in, list<int> records_out, list<int> records_completed,
-            list<int> records_dropped, int fanout_completed, date timestamp) {
+            date timestamp) {
         int ri = cached_record_interval;
         int ims = cached_interval_ms;
 
@@ -1140,12 +1079,9 @@ public class PipelineMetricsCollector {
             metrics_lock.lock();
             on_exit metrics_lock.unlock();
 
-            # 1. Update total_submitted and fan-out completions
+            # 1. Update total_submitted
             if (submitted_count > 0) {
                 total_submitted += submitted_count;
-            }
-            if (fanout_completed > 0) {
-                total_completed += fanout_completed;
             }
 
             # 2. Update source element metrics (if configured)
@@ -1167,9 +1103,6 @@ public class PipelineMetricsCollector {
                     # Update total_completed atomically with element metrics
                     if (records_completed[i] > 0) {
                         total_completed += records_completed[i];
-                    }
-                    if (records_dropped[i] > 0) {
-                        total_dropped += records_dropped[i];
                     }
 
                     reference<hash<PipelineElementMetrics>> em = \element_metrics{element_ids[i]};
@@ -1454,12 +1387,10 @@ public class PipelineMetricsCollector {
             # Reset pipeline-level counters
             total_submitted = 0;
             total_completed = 0;
-            total_dropped = 0;
 
             # Reset delta tracking state
             prev_submitted = 0;
             prev_completed = 0;
-            prev_dropped = 0;
             remove prev_snapshot_time;
             prev_element_snap = {};
 
@@ -1561,7 +1492,6 @@ public class PipelineMetricsCollector {
         int interval_ms = (now - effective_prev_time).durationMilliseconds();
         int delta_submitted = total_submitted - prev_submitted;
         int delta_completed = total_completed - prev_completed;
-        int delta_dropped = total_dropped - prev_dropped;
         float delta_secs = interval_ms / 1000.0;
         float delta_throughput = (delta_secs > 0.0) ? (delta_completed / delta_secs) : 0.0;
 
@@ -1595,7 +1525,6 @@ public class PipelineMetricsCollector {
             "interval_ms"      : interval_ms,
             "records_submitted": delta_submitted,
             "records_completed": delta_completed,
-            "records_dropped"  : delta_dropped,
             "throughput_rps"   : delta_throughput,
             "element_metrics"  : delta_elements,
         };
@@ -1604,7 +1533,6 @@ public class PipelineMetricsCollector {
         prev_snapshot_time = now;
         prev_submitted = total_submitted;
         prev_completed = total_completed;
-        prev_dropped = total_dropped;
         # Only snapshot elements that appear in delta output (non-queue, non-mapper)
         hash<string, hash<auto>> new_prev;
         foreach string k in (keys element_metrics) {
@@ -1630,8 +1558,6 @@ public class PipelineMetricsCollector {
             "snapshot_time": now,
             "total_records_submitted": total_submitted,
             "total_records_completed": total_completed,
-            "total_records_dropped": total_dropped,
-            "records_in_flight": total_submitted - total_completed - total_dropped,
             "throughput_rps": throughput,
             "avg_latency_us": avg_latency,
             "element_metrics": out_metrics,
