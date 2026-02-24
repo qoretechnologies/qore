@@ -557,6 +557,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // invoke.cont blocks created during the do-while body lowering.
         builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
+
+        // Emit UninstantiateLocal for DoWhileStatement loop variables in reverse order
+        if (const LVList* loop_lvars = do_stmt->getLVList()) {
+            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+            }
+        }
+
         return true;
     }
     if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
@@ -595,6 +603,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // invoke.cont blocks created during the while body lowering.
         builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
+
+        // Emit UninstantiateLocal for WhileStatement loop variables in reverse order
+        if (const LVList* loop_lvars = while_stmt->getLVList()) {
+            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+            }
+        }
+
         return true;
     }
     if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
@@ -659,6 +675,17 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // invoke.cont blocks created during the for body lowering.
         builder.getFunction()->moveBlockToEnd(exit_block);
         builder.setBlock(exit_block);
+
+        // Emit UninstantiateLocal for ForStatement loop variables in reverse order
+        // (reverse order ensures destructors are called in LIFO order like in AST mode)
+        // The loop variables are declared in the for statement's initialization (e.g., "int j = 2")
+        // and must be cleaned up after the loop exits.
+        if (const LVList* loop_lvars = for_stmt->getLVList()) {
+            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+            }
+        }
+
         return true;
     }
     if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
