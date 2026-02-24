@@ -2284,14 +2284,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 setValueSlot(values, local_inst->result.id, out, xsink);
-                if (out.hasNode()) {
+                if (out.hasNode() && local_inst->auto_ref) {
+                    // Only owned references need cleanup — auto_ref=false is a borrowed view
                     cleanup.push_back(local_inst->result.id);
                 }
                 // Track this LoadLocal result slot for cleanup in UninstantiateLocal.
                 // Without this, the last loop iteration's LoadLocal holds an extra
                 // reference to block-scoped objects, deferring their destructor to
                 // function exit instead of firing at block scope exit.
-                if (local_inst->local) {
+                if (local_inst->local && local_inst->auto_ref) {
                     local_load_slots[local_inst->local].insert(local_inst->result.id);
                 }
                 ++ip;
@@ -2468,11 +2469,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Without this, subsequent IR instructions reading operands[0]
                         // will use the stale hash and lose modifications.
-                        // setValueSlot discards the old ref (from LoadLocal), which is correct.
-                        fprintf(stderr, "        setValueSlot: operands[0].id=%d\n", hks_inst->operands[0].id);
-                        setValueSlot(values, hks_inst->operands[0].id,
-                            QoreValue(new_h->refSelf()), xsink);
-                        fprintf(stderr, "        setValueSlot: done\n");
+                        // Use direct assignment (not setValueSlot) to avoid discarding
+                        // the un-ref'd old slot. The new_h has been taken into the LocalVar,
+                        // so we add a +1 reference for the IR slot and schedule cleanup.
+                        fprintf(stderr, "        direct assign: operands[0].id=%d\n", hks_inst->operands[0].id);
+                        values[hks_inst->operands[0].id] = QoreValue(new_h->refSelf());
+                        cleanup.push_back(hks_inst->operands[0].id);
+                        fprintf(stderr, "        direct assign: done\n");
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupStoredValues(locals, nullptr);
@@ -2500,6 +2503,87 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (hks_inst->result.isValid()) {
                     setValueSlot(values, hks_inst->result.id, val, xsink);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListIndexStore: {
+                auto* lis_inst = static_cast<QoreIRListIndexStoreInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, lis_inst->operands[0]);
+                QoreValue val      = getIRValue(values, lis_inst->operands[1]);
+                QoreValue idx_val  = getIRValue(values, lis_inst->operands[2]);
+                int64_t index = idx_val.getAsBigInt();
+                fprintf(stderr, "      ListIndexStore: operands[0]=%d operands[1]=%d operands[2]=%d index=%ld\n",
+                    lis_inst->operands[0].id, lis_inst->operands[1].id, lis_inst->operands[2].id, index);
+                fprintf(stderr, "        list_addr=%p is_unique=%d val_type=%s\n",
+                    list_val.getType() == NT_LIST ? (void*)list_val.get<QoreListNode>() : nullptr,
+                    list_val.getType() == NT_LIST ? list_val.get<QoreListNode>()->is_unique() : -1,
+                    val.getTypeName());
+                if (list_val.getType() == NT_LIST) {
+                    QoreListNode* l = list_val.get<QoreListNode>();
+                    // The list was loaded with auto_ref=false for lvalue operations,
+                    // so is_unique() accurately reflects whether COW is needed
+                    if (!l->is_unique()) {
+                        fprintf(stderr, "        COW triggered: copying list\n");
+                        // COW: create unique copy and update the local variable
+                        QoreListNode* new_l = l->copy();
+                        fprintf(stderr, "        COW: new_l_addr=%p\n", (void*)new_l);
+                        LocalVar* lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
+                        // Invalidate caches (matches StoreLocal pattern)
+                        auto cache_it = locals.find(lv);
+                        if (cache_it != locals.end()) {
+                            cache_it->second.discard(xsink);
+                            locals.erase(cache_it);
+                        }
+                        auto slot_it = func.local_var_slots.find(lv);
+                        if (slot_it != func.local_var_slots.end()
+                                && slot_it->second < locals_slot_cache.size()) {
+                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second] = QoreValue();
+                        }
+                        // Write new_l to thread-local stack
+                        assignLocalVarValue(lv, QoreValue(new_l), xsink);
+                        if (xsink && *xsink) {
+                            new_l->deref(nullptr);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
+                        }
+                        l = new_l;
+                        // CRITICAL FIX: Update IR values[] array with new COW copy.
+                        // Use direct assignment (not setValueSlot) to avoid discarding
+                        // the un-ref'd old slot.
+                        fprintf(stderr, "        direct assign: operands[0].id=%d\n", lis_inst->operands[0].id);
+                        values[lis_inst->operands[0].id] = QoreValue(new_l->refSelf());
+                        cleanup.push_back(lis_inst->operands[0].id);
+                        fprintf(stderr, "        direct assign: done\n");
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupStoredValues(locals, nullptr);
+                            cleanupStoredValues(globals, nullptr);
+                            cleanupStoredValues(threadlocals, nullptr);
+                            cleanupStoredValues(closures, nullptr);
+                            return false;
+                        }
+                    }
+                    fprintf(stderr, "        setEntry: index=%ld list_addr=%p\n", index, (void*)l);
+                    l->setEntry(index, val.refSelf(), xsink);
+                    fprintf(stderr, "        setEntry done\n");
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                if (lis_inst->result.isValid()) {
+                    setValueSlot(values, lis_inst->result.id, val, xsink);
                 }
                 ++ip;
                 break;

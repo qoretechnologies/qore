@@ -1246,6 +1246,55 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     return value_bits;
 }
 
+// JIT path: list[index] = value with COW
+// var: container LocalVar* (used to update the local when COW triggers).
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
+        LocalVar* var, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(list_bits);
+    QoreValue val = fromBits(val_bits);
+    if (lv.getType() == NT_LIST) {
+        QoreListNode* l = lv.get<QoreListNode>();
+        if (!l->is_unique()) {
+            QoreListNode* new_l = l->copy();
+            qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
+            if (*xsink) {
+                new_l->deref(nullptr);
+                return toBits(QoreValue());
+            }
+            l = new_l;
+        }
+        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        l->setEntry(index, entry, xsink);
+    }
+    return val_bits;
+}
+
+// AOT path: list[index] = value with COW
+// ctx: QoreAOTContext, local_slot identifies the list's slot
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(list_bits);
+    QoreValue val = fromBits(val_bits);
+    if (lv.getType() == NT_LIST) {
+        QoreListNode* l = lv.get<QoreListNode>();
+        if (!l->is_unique()) {
+            QoreListNode* new_l = l->copy();
+            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
+            if (*xsink) {
+                new_l->deref(nullptr);
+                return toBits(QoreValue());
+            }
+            l = new_l;
+        }
+        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        l->setEntry(index, entry, xsink);
+    }
+    return val_bits;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() == NT_LIST) {

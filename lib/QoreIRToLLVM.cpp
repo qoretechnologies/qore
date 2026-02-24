@@ -5852,6 +5852,87 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             return true;
         }
+        case QoreIROpcode::ListIndexStore: {
+            const auto* lis_inst = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            std::string err;
+            auto* list_v = getVal(lis_inst->operands[0].id, err);
+            auto* val_v  = getVal(lis_inst->operands[1].id, err);
+            auto* idx_v  = getVal(lis_inst->operands[2].id, err);
+            if (!list_v || !val_v || !idx_v) {
+                error = err;
+                return false;
+            }
+            llvm::Value* list_boxed = boxValue(list_v, lis_inst->operands[0].id);
+            llvm::Value* val_boxed  = boxValue(val_v,  lis_inst->operands[1].id);
+            // Index is already i64, but may be in a nanboxed slot; extract it
+            llvm::Value* index_i64;
+            if (nanboxed_values.count(lis_inst->operands[2].id)) {
+                // Index is nanboxed; extract as i64
+                auto unbox_fn = module.getOrInsertFunction("qore_rt_get_int64",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                index_i64 = builder->CreateCall(unbox_fn, {idx_v, xsink_arg});
+            } else {
+                // Index is already a native i64
+                index_i64 = idx_v;
+            }
+
+            llvm::Value* call_result;
+            if (aot_mode) {
+                // AOT: pass ctx + pre-registered local slot index for COW update
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                        reinterpret_cast<const void*>(lis_inst->container->ref.id));
+                llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
+                auto fn = module.getOrInsertFunction("qore_rt_list_index_store_cow_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(fn,
+                        {aot_ctx_arg, slot_val, list_boxed, index_i64, val_boxed, xsink_arg});
+            } else {
+                // JIT: pass LocalVar* directly
+                auto var_int = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(lis_inst->container->ref.id));
+                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
+                auto fn = module.getOrInsertFunction("qore_rt_list_index_store_cow",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(fn, {var_ptr, list_boxed, index_i64, val_boxed, xsink_arg});
+            }
+            if (inst->result.isValid()) {
+                values[inst->result.id] = call_result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
+
+            // CRITICAL: After ListIndexStore COW, reload the list from the LocalVar.
+            // Same pattern as HashKeyStore.
+            uint32_t list_operand_id = lis_inst->operands[0].id;
+            if (aot_mode) {
+                // AOT: reload from context slot
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                        reinterpret_cast<const void*>(lis_inst->container->ref.id));
+                llvm::Value* updated_list = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                values[list_operand_id] = updated_list;
+                nanboxed_values.insert(list_operand_id);
+                trackResultForCleanup(updated_list, list_operand_id, llvm_func);
+            } else {
+                // JIT: reload from LocalVar pointer
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                auto var_int = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(lis_inst->container->ref.id));
+                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
+                llvm::Value* updated_list = builder->CreateCall(load_fn, {var_ptr, xsink_arg});
+                values[list_operand_id] = updated_list;
+                nanboxed_values.insert(list_operand_id);
+                trackResultForCleanup(updated_list, list_operand_id, llvm_func);
+            }
+
+            return true;
+        }
         case QoreIROpcode::LoadSelfMember: {
             const auto* sminst = static_cast<const QoreIRSelfMemberInstruction*>(inst);
             llvm::Constant* name_const = builder->CreateGlobalString(sminst->member_name,

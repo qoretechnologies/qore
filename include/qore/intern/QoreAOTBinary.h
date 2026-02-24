@@ -67,8 +67,9 @@ constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_ACCESS = 1ULL << 4;  //!< HashKeyAcces
 constexpr uint64_t QORE_AOT_FEAT_FAST_CALL       = 1ULL << 5;  //!< CallMethodDirect/CallStaticDirect
 constexpr uint64_t QORE_AOT_FEAT_COMPLEX_RETURN  = 1ULL << 6;  //!< reserved, set to 0 for now
 constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_STORE  = 1ULL << 7;  //!< HashKeyStore opcode (335)
+constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexStore opcode (337)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

@@ -639,6 +639,8 @@ static int expectedOperands(QoreIROpcode op) {
             return 0;
         case QoreIROpcode::HashKeyStore:          // 2 operands: hash container value, new element value
             return 2;
+        case QoreIROpcode::ListIndexAccess:       // 2 operands: list value, index
+            return 2;
         case QoreIROpcode::HashKeyAccess:         // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::HashKeyAccessInt:      // 1 operand: hash value (key stored in QoreIRHashKeyAccessInstruction)
         case QoreIROpcode::MapHashKeyValue:      // 1 operand: list (key stored in QoreIRMapHashKeyInstruction)
@@ -652,6 +654,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ListSetInt:         // 3 operands: list, index, value
         case QoreIROpcode::ListSetFloat:       // 3 operands: list, index, value
         case QoreIROpcode::ListSetValue:       // 3 operands: list, index, value
+        case QoreIROpcode::ListIndexStore:     // 3 operands: list, value, index
             return 3;
         case QoreIROpcode::PushImplicitArg:    // 1 operand: value to push as $1
         case QoreIROpcode::SetImplicitArgv:    // 1 operand: list to set as $argv
