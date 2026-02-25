@@ -302,10 +302,11 @@ QoreIRLocalInstruction* QoreIRBuilder::createLoadLocal(LocalVar* local, const Qo
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createStoreLocal(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, bool weak) {
     auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::StoreLocal, local);
     inst->loc = loc;
     inst->operands.push_back(value);
+    inst->weak = weak;
     return inst;
 }
 
@@ -323,10 +324,11 @@ QoreIRLocalInstruction* QoreIRBuilder::createLoadClosure(LocalVar* local, const 
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createStoreClosure(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, bool weak) {
     auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::StoreClosure, local);
     inst->loc = loc;
     inst->operands.push_back(value);
+    inst->weak = weak;
     return inst;
 }
 
@@ -338,10 +340,11 @@ QoreIRVarInstruction* QoreIRBuilder::createLoadGlobal(Var* var, const QoreProgra
 }
 
 QoreIRVarInstruction* QoreIRBuilder::createStoreGlobal(Var* var, QoreIRValue value,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, bool weak) {
     auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::StoreGlobal, var);
     inst->loc = loc;
     inst->operands.push_back(value);
+    inst->weak = weak;
     return inst;
 }
 
@@ -353,10 +356,11 @@ QoreIRVarInstruction* QoreIRBuilder::createLoadThreadLocal(Var* var, const QoreP
 }
 
 QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValue value,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, bool weak) {
     auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::StoreThreadLocal, var);
     inst->loc = loc;
     inst->operands.push_back(value);
+    inst->weak = weak;
     return inst;
 }
 

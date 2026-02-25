@@ -193,7 +193,7 @@ private:
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
-        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr);
+        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, bool weak = false);
     LocalVar* getLocalVarFromValue(const QoreValue& expr) const;
     const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,

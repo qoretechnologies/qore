@@ -3082,7 +3082,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
 }
 
 bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error,
-        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc) {
+        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc, bool weak) {
     if (!var) {
         error = std::string("null lvalue in IR lowering (") + context + ")";
         return false;
@@ -3098,7 +3098,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc);
+                auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, weak);
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -3114,7 +3114,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc);
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -3126,7 +3126,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreGlobal(var->ref.var, value, var->loc);
+                auto* store_inst = builder.createStoreGlobal(var->ref.var, value, var->loc, weak);
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -3138,7 +3138,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreThreadLocal(var->ref.var, value, var->loc);
+                auto* store_inst = builder.createStoreThreadLocal(var->ref.var, value, var->loc, weak);
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -3469,7 +3469,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     if (left_var) {
-        if (!storeVarRef(left_var, right, error, "assignment", &right_expr)) {
+        if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, is_weak)) {
             return QoreIRValue();
         }
     } else if (assign->getLeft().hasNode()) {

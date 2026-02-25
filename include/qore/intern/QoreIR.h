@@ -927,6 +927,7 @@ public:
 
     LocalVar* local = nullptr;
     bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
+    bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
 };
 
 
@@ -936,6 +937,7 @@ public:
     }
 
     Var* var = nullptr;
+    bool weak = false;  // For StoreGlobal/StoreThreadLocal: if true, wraps object/hash/list in weak reference
 };
 
 //! Implicit argument reference instruction - loads $1, $2, etc.

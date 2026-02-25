@@ -86,16 +86,16 @@ public:
     QoreIRInstruction* createUnaryOp(QoreIROpcode op, QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr, bool auto_ref = true);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, bool weak = false);
     QoreIRLocalInstruction* createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadClosure(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreClosure(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, bool weak = false);
     QoreIRVarInstruction* createLoadGlobal(Var* var, const QoreProgramLocation* loc = nullptr);
-    QoreIRVarInstruction* createStoreGlobal(Var* var, QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    QoreIRVarInstruction* createStoreGlobal(Var* var, QoreIRValue value, const QoreProgramLocation* loc = nullptr, bool weak = false);
     QoreIRVarInstruction* createLoadThreadLocal(Var* var, const QoreProgramLocation* loc = nullptr);
     QoreIRVarInstruction* createStoreThreadLocal(Var* var, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, bool weak = false);
     // Hash key access
     QoreIRHashKeyAccessInstruction* createHashKeyAccess(const char* key_name,
         const QoreProgramLocation* loc = nullptr);

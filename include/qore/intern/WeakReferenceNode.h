@@ -78,7 +78,8 @@ protected:
     }
 
     DLLLOCAL virtual bool getAsBoolImpl() const {
-        return obj->getAsBoolImpl();
+        // Weak reference is only true if the target object is still valid
+        return obj->isValid() && obj->getAsBoolImpl();
     }
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {

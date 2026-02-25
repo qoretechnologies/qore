@@ -215,6 +215,10 @@ double QoreValue::getAsFloat() const {
 }
 
 bool QoreValue::getAsBool() const {
+    int type = getType();
+    if (type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST) {
+        fprintf(stderr, "DEBUG getAsBool: WEAKREF type=%d\n", type);
+    }
     if (isBool()) {
         return getBool();
     }

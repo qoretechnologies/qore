@@ -37,6 +37,9 @@
 #include <qore/intern/QoreException.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/Variable.h>
+#include <qore/intern/WeakReferenceNode.h>
+#include <qore/intern/WeakHashReferenceNode.h>
+#include <qore/intern/WeakListReferenceNode.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
@@ -3102,6 +3105,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         function_own_locals, &locally_uninstantiated);
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
+
+                // Handle weak assignment by wrapping in WeakReferenceNode at runtime
+                if (local_inst->weak && val.hasNode()) {
+                    qore_type_t type = val.getType();
+                    if (type == NT_OBJECT) {
+                        QoreObject* o = val.get<QoreObject>();
+                        val = new WeakReferenceNode(o);
+                    } else if (type == NT_HASH) {
+                        QoreHashNode* h = val.get<QoreHashNode>();
+                        val = new WeakHashReferenceNode(h);
+                    } else if (type == NT_LIST) {
+                        QoreListNode* l = val.get<QoreListNode>();
+                        val = new WeakListReferenceNode(l);
+                    }
+                }
+
                 // Don't cache closure-bound locals — closures can modify the value.
                 // We invalidate (rather than pre-populate) the cache here because
                 // assignLocalVarValue() → acceptAssignment() may coerce the value
@@ -3276,6 +3295,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue val = getIRValue(values, local_inst->operands.front());
+
+                // Handle weak assignment by wrapping in WeakReferenceNode at runtime
+                if (local_inst->weak && val.hasNode()) {
+                    qore_type_t type = val.getType();
+                    if (type == NT_OBJECT) {
+                        QoreObject* o = val.get<QoreObject>();
+                        val = new WeakReferenceNode(o);
+                    } else if (type == NT_HASH) {
+                        QoreHashNode* h = val.get<QoreHashNode>();
+                        val = new WeakHashReferenceNode(h);
+                    } else if (type == NT_LIST) {
+                        QoreListNode* l = val.get<QoreListNode>();
+                        val = new WeakListReferenceNode(l);
+                    }
+                }
+
                 storeValue(closures, local_inst->local, val, xsink);
                 // Write-through: update the actual closure variable so changes
                 // are visible outside the IR interpreter's local cache.
@@ -3329,6 +3364,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
+
+                // Handle weak assignment by wrapping in WeakReferenceNode at runtime
+                if (var_inst->weak && val.hasNode()) {
+                    qore_type_t type = val.getType();
+                    if (type == NT_OBJECT) {
+                        QoreObject* o = val.get<QoreObject>();
+                        val = new WeakReferenceNode(o);
+                    } else if (type == NT_HASH) {
+                        QoreHashNode* h = val.get<QoreHashNode>();
+                        val = new WeakHashReferenceNode(h);
+                    } else if (type == NT_LIST) {
+                        QoreListNode* l = val.get<QoreListNode>();
+                        val = new WeakListReferenceNode(l);
+                    }
+                }
+
                 storeValue(globals, var_inst->var, val, xsink);
                 // Write-through: update the actual global variable so changes
                 // are visible outside the IR interpreter's local cache.
@@ -3382,6 +3433,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
+
+                // Handle weak assignment by wrapping in WeakReferenceNode at runtime
+                if (var_inst->weak && val.hasNode()) {
+                    qore_type_t type = val.getType();
+                    if (type == NT_OBJECT) {
+                        QoreObject* o = val.get<QoreObject>();
+                        val = new WeakReferenceNode(o);
+                    } else if (type == NT_HASH) {
+                        QoreHashNode* h = val.get<QoreHashNode>();
+                        val = new WeakHashReferenceNode(h);
+                    } else if (type == NT_LIST) {
+                        QoreListNode* l = val.get<QoreListNode>();
+                        val = new WeakListReferenceNode(l);
+                    }
+                }
+
                 storeValue(threadlocals, var_inst->var, val, xsink);
                 // Write-through: update the actual thread-local variable.
                 assignGlobalVarValue(var_inst->var, val, xsink);
