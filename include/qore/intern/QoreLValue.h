@@ -133,6 +133,17 @@ public:
     }
 #endif
 
+    // Reset to initial empty state for reuse (when stack-allocated LocalVarValue is reused for a different variable)
+    DLLLOCAL void reset_to_empty() {
+        type = QV_Node;
+        fixed_type = false;
+        assigned = false;
+        static_assignment = false;
+        is_closure = false;
+        // Always clear the node pointer to ensure destructor assertion doesn't fail
+        v.n = 0;
+    }
+
     DLLLOCAL void setClosure() {
         assert(!is_closure);
         is_closure = true;

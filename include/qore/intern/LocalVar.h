@@ -151,6 +151,21 @@ public:
         //    QoreTypeInfo::getName(typeInfo), nval.getType(), static_assignment);
         assert(!finalized);
 
+        // If this LocalVarValue is being reused (same memory location for a different variable),
+        // we need to clear the old state first. The ThreadLocalVariableData stack reuses memory
+        // locations when variables go out of scope, but the LocalVarValue object retains the
+        // old variable's state. We reset the val member to a clean state before reusing it.
+        // This happens due to the stack-based allocation strategy in ThreadLocalVariableData,
+        // where instantiate() returns &curr->var[curr->pos++] and variables are recycled
+        // when uninstantiate() decrements pos.
+        if (id) {
+            // Remove and discard the old value to avoid leaving dangling references
+            QoreValue old_val = val.removeValue(true);
+            old_val.discard(nullptr);
+            // Reset the QoreLValue to initial state for reuse
+            val.reset_to_empty();
+        }
+
         id = n_id;
 
         // try to set an optimized value type for the value holder if possible
