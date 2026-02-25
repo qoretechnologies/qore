@@ -2439,7 +2439,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 QoreValue base = getIRValue(values, hka_inst->operands[0]);
                 QoreValue out;
-                if (base.getType() == NT_HASH) {
+
+                // Handle weak references by unwrapping them
+                if (base.getType() == NT_WEAKREF) {
+                    QoreObject* o = base.get<const WeakReferenceNode>()->get();
+                    if (o && o->isValid()) {
+                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                } else if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
