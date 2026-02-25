@@ -1,0 +1,951 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class JITSmokeTest
+
+class JITSmokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITSmokeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("JIT integer arithmetic", \testJitIntArithmetic());
+        addTestCase("JIT integer comparisons", \testJitIntComparisons());
+        addTestCase("JIT float arithmetic", \testJitFloatArithmetic());
+        addTestCase("JIT float comparisons", \testJitFloatComparisons());
+        addTestCase("JIT boolean operations", \testJitBoolOps());
+        addTestCase("JIT control flow", \testJitControlFlow());
+        addTestCase("JIT bitwise operations", \testJitBitwiseOps());
+        addTestCase("JIT division by zero", \testJitDivisionByZero());
+        addTestCase("JIT nested if/else", \testJitNestedIfElse());
+        addTestCase("JIT loop computation", \testJitLoopComputation());
+        addTestCase("JIT fallback to IR", \testJitFallbackToIr());
+        addTestCase("JIT non-modern fallback", \testJitNonModernFallback());
+        addTestCase("JIT try/catch exception", \testJitTryCatch());
+        addTestCase("JIT float division by zero", \testJitFloatDivByZero());
+        addTestCase("JIT modulo by zero", \testJitModuloByZero());
+        addTestCase("JIT unary operations", \testJitUnaryOps());
+        addTestCase("JIT mixed arithmetic", \testJitMixedArithmetic());
+        addTestCase("JIT string operations", \testJitStringOps());
+        addTestCase("JIT switch statement", \testJitSwitch());
+        addTestCase("JIT while loop", \testJitWhileLoop());
+        addTestCase("JIT do-while loop", \testJitDoWhileLoop());
+        addTestCase("JIT correctness across modes", \testJitCorrectnessAcrossModes());
+        addTestCase("JIT hash construction and access", \testJitHashAccess());
+        addTestCase("JIT list construction and access", \testJitListOps());
+        addTestCase("JIT string concatenation", \testJitStringConcat());
+        addTestCase("JIT dynamic comparison ops", \testJitDynamicComparisons());
+        addTestCase("JIT dynamic bitwise ops", \testJitDynamicBitwise());
+        addTestCase("JIT dynamic unary ops", \testJitDynamicUnary());
+        addTestCase("JIT compound assignment ops", \testJitCompoundAssign());
+        addTestCase("JIT throw with list args", \testJitThrowList());
+        addTestCase("JIT multiple exceptions", \testJitMultipleExceptions());
+        addTestCase("JIT scoped object construction", \testJitScopedObjectConstruction());
+        # Phase 5b optimization tests
+        addTestCase("JIT hash key access fast-path", \testJitHashKeyFastPath());
+        addTestCase("JIT list index access fast-path", \testJitListIndexFastPath());
+        addTestCase("JIT string concat fast-path", \testJitStringConcatFastPath());
+        addTestCase("JIT any arithmetic fast-path", \testJitAnyArithFastPath());
+        addTestCase("JIT any comparison fast-path", \testJitAnyCmpFastPath());
+        addTestCase("JIT any arithmetic mixed types", \testJitAnyArithMixed());
+        addTestCase("JIT Phase 5b cross-mode correctness", \testJitPhase5bCrossMode());
+        # Phase 5c debug info tests
+        addTestCase("JIT debug info compile", \testJitDebugInfoCompile());
+        addTestCase("JIT debug info multi-line", \testJitDebugInfoMultiLine());
+        # Double-eval regression tests
+        addTestCase("side-effecting args", \testJitSideEffectingArgs());
+        addTestCase("tracked side effects", \testJitTrackedSideEffects());
+        addTestCase("nested call side effects", \testJitNestedCallSideEffects());
+        addTestCase("binary invoke try/catch", \testJitBinaryInvokeTryCatch());
+        addTestCase("call cross-mode", \testJitCallCrossMode());
+        # Bug fix regression tests
+        addTestCase("no-arg function call", \testJitNoArgCall());
+        addTestCase("int post-increment", \testJitIntPostIncrement());
+        addTestCase("int post-decrement", \testJitIntPostDecrement());
+        addTestCase("ternary operator", \testJitTernary());
+        # DotEval double-evaluation regression tests
+        addTestCase("dot-eval method call single eval", \testJitDotEvalSingleEval());
+        addTestCase("dot-eval invoke path single eval", \testJitDotEvalInvokeSingleEval());
+        addTestCase("dot-eval chained methods", \testJitDotEvalChained());
+        addTestCase("dot-eval hash member access", \testJitDotEvalHashMember());
+        set_return_value(main());
+    }
+
+    private string runScript(string code, *string exec_mode) {
+        string mode = exec_mode ?? "jit";
+        TmpFile tmp(".q");
+        tmp.file.write(code);
+        tmp.file.close();
+        string path = tmp.path;
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, path);
+        return backquote(cmd);
+    }
+
+    testJitIntArithmetic() {
+        # Test that JIT or fallback produces correct integer arithmetic
+        string code = "%modern
+int sub compute(int a, int b) {
+    int sum = a + b;
+    int diff = a - b;
+    int prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%d\\n\", compute(10, 3));
+";
+        string result = trim(runScript(code));
+        assertEq("50", result, "integer arithmetic: (10+3) + (10-3) + (10*3) = 13+7+30 = 50");
+    }
+
+    testJitIntComparisons() {
+        string code = "%modern
+int a = 5;
+int b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "integer comparisons");
+    }
+
+    testJitFloatArithmetic() {
+        string code = "%modern
+float sub fcompute(float a, float b) {
+    float sum = a + b;
+    float diff = a - b;
+    float prod = a * b;
+    return sum + diff + prod;
+}
+printf(\"%.1f\\n\", fcompute(10.0, 3.0));
+";
+        string result = trim(runScript(code));
+        assertEq("50.0", result, "float arithmetic");
+    }
+
+    testJitFloatComparisons() {
+        string code = "%modern
+float a = 1.5;
+float b = 2.5;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "float comparisons");
+    }
+
+    testJitBoolOps() {
+        string code = "%modern
+bool a = True;
+bool b = False;
+list<string> results = ();
+if (a) { results += \"a_true\"; }
+if (!b) { results += \"b_false\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("a_true,b_false,ne", result, "boolean operations");
+    }
+
+    testJitControlFlow() {
+        string code = "%modern
+int sub fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+printf(\"%d\\n\", fib(10));
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "recursive fibonacci");
+    }
+
+    testJitBitwiseOps() {
+        string code = "%modern
+int a = 0xFF;
+int b = 0x0F;
+int and_result = a & b;
+int or_result = a | b;
+int xor_result = a ^ b;
+int shl_result = 1 << 8;
+int shr_result = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_result, or_result, xor_result, shl_result, shr_result);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "bitwise operations");
+    }
+
+    testJitDivisionByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "division by zero exception");
+    }
+
+    testJitNestedIfElse() {
+        string code = "%modern
+int sub classify(int n) {
+    if (n < 0) {
+        return -1;
+    } else if (n == 0) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+printf(\"%d,%d,%d\\n\", classify(-5), classify(0), classify(5));
+";
+        string result = trim(runScript(code));
+        assertEq("-1,0,1", result, "nested if/else");
+    }
+
+    testJitLoopComputation() {
+        string code = "%modern
+int sum = 0;
+for (int i = 1; i <= 100; i++) {
+    sum += i;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5050", result, "loop sum 1..100");
+    }
+
+    testJitFallbackToIr() {
+        # Test that JIT falls back gracefully for complex operations
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\"};
+printf(\"%s\\n\", h.key);
+";
+        string result = trim(runScript(code));
+        assertEq("value", result, "JIT fallback for hash access");
+    }
+
+    testJitNonModernFallback() {
+        # Non-%modern code should fall back to AST; check output contains "42"
+        string code = "printf(\"%d\\n\", 42);\n";
+        string result = runScript(code);
+        assertRegex("42", result, "non-modern fallback to AST produces correct output");
+    }
+
+    testJitTryCatch() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("TEST-ERROR:test message", result, "try/catch with throw");
+    }
+
+    testJitFloatDivByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    float zero = 0.0;
+    float x = 10.0 / zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "float division by zero");
+    }
+
+    testJitModuloByZero() {
+        string code = "%modern
+%disable-warning unreferenced-variable
+try {
+    int zero = 0;
+    int x = 10 % zero;
+    printf(\"ERROR: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("DIVISION-BY-ZERO", result, "modulo by zero");
+    }
+
+    testJitUnaryOps() {
+        string code = "%modern
+int a = 42;
+int neg = -a;
+float f = 3.14;
+float fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "unary negation");
+    }
+
+    testJitMixedArithmetic() {
+        string code = "%modern
+int a = 7;
+int b = 3;
+int sum = a + b;
+int diff = a - b;
+int prod = a * b;
+int quot = a / b;
+int mod = a % b;
+printf(\"%d,%d,%d,%d,%d\\n\", sum, diff, prod, quot, mod);
+";
+        string result = trim(runScript(code));
+        assertEq("10,4,21,2,1", result, "mixed integer arithmetic");
+    }
+
+    testJitStringOps() {
+        string code = "%modern
+string s = \"hello\";
+printf(\"%s world\\n\", s);
+";
+        string result = trim(runScript(code));
+        assertEq("hello world", result, "string operations");
+    }
+
+    testJitSwitch() {
+        string code = "%modern
+int sub classify(int n) {
+    switch (n) {
+        case 1: return 10;
+        case 2: return 20;
+        case 3: return 30;
+        default: return -1;
+    }
+}
+printf(\"%d,%d,%d,%d\\n\", classify(1), classify(2), classify(3), classify(99));
+";
+        string result = trim(runScript(code));
+        assertEq("10,20,30,-1", result, "switch statement");
+    }
+
+    testJitWhileLoop() {
+        string code = "%modern
+int n = 10;
+int sum = 0;
+int i = 1;
+while (i <= n) {
+    sum += i;
+    i++;
+}
+printf(\"%d\\n\", sum);
+";
+        string result = trim(runScript(code));
+        assertEq("55", result, "while loop sum");
+    }
+
+    testJitDoWhileLoop() {
+        string code = "%modern
+int n = 5;
+int prod = 1;
+int i = 1;
+do {
+    prod *= i;
+    i++;
+} while (i <= n);
+printf(\"%d\\n\", prod);
+";
+        string result = trim(runScript(code));
+        assertEq("120", result, "do-while factorial");
+    }
+
+    testJitCorrectnessAcrossModes() {
+        # Verify identical output across all three modes for a non-trivial program
+        string code = "%modern
+int sub compute(int n) {
+    int result = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 2 == 0) {
+            result += i * i;
+        } else {
+            result -= i;
+        }
+    }
+    return result;
+}
+printf(\"%d\\n\", compute(20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "IR produces same result as AST");
+        assertEq(ast_result, jit_result, "JIT produces same result as AST");
+    }
+
+    testJitHashAccess() {
+        string code = "%modern
+hash<auto> h = {\"key\": \"value\", \"num\": 42};
+printf(\"%s:%d\\n\", h.key, h.num);
+";
+        string result = trim(runScript(code));
+        assertEq("value:42", result, "hash construction and dot-access");
+    }
+
+    testJitListOps() {
+        string code = "%modern
+list<int> l = (10, 20, 30, 40, 50);
+int sum = 0;
+for (int i = 0; i < l.size(); i++) {
+    sum += l[i];
+}
+printf(\"%d:%d\\n\", l.size(), sum);
+";
+        string result = trim(runScript(code));
+        assertEq("5:150", result, "list construction, indexing, and size");
+    }
+
+    testJitStringConcat() {
+        string code = "%modern
+string a = \"hello\";
+string b = \" world\";
+string c = a + b;
+printf(\"%s:%d\\n\", c, c.size());
+";
+        string result = trim(runScript(code));
+        assertEq("hello world:11", result, "string concatenation and size");
+    }
+
+    testJitDynamicComparisons() {
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> results = ();
+if (a < b) { results += \"lt\"; }
+if (a <= b) { results += \"le\"; }
+if (b > a) { results += \"gt\"; }
+if (b >= a) { results += \"ge\"; }
+if (a == a) { results += \"eq\"; }
+if (a != b) { results += \"ne\"; }
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("lt,le,gt,ge,eq,ne", result, "dynamic auto comparison operators");
+    }
+
+    testJitDynamicBitwise() {
+        string code = "%modern
+auto a = 0xFF;
+auto b = 0x0F;
+auto and_r = a & b;
+auto or_r = a | b;
+auto xor_r = a ^ b;
+auto shl_r = 1 << 8;
+auto shr_r = 256 >> 4;
+printf(\"%d,%d,%d,%d,%d\\n\", and_r, or_r, xor_r, shl_r, shr_r);
+";
+        string result = trim(runScript(code));
+        assertEq("15,255,240,256,16", result, "dynamic auto bitwise operators");
+    }
+
+    testJitDynamicUnary() {
+        string code = "%modern
+auto a = 42;
+auto neg = -a;
+auto f = 3.14;
+auto fneg = -f;
+printf(\"%d,%.2f\\n\", neg, fneg);
+";
+        string result = trim(runScript(code));
+        assertEq("-42,-3.14", result, "dynamic auto unary negation");
+    }
+
+    testJitCompoundAssign() {
+        string code = "%modern
+int a = 10;
+a += 5;
+int b = 20;
+b -= 3;
+int c = 4;
+c *= 3;
+int d = 15;
+d /= 3;
+int e = 17;
+e %= 5;
+printf(\"%d,%d,%d,%d,%d\\n\", a, b, c, d, e);
+";
+        string result = trim(runScript(code));
+        assertEq("15,17,12,5,2", result, "compound assignment operators");
+    }
+
+    testJitThrowList() {
+        string code = "%modern
+try {
+    throw \"MY-ERROR\", \"my description\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%s\\n\", ex.err, ex.desc);
+}
+";
+        string result = trim(runScript(code));
+        assertEq("MY-ERROR:my description", result, "throw with err and desc args");
+    }
+
+    testJitMultipleExceptions() {
+        string code = "%modern
+list<string> results = ();
+for (int i = 0; i < 5; i++) {
+    try {
+        if (i % 2 == 0) {
+            throw \"EVEN-ERROR\", sprintf(\"i=%d\", i);
+        } else {
+            results += sprintf(\"ok:%d\", i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        results += sprintf(\"%s:%s\", ex.err, ex.desc);
+    }
+}
+printf(\"%s\\n\", results.join(\",\"));
+";
+        string result = trim(runScript(code));
+        assertEq("EVEN-ERROR:i=0,ok:1,EVEN-ERROR:i=2,ok:3,EVEN-ERROR:i=4", result, "multiple exceptions in loop");
+    }
+
+    testJitScopedObjectConstruction() {
+        # Test "ClassName var(args)" syntax (VarRefNewObjectNode)
+        string code = "%modern
+class Point {
+    public {
+        int x;
+        int y;
+    }
+    constructor(int a, int b) {
+        x = a;
+        y = b;
+    }
+}
+Point p(3, 7);
+printf(\"%d:%d\\n\", p.x, p.y);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("3:7", ast_result, "scoped object construction AST");
+        assertEq(ast_result, ir_result, "scoped object construction IR matches AST");
+        assertEq(ast_result, jit_result, "scoped object construction JIT matches AST");
+    }
+
+    # --- Phase 5b optimization tests ---
+
+    testJitHashKeyFastPath() {
+        # Test hash key access via DotEvalHash with constant string key
+        string code = "%modern
+hash<auto> h = {\"name\": \"alice\", \"age\": 30, \"score\": 99.5};
+printf(\"%s:%d:%.1f\\n\", h.name, h.age, h.score);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alice:30:99.5", ast_result, "hash key access AST");
+        assertEq(ast_result, jit_result, "hash key access JIT matches AST");
+    }
+
+    testJitListIndexFastPath() {
+        # Test list index access with integer index
+        string code = "%modern
+list<auto> l = (\"alpha\", 42, 3.14, True);
+printf(\"%s:%d:%.2f:%s\\n\", l[0], l[1], l[2], l[3] ? \"true\" : \"false\");
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("alpha:42:3.14:true", ast_result, "list index access AST");
+        assertEq(ast_result, jit_result, "list index access JIT matches AST");
+    }
+
+    testJitStringConcatFastPath() {
+        # Test string concatenation through AddAny (auto-typed)
+        string code = "%modern
+auto a = \"hello\";
+auto b = \" world\";
+auto c = a + b;
+printf(\"%s\\n\", c);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("hello world", ast_result, "string concat AST");
+        assertEq(ast_result, jit_result, "string concat JIT matches AST");
+    }
+
+    testJitAnyArithFastPath() {
+        # Test inline int+int and float+float fast-paths for .any arithmetic
+        string code = "%modern
+auto a = 10;
+auto b = 20;
+auto sum = a + b;
+auto diff = a - b;
+auto prod = a * b;
+auto fa = 1.5;
+auto fb = 2.5;
+auto fsum = fa + fb;
+auto fdiff = fa - fb;
+auto fprod = fa * fb;
+printf(\"%d:%d:%d:%.1f:%.1f:%.2f\\n\", sum, diff, prod, fsum, fdiff, fprod);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("30:-10:200:4.0:-1.0:3.75", ast_result, "any arith AST");
+        assertEq(ast_result, jit_result, "any arith JIT matches AST");
+    }
+
+    testJitAnyCmpFastPath() {
+        # Test inline int-vs-int and float-vs-float fast-paths for comparisons
+        string code = "%modern
+auto a = 5;
+auto b = 10;
+list<string> r = ();
+if (a == a) { r += \"eq\"; }
+if (a != b) { r += \"ne\"; }
+if (a < b) { r += \"lt\"; }
+if (a <= b) { r += \"le\"; }
+if (b > a) { r += \"gt\"; }
+if (b >= a) { r += \"ge\"; }
+auto fa = 1.5;
+auto fb = 2.5;
+if (fa == fa) { r += \"feq\"; }
+if (fa != fb) { r += \"fne\"; }
+if (fa < fb) { r += \"flt\"; }
+if (fb > fa) { r += \"fgt\"; }
+printf(\"%s\\n\", r.join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("eq,ne,lt,le,gt,ge,feq,fne,flt,fgt", ast_result, "any cmp AST");
+        assertEq(ast_result, jit_result, "any cmp JIT matches AST");
+    }
+
+    testJitAnyArithMixed() {
+        # Test .any arithmetic with mixed types (int+float should fall to slow path)
+        string code = "%modern
+auto a = 10;
+auto b = 2.5;
+auto result = a + b;
+printf(\"%.1f\\n\", result);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("12.5", ast_result, "mixed any arith AST");
+        assertEq(ast_result, jit_result, "mixed any arith JIT matches AST");
+    }
+
+    testJitPhase5bCrossMode() {
+        # Comprehensive test exercising hash, list, string, arith, and comparison
+        # across all execution modes
+        string code = "%modern
+auto sub compute(auto n) {
+    hash<auto> h = {\"val\": n, \"doubled\": n * 2};
+    list<auto> l = (h.val, h.doubled);
+    auto sum = l[0] + l[1];
+    if (sum > 10) {
+        return sum;
+    }
+    return 0;
+}
+list<auto> results = ();
+for (int i = 0; i < 10; i++) {
+    results += compute(i);
+}
+printf(\"%s\\n\", (map $1.toString(), results).join(\",\"));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, ir_result, "Phase 5b cross-mode: IR matches AST");
+        assertEq(ast_result, jit_result, "Phase 5b cross-mode: JIT matches AST");
+    }
+
+    # --- Phase 5c debug info tests ---
+
+    testJitDebugInfoCompile() {
+        # Simple function with local variables; verify correct result under JIT
+        # (exercises DIBuilder code path for every JIT compilation)
+        string code = "%modern
+int sub add_locals(int a, int b) {
+    int x = a + 1;
+    int y = b + 2;
+    int result = x + y;
+    return result;
+}
+printf(\"%d\\n\", add_locals(10, 20));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("33", ast_result, "debug info compile AST");
+        assertEq(ast_result, jit_result, "debug info compile JIT matches AST");
+    }
+
+    testJitDebugInfoMultiLine() {
+        # Multi-line function with branches and loops; verify correct result
+        # (exercises per-instruction debug locations across blocks)
+        string code = "%modern
+int sub multi_line(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (i % 3 == 0) {
+            total += i * 2;
+        } else if (i % 3 == 1) {
+            total -= 1;
+        } else {
+            total += i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", multi_line(15));
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq(ast_result, jit_result, "debug info multi-line JIT matches AST");
+    }
+
+    # --- Double-eval regression tests ---
+
+    testJitSideEffectingArgs() {
+        # Verify that side-effecting function args are evaluated exactly once per call
+        string code = "%modern
+int counter = 0;
+int sub side_effect(int v) {
+    counter++;
+    return v;
+}
+int sub add(int a, int b) { return a + b; }
+int result = add(side_effect(10), side_effect(20));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("30:2", result, sprintf("side-effecting args %s", mode));
+        }
+    }
+
+    testJitTrackedSideEffects() {
+        # Verify tracked_inc() (a side-effecting call) evaluates once as arg
+        string code = "%modern
+int counter = 0;
+int sub tracked_inc(int v) {
+    counter++;
+    return v;
+}
+int sub identity(int v) { return v; }
+int i = 5;
+int result = identity(tracked_inc(i));
+printf(\"%d:%d\\n\", result, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:1", result, sprintf("tracked side effects %s", mode));
+        }
+    }
+
+    testJitNestedCallSideEffects() {
+        # Verify nested calls with side effects: log should have exactly 3 entries
+        string code = "%modern
+list<int> log = ();
+int sub logged(int v) {
+    log += v;
+    return v;
+}
+int sub add3(int a, int b, int c) { return a + b + c; }
+int result = add3(logged(1), logged(2), logged(3));
+printf(\"%d:%d:%s\\n\", result, log.size(), (map $1.toString(), log).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("6:3:1,2,3", result, sprintf("nested call side effects %s", mode));
+        }
+    }
+
+    testJitBinaryInvokeTryCatch() {
+        # Verify binary ops inside try/catch (Invoke path) work correctly
+        string code = "%modern
+auto a = 10;
+auto b = 0;
+string result;
+try {
+    auto r = a / b;
+    result = \"no-exception\";
+} catch (hash<ExceptionInfo> ex) {
+    result = ex.err;
+}
+printf(\"%s\\n\", result);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("DIVISION-BY-ZERO", result,
+                    sprintf("binary invoke try/catch %s", mode));
+        }
+    }
+
+    testJitCallCrossMode() {
+        # Verify call with side effects produces same results across modes
+        string code = "%modern
+int counter = 0;
+int sub bump() {
+    counter++;
+    return counter;
+}
+int a = bump();
+int b = bump();
+int c = bump();
+printf(\"%d:%d:%d:%d\\n\", a, b, c, counter);
+";
+        string ast_result = trim(runScript(code, "ast"));
+        string ir_result = trim(runScript(code, "ir"));
+        string jit_result = trim(runScript(code, "jit"));
+        assertEq("1:2:3:3", ast_result, "call cross-mode AST");
+        assertEq(ast_result, ir_result, "call cross-mode IR matches AST");
+        assertEq(ast_result, jit_result, "call cross-mode JIT matches AST");
+    }
+
+    # --- Bug fix regression tests ---
+
+    testJitNoArgCall() {
+        # Bug 2: zero-argument function calls failed IR lowering
+        string code = "%modern
+int sub no_arg_func() {
+    return 42;
+}
+printf(\"%d\\n\", no_arg_func());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42", result, sprintf("no-arg function call %s", mode));
+        }
+    }
+
+    testJitIntPostIncrement() {
+        # Bug 1: int-typed post-increment failed IR lowering (QoreIntPostIncrementOperatorNode
+        # does not inherit from QorePostIncrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i++;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:6", result, sprintf("int post-increment %s", mode));
+        }
+    }
+
+    testJitIntPostDecrement() {
+        # Bug 1: int-typed post-decrement failed IR lowering (QoreIntPostDecrementOperatorNode
+        # does not inherit from QorePostDecrementOperatorNode)
+        string code = "%modern
+int i = 5;
+int r = i--;
+printf(\"%d:%d\\n\", r, i);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:4", result, sprintf("int post-decrement %s", mode));
+        }
+    }
+
+    testJitTernary() {
+        # Bug 3: ternary operator PHI node had zero incoming values in LLVM lowering
+        string code = "%modern
+int sub ternary_test(int x) {
+    int r = (x > 0) ? 10 : 20;
+    return r;
+}
+printf(\"%d:%d:%d\\n\", ternary_test(5), ternary_test(0), ternary_test(-3));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("10:20:20", result, sprintf("ternary operator %s", mode));
+        }
+    }
+
+    testJitDotEvalSingleEval() {
+        # Bug A: DotEval double-evaluation — base expression f() should be called once, not twice
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 42; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().get();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42:1", result, sprintf("dot-eval single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalInvokeSingleEval() {
+        # Bug A: DotEval inside try/catch (Invoke path) — base called once
+        string code = "%modern
+our int counter = 0;
+class C {
+    int get() { return 99; }
+}
+C sub f() { counter++; return new C(); }
+int r;
+try { r = f().get(); } catch (hash<auto> ex) { r = -1; }
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("99:1", result, sprintf("dot-eval invoke single eval %s", mode));
+        }
+    }
+
+    testJitDotEvalChained() {
+        # Bug A: chained method calls — each base evaluated once
+        string code = "%modern
+our int counter = 0;
+class C {
+    C next() { return new C(); }
+    int val() { return 7; }
+}
+C sub f() { counter++; return new C(); }
+int r = f().next().val();
+printf(\"%d:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("7:1", result, sprintf("dot-eval chained %s", mode));
+        }
+    }
+
+    testJitDotEvalHashMember() {
+        # Bug A: hash member access on side-effecting base — evaluated once
+        string code = "%modern
+our int counter = 0;
+hash<auto> sub f() { counter++; return {\"key\": \"hello\"}; }
+auto r = f().key;
+printf(\"%s:%d\\n\", r, counter);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello:1", result, sprintf("dot-eval hash member %s", mode));
+        }
+    }
+}

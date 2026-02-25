@@ -259,8 +259,14 @@ QoreValue Var::eval() const {
         return val.v.getPtr()->eval();
     if (is_thread_local) {
         switch (val.getType()) {
-            case NT_WEAKREF:
-                return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
+            case NT_WEAKREF: {
+                QoreObject* o = static_cast<WeakReferenceNode*>(val.v.n)->get();
+                // Return NOTHING if the target object has been deleted
+                if (!o->isValid()) {
+                    return QoreValue();
+                }
+                return o->refSelf();
+            }
             case NT_WEAKREF_HASH:
                 return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
             case NT_WEAKREF_LIST:
@@ -270,8 +276,14 @@ QoreValue Var::eval() const {
     }
     QoreAutoVarRWReadLocker al(rwl);
     switch (val.getType()) {
-        case NT_WEAKREF:
-            return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
+        case NT_WEAKREF: {
+            QoreObject* o = static_cast<WeakReferenceNode*>(val.v.n)->get();
+            // Return NOTHING if the target object has been deleted
+            if (!o->isValid()) {
+                return QoreValue();
+            }
+            return o->refSelf();
+        }
         case NT_WEAKREF_HASH:
             return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
         case NT_WEAKREF_LIST:

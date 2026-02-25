@@ -2861,14 +2861,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreParseOptions old_po;
                 swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
-                // Isolate from outer AST stack location chain — the outer chain may contain
-                // pointers to destroyed RAII objects if JIT is called from deep AST context.
-                // Nulling before execution prevents dangling-pointer crashes in
-                // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
-                const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-                if (saved_stack_loc) {
-                    update_runtime_stack_location(nullptr);
-                }
+                // Note: We used to isolate from outer AST stack location chain by nulling it,
+                // but this caused crashes when exceptions are thrown from builtins called during
+                // JIT execution. The exception constructor tries to walk the stack while it's being
+                // thrown, and a nullptr location breaks the walk. Instead, we rely on the fact that
+                // the stack locations are properly set up by CodeEvaluationHelper when builtins
+                // are called, so dangling pointers should not occur.
 
                 uint64_t result_bits;
                 if (cached_aot_ctx && cached_aot_fn) {
@@ -2890,12 +2888,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     if (statements) {
                         val = statements->exec(xsink);
                     }
-                    // Restore chain after successful deopt
-                    update_runtime_stack_location(saved_stack_loc);
                 } else {
-                    // Restore chain on success
-                    update_runtime_stack_location(saved_stack_loc);
-
                     QoreValue result;
                     std::memcpy(&result, &result_bits, sizeof(result));
                     val = result;

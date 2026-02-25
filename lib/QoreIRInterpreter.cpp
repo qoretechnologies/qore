@@ -163,6 +163,32 @@ static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     return result;
 }
 
+// Helper to check if a weak reference's target object is still valid
+// Returns the value if valid, or NOTHING if the weak reference target was deleted
+static QoreValue validateWeakRef(const QoreValue& val) {
+    switch (val.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = val.get<const WeakReferenceNode>()->get();
+            if (!o->isValid()) {
+                return QoreValue();
+            }
+            return val;
+        }
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();
+            // Hashes and lists don't have an "invalid" state, so return as-is
+            return val;
+        }
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = val.get<const WeakListReferenceNode>()->get();
+            // Hashes and lists don't have an "invalid" state, so return as-is
+            return val;
+        }
+        default:
+            return val;
+    }
+}
+
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
     switch (op) {
@@ -1448,6 +1474,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return false;  // local_cleanup RAII handles cleanup
         }
     }
+
 
     if (func.blocks.empty()) {
         if (xsink) {
@@ -3275,7 +3302,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue out;
                 auto it = globals.find(var_inst->var);
                 if (it != globals.end()) {
-                    QoreValue val = it->second;
+                    QoreValue val = validateWeakRef(it->second);
                     out = val.hasNode() ? val.refSelf() : val;
                 } else {
                     // Read from the actual global variable when not in the local cache

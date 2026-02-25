@@ -70,6 +70,10 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         assert(needs_deref);
         needs_deref = false;
+        // Return NOTHING if the target object has been deleted
+        if (!obj->isValid()) {
+            return QoreValue();
+        }
         return obj;
     }
 
