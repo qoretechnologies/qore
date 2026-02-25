@@ -76,6 +76,8 @@ public class ConnectionSchemeCache {
         const SchemeMap = {
             "awsrests": "AwsRestClient",
 
+            "bigcommerceres": "BigCommerceRestClient",
+
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 

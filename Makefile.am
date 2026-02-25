@@ -85,6 +85,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/SquareRestClient.qm \
 	qlib/SquarespaceRestClient.qm \
 	qlib/TableauRestClient.qm \
+	qlib/BigCommerceRestClient.qm \
 	qlib/BigMLRestClient.qm \
 	qlib/Cin7CoreRestClient.qm \
 	qlib/UnleashedRestClient.qm \
@@ -161,6 +162,7 @@ DOX_SPLIT_MODULES = \
     qlib/SquarespaceDataProvider \
     qlib/BigMLDataProvider \
     qlib/TableauDataProvider \
+    qlib/BigCommerceDataProvider \
     qlib/Cin7CoreDataProvider \
     qlib/UnleashedDataProvider \
     qlib/SwaggerDataProvider \
@@ -237,6 +239,7 @@ SquareDataProvider_modverdir = $(modverdir)/SquareDataProvider
 ChargebeeDataProvider_modverdir = $(modverdir)/ChargebeeDataProvider
 SquarespaceDataProvider_modverdir = $(modverdir)/SquarespaceDataProvider
 TableauDataProvider_modverdir = $(modverdir)/TableauDataProvider
+BigCommerceDataProvider_modverdir = $(modverdir)/BigCommerceDataProvider
 BigMLDataProvider_modverdir = $(modverdir)/BigMLDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
 UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
@@ -298,6 +301,7 @@ dist_SquareDataProvider_modver_DATA = $(wildcard qlib/SquareDataProvider/*.q[cm]
 dist_ChargebeeDataProvider_modver_DATA = $(wildcard qlib/ChargebeeDataProvider/*.q[cm]) $(wildcard qlib/ChargebeeDataProvider/*.svg)
 dist_SquarespaceDataProvider_modver_DATA = $(wildcard qlib/SquarespaceDataProvider/*.q[cm]) $(wildcard qlib/SquarespaceDataProvider/*.svg)
 dist_TableauDataProvider_modver_DATA = $(wildcard qlib/TableauDataProvider/*.q[cm]) $(wildcard qlib/TableauDataProvider/*.svg)
+dist_BigCommerceDataProvider_modver_DATA = $(wildcard qlib/BigCommerceDataProvider/*.q[cm]) $(wildcard qlib/BigCommerceDataProvider/*.svg)
 dist_BigMLDataProvider_modver_DATA = $(wildcard qlib/BigMLDataProvider/*.q[cm]) $(wildcard qlib/BigMLDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
 dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*.q[cm]) $(wildcard qlib/UnleashedDataProvider/*.svg)
@@ -1254,6 +1258,7 @@ EXTRA_DIST = next_build.sh run_tests.sh ABOUT RELEASE-NOTES \
 	qlib/SquareDataProvider/square-logo.svg \
 	qlib/SquarespaceDataProvider/squarespace-logo.svg \
 	qlib/TableauDataProvider/tableau-logo.svg \
+	qlib/BigCommerceDataProvider/bigcommerce-logo.svg \
 	qlib/WaveDataProvider/wave-logo.svg \
 	qlib/ZohoInventoryDataProvider/zohoinventory-logo.svg \
 	qlib/ElasticSearchDataProvider/elastic-logo.svg \

@@ -217,6 +217,9 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping sanity tests");
             }
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("no network connection - skipping sanity tests");
+            }
             rethrow;
         }
     }
@@ -262,6 +265,9 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping metadata tests");
             }
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("no network connection - skipping metadata tests");
+            }
             rethrow;
         }
     }
@@ -281,6 +287,9 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("no network connection - skipping child provider tests");
             }
             rethrow;
         }
@@ -510,6 +519,9 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping trigger tests");
             }
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("no network connection - skipping trigger tests");
+            }
             rethrow;
         }
 
@@ -590,6 +602,9 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping negative tests");
+            }
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip("no network connection - skipping negative tests");
             }
             rethrow;
         }

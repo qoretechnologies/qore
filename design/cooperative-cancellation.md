@@ -349,7 +349,7 @@ All modules with existing `qore_check_io_interrupt()` calls need a mechanical re
     cancel_thread(tid, "timeout exceeded");
     @endcode
 
-    @since Qore 2.2
+    @since Qore 2.3
 
     @see thread_cancelled()
     @see clear_thread_cancel()
@@ -357,14 +357,14 @@ All modules with existing `qore_check_io_interrupt()` calls need a mechanical re
 bool cancel_thread(int tid, *string reason);
 
 #! Returns True if cancellation has been requested for the current thread
-/** @since Qore 2.2 */
+/** @since Qore 2.3 */
 bool thread_cancelled();
 
 #! Clears the cancellation flag for the current thread
 /** Call this after catching a THREAD-CANCELLED exception if the thread
     should continue running (e.g., to complete cleanup operations).
 
-    @since Qore 2.2
+    @since Qore 2.3
 */
 nothing clear_thread_cancel();
 ```
@@ -714,7 +714,7 @@ do_io_operation();  # Works normally, no overhead
 ### Phase 5: Documentation
 - Remove `interruptible-io-module-guide.md` and `safe-thread-cancellation.md` (replaced by this document)
 - Update module developer guide
-- Release notes for Qore 2.2
+- Release notes for Qore 2.3
 
 ## Open Questions
 
@@ -730,4 +730,4 @@ do_io_operation();  # Works normally, no overhead
 
 - **Qore 2.0**: Initial implementation of program interrupt infrastructure
 - **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free; modules audited and updated for interruptible I/O and sandboxing
-- **Qore 2.2**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`)
+- **Qore 2.3**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`)

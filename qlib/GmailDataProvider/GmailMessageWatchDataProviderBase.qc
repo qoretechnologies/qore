@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore GmailDataProvider module definition
 
-/** GmailMessageWatchDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** GmailMessageWatchDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -210,10 +210,12 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         while (!stop) {
             pollOnce(\info);
 
-            # wait until next poll
+            # wait until next poll; check stop first to avoid sleeping after a signal was already sent
             lck.lock();
             on_exit lck.unlock();
-            cond.wait(lck, poll_secs * 1000);
+            if (!stop) {
+                cond.wait(lck, poll_secs * 1000);
+            }
         }
     }
 
@@ -249,6 +251,10 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
             res = rest.get(this_uri, NOTHING, \info).body;
             int match;
             foreach hash<auto> minfo in (res.messages) {
+                # check for shutdown between REST calls
+                if (stop) {
+                    break;
+                }
                 # skip messages already processed
                 if (setup.last_msg{minfo.id}) {
                     continue;

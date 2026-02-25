@@ -179,6 +179,18 @@ public enum DataProviderActionType {
     DPAT_PIPELINE_PROCESSOR = 10
 }
 
+#! UI option view modes
+/** Determines the default view for the option in the front end
+
+    @since %DataProvider 3.3
+*/
+public enum UiOptionView {
+    #! Template view
+    Template = "template",
+    #! Expression view
+    Expression = "expression",
+}
+
 #! Maps DPAT_* action type codes to app action flags
 public const ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
@@ -298,6 +310,11 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! Does the value of this option determine the structure of other options?
     bool structural_determinate;
+
+    #! The default view for the option in the front end
+    /** @since DataProvider 3.3
+    */
+    *enum<UiOptionView> default_view;
 }
 
 #! DataProvider path var info

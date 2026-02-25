@@ -122,27 +122,36 @@ int SmartMutex::externWaitImpl(int mtid, QoreCondition *cond, ExceptionSink *xsi
         rc = timeout_ms > 0 ? cond->wait2(&asl_lock, timeout_ms) : cond->wait(&asl_lock);
     }
 
-    // detect signals/broadcasts that were fired while this thread was waiting
-    // (before we erase from the condition map); save result before erasing so we
-    // don't access cond after it's no longer tracked (another thread might delete it)
-    bool signal_fired = (rc == ETIMEDOUT && cond->getSignalGen() != gen);
-
-    // decrement cond count and delete from map if 0
-    if (!--(i->second)) {
-        cmap.erase(i);
+    // check for signals before reacquiring the lock for efficiency
+    if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
+        rc = 0;
     }
 
-    // reacquire the lock
+    // reacquire the lock BEFORE erasing from the cond map, so we can safely
+    // check the signal generation after reacquisition.  During grabImpl, this
+    // thread waits on asl_cond (not the user's condition), so any broadcast on
+    // the user's condition during that window would be lost without this check.
     if (grabImpl(mtid, nvl, xsink)) {
+        // error: clean up cond map before returning
+        if (!--(i->second)) {
+            cmap.erase(i);
+        }
         return -1;
     }
 
     grab_intern(mtid, nvl);
 
-    // if a signal/broadcast was fired during the gap when we weren't listening
-    // (while reacquiring the Qore-level mutex in grabImpl), treat as success
-    if (signal_fired) {
+    // detect signals/broadcasts that were fired at any point during this wait
+    // cycle: during pthread_cond_wait/timedwait, OR during the grabImpl window
+    // when the thread was on asl_cond instead of the user's condition.
+    // The cond is still in the cmap, so it is safe to dereference.
+    if (rc == ETIMEDOUT && cond->getSignalGen() != gen) {
         rc = 0;
+    }
+
+    // now erase from cond map
+    if (!--(i->second)) {
+        cmap.erase(i);
     }
 
     return rc;

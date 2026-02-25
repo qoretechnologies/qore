@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingWatchSensorDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingWatchSensorDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -189,7 +189,9 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
 
             m.lock();
             on_exit m.unlock();
-            cond.wait(m, poll_interval_ms);
+            if (!stop_flag) {
+                cond.wait(m, poll_interval_ms);
+            }
         }
     }
 

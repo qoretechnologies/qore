@@ -35,7 +35,7 @@ const GeneratorTypeMap = {
 };
 
 #! Default field definitions used when no custom schema is provided
-const DefaultFields = (
+public const DefaultFields = (
     {"name": "id", "type": GeneratorFieldType::Int, "desc": "Record identifier"},
     {"name": "name", "type": GeneratorFieldType::String, "desc": "Record name"},
     {"name": "value", "type": GeneratorFieldType::Float, "desc": "Numeric value"},

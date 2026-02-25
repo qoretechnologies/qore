@@ -326,8 +326,39 @@ public:
         }
     }
 
+    DLLLOCAL static const QoreTypeInfo* inferBaseType(qore_type_t vt) {
+        switch (vt) {
+            case NT_INT:
+                return bigIntTypeInfo;
+            case NT_STRING:
+                return stringTypeInfo;
+            case NT_FLOAT:
+                return floatTypeInfo;
+            case NT_NUMBER:
+                return numberTypeInfo;
+            default:
+                return nullptr;
+        }
+    }
+
     DLLLOCAL void init(const QoreTypeInfo* bt, EnumMemberList* m) {
         checkName();
+
+        // If no explicit base type, infer from the first member value
+        if (!bt && m && !m->members.empty()) {
+            for (auto& member : m->members) {
+                if (member->has_value) {
+                    bt = inferBaseType(member->value.getType());
+                    break;
+                }
+            }
+            if (!bt) {
+                bt = bigIntTypeInfo;
+            }
+        } else if (!bt) {
+            bt = bigIntTypeInfo;
+        }
+
         // Validate base type - only simple immutable value types are allowed
         if (bt != bigIntTypeInfo &&
             bt != stringTypeInfo &&
@@ -347,6 +378,13 @@ public:
         if (m) {
             for (auto& member : m->members) {
                 if (member->has_value) {
+                    // Validate that member value type matches enum base type
+                    const QoreTypeInfo* memberType = inferBaseType(member->value.getType());
+                    if (memberType && memberType != bt) {
+                        parse_error(*loc, "enum member '%s' value type '%s' does not match enum base "
+                            "type '%s'", member->name,
+                            QoreTypeInfo::getName(memberType), QoreTypeInfo::getName(bt));
+                    }
                     // Transfer ownership of the value to parseAddMember
                     QoreValue val = member->value;
                     member->value = QoreValue();  // Clear without discarding - we're transferring ownership
@@ -1314,12 +1352,20 @@ public:
                     }
                     buf.concat(p, e - p + 1);
                     //printd(5, "ST: '%s' (str: '%s') p: %p '%s'\n", buf.c_str(), str, p, p);
-                    // Check if next character is '(' - if so, continue accumulating for callable type syntax
-                    // e.g., hash<string, int>(list<string>) should be a single subtype
-                    if (*(e + 1) == '(') {
-                        // Don't push yet - continue accumulating
-                        p = e;
-                        break;
+                    // Check if next non-whitespace character is '(' - if so, continue accumulating
+                    // for callable type syntax
+                    // e.g., hash<string, int>(list<string>) or hash<string, int> (string) should
+                    // be a single subtype
+                    {
+                        const char* next = e + 1;
+                        while (*next == ' ' || *next == '\t') {
+                            ++next;
+                        }
+                        if (*next == '(') {
+                            // Don't push yet - continue accumulating
+                            p = e;
+                            break;
+                        }
                     }
                     subtypes.push_back(getParseType(loc, buf.giveBuffer(), or_nothing));
                     buf.reset();
@@ -2951,7 +2997,7 @@ enum_def:
     nsc_modifiers TOK_ENUM IDENTIFIER '{' enum_members '}' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        $$ = new EnumDef(loc, $3, bigIntTypeInfo, $5);
+        $$ = new EnumDef(loc, $3, nullptr, $5);
         if ($$->enumdecl) {
             check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
         }
@@ -2968,7 +3014,7 @@ enum_def:
     | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        $$ = new EnumDef(loc, $3, bigIntTypeInfo, $5);
+        $$ = new EnumDef(loc, $3, nullptr, $5);
         if ($$->enumdecl) {
             check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
         }

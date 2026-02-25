@@ -78,6 +78,7 @@ public class DataProvider {
             "awsrestclient": "AwsRestClientDataProvider",
 
             "bcrest": "CdsRestDataProvider",
+            "bigcommerce": "BigCommerceDataProvider",
 
             "bigml": "BigMLDataProvider",
 
