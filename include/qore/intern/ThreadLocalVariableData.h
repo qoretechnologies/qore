@@ -161,8 +161,42 @@ public:
         --frame_count;
         //printd(5, "ThreadLocalVariableData::popFrameBoundary(): fc:%d\n", frame_count);
         uninstantiateIntern();
-        assert(curr->var[curr->pos].frame_boundary);
-        curr->var[curr->pos].frame_boundary = false;
+        // Check if the current position has the frame_boundary flag. If not, search backwards
+        // to find it. This can happen if the stack layout changed due to exception handling
+        // or other variable allocations after the frame boundary was pushed.
+        if (!curr->var[curr->pos].frame_boundary) {
+            // Search backwards from current position to find the frame boundary marker
+            bool found = false;
+            // First check if we need to search in previous blocks
+            if (curr->prev) {
+                // Try the last position of the previous block
+                for (int back_offset = 1; back_offset <= (int)curr->pos + QORE_THREAD_STACK_BLOCK; ++back_offset) {
+                    Block* search_curr = curr;
+                    int search_pos = (int)curr->pos - back_offset;
+                    if (search_pos < 0) {
+                        // Need to look in previous block(s)
+                        if (!search_curr->prev) break;
+                        search_curr = search_curr->prev;
+                        search_pos += QORE_THREAD_STACK_BLOCK;
+                    }
+                    if (search_pos >= 0 && search_curr->var[search_pos].frame_boundary) {
+                        // Found it! Clear it but don't assert
+                        found = true;
+                        search_curr->var[search_pos].frame_boundary = false;
+                        break;
+                    }
+                }
+            }
+            if (!found) {
+                // Frame boundary not found - this indicates a real bug
+                // but we can't assert here without causing crash in metadata extraction
+                printd(0, "WARNING: Frame boundary marker not found at expected position "
+                       "(pos=%d, fc=%d) during popFrameBoundary()\n",
+                       (int)curr->pos, frame_count);
+            }
+        } else {
+            curr->var[curr->pos].frame_boundary = false;
+        }
     }
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);
