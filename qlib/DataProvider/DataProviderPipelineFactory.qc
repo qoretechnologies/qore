@@ -70,6 +70,12 @@ public class DataProviderPipelineFactory {
         #! Hash of queues keyed by queue ID
         hash<string, hash<PipelineQueueInfo>> pmap;
 
+        #! Optional custom element IDs: queue_id (string) → list of *string IDs, parallel to pmap elems processors
+        hash<string, list<*string>> custom_ids;
+
+        #! Element types parallel to custom_ids: queue_id (string) → list of element type strings
+        hash<string, list<string>> element_types;
+
         #! Bulk flag
         bool do_bulk = True;
     }
@@ -107,16 +113,27 @@ public class DataProviderPipelineFactory {
     }
 
     #! Appends a data processor to the default pipeline
-    /**
+    /** @param processor the data processor to append
+        @param custom_id optional custom element ID to use in pipeline metrics instead of the
+               auto-generated "queue_id:element_index" format; when set the element appears in
+               metrics under this ID (e.g. an FSM state key such as "processor1")
+        @param element_type element type for metrics; use "mapper" to exclude the element from
+               metrics output (default: "processor")
+
         @note The initial queue is queue 0
     */
-    append(AbstractDataProcessor processor) {
-        append(0, processor);
+    append(AbstractDataProcessor processor, *string custom_id, string element_type = "processor") {
+        append(0, processor, custom_id, element_type);
     }
 
     #! Appends a data processor to a pipeline
     /** @param id the queue ID as returned from appendQueue()
         @param processor the data processor to append to the pipeline
+        @param custom_id optional custom element ID to use in pipeline metrics instead of the
+               auto-generated "queue_id:element_index" format; when set the element appears in
+               metrics under this ID (e.g. an FSM state key such as "processor1")
+        @param element_type element type for metrics; use "mapper" to exclude the element from
+               metrics output (default: "processor")
 
         @throws PIPELINE-ERROR invalid queue ID or the queue already terminates in additional queues
 
@@ -124,7 +141,7 @@ public class DataProviderPipelineFactory {
 
         @see appendQueue()
     */
-    append(int id, AbstractDataProcessor processor) {
+    append(int id, AbstractDataProcessor processor, *string custom_id, string element_type = "processor") {
         checkUpdateQueue(id);
 
         if (pmap{id}.elems.last() instanceof hash<PipelineQueueInfo>) {
@@ -133,6 +150,8 @@ public class DataProviderPipelineFactory {
         }
 
         pmap{id}.elems += processor;
+        custom_ids{id} += custom_id;
+        element_types{id} += element_type;
 
         if (do_bulk && !processor.supportsBulkApi()) {
             do_bulk = False;
@@ -185,9 +204,14 @@ public class DataProviderPipelineFactory {
         append()), not the copy stored in the parent's pipeline_list.
     */
     private processQueue(DataProviderPipeline pipe, int id, hash<PipelineQueueInfo> queue) {
+        # Track processor index separately from the elems index (elems may also contain queue lists)
+        int proc_idx = 0;
         foreach auto elem in (queue.elems) {
             if (elem instanceof AbstractDataProcessor) {
-                pipe.append(id, elem);
+                *string custom_id = custom_ids{id}[proc_idx];
+                string element_type = element_types{id}[proc_idx] ?? "processor";
+                pipe.append(id, elem, custom_id, element_type);
+                ++proc_idx;
             } else {
                 foreach hash<PipelineQueueInfo> new_queue in (elem) {
                     int queue_id = pipe.appendQueue(id);

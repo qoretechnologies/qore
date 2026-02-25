@@ -76,6 +76,8 @@ public class ConnectionSchemeCache {
         const SchemeMap = {
             "awsrests": "AwsRestClient",
 
+            "bigcommerceres": "BigCommerceRestClient",
+
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
 
@@ -344,6 +346,34 @@ public class ConnectionSchemeCache {
         if (load_all) {
             return cache;
         }
+
+        # Take a snapshot of what needs loading while holding the lock, then release the lock
+        # before calling load_module() to avoid an ABBA deadlock with registerScheme().
+        # See getSchemeImpl() for a detailed explanation of the lock ordering issue.
+        *list<code> init_list;
+        {
+            bool needs_lock = !lck.lockOwner();
+            if (needs_lock) {
+                lck.lock();
+            }
+            on_exit if (needs_lock) {
+                lck.unlock();
+            }
+            # check again in the lock
+            if (load_all) {
+                return cache;
+            }
+            # snapshot and clear pending init closures atomically under the lock
+            init_list = initmap.values();
+            initmap = {};
+        }
+
+        # Load all pending modules without holding the lock.
+        # getSchemeImpl() acquires lck itself (needs_lock = True) when the caller does not hold it.
+        # The init closures also register via registerScheme() which acquires lck.
+        map $1(), init_list;
+        map ConnectionSchemeCache::getSchemeImpl($1, False), keys SchemeMap;
+
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -351,13 +381,7 @@ public class ConnectionSchemeCache {
         on_exit if (needs_lock) {
             lck.unlock();
         }
-        # check again in the lock
-        if (needs_lock && load_all) {
-            return cache;
-        }
-        # load all pending schemes
-        map $1(), initmap.iterator();
-        map ConnectionSchemeCache::getSchemeImpl($1, False), keys SchemeMap, !cache{$1};
+        load_all = True;
         return cache;
     }
 
@@ -433,11 +457,27 @@ public class ConnectionSchemeCache {
         if (rv) {
             return rv;
         }
-        if (ProviderIndexUtil::checkSchemeModule(scheme) && (rv = cache{scheme})) {
-            return rv;
+
+        # Release the lock before calling load_module() to avoid an ABBA deadlock:
+        #   Thread A: holds module_lock (loading a module whose init calls registerScheme())
+        #             → waiting for lck (in registerScheme())
+        #   Thread B: holds lck (here in getSchemeImpl())
+        #             → waiting for module_lock (in checkSchemeModule()/tryLoadModule())
+        # By releasing lck before calling load_module(), Thread B no longer holds lck
+        # while waiting for the module lock, breaking the cycle.
+        # SchemeMap is a const — safe to read without the lock.
+        *string mod = SchemeMap{scheme};
+        if (needs_lock) {
+            lck.unlock();
         }
-        if ((*string mod = SchemeMap{scheme}) && ConnectionSchemeCache::tryLoadModule(mod, throw_exception)
-            && (rv = cache{scheme})) {
+        bool loaded = ProviderIndexUtil::checkSchemeModule(scheme);
+        if (!loaded && mod) {
+            loaded = ConnectionSchemeCache::tryLoadModule(mod, throw_exception);
+        }
+        if (needs_lock) {
+            lck.lock();
+        }
+        if (loaded && (rv = cache{scheme})) {
             return rv;
         }
         if (scheme_loader && (rv = cache{scheme} = scheme_loader(scheme))) {

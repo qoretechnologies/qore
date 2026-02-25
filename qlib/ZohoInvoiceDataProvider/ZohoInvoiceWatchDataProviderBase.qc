@@ -111,8 +111,9 @@ public class ZohoInvoiceWatchDataProviderBase inherits ZohoInvoiceDataProviderBa
         on_exit lck.unlock();
         stop = True;
         cond.broadcast();
-        if (io_tid) {
-            cond.wait(lck, 30s);
+        # Wait for the polling thread to exit; no timeout needed since pollThread always broadcasts on exit
+        while (io_tid) {
+            cond.wait(lck);
         }
     }
 
@@ -157,6 +158,10 @@ public class ZohoInvoiceWatchDataProviderBase inherits ZohoInvoiceDataProviderBa
             date new_last_check = last_check;
 
             foreach hash<auto> record in (records) {
+                # check for shutdown between iterations
+                if (stop) {
+                    break;
+                }
                 string id = string(record{getIdField()});
 
                 # Skip if already seen

@@ -111,9 +111,9 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
         on_exit lck.unlock();
         stop = True;
         cond.broadcast();
-        # Wait in a loop until the polling thread exits
+        # Wait for the polling thread to exit; no timeout needed since pollThread always broadcasts on exit
         while (io_tid) {
-            cond.wait(lck, 5s);
+            cond.wait(lck);
         }
     }
 
@@ -165,6 +165,10 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
             date new_last_check = last_check;
 
             foreach hash<auto> record in (records) {
+                # check for shutdown between iterations
+                if (stop) {
+                    break;
+                }
                 string id = getRecordId(record);
 
                 # Skip if already seen

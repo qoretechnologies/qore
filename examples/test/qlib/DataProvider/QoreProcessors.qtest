@@ -632,7 +632,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(True, dynamic_opts.hasKey("where_cond"));
         assertEq(True, dynamic_opts.where_cond.supports_expressions);
         assertEq(False, dynamic_opts.where_cond.supports_custom_values);
-        assertEq(False, dynamic_opts.where_cond.server_expression_handling);
+        assertEq(True, dynamic_opts.where_cond.server_expression_handling);
         assertEq(True, dynamic_opts.where_cond.preselected);
         assertEq("constructor", dynamic_opts.where_cond.loc);
 
