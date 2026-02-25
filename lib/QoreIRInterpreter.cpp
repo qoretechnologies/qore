@@ -3160,6 +3160,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 }
                 assignLocalVarValue(local_inst->local, val, xsink);
+
+                // For weak assignments, cache the weak-wrapped value so LoadLocal
+                // returns the WeakReferenceNode instead of calling eval() which unwraps it
+                if (local_inst->weak && val.getType() >= NT_WEAKREF && val.getType() <= NT_WEAKREF_LIST) {
+                    storeValue(locals, local_inst->local, val.hasNode() ? val.refSelf() : val, nullptr);
+                }
+
                 // If the variable holds a reference, assignLocalVarValue wrote through
                 // the reference to another variable.  Clear the locals cache to prevent
                 // stale reads from that target variable.
