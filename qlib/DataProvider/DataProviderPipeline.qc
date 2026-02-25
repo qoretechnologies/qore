@@ -1495,7 +1495,7 @@ public class PipelineMetricsCollector {
         float delta_secs = interval_ms / 1000.0;
         float delta_throughput = (delta_secs > 0.0) ? (delta_completed / delta_secs) : 0.0;
 
-        hash<string, hash<PipelineElementDelta>> delta_elements;
+        hash<string, hash<PipelineElementDelta>> delta_elements();
         foreach string k in (keys element_metrics) {
             hash<PipelineElementMetrics> em = element_metrics{k};
             if (em.element_type == "queue" || em.element_type == "mapper") {
@@ -1508,6 +1508,11 @@ public class PipelineMetricsCollector {
             int d_qw  = em.queue_wait_time_us - (prev_em.queue_wait_time_us ?? 0);
             int d_ec  = em.error_count        - (prev_em.error_count        ?? 0);
             int d_qfc = em.queue_full_count   - (prev_em.queue_full_count   ?? 0);
+            # Skip elements with no activity in this interval to avoid zero-value noise
+            # in fan-out pipelines where queue workers trigger interleaved snapshots
+            if (d_rp == 0 && d_ro == 0 && d_ec == 0 && d_qfc == 0) {
+                continue;
+            }
             string out_key = element_id_alias{k} ?? k;
             delta_elements{out_key} = <PipelineElementDelta>{
                 "element_id"            : out_key,
