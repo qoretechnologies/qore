@@ -35,6 +35,8 @@ public class ZohoInventoryShipmentOrdersDataProvider inherits ZohoInventoryDataP
             "type": "ZohoInventoryShipmentOrdersDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -72,8 +74,8 @@ public class ZohoInventoryShipmentOrdersDataProvider inherits ZohoInventoryDataP
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventoryShipmentOrderDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventoryShipmentOrderDataType().getFields();
     }
 
     #! Searches for shipment orders

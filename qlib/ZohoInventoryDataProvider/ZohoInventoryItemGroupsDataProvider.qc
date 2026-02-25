@@ -35,6 +35,8 @@ public class ZohoInventoryItemGroupsDataProvider inherits ZohoInventoryDataProvi
             "type": "ZohoInventoryItemGroupsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -66,8 +68,8 @@ public class ZohoInventoryItemGroupsDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventoryItemGroupDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventoryItemGroupDataType().getFields();
     }
 
     #! Searches for item groups

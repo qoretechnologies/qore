@@ -67,6 +67,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] `ProviderInfo` includes `"search_options": SearchOptions`
 - [ ] `searchRecordsImpl()` handles all `SearchOptions`
 - [ ] DPAT_FIND_SINGLE points to collection provider (e.g., `/items`, not `/items/get`)
+- [ ] **`getRecordTypeImpl()` returns `*hash<string, AbstractDataField>`** — call `.getFields()` on the data type instance; returning the type object directly (`new XxxDataType()`) causes `RUNTIME-TYPE-ERROR` when the action catalog acquires the type description. See [pitfall #15](#15-wrong-getrecordtypeimpl-return-type).
 
 ### Field Ordering in Request Types
 - [ ] Fields with `required_groups` are declared first in the `Fields` constant

@@ -35,6 +35,8 @@ public class ZohoInventoryPurchaseOrdersDataProvider inherits ZohoInventoryDataP
             "type": "ZohoInventoryPurchaseOrdersDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
+            "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
 
@@ -94,8 +96,8 @@ public class ZohoInventoryPurchaseOrdersDataProvider inherits ZohoInventoryDataP
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new ZohoInventoryPurchaseOrderDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new ZohoInventoryPurchaseOrderDataType().getFields();
     }
 
     #! Searches for purchase orders
