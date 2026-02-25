@@ -30,7 +30,9 @@
 */
 
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/qore_thread_intern.h"
 
+#include <cstdio>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
@@ -49,6 +51,17 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreIRInterpreter.h"
+
+// Thread-local flag to detect when JIT cleared the stack location for exception safety
+thread_local bool jit_cleared_stack_location = false;
+
+DLLLOCAL void set_jit_cleared_stack_flag(bool cleared) {
+    jit_cleared_stack_location = cleared;
+}
+
+DLLLOCAL bool is_jit_cleared_stack() {
+    return jit_cleared_stack_location;
+}
 
 // Tiered compilation threshold defaults (overridable via QORE_IR_THRESHOLD / QORE_JIT_THRESHOLD env vars)
 uint64_t QoreJIT::ir_threshold = []() -> uint64_t {
@@ -730,8 +743,21 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
     if (compileFunction(func, error)) {
         JitFunctionPtr fn = lookupFunction(func.name);
         if (fn) {
+            // Isolate from outer AST stack location chain to prevent dangling-pointer crashes
+            // when exceptions are thrown in JIT code. Clearing the stack location prevents
+            // QoreExceptionBase::QoreExceptionBase() from accessing invalid pointers during unwinding.
+            const QoreStackLocation* saved = get_runtime_stack_location();
+            // Mark that JIT cleared the stack so exception handler can skip unsafe call stack building
+            set_jit_cleared_stack_flag(true);
+            update_runtime_stack_location(nullptr);
+
             // Execute the JIT-compiled function
             uint64_t result_bits = fn(xsink);
+
+            // Restore the stack location and clear the flag
+            set_jit_cleared_stack_flag(false);
+            update_runtime_stack_location(saved);
+
             // Reconstruct QoreValue from NaN-boxed bits
             QoreValue result;
             std::memcpy(&result, &result_bits, sizeof(result));

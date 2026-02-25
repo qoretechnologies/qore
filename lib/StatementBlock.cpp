@@ -46,6 +46,10 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 
+// Declare JIT stack location flag functions from QoreJIT.cpp
+extern void set_jit_cleared_stack_flag(bool cleared);
+extern bool is_jit_cleared_stack();
+
 #include <atomic>
 #include <cassert>
 #include <cstdio>
@@ -939,12 +943,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // guard failure because re-executing the entire block from the
                     // beginning would duplicate side effects (I/O, mutations).
                     const QoreStackLocation* saved = get_runtime_stack_location();
-                    if (saved) update_runtime_stack_location(nullptr);
+                    // Always clear stack location for IR execution to prevent dangling pointers
+                    // when builtins throw exceptions (same as JIT fix)
+                    set_jit_cleared_stack_flag(true);
+                    update_runtime_stack_location(nullptr);
 
                     ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
                         nullptr, nullptr, &pre_instantiated, nullptr, nullptr, nullptr, true);
 
-                    if (saved) update_runtime_stack_location(saved);
+                    // Restore stack location and clear flag
+                    set_jit_cleared_stack_flag(false);
+                    update_runtime_stack_location(saved);
                 }
 
                 // Uninstantiate nested locals after JIT execution (reverse order)

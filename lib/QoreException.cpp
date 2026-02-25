@@ -33,9 +33,13 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreThreadList.h"
 
+// Declare JIT stack flag from QoreJIT.cpp
+extern bool is_jit_cleared_stack();
+
 #include <qore/safe_dslist>
 
 #include <cassert>
+#include <cstdio>
 
 //! add an element to the end of the stack trace
 void QoreCallStack::add(qore_call_t type, const char* label, int start, int end, const char* code,
@@ -52,7 +56,15 @@ void QoreCallStack::add(qore_call_t type, const char* label, int start, int end,
 
 QoreExceptionBase::QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg, qore_call_t n_type)
         : type(n_type), err(n_err), desc(n_desc), arg(n_arg) {
-    // populate call stack
+    // Skip call stack building if JIT execution cleared the stack location.
+    // When JIT clears the stack to prevent dangling pointers, builtin functions
+    // may create their own stack location objects that become invalid during exception
+    // unwinding. Skipping the call stack avoids crashes in getCallStackHash().
+    if (is_jit_cleared_stack()) {
+        return;
+    }
+
+    // populate call stack normally
     const QoreStackLocation* w = get_runtime_stack_location();
     while (w) {
         callStack->push(QoreThreadList::getCallStackHash(*w), nullptr);
