@@ -4909,6 +4909,26 @@ int QoreSocket::getRecvTimeout() const {
     return priv->getRecvTimeout();
 }
 
+void QoreSocket::setMaxChunkedBodySize(int64 size) {
+    priv->max_chunked_body_size = size;
+}
+
+int64 QoreSocket::getMaxChunkedBodySize() const {
+    return priv->max_chunked_body_size;
+}
+
+void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
+    priv->max_http2_body_size = size;
+    AutoLocker al(priv->h2_session_lock);
+    if (priv->h2_session) {
+        priv->h2_session->setMaxRequestBodySize(size);
+    }
+}
+
+int64 QoreSocket::getHttp2MaxRequestBodySize() const {
+    return priv->max_http2_body_size;
+}
+
 void QoreSocket::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
     priv->setEventQueue(xsink, q, arg, with_data);
 }
@@ -5905,6 +5925,8 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
     if (sock->priv->socket->priv->h2_session) {
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
+        // Update max body size limit in case it changed since session was created
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
         reused_session = true;
     } else {
         // Initialize new HTTP/2 session and store it on the socket
@@ -5936,6 +5958,10 @@ int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     }
     // Apply socket-level HTTP/2 settings before the connection preface is sent
     h2_session->setEnableConnectProtocol(sock->priv->socket->priv->h2_enable_connect_protocol);
+    // Propagate max request body size limit to the HTTP/2 session
+    if (sock->priv->socket->priv->max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+    }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
     return 0;
@@ -6789,6 +6815,8 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
     if (sock->priv->socket->priv->h2_session) {
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
+        // Update max body size limit in case it changed since session was created
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
         reused_session = true;
     } else {
         // Initialize new HTTP/2 client session and store it on the socket
@@ -6873,6 +6901,10 @@ int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
     h2_session = Http2Session::createClient(sock->priv->socket->priv, xsink, scheme);
     if (!h2_session) {
         return -1;
+    }
+    // Propagate max request body size limit to the HTTP/2 session
+    if (sock->priv->socket->priv->max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
     }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;

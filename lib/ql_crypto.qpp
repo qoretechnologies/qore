@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,7 @@
 #include <openssl/rand.h>
 
 #ifdef OPENSSL_3_PLUS
+#include <openssl/kdf.h>
 #include <map>
 #include <string>
 
@@ -3648,6 +3649,128 @@ bool has_digest(string digest) [flags=RET_VALUE_ONLY] {
     }
 
     return q_lookup_digest(temp->c_str()) ? true : false;
+}
+
+//! Returns the derived key from PBKDF2 (Password-Based Key Derivation Function 2)
+/** @par Example:
+    @code{.py}
+binary salt = get_random_bytes(32);
+binary key = pbkdf2("sha256", "my password", salt, 600000, 32);
+    @endcode
+
+    @param digest the digest algorithm to use (e.g. \c "sha256", \c "sha512"); see @ref DigestMap for supported
+    digest algorithms
+    @param password the password or passphrase to derive from
+    @param salt the cryptographic salt (use @ref get_random_bytes() to generate; recommended minimum 16 bytes)
+    @param iterations the number of iterations (recommended minimum: 600,000 for SHA-256 per OWASP 2024 guidelines)
+    @param key_len the desired output key length in bytes (e.g. 32 for a 256-bit key)
+
+    @return the derived key as binary data of the requested length
+
+    @throw PBKDF2-ERROR invalid arguments (iterations or key_len <= 0) or error deriving key
+    @throw DIGEST-ERROR unknown or unsupported digest algorithm
+    @throw ENCODING-CONVERSION-ERROR this error is thrown if the digest string cannot be converted to the
+    @ref default_encoding "default character encoding"
+
+    @note If %Qore is compiled with OpenSSL 3+, it uses the EVP_KDF API; otherwise it uses PKCS5_PBKDF2_HMAC()
+
+    @see
+    - @ref hmac()
+    - @ref get_random_bytes()
+    - @ref DigestMap
+
+    @since %Qore 2.3
+*/
+binary pbkdf2(string digest, data password, data salt, int iterations, int key_len) [flags=RET_VALUE_ONLY] {
+    if (iterations <= 0) {
+        xsink->raiseException("PBKDF2-ERROR", "iterations must be > 0; got " QLLD, iterations);
+        return QoreValue();
+    }
+    if (iterations > INT_MAX) {
+        xsink->raiseException("PBKDF2-ERROR", "iterations value " QLLD " exceeds maximum %d", iterations, INT_MAX);
+        return QoreValue();
+    }
+    if (key_len <= 0) {
+        xsink->raiseException("PBKDF2-ERROR", "key_len must be > 0; got " QLLD, key_len);
+        return QoreValue();
+    }
+    if (key_len > INT_MAX) {
+        xsink->raiseException("PBKDF2-ERROR", "key_len value " QLLD " exceeds maximum %d", key_len, INT_MAX);
+        return QoreValue();
+    }
+
+    // convert digest to default encoding
+    TempEncodingHelper temp(digest, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // get password data
+    const char* pass_ptr;
+    size_t pass_len;
+    q_get_data(password, pass_ptr, pass_len);
+
+    // get salt data
+    const char* salt_ptr;
+    size_t salt_len;
+    q_get_data(salt, salt_ptr, salt_len);
+
+    // allocate output buffer
+    SimpleRefHolder<BinaryNode> rv(new BinaryNode);
+    rv->preallocate(key_len);
+
+#ifdef OPENSSL_3_PLUS
+    EVP_KDF* kdf = EVP_KDF_fetch(nullptr, "PBKDF2", nullptr);
+    if (!kdf) {
+        xsink->raiseException("PBKDF2-ERROR", "error fetching PBKDF2 KDF implementation");
+        return QoreValue();
+    }
+    ON_BLOCK_EXIT(EVP_KDF_free, kdf);
+
+    EVP_KDF_CTX* ctx = EVP_KDF_CTX_new(kdf);
+    if (!ctx) {
+        xsink->raiseException("PBKDF2-ERROR", "error creating PBKDF2 KDF context");
+        return QoreValue();
+    }
+    ON_BLOCK_EXIT(EVP_KDF_CTX_free, ctx);
+
+    OSSL_PARAM params[5];
+    params[0] = OSSL_PARAM_construct_utf8_string("digest", (char*)temp->c_str(), 0);
+    params[1] = OSSL_PARAM_construct_octet_string("pass", (void*)pass_ptr, pass_len);
+    params[2] = OSSL_PARAM_construct_octet_string("salt", (void*)salt_ptr, salt_len);
+    unsigned int iter_val = (unsigned int)iterations;
+    params[3] = OSSL_PARAM_construct_uint("iter", &iter_val);
+    params[4] = OSSL_PARAM_construct_end();
+
+    if (EVP_KDF_derive(ctx, (unsigned char*)rv->getPtr(), key_len, params) <= 0) {
+        unsigned long err = ERR_get_error();
+        char buf[121];
+        ERR_error_string(err, buf);
+        xsink->raiseException("PBKDF2-ERROR", "error deriving PBKDF2 key with digest '%s': %s",
+            temp->c_str(), buf);
+        return QoreValue();
+    }
+#else
+    const EVP_MD* md = q_lookup_digest(temp->c_str());
+    if (!md) {
+        xsink->raiseException("DIGEST-ERROR", "unknown digest '%s'; check DigestMap for supported digests",
+            temp->c_str());
+        return QoreValue();
+    }
+
+    int rc = PKCS5_PBKDF2_HMAC(pass_ptr, (int)pass_len, (const unsigned char*)salt_ptr, (int)salt_len,
+        (int)iterations, md, (int)key_len, (unsigned char*)rv->getPtr());
+    if (rc != 1) {
+        unsigned long err = ERR_get_error();
+        char buf[121];
+        ERR_error_string(err, buf);
+        xsink->raiseException("PBKDF2-ERROR", "error deriving PBKDF2 key with digest '%s': %s",
+            temp->c_str(), buf);
+        return QoreValue();
+    }
+#endif
+
+    return rv.release();
 }
 
 //! returns a binary value of random bytes using openssl

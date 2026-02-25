@@ -2119,7 +2119,6 @@ public class DataProviderTest inherits QUnit::Test {
                 "snapshot_time": now(),
                 "total_records_submitted": 1000,
                 "total_records_completed": 950,
-                "records_in_flight": 50,
                 "throughput_rps": 14500.5,
                 "avg_latency_us": 250.0,
                 "element_metrics": {},
@@ -2132,7 +2131,6 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("test-pipeline", ms.pipeline_name);
             assertEq(PS_RUNNING, ms.status);
             assertEq(1000, ms.total_records_submitted);
-            assertEq(50, ms.records_in_flight);
             assertEq(123, ms.user_context.test_key);
         }
 
@@ -2187,7 +2185,6 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("getmetrics-test-pipeline", metrics.pipeline_name);
             assertEq(10, metrics.total_records_submitted);
             assertEq(10, metrics.total_records_completed);
-            assertEq(0, metrics.records_in_flight);
         }
 
         # Test metrics with user context
@@ -2287,7 +2284,6 @@ public class DataProviderTest inherits QUnit::Test {
             assertTrue(exists metrics);
             assertEq(0, metrics.total_records_submitted);
             assertEq(0, metrics.total_records_completed);
-            assertEq(0, metrics.records_in_flight);
         }
 
         # Test that reportMetrics() exceptions don't crash the pipeline

@@ -1086,6 +1086,26 @@ int64 QoreSocketObject::getConnectionId() const {
     return priv->socket->getConnectionId();
 }
 
+void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
+    AutoLocker al(priv->m);
+    priv->socket->setMaxChunkedBodySize(size);
+}
+
+int64 QoreSocketObject::getMaxChunkedBodySize() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getMaxChunkedBodySize();
+}
+
+void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {
+    AutoLocker al(priv->m);
+    priv->socket->setHttp2MaxRequestBodySize(size);
+}
+
+int64 QoreSocketObject::getHttp2MaxRequestBodySize() const {
+    AutoLocker al(priv->m);
+    return priv->socket->getHttp2MaxRequestBodySize();
+}
+
 int QoreSocketObject::setNonBlock(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     return priv->setNonBlock(xsink);

@@ -53,11 +53,19 @@ public const DPO_DisableOnDemandInitialization  = (1 << 1);
 */
 public const DPO_EnableOnDemandActions          = (1 << 2);
 
+#! Enable in-process servers
+/** If this is set (and \c DPO_EnableServers is NOT set), then in-process JavaScript program pools will be used for
+    data provider functionality instead of external server processes; this eliminates IPC overhead while supporting
+    concurrent access through multiple in-process program instances
+*/
+public const DPO_EnableInProcessServers         = (1 << 3);
+
 #! The mask of all data provider options
 public const DPO_AllOptions = (
     DPO_EnableServers
     | DPO_DisableOnDemandInitialization
     | DPO_EnableOnDemandActions
+    | DPO_EnableInProcessServers
 );
 #/@}
 
@@ -70,6 +78,7 @@ public class DataProvider {
             "awsrestclient": "AwsRestClientDataProvider",
 
             "bcrest": "CdsRestDataProvider",
+            "bigcommerce": "BigCommerceDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",

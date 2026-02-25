@@ -27,7 +27,7 @@ public namespace DataProvider {
 #! Abstract interface for pipeline metrics collectors
 /** Implementations own the async/export behavior; the pipeline calls reportMetrics() synchronously.
 
-    @since DataProvider 3.1
+    @since DataProvider 3.3
 */
 public class AbstractPipelineMetricsCollector {
     #! Returns the minimum time interval in milliseconds between metrics reports
@@ -51,5 +51,20 @@ public class AbstractPipelineMetricsCollector {
     /** Implementations should flush any pending metrics and release resources
     */
     abstract shutdown();
+
+    #! Called when the pipeline is reset for reuse
+    /** Implementations should re-initialize any resources closed during shutdown()
+        and clear any internal state accumulated during the previous run.
+
+        @warning If your implementation acquires resources in the constructor or holds
+        state that is released in shutdown(), you must override this method to
+        re-acquire those resources; otherwise the collector will not function correctly
+        on subsequent pipeline runs.
+
+        The default implementation does nothing.
+    */
+    reset() {
+        # default: nothing to do
+    }
 }
 }

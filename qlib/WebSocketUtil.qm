@@ -333,7 +333,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
         @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
     */
-    public hash<WsMsgInfo> sub ws_read_message(Socket sock, *timeout to) {
+    public hash<WsMsgInfo> sub ws_read_message(Socket sock, *timeout to, *int max_frame_size) {
         int b0 = sock.recvu1(to);
 
         # get opcode
@@ -351,20 +351,29 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         b1 &= 0x7f;
 
         int data_len;
-        if (b1 < 126)
+        if (b1 < 126) {
             data_len = b1;
-        else if (b1 == 126)
+        } else if (b1 == 126) {
             data_len = sock.recvu2(to);
-        else
+        } else {
             data_len = sock.recvi8(to);
+        }
+
+        # Check frame size against limit before reading payload
+        if (max_frame_size > 0 && data_len > max_frame_size) {
+            throw "WEBSOCKET-FRAME-TOO-LARGE", sprintf("WebSocket frame size %d exceeds maximum %d",
+                data_len, max_frame_size);
+        }
 
         *binary mask;
-        if (masked)
+        if (masked) {
             mask = sock.recvBinary(4, to);
+        }
 
         *data data;
-        if (data_len)
+        if (data_len) {
             data = sock.recvBinary(data_len, to);
+        }
 
         # unmask data if necessary
         if (mask) {

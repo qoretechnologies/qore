@@ -1630,9 +1630,10 @@ qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_matc
                     // Check if the base type matches (for compatibility with underlying type)
                     qore_type_t bt = QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
                     if (t.u.t == bt) {
-                        // Base type matches - this is ambiguous at best, but we want strict matching
-                        // so return NOT_EQUAL to force cast
-                        return QTI_NOT_EQUAL;
+                        // Base type matches - enum values have the base type at runtime,
+                        // so accept as ambiguous for parse-time compatibility
+                        max_result = QTI_IDENT;
+                        return QTI_AMBIGUOUS;
                     }
                     if (t.u.t == NT_ALL) {
                         may_not_match = true;
