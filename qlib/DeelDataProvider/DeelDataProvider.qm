@@ -1,0 +1,1686 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore DeelDataProvider module definition
+
+/*  DeelDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) DeelRestClient
+
+module DeelDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Deel global workforce management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new DeelDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DeelDataProvider::AppName,
+            "display_name": "Deel",
+            "short_desc": "Deel global workforce management platform",
+            "desc": "Deel is a global workforce management and HR platform for hiring, managing, "
+                "and paying contractors and full-time employees worldwide.\n\n"
+                "This integration supports contracts, timesheets, invoice adjustments, workers, "
+                "time-off requests, legal entities, invoices, and polling-based event triggers.",
+            "scheme": "deel",
+            "logo": DeelDataProvider::DeelLogo,
+            "logo_file_name": "deel-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Hr,),
+        });
+
+        # ========== CONTRACT ACTIONS ==========
+
+        # Create a Contract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts/create",
+            "action": "create-contract",
+            "groups": "Contracts",
+            "display_name": "Create a Contract",
+            "short_desc": "Create a new contract in Deel",
+            "desc": "Create a new contractor or employee contract in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelContractDataType(); },
+            "options": {
+                "type": <ActionOptionInfo>{
+                    "display_name": "Contract Type",
+                    "short_desc": "The type of contract",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The type of contract to create",
+                    "example_value": "fixed",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pay_as_you_go_time_based",
+                            "desc": "Pay-as-you-go time-based contract"},
+                        <AllowedValueInfo>{"value": "fixed", "desc": "Fixed-rate contract"},
+                        <AllowedValueInfo>{"value": "milestone",
+                            "desc": "Milestone-based contract"},
+                        <AllowedValueInfo>{"value": "employee", "desc": "Employee contract"},
+                    ),
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "The contract title",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "A descriptive title for the contract",
+                    "example_value": "Software Engineer - Backend",
+                },
+                "worker_email": <ActionOptionInfo>{
+                    "display_name": "Worker Email",
+                    "short_desc": "The worker's email address",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The email address of the contractor or employee",
+                    "example_value": "worker@example.com",
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "The contract start date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The date the contract starts (YYYY-MM-DD format)",
+                    "example_value": "2026-03-01",
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "The contract currency",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)",
+                    "example_value": "USD",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "The contract amount",
+                    "type": AbstractDataProviderTypeMap."*number",
+                    "desc": "The monetary amount for the contract (rate or fixed amount)",
+                    "example_value": 5000.00,
+                },
+                "payment_cycle": <ActionOptionInfo>{
+                    "display_name": "Payment Cycle",
+                    "short_desc": "How often payments are made",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The payment cycle for this contract",
+                    "example_value": "monthly",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "monthly", "desc": "Monthly payments"},
+                        <AllowedValueInfo>{"value": "weekly", "desc": "Weekly payments"},
+                        <AllowedValueInfo>{"value": "biweekly",
+                            "desc": "Biweekly (every two weeks) payments"},
+                    ),
+                },
+                "scope_of_work": <ActionOptionInfo>{
+                    "display_name": "Scope of Work",
+                    "short_desc": "Description of the work",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A description of the work to be performed under this contract",
+                },
+                "country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "The worker's country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ISO 3166-1 alpha-2 country code for the worker's location",
+                    "example_value": "US",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "The worker's job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The job title of the contractor or employee",
+                    "example_value": "Software Engineer",
+                },
+                "end_date": <ActionOptionInfo>{
+                    "display_name": "End Date",
+                    "short_desc": "The contract end date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The date the contract ends (YYYY-MM-DD format), if applicable",
+                },
+            },
+        });
+
+        # Terminate a Contract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts/terminate",
+            "action": "terminate-contract",
+            "groups": "Contracts",
+            "display_name": "Terminate a Contract",
+            "short_desc": "Terminate an existing contract",
+            "desc": "Terminate an existing contractor or employee contract in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelContractDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The contract to terminate",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract to terminate",
+                },
+                "termination_reason": <ActionOptionInfo>{
+                    "display_name": "Termination Reason",
+                    "short_desc": "The reason for termination",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "desc": "The reason for terminating the contract",
+                    "example_value": "Project completed",
+                },
+                "last_day_of_work": <ActionOptionInfo>{
+                    "display_name": "Last Day of Work",
+                    "short_desc": "The worker's last working day",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The last day the worker will be active (YYYY-MM-DD format)",
+                    "example_value": "2026-03-31",
+                },
+            },
+        });
+
+        # Sign a Contract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts/sign",
+            "action": "sign-contract",
+            "groups": "Contracts",
+            "display_name": "Sign a Contract",
+            "short_desc": "Sign a contract in Deel",
+            "desc": "Sign a contract in Deel on behalf of the organization",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelContractDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The contract to sign",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract to sign",
+                },
+            },
+        });
+
+        # Search Contracts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts",
+            "action": "search-contracts",
+            "groups": "Contracts",
+            "display_name": "Search Contracts",
+            "short_desc": "Search for contracts in Deel",
+            "desc": "List and search contracts in Deel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "Filter by contract ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get a specific contract by its ID",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by contract status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contracts by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending", "desc": "Pending contracts"},
+                        <AllowedValueInfo>{"value": "active", "desc": "Active contracts"},
+                        <AllowedValueInfo>{"value": "ended", "desc": "Ended contracts"},
+                        <AllowedValueInfo>{"value": "terminated",
+                            "desc": "Terminated contracts"},
+                    ),
+                },
+                "contract_type": <ActionOptionInfo>{
+                    "display_name": "Contract Type",
+                    "short_desc": "Filter by contract type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter contracts by type",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pay_as_you_go_time_based",
+                            "desc": "Pay-as-you-go time-based contracts"},
+                        <AllowedValueInfo>{"value": "fixed", "desc": "Fixed-rate contracts"},
+                        <AllowedValueInfo>{"value": "milestone",
+                            "desc": "Milestone-based contracts"},
+                        <AllowedValueInfo>{"value": "employee",
+                            "desc": "Employee contracts"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # Get a Contract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts",
+            "action": "get-contract",
+            "groups": "Contracts",
+            "display_name": "Get a Contract",
+            "short_desc": "Get a single contract by ID",
+            "desc": "Retrieve a single contract by ID from Deel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The contract ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract",
+                },
+            },
+        });
+
+        # Update a Contract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/contracts/update",
+            "action": "update-contract",
+            "groups": "Contracts",
+            "display_name": "Update a Contract",
+            "short_desc": "Update an existing contract",
+            "desc": "Update the details of an existing contract in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelContractDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The contract to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract to update",
+                },
+                "title": <ActionOptionInfo>{
+                    "display_name": "Title",
+                    "short_desc": "Updated contract title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A new descriptive title for the contract",
+                    "example_value": "Senior Software Engineer",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "Updated contract amount",
+                    "type": AbstractDataProviderTypeMap."*number",
+                    "desc": "The updated monetary amount for the contract",
+                    "example_value": 6000.00,
+                },
+                "scope_of_work": <ActionOptionInfo>{
+                    "display_name": "Scope of Work",
+                    "short_desc": "Updated scope of work",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Updated description of the work to be performed",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "Updated job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated job title for the contract",
+                    "example_value": "Senior Software Engineer",
+                },
+            },
+        });
+
+        # ========== TIMESHEET ACTIONS ==========
+
+        # Submit a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets/submit",
+            "action": "submit-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Submit a Timesheet",
+            "short_desc": "Submit a timesheet entry in Deel",
+            "desc": "Submit a new timesheet entry for a contract in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimesheetDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The associated contract",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract this timesheet belongs to",
+                },
+                "date_submitted": <ActionOptionInfo>{
+                    "display_name": "Date Submitted",
+                    "short_desc": "The timesheet date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The date for this timesheet entry (YYYY-MM-DD format)",
+                    "example_value": "2026-02-24",
+                },
+                "quantity": <ActionOptionInfo>{
+                    "display_name": "Hours (Quantity)",
+                    "short_desc": "The number of hours worked",
+                    "type": AbstractDataProviderTypeMap."number",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The number of hours worked for this timesheet entry",
+                    "example_value": 8.0,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Work description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A description of the work performed",
+                    "example_value": "Developed new API endpoints",
+                },
+            },
+        });
+
+        # Update a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets/update",
+            "action": "update-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Update a Timesheet",
+            "short_desc": "Update an existing timesheet entry",
+            "desc": "Update an existing timesheet entry in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimesheetDataType(); },
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "The timesheet to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the timesheet entry to update",
+                },
+                "quantity": <ActionOptionInfo>{
+                    "display_name": "Hours (Quantity)",
+                    "short_desc": "The updated number of hours",
+                    "type": AbstractDataProviderTypeMap."*number",
+                    "desc": "The new number of hours worked",
+                    "example_value": 8.0,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Updated work description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated description of the work performed",
+                },
+            },
+        });
+
+        # Approve a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets/approve",
+            "action": "approve-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Approve a Timesheet",
+            "short_desc": "Approve a timesheet entry",
+            "desc": "Approve a timesheet entry in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimesheetDataType(); },
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "The timesheet to approve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the timesheet entry to approve",
+                },
+            },
+        });
+
+        # Reject a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets/reject",
+            "action": "reject-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Reject a Timesheet",
+            "short_desc": "Reject a timesheet entry",
+            "desc": "Reject a timesheet entry in Deel with an optional rejection reason",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimesheetDataType(); },
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "The timesheet to reject",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the timesheet entry to reject",
+                },
+                "rejection_reason": <ActionOptionInfo>{
+                    "display_name": "Rejection Reason",
+                    "short_desc": "The reason for rejection",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "An explanation for why the timesheet entry was rejected",
+                    "example_value": "Incorrect hours reported",
+                },
+            },
+        });
+
+        # Search Timesheets
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets",
+            "action": "search-timesheets",
+            "groups": "Timesheets",
+            "display_name": "Search Timesheets",
+            "short_desc": "Search for timesheets in Deel",
+            "desc": "List and search timesheet entries in Deel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "Filter by timesheet ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get a specific timesheet by its ID",
+                },
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "Filter by contract",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter timesheets by associated contract ID",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by timesheet status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter timesheets by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending", "desc": "Pending timesheets"},
+                        <AllowedValueInfo>{"value": "approved",
+                            "desc": "Approved timesheets"},
+                        <AllowedValueInfo>{"value": "rejected",
+                            "desc": "Rejected timesheets"},
+                    ),
+                },
+                "date_from": <ActionOptionInfo>{
+                    "display_name": "Date From",
+                    "short_desc": "Start of date range",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter timesheets from this date (YYYY-MM-DD format)",
+                },
+                "date_to": <ActionOptionInfo>{
+                    "display_name": "Date To",
+                    "short_desc": "End of date range",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter timesheets up to this date (YYYY-MM-DD format)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # Get a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets",
+            "action": "get-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Get a Timesheet",
+            "short_desc": "Get a single timesheet by ID",
+            "desc": "Retrieve a single timesheet entry by ID from Deel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "The timesheet ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the timesheet entry",
+                },
+            },
+        });
+
+        # Delete a Timesheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/timesheets/delete",
+            "action": "delete-timesheet",
+            "groups": "Timesheets",
+            "display_name": "Delete a Timesheet",
+            "short_desc": "Delete a timesheet entry",
+            "desc": "Delete a timesheet entry in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelDeletedResponseDataType(); },
+            "options": {
+                "timesheet_id": <ActionOptionInfo>{
+                    "display_name": "Timesheet ID",
+                    "ref_data": "timesheets",
+                    "short_desc": "The timesheet to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the timesheet entry to delete",
+                },
+            },
+        });
+
+        # ========== INVOICE ADJUSTMENT ACTIONS ==========
+
+        # Create an Invoice Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments/create",
+            "action": "create-invoice-adjustment",
+            "groups": "Invoice Adjustments",
+            "display_name": "Create an Invoice Adjustment",
+            "short_desc": "Create a new invoice adjustment",
+            "desc": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelAdjustmentDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The associated contract",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract this adjustment belongs to",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "The adjustment amount",
+                    "type": AbstractDataProviderTypeMap."number",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The monetary amount for this invoice adjustment",
+                    "example_value": 500.00,
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "The adjustment currency",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ISO 4217 currency code (e.g., `USD`, `EUR`)",
+                    "example_value": "USD",
+                },
+                "date_submitted": <ActionOptionInfo>{
+                    "display_name": "Date Submitted",
+                    "short_desc": "The adjustment date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The date for this adjustment entry (YYYY-MM-DD format)",
+                    "example_value": "2026-03-01",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Adjustment Type",
+                    "short_desc": "The type of adjustment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The type of invoice adjustment",
+                    "example_value": "bonus",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "bonus", "desc": "Bonus payment"},
+                        <AllowedValueInfo>{"value": "reimbursement",
+                            "desc": "Expense reimbursement"},
+                        <AllowedValueInfo>{"value": "deduction", "desc": "Payment deduction"},
+                    ),
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The reason for the adjustment",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "An explanation for why this invoice adjustment is being created",
+                    "example_value": "Bonus for exceptional performance",
+                },
+            },
+        });
+
+        # Update an Invoice Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments/update",
+            "action": "update-invoice-adjustment",
+            "groups": "Invoice Adjustments",
+            "display_name": "Update an Invoice Adjustment",
+            "short_desc": "Update an existing invoice adjustment",
+            "desc": "Update an existing invoice adjustment in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelAdjustmentDataType(); },
+            "options": {
+                "adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "ref_data": "adjustments",
+                    "short_desc": "The adjustment to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the invoice adjustment to update",
+                },
+                "amount": <ActionOptionInfo>{
+                    "display_name": "Amount",
+                    "short_desc": "The updated adjustment amount",
+                    "type": AbstractDataProviderTypeMap."*number",
+                    "desc": "The new monetary amount for this invoice adjustment",
+                    "example_value": 500.00,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "The updated description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated explanation for this invoice adjustment",
+                },
+            },
+        });
+
+        # Review an Invoice Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments/review",
+            "action": "review-invoice-adjustment",
+            "groups": "Invoice Adjustments",
+            "display_name": "Review an Invoice Adjustment",
+            "short_desc": "Approve or decline an invoice adjustment",
+            "desc": "Approve or decline an invoice adjustment in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelAdjustmentDataType(); },
+            "options": {
+                "adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "ref_data": "adjustments",
+                    "short_desc": "The adjustment to review",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the invoice adjustment to review",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Review Status",
+                    "short_desc": "The review decision",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The review decision for the invoice adjustment",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "approved", "desc": "Approve the adjustment"},
+                        <AllowedValueInfo>{"value": "declined", "desc": "Decline the adjustment"},
+                    ),
+                },
+            },
+        });
+
+        # Search Invoice Adjustments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments",
+            "action": "search-invoice-adjustments",
+            "groups": "Invoice Adjustments",
+            "display_name": "Search Invoice Adjustments",
+            "short_desc": "Search for invoice adjustments",
+            "desc": "List and search invoice adjustments in Deel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "ref_data": "adjustments",
+                    "short_desc": "Filter by adjustment ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get a specific adjustment by its ID",
+                },
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "Filter by contract",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter adjustments by associated contract ID",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by adjustment status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter adjustments by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending",
+                            "desc": "Pending adjustments"},
+                        <AllowedValueInfo>{"value": "approved",
+                            "desc": "Approved adjustments"},
+                        <AllowedValueInfo>{"value": "declined",
+                            "desc": "Declined adjustments"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # Get an Invoice Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments",
+            "action": "get-invoice-adjustment",
+            "groups": "Invoice Adjustments",
+            "display_name": "Get an Invoice Adjustment",
+            "short_desc": "Get a single invoice adjustment by ID",
+            "desc": "Retrieve a single invoice adjustment by ID from Deel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "ref_data": "adjustments",
+                    "short_desc": "The adjustment ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the invoice adjustment",
+                },
+            },
+        });
+
+        # Delete an Invoice Adjustment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/adjustments/delete",
+            "action": "delete-invoice-adjustment",
+            "groups": "Invoice Adjustments",
+            "display_name": "Delete an Invoice Adjustment",
+            "short_desc": "Delete an invoice adjustment",
+            "desc": "Delete an invoice adjustment in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelDeletedResponseDataType(); },
+            "options": {
+                "adjustment_id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "ref_data": "adjustments",
+                    "short_desc": "The adjustment to delete",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the invoice adjustment to delete",
+                },
+            },
+        });
+
+        # ========== WORKER ACTIONS ==========
+
+        # Create a Worker
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/workers/create",
+            "action": "create-worker",
+            "groups": "Workers",
+            "display_name": "Create a Worker",
+            "short_desc": "Create a new worker/person in Deel",
+            "desc": "Create a new worker or person record in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelWorkerDataType(); },
+            "options": {
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "The worker's first name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The given (first) name of the worker",
+                    "example_value": "Jane",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "The worker's last name",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The family (last) name of the worker",
+                    "example_value": "Smith",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "The worker's email address",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The email address of the worker",
+                    "example_value": "jane.smith@example.com",
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "The worker's country",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ISO 3166-1 alpha-2 country code for the worker's location",
+                    "example_value": "US",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "The worker's job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The job title of the worker",
+                    "example_value": "Software Engineer",
+                },
+                "seniority": <ActionOptionInfo>{
+                    "display_name": "Seniority",
+                    "short_desc": "The worker's seniority level",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The seniority level of the worker",
+                    "example_value": "senior",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "junior", "desc": "Junior level"},
+                        <AllowedValueInfo>{"value": "mid", "desc": "Mid level"},
+                        <AllowedValueInfo>{"value": "senior", "desc": "Senior level"},
+                        <AllowedValueInfo>{"value": "lead", "desc": "Lead level"},
+                    ),
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "The worker's phone number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The worker's phone number in international format",
+                    "example_value": "+1-555-123-4567",
+                },
+            },
+        });
+
+        # Update a Worker
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/workers/update",
+            "action": "update-worker",
+            "groups": "Workers",
+            "display_name": "Update a Worker",
+            "short_desc": "Update an existing worker's information",
+            "desc": "Update an existing worker or person record in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelWorkerDataType(); },
+            "options": {
+                "worker_id": <ActionOptionInfo>{
+                    "display_name": "Worker ID",
+                    "ref_data": "workers",
+                    "short_desc": "The worker to update",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the worker to update",
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "The worker's first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated given (first) name of the worker",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "The worker's last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated family (last) name of the worker",
+                },
+                "job_title": <ActionOptionInfo>{
+                    "display_name": "Job Title",
+                    "short_desc": "The worker's job title",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated job title of the worker",
+                },
+                "seniority": <ActionOptionInfo>{
+                    "display_name": "Seniority",
+                    "short_desc": "The worker's seniority level",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The updated seniority level of the worker",
+                },
+            },
+        });
+
+        # Search Workers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/workers",
+            "action": "search-workers",
+            "groups": "Workers",
+            "display_name": "Search Workers",
+            "short_desc": "Search for workers in Deel",
+            "desc": "List and search workers/people in Deel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "worker_id": <ActionOptionInfo>{
+                    "display_name": "Worker ID",
+                    "ref_data": "workers",
+                    "short_desc": "Filter by worker ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get a specific worker by their ID",
+                },
+                "country_code": <ActionOptionInfo>{
+                    "display_name": "Country Code",
+                    "short_desc": "Filter by country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter workers by country code (ISO 3166-1 alpha-2)",
+                },
+                "employment_status": <ActionOptionInfo>{
+                    "display_name": "Employment Status",
+                    "short_desc": "Filter by employment status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter workers by employment status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active", "desc": "Active workers"},
+                        <AllowedValueInfo>{"value": "inactive", "desc": "Inactive workers"},
+                        <AllowedValueInfo>{"value": "pending", "desc": "Pending workers"},
+                    ),
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # Get a Worker
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/workers",
+            "action": "get-worker",
+            "groups": "Workers",
+            "display_name": "Get a Worker",
+            "short_desc": "Get a single worker by ID",
+            "desc": "Retrieve a single worker or person record by ID from Deel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "worker_id": <ActionOptionInfo>{
+                    "display_name": "Worker ID",
+                    "ref_data": "workers",
+                    "short_desc": "The worker ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the worker",
+                },
+            },
+        });
+
+        # ========== TIME-OFF ACTIONS ==========
+
+        # Create a Time-Off Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/time-off/create-request",
+            "action": "create-time-off-request",
+            "groups": "Time-Off",
+            "display_name": "Create a Time-Off Request",
+            "short_desc": "Create a new time-off request",
+            "desc": "Create a new time-off request for a worker in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimeOffRequestDataType(); },
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "The associated contract",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the contract for this time-off request",
+                },
+                "type_id": <ActionOptionInfo>{
+                    "display_name": "Time-Off Type ID",
+                    "ref_data": "time_off_types",
+                    "short_desc": "The time-off type",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The ID of the time-off type (entitlement) to use for this request",
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "The time-off start date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The first day of the requested time-off period (YYYY-MM-DD format)",
+                    "example_value": "2026-04-01",
+                },
+                "end_date": <ActionOptionInfo>{
+                    "display_name": "End Date",
+                    "short_desc": "The time-off end date",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The last day of the requested time-off period (YYYY-MM-DD format)",
+                    "example_value": "2026-04-05",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Notes about the request",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Optional notes or reason for the time-off request",
+                    "example_value": "Family vacation",
+                },
+            },
+        });
+
+        # Search Time-Off Types
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/time-off",
+            "action": "search-time-off-types",
+            "groups": "Time-Off",
+            "display_name": "Search Time-Off Types",
+            "short_desc": "List available time-off types/entitlements",
+            "desc": "List available time-off types and entitlements in Deel",
+            "action_code": DPAT_FIND,
+            "options": {
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "Filter by contract",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter time-off types by associated contract ID",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                # Note: no "offset" option — time-off uses cursor-based pagination, not offset
+            },
+        });
+
+        # ========== LEGAL ENTITY ACTIONS ==========
+
+        # List Legal Entities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/legal-entities",
+            "action": "list-legal-entities",
+            "groups": "Legal Entities",
+            "display_name": "List Legal Entities",
+            "short_desc": "List legal entities in Deel",
+            "desc": "List all legal entities (companies) registered in Deel",
+            "action_code": DPAT_FIND,
+            "options": {
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # ========== INVOICE ACTIONS ==========
+
+        # Search Invoices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/invoices",
+            "action": "search-invoices",
+            "groups": "Invoices",
+            "display_name": "Search Invoices",
+            "short_desc": "Search for invoices in Deel",
+            "desc": "List and search invoices in Deel with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "Filter by invoice ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get a specific invoice by its ID",
+                },
+                "contract_id": <ActionOptionInfo>{
+                    "display_name": "Contract ID",
+                    "ref_data": "contracts",
+                    "short_desc": "Filter by contract",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter invoices by associated contract ID",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by invoice status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter invoices by status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "pending", "desc": "Pending invoices"},
+                        <AllowedValueInfo>{"value": "paid", "desc": "Paid invoices"},
+                        <AllowedValueInfo>{"value": "cancelled",
+                            "desc": "Cancelled invoices"},
+                    ),
+                },
+                "date_from": <ActionOptionInfo>{
+                    "display_name": "Date From",
+                    "short_desc": "Start of date range",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter invoices from this date (YYYY-MM-DD format)",
+                },
+                "date_to": <ActionOptionInfo>{
+                    "display_name": "Date To",
+                    "short_desc": "End of date range",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter invoices up to this date (YYYY-MM-DD format)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of results to return",
+                    "preselected": True,
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Results offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of results to skip (for manual pagination)",
+                },
+            },
+        });
+
+        # Get an Invoice
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/invoices",
+            "action": "get-invoice",
+            "groups": "Invoices",
+            "display_name": "Get an Invoice",
+            "short_desc": "Get a single invoice by ID",
+            "desc": "Retrieve a single invoice by ID from Deel",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "invoice_id": <ActionOptionInfo>{
+                    "display_name": "Invoice ID",
+                    "short_desc": "The invoice ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the invoice",
+                },
+            },
+        });
+
+        # Approve a Time-Off Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/time-off/approve-request",
+            "action": "approve-time-off-request",
+            "groups": "Time-Off",
+            "display_name": "Approve a Time-Off Request",
+            "short_desc": "Approve a time-off request",
+            "desc": "Approve a pending time-off request for a worker in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimeOffRequestDataType(); },
+            "options": {
+                "request_id": <ActionOptionInfo>{
+                    "display_name": "Request ID",
+                    "ref_data": "time_off_requests",
+                    "short_desc": "The time-off request to approve",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the time-off request to approve",
+                },
+            },
+        });
+
+        # Reject a Time-Off Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/time-off/reject-request",
+            "action": "reject-time-off-request",
+            "groups": "Time-Off",
+            "display_name": "Reject a Time-Off Request",
+            "short_desc": "Reject a time-off request",
+            "desc": "Reject a pending time-off request for a worker in Deel",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () { return new DeelTimeOffRequestDataType(); },
+            "options": {
+                "request_id": <ActionOptionInfo>{
+                    "display_name": "Request ID",
+                    "ref_data": "time_off_requests",
+                    "short_desc": "The time-off request to reject",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "desc": "The unique identifier of the time-off request to reject",
+                },
+                "rejection_reason": <ActionOptionInfo>{
+                    "display_name": "Rejection Reason",
+                    "short_desc": "The reason for rejection",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "An explanation for why the time-off request was rejected",
+                },
+            },
+        });
+
+        # ========== TRIGGER / EVENT ACTIONS ==========
+
+        # Contract Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_CONTRACT_CREATED,
+            "action": EVENT_CONTRACT_CREATED,
+            "groups": "Triggers",
+            "display_name": "Contract Created",
+            "short_desc": "Trigger when a new contract is created",
+            "desc": "Fires when a new contract is created in Deel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTRACT_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Contract Status Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_CONTRACT_STATUS_UPDATED,
+            "action": EVENT_CONTRACT_STATUS_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Contract Status Updated",
+            "short_desc": "Trigger when a contract's status changes",
+            "desc": "Fires when a contract's status is updated in Deel. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTRACT_STATUS_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Contract Terminated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_CONTRACT_TERMINATED,
+            "action": EVENT_CONTRACT_TERMINATED,
+            "groups": "Triggers",
+            "display_name": "Contract Terminated",
+            "short_desc": "Trigger when a contract is terminated",
+            "desc": "Fires when a contract is terminated in Deel. "
+                "Uses polling to detect terminated contracts.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_CONTRACT_TERMINATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Invoice Adjustment Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_ADJUSTMENT_CREATED,
+            "action": EVENT_ADJUSTMENT_CREATED,
+            "groups": "Triggers",
+            "display_name": "Invoice Adjustment Created",
+            "short_desc": "Trigger when a new invoice adjustment is created",
+            "desc": "Fires when a new invoice adjustment is created in Deel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ADJUSTMENT_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Invoice Adjustment Reviewed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_ADJUSTMENT_REVIEWED,
+            "action": EVENT_ADJUSTMENT_REVIEWED,
+            "groups": "Triggers",
+            "display_name": "Invoice Adjustment Reviewed",
+            "short_desc": "Trigger when an invoice adjustment is reviewed",
+            "desc": "Fires when an invoice adjustment is approved or declined in Deel. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ADJUSTMENT_REVIEWED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Timesheet Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_TIMESHEET_CREATED,
+            "action": EVENT_TIMESHEET_CREATED,
+            "groups": "Triggers",
+            "display_name": "Timesheet Submitted",
+            "short_desc": "Trigger when a new timesheet is submitted",
+            "desc": "Fires when a new timesheet entry is submitted in Deel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TIMESHEET_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Timesheet Reviewed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_TIMESHEET_REVIEWED,
+            "action": EVENT_TIMESHEET_REVIEWED,
+            "groups": "Triggers",
+            "display_name": "Timesheet Reviewed",
+            "short_desc": "Trigger when a timesheet is approved or rejected",
+            "desc": "Fires when a timesheet entry is approved or rejected in Deel. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TIMESHEET_REVIEWED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Time-Off Request Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_TIME_OFF_CREATED,
+            "action": EVENT_TIME_OFF_CREATED,
+            "groups": "Triggers",
+            "display_name": "Time-Off Request Created",
+            "short_desc": "Trigger when a new time-off request is created",
+            "desc": "Fires when a new time-off request is created in Deel. "
+                "Uses polling to detect new records.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TIME_OFF_CREATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Time-Off Request Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_TIME_OFF_UPDATED,
+            "action": EVENT_TIME_OFF_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Time-Off Request Updated",
+            "short_desc": "Trigger when a time-off request is updated",
+            "desc": "Fires when a time-off request is updated in Deel. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TIME_OFF_UPDATED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+
+        # Time-Off Request Reviewed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": DeelDataProvider::AppName,
+            "path": "/events/" + EVENT_TIME_OFF_REVIEWED,
+            "action": EVENT_TIME_OFF_REVIEWED,
+            "groups": "Triggers",
+            "display_name": "Time-Off Request Reviewed",
+            "short_desc": "Trigger when a time-off request is approved or rejected",
+            "desc": "Fires when a time-off request is approved or rejected in Deel. "
+                "Uses polling to detect changes.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TIME_OFF_REVIEWED,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "How often to check for new records (minimum 30 seconds)",
+                    "default_value": DefaultPollInterval,
+                },
+                "start_date": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Only detect events after this date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Only detect events created or updated after this date/time. "
+                        "If not set, polling starts from the current time.",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage DeelDataProvider Module
+
+    @tableofcontents
+
+    @section deeldataproviderintro DeelDataProvider Introduction
+
+    The %DeelDataProvider module provides a data provider API for the Deel global workforce
+    management and HR platform.
+
+    To use this module, use \c "%requires DeelDataProvider" in your code.
+
+    All the public symbols in the module are defined in the DeelDataProvider namespace.
+
+    The main classes are:
+    - @ref DeelDataProvider::DeelDataProvider "DeelDataProvider":
+      the root data provider for Deel
+    - @ref DeelDataProvider::DeelDataProviderFactory "DeelDataProviderFactory":
+      the data provider factory for Deel
+
+    @section deeldataproviderrelnotes Release Notes
+
+    @subsection deeldataproviderv1_0 DeelDataProvider v1.0
+    - the initial version of the %DeelDataProvider module
+*/
+
+#! Contains all public definitions in the DeelDataProvider module
+public namespace DeelDataProvider {
+}
