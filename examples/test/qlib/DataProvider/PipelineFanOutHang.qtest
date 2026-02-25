@@ -1,0 +1,426 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class PipelineFanOutHangTest
+
+class TestMetricsCollector inherits DataProvider::AbstractPipelineMetricsCollector {
+    private {
+        int callback_count = 0;
+        *hash<PipelineMetricsSnapshot> last_snapshot;
+    }
+
+    int getIntervalMs() {
+        return 100;
+    }
+
+    int getRecordInterval() {
+        return 0;
+    }
+
+    reportMetrics(hash<PipelineMetricsSnapshot> snapshot) {
+        ++callback_count;
+        last_snapshot = snapshot;
+    }
+
+    shutdown() {
+    }
+
+    reset() {
+        callback_count = 0;
+        remove last_snapshot;
+    }
+
+    int getCallbackCount() {
+        return callback_count;
+    }
+
+    *hash<PipelineMetricsSnapshot> getLastSnapshot() {
+        return last_snapshot;
+    }
+}
+
+#! Non-bulk passthrough processor (forces non-bulk pipeline mode)
+class NonBulkPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
+    private {
+        int count = 0;
+    }
+
+    string className() {
+        return "NonBulkPassthroughProcessor";
+    }
+
+    int getCount() {
+        return count;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        ++count;
+        enqueue(_data);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+}
+
+#! Bulk-capable passthrough processor (default; matches qogcompatibilitytest behavior)
+class BulkPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
+    private {
+        int count = 0;
+    }
+
+    string className() {
+        return "BulkPassthroughProcessor";
+    }
+
+    int getCount() {
+        return count;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        ++count;
+        enqueue(_data);
+    }
+
+    # default supportsBulkApiImpl() returns True
+}
+
+class TestRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+    private {
+        int max;
+        int current = -1;
+    }
+
+    constructor(int max) {
+        self.max = max;
+    }
+
+    string getName() {
+        return "TestRecordIterator";
+    }
+
+    hash<string, AbstractDataField> getRecordType() {
+        return {};
+    }
+
+    private bool nextImpl() {
+        return ++current < max;
+    }
+
+    hash<auto> getValue() {
+        return {"id": current, "name": "record_" + current.toString()};
+    }
+
+    bool valid() {
+        return current >= 0 && current < max;
+    }
+}
+
+#! Simulates AbstractDataProviderBulkRecordInterface (what generate-records returns via DPAT_FIND)
+class TestBulkRecordInterface inherits DataProvider::AbstractDataProviderBulkRecordInterface {
+    private {
+        int total;
+        int batch_size;
+        int offset = 0;
+    }
+
+    constructor(int total, int batch_size = 1000) : AbstractDataProviderBulkRecordInterface(batch_size) {
+        self.total = total;
+        self.batch_size = batch_size;
+    }
+
+    string getName() {
+        return "TestBulkRecordInterface";
+    }
+
+    hash<string, AbstractDataField> getRecordType() {
+        return {};
+    }
+
+    #! Returns the next batch of records or NOTHING when done
+    private *hash<auto> getValueImpl() {
+        if (offset >= total) {
+            return;
+        }
+        int count = min(batch_size, total - offset);
+        list<int> ids = ();
+        list<string> names = ();
+        for (int i = 0; i < count; ++i) {
+            push ids, offset + i;
+            push names, "record_" + (offset + i).toString();
+        }
+        offset += count;
+        return {"id": ids, "name": names};
+    }
+}
+
+class PipelineFanOutHangTest inherits QUnit::Test {
+    constructor() : Test("PipelineFanOutHang", "1.0") {
+        addTestCase("fan-out non-bulk, 2 procs, 2000 records via iterator",
+            \testFanOutNonBulkIterator());
+        addTestCase("fan-out non-bulk, 2 procs, 2000 records via factory",
+            \testFanOutNonBulkFactory());
+        addTestCase("fan-out non-bulk, 2 procs, 2000 individual submits",
+            \testFanOutNonBulkIndividual());
+        addTestCase("fan-out non-bulk with metrics",
+            \testFanOutNonBulkMetrics());
+        addTestCase("fan-out BULK, 3 procs per branch, 2000 records via bulk interface",
+            \testFanOutBulkInterface());
+        addTestCase("fan-out BULK with metrics, 3 procs per branch",
+            \testFanOutBulkMetrics());
+        addTestCase("fan-out BULK via factory, 3 procs per branch",
+            \testFanOutBulkFactory());
+
+        set_return_value(main());
+    }
+
+    #! Non-bulk: fan-out with 2 procs per branch, record iterator submission
+    testFanOutNonBulkIterator() {
+        int n = 2000;
+
+        NonBulkPassthroughProcessor proc_a0();
+        NonBulkPassthroughProcessor proc_a1();
+        NonBulkPassthroughProcessor proc_b0();
+        NonBulkPassthroughProcessor proc_b1();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "fanout-nonbulk-iter"});
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, proc_a0);
+        pipe.append(q1, proc_a1);
+        pipe.append(q2, proc_b0);
+        pipe.append(q2, proc_b1);
+
+        TestRecordIterator iter(n);
+        pipe.submit(iter);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertEq(n, proc_a0.getCount(), "proc_a0");
+        assertEq(n, proc_a1.getCount(), "proc_a1");
+        assertEq(n, proc_b0.getCount(), "proc_b0");
+        assertEq(n, proc_b1.getCount(), "proc_b1");
+    }
+
+    #! Non-bulk: fan-out via factory (same as Qorus createDataPipelineFromFsmStates)
+    testFanOutNonBulkFactory() {
+        int n = 2000;
+
+        NonBulkPassthroughProcessor proc_a0();
+        NonBulkPassthroughProcessor proc_a1();
+        NonBulkPassthroughProcessor proc_b0();
+        NonBulkPassthroughProcessor proc_b1();
+
+        DataProviderPipelineFactory factory(<PipelineOptionInfo>{"name": "fanout-nonbulk-factory"});
+        int q1 = factory.appendQueue(0);
+        int q2 = factory.appendQueue(0);
+        factory.append(q1, proc_a0);
+        factory.append(q1, proc_a1);
+        factory.append(q2, proc_b0);
+        factory.append(q2, proc_b1);
+
+        DataProviderPipeline pipe = factory.create();
+
+        TestRecordIterator iter(n);
+        pipe.submit(iter);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertEq(n, proc_a0.getCount(), "proc_a0");
+        assertEq(n, proc_a1.getCount(), "proc_a1");
+        assertEq(n, proc_b0.getCount(), "proc_b0");
+        assertEq(n, proc_b1.getCount(), "proc_b1");
+    }
+
+    #! Non-bulk: individual submit calls
+    testFanOutNonBulkIndividual() {
+        int n = 2000;
+
+        NonBulkPassthroughProcessor proc_a0();
+        NonBulkPassthroughProcessor proc_a1();
+        NonBulkPassthroughProcessor proc_b0();
+        NonBulkPassthroughProcessor proc_b1();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "fanout-nonbulk-indiv"});
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, proc_a0);
+        pipe.append(q1, proc_a1);
+        pipe.append(q2, proc_b0);
+        pipe.append(q2, proc_b1);
+
+        for (int i = 0; i < n; ++i) {
+            pipe.submit({"id": i, "name": "record_" + i.toString()});
+        }
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertEq(n, proc_a0.getCount(), "proc_a0");
+        assertEq(n, proc_a1.getCount(), "proc_a1");
+        assertEq(n, proc_b0.getCount(), "proc_b0");
+        assertEq(n, proc_b1.getCount(), "proc_b1");
+    }
+
+    #! Non-bulk with metrics collector
+    testFanOutNonBulkMetrics() {
+        int n = 2000;
+        TestMetricsCollector collector();
+
+        NonBulkPassthroughProcessor proc_a0();
+        NonBulkPassthroughProcessor proc_a1();
+        NonBulkPassthroughProcessor proc_b0();
+        NonBulkPassthroughProcessor proc_b1();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "fanout-nonbulk-metrics",
+            "metrics_collector": collector,
+        });
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, proc_a0);
+        pipe.append(q1, proc_a1);
+        pipe.append(q2, proc_b0);
+        pipe.append(q2, proc_b1);
+
+        TestRecordIterator iter(n);
+        pipe.submit(iter);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertEq(n, proc_a0.getCount(), "proc_a0");
+        assertEq(n, proc_a1.getCount(), "proc_a1");
+        assertEq(n, proc_b0.getCount(), "proc_b0");
+        assertEq(n, proc_b1.getCount(), "proc_b1");
+        assertTrue(collector.getCallbackCount() > 0, "metrics callback called");
+    }
+
+    #! BULK mode: 3 procs per branch (mapper + 2 processors), bulk interface submission
+    #! This matches the exact Qorus pipeline topology:
+    #!   Queue 0: fan-out only
+    #!   Queue 1: bulk_mapper + bulk_proc_1 + bulk_proc_2
+    #!   Queue 2: bulk_mapper + bulk_proc_3 + bulk_proc_4
+    #!   Data: AbstractDataProviderBulkRecordInterface (from DPAT_FIND/generate-records)
+    testFanOutBulkInterface() {
+        int n = 2000;
+
+        BulkPassthroughProcessor mapper_a();
+        BulkPassthroughProcessor proc_a0();
+        BulkPassthroughProcessor proc_a1();
+        BulkPassthroughProcessor mapper_b();
+        BulkPassthroughProcessor proc_b0();
+        BulkPassthroughProcessor proc_b1();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{"name": "fanout-bulk-iface"});
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+
+        # Queue 1: mapper + 2 processors (3 elements like Qorus)
+        pipe.append(q1, mapper_a);
+        pipe.append(q1, proc_a0);
+        pipe.append(q1, proc_a1);
+
+        # Queue 2: mapper + 2 processors
+        pipe.append(q2, mapper_b);
+        pipe.append(q2, proc_b0);
+        pipe.append(q2, proc_b1);
+
+        # Submit via bulk record interface (same as Qorus DPAT_FIND → generate-records)
+        TestBulkRecordInterface bulk(n, 1000);
+        pipe.submit(bulk);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertTrue(info.bulk, "pipeline must be in bulk mode");
+        # In bulk mode, each processor receives bulk hashes, not individual records
+        # So count reflects number of bulk hash submissions, not individual records
+        # With 2000 records and batch_size=1000, there are 2 bulk submissions per branch
+        assertEq(2, mapper_a.getCount(), "mapper_a bulk batches");
+        assertEq(2, proc_a0.getCount(), "proc_a0 bulk batches");
+        assertEq(2, proc_a1.getCount(), "proc_a1 bulk batches");
+        assertEq(2, mapper_b.getCount(), "mapper_b bulk batches");
+        assertEq(2, proc_b0.getCount(), "proc_b0 bulk batches");
+        assertEq(2, proc_b1.getCount(), "proc_b1 bulk batches");
+    }
+
+    #! BULK mode with metrics collector
+    testFanOutBulkMetrics() {
+        int n = 2000;
+        TestMetricsCollector collector();
+
+        BulkPassthroughProcessor mapper_a();
+        BulkPassthroughProcessor proc_a0();
+        BulkPassthroughProcessor proc_a1();
+        BulkPassthroughProcessor mapper_b();
+        BulkPassthroughProcessor proc_b0();
+        BulkPassthroughProcessor proc_b1();
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "fanout-bulk-metrics",
+            "metrics_collector": collector,
+        });
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, mapper_a);
+        pipe.append(q1, proc_a0);
+        pipe.append(q1, proc_a1);
+        pipe.append(q2, mapper_b);
+        pipe.append(q2, proc_b0);
+        pipe.append(q2, proc_b1);
+
+        TestBulkRecordInterface bulk(n, 1000);
+        pipe.submit(bulk);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertTrue(info.bulk, "pipeline must be in bulk mode");
+        assertEq(2, proc_a1.getCount(), "proc_a1 bulk batches");
+        assertEq(2, proc_b1.getCount(), "proc_b1 bulk batches");
+        assertTrue(collector.getCallbackCount() > 0, "metrics callback called");
+    }
+
+    #! BULK mode via factory (same creation path as Qorus)
+    testFanOutBulkFactory() {
+        int n = 2000;
+
+        BulkPassthroughProcessor mapper_a();
+        BulkPassthroughProcessor proc_a0();
+        BulkPassthroughProcessor proc_a1();
+        BulkPassthroughProcessor mapper_b();
+        BulkPassthroughProcessor proc_b0();
+        BulkPassthroughProcessor proc_b1();
+
+        DataProviderPipelineFactory factory(<PipelineOptionInfo>{"name": "fanout-bulk-factory"});
+        int q1 = factory.appendQueue(0);
+        int q2 = factory.appendQueue(0);
+        factory.append(q1, mapper_a);
+        factory.append(q1, proc_a0);
+        factory.append(q1, proc_a1);
+        factory.append(q2, mapper_b);
+        factory.append(q2, proc_b0);
+        factory.append(q2, proc_b1);
+
+        DataProviderPipeline pipe = factory.create();
+
+        TestBulkRecordInterface bulk(n, 1000);
+        pipe.submit(bulk);
+        pipe.waitDone();
+
+        hash<PipelineInfo> info = pipe.getInfo();
+        assertEq(n, info.record_count, "record_count");
+        assertTrue(info.bulk, "pipeline must be in bulk mode");
+        assertEq(2, proc_a1.getCount(), "proc_a1 bulk batches");
+        assertEq(2, proc_b1.getCount(), "proc_b1 bulk batches");
+    }
+}
