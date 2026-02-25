@@ -7,23 +7,29 @@
     specific base type. Enums provide named constants that are grouped together and can be used for
     type-safe programming where only specific values are valid.
 
-    Enum values are distinct from their underlying base type - assigning a raw value of the base type
-    to an enum variable requires an explicit @ref cast "cast<>" operation, while enum constants
-    can be freely used where the base type is expected.
+    Enum values are compatible with their underlying base type in both directions - enum constants
+    can be used where the base type is expected, and base type values can be assigned to enum
+    variables (with runtime validation). For guaranteed type safety, the @ref cast "cast<>" operator
+    can be used to validate that a base type value corresponds to a valid enum member.
 
     @section enum_syntax Enum Declaration Syntax
-    <tt>[<b>public</b>]</tt> <tt><b>enum</b></tt> <em>enum_identifier</em> <tt><b>:</b></tt> <em>base_type</em> <tt>{</tt> \n
+    <tt>[<b>public</b>]</tt> <tt><b>enum</b></tt> <em>enum_identifier</em> [<tt><b>:</b></tt> <em>base_type</em>] <tt>{</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;<em>member_name</em> <tt>=</tt> <em>value</em><tt>,</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;[...] \n
     <tt>}</tt>
 
+    The base type specifier (<tt>: <em>base_type</em></tt>) is optional. When omitted, the base type
+    is inferred from the first member value. If no members have explicit values, the base type
+    defaults to @ref int_type "int". All member values must be of the same type as the enum's
+    base type (whether explicit or inferred).
+
     @par Supported Base Types
-    - @ref int_type "int" - integer values
+    - @ref int_type "int" - integer values (default when no base type is specified and no values are given)
     - @ref string_type "string" - string values
     - @ref float_type "float" - floating-point values
     - @ref number_type "number" - arbitrary-precision numeric values
 
-    @par Example: Integer Enum
+    @par Example: Integer Enum with Explicit Base Type
     @code{.py}
 public enum Priority : int {
     Low = 0,
@@ -37,7 +43,7 @@ Priority p = Priority::High;
 printf("Priority value: %d\n", p);  # Prints: Priority value: 10
     @endcode
 
-    @par Example: String Enum
+    @par Example: String Enum with Explicit Base Type
     @code{.py}
 public enum Status : string {
     Active = "active",
@@ -50,11 +56,41 @@ Status s = Status::Active;
 printf("Status: %s\n", s);  # Prints: Status: active
     @endcode
 
-    @section enum_type_safety Enum Type Safety
-    Enums in Qore are strictly typed. While enum values can be used where the base type is expected
-    (for comparison, assignment to base type variables, etc.), the reverse requires an explicit cast.
+    @par Example: Inferred Base Type
+    When the base type is omitted, it is inferred from the type of the first member value:
+    @code{.py}
+# Base type inferred as "string" from the first member value
+enum HttpMethod {
+    Get = "GET",
+    Post = "POST",
+    Put = "PUT",
+    Delete = "DELETE",
+}
 
-    @par Example: Strict Type Enforcement
+# Base type inferred as "int" from the first member value
+enum ExitCode {
+    Success = 0,
+    GeneralError = 1,
+    MisuseOfBuiltin = 2,
+}
+    @endcode
+
+    @par Example: Member Type Mismatch (Parse Error)
+    All member values must match the enum's base type:
+    @code{.py}
+# PARSE-EXCEPTION: enum member 'B' value type 'int' does not match enum base type 'string'
+enum Bad {
+    A = "hello",
+    B = 42,
+}
+    @endcode
+
+    @section enum_type_safety Enum Type Safety
+    Enums in Qore are type-compatible with their base type in both directions. Enum values can be
+    used where the base type is expected, and base type values can be assigned to enum-typed
+    variables or passed to enum-typed parameters.
+
+    @par Example: Type Compatibility
     @code{.py}
 public enum Color : int {
     Red = 1,
@@ -65,23 +101,28 @@ public enum Color : int {
 # Enum to base type - OK
 int i = Color::Red;  # i = 1
 
-# Base type to enum - requires cast
+# Base type to enum - OK (accepted at parse time)
 int rawValue = 2;
-Color c = cast<enum<Color>>(rawValue);  # c = Color::Green
+Color c = rawValue;
 
 # Function with enum parameter
 sub processColor(Color c) {
     printf("Color value: %d\n", c);
 }
 
-processColor(Color::Blue);        # OK: enum constant
-# processColor(3);                # ERROR: int cannot be passed directly
-processColor(cast<enum<Color>>(3));  # OK: explicit cast
+processColor(Color::Blue);  # OK: enum constant
+processColor(3);             # OK: base type value accepted
     @endcode
 
+    @note While base type values are accepted where enum types are expected, using
+    @ref cast "cast<enum<EnumName>>()" provides additional runtime validation that the value
+    corresponds to a valid enum member. See @ref enum_cast "Casting to Enum Types" below.
+
     @section enum_cast Casting to Enum Types
-    The @ref cast "cast<>" operator can be used to convert base type values to enum values. The cast
-    performs runtime validation to ensure the value is a valid enum member.
+    The @ref cast "cast<>" operator can be used to convert base type values to enum values with
+    runtime validation. While base type values can be assigned directly to enum-typed variables
+    (see @ref enum_type_safety "Enum Type Safety"), using a cast ensures at runtime that the value
+    corresponds to a valid enum member, throwing a \c RUNTIME-CAST-ERROR if it does not.
 
     @par Syntax
     <tt><b>cast</b>&lt;<b>enum</b>&lt;<em>EnumName</em>&gt;&gt;(</tt><em>expression</em><tt>)</tt> \n
