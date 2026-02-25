@@ -104,7 +104,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                 "supports_custom_values": False,
                 "supports_expressions": True,
                 "server_expression_handling": True,
-                "prefer_expression": True,
+                "default_view": UiOptionView::Expression,
                 "preselected": True,
                 "loc": "constructor",
             },
