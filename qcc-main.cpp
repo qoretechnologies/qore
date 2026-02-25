@@ -388,17 +388,6 @@ int main(int argc, char** argv) {
                 include_source ? "" : ", source-stripped");
         }
     } else {
-        // Check if source contains %requires directives
-        // Currently, qcc cannot safely compile scripts with module dependencies
-        // This is a known limitation - modules require special handling during compilation
-        if (source_text.find("%requires") != std::string::npos) {
-            fprintf(stderr, "error: %s contains %%requires directive\n", source_file);
-            fprintf(stderr, "qcc does not support compiling scripts with module dependencies\n");
-            fprintf(stderr, "Reason: Module initialization is not safe during compilation phase\n");
-            fprintf(stderr, "Solution: Use 'qore' interpreter for scripts with modules instead\n");
-            return 1;
-        }
-
         // Create program and parse
         QoreProgram* qpgm = new QoreProgram(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         ExceptionSink xsink;
