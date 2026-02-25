@@ -298,6 +298,11 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
 
     #! Does the value of this option determine the structure of other options?
     bool structural_determinate;
+
+    #! If @ref True, the front end should prompt the user for an expression rather than a simple value by default
+    /** @since DataProvider 3.3
+    */
+    bool prefer_expression;
 }
 
 #! DataProvider path var info
