@@ -398,17 +398,28 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
 # Get LLVM libraries
-# LLVM 21+ builds as a single unified library, get the name from llvm-config
-execute_process(
-    COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libs all
-    OUTPUT_VARIABLE LLVM_LIBS_RAW
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET
-)
-# Convert space-separated -l flags to semicolon-separated CMake list
-string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS_RAW}")
-string(REPLACE "-l" "" LLVM_LIBS "${LLVM_LIBS}")
-message(STATUS "LLVM libraries from llvm-config: ${LLVM_LIBS}")
+# Prefer LLVM_LIBRARIES from find_package, but fallback to llvm-config if needed
+if(LLVM_LIBRARIES)
+    set(LLVM_LIBS ${LLVM_LIBRARIES})
+    message(STATUS "Using LLVM libraries from find_package: ${LLVM_LIBS}")
+else()
+    # Fallback: Get library names from llvm-config (LLVM 21+ builds as a single unified library)
+    execute_process(
+        COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libs all
+        OUTPUT_VARIABLE LLVM_LIBS_RAW
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(LLVM_LIBS_RAW)
+        # Keep library flags with "-l" prefix for proper linker handling
+        # Don't remove "-l" or we lose the library directive
+        string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS_RAW}")
+        message(STATUS "Using LLVM libraries from llvm-config: ${LLVM_LIBS}")
+    else()
+        message(WARNING "Could not determine LLVM libraries - continuing anyway")
+        set(LLVM_LIBS "")
+    endif()
+endif()
 
 # Ensure LLVM_LIBRARY_DIRS is properly set (find_package sets this, but fallback to _DIR if needed)
 if(NOT LLVM_LIBRARY_DIRS AND LLVM_LIBRARY_DIR)
