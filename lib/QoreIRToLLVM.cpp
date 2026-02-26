@@ -6510,6 +6510,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 case QoreIROpcode::ShrAssignLValue:
                     iop = llvm::Instruction::AShr;
                     break;
+                default:
+                    // All other opcodes do not have inline fast paths; iop and fop remain -1
+                    break;
             }
 
             // Pre-decref old result and clear reload tracker before the lvalue
