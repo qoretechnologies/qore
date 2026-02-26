@@ -808,6 +808,41 @@ struct qore_socket_private {
         return quic_sessions.begin()->first;
     }
 
+    //! Shared server SSL_CTX for QUIC sessions (for session ticket key continuity)
+    /** Session tickets are encrypted with the SSL_CTX's ticket key, so all
+        sessions for a listener must share one SSL_CTX. This ensures that a
+        ticket issued by one session can be decrypted by another, enabling
+        QUIC 0-RTT (early data).
+
+        Lazily initialized by getOrCreateQuicServerSslCtx(). Reference-counted
+        via SSL_CTX_up_ref()/SSL_CTX_free(); QuicSession holds a reference,
+        and this pointer holds the "master" reference. Cleaned up in destructor
+        and close_internal() via freeQuicServerSslCtx().
+    */
+    SSL_CTX* quic_server_ssl_ctx_ = nullptr;
+    std::mutex quic_server_ssl_ctx_lock_;  //!< protects lazy init of quic_server_ssl_ctx_
+
+    //! Get or create the shared server SSL_CTX for QUIC
+    /** Thread-safe: uses quic_server_ssl_ctx_lock_ internally. Creates the SSL_CTX
+        once with TLS 1.3, cert/key, ALPN callback, max_early_data=0xffffffff
+        (RFC 9001 §4.6.1), and 2 session tickets.
+        @param cert X.509 certificate
+        @param pk private key
+        @param xsink exception sink
+        @return SSL_CTX pointer (owned by this socket), or nullptr on error
+    */
+    DLLLOCAL SSL_CTX* getOrCreateQuicServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
+                                                   ExceptionSink* xsink);
+
+    //! Free the shared server SSL_CTX if allocated (thread-safe)
+    DLLLOCAL void freeQuicServerSslCtx() {
+        std::lock_guard<std::mutex> lock(quic_server_ssl_ctx_lock_);
+        if (quic_server_ssl_ctx_) {
+            SSL_CTX_free(quic_server_ssl_ctx_);
+            quic_server_ssl_ctx_ = nullptr;
+        }
+    }
+
 #ifdef DARWIN
     //! Write end of a notification pipe used by Socket::poll() on macOS
     /** When a socket FD is closed during a kqueue poll, macOS silently removes
@@ -833,6 +868,10 @@ struct qore_socket_private {
         }
 
         close_internal();
+
+        // Free the shared server SSL_CTX after all sessions are destroyed
+        // (sessions hold their own SSL_CTX_up_ref'd references via SSL_new)
+        freeQuicServerSslCtx();
 
         // must be dereferenced and removed before deleting
         assert(!event_queue);
@@ -1004,6 +1043,8 @@ struct qore_socket_private {
             }
             quic_sessions.clear();
         }
+        // Free shared server SSL_CTX after all sessions are released
+        freeQuicServerSslCtx();
         // Clear HTTP/2 client multiplexing state
         {
             AutoLocker al(h2_stream_callbacks_lock);

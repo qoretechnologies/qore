@@ -83,6 +83,8 @@ struct QuicStreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     std::string error_message;  //!< non-empty if stream terminated with error
+    //! true if stream received data in 0-RTT (for server-side logging/auditing)
+    bool received_0rtt_data = false;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
@@ -168,7 +170,8 @@ public:
         const char* host, uint16_t port,
         const struct sockaddr* local_addr, socklen_t local_addrlen,
         const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-        int ssl_verify_mode = SSL_VERIFY_NONE);
+        int ssl_verify_mode = SSL_VERIFY_NONE,
+        bool enable_0rtt = false);
 
     //! Factory: create a server QUIC session
     /** @param sock the underlying socket
@@ -181,6 +184,7 @@ public:
         @param remote_addr remote socket address (from recvfrom)
         @param remote_addrlen length of remote_addr
         @param dispatcher optional datagram dispatcher for CID-based routing (multi-connection)
+        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity (0-RTT)
     */
     DLLLOCAL static std::shared_ptr<QuicSession> createServer(
         qore_socket_private* sock, ExceptionSink* xsink,
@@ -188,7 +192,8 @@ public:
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
         const struct sockaddr* local_addr, socklen_t local_addrlen,
         const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-        QoreDatagramDispatcher* dispatcher = nullptr);
+        QoreDatagramDispatcher* dispatcher = nullptr,
+        SSL_CTX* shared_ssl_ctx = nullptr);
 
     ~QuicSession();
 
@@ -322,11 +327,29 @@ public:
     //! Set up the HTTP/3 layer after handshake completes
     DLLLOCAL int setupHttp3(ExceptionSink* xsink);
 
+    //! Tear down and re-create the HTTP/3 layer (used after 0-RTT rejection)
+    /** When 0-RTT is rejected, all 0-RTT streams are discarded by ngtcp2, including
+        the HTTP/3 control and QPACK streams opened during early data. This method
+        tears down the old h3 connection and creates a fresh one.
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int resetHttp3(ExceptionSink* xsink);
+
     //! Check if HTTP/3 layer is initialized
     DLLLOCAL bool isHttp3Ready() const {
         std::lock_guard<std::recursive_mutex> lock(mtx_);
         return h3_conn_ != nullptr;
     }
+
+    //! Check if this session is attempting 0-RTT
+    DLLLOCAL bool isAttempting0Rtt() const { return attempting_0rtt_.load(std::memory_order_acquire); }
+
+    //! Check if 0-RTT early data was rejected by the server
+    DLLLOCAL bool isEarlyDataRejected() const { return early_data_rejected_.load(std::memory_order_acquire); }
+
+    //! Check if 0-RTT TX key is installed (can send early data)
+    DLLLOCAL bool isEarlyDataReady() const { return early_data_ready_.load(std::memory_order_acquire); }
 
     //! Check if there is pending data to write (set after submitRequest/submitResponse)
     DLLLOCAL bool hasPendingWrite() const { return pending_write_.load(std::memory_order_acquire); }
@@ -415,7 +438,8 @@ private:
                    const char* host, uint16_t port,
                    const struct sockaddr* local_addr, socklen_t local_addrlen,
                    const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-                   int ssl_verify_mode = SSL_VERIFY_NONE);
+                   int ssl_verify_mode = SSL_VERIFY_NONE,
+                   bool enable_0rtt = false);
 
     //! Initialize server-side connection
     DLLLOCAL int initServer(qore_socket_private* sock, ExceptionSink* xsink,
@@ -423,14 +447,20 @@ private:
                    QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
                    const struct sockaddr* local_addr, socklen_t local_addrlen,
                    const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-                   QoreDatagramDispatcher* dispatcher);
+                   QoreDatagramDispatcher* dispatcher,
+                   SSL_CTX* shared_ssl_ctx = nullptr);
 
     //! Set up SSL_CTX for client
     DLLLOCAL int setupClientSslCtx(const char* host, int ssl_verify_mode, ExceptionSink* xsink);
 
     //! Set up SSL_CTX for server with certificate and private key
+    /** @param cert X.509 certificate (used only when shared_ssl_ctx is nullptr)
+        @param pk private key (used only when shared_ssl_ctx is nullptr)
+        @param xsink exception sink
+        @param shared_ssl_ctx optional shared SSL_CTX for session ticket key continuity
+    */
     DLLLOCAL int setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
-                          ExceptionSink* xsink);
+                          ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx = nullptr);
 
     //! Get timer expiry without locking (caller must hold mtx_)
     DLLLOCAL ngtcp2_tstamp getExpiryLocked() const;
@@ -500,10 +530,16 @@ private:
                                             uint64_t max_data,
                                             void* user_data, void* stream_user_data);
 
-    //! Receive TX key (for HTTP/3 uni stream binding)
+    //! Receive TX key (for HTTP/3 uni stream binding and 0-RTT detection)
     DLLLOCAL static int recvTxKeyCallback(ngtcp2_conn* conn,
                                  ngtcp2_encryption_level level,
                                  void* user_data);
+
+    //! TLS new session ticket callback (for caching 0-RTT session tickets)
+    DLLLOCAL static int newSessionTicketCallback(SSL* ssl, SSL_SESSION* session);
+
+    //! TLS early data rejected callback (for 0-RTT rejection handling)
+    DLLLOCAL static int earlyDataRejectedCallback(ngtcp2_conn* conn, void* user_data);
 
     // --- nghttp3 static callbacks ---
 
@@ -571,7 +607,7 @@ private:
     ngtcp2_conn* conn_ = nullptr;                   //!< ngtcp2 connection handle
     nghttp3_conn* h3_conn_ = nullptr;               //!< nghttp3 HTTP/3 connection handle
     ngtcp2_crypto_ossl_ctx* ossl_ctx_ = nullptr;    //!< ngtcp2 OpenSSL context wrapper
-    SSL_CTX* ssl_ctx_ = nullptr;                    //!< OpenSSL context
+    SSL_CTX* ssl_ctx_ = nullptr;                    //!< OpenSSL context (always ref-counted; freed in destructor)
     SSL* ssl_ = nullptr;                            //!< OpenSSL connection
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
@@ -585,6 +621,9 @@ private:
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)
+    std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
+    std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
+    std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
     int64_t goaway_max_stream_id_{-1};               //!< max stream ID from received GOAWAY; protected by mtx_

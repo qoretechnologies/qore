@@ -371,11 +371,13 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     }
 
     // Create QUIC session with actual socket addresses; pass through the
-    // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification
+    // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
+    // enable 0-RTT for reconnections with cached session tickets
     quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host, port,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
-        sock->priv->socket->priv->ssl_verify_mode);
+        sock->priv->socket->priv->ssl_verify_mode,
+        /*enable_0rtt=*/true);
     if (*xsink || !quic_session) {
         sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
@@ -533,6 +535,27 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     return 0;
 }
 
+QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* xsink) {
+    if (!quic_session->isEarlyDataReady() || quic_session->isHttp3Ready()) {
+        return nullptr;  // no-op: not attempting 0-RTT or already set up
+    }
+    quic_session->setupHttp3(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // Flush HTTP/3 setup frames as 0-RTT packets
+    ngtcp2_tstamp h3_expiry;
+    int srv = sendPendingPackets(h3_expiry, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (srv == SOCK_POLLOUT) {
+        // Partial send — caller should yield for write readiness
+        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+    }
+    return nullptr;
+}
+
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
@@ -555,6 +578,17 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
                 }
 
+                // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
+                {
+                    QoreHashNode* poll_info = trySetupEarlyHttp3(xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (poll_info) {
+                        return poll_info;  // SOCK_POLLOUT — yield for write readiness
+                    }
+                }
+
                 qcs_state = QCS::HANDSHAKE_RECV;
                 [[fallthrough]];
             }
@@ -568,6 +602,19 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                     if (rv == SOCK_POLLIN) {
                         break;  // EAGAIN — no more data
+                    }
+                }
+
+                // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
+                // (may be detected after receiving server response to Initial)
+                {
+                    QoreHashNode* poll_info = trySetupEarlyHttp3(xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (poll_info) {
+                        qcs_state = QCS::HANDSHAKE_SEND;
+                        return poll_info;  // SOCK_POLLOUT — yield for write readiness
                     }
                 }
 
@@ -597,7 +644,16 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             case QCS::SETUP_HTTP3: {
-                // Set up HTTP/3 layer
+                // Handle 0-RTT rejection: if HTTP/3 was set up during 0-RTT but
+                // early data was rejected, re-initialize with new streams
+                if (quic_session->isEarlyDataRejected() && quic_session->isHttp3Ready()) {
+                    quic_session->resetHttp3(xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+
+                // Set up HTTP/3 layer (no-op if already set up during 0-RTT)
                 if (!quic_session->isHttp3Ready()) {
                     quic_session->setupHttp3(xsink);
                     if (*xsink) {
@@ -1012,13 +1068,26 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             return 0;
         }
 
-        // Create a new session with dispatcher for CID registration
+        // Get or create the shared server SSL_CTX for session ticket key continuity (0-RTT)
+        SSL_CTX* shared_ctx = sock->priv->socket->priv->getOrCreateQuicServerSslCtx(
+            sock->priv->cert, sock->priv->pk, xsink);
+        if (*xsink) {
+            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
+            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            fprintf(stderr, "QUIC WARNING: failed to create shared server SSL_CTX: %s: %s\n",
+                err_str ? err_str->c_str() : "unknown",
+                desc_str ? desc_str->c_str() : "unknown");
+            xsink->clear();
+            return 0;
+        }
+
+        // Create a new session with dispatcher for CID registration and shared SSL_CTX
         auto new_session = QuicSession::createServer(
             sock->priv->socket->priv, xsink, &hdr,
             sock->priv->cert, sock->priv->pk,
             reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen,
             reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen,
-            &dispatcher);
+            &dispatcher, shared_ctx);
         if (*xsink || !new_session) {
             // Log and continue — a single client's failed handshake should not
             // abort the server for all other clients

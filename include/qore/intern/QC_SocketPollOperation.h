@@ -1166,6 +1166,14 @@ private:
     //! Receive and process a UDP datagram
     DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink);
 
+    //! Try to set up HTTP/3 early when 0-RTT TX key is installed
+    /** Checks isEarlyDataReady() and sets up HTTP/3 + flushes setup frames.
+        @param xsink exception sink
+        @return nullptr on success/no-op, poll info hash if SOCK_POLLOUT needed;
+                raises exception and returns nullptr on error (check *xsink)
+    */
+    DLLLOCAL QoreHashNode* trySetupEarlyHttp3(ExceptionSink* xsink);
+
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return false;  // UDP is connectionless
     }

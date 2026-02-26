@@ -5330,7 +5330,8 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
         connection.host.c_str(), quic_port,
         reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen,
         res->ai_addr, res->ai_addrlen,
-        msock->socket->priv->ssl_verify_mode);
+        msock->socket->priv->ssl_verify_mode,
+        /*enable_0rtt=*/true);
 
     if (!quic_session || *xsink) {
         quic_session.reset();
@@ -5369,6 +5370,32 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
                     strerror(errno));
                 disconnectQuic();
                 return -1;
+            }
+        }
+
+        // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
+        // This allows HTTP/3 control + QPACK streams to be sent as 0-RTT data
+        if (quic_session->isEarlyDataReady() && !quic_session->isHttp3Ready()) {
+            rv = quic_session->setupHttp3(xsink);
+            if (rv < 0 || *xsink) {
+                disconnectQuic();
+                return -1;
+            }
+            // Flush HTTP/3 setup frames as 0-RTT packets
+            QuicPacketBatch h3_pkt_batch;
+            quic_session->writePackets(h3_pkt_batch, xsink);
+            if (*xsink) {
+                disconnectQuic();
+                return -1;
+            }
+            if (!h3_pkt_batch.empty()) {
+                int sent = sendQuicPacketsBatch(quic_fd, h3_pkt_batch, nullptr, 0);
+                if (sent < 0) {
+                    xsink->raiseException("HTTP3-CONNECT-ERROR",
+                        "failed to send 0-RTT HTTP/3 setup frames: %s", strerror(errno));
+                    disconnectQuic();
+                    return -1;
+                }
             }
         }
 
@@ -5471,7 +5498,19 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
         }
     }
 
-    // Setup HTTP/3
+    // Handle 0-RTT rejection: if HTTP/3 was set up during 0-RTT handshake but
+    // early data was rejected, ngtcp2 discards all 0-RTT streams (including HTTP/3
+    // control and QPACK streams). Re-initialize the HTTP/3 layer with new streams.
+    if (quic_session->isEarlyDataRejected() && quic_session->isHttp3Ready()) {
+        printd(2, "connectQuic(): 0-RTT rejected, re-initializing HTTP/3 layer\n");
+        rv = quic_session->resetHttp3(xsink);
+        if (rv < 0 || *xsink) {
+            disconnectQuic();
+            return -1;
+        }
+    }
+
+    // Setup HTTP/3 (no-op if already set up during 0-RTT)
     rv = quic_session->setupHttp3(xsink);
     if (rv < 0 || *xsink) {
         disconnectQuic();

@@ -37,6 +37,8 @@
 #include <openssl/err.h>
 
 #include "qore/intern/QoreDatagramDispatcher.h"
+#include "qore/intern/QuicSessionTicketCache.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <unordered_set>
 
@@ -60,6 +62,88 @@ static const size_t H3_ALPN_LEN = sizeof(H3_ALPN) - 1;
 static std::once_flag ossl_init_flag;
 static void ensureOsslInit() {
     std::call_once(ossl_init_flag, []() { ngtcp2_crypto_ossl_init(); });
+}
+
+// ===== Shared Server SSL_CTX =====
+
+SSL_CTX* qore_socket_private::getOrCreateQuicServerSslCtx(QoreSSLCertificate* cert,
+                                                            QoreSSLPrivateKey* pk,
+                                                            ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(quic_server_ssl_ctx_lock_);
+
+    // Check if already created (under lock)
+    if (quic_server_ssl_ctx_) {
+        return quic_server_ssl_ctx_;
+    }
+
+    assert(cert);
+    assert(pk);
+
+    SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) {
+        xsink->raiseException("QUIC-SSL-ERROR", "failed to create shared server SSL_CTX");
+        return nullptr;
+    }
+
+    // Set minimum TLS version to 1.3 (required for QUIC)
+    SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
+    SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+
+    // Load the X.509 certificate for the TLS 1.3 handshake
+    if (SSL_CTX_use_certificate(ctx, cert->getData()) != 1) {
+        SSL_CTX_free(ctx);
+        xsink->raiseException("QUIC-SSL-ERROR", "failed to load server certificate into shared SSL_CTX");
+        return nullptr;
+    }
+
+    // Load the private key for the TLS 1.3 handshake
+    EVP_PKEY* pk_data = pk->getData();
+    if (!pk_data) {
+        SSL_CTX_free(ctx);
+        xsink->raiseException("QUIC-SSL-ERROR", "server private key getData() returned null");
+        return nullptr;
+    }
+    if (SSL_CTX_use_PrivateKey(ctx, pk_data) != 1) {
+        unsigned long ssl_err = ERR_peek_last_error();
+        char errbuf[256];
+        ERR_error_string_n(ssl_err, errbuf, sizeof(errbuf));
+        SSL_CTX_free(ctx);
+        xsink->raiseException("QUIC-SSL-ERROR",
+            "failed to load server private key into shared SSL_CTX: %s (EVP_PKEY type=%d)",
+            errbuf, EVP_PKEY_base_id(pk_data));
+        return nullptr;
+    }
+
+    // Verify cert/key match
+    if (SSL_CTX_check_private_key(ctx) != 1) {
+        SSL_CTX_free(ctx);
+        xsink->raiseException("QUIC-SSL-ERROR", "server certificate and private key do not match");
+        return nullptr;
+    }
+
+    // Set ALPN selection callback for the server
+    SSL_CTX_set_alpn_select_cb(ctx,
+        [](SSL*, const unsigned char** out, unsigned char* outlen,
+           const unsigned char* in, unsigned int inlen, void*) -> int {
+            if (SSL_select_next_proto(const_cast<unsigned char**>(out), outlen,
+                    H3_ALPN, H3_ALPN_LEN, in, inlen) != OPENSSL_NPN_NEGOTIATED) {
+                return SSL_TLSEXT_ERR_NOACK;
+            }
+            return SSL_TLSEXT_ERR_OK;
+        }, nullptr);
+
+    // Enable 0-RTT (early data) for QUIC: RFC 9001 §4.6.1 requires exactly 0xffffffff
+    SSL_CTX_set_max_early_data(ctx, 0xffffffff);
+
+    // Issue 2 session tickets per connection to allow concurrent 0-RTT attempts
+    SSL_CTX_set_num_tickets(ctx, 2);
+
+    quic_server_ssl_ctx_ = ctx;
+
+    printd(3, "qore_socket_private::getOrCreateQuicServerSslCtx(): created shared server SSL_CTX %p "
+        "(max_early_data=0xffffffff, num_tickets=2)\n", ctx);
+
+    return ctx;
 }
 
 // ===== Timestamp helper =====
@@ -125,6 +209,8 @@ QuicSession::~QuicSession() {
         ssl_ = nullptr;
     }
     if (ssl_ctx_) {
+        // Always free: owned contexts have refcount=1, shared contexts were
+        // explicitly up-ref'd in setupServerSslCtx() so this drops our reference
         SSL_CTX_free(ssl_ctx_);
         ssl_ctx_ = nullptr;
     }
@@ -137,7 +223,7 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     const char* host, uint16_t port,
     const struct sockaddr* local_addr, socklen_t local_addrlen,
     const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-    int ssl_verify_mode) {
+    int ssl_verify_mode, bool enable_0rtt) {
     assert(local_addr);
     assert(remote_addr);
 
@@ -147,7 +233,7 @@ std::shared_ptr<QuicSession> QuicSession::createClient(
     if (session->initClient(sock, xsink, host, port,
                             local_addr, local_addrlen,
                             remote_addr, remote_addrlen,
-                            ssl_verify_mode) != 0) {
+                            ssl_verify_mode, enable_0rtt) != 0) {
         return nullptr;
     }
     // Clear the temporary socket pointer; it was only needed during init
@@ -161,7 +247,8 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
     const struct sockaddr* local_addr, socklen_t local_addrlen,
     const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-    QoreDatagramDispatcher* dispatcher) {
+    QoreDatagramDispatcher* dispatcher,
+    SSL_CTX* shared_ssl_ctx) {
     assert(cert);
     assert(pk);
     assert(local_addr);
@@ -173,7 +260,7 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
     if (session->initServer(sock, xsink, initial_hdr, cert, pk,
                             local_addr, local_addrlen,
                             remote_addr, remote_addrlen,
-                            dispatcher) != 0) {
+                            dispatcher, shared_ssl_ctx) != 0) {
         return nullptr;
     }
     // Clear the temporary socket pointer; it was only needed during init
@@ -199,6 +286,12 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // Enable certificate verification if requested
     SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
+
+    // Enable session caching for 0-RTT ticket capture
+    // NO_INTERNAL_STORE: we manage our own cache (QuicSessionTicketCache)
+    SSL_CTX_set_session_cache_mode(ssl_ctx_,
+        SSL_SESS_CACHE_CLIENT | SSL_SESS_CACHE_NO_INTERNAL_STORE);
+    SSL_CTX_sess_set_new_cb(ssl_ctx_, newSessionTicketCallback);
 
     // Create SSL connection
     ssl_ = SSL_new(ssl_ctx_);
@@ -237,62 +330,73 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 }
 
 int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
-                                    ExceptionSink* xsink) {
-    assert(cert);
-    assert(pk);
+                                    ExceptionSink* xsink, SSL_CTX* shared_ssl_ctx) {
+    if (shared_ssl_ctx) {
+        // Use the shared SSL_CTX (for session ticket key continuity / 0-RTT).
+        // Take an explicit reference so the destructor can always call SSL_CTX_free()
+        // unconditionally. Without this, if setupServerSslCtx() fails between storing
+        // ssl_ctx_ and SSL_new() (which internally up-refs), the ref would be unbalanced.
+        SSL_CTX_up_ref(shared_ssl_ctx);
+        ssl_ctx_ = shared_ssl_ctx;
+        // The shared context already has cert, key, ALPN, TLS 1.3, early data,
+        // and ticket settings configured by getOrCreateQuicServerSslCtx()
+    } else {
+        assert(cert);
+        assert(pk);
 
-    ssl_ctx_ = SSL_CTX_new(TLS_server_method());
-    if (!ssl_ctx_) {
-        xsink->raiseException("QUIC-SSL-ERROR", "failed to create server SSL_CTX");
-        return -1;
+        ssl_ctx_ = SSL_CTX_new(TLS_server_method());
+        if (!ssl_ctx_) {
+            xsink->raiseException("QUIC-SSL-ERROR", "failed to create server SSL_CTX");
+            return -1;
+        }
+
+        // Set minimum TLS version to 1.3 (required for QUIC)
+        SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_3_VERSION);
+        SSL_CTX_set_max_proto_version(ssl_ctx_, TLS1_3_VERSION);
+
+        // Load the X.509 certificate for the TLS 1.3 handshake
+        if (SSL_CTX_use_certificate(ssl_ctx_, cert->getData()) != 1) {
+            xsink->raiseException("QUIC-SSL-ERROR", "failed to load server certificate into SSL_CTX");
+            return -1;
+        }
+
+        // Load the private key for the TLS 1.3 handshake
+        EVP_PKEY* pk_data = pk->getData();
+        if (!pk_data) {
+            xsink->raiseException("QUIC-SSL-ERROR", "server private key getData() returned null");
+            return -1;
+        }
+        if (SSL_CTX_use_PrivateKey(ssl_ctx_, pk_data) != 1) {
+            unsigned long ssl_err = ERR_peek_last_error();
+            char errbuf[256];
+            ERR_error_string_n(ssl_err, errbuf, sizeof(errbuf));
+            xsink->raiseException("QUIC-SSL-ERROR",
+                "failed to load server private key into SSL_CTX: %s (EVP_PKEY type=%d)",
+                errbuf, EVP_PKEY_base_id(pk_data));
+            return -1;
+        }
+
+        // Verify cert/key match
+        if (SSL_CTX_check_private_key(ssl_ctx_) != 1) {
+            xsink->raiseException("QUIC-SSL-ERROR", "server certificate and private key do not match");
+            return -1;
+        }
+
+        // Set ALPN selection callback for the server
+        // The server must select "h3" from the client's ALPN list for HTTP/3
+        SSL_CTX_set_alpn_select_cb(ssl_ctx_,
+            [](SSL*, const unsigned char** out, unsigned char* outlen,
+               const unsigned char* in, unsigned int inlen, void*) -> int {
+                // Use OpenSSL helper to select "h3" from client's list
+                if (SSL_select_next_proto(const_cast<unsigned char**>(out), outlen,
+                        H3_ALPN, H3_ALPN_LEN, in, inlen) != OPENSSL_NPN_NEGOTIATED) {
+                    return SSL_TLSEXT_ERR_NOACK;
+                }
+                return SSL_TLSEXT_ERR_OK;
+            }, nullptr);
     }
 
-    // Set minimum TLS version to 1.3 (required for QUIC)
-    SSL_CTX_set_min_proto_version(ssl_ctx_, TLS1_3_VERSION);
-    SSL_CTX_set_max_proto_version(ssl_ctx_, TLS1_3_VERSION);
-
-    // Load the X.509 certificate for the TLS 1.3 handshake
-    if (SSL_CTX_use_certificate(ssl_ctx_, cert->getData()) != 1) {
-        xsink->raiseException("QUIC-SSL-ERROR", "failed to load server certificate into SSL_CTX");
-        return -1;
-    }
-
-    // Load the private key for the TLS 1.3 handshake
-    EVP_PKEY* pk_data = pk->getData();
-    if (!pk_data) {
-        xsink->raiseException("QUIC-SSL-ERROR", "server private key getData() returned null");
-        return -1;
-    }
-    if (SSL_CTX_use_PrivateKey(ssl_ctx_, pk_data) != 1) {
-        unsigned long ssl_err = ERR_peek_last_error();
-        char errbuf[256];
-        ERR_error_string_n(ssl_err, errbuf, sizeof(errbuf));
-        xsink->raiseException("QUIC-SSL-ERROR",
-            "failed to load server private key into SSL_CTX: %s (EVP_PKEY type=%d)",
-            errbuf, EVP_PKEY_base_id(pk_data));
-        return -1;
-    }
-
-    // Verify cert/key match
-    if (SSL_CTX_check_private_key(ssl_ctx_) != 1) {
-        xsink->raiseException("QUIC-SSL-ERROR", "server certificate and private key do not match");
-        return -1;
-    }
-
-    // Set ALPN selection callback for the server
-    // The server must select "h3" from the client's ALPN list for HTTP/3
-    SSL_CTX_set_alpn_select_cb(ssl_ctx_,
-        [](SSL*, const unsigned char** out, unsigned char* outlen,
-           const unsigned char* in, unsigned int inlen, void*) -> int {
-            // Use OpenSSL helper to select "h3" from client's list
-            if (SSL_select_next_proto(const_cast<unsigned char**>(out), outlen,
-                    H3_ALPN, H3_ALPN_LEN, in, inlen) != OPENSSL_NPN_NEGOTIATED) {
-                return SSL_TLSEXT_ERR_NOACK;
-            }
-            return SSL_TLSEXT_ERR_OK;
-        }, nullptr);
-
-    // Create SSL connection
+    // Create SSL connection from the context
     ssl_ = SSL_new(ssl_ctx_);
     if (!ssl_) {
         xsink->raiseException("QUIC-SSL-ERROR", "failed to create server SSL object");
@@ -323,7 +427,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
                             const char* host, uint16_t port,
                             const struct sockaddr* local_addr, socklen_t local_addrlen,
                             const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-                            int ssl_verify_mode) {
+                            int ssl_verify_mode, bool enable_0rtt) {
     sock_ = sock;
     is_server_ = false;
     host_ = host;
@@ -350,6 +454,20 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     conn_ref_.get_conn = getConnFromRef;
     conn_ref_.user_data = this;
     SSL_set_app_data(ssl_, &conn_ref_);
+
+    // Attempt 0-RTT: restore a cached session ticket if available
+    std::vector<uint8_t> cached_tp;
+    if (enable_0rtt) {
+        SSL_SESSION* cached_session = nullptr;
+        std::string origin = std::string(host) + ":" + std::to_string(port);
+        if (QuicSessionTicketCache::instance().lookup(origin, &cached_session, cached_tp)) {
+            SSL_set_session(ssl_, cached_session);
+            SSL_SESSION_free(cached_session);  // SSL_set_session up-refs it
+            attempting_0rtt_.store(true, std::memory_order_release);
+            printd(3, "QuicSession::initClient(): restoring 0-RTT session for '%s' "
+                "(tp_size=%zu)\n", origin.c_str(), cached_tp.size());
+        }
+    }
 
     // Generate random connection IDs
     ngtcp2_cid dcid, scid;
@@ -388,6 +506,11 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.extend_max_local_streams_bidi = extendMaxLocalStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
     callbacks.recv_tx_key = recvTxKeyCallback;
+
+    // Register 0-RTT rejection callback when attempting early data
+    if (attempting_0rtt_) {
+        callbacks.tls_early_data_rejected = earlyDataRejectedCallback;
+    }
 
     // Settings
     ngtcp2_settings settings;
@@ -428,6 +551,16 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     // Set TLS native handle (for ossl backend, pass ossl_ctx_ not ssl_)
     ngtcp2_conn_set_tls_native_handle(conn_, ossl_ctx_);
 
+    // Decode and set 0-RTT transport params after connection is created
+    if (attempting_0rtt_ && !cached_tp.empty()) {
+        rv = ngtcp2_conn_decode_and_set_0rtt_transport_params(conn_, cached_tp.data(), cached_tp.size());
+        if (rv != 0) {
+            printd(2, "QuicSession::initClient(): 0-RTT transport params decode failed: %s\n",
+                ngtcp2_strerror(rv));
+            attempting_0rtt_.store(false, std::memory_order_release);
+        }
+    }
+
     return 0;
 }
 
@@ -436,7 +569,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
                             QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
                             const struct sockaddr* local_addr, socklen_t local_addrlen,
                             const struct sockaddr* remote_addr, socklen_t remote_addrlen,
-                            QoreDatagramDispatcher* dispatcher) {
+                            QoreDatagramDispatcher* dispatcher,
+                            SSL_CTX* shared_ssl_ctx) {
     sock_ = sock;
     is_server_ = true;
     dispatcher_ = dispatcher;
@@ -453,8 +587,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     memcpy(&remote_addr_, remote_addr, remote_addrlen);
     remote_addrlen_ = remote_addrlen;
 
-    // Set up SSL with cert/key for TLS 1.3
-    if (setupServerSslCtx(cert, pk, xsink) != 0) {
+    // Set up SSL with cert/key for TLS 1.3 (use shared SSL_CTX if provided)
+    if (setupServerSslCtx(cert, pk, xsink, shared_ssl_ctx) != 0) {
         return -1;
     }
 
@@ -572,6 +706,32 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
 }
 
 // ===== HTTP/3 Setup =====
+
+int QuicSession::resetHttp3(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (h3_conn_) {
+        nghttp3_conn_del(h3_conn_);
+        h3_conn_ = nullptr;
+    }
+    // Clear all stream state from the rejected 0-RTT attempt: streams opened during
+    // 0-RTT (including internal uni-streams created by nghttp3) were discarded by ngtcp2
+    streams_.clear();
+    body_data_.clear();
+    streaming_body_data_.clear();
+    // Clear any pre-H3 buffered data and completed streams from the 0-RTT attempt
+    pre_h3_buffer_.clear();
+    pre_h3_buffer_size_ = 0;
+    while (!completed_streams_.empty()) {
+        completed_streams_.pop();
+    }
+    has_completed_streams_.store(false, std::memory_order_release);
+
+    printd(2, "QuicSession::resetHttp3(): HTTP/3 layer torn down for re-initialization "
+        "(session %lld)\n", session_id_);
+
+    return setupHttp3(xsink);
+}
 
 int QuicSession::setupHttp3(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
@@ -1633,6 +1793,15 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
     auto* session = static_cast<QuicSession*>(user_data);
     bool fin = (flags & NGTCP2_STREAM_DATA_FLAG_FIN) != 0;
 
+    // Track 0-RTT data reception on existing streams only (don't create entries
+    // for HTTP/3 internal uni-streams — they never complete and would leak)
+    if (flags & NGTCP2_STREAM_DATA_FLAG_0RTT) {
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end()) {
+            it->second->received_0rtt_data = true;
+        }
+    }
+
     // Forward to HTTP/3 layer if available
     if (session->h3_conn_) {
         nghttp3_ssize nconsumed = nghttp3_conn_read_stream2(
@@ -1786,11 +1955,95 @@ int QuicSession::extendMaxStreamDataCallback(ngtcp2_conn* /* conn */,
 }
 
 int QuicSession::recvTxKeyCallback(ngtcp2_conn* /* conn */,
-                                   ngtcp2_encryption_level /* level */,
-                                   void* /* user_data */) {
+                                   ngtcp2_encryption_level level,
+                                   void* user_data) {
+    // Detect 0-RTT TX key installation — when the 0-RTT encryption level key
+    // is installed, the client can start sending early data
+    auto* session = static_cast<QuicSession*>(user_data);
+    if (level == NGTCP2_ENCRYPTION_LEVEL_0RTT && session->attempting_0rtt_.load(std::memory_order_acquire)) {
+        session->early_data_ready_.store(true, std::memory_order_release);
+        printd(3, "QuicSession::recvTxKeyCallback(): 0-RTT TX key installed (session %lld)\n",
+            (long long)session->session_id_);
+    }
     // HTTP/3 setup is deferred to the poll loop (QCS_SETUP_HTTP3 state)
     // after the handshake is fully complete and transport parameters are
     // exchanged, so that uni-stream limits are available.
+    return 0;
+}
+
+int QuicSession::newSessionTicketCallback(SSL* ssl, SSL_SESSION* session) {
+    // NOTE: This is called from OpenSSL (C code) — C++ exceptions must NOT propagate.
+    // All allocating operations (std::string, std::vector) are wrapped in try/catch.
+    try {
+        // Get the QuicSession from SSL app_data
+        auto* conn_ref = static_cast<ngtcp2_crypto_conn_ref*>(SSL_get_app_data(ssl));
+        if (!conn_ref || !conn_ref->user_data) {
+            return 0;
+        }
+        auto* qs = static_cast<QuicSession*>(conn_ref->user_data);
+
+        // Verify the session ticket has max_early_data == 0xffffffff (QUIC requirement)
+        // RFC 9001 §4.6.1: "A client MUST treat receipt of a TLS NewSessionTicket
+        // message with a max_early_data_size of any value other than 0xffffffff as
+        // a connection error of type PROTOCOL_VIOLATION."
+        uint32_t max_early_data = SSL_SESSION_get_max_early_data(session);
+        if (max_early_data != 0xffffffff) {
+            printd(3, "QuicSession::newSessionTicketCallback(): ignoring ticket with "
+                "max_early_data=%u (expected 0xffffffff)\n", max_early_data);
+            // Return 0: OpenSSL frees the session
+            return 0;
+        }
+
+        // Encode transport params for 0-RTT restoration
+        uint8_t tp_buf[512];
+        ngtcp2_ssize tp_len = ngtcp2_conn_encode_0rtt_transport_params(qs->conn_, tp_buf, sizeof(tp_buf));
+        if (tp_len < 0) {
+            printd(2, "QuicSession::newSessionTicketCallback(): encode_0rtt_transport_params failed: %s\n",
+                ngtcp2_strerror(static_cast<int>(tp_len)));
+            return 0;
+        }
+
+        // Build cached ticket — order: assign vector first (can throw), then up_ref session
+        // (can't fail). This avoids leaking a ref count if vector::assign throws.
+        QuicCachedTicket ticket;
+        ticket.transport_params.assign(tp_buf, tp_buf + tp_len);
+        SSL_SESSION_up_ref(session);
+        ticket.session = session;
+
+        // Store in cache keyed by origin
+        std::string origin = qs->host_ + ":" + std::to_string(qs->port_);
+        QuicSessionTicketCache::instance().store(origin, std::move(ticket));
+
+        printd(3, "QuicSession::newSessionTicketCallback(): cached ticket for '%s' "
+            "(tp_len=%zd, session %lld)\n", origin.c_str(), tp_len, (long long)qs->session_id_);
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::newSessionTicketCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::newSessionTicketCallback(): unknown exception\n");
+    }
+
+    return 0;
+}
+
+int QuicSession::earlyDataRejectedCallback(ngtcp2_conn* /* conn */, void* user_data) {
+    // NOTE: This is called from ngtcp2 (C code) — C++ exceptions must NOT propagate.
+    auto* session = static_cast<QuicSession*>(user_data);
+    session->early_data_rejected_.store(true, std::memory_order_release);
+
+    try {
+        // Invalidate the cached ticket since the server rejected 0-RTT
+        std::string origin = session->host_ + ":" + std::to_string(session->port_);
+        QuicSessionTicketCache::instance().remove(origin);
+
+        printd(2, "QuicSession::earlyDataRejectedCallback(): 0-RTT rejected by server, "
+            "removed cached ticket for '%s' (session %lld)\n",
+            origin.c_str(), (long long)session->session_id_);
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::earlyDataRejectedCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::earlyDataRejectedCallback(): unknown exception\n");
+    }
+
     return 0;
 }
 

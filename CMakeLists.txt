@@ -896,6 +896,7 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/QuicSession.cpp
+    lib/QuicSessionTicketCache.cpp
     lib/QuicPollOperations.cpp
 )
 
@@ -1294,6 +1295,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/Http2Session.cpp\"
 // QUIC/HTTP/3 support via ngtcp2 + nghttp3
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicSession.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QuicSessionTicketCache.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicPollOperations.cpp\"
 ")
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_SOURCE_HEADERS})
