@@ -159,12 +159,16 @@ public:
         assert(!frame_marker_stack.empty());
 
         // Retrieve the recorded marker location (O(1) lookup)
+        // This uses the location recorded when the frame boundary was pushed,
+        // enabling guaranteed correct marker finding regardless of stack depth
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
         // Uninstantiate variables until we reach (or pass) the marker position
-        // Variables should already be uninstantiated by the caller, but we handle
-        // the case where curr->pos is at the marker or one past it
+        // This handles cases where the variable stack has been modified since
+        // the frame boundary was pushed (e.g., nested function calls, exceptions).
+        // CRITICAL: This loop must reach the exact recorded position to avoid
+        // DGC violations from clearing the wrong frame boundary marker.
         while (curr != rec.block || curr->pos > rec.pos) {
             uninstantiateIntern();
         }
