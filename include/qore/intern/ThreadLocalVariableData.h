@@ -165,23 +165,45 @@ public:
         // Navigate back to the marker position, cleaning up any variables that
         // weren't properly uninstantiated by the function.
         //
-        // Important: LocalVarValue::uninstantiate() calls del() which calls
-        // val.removeValue(true), NOT QoreLValue::removeValue(). So it's safe to
-        // call even for variables with special assignment flags.
+        // For regular variables, we call del() to properly clean up.
+        // For variables with static_assignment (program-level variables),
+        // we call reset_to_empty() to avoid triggering the static_assignment assertion
+        // in QoreLValue::removeValue(), since static variables should never trigger
+        // dynamic cleanup at function boundaries.
         //
-        // curr->pos should be at or near the marker position since the function
-        // should have uninstantiated most of its variables already.
+        // Most functions should have already cleaned their variables before returning,
+        // so this is primarily a safety net for abnormal control flow.
 
         // Navigate to the marker position - same block case
         if (curr == rec.block) {
-            // Same block - uninstantiate back to the marker
+            // Same block - clean variables and move position back to the marker
             while (curr->pos > rec.pos) {
-                uninstantiate(nullptr);
+                // Clean the variable before moving past it, handling static_assignment
+                if (curr->var[curr->pos - 1].val.assigned) {
+                    if (curr->var[curr->pos - 1].val.static_assignment) {
+                        // For static variables, reset to empty state
+                        curr->var[curr->pos - 1].val.reset_to_empty();
+                    } else {
+                        // For regular variables, call del() to properly clean up
+                        curr->var[curr->pos - 1].del(nullptr);
+                    }
+                }
+                uninstantiateIntern();
             }
         } else {
-            // Different block - navigate back and clean up
+            // Different block - navigate back and clean up, then transition blocks
             while (curr != rec.block || curr->pos > rec.pos) {
-                uninstantiate(nullptr);
+                // Clean the variable before moving past it, handling static_assignment
+                if (curr->pos > 0 && curr->var[curr->pos - 1].val.assigned) {
+                    if (curr->var[curr->pos - 1].val.static_assignment) {
+                        // For static variables, reset to empty state
+                        curr->var[curr->pos - 1].val.reset_to_empty();
+                    } else {
+                        // For regular variables, call del() to properly clean up
+                        curr->var[curr->pos - 1].del(nullptr);
+                    }
+                }
+                uninstantiateIntern();
             }
         }
 
