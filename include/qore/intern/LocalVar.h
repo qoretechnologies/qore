@@ -100,6 +100,7 @@ public:
     const char* id;
     // declaration order for proper cleanup ordering (issue #5168)
     uint64_t decl_order = 0;
+    int frame_marker_id = -1;  // frame count value at time of pushFrameBoundary(), -1 if not a marker
     bool finalized : 1;
     bool frame_boundary : 1;
 
