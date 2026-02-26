@@ -1132,41 +1132,47 @@ public class HttpAsyncSocketIoController {
 
         if (result.code && !result.streaming) {
             try {
-                # For InputStream responses, read all data first
-                *data body = result.body;
                 if (result.input_stream) {
+                    # HTTP/3: stream InputStream incrementally via deferred data reader
                     result.input_stream.reassignThread();
                     on_exit result.input_stream.unassignThread();
-                    # Read all chunks then build the body (binary += is amortized O(1))
-                    list<binary> chunks();
+                    cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
+                        result.code, result.hdr);
+                    controllers[cinfo.controller_idx].wake();
                     try {
                         while (True) {
                             *binary chunk = result.input_stream.read(65536);
                             if (!chunk) {
+                                cinfo.sock.submitQuicStreamData(session_id, stream_id,
+                                    NOTHING, True);
+                                controllers[cinfo.controller_idx].wake();
                                 break;
                             }
-                            push chunks, chunk;
-                        }
-                        if (chunks) {
-                            body = binary();
-                            map body += $1, chunks;
+                            # Handle backpressure: wait for the I/O thread to drain the
+                            # stream buffer via condition variable (no polling)
+                            while (cinfo.sock.submitQuicStreamData(session_id, stream_id,
+                                    chunk, False) == 1) {
+                                controllers[cinfo.controller_idx].wake();
+                                cinfo.sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+                            }
+                            controllers[cinfo.controller_idx].wake();
                         }
                     } catch (hash<ExceptionInfo> ex) {
                         log(LoggerLevel::ERROR,
-                            "Error reading InputStream for HTTP/3 session=%d stream=%d on %y: %s: %s",
+                            "Error reading InputStream for HTTP/3 session=%d stream=%d "
+                            "on %y: %s: %s",
                             session_id, stream_id, uh, ex.err, ex.desc);
                         try {
-                            cinfo.sock.submitQuicResponse(session_id, stream_id, 500,
-                                {"content-type": "text/plain"},
-                                "Internal Server Error");
+                            cinfo.sock.cancelQuicStream(session_id, stream_id);
                             controllers[cinfo.controller_idx].wake();
                         } catch () {}
                         return;
                     }
+                } else {
+                    cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
+                        result.hdr, result.body);
+                    controllers[cinfo.controller_idx].wake();
                 }
-
-                cinfo.sock.submitQuicResponse(session_id, stream_id, result.code, result.hdr, body);
-                controllers[cinfo.controller_idx].wake();
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/3 response for session=%d stream=%d on %y: %s: %s",

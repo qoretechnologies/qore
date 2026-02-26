@@ -719,10 +719,8 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
 
 // ===== Packet I/O =====
 
-int QuicSession::readPacket(const uint8_t* data, size_t len,
-                            const ngtcp2_path& path, ExceptionSink* xsink) {
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
-
+int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
+                                  const ngtcp2_path& path, ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
@@ -761,9 +759,49 @@ int QuicSession::readPacket(const uint8_t* data, size_t len,
     return 0;
 }
 
-int QuicSession::writePackets(QuicPacketBatch& packets, ExceptionSink* xsink) {
+int QuicSession::readPacket(const uint8_t* data, size_t len,
+                            const ngtcp2_path& path, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return readPacketLocked(data, len, path, xsink);
+}
+
+int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
+                                  ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
+    if (!conn_) {
+        xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
+        return -1;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        ngtcp2_pkt_info pi{};
+
+        int rv = ngtcp2_conn_read_pkt(conn_, &packets[i].path, &pi,
+                                       packets[i].data, packets[i].len, timestamp());
+        if (rv != 0) {
+            if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
+                break;  // connection shutting down — no more packets can be processed
+            }
+            // Log per-packet errors and continue (matching existing batch error handling)
+            printd(1, "QuicSession::readPacketBatch(): packet %d/%d failed: %s (rv=%d)\n",
+                i, count, ngtcp2_strerror(rv), rv);
+            continue;
+        }
+    }
+
+    // Signal pending write once for the entire batch
+    pending_write_.store(true, std::memory_order_release);
+
+    return 0;
+}
+
+int QuicSession::writePackets(QuicPacketBatch& packets, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return writePacketsLocked(packets, xsink);
+}
+
+int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
@@ -888,17 +926,19 @@ int QuicSession::writePackets(QuicPacketBatch& packets, ExceptionSink* xsink) {
 
 // ===== Timer Handling =====
 
-ngtcp2_tstamp QuicSession::getExpiry() const {
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
+ngtcp2_tstamp QuicSession::getExpiryLocked() const {
     if (!conn_) {
         return UINT64_MAX;
     }
     return ngtcp2_conn_get_expiry(conn_);
 }
 
-int QuicSession::handleExpiry(ExceptionSink* xsink) {
+ngtcp2_tstamp QuicSession::getExpiry() const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return getExpiryLocked();
+}
 
+int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     if (!conn_) {
         xsink->raiseException("QUIC-ERROR", "QUIC connection not initialized");
         return -1;
@@ -927,6 +967,41 @@ int QuicSession::handleExpiry(ExceptionSink* xsink) {
     pending_write_.store(true, std::memory_order_release);
 
     return 0;
+}
+
+int QuicSession::handleExpiry(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return handleExpiryLocked(xsink);
+}
+
+QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
+                                                        ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    QuicTimerWriteResult result;
+
+    // Check and handle timer expiry
+    ngtcp2_tstamp expiry = getExpiryLocked();
+    if (expiry != UINT64_MAX) {
+        ngtcp2_tstamp now = timestamp();
+        if (expiry <= now) {
+            if (handleExpiryLocked(xsink) < 0) {
+                result.error = true;
+                return result;
+            }
+        }
+    }
+
+    // Generate outgoing packets
+    if (writePacketsLocked(packets, xsink) < 0) {
+        result.error = true;
+        return result;
+    }
+
+    // Get next expiry for poll timeout computation
+    result.next_expiry = getExpiryLocked();
+
+    return result;
 }
 
 // ===== HTTP/3 Request/Response =====
@@ -1138,6 +1213,191 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
     pending_write_.store(true, std::memory_order_release);
 
     return 0;
+}
+
+int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
+                                          const strcase_str_map_t& headers,
+                                          ExceptionSink* xsink) {
+    // Build header name-value pairs OUTSIDE the lock (same pattern as submitResponse)
+    std::vector<nghttp3_nv> nva;
+    nva.reserve(headers.size() + 1);
+    auto add_nv = [&nva](const char* name, size_t namelen,
+                          const char* value, size_t valuelen) {
+        nva.push_back({
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
+            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
+            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
+        });
+    };
+
+    // Status pseudo-header
+    std::string status_str = std::to_string(status_code);
+    add_nv(":status", 7, status_str.c_str(), status_str.size());
+
+    // Regular headers (same filtering as submitResponse)
+    std::vector<std::string> lower_keys;
+    lower_keys.reserve(headers.size());
+    for (const auto& h : headers) {
+        if (h.first.empty() || h.first[0] == ':') {
+            continue;
+        }
+        std::string lower_key = h.first;
+        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (h3_forbidden_headers.count(lower_key)) {
+            continue;
+        }
+        lower_keys.push_back(std::move(lower_key));
+        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
+                h.second.c_str(), h.second.size());
+    }
+
+    // Always set up data reader (streaming will provide data via sendStreamData)
+    nghttp3_data_reader dr;
+    dr.read_data = h3ReadDataCallback;
+
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+
+    // Guard against double submit for the same stream
+    if (body_data_.count(stream_id) || streaming_body_data_.count(stream_id)) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "response already submitted for stream %" PRId64, stream_id);
+        return -1;
+    }
+
+    // Create empty streaming body data entry in deferred state
+    auto& sbd = streaming_body_data_[stream_id];
+    sbd = QuicStreamingBodyData{};
+    sbd.deferred = true;
+
+    int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "nghttp3_conn_submit_response failed: %s",
+                              nghttp3_strerror(rv));
+        streaming_body_data_.erase(stream_id);
+        return -1;
+    }
+
+    // Signal that there's data to write (HEADERS frame)
+    pending_write_.store(true, std::memory_order_release);
+
+    return 0;
+}
+
+int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
+                                 bool end_stream, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end()) {
+        xsink->raiseException("QUIC-HTTP3-ERROR",
+            "no streaming response for stream %" PRId64, stream_id);
+        return -1;
+    }
+
+    auto& sbd = it->second;
+
+    // Check backpressure: if buffer > 1MB, signal caller to retry
+    if (sbd.data.size() - sbd.offset > QUIC_MAX_STREAM_BODY) {
+        return 1;
+    }
+
+    // Compact buffer if consumed data exceeds half the buffer size
+    if (sbd.offset > 0 && sbd.offset > sbd.data.size() / 2) {
+        sbd.data.erase(sbd.data.begin(), sbd.data.begin() + sbd.offset);
+        sbd.offset = 0;
+    }
+
+    // Append new data
+    if (data && len > 0) {
+        auto bp = static_cast<const uint8_t*>(data);
+        sbd.data.insert(sbd.data.end(), bp, bp + len);
+    }
+
+    if (end_stream) {
+        sbd.eof = true;
+    }
+
+    // Resume the deferred data reader if it was waiting
+    if (sbd.deferred && h3_conn_) {
+        int rv = nghttp3_conn_resume_stream(h3_conn_, stream_id);
+        if (rv != 0 && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
+            xsink->raiseException("QUIC-HTTP3-ERROR",
+                "nghttp3_conn_resume_stream failed: %s", nghttp3_strerror(rv));
+            return -1;
+        }
+        sbd.deferred = false;
+    }
+
+    pending_write_.store(true, std::memory_order_release);
+    return 0;
+}
+
+int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
+    // Phase 1: check predicate under mtx_
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        auto it = streaming_body_data_.find(stream_id);
+        if (it == streaming_body_data_.end()) {
+            return -1;  // stream not found
+        }
+        if (it->second.data.size() - it->second.offset <= QUIC_MAX_STREAM_BODY) {
+            return 0;  // buffer already below threshold
+        }
+    }
+
+    if (timeout_ms == 0) {
+        return 1;  // no wait requested, buffer is full
+    }
+
+    // Phase 2: wait on drain_cv_ with generation-based wakeup
+    // The generation counter prevents lost wakeups: if a signal fires between
+    // releasing mtx_ above and entering wait below, the gen change is visible
+    // immediately when the waiter checks the predicate on drain_cv_.
+    unsigned gen = drain_gen_.load(std::memory_order_acquire);
+    auto deadline = (timeout_ms > 0)
+        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
+        : std::chrono::steady_clock::time_point::max();
+
+    while (true) {
+        // Wait for generation change (signal from h3ReadDataCallback or streamCloseCallback)
+        {
+            std::unique_lock<std::mutex> dlock(drain_mtx_);
+            auto gen_changed = [this, gen]() {
+                return drain_gen_.load(std::memory_order_acquire) != gen;
+            };
+            if (timeout_ms < 0) {
+                drain_cv_.wait(dlock, gen_changed);
+            } else {
+                drain_cv_.wait_until(dlock, deadline, gen_changed);
+            }
+        }
+
+        // Re-check actual predicate under mtx_
+        {
+            std::lock_guard<std::recursive_mutex> lock(mtx_);
+            auto it = streaming_body_data_.find(stream_id);
+            if (it == streaming_body_data_.end()) {
+                return -1;  // stream removed
+            }
+            if (it->second.data.size() - it->second.offset <= QUIC_MAX_STREAM_BODY) {
+                return 0;  // buffer drained
+            }
+        }
+
+        // Update generation for next wait iteration
+        gen = drain_gen_.load(std::memory_order_acquire);
+
+        // Check timeout
+        if (timeout_ms > 0 && std::chrono::steady_clock::now() >= deadline) {
+            return 1;  // timed out
+        }
+    }
 }
 
 // ===== Stream Management =====
@@ -1456,6 +1716,14 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
 
         // Clean up body data
         session->body_data_.erase(stream_id);
+        session->streaming_body_data_.erase(stream_id);
+
+        // Wake any handler threads blocked in waitForStreamDrain() for this stream
+        session->drain_gen_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> dlock(session->drain_mtx_);
+        }
+        session->drain_cv_.notify_all();
 
         // Mark stream complete if it wasn't already (e.g. peer reset before
         // h3EndStreamCallback fired).  Without this, the stream would remain
@@ -1707,26 +1975,76 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
                                                void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
 
+    // Check non-streaming body data first
     auto it = session->body_data_.find(stream_id);
-    if (it == session->body_data_.end() || it->second.offset >= it->second.data.size()) {
-        *pflags = NGHTTP3_DATA_FLAG_EOF;
+    if (it != session->body_data_.end()) {
+        if (it->second.offset >= it->second.data.size()) {
+            *pflags = NGHTTP3_DATA_FLAG_EOF;
+            return 0;
+        }
+
+        auto& bd = it->second;
+        size_t remaining = bd.data.size() - bd.offset;
+
+        if (veccnt > 0) {
+            vec[0].base = const_cast<uint8_t*>(bd.data.data() + bd.offset);
+            vec[0].len = remaining;
+            bd.offset = bd.data.size();  // all data consumed
+
+            *pflags = NGHTTP3_DATA_FLAG_EOF;
+            return 1;
+        }
+
+        // veccnt == 0: no vector slots available; signal "call again" without EOF
+        *pflags = 0;
         return 0;
     }
 
-    auto& bd = it->second;
-    size_t remaining = bd.data.size() - bd.offset;
+    // Check streaming body data
+    auto sit = session->streaming_body_data_.find(stream_id);
+    if (sit != session->streaming_body_data_.end()) {
+        auto& sbd = sit->second;
+        size_t remaining = sbd.data.size() - sbd.offset;
 
-    if (veccnt > 0) {
-        vec[0].base = const_cast<uint8_t*>(bd.data.data() + bd.offset);
-        vec[0].len = remaining;
-        bd.offset = bd.data.size();  // all data consumed
+        if (remaining > 0) {
+            if (veccnt > 0) {
+                // Data available: return vec pointing into buffer
+                vec[0].base = const_cast<uint8_t*>(sbd.data.data() + sbd.offset);
+                vec[0].len = remaining;
+                sbd.offset = sbd.data.size();  // mark all data as consumed
 
-        *pflags = NGHTTP3_DATA_FLAG_EOF;
-        return 1;
+                // Notify waitForStreamDrain() that buffer space freed up
+                session->drain_gen_.fetch_add(1, std::memory_order_release);
+                {
+                    std::lock_guard<std::mutex> dlock(session->drain_mtx_);
+                }
+                session->drain_cv_.notify_all();
+
+                if (sbd.eof) {
+                    *pflags = NGHTTP3_DATA_FLAG_EOF;
+                } else {
+                    *pflags = 0;
+                }
+                return 1;
+            }
+            // veccnt == 0: data available but no vec slots; signal "call again"
+            *pflags = 0;
+            return 0;
+        }
+
+        if (sbd.eof) {
+            // No data and EOF: signal end of stream
+            *pflags = NGHTTP3_DATA_FLAG_EOF;
+            return 0;
+        }
+
+        // No data available and not EOF: defer (WOULDBLOCK)
+        sbd.deferred = true;
+        return NGHTTP3_ERR_WOULDBLOCK;
     }
 
-    // veccnt == 0: no vector slots available; signal "call again" without EOF
-    *pflags = 0;
+    // Stream not found in either map — signal EOF
+    *pflags = NGHTTP3_DATA_FLAG_EOF;
     return 0;
 }
 

@@ -147,6 +147,7 @@ class QoreSocket {
     friend class SocketQuicClientPollOperation;
     friend class SocketQuicServerPollOperation;
     friend class SocketQuicSendResponsePollOperation;
+    friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
     //! creates an empty, unconnected socket

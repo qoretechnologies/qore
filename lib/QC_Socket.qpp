@@ -5419,3 +5419,204 @@ bool Socket::isQuicGoawayReceived(int session_id) {
     }
     return s->isQuicGoawayReceived(session_id, xsink);
 }
+
+//! Creates a poll operation for sending an HTTP/3 streaming response via InputStream
+/** @par Example:
+    @code{.py}
+    AbstractPollOperation op = sock.startPollQuicSendStreamingResponse(
+        session_id, stream_id, 200, headers, input_stream);
+    @endcode
+
+    Reads chunks from the InputStream incrementally and sends them over the QUIC
+    stream using the deferred data reader mechanism. This avoids buffering the
+    entire response body in memory.
+
+    @param session_id the QUIC session ID from the request
+    @param stream_id the HTTP/3 stream ID from the request
+    @param status_code the HTTP/3 response status code
+    @param headers response headers
+    @param body the InputStream providing the response body
+    @param chunk_size optional chunk size for reading from the InputStream (default 16384)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the
+    streaming HTTP/3 response
+
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given
+    ID exists
+    @throw SOCKET-NOT-OPEN if the socket is not open
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
+        int status_code, *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
+    InputStream* body_ptr = body.release();
+    s->ref();
+
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketQuicSendStreamingResponsePollOperation(xsink, s, session_id, stream_id,
+            status_code, headers, body_ptr, chunk_size ? chunk_size : 16384),
+        xsink
+    );
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Unassign the stream from the current thread so that the worker thread
+    // calling continuePoll() can reassign it to itself
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("quic-streaming-response"), xsink);
+    }
+    return rv.release();
+}
+
+//! Submits a streaming HTTP/3 response (headers only) on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicResponseStreaming(session_id, stream_id, 200, {"content-type": "text/plain"});
+    # Then send data incrementally:
+    sock.submitQuicStreamData(session_id, stream_id, chunk1);
+    sock.submitQuicStreamData(session_id, stream_id, chunk2);
+    sock.submitQuicStreamData(session_id, stream_id, NOTHING, True); # end stream
+    @endcode
+
+    Submits the response headers with a deferred body. Data is provided incrementally
+    via @ref submitQuicStreamData(). The I/O thread must call writePackets() to flush
+    the data to the network.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID to respond on
+    @param status_code the HTTP status code
+    @param headers optional response headers
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int status_code,
+        *hash<auto> headers) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+        return QoreValue();
+    }
+    s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
+}
+
+//! Sends body data on a streaming HTTP/3 response
+/** @par Example:
+    @code{.py}
+    int rv = sock.submitQuicStreamData(session_id, stream_id, chunk_data);
+    if (rv == 1) {
+        # buffer full — wait for ACKs before retrying
+    }
+    sock.submitQuicStreamData(session_id, stream_id, NOTHING, True); # end stream
+    @endcode
+
+    Appends data to the stream's buffer and resumes the nghttp3 deferred data reader
+    if it was waiting. The I/O thread must call writePackets() to flush.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param body optional body data to send
+    @param end_stream set to True to signal the end of the response body
+
+    @return 0 on success, 1 if buffer full (backpressure)
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if no streaming response for the given stream
+
+    @since %Qore 2.3
+*/
+int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
+        softbool end_stream = False) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+        return -1;
+    }
+    return s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
+        (bool)end_stream, xsink);
+}
+
+//! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold
+/** @par Example:
+    @code{.py}
+    while (sock.submitQuicStreamData(session_id, stream_id, chunk, False) == 1) {
+        controllers[idx].wake();
+        # Deterministic wait — blocks until buffer drains or timeout expires
+        sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+    }
+    @endcode
+
+    Blocks the calling thread until the stream's internal buffer drops below the
+    backpressure threshold (1 MB), the stream is closed, or the timeout expires.
+
+    Unlike polling with usleep(), this method uses a condition variable signaled by
+    the I/O thread when buffer space is freed, providing deterministic wakeup with
+    no wasted CPU cycles.
+
+    @note This method does NOT acquire the socket lock, so it is safe to call from
+    a handler thread while the I/O thread is running. The I/O thread is free to
+    call continuePoll() concurrently.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+
+    @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
+        timeout timeout_ms = 5s) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
+}

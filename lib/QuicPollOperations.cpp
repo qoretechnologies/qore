@@ -71,6 +71,225 @@ static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expi
     poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
 }
 
+//! Log and clear a readPacketBatch exception (shared by batch recv helpers)
+static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
+    const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
+    const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+    fprintf(stderr, "QUIC WARNING: readPacketBatch error "
+        "(session %lld%s, %d packets): %s: %s\n",
+        (long long)target->getSessionId(),
+        target->isClosed() ? ", now closed" : "",
+        batch_count,
+        err_str ? err_str->c_str() : "unknown",
+        desc_str ? desc_str->c_str() : "unknown");
+    xsink->clear();
+}
+
+//! Batch-receive and dispatch QUIC packets via recvmmsg (Linux) or recvmsg (other).
+/** Receives all available packets from the socket and dispatches them to their
+    target QuicSession via CID-based routing.  On Linux, uses recvmmsg + readPacketBatch
+    for batched processing with a single lock acquisition per session.
+    @param fd the UDP socket file descriptor
+    @param dispatcher CID-based packet router
+    @param local_addr cached local address (from getsockname)
+    @param local_addrlen local address length
+    @param recv_buf fallback receive buffer (used on non-Linux platforms)
+    @param recv_buf_size size of recv_buf
+    @param xsink exception sink
+    @return 0 on success, -1 on fatal error
+*/
+static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher,
+    const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
+    uint8_t* recv_buf, size_t recv_buf_size, ExceptionSink* xsink) {
+#ifdef __linux__
+    // Batch receive with recvmmsg for reduced syscall overhead.
+    // All large arrays are thread-local to avoid ~8.5KB of stack pressure per call
+    // (mmsghdr + iovec + sockaddr_storage + cmsg + batch + pkt_locals).
+    static thread_local uint8_t bufs[QUIC_MAX_RECV_BATCH][QUIC_RECV_BUF_SIZE];
+    static thread_local struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
+    static thread_local struct iovec iovecs[QUIC_MAX_RECV_BATCH];
+    static thread_local struct sockaddr_storage addrs[QUIC_MAX_RECV_BATCH];
+    static thread_local uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
+    static thread_local QuicReceivedPacket batch[QUIC_MAX_RECV_BATCH];
+    static thread_local struct sockaddr_storage pkt_locals[QUIC_MAX_RECV_BATCH];
+    while (true) {
+        memset(msgs, 0, sizeof(msgs));
+
+        for (int i = 0; i < QUIC_MAX_RECV_BATCH; ++i) {
+            iovecs[i].iov_base = bufs[i];
+            iovecs[i].iov_len = QUIC_RECV_BUF_SIZE;
+            msgs[i].msg_hdr.msg_name = &addrs[i];
+            msgs[i].msg_hdr.msg_namelen = sizeof(addrs[i]);
+            msgs[i].msg_hdr.msg_iov = &iovecs[i];
+            msgs[i].msg_hdr.msg_iovlen = 1;
+            msgs[i].msg_hdr.msg_control = cmsg_bufs[i];
+            msgs[i].msg_hdr.msg_controllen = QUIC_CMSG_BUF_SIZE;
+        }
+
+        int nrecv = recvmmsg(fd, msgs, QUIC_MAX_RECV_BATCH, MSG_DONTWAIT, nullptr);
+        if (nrecv < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return 0;  // no more data available
+            }
+            if (errno == EINTR) {
+                continue;  // retry on signal interruption
+            }
+            xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmmsg() failed");
+            return -1;
+        }
+        if (nrecv == 0) {
+            return 0;
+        }
+
+        // Batch packets by target session for readPacketBatch();
+        // common case: all packets go to the same session (single client).
+        // Invariant: batch_count <= nrecv <= QUIC_MAX_RECV_BATCH (packets are
+        // only accumulated, never added beyond what recvmmsg returned).
+        int batch_count = 0;
+        QuicSession* batch_target = nullptr;
+
+        for (int i = 0; i < nrecv; ++i) {
+            // Discard truncated datagrams — ngtcp2 would reject partial packets
+            if (msgs[i].msg_hdr.msg_flags & MSG_TRUNC) {
+                continue;
+            }
+            size_t pkt_len = msgs[i].msg_len;
+            if (pkt_len == 0) {
+                continue;
+            }
+
+            // Route to the correct session via dispatcher; drop packets
+            // with unrecognized DCIDs rather than misrouting them
+            void* handler = dispatcher.dispatch(bufs[i], pkt_len);
+            if (!handler) {
+                continue;
+            }
+            QuicSession* target = static_cast<QuicSession*>(handler);
+
+            // Per-packet local address from pktinfo
+            assert(batch_count < QUIC_MAX_RECV_BATCH);
+            memcpy(&pkt_locals[batch_count], &local_addr, local_addrlen);
+            extractPktinfoAddr(cmsg_bufs[i], msgs[i].msg_hdr.msg_controllen,
+                               local_addr.ss_family, &pkt_locals[batch_count]);
+
+            if (target == batch_target || !batch_target) {
+                // Same session (or first packet) — accumulate in batch
+                batch_target = target;
+                ngtcp2_path& path = batch[batch_count].path;
+                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_locals[batch_count]);
+                path.local.addrlen = local_addrlen;
+                path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&addrs[i]);
+                path.remote.addrlen = msgs[i].msg_hdr.msg_namelen;
+                batch[batch_count].data = bufs[i];
+                batch[batch_count].len = pkt_len;
+                ++batch_count;
+            } else {
+                // Different session — flush current batch first
+                if (batch_count > 0) {
+                    batch_target->readPacketBatch(batch, batch_count, xsink);
+                    if (*xsink) {
+                        logBatchError(xsink, batch_target, batch_count);
+                    }
+                }
+                // Start new batch for the different session.
+                // saved_idx captures where the current packet's pktinfo was
+                // written (at pkt_locals[batch_count] above, before the
+                // if/else).  After resetting batch_count to 0, we relocate
+                // that entry to pkt_locals[0] so it becomes the first element
+                // of the new batch.  When saved_idx == 0, source and dest
+                // are already the same slot, so no copy is needed.
+                int saved_idx = batch_count;
+                batch_target = target;
+                batch_count = 0;
+                if (saved_idx != 0) {
+                    memcpy(&pkt_locals[0], &pkt_locals[saved_idx], sizeof(pkt_locals[0]));
+                }
+                ngtcp2_path& path = batch[0].path;
+                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_locals[0]);
+                path.local.addrlen = local_addrlen;
+                path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&addrs[i]);
+                path.remote.addrlen = msgs[i].msg_hdr.msg_namelen;
+                batch[0].data = bufs[i];
+                batch[0].len = pkt_len;
+                ++batch_count;
+            }
+        }
+
+        // Flush remaining batch
+        if (batch_target && batch_count > 0) {
+            batch_target->readPacketBatch(batch, batch_count, xsink);
+            if (*xsink) {
+                logBatchError(xsink, batch_target, batch_count);
+            }
+        }
+
+        // If we received fewer than the batch size, the buffer is drained
+        if (nrecv < QUIC_MAX_RECV_BATCH) {
+            break;
+        }
+    }
+    return 0;
+#else
+    // Drain all available incoming packets one at a time
+    while (true) {
+        struct sockaddr_storage src_addr;
+        socklen_t src_addrlen = sizeof(src_addr);
+        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        size_t cmsg_len = sizeof(cmsg_buf);
+        ssize_t nread = recvQuicPacket(fd, recv_buf, recv_buf_size, MSG_DONTWAIT,
+                                        reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
+                                        cmsg_buf, &cmsg_len);
+        if (nread < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return 0;  // no more data available
+            }
+            if (errno == EMSGSIZE) {
+                continue;  // truncated datagram discarded; continue draining
+            }
+            xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed");
+            return -1;
+        }
+        if (nread == 0) {
+            return 0;
+        }
+
+        // Route to the correct session via dispatcher; drop packets
+        // with unrecognized DCIDs rather than misrouting them
+        void* handler = dispatcher.dispatch(recv_buf, static_cast<size_t>(nread));
+        if (!handler) {
+            continue;
+        }
+        QuicSession* target = static_cast<QuicSession*>(handler);
+
+        // Per-packet local address from pktinfo
+        struct sockaddr_storage pkt_local;
+        memcpy(&pkt_local, &local_addr, local_addrlen);
+        extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr.ss_family, &pkt_local);
+
+        // Build ngtcp2 path with local and remote addresses
+        ngtcp2_path path;
+        path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+        path.local.addrlen = local_addrlen;
+        path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
+        path.remote.addrlen = src_addrlen;
+
+        int rv = target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
+        if (*xsink) {
+            // Log exception details and continue; a single session error should not
+            // stop the server from receiving packets for other sessions
+            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
+            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            fprintf(stderr, "QUIC WARNING: readPacket error (session %lld%s): %s: %s\n",
+                (long long)target->getSessionId(),
+                target->isClosed() ? ", now closed" : "",
+                err_str ? err_str->c_str() : "unknown",
+                desc_str ? desc_str->c_str() : "unknown");
+            xsink->clear();
+        }
+    }
+#endif
+}
+
 // NOTE: sock->priv is accessible because these classes are friends of QoreSocketObject
 
 // ============================================================
@@ -229,13 +448,15 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
     return h.release();
 }
 
-int SocketQuicClientPollOperation::sendPendingPackets(ExceptionSink* xsink) {
-    // Append new packets to any unsent ones retained from a previous partial send
-    (void)quic_session->writePackets(pkt_batch_, xsink);
-    if (*xsink) {
+int SocketQuicClientPollOperation::sendPendingPackets(
+    ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Coalesced timer check + packet generation under a single lock
+    auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
+    if (result.error) {
         pkt_batch_.clear();
         return -1;
     }
+    next_expiry = result.next_expiry;
 
     if (pkt_batch_.empty()) {
         return 0;
@@ -324,8 +545,9 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
     while (true) {
         switch (qcs_state) {
             case QCS::HANDSHAKE_SEND: {
-                // Generate and send handshake packets
-                int rv = sendPendingPackets(xsink);
+                // Generate and send handshake packets (coalesced: timer + write)
+                ngtcp2_tstamp next_expiry;
+                int rv = sendPendingPackets(next_expiry, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -338,22 +560,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             case QCS::HANDSHAKE_RECV: {
-                // Process expired retransmission timers before draining packets;
-                // this triggers ngtcp2 to generate retransmission data that
-                // sendPendingPackets() will flush after the drain loop
-                {
-                    ngtcp2_tstamp expiry = quic_session->getExpiry();
-                    if (expiry != UINT64_MAX) {
-                        ngtcp2_tstamp now = QuicSession::timestamp();
-                        if (expiry <= now) {
-                            quic_session->handleExpiry(xsink);
-                            if (*xsink) {
-                                return nullptr;
-                            }
-                        }
-                    }
-                }
-
                 // Drain all available handshake datagrams
                 while (true) {
                     int rv = recvAndProcessPacket(xsink);
@@ -369,10 +575,11 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 if (quic_session->isHandshakeComplete()) {
                     qcs_state = QCS::SETUP_HTTP3;
                 } else {
-                    // Send any pending handshake data, then yield
-                    // to poll for the next round of datagrams
+                    // Send any pending handshake data (coalesced: timer + write),
+                    // then yield to poll for the next round of datagrams
+                    ngtcp2_tstamp next_expiry;
                     {
-                        int rv = sendPendingPackets(xsink);
+                        int rv = sendPendingPackets(next_expiry, xsink);
                         if (*xsink) {
                             return nullptr;
                         }
@@ -382,7 +589,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // timers fire even when no packets arrive (lossy networks)
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -399,8 +606,10 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 }
 
                 // Send any pending frames (HTTP/3 control + QPACK streams)
+                // Coalesced: timer + write
                 {
-                    int rv = sendPendingPackets(xsink);
+                    ngtcp2_tstamp next_expiry;
+                    int rv = sendPendingPackets(next_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
@@ -414,20 +623,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             case QCS::READING: {
-                // Handle timer expiry (retransmission, PTO) — same as server path
-                {
-                    ngtcp2_tstamp expiry = quic_session->getExpiry();
-                    if (expiry != UINT64_MAX) {
-                        ngtcp2_tstamp now = QuicSession::timestamp();
-                        if (expiry <= now) {
-                            quic_session->handleExpiry(xsink);
-                            if (*xsink) {
-                                return nullptr;
-                            }
-                        }
-                    }
-                }
-
                 // Check for completed streams
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
@@ -464,8 +659,10 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 }
 
                 // Send any pending data (ACKs, HTTP/3 request frames, etc.)
+                // Coalesced: timer + write
                 {
-                    int srv = sendPendingPackets(xsink);
+                    ngtcp2_tstamp next_expiry;
+                    int srv = sendPendingPackets(next_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
@@ -509,7 +706,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // timers fire even when no packets arrive
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -697,39 +894,10 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     return h.release();
 }
 
-int SocketQuicServerPollOperation::processTimers(ExceptionSink* xsink) {
-    ngtcp2_tstamp now = QuicSession::timestamp();
-    for (auto& entry : sessions_) {
-        if (entry.second->isClosed()) {
-            continue;
-        }
-        ngtcp2_tstamp expiry = entry.second->getExpiry();
-        if (expiry != UINT64_MAX && expiry <= now) {
-            entry.second->handleExpiry(xsink);
-            if (*xsink) {
-                return -1;
-            }
-        }
-    }
-    return 0;
-}
-
-ngtcp2_tstamp SocketQuicServerPollOperation::getMinExpiry() const {
-    ngtcp2_tstamp min_expiry = UINT64_MAX;
-    for (const auto& entry : sessions_) {
-        if (entry.second->isClosed()) {
-            continue;
-        }
-        ngtcp2_tstamp expiry = entry.second->getExpiry();
-        if (expiry < min_expiry) {
-            min_expiry = expiry;
-        }
-    }
-    return min_expiry;
-}
-
-int SocketQuicServerPollOperation::sendAllPendingPackets(ExceptionSink* xsink) {
+int SocketQuicServerPollOperation::processTimersAndSendAll(
+    ngtcp2_tstamp& min_expiry, ExceptionSink* xsink) {
     int fd = sock->priv->socket->getSocket();
+    min_expiry = UINT64_MAX;
     int result = 0;
 
     for (auto& entry : sessions_) {
@@ -738,13 +906,14 @@ int SocketQuicServerPollOperation::sendAllPendingPackets(ExceptionSink* xsink) {
             continue;
         }
 
-        // Always call writePackets() — the hasPendingWrite() atomic check
-        // has a TOCTOU window where ACK/timer packets could be missed.
-        // writePackets() is cheap when there's nothing to send (returns empty).
+        // Coalesced: timer check + packet generation + next expiry (1 lock per session)
         pkt_batch_.clear();
-        (void)session->writePackets(pkt_batch_, xsink);
-        if (*xsink) {
+        auto tw = session->processTimerAndWrite(pkt_batch_, xsink);
+        if (tw.error) {
             return -1;
+        }
+        if (tw.next_expiry < min_expiry) {
+            min_expiry = tw.next_expiry;
         }
 
         if (pkt_batch_.empty()) {
@@ -769,7 +938,7 @@ int SocketQuicServerPollOperation::sendAllPendingPackets(ExceptionSink* xsink) {
             // PTO timers.  Server uses a shared UDP socket with per-session addressing,
             // so retaining unsent packets per-session would require a per-session send
             // queue — not worth the complexity since ngtcp2 retransmission handles it.
-            printd(1, "SocketQuicServerPollOperation::sendAllPendingPackets(): partial QUIC send: "
+            printd(1, "SocketQuicServerPollOperation::processTimersAndSendAll(): partial QUIC send: "
                 "%d/%d packets for session %lld\n", sent, pkt_batch_.size(),
                 (long long)entry.first);
             result = SOCK_POLLOUT;
@@ -949,34 +1118,28 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
 
-                // We have at least one session; send any pending handshake data
+                // We have at least one session; coalesced timer + write + send
                 {
-                    int rv = sendAllPendingPackets(xsink);
+                    ngtcp2_tstamp min_expiry;
+                    int rv = processTimersAndSendAll(min_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
-                }
 
-                // Move to the main reading state
-                qcs_state = QCS::READING;
+                    // Move to the main reading state
+                    qcs_state = QCS::READING;
 
-                // Compute QUIC-aware poll timeout from handshake timers
-                // (retransmission PTO may already be pending from handshake)
-                {
+                    // Compute QUIC-aware poll timeout from handshake timers
+                    // (retransmission PTO may already be pending from handshake)
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, getMinExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
                     }
                     return poll_info;
                 }
             }
 
             case QCS::READING: {
-                // Process expired QUIC timers (retransmission, PTO, idle timeout)
-                if (processTimers(xsink) < 0) {
-                    return nullptr;
-                }
-
                 // Check ALL sessions for completed streams
                 for (auto& entry : sessions_) {
                     auto& session = entry.second;
@@ -1024,20 +1187,11 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     }
                 }
 
-                // Send ACKs, retransmissions, and pending data for all sessions
+                // Coalesced: timer + write + send for all sessions (single pass)
                 {
-                    int srv = sendAllPendingPackets(xsink);
+                    ngtcp2_tstamp min_expiry;
+                    int srv = processTimersAndSendAll(min_expiry, xsink);
                     if (*xsink) {
-                        return nullptr;
-                    }
-
-                    // Process timers again after sending (timers may have generated new data)
-                    if (processTimers(xsink) < 0) {
-                        return nullptr;
-                    }
-
-                    // Send any retransmission packets generated by timer processing
-                    if (sendAllPendingPackets(xsink) < 0) {
                         return nullptr;
                     }
 
@@ -1080,7 +1234,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                     // Compute QUIC-aware poll timeout hint from timer expiries
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, getMinExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, min_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -1229,13 +1383,15 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
     }
 }
 
-int SocketQuicSendResponsePollOperation::sendPendingPackets(ExceptionSink* xsink) {
-    // Append new packets to any unsent ones retained from a previous partial send
-    (void)quic_session->writePackets(pkt_batch_, xsink);
-    if (*xsink) {
+int SocketQuicSendResponsePollOperation::sendPendingPackets(
+    ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Coalesced timer check + packet generation under a single lock
+    auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
+    if (result.error) {
         pkt_batch_.clear();
         return -1;
     }
+    next_expiry = result.next_expiry;
 
     if (pkt_batch_.empty()) {
         return 0;
@@ -1268,161 +1424,11 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(ExceptionSink* xsink
 }
 
 int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
-    int fd = sock->priv->socket->getSocket();
-
-    QoreDatagramDispatcher& dispatcher = sock->priv->socket->priv->getQuicDispatcher();
-
-#ifdef __linux__
-    // Batch receive with recvmmsg for reduced syscall overhead
-    // thread-local buffer avoids per-call stack allocation (~32KB)
-    static thread_local uint8_t bufs[QUIC_MAX_RECV_BATCH][QUIC_RECV_BUF_SIZE];
-    while (true) {
-        struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
-        struct iovec iovecs[QUIC_MAX_RECV_BATCH];
-        struct sockaddr_storage addrs[QUIC_MAX_RECV_BATCH];
-        uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
-        memset(msgs, 0, sizeof(msgs));
-
-        for (int i = 0; i < QUIC_MAX_RECV_BATCH; ++i) {
-            iovecs[i].iov_base = bufs[i];
-            iovecs[i].iov_len = QUIC_RECV_BUF_SIZE;
-            msgs[i].msg_hdr.msg_name = &addrs[i];
-            msgs[i].msg_hdr.msg_namelen = sizeof(addrs[i]);
-            msgs[i].msg_hdr.msg_iov = &iovecs[i];
-            msgs[i].msg_hdr.msg_iovlen = 1;
-            msgs[i].msg_hdr.msg_control = cmsg_bufs[i];
-            msgs[i].msg_hdr.msg_controllen = QUIC_CMSG_BUF_SIZE;
-        }
-
-        int nrecv = recvmmsg(fd, msgs, QUIC_MAX_RECV_BATCH, MSG_DONTWAIT, nullptr);
-        if (nrecv < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return 0;  // no more data available
-            }
-            if (errno == EINTR) {
-                continue;  // retry on signal interruption
-            }
-            xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmmsg() failed in send-response");
-            return -1;
-        }
-        if (nrecv == 0) {
-            return 0;
-        }
-
-        for (int i = 0; i < nrecv; ++i) {
-            // Discard truncated datagrams — ngtcp2 would reject partial packets
-            if (msgs[i].msg_hdr.msg_flags & MSG_TRUNC) {
-                continue;
-            }
-            size_t pkt_len = msgs[i].msg_len;
-            if (pkt_len == 0) {
-                continue;
-            }
-
-            // Route to the correct session via dispatcher; drop packets
-            // with unrecognized DCIDs rather than misrouting them
-            void* handler = dispatcher.dispatch(bufs[i], pkt_len);
-            if (!handler) {
-                continue;
-            }
-            QuicSession* target = static_cast<QuicSession*>(handler);
-
-            // Per-packet local address from pktinfo
-            struct sockaddr_storage pkt_local;
-            memcpy(&pkt_local, &local_addr_, local_addrlen_);
-            extractPktinfoAddr(cmsg_bufs[i], msgs[i].msg_hdr.msg_controllen,
-                               local_addr_.ss_family, &pkt_local);
-
-            // Build ngtcp2 path
-            ngtcp2_path path;
-            path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
-            path.local.addrlen = local_addrlen_;
-            path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&addrs[i]);
-            path.remote.addrlen = msgs[i].msg_hdr.msg_namelen;
-
-            int rv = target->readPacket(bufs[i], pkt_len, path, xsink);
-            if (*xsink) {
-                // Log exception details and continue processing remaining packets
-                // in this batch; dropping them would lose valid data from other sessions.
-                // TODO: replace fprintf with AbstractLoggerBase when core logging is implemented
-                const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-                const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-                fprintf(stderr, "QUIC WARNING: readPacket error on batch packet %d/%d "
-                    "(session %lld%s): %s: %s\n",
-                    i, nrecv, (long long)target->getSessionId(),
-                    target->isClosed() ? ", now closed" : "",
-                    err_str ? err_str->c_str() : "unknown",
-                    desc_str ? desc_str->c_str() : "unknown");
-                xsink->clear();
-            }
-        }
-
-        // If we received fewer than the batch size, the buffer is drained
-        if (nrecv < QUIC_MAX_RECV_BATCH) {
-            break;
-        }
-    }
-    return 0;
-#else
-    // Drain all available incoming packets one at a time
-    while (true) {
-        struct sockaddr_storage src_addr;
-        socklen_t src_addrlen = sizeof(src_addr);
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
-        size_t cmsg_len = sizeof(cmsg_buf);
-        ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), MSG_DONTWAIT,
-                                        reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
-                                        cmsg_buf, &cmsg_len);
-        if (nread < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return 0;  // no more data available
-            }
-            if (errno == EMSGSIZE) {
-                continue;  // truncated datagram discarded; continue draining
-            }
-            xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed in send-response");
-            return -1;
-        }
-        if (nread == 0) {
-            return 0;
-        }
-
-        // Route to the correct session via dispatcher; drop packets
-        // with unrecognized DCIDs rather than misrouting them
-        void* handler = dispatcher.dispatch(recv_buf_, static_cast<size_t>(nread));
-        if (!handler) {
-            continue;
-        }
-        QuicSession* target = static_cast<QuicSession*>(handler);
-
-        // Per-packet local address from pktinfo
-        struct sockaddr_storage pkt_local;
-        memcpy(&pkt_local, &local_addr_, local_addrlen_);
-        extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr_.ss_family, &pkt_local);
-
-        // Build ngtcp2 path with local and remote addresses
-        ngtcp2_path path;
-        path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
-        path.local.addrlen = local_addrlen_;
-        path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
-        path.remote.addrlen = src_addrlen;
-
-        int rv = target->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
-        if (*xsink) {
-            // Log exception details and continue; a single session error should not
-            // stop the server from receiving packets for other sessions
-            // TODO: replace fprintf with AbstractLoggerBase when core logging is implemented
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-            fprintf(stderr, "QUIC WARNING: readPacket error (session %lld%s): %s: %s\n",
-                (long long)target->getSessionId(),
-                target->isClosed() ? ", now closed" : "",
-                err_str ? err_str->c_str() : "unknown",
-                desc_str ? desc_str->c_str() : "unknown");
-            xsink->clear();
-        }
-    }
-#endif
+    return recvAndDispatchQuicPackets(
+        sock->priv->socket->getSocket(),
+        sock->priv->socket->priv->getQuicDispatcher(),
+        local_addr_, local_addrlen_,
+        recv_buf_, sizeof(recv_buf_), xsink);
 }
 
 QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
@@ -1437,27 +1443,15 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
     while (true) {
         switch (qcs_state) {
             case QCS::SENDING: {
-                // Handle timer expiry (retransmission, PTO)
-                {
-                    ngtcp2_tstamp expiry = quic_session->getExpiry();
-                    if (expiry != UINT64_MAX) {
-                        ngtcp2_tstamp now = QuicSession::timestamp();
-                        if (expiry <= now) {
-                            quic_session->handleExpiry(xsink);
-                            if (*xsink) {
-                                return nullptr;
-                            }
-                        }
-                    }
-                }
-
                 // Read any incoming ACKs to update flow control windows
                 recvAndProcessPackets(xsink);
                 if (*xsink) {
                     return nullptr;
                 }
 
-                int rv = sendPendingPackets(xsink);
+                // Coalesced: timer check + packet generation + next expiry
+                ngtcp2_tstamp next_expiry;
+                int rv = sendPendingPackets(next_expiry, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -1465,7 +1459,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                     // Register for both read (ACKs) and write (more data)
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -1476,7 +1470,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -1492,34 +1486,22 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                     return nullptr;
                 }
 
-                // Handle timer expiry (retransmission, PTO)
-                {
-                    ngtcp2_tstamp expiry = quic_session->getExpiry();
-                    if (expiry != UINT64_MAX) {
-                        ngtcp2_tstamp now = QuicSession::timestamp();
-                        if (expiry <= now) {
-                            quic_session->handleExpiry(xsink);
-                            if (*xsink) {
-                                return nullptr;
-                            }
-                        }
-                    }
-                }
-
                 // Read any incoming ACKs to update flow control windows
                 recvAndProcessPackets(xsink);
                 if (*xsink) {
                     return nullptr;
                 }
 
-                int rv = sendPendingPackets(xsink);
+                // Coalesced: timer check + packet generation + next expiry
+                ngtcp2_tstamp next_expiry;
+                int rv = sendPendingPackets(next_expiry, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
                 if (rv == SOCK_POLLOUT) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -1531,7 +1513,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -1554,6 +1536,418 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
 
             default:
                 xsink->raiseException("QUIC-POLL-ERROR", "invalid send response poll state: %d", static_cast<int>(qcs_state));
+                return nullptr;
+        }
+    }
+}
+
+// ============================================================
+// SocketQuicSendStreamingResponsePollOperation
+// ============================================================
+
+SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePollOperation(
+    ExceptionSink* xsink, QoreSocketObject* sock,
+    int64_t session_id, int64_t stream_id, int status_code,
+    const QoreHashNode* headers,
+    InputStream* input_stream, int64 chunk_size)
+    : SocketPollSocketOperationBase(sock), stream_id(stream_id),
+      input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+      is_pollable(input_stream->supportsNonBlockingIo()) {
+    AutoLocker al(sock->priv->m);
+
+    // Validate socket
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    // Get the QUIC session by session_id from the socket
+    quic_session = sock->priv->socket->priv->getQuicSession(session_id);
+    if (!quic_session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    // Set non-blocking guard flag on QoreSocketObject
+    if (sock->priv->setNonBlock(xsink)) {
+        return;
+    }
+    set_non_block = true;
+
+    // Set OS-level non-blocking mode on the fd
+    if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return;
+    }
+
+    // Copy the remote peer address from the QUIC session for sendto()
+    memcpy(&peer_addr_, &quic_session->getRemoteAddr(), sizeof(peer_addr_));
+    peer_addrlen_ = quic_session->getRemoteAddrLen();
+
+    // Cache local address
+    int fd = sock->priv->socket->getSocket();
+    local_addrlen_ = sizeof(local_addr_);
+    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
+        xsink->raiseErrnoException("QUIC-ERROR", errno,
+            "getsockname() failed in streaming send-response setup");
+        sock->priv->socket->priv->set_non_blocking(false, xsink);
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return;
+    }
+    if (enableQuicPktinfo(fd, local_addr_.ss_family) < 0) {
+        printd(0, "SocketQuicSendStreamingResponsePollOperation: enableQuicPktinfo() failed: "
+            "errno=%d (%s)\n", errno, strerror(errno));
+    }
+
+    // Submit the streaming response (headers only, deferred data reader)
+    int rv = quic_session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+    if (*xsink) {
+        sock->priv->socket->priv->set_non_blocking(false, xsink);
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return;
+    }
+
+    // Cache the pollable file descriptor for non-blocking reads
+    if (is_pollable) {
+        stream_fd = input_stream->getPollableDescriptor();
+        if (stream_fd < 0) {
+            is_pollable = false;
+        }
+    }
+
+    // Thread affinity: QPP wrapper calls unassignThread() after construction
+    printd(5, "SocketQuicSendStreamingResponsePollOperation() headers submitted stream_id=%" PRId64 "\n",
+        stream_id);
+}
+
+const char* SocketQuicSendStreamingResponsePollOperation::getStateImpl() const {
+    switch (ss_state) {
+        case QCS_SS::READ_CHUNK: return "reading-chunk";
+        case QCS_SS::SEND_CHUNK: return "sending-chunk";
+        case QCS_SS::FLUSH: return "flushing";
+        case QCS_SS::RECV_ACK: return "receiving-ack";
+        case QCS_SS::DONE: return "done";
+        default: return "unknown";
+    }
+}
+
+int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
+    ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Coalesced timer check + packet generation under a single lock
+    auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
+    if (result.error) {
+        pkt_batch_.clear();
+        return -1;
+    }
+    next_expiry = result.next_expiry;
+
+    if (pkt_batch_.empty()) {
+        return 0;
+    }
+
+    int fd = sock->priv->socket->getSocket();
+
+    int sent = sendQuicPacketsBatch(fd, pkt_batch_,
+        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_);
+    if (sent < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return SOCK_POLLOUT;
+        }
+        pkt_batch_.clear();
+        xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
+        return -1;
+    }
+    if (sent > 0 && sent < static_cast<int>(pkt_batch_.size())) {
+        printd(1, "SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(): "
+            "partial QUIC send: %d/%d packets\n", sent, static_cast<int>(pkt_batch_.size()));
+        pkt_batch_.removeFront(sent);
+        return SOCK_POLLOUT;
+    }
+
+    pkt_batch_.clear();
+    return 0;
+}
+
+int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
+    return recvAndDispatchQuicPackets(
+        sock->priv->socket->getSocket(),
+        sock->priv->socket->priv->getQuicDispatcher(),
+        local_addr_, local_addrlen_,
+        recv_buf_, sizeof(recv_buf_), xsink);
+}
+
+QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {
+    // Reassign the input stream to the current (worker) thread on first call
+    if (need_reassign) {
+        need_reassign = false;
+        if (input_stream) {
+            input_stream->reassignThread(xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+
+    // Guard against continuePoll() after abort()
+    if (!quic_session) {
+        xsink->raiseException("QUIC-POLL-ERROR", "QUIC streaming send session has been aborted");
+        return nullptr;
+    }
+
+    while (true) {
+        switch (ss_state) {
+            case QCS_SS::READ_CHUNK: {
+                if (eof) {
+                    // Send end-of-stream marker
+                    int rv = quic_session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (rv == 1) {
+                        // Buffer full, wait for ACKs
+                        ss_state = QCS_SS::RECV_ACK;
+                        continue;
+                    }
+                    ss_state = QCS_SS::FLUSH;
+                    continue;
+                }
+
+                if (is_pollable) {
+                    // Non-blocking read for pollable streams
+                    assert(stream_fd >= 0);
+                    struct pollfd pfd;
+                    pfd.fd = stream_fd;
+                    pfd.events = POLLIN;
+                    pfd.revents = 0;
+                    int poll_rv = poll(&pfd, 1, 0);
+                    if (poll_rv < 0) {
+                        xsink->raiseException("QUIC-ERROR", "poll() on stream fd failed: %s",
+                            strerror(errno));
+                        ExceptionSink cancel_xsink;
+                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
+                            &cancel_xsink);
+                        return nullptr;
+                    }
+                    if (poll_rv == 0) {
+                        // Stream not ready — yield to event loop for socket I/O
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        if (poll_info) {
+                            setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
+                        }
+                        return poll_info;
+                    }
+
+                    // Stream FD is readable — do non-blocking read
+                    SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                    chunk->preallocate(chunk_size);
+                    int64 count = input_stream->readNonBlock(
+                        const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                    if (*xsink) {
+                        ExceptionSink cancel_xsink;
+                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
+                            &cancel_xsink);
+                        return nullptr;
+                    }
+                    if (count == 0) {
+                        // poll said readable but read returned 0 → EOF
+                        eof = true;
+                        continue;
+                    }
+                    chunk->setSize(count);
+                    current_chunk = chunk.release();
+                } else {
+                    // Non-pollable streams: release the socket lock before
+                    // reading to avoid blocking the I/O thread if the
+                    // InputStream implementation performs blocking I/O
+                    sock->priv->m.unlock();
+                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    sock->priv->m.lock();
+                    // Re-validate session after re-acquiring lock (abort() may
+                    // have been called while the lock was released)
+                    if (!quic_session) {
+                        if (!*xsink) {
+                            xsink->raiseException("QUIC-POLL-ERROR",
+                                "QUIC streaming send session was aborted during InputStream read");
+                        }
+                        return nullptr;
+                    }
+                    if (*xsink) {
+                        ExceptionSink cancel_xsink;
+                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
+                            &cancel_xsink);
+                        return nullptr;
+                    }
+                    if (!current_chunk) {
+                        eof = true;
+                        continue;
+                    }
+                }
+
+                printd(5, "SocketQuicSendStreamingResponsePollOperation::continuePoll() "
+                    "read chunk size=%zu\n", current_chunk->size());
+                ss_state = QCS_SS::SEND_CHUNK;
+                continue;
+            }
+
+            case QCS_SS::SEND_CHUNK: {
+                int rv = quic_session->sendStreamData(stream_id, current_chunk->getPtr(),
+                    current_chunk->size(), false, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == 1) {
+                    // Buffer full (backpressure) — wait for ACKs before retrying
+                    ss_state = QCS_SS::RECV_ACK;
+                    continue;
+                }
+                current_chunk = nullptr;
+                ss_state = QCS_SS::FLUSH;
+                continue;
+            }
+
+            case QCS_SS::FLUSH: {
+                // Check for peer disconnect
+                if (quic_session->isClosed()) {
+                    ss_state = QCS_SS::DONE;
+                    if (set_non_block) {
+                        sock->priv->socket->priv->set_non_blocking(false, xsink);
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                    }
+                    return nullptr;
+                }
+
+                // Read any incoming ACKs to update flow control windows
+                recvAndProcessPackets(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                // Coalesced: timer check + packet generation + next expiry
+                ngtcp2_tstamp next_expiry;
+                int rv = sendPendingPackets(next_expiry, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (rv == SOCK_POLLOUT) {
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN | SOCK_POLLOUT);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                    }
+                    return poll_info;
+                }
+
+                // Check if there's still more data to send
+                if (quic_session->hasPendingWrite()) {
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                    }
+                    return poll_info;
+                }
+
+                if (eof) {
+                    // All done
+                    ss_state = QCS_SS::DONE;
+                    if (set_non_block) {
+                        sock->priv->socket->priv->set_non_blocking(false, xsink);
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                    }
+                    return nullptr;
+                }
+
+                // More data to read
+                ss_state = QCS_SS::READ_CHUNK;
+                continue;
+            }
+
+            case QCS_SS::RECV_ACK: {
+                // Read incoming ACKs
+                recvAndProcessPackets(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                // Coalesced: timer check + packet generation + send
+                ngtcp2_tstamp next_expiry;
+                {
+                    int rv = sendPendingPackets(next_expiry, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+
+                // Retry the previous send/EOF operation
+                if (eof && !current_chunk) {
+                    // Was trying to send EOF marker
+                    int rv = quic_session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (rv != 1) {
+                        // Buffer drained; proceed to flush
+                        ss_state = QCS_SS::FLUSH;
+                        continue;
+                    }
+                    // Still full — fall through to yield below
+                } else if (current_chunk) {
+                    // Retry sending the chunk
+                    int rv = quic_session->sendStreamData(stream_id,
+                        current_chunk->getPtr(), current_chunk->size(), false, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (rv != 1) {
+                        // Buffer drained; proceed to flush
+                        current_chunk = nullptr;
+                        ss_state = QCS_SS::FLUSH;
+                        continue;
+                    }
+                    // Still full — fall through to yield below
+                } else {
+                    // No pending send — go back to read
+                    ss_state = QCS_SS::READ_CHUNK;
+                    continue;
+                }
+
+                // Buffer still full — yield to event loop and wait for ACKs
+                {
+                    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    if (poll_info) {
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                    }
+                    return poll_info;
+                }
+            }
+
+            case QCS_SS::DONE:
+                if (set_non_block) {
+                    sock->priv->socket->priv->set_non_blocking(false, xsink);
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                }
+                return nullptr;
+
+            default:
+                xsink->raiseException("QUIC-POLL-ERROR",
+                    "invalid streaming send response poll state: %d",
+                    static_cast<int>(ss_state));
                 return nullptr;
         }
     }

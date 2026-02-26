@@ -1088,7 +1088,9 @@ public:
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
-                sock->clearNonBlock();
+                AutoLocker al(sock->priv->m);
+                sock->priv->socket->priv->set_non_blocking(false, xsink);
+                sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
             delete this;
@@ -1155,8 +1157,11 @@ private:
     //! Reusable packet batch (avoids per-call heap allocations)
     QuicPacketBatch pkt_batch_;
 
-    //! Send all pending QUIC packets via UDP
-    DLLLOCAL int sendPendingPackets(ExceptionSink* xsink);
+    //! Coalesced timer + write + send pending QUIC packets via UDP
+    /** @param next_expiry output: next timer expiry for poll timeout
+        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    */
+    DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
     //! Receive and process a UDP datagram
     DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink);
@@ -1180,7 +1185,9 @@ public:
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
-                sock->clearNonBlock();
+                AutoLocker al(sock->priv->m);
+                sock->priv->socket->priv->set_non_blocking(false, xsink);
+                sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
             delete this;
@@ -1257,17 +1264,16 @@ private:
     struct sockaddr_storage local_addr_{};
     socklen_t local_addrlen_ = 0;
 
-    //! Send all pending QUIC packets for ALL sessions via UDP
-    DLLLOCAL int sendAllPendingPackets(ExceptionSink* xsink);
+    //! Coalesced timer + write + send for all sessions in a single pass
+    /** Replaces separate processTimers() + sendAllPendingPackets() + getMinExpiry()
+        with a single iteration over sessions.
+        @param min_expiry output: minimum timer expiry across all sessions
+        @return 0 on success, SOCK_POLLOUT if any session had a partial send, -1 on error
+    */
+    DLLLOCAL int processTimersAndSendAll(ngtcp2_tstamp& min_expiry, ExceptionSink* xsink);
 
     //! Receive and process a UDP datagram (dispatches to correct session)
     DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink, QuicSession** target_out = nullptr);
-
-    //! Process QUIC timers for all sessions (retransmission, idle timeout, PTO)
-    DLLLOCAL int processTimers(ExceptionSink* xsink);
-
-    //! Get minimum expiry across all sessions (nanosecond timestamp, UINT64_MAX if none)
-    DLLLOCAL ngtcp2_tstamp getMinExpiry() const;
 
     //! Clean up closed sessions (called periodically, not every poll cycle)
     DLLLOCAL void cleanupClosedSessions();
@@ -1299,7 +1305,9 @@ public:
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
-                sock->clearNonBlock();
+                AutoLocker al(sock->priv->m);
+                sock->priv->socket->priv->set_non_blocking(false, xsink);
+                sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
             delete this;
@@ -1346,8 +1354,133 @@ private:
     struct sockaddr_storage local_addr_{};
     socklen_t local_addrlen_ = 0;
 
-    //! Send all pending QUIC packets via UDP
-    DLLLOCAL int sendPendingPackets(ExceptionSink* xsink);
+    //! Coalesced timer + write + send pending QUIC packets via UDP
+    /** @param next_expiry output: next timer expiry for poll timeout
+        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    */
+    DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
+
+    //! Receive and process incoming packets (ACKs for flow control)
+    DLLLOCAL int recvAndProcessPackets(ExceptionSink* xsink);
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return false;  // UDP is connectionless
+    }
+};
+
+//! Streaming states for QUIC streaming response poll operation
+enum class QCS_SS : int {
+    READ_CHUNK = 0,   //!< reading a chunk from InputStream
+    SEND_CHUNK = 1,   //!< sending chunk data to QuicSession
+    FLUSH = 2,        //!< flushing QUIC packets to the network
+    RECV_ACK = 3,     //!< waiting for ACKs (backpressure)
+    DONE = 4,         //!< streaming complete
+};
+
+//! Poll operation for sending an HTTP/3 streaming response via InputStream
+/** Reads chunks from an InputStream and sends them incrementally over a QUIC
+    stream using the deferred data reader mechanism (NGHTTP3_ERR_WOULDBLOCK /
+    nghttp3_conn_resume_stream).
+
+    State machine:
+    QCS_SS_READ_CHUNK -> QCS_SS_SEND_CHUNK -> QCS_SS_FLUSH -> (loop or QCS_SS_DONE)
+                                                  |
+                                            QCS_SS_RECV_ACK (backpressure/flow control)
+
+    @since %Qore 2.3
+*/
+class SocketQuicSendStreamingResponsePollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketQuicSendStreamingResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+                                                           int64_t session_id, int64_t stream_id,
+                                                           int status_code,
+                                                           const QoreHashNode* headers,
+                                                           InputStream* input_stream,
+                                                           int64 chunk_size = 16384);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            // If destroyed without abort() (e.g. owner cancellation), clean up
+            // the stream and restore socket state
+            if (quic_session || set_non_block) {
+                AutoLocker al(sock->priv->m);
+                // Cancel stream to prevent leaked streaming_body_data_ entries
+                if (quic_session && ss_state != QCS_SS::DONE) {
+                    ExceptionSink cancel_xsink;
+                    quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
+                        &cancel_xsink);
+                }
+                quic_session.reset();
+                // Restore OS-level blocking mode
+                if (set_non_block) {
+                    sock->priv->socket->priv->set_non_blocking(false, xsink);
+                    sock->priv->clearNonBlock();
+                }
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return ss_state == QCS_SS::DONE;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Release InputStream and chunk references
+        input_stream = nullptr;
+        current_chunk = nullptr;
+        // Cancel stream via QuicSession
+        {
+            AutoLocker al(sock->priv->m);
+            if (quic_session) {
+                ExceptionSink cancel_xsink;
+                quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &cancel_xsink);
+            }
+            quic_session.reset();
+            if (set_non_block) {
+                sock->priv->socket->priv->set_non_blocking(false, xsink);
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+            }
+        }
+    }
+
+private:
+    std::shared_ptr<QuicSession> quic_session;
+    int64_t stream_id = -1;
+    QCS_SS ss_state = QCS_SS::READ_CHUNK;
+
+    //! InputStream fields
+    SimpleRefHolder<InputStream> input_stream;
+    int64 chunk_size;
+    bool eof = false;
+    bool is_pollable;
+    bool need_reassign = true;
+    int stream_fd = -1;
+    SimpleRefHolder<BinaryNode> current_chunk;
+
+    //! Stored remote peer address for sendto()
+    struct sockaddr_storage peer_addr_{};
+    socklen_t peer_addrlen_ = 0;
+
+    //! Receive buffer for incoming packets (ACKs)
+    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
+    //! Reusable packet batch (avoids per-call heap allocations)
+    QuicPacketBatch pkt_batch_;
+
+    //! Cached local address (from getsockname at construction time)
+    struct sockaddr_storage local_addr_{};
+    socklen_t local_addrlen_ = 0;
+
+    //! Coalesced timer + write + send pending QUIC packets via UDP
+    /** @param next_expiry output: next timer expiry for poll timeout
+        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    */
+    DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
     //! Receive and process incoming packets (ACKs for flow control)
     DLLLOCAL int recvAndProcessPackets(ExceptionSink* xsink);

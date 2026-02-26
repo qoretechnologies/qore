@@ -46,6 +46,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <condition_variable>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -90,7 +91,32 @@ struct QuicBodyData {
     size_t offset = 0;
 };
 
+//! Per-stream streaming body data for incremental sending via nghttp3 data reader callback
+/** Used by submitResponseStreaming()/sendStreamData() for InputStream-based responses.
+    The nghttp3 data reader callback returns NGHTTP3_ERR_WOULDBLOCK when no data is
+    available, and nghttp3_conn_resume_stream() is called when new data arrives.
+*/
+struct QuicStreamingBodyData {
+    std::vector<uint8_t> data;   //!< buffered chunk data
+    size_t offset = 0;           //!< read offset into data
+    bool eof = false;            //!< InputStream signaled EOF
+    bool deferred = false;       //!< WOULDBLOCK returned, waiting for resume
+};
+
 class qore_socket_private;
+
+//! Result from processTimerAndWrite() — coalesces timer check + packet generation
+struct QuicTimerWriteResult {
+    ngtcp2_tstamp next_expiry = UINT64_MAX;  //!< next timer expiry after processing
+    bool error = false;                       //!< true if an error occurred
+};
+
+//! A received QUIC packet ready for batch processing
+struct QuicReceivedPacket {
+    const uint8_t* data;    //!< packet data (not owned)
+    size_t len;             //!< packet length
+    ngtcp2_path path;       //!< network path (local + remote address)
+};
 
 //! QUIC session wrapper around ngtcp2 + nghttp3 (parallel to Http2Session)
 class QuicSession {
@@ -199,6 +225,25 @@ public:
     //! Handle timer expiry (retransmission, keep-alive, etc.)
     DLLLOCAL int handleExpiry(ExceptionSink* xsink);
 
+    //! Coalesced timer check + packet generation under a single lock acquisition
+    /** Replaces the separate getExpiry() → handleExpiry() → writePackets() → getExpiry()
+        sequence with a single lock acquisition.
+        @param packets output: generated QUIC packets
+        @param xsink exception sink
+        @return result containing next_expiry and error flag
+    */
+    DLLLOCAL QuicTimerWriteResult processTimerAndWrite(QuicPacketBatch& packets, ExceptionSink* xsink);
+
+    //! Process a batch of received packets under a single lock acquisition
+    /** Replaces N separate readPacket() calls with a single lock acquisition.
+        On per-packet error: logs and continues. On DRAINING/CLOSING: breaks early.
+        @param packets array of received packets
+        @param count number of packets in the array
+        @param xsink exception sink
+        @return 0 on success, -1 on fatal error
+    */
+    DLLLOCAL int readPacketBatch(const QuicReceivedPacket* packets, int count, ExceptionSink* xsink);
+
     //! Submit an HTTP/3 request (client side)
     /** @return stream ID on success, -1 on error */
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
@@ -209,6 +254,45 @@ public:
     DLLLOCAL int submitResponse(int64_t stream_id, int status_code,
                        const strcase_str_map_t& headers,
                        const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Submit an HTTP/3 streaming response (server side, headers only)
+    /** Sets up a deferred data reader callback that will return NGHTTP3_ERR_WOULDBLOCK
+        until data is provided via sendStreamData().
+
+        @param stream_id the HTTP/3 stream ID to respond on
+        @param status_code the HTTP status code
+        @param headers response headers
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitResponseStreaming(int64_t stream_id, int status_code,
+                       const strcase_str_map_t& headers, ExceptionSink* xsink);
+
+    //! Send body data on a streaming HTTP/3 response
+    /** Appends data to the stream's buffer and resumes the nghttp3 deferred data
+        reader if it was waiting.
+
+        @param stream_id the HTTP/3 stream ID
+        @param data body data to send (nullptr with end_stream=true to signal EOF)
+        @param len length of data
+        @param end_stream true if this is the last chunk
+        @param xsink exception sink
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+    */
+    DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
+                       bool end_stream, ExceptionSink* xsink);
+
+    //! Wait for a streaming body buffer to drain below the backpressure threshold
+    /** Blocks the calling thread until the stream's buffered data drops below
+        QUIC_MAX_STREAM_BODY, the stream is closed, or the timeout expires.
+        Only acquires mtx_ (NOT the socket lock priv->m), so this is safe to call
+        from a handler thread that does not hold the socket lock.
+
+        @param stream_id the HTTP/3 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+    */
+    DLLLOCAL int waitForStreamDrain(int64_t stream_id, int timeout_ms);
 
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();
@@ -347,6 +431,19 @@ private:
     //! Set up SSL_CTX for server with certificate and private key
     DLLLOCAL int setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
                           ExceptionSink* xsink);
+
+    //! Get timer expiry without locking (caller must hold mtx_)
+    DLLLOCAL ngtcp2_tstamp getExpiryLocked() const;
+
+    //! Handle timer expiry without locking (caller must hold mtx_)
+    DLLLOCAL int handleExpiryLocked(ExceptionSink* xsink);
+
+    //! Generate outgoing packets without locking (caller must hold mtx_)
+    DLLLOCAL int writePacketsLocked(QuicPacketBatch& batch, ExceptionSink* xsink);
+
+    //! Process incoming packet without locking (caller must hold mtx_)
+    DLLLOCAL int readPacketLocked(const uint8_t* data, size_t len,
+                                  const ngtcp2_path& path, ExceptionSink* xsink);
 
     //! Get or create a stream info entry
     DLLLOCAL QuicStreamInfo* getOrCreateStream(int64_t stream_id);
@@ -503,6 +600,9 @@ private:
     //! Body data for streams being sent (used by data reader callback)
     std::unordered_map<int64_t, QuicBodyData> body_data_;
 
+    //! Streaming body data for incremental sending (used by data reader callback)
+    std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
+
     //! Stream data received before HTTP/3 layer is initialized (buffered for replay)
     struct BufferedStreamData {
         int64_t stream_id;
@@ -530,6 +630,27 @@ private:
     //! markStreamComplete) that also need the lock. A non-recursive mutex
     //! would deadlock.
     mutable std::recursive_mutex mtx_;
+
+    //! Condition variable for stream drain notifications (backpressure)
+    /** Signaled by h3ReadDataCallback when it consumes data from a streaming
+        buffer, and by streamCloseCallback when a stream is closed.
+
+        Uses a separate non-recursive drain_mtx_ + drain_cv_ pair with an atomic
+        generation counter to avoid both:
+        - POSIX UB of pthread_cond_wait with PTHREAD_MUTEX_RECURSIVE
+        - the extra internal mutex overhead of std::condition_variable_any
+
+        The generation counter prevents lost wakeups: signal sites increment
+        drain_gen_ and briefly lock drain_mtx_ before notify; the waiter checks
+        drain_gen_ under drain_mtx_ then re-checks the actual predicate under mtx_.
+
+        Lock ordering: signal sites hold mtx_ then briefly acquire drain_mtx_;
+        the waiter holds drain_mtx_ (for CV wait) then separately acquires mtx_
+        (never simultaneously), so no deadlock is possible.
+    */
+    std::mutex drain_mtx_;
+    std::condition_variable drain_cv_;
+    std::atomic<unsigned> drain_gen_{0};
 };
 
 #endif // _QORE_INTERN_QUICSESSION_H

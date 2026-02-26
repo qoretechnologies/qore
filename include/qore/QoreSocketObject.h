@@ -71,6 +71,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketQuicClientPollOperation;
     friend class SocketQuicServerPollOperation;
     friend class SocketQuicSendResponsePollOperation;
+    friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
     DLLEXPORT QoreSocketObject();
@@ -581,6 +582,52 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT bool isQuicGoawayReceived(int64_t session_id, ExceptionSink* xsink);
+
+    //! Submits a streaming HTTP/3 response (headers only) on a QUIC session
+    /** Data is provided incrementally via submitQuicStreamData().
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param status_code the HTTP status code
+        @param headers response headers
+        @param xsink exception sink
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicResponseStreaming(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Sends body data on a streaming HTTP/3 response
+    /** @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param data body data to send (nullptr with end_stream=true to signal EOF)
+        @param len length of data
+        @param end_stream true if this is the last chunk
+        @param xsink exception sink
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicStreamData(int64_t session_id, int64_t stream_id,
+        const void* data, size_t len, bool end_stream, ExceptionSink* xsink);
+
+    //! Wait for a streaming body buffer to drain below the backpressure threshold
+    /** Blocks until the stream's buffered data drops below QUIC_MAX_STREAM_BODY,
+        the stream is closed, or the timeout expires.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+        @param xsink exception sink
+        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

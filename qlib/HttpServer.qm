@@ -1347,7 +1347,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         if (asyncMode) {
             # Cancel any remaining operations owned by this server on globalAsyncCtrl
-            # (e.g. HTTP/2 poll operations from execHttp2PollOperation)
+            # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
             string ownerId = self.uniqueHash();
             @debug(log("stop: calling globalAsyncCtrl.cancelByOwner(%s)", ownerId));
             int canceled = globalAsyncCtrl.cancelByOwner(ownerId);
@@ -1841,17 +1841,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     op = s.startPollSendHttp2Response(stream_id, status_code, hdr, send_body);
                 }
-                execHttp2PollOperation(s, op);
+                execAsyncPollOperation(s, op);
             } else if (cx."header-info".http3) {
                 # HTTP/3: send response via QUIC stream (NOT the HTTP/1.x sendHTTPResponse path)
                 int session_id = cx."header-info".session_id;
                 int stream_id = cx."header-info".stream_id;
                 auto send_body = response_msg ?? chunked_msg;
-                # TODO: implement streaming HTTP/3 response to avoid buffering entire body in memory
                 if (send_body instanceof InputStream) {
-                    send_body = send_body.read(-1);
+                    # HTTP/3: stream InputStream response incrementally to avoid buffering
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, status_code, hdr, send_body);
+                    execAsyncPollOperation(s, op);
+                } else {
+                    s.submitQuicResponse(session_id, stream_id, status_code, hdr, send_body);
                 }
-                s.submitQuicResponse(session_id, stream_id, status_code, hdr, send_body);
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
                     response_msg ?? chunked_msg);
@@ -2873,7 +2876,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # Sync mode: use poll operation
                             AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(
                                 stream_id, rv."code" ?? 200, ws_hdr);
-                            execHttp2PollOperation(s, op);
+                            execAsyncPollOperation(s, op);
                         }
 
                         hash<auto> ws_cx = cx + {"listener": listener, "id": ws_id};
@@ -2957,20 +2960,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
-    #! Executes an HTTP/2 poll operation using the global async I/O controller
+    #! Executes an async poll operation using the global async I/O controller
     /** @par Internal Method
         This method is for internal use only and should not be called directly by user code.
 
-        This method sends an HTTP/2 response using the shared AsyncSocketIoController for efficient
+        This method sends a response via the shared AsyncSocketIoController for efficient
         I/O multiplexing. It blocks until the response is fully sent, but the underlying I/O is
         handled asynchronously by the controller's I/O thread.
+
+        Used for both HTTP/2 and HTTP/3 (QUIC) poll operations.
 
         @param s the socket to send on
         @param op the poll operation to execute
 
         @throw any exception raised during the I/O operation
     */
-    execHttp2PollOperation(Socket s, AbstractPollOperation op) {
+    execAsyncPollOperation(Socket s, AbstractPollOperation op) {
         hash<SocketPollResultInfo> result = globalAsyncCtrl.exec(<SocketPollOperationInfo>{
             "sock": s,
             "spop": op,
@@ -3105,7 +3110,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         stream_id, rv."code");
                     AbstractPollOperation op = s.startPollSendHttp2StreamingResponse(
                         stream_id, rv."code", hdr, body);
-                    execHttp2PollOperation(s, op);
+                    execAsyncPollOperation(s, op);
                 } else {
                     # HTTP/2: send pre-materialized body
                     auto final_body = body ?? rv.body;
@@ -3116,7 +3121,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         stream_id, rv."code", final_body ? final_body.size() : 0);
                     AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
                         final_body);
-                    execHttp2PollOperation(s, op);
+                    execAsyncPollOperation(s, op);
                 }
                 listener.log("doResponse: HTTP/2 send complete");
             } else if (cx."header-info".http3) {
@@ -3126,17 +3131,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 hash<auto> hdr = rv.hdr ?? {};
                 remove hdr."Transfer-Encoding";
                 auto final_body = body ?? rv.body;
-                # TODO: implement streaming HTTP/3 response to avoid buffering entire body in memory
-                # NOTE: this sync path is only reached from the handler thread
-                # (async mode captures InputStreams via async_response_out above);
-                # InputStream.read() is safe here without reassignThread() because
-                # the handler thread created the stream
                 if (final_body instanceof InputStream) {
-                    final_body = final_body.read(-1);
+                    # HTTP/3: stream InputStream response incrementally to avoid buffering
+                    listener.log("doResponse: HTTP/3 streaming send starting session=%d "
+                        "stream=%d code=%d", session_id, stream_id, rv."code");
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, rv."code", hdr, final_body);
+                    execAsyncPollOperation(s, op);
+                } else {
+                    listener.log("doResponse: HTTP/3 send session=%d stream=%d code=%d "
+                        "body_size=%d", session_id, stream_id, rv."code",
+                        final_body ? final_body.size() : 0);
+                    s.submitQuicResponse(session_id, stream_id, rv."code", hdr, final_body);
                 }
-                listener.log("doResponse: HTTP/3 send session=%d stream=%d code=%d body_size=%d",
-                    session_id, stream_id, rv."code", final_body ? final_body.size() : 0);
-                s.submitQuicResponse(session_id, stream_id, rv."code", hdr, final_body);
                 listener.log("doResponse: HTTP/3 send complete");
             } else if (!chunked) {
                 # HTTP/1.x: send a normal monolithic response
@@ -4600,23 +4607,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     op = s.startPollSendHttp2Response(stream_id, response.code, hdr,
                         response.body);
                 }
-                serv.execHttp2PollOperation(s, op);
+                serv.execAsyncPollOperation(s, op);
             } else if (response.cx."header-info".http3) {
                 # HTTP/3: send via QUIC stream
                 int session_id = response.cx."header-info".session_id;
                 int stream_id = response.cx."header-info".stream_id;
                 hash<auto> hdr = response.hdr ?? {};
                 remove hdr."Transfer-Encoding";
-                auto final_body = response.body;
-                # TODO: implement streaming HTTP/3 response to avoid buffering entire body in memory
                 if (response.input_stream) {
+                    # HTTP/3: stream InputStream response incrementally
+                    # Stream was unassigned in doResponse(); reassign to current thread so
+                    # startPollQuicSendStreamingResponse() can access it (it will unassign again)
                     response.input_stream.reassignThread();
-                    on_exit response.input_stream.unassignThread();
-                    final_body = response.input_stream.read(-1);
-                } else if (final_body instanceof InputStream) {
-                    final_body = final_body.read(-1);
+                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
+                        session_id, stream_id, response.code, hdr, response.input_stream);
+                    serv.execAsyncPollOperation(s, op);
+                } else {
+                    s.submitQuicResponse(session_id, stream_id, response.code, hdr,
+                        response.body);
                 }
-                s.submitQuicResponse(session_id, stream_id, response.code, hdr, final_body);
             } else if (response.send_callback) {
                 # HTTP/1.x: send callback-based chunked response (e.g. DataStream protocol)
                 s.sendHTTPResponseWithCallback(response.send_callback, response.code,

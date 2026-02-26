@@ -1257,6 +1257,63 @@ bool QoreSocketObject::isQuicGoawayReceived(int64_t session_id, ExceptionSink* x
     return session->isGoawayReceived();
 }
 
+int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t stream_id,
+        int status_code, const QoreHashNode* headers, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    return session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+}
+
+int QoreSocketObject::submitQuicStreamData(int64_t session_id, int64_t stream_id,
+        const void* data, size_t len, bool end_stream, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+
+    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+}
+
+int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink) {
+    // Look up the session with a brief lock, then release it before waiting.
+    // waitForStreamDrain() only acquires QuicSession::mtx_, not the socket lock,
+    // so there is no deadlock risk with I/O threads that hold priv->m.
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+    return session->waitForStreamDrain(stream_id, timeout_ms);
+}
+
 bool my_socket_priv::hasQuicSession() const {
     qore_socket_private* sp = qore_socket_private::get(*socket);
     AutoLocker al(sp->quic_sessions_lock);

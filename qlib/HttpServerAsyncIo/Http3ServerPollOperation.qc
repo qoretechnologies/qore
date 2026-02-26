@@ -383,6 +383,34 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         state = STATE_SENDING;
     }
 
+    #! Starts sending an HTTP/3 streaming response via InputStream
+    /** @param status_code the HTTP status code
+        @param headers response headers
+        @param body InputStream providing the response body
+        @param chunk_size optional chunk size for reading from the InputStream
+
+        @note This must be called after the request is ready (goalReached() returns True)
+    */
+    startSendStreamingResponse(int status_code, *hash<auto> headers,
+            InputStream body, *int chunk_size) {
+        AutoLock al(op_lock);
+        if (state != STATE_REQUEST_READY) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot send streaming response in state: %y "
+                "(HTTP/3 allows only one response per request stream)", state);
+        }
+        if (!request || !request.stream_id) {
+            throw "HTTP3-ERROR", "no stream_id available for response";
+        }
+        if (!request.session_id) {
+            throw "HTTP3-ERROR", "no session_id available for response";
+        }
+
+        # Use the Socket QUIC streaming send response operation
+        current_op = sock.startPollQuicSendStreamingResponse(request.session_id,
+            request.stream_id, status_code, headers, body, chunk_size);
+        state = STATE_SENDING;
+    }
+
     #! Starts reading the next HTTP/3 request on this connection
     /** After sending a response, call this to wait for the next request
         on the persistent QUIC connection.
