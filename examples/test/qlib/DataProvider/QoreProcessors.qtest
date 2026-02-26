@@ -116,6 +116,11 @@ class QoreProcessorsTest inherits QUnit::Test {
 
         addTestCase("RegularExpressionArgInfo - RE_Global present", \regexArgInfoReGlobal());
 
+        addTestCase("prepareExpression - field path caching", \prepareExpressionFieldPath());
+        addTestCase("filter - bulk mode support", \filterBulkMode());
+        addTestCase("filter - bulk edge cases", \filterBulkEdgeCases());
+        addTestCase("filter - bulk in pipeline", \filterBulkPipeline());
+
         set_return_value(main());
     }
 
@@ -659,5 +664,118 @@ class QoreProcessorsTest inherits QUnit::Test {
         assertEq(True, found, "RE_Global should be in RegularExpressionArgInfo allowed_values");
         # verify total count is 6 (5 original + RE_Global)
         assertEq(6, allowed.size());
+    }
+
+    # --- prepareExpression Tests ---
+
+    prepareExpressionFieldPath() {
+        # Simple field reference
+        hash<DataProviderExpression> raw = <DataProviderExpression>{
+            "exp": "==",
+            "args": (
+                <DataProviderFieldReference>{"field": "a.b"},
+                42,
+            ),
+        };
+        hash<DataProviderExpression> prepared = AbstractDataProvider::prepareExpression(raw);
+
+        # field_path should be pre-computed
+        hash<DataProviderFieldReference> ref0 = prepared.args[0];
+        assertEq(("a", "b"), ref0.field_path, "field_path pre-computed for dotted field");
+        assertEq("a.b", ref0.field, "original field name preserved");
+
+        # Both produce same evaluation results
+        hash<auto> rec_match = {"a": {"b": 42}};
+        hash<auto> rec_no_match = {"a": {"b": 99}};
+        assertTrue(AbstractDataProvider::evalGenericExpression(rec_match, raw).toBool());
+        assertTrue(AbstractDataProvider::evalGenericExpression(rec_match, prepared).toBool());
+        assertFalse(AbstractDataProvider::evalGenericExpression(rec_no_match, raw).toBool());
+        assertFalse(AbstractDataProvider::evalGenericExpression(rec_no_match, prepared).toBool());
+
+        # Escaped dots should be unescaped in field_path
+        hash<DataProviderExpression> escaped = AbstractDataProvider::prepareExpression(<DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "a\\.b"}, 1),
+        });
+        hash<DataProviderFieldReference> ref_escaped = escaped.args[0];
+        assertEq(("a.b",), ref_escaped.field_path, "escaped dot produces single segment");
+
+        # Nested expressions are recursively prepared
+        hash<DataProviderExpression> nested = AbstractDataProvider::prepareExpression(<DataProviderExpression>{
+            "exp": "AND",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "x"}, 1),
+                },
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "y"}, 2),
+                },
+            ),
+        });
+        hash<DataProviderExpression> sub0 = nested.args[0];
+        hash<DataProviderFieldReference> sub0_ref = sub0.args[0];
+        assertEq(("x",), sub0_ref.field_path, "nested expression field_path prepared");
+
+        # Literal args pass through unchanged
+        assertEq(42, prepared.args[1], "literal arg preserved");
+    }
+
+    # --- Bulk Filter Tests ---
+
+    filterBulkMode() {
+        QoreFilterRecordsProcessor fp({"where_cond": {"exp": "==", "args": ({"field": "value"}, 1)}});
+
+        # Verify bulk API is supported
+        assertTrue(fp.supportsBulkApi(), "filter processor supports bulk API");
+
+        # Build bulk data with 10 records, records 1 and 9 match (value == 1)
+        hash<auto> bulk = {
+            "id": (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+            "value": (0, 1, 2, 3, 4, 5, 6, 7, 8, 1),
+            "name": ("r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9"),
+        };
+
+        *auto result = fp.processRecord(bulk);
+        assertEq(True, exists result, "bulk result exists");
+        hash<auto> filtered = result;
+        assertEq(2, filtered.id.lsize(), "2 records pass filter");
+        assertEq((1, 9), filtered.id, "correct IDs pass");
+        assertEq((1, 1), filtered.value, "correct values");
+        assertEq(("r1", "r9"), filtered.name, "correct names");
+
+        # Verify individual (non-bulk) path still works
+        assertEq({"id": 1, "value": 1}, fp.processRecord({"id": 1, "value": 1}),
+            "individual matching record");
+        assertEq(NOTHING, fp.processRecord({"id": 2, "value": 2}),
+            "individual non-matching record");
+    }
+
+    filterBulkEdgeCases() {
+        QoreFilterRecordsProcessor fp_none({"where_cond": {"exp": "==", "args": ({"field": "v"}, 99)}});
+
+        # All records filtered out
+        hash<auto> bulk_none = {"id": (1, 2, 3), "v": (0, 0, 0)};
+        assertEq(NOTHING, fp_none.processRecord(bulk_none), "all filtered returns NOTHING");
+
+        # All records pass
+        QoreFilterRecordsProcessor fp_all({"where_cond": {"exp": "==", "args": ({"field": "v"}, 1)}});
+        hash<auto> bulk_all = {"id": (1, 2, 3), "v": (1, 1, 1)};
+        assertEq(bulk_all, fp_all.processRecord(bulk_all), "all pass returns original data");
+
+        # Single record bulk
+        hash<auto> bulk_one = {"id": (42,), "v": (1,)};
+        assertEq(bulk_one, fp_all.processRecord(bulk_one), "single record bulk pass");
+        assertEq(NOTHING, fp_none.processRecord(bulk_one), "single record bulk filtered");
+    }
+
+    filterBulkPipeline() {
+        # Verify that a pipeline with a filter processor enables bulk mode
+        DataProviderPipeline pipeline(<PipelineOptionInfo>{"name": "filter-bulk-test"});
+        pipeline.append(0, new QoreFilterRecordsProcessor({
+            "where_cond": {"exp": "==", "args": ({"field": "v"}, 1)},
+        }));
+        assertTrue(pipeline.getInfo().bulk, "pipeline with filter has bulk mode enabled");
     }
 }

@@ -25,6 +25,12 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Pipeline processor that filters records based on a where_cond expression
+/** Supports both individual record and bulk (hash-of-lists) processing.  When used in a pipeline,
+    bulk mode allows the pipeline to avoid per-record queue enqueue/dequeue overhead, which is a
+    significant performance improvement for high-throughput pipelines.
+
+    @since DataProvider 3.3
+*/
 public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
@@ -49,7 +55,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     }
 
     private {
-        #! The parsed where expression
+        #! The parsed and prepared where expression (field paths pre-computed)
         hash<DataProviderExpression> where_expr;
     }
 
@@ -61,7 +67,8 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.where_cond) {
-            where_expr = DataProvider::deserializeExpressionFromJson(copts.where_cond);
+            where_expr = AbstractDataProvider::prepareExpression(
+                DataProvider::deserializeExpressionFromJson(copts.where_cond));
         }
     }
 
@@ -112,17 +119,71 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     }
 
     #! Processes a single record and returns the result
+    /** Handles both individual records (hash) and bulk data (hash-of-lists).
+        In bulk mode, iterates through each record in the hash-of-lists, evaluates the filter expression,
+        and returns a filtered hash-of-lists containing only matching records.
+
+        @param record the input data — either a single record hash or a bulk hash-of-lists
+
+        @return the input data if the filter matches (or a filtered subset for bulk), or @ref nothing if no records
+        match
+
+        @throws PROCESSOR-ERROR if no filter expression is configured
+    */
     private *auto processRecordImpl(auto record) {
         if (!where_expr) {
             throw "PROCESSOR-ERROR", "QoreFilterRecordsProcessor: no filter expression configured; "
                 "provide 'where_cond' option";
         }
+        # Bulk mode: hash-of-lists where first value is a list
+        if (record.typeCode() == NT_HASH && record.firstValue().typeCode() == NT_LIST) {
+            return filterBulk(record);
+        }
         return AbstractDataProvider::evalGenericExpression(record, where_expr) ? record : NOTHING;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Filters bulk data (hash-of-lists) by evaluating the expression on each record
+    /** @param records the bulk data to filter
+        @return filtered hash-of-lists with only matching records, or @ref nothing if no records match
+
+        @since DataProvider 3.3
+    */
+    private *hash<auto> filterBulk(hash<auto> records) {
+        int total = records.firstValue().lsize();
+        list<int> passing();
+        HashListIterator it(records);
+        int idx = 0;
+        while (it.next()) {
+            if (AbstractDataProvider::evalGenericExpression(it.getValue(), where_expr)) {
+                push passing, idx;
+            }
+            ++idx;
+        }
+        if (!passing) {
+            return;
+        }
+        if (passing.lsize() == total) {
+            return records;
+        }
+        # Build filtered hash-of-lists using only the passing indices
+        hash<auto> result;
+        list<string> field_keys = keys records;
+        foreach string key in (field_keys) {
+            list<auto> vals = records{key};
+            list<auto> filtered();
+            foreach int i in (passing) {
+                push filtered, vals[i];
+            }
+            result{key} = filtered;
+        }
+        return result;
+    }
+
+    #! Returns @ref True — this processor supports bulk (hash-of-lists) data
+    /** @since DataProvider 3.3
+    */
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
