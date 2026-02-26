@@ -223,6 +223,8 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         addTestCase("source element with 3 child queues", \testSourceElementWith3ChildQueues());
         addTestCase("source element as queue processor no double-count",
             \testSourceElementAsQueueProcessorNoDoubleCount());
+        addTestCase("QoG fan-out with filter field reference and source metrics",
+            \testQogFanOutFilterFieldRefSourceMetrics());
 
         set_return_value(main());
     }
@@ -1711,5 +1713,94 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Total completed = 2*N (each child queue outputs N)
         assertEq(2 * n, snap.total_records_completed,
             "total_records_completed must equal 2*N (fan-out)");
+    }
+
+    # =========================================================================
+    # Test 30: QoG fan-out with filter field reference and source metrics
+    # =========================================================================
+
+    #! Reproduces the QoG topology from qog-pipeline-test.json:
+    #!   Source (Generator, N sequential records) → fan-out:
+    #!     Branch 1: passthrough → passthrough
+    #!     Branch 2: QoreFilterRecordsProcessor (value < threshold) → passthrough
+    #!
+    #! With sequential generator, value = 0.0, 1.0, ..., (N-1).0
+    #! Filter passes records where value < threshold → exactly `threshold` records.
+    #!
+    #! Verifies:
+    #! - Source element metrics = N (not inflated by fan-out)
+    #! - Filter accounting: branch 1 outputs N, branch 2 outputs threshold
+    #! - total_records_submitted = N
+    #! - total_records_completed = N + threshold
+    #! - QoreFilterRecordsProcessor correctly resolves DataProviderFieldReference
+    testQogFanOutFilterFieldRefSourceMetrics() {
+        int n = 100;
+        int threshold = 50;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "qog-fanout-filter-test",
+            "metrics_collector": collector,
+        });
+
+        # Branch 1: passthrough → passthrough
+        int q1 = pipe.appendQueue(0);
+        pipe.append(q1, new DeltaPassthroughProcessor(), "proc-1a");
+        pipe.append(q1, new DeltaPassthroughProcessor(), "proc-1b");
+
+        # Branch 2: QoreFilterRecordsProcessor (value < threshold) → passthrough
+        int q2 = pipe.appendQueue(0);
+        # Construct the filter expression: value < threshold
+        # In JSON transport format: {"exp": "<", "args": [{"field": "value"}, {"value": threshold}]}
+        hash<auto> filter_expr_json = {
+            "exp": "<",
+            "args": (
+                {"field": "value"},
+                {"value": threshold},
+            ),
+        };
+        DataProvider::QoreFilterRecordsProcessor filter({"where_cond": filter_expr_json});
+        pipe.append(q2, filter, "filter-2");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "proc-2a");
+
+        # Set up external source element
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        mc.initElement("ext:source", "processor", "SourceProvider", "source-state");
+        mc.setSourceElement("ext:source");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Source element must have exactly N records — not inflated by fan-out
+        assertEq(n, snap.element_metrics."source-state".records_processed,
+            "source records_processed must equal N");
+        assertEq(n, snap.element_metrics."source-state".records_output,
+            "source records_output must equal N");
+
+        # Total submitted must equal N
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal N");
+
+        # Total completed = N (branch 1 terminal) + threshold (branch 2 terminal after filter)
+        assertEq(n + threshold, snap.total_records_completed,
+            sprintf("total_records_completed must equal N + threshold (%d + %d)", n, threshold));
+
+        # Branch 1 processors: both must have processed N records
+        assertEq(n, snap.element_metrics."proc-1a".records_processed,
+            "proc-1a must have processed N records");
+        assertEq(n, snap.element_metrics."proc-1b".records_processed,
+            "proc-1b must have processed N records");
+
+        # Filter must have processed N records but output only threshold records
+        assertEq(n, snap.element_metrics."filter-2".records_processed,
+            "filter must have processed N records (received all)");
+        assertEq(threshold, snap.element_metrics."filter-2".records_output,
+            sprintf("filter must have output only %d records (value < %d)", threshold, threshold));
+
+        # Branch 2 terminal processor must have processed only threshold records
+        assertEq(threshold, snap.element_metrics."proc-2a".records_processed,
+            sprintf("proc-2a must have processed only %d records (after filter)", threshold));
     }
 }
