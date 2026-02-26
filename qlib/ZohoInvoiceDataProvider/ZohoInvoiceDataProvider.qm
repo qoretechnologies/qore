@@ -74,6 +74,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new invoice",
             "desc": "Create a new invoice in Zoho Invoice for a customer",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceInvoiceDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -168,6 +171,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing invoice",
             "desc": "Update an existing invoice in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceInvoiceDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -262,6 +268,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete an invoice",
             "desc": "Delete an invoice from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteInvoiceDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -285,7 +294,7 @@ module ZohoInvoiceDataProvider {
         # Get Invoice
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-invoice",
+            "path": "/invoices",
             "action": "get-invoice",
             "groups": "Invoices",
             "display_name": "Get Invoice",
@@ -355,13 +364,13 @@ module ZohoInvoiceDataProvider {
                     "display_name": "Date Start",
                     "short_desc": "Filter from this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter invoices created on or after this date (YYYY-MM-DD)",
+                    "desc": "Filter invoices created on or after this date (`YYYY-MM-DD`)",
                 },
                 "date_end": <ActionOptionInfo>{
                     "display_name": "Date End",
                     "short_desc": "Filter to this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter invoices created on or before this date (YYYY-MM-DD)",
+                    "desc": "Filter invoices created on or before this date (`YYYY-MM-DD`)",
                 },
                 "invoice_number": <ActionOptionInfo>{
                     "display_name": "Invoice Number",
@@ -382,6 +391,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Send an invoice by email",
             "desc": "Send an invoice to the customer via email",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceEmailInvoiceDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -428,6 +440,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Change invoice status",
             "desc": "Change the status of an invoice (sent, void, or draft)",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceMarkInvoiceDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -472,6 +487,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new recurring invoice",
             "desc": "Create a new recurring invoice profile in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceRecurringInvoiceDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -542,6 +560,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing recurring invoice",
             "desc": "Update an existing recurring invoice profile",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceRecurringInvoiceDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -604,7 +625,7 @@ module ZohoInvoiceDataProvider {
         # Get Recurring Invoice
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-recurring-invoice",
+            "path": "/recurring-invoices",
             "action": "get-recurring-invoice",
             "groups": "Recurring Invoices",
             "display_name": "Get Recurring Invoice",
@@ -668,6 +689,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Change recurring invoice status",
             "desc": "Stop or resume a recurring invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceMarkRecurringInvoiceDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -710,6 +734,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new contact",
             "desc": "Create a new customer contact in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceContactDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -812,6 +839,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing contact",
             "desc": "Update an existing contact's information",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceContactDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -915,6 +945,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete a contact",
             "desc": "Delete a contact from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteContactDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -938,7 +971,7 @@ module ZohoInvoiceDataProvider {
         # Get Contact
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-contact",
+            "path": "/contacts",
             "action": "get-contact",
             "groups": "Contacts",
             "display_name": "Get Contact",
@@ -1024,6 +1057,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Change contact status",
             "desc": "Mark a contact as active or inactive",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceMarkContactDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1067,6 +1103,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new expense",
             "desc": "Record a new expense in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceExpenseDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1156,6 +1195,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing expense",
             "desc": "Update an existing expense record",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceExpenseDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1239,6 +1281,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete an expense",
             "desc": "Delete an expense from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteExpenseDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1262,7 +1307,7 @@ module ZohoInvoiceDataProvider {
         # Get Expense
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-expense",
+            "path": "/expenses",
             "action": "get-expense",
             "groups": "Expenses",
             "display_name": "Get Expense",
@@ -1331,13 +1376,13 @@ module ZohoInvoiceDataProvider {
                     "display_name": "Date Start",
                     "short_desc": "Filter from this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter expenses on or after this date (YYYY-MM-DD)",
+                    "desc": "Filter expenses on or after this date (`YYYY-MM-DD`)",
                 },
                 "date_end": <ActionOptionInfo>{
                     "display_name": "Date End",
                     "short_desc": "Filter to this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter expenses on or before this date (YYYY-MM-DD)",
+                    "desc": "Filter expenses on or before this date (`YYYY-MM-DD`)",
                 },
             },
         });
@@ -1354,6 +1399,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new recurring expense",
             "desc": "Create a new recurring expense profile in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceRecurringExpenseDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1430,6 +1478,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing recurring expense",
             "desc": "Update an existing recurring expense profile",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceRecurringExpenseDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1499,6 +1550,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete a recurring expense",
             "desc": "Delete a recurring expense from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteRecurringExpenseDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1521,7 +1575,7 @@ module ZohoInvoiceDataProvider {
         # Get Recurring Expense
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-recurring-expense",
+            "path": "/recurring-expenses",
             "action": "get-recurring-expense",
             "groups": "Recurring Expenses",
             "display_name": "Get Recurring Expense",
@@ -1581,6 +1635,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new payment",
             "desc": "Record a payment received from a customer",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoicePaymentDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1664,6 +1721,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing payment",
             "desc": "Update an existing payment record",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoicePaymentDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1740,6 +1800,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete a payment",
             "desc": "Delete a payment record from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeletePaymentDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1763,7 +1826,7 @@ module ZohoInvoiceDataProvider {
         # Get Payment
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-payment",
+            "path": "/payments",
             "action": "get-payment",
             "groups": "Payments",
             "display_name": "Get Payment",
@@ -1819,13 +1882,13 @@ module ZohoInvoiceDataProvider {
                     "display_name": "Date Start",
                     "short_desc": "Filter from this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter payments on or after this date (YYYY-MM-DD)",
+                    "desc": "Filter payments on or after this date (`YYYY-MM-DD`)",
                 },
                 "date_end": <ActionOptionInfo>{
                     "display_name": "Date End",
                     "short_desc": "Filter to this date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter payments on or before this date (YYYY-MM-DD)",
+                    "desc": "Filter payments on or before this date (`YYYY-MM-DD`)",
                 },
                 "payment_mode": <ActionOptionInfo>{
                     "display_name": "Payment Mode",
@@ -1859,6 +1922,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Refund a payment",
             "desc": "Create a refund for a customer payment",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceRefundPaymentDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1898,6 +1964,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new estimate",
             "desc": "Create a new quote/estimate for a customer",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceEstimateDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -1993,6 +2062,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing estimate",
             "desc": "Update an existing quote/estimate",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceEstimateDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2088,6 +2160,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete an estimate",
             "desc": "Delete an estimate from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteEstimateDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2111,7 +2186,7 @@ module ZohoInvoiceDataProvider {
         # Get Estimate
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-estimate",
+            "path": "/estimates",
             "action": "get-estimate",
             "groups": "Estimates",
             "display_name": "Get Estimate",
@@ -2188,6 +2263,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Change estimate status",
             "desc": "Change the status of an estimate",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceMarkEstimateDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2232,6 +2310,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new project",
             "desc": "Create a new project in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceProjectDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2312,6 +2393,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing project",
             "desc": "Update an existing project",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceProjectDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2377,7 +2461,7 @@ module ZohoInvoiceDataProvider {
         # Get Project
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-project",
+            "path": "/projects",
             "action": "get-project",
             "groups": "Projects",
             "display_name": "Get Project",
@@ -2428,6 +2512,21 @@ module ZohoInvoiceDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "ref_data": "customers",
                 },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by project status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "active", "desc": "Active projects"},
+                        <AllowedValueInfo>{"value": "inactive", "desc": "Inactive projects"},
+                    ),
+                },
+                "project_name": <ActionOptionInfo>{
+                    "display_name": "Project Name",
+                    "short_desc": "Search by project name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search projects by name (partial match)",
+                },
             },
         });
 
@@ -2441,6 +2540,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Change project status",
             "desc": "Mark a project as active or inactive",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceMarkProjectDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2483,6 +2585,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Create a new item",
             "desc": "Create a new product or service item in Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceItemDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2555,6 +2660,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Update an existing item",
             "desc": "Update an existing item",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ZohoInvoiceItemDataType();
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2620,6 +2728,9 @@ module ZohoInvoiceDataProvider {
             "short_desc": "Delete an item",
             "desc": "Delete an item from Zoho Invoice",
             "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return ZohoInvoiceDeleteItemDataProvider::ResponseType;
+            },
             "options": {
                 "organization_id": <ActionOptionInfo>{
                     "display_name": "Organization",
@@ -2642,7 +2753,7 @@ module ZohoInvoiceDataProvider {
         # Get Item
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ZohoInvoiceDataProvider::AppName,
-            "path": "/get-item",
+            "path": "/items",
             "action": "get-item",
             "groups": "Items",
             "display_name": "Get Item",
@@ -2715,7 +2826,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new invoices (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },
@@ -2744,7 +2855,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new contacts (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },
@@ -2773,7 +2884,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new estimates (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },
@@ -2802,7 +2913,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new expenses (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },
@@ -2831,7 +2942,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new items (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },
@@ -2860,7 +2971,7 @@ module ZohoInvoiceDataProvider {
                 "poll_interval": <ActionOptionInfo>{
                     "display_name": "Poll Interval",
                     "short_desc": "How often to check for new projects (seconds)",
-                    "type": AbstractDataProviderTypeMap."int",
+                    "type": AbstractDataProviderTypeMap."*int",
                     "default_value": DefaultPollInterval,
                 },
             },

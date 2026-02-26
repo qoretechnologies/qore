@@ -69,8 +69,12 @@ public class ZohoInvoiceItemDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Item status",
-                "desc": "Status of the item (active, inactive)",
+                "desc": "Status of the item",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active item"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive item"},
+                ),
             },
             "item_type": {
                 "display_name": "Item Type",
@@ -131,8 +135,7 @@ public class ZohoInvoiceItemDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -207,8 +210,7 @@ public class ZohoInvoiceCreateItemRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

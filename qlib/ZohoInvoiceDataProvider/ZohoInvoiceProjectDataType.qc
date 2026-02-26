@@ -63,8 +63,12 @@ public class ZohoInvoiceProjectDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Project status",
-                "desc": "Status of the project (active, inactive)",
+                "desc": "Status of the project",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active project"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive project"},
+                ),
             },
             "billing_type": {
                 "display_name": "Billing Type",
@@ -149,8 +153,7 @@ public class ZohoInvoiceProjectDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -220,8 +223,7 @@ public class ZohoInvoiceCreateProjectRequestDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

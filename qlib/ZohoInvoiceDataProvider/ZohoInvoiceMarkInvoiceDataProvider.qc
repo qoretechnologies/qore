@@ -58,7 +58,12 @@ public class ZohoInvoiceMarkInvoiceDataProvider inherits ZohoInvoiceDataProvider
             "status": {
                 "display_name": "Status",
                 "type": SoftStringType,
-                "desc": "The status to set (sent, void, draft)",
+                "desc": "The status to set",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "sent", "desc": "Mark as sent"},
+                    <AllowedValueInfo>{"value": "void", "desc": "Mark as void"},
+                    <AllowedValueInfo>{"value": "draft", "desc": "Mark as draft"},
+                ),
             },
         });
 

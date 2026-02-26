@@ -57,8 +57,13 @@ public class ZohoInvoiceRecurringInvoiceDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Recurring invoice status",
-                "desc": "Status (active, stopped, expired)",
+                "desc": "Status of the recurring invoice",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active recurring invoice"},
+                    <AllowedValueInfo>{"value": "stopped", "desc": "Stopped recurring invoice"},
+                    <AllowedValueInfo>{"value": "expired", "desc": "Expired recurring invoice"},
+                ),
             },
             "recurrence_frequency": {
                 "display_name": "Frequency",
@@ -155,8 +160,7 @@ public class ZohoInvoiceRecurringInvoiceDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
@@ -194,14 +198,14 @@ public class ZohoInvoiceCreateRecurringInvoiceRequestDataType inherits HashDataT
             "start_date": {
                 "display_name": "Start Date",
                 "short_desc": "Start date",
-                "desc": "The start date (YYYY-MM-DD)",
+                "desc": "The start date (`YYYY-MM-DD`)",
                 "type": SoftStringType,
                 "required": True,
             },
             "end_date": {
                 "display_name": "End Date",
                 "short_desc": "End date",
-                "desc": "The end date (YYYY-MM-DD)",
+                "desc": "The end date (`YYYY-MM-DD`)",
                 "type": SoftStringOrNothingType,
             },
             "payment_terms": {
@@ -240,8 +244,7 @@ public class ZohoInvoiceCreateRecurringInvoiceRequestDataType inherits HashDataT
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
