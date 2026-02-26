@@ -305,6 +305,8 @@ class PipelineQueue {
         int flush_waiting = 0;
 
         #! Data queue
+        #! When metrics are enabled, entries are hashes with "data" and "enqueue_time" keys;
+        #! otherwise entries are raw data values.
         list<auto> queue;
 
         #! Maximum queue size
@@ -405,7 +407,9 @@ class PipelineQueue {
             lck.unlock();
         }
 
+        bool waited = False;
         while (!queue_stop && queue.lsize() == size) {
+            waited = True;
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
@@ -416,8 +420,21 @@ class PipelineQueue {
                 "down", parent.getName());
         }
 
-        # do not use the += operator in case the data is a list
-        push queue, qdata;
+        # Enqueue data; when metrics are enabled, wrap in a hash with the enqueue timestamp
+        # so dequeue can compute queue wait time from the same entry (no parallel list to desync)
+        if (has_metrics) {
+            push queue, {"data": qdata, "enqueue_time": now_us()};
+            *PipelineMetricsCollector mc = parent.getMetricsCollector();
+            if (mc) {
+                mc.recordQueueDepth(id_str, queue.lsize());
+                if (waited) {
+                    mc.recordBackpressure(id_str);
+                }
+            }
+        } else {
+            # do not use the += operator in case the data is a list
+            push queue, qdata;
+        }
 
         if (data_waiting) {
             cond.broadcast();
@@ -493,6 +510,7 @@ class PipelineQueue {
         list<int> acc_out();
         list<int> acc_completed();
         list<int> acc_processing_us();
+        list<int> acc_queue_wait_us();
         bool acc_initialized = False;
 
         #! wait for an event
@@ -501,7 +519,7 @@ class PipelineQueue {
                 # Flush any pending metrics before going idle
                 if (batch_count > 0) {
                     flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                        \acc_completed, \acc_processing_us);
+                        \acc_completed, \acc_processing_us, \acc_queue_wait_us);
                 }
 
                 if (!id && do_flush) {
@@ -518,8 +536,21 @@ class PipelineQueue {
                 continue;
             }
 
-            auto qdata = shift queue;
+            auto qentry = shift queue;
+            int record_queue_wait_us = 0;
+            auto qdata;
             processing = True;
+            if (has_metrics) {
+                # Unwrap the {data, enqueue_time} envelope
+                qdata = qentry.data;
+                record_queue_wait_us = (now_us() - qentry.enqueue_time).durationMicroseconds();
+                *PipelineMetricsCollector mc = parent.getMetricsCollector();
+                if (mc) {
+                    mc.recordQueueDepth(id_str, queue.lsize());
+                }
+            } else {
+                qdata = qentry;
+            }
             if (queue_waiting) {
                 cond.broadcast();
             }
@@ -546,6 +577,7 @@ class PipelineQueue {
                         push acc_out, 0;
                         push acc_completed, 0;
                         push acc_processing_us, 0;
+                        push acc_queue_wait_us, 0;
                     }
                     acc_initialized = True;
                 }
@@ -604,8 +636,7 @@ class PipelineQueue {
                         }
                     } else {
                         # Fan-out to child queues
-                        # Queue 0 still needs acc_in[elem_index] so flushMetricsBatch
-                        # can compute submitted (it reads acc_in[0] for the first element)
+                        # Queue 0 tracks acc_in so flushMetricsBatch can compute submitted
                         if (has_metrics && !id) {
                             int fanout_count;
                             if (do_bulk) {
@@ -628,16 +659,18 @@ class PipelineQueue {
 
                 # Increment batch counter; flush at threshold
                 if (has_metrics) {
+                    # Attribute queue wait time to the first processing element
+                    acc_queue_wait_us[0] += record_queue_wait_us;
                     if (++batch_count >= metrics_batch_size) {
                         flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                            \acc_completed, \acc_processing_us);
+                            \acc_completed, \acc_processing_us, \acc_queue_wait_us);
                     }
                 }
             } catch (hash<ExceptionInfo> ex) {
                 # Flush pending metrics batch on error
                 if (batch_count > 0) {
                     flushMetricsBatch(\batch_count, \acc_in, \acc_out,
-                        \acc_completed, \acc_processing_us);
+                        \acc_completed, \acc_processing_us, \acc_queue_wait_us);
                 }
                 if (has_metrics) {
                     *PipelineMetricsCollector mc = parent.getMetricsCollector();
@@ -666,11 +699,13 @@ class PipelineQueue {
         @param acc_out per-element output record accumulators (reset to 0)
         @param acc_completed per-element completed record accumulators (reset to 0)
         @param acc_processing_us per-element processing time accumulators in microseconds (reset to 0)
+        @param acc_queue_wait_us per-element queue wait time accumulators in microseconds (reset to 0)
     */
     private flushMetricsBatch(reference<int> batch_count,
             reference<list<int>> acc_in, reference<list<int>> acc_out,
             reference<list<int>> acc_completed,
-            reference<list<int>> acc_processing_us) {
+            reference<list<int>> acc_processing_us,
+            reference<list<int>> acc_queue_wait_us) {
         *PipelineMetricsCollector mc = parent.getMetricsCollector();
         if (mc) {
             date now = now_us();
@@ -682,7 +717,7 @@ class PipelineQueue {
             int submitted = (!id && acc_in && acc_in[0] > 0) ? acc_in[0] : 0;
 
             # Atomically update all metrics and trigger at most one snapshot
-            mc.recordBatchFlush(submitted, elem_ids, acc_processing_us,
+            mc.recordBatchFlush(submitted, elem_ids, acc_processing_us, acc_queue_wait_us,
                 acc_in, acc_out, acc_completed, now);
 
             # Reset accumulators
@@ -691,6 +726,7 @@ class PipelineQueue {
                 acc_out[i] = 0;
                 acc_completed[i] = 0;
                 acc_processing_us[i] = 0;
+                acc_queue_wait_us[i] = 0;
             }
         }
         batch_count = 0;
@@ -933,13 +969,13 @@ public class PipelineMetricsCollector {
         }
     }
 
-    #! Sets the source element ID so that recordPipelineSubmit() also updates source element metrics
+    #! Sets the source element ID so that pipeline submissions also update source element metrics
     /** @param element_id the element identifier for the source element (must already be initialized
                via initElement())
 
-        When set, each call to recordPipelineSubmit() will increment the source element's
-        records_processed and records_output and trigger maybeGetSnapshot(), so that source
-        element metrics appear in periodic delta snapshots — not only in the final COMPLETE snapshot.
+        When set, each pipeline submission will increment the source element's
+        records_processed and records_output so that source element metrics appear in
+        periodic delta snapshots — not only in the final COMPLETE snapshot.
     */
     setSourceElement(string element_id) {
         metrics_lock.lock();
@@ -1063,12 +1099,14 @@ public class PipelineMetricsCollector {
         @param submitted_count number of records submitted to the pipeline (0 for non-primary queues)
         @param element_ids list of element IDs in the queue (parallel to records_in/out/completed)
         @param processing_us per-element processing time accumulators in microseconds
+        @param queue_wait_us per-element queue wait time accumulators in microseconds
         @param records_in per-element input record counts
         @param records_out per-element output record counts
         @param records_completed per-element completed record counts (only last element normally > 0)
         @param timestamp caller-provided timestamp to avoid redundant now_us() calls
     */
     recordBatchFlush(int submitted_count, list<string> element_ids, list<int> processing_us,
+            list<int> queue_wait_us,
             list<int> records_in, list<int> records_out, list<int> records_completed,
             date timestamp) {
         int ri = cached_record_interval;
@@ -1079,24 +1117,22 @@ public class PipelineMetricsCollector {
             metrics_lock.lock();
             on_exit metrics_lock.unlock();
 
-            # 1. Update total_submitted
+            # Update total_submitted and source element metrics
             if (submitted_count > 0) {
                 total_submitted += submitted_count;
-            }
-
-            # 2. Update source element metrics (if configured)
-            if (submitted_count > 0 && source_element_id) {
-                reference<hash<PipelineElementMetrics>> sem = \element_metrics{source_element_id};
-                if (!sem.first_record_time) {
-                    sem.first_record_time = timestamp;
+                if (source_element_id) {
+                    reference<hash<PipelineElementMetrics>> sem = \element_metrics{source_element_id};
+                    if (!sem.first_record_time) {
+                        sem.first_record_time = timestamp;
+                    }
+                    sem.last_record_time = timestamp;
+                    sem.records_processed += submitted_count;
+                    sem.records_output += submitted_count;
+                    records_since_callback += submitted_count;
                 }
-                sem.last_record_time = timestamp;
-                sem.records_processed += submitted_count;
-                sem.records_output += submitted_count;
-                records_since_callback += submitted_count;
             }
 
-            # 3. Update per-element metrics
+            # Update per-element metrics
             int n = element_ids.size();
             for (int i = 0; i < n; ++i) {
                 if (records_in[i] > 0) {
@@ -1121,6 +1157,9 @@ public class PipelineMetricsCollector {
                     int elem_us = processing_us[i];
                     em.processing_time_us += elem_us;
 
+                    # Update queue wait time
+                    em.queue_wait_time_us += queue_wait_us[i];
+
                     # Calculate per-record processing time for min/max tracking
                     int per_record_us = records_in[i] > 0
                         ? (elem_us / records_in[i]) : elem_us;
@@ -1135,7 +1174,7 @@ public class PipelineMetricsCollector {
                 }
             }
 
-            # 4. Trigger at most one snapshot after all updates are applied
+            # Trigger at most one snapshot after all updates are applied
             snapshot = maybeGetSnapshot(ri, ims);
         }
 
@@ -1149,63 +1188,28 @@ public class PipelineMetricsCollector {
         }
     }
 
-    #! Records records entering the pipeline
+    #! Records records entering the pipeline (internal use only)
     /** @param count number of records submitted (default: 1)
 
-        When a source element has been set via setSourceElement(), this method also updates
-        the source element's records_processed/records_output and triggers maybeGetSnapshot()
-        so that source metrics appear in periodic delta snapshots.
+        Updates total_submitted and, when a source element is set, the source element's
+        records_processed/records_output counters.
 
-        @note records_since_callback is only incremented when a source element is set, because
-        without a source element there are no element-level metrics to snapshot and the pipeline
-        queue workers handle their own snapshot triggering via recordElementProcessing().
+        @note Submission tracking is handled by recordBatchFlush() called from the pipeline's
+        queue workers. This method exists for internal use only.
     */
-    recordPipelineSubmit(int count = 1) {
-        # First pass: check source_element_id under lock; if set, release lock and fetch thresholds
-        bool has_source;
-        {
-            metrics_lock.lock();
-            on_exit metrics_lock.unlock();
-            total_submitted += count;
-            has_source = exists source_element_id;
-        }
+    private:internal recordPipelineSubmit(int count = 1) {
+        # lock must be held by caller
+        total_submitted += count;
 
-        if (!has_source) {
-            return;
-        }
-
-        # Use cached thresholds (set in constructor)
-        int ri = cached_record_interval;
-        int ims = cached_interval_ms;
-
-        # Second pass: update source element metrics under lock
-        *hash<PipelineMetricsSnapshot> snapshot;
-        {
-            metrics_lock.lock();
-            on_exit metrics_lock.unlock();
-
-            # Re-check source_element_id under lock (could have been cleared between passes)
-            if (source_element_id) {
-                reference<hash<PipelineElementMetrics>> em = \element_metrics{source_element_id};
-                date ts = now_us();
-                if (!em.first_record_time) {
-                    em.first_record_time = ts;
-                }
-                em.last_record_time = ts;
-                em.records_processed += count;
-                em.records_output += count;
-
-                records_since_callback += count;
-                snapshot = maybeGetSnapshot(ri, ims);
+        if (source_element_id) {
+            reference<hash<PipelineElementMetrics>> em = \element_metrics{source_element_id};
+            date ts = now_us();
+            if (!em.first_record_time) {
+                em.first_record_time = ts;
             }
-        }
-
-        if (snapshot) {
-            try {
-                collector.reportMetrics(snapshot);
-            } catch (hash<ExceptionInfo> ex) {
-                parent.logError("metrics collector error: %s: %s", ex.err, ex.desc);
-            }
+            em.last_record_time = ts;
+            em.records_processed += count;
+            em.records_output += count;
         }
     }
 
@@ -1434,6 +1438,28 @@ public class PipelineMetricsCollector {
         return getSnapshotIntern();
     }
 
+    #! Returns queue-type element metrics (filtered from snapshots but useful for monitoring)
+    /** @return hash of queue element metrics keyed by queue ID, or an empty hash if none exist
+
+        Queue-type elements track infrastructure metrics like queue depth and backpressure
+        that are filtered from the main snapshot output. This method provides direct access
+        to those internal metrics.
+
+        @since DataProvider 3.3
+    */
+    hash<string, hash<PipelineElementMetrics>> getQueueMetrics() {
+        metrics_lock.lock();
+        on_exit metrics_lock.unlock();
+
+        hash<string, hash<PipelineElementMetrics>> rv();
+        foreach string k in (keys element_metrics) {
+            if (element_metrics{k}.element_type == "queue") {
+                rv{k} = element_metrics{k};
+            }
+        }
+        return rv;
+    }
+
     #! Returns a current metrics snapshot (internal, must be called with lock held)
     /** @note Side effect: advances the delta window — updates \c prev_snapshot_time, \c prev_submitted,
         \c prev_completed, and \c prev_element_snap so that the next call computes the delta since
@@ -1475,7 +1501,7 @@ public class PipelineMetricsCollector {
         float total_latency = 0.0;
         int latency_samples = 0;
         foreach hash<auto> em in (out_metrics.pairIterator()) {
-            if (em.value.records_processed > 0) {
+            if (em.value.records_processed > 0 && em.value.processing_time_us > 0) {
                 total_latency += em.value.processing_time_us + em.value.queue_wait_time_us;
                 latency_samples += em.value.records_processed;
             }
@@ -2041,7 +2067,7 @@ public class DataProviderPipeline {
     }
 
     #! Sets the source element for metrics collection
-    /** When set, recordPipelineSubmit() will also update the source element's metrics incrementally,
+    /** When set, pipeline submissions will also update the source element's metrics incrementally,
         so that source element metrics appear in periodic delta snapshots — not only in the final
         COMPLETE snapshot.
 
