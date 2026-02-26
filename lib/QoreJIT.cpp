@@ -743,20 +743,12 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
     if (compileFunction(func, error)) {
         JitFunctionPtr fn = lookupFunction(func.name);
         if (fn) {
-            // Isolate from outer AST stack location chain to prevent dangling-pointer crashes
-            // when exceptions are thrown in JIT code. Clearing the stack location prevents
-            // QoreExceptionBase::QoreExceptionBase() from accessing invalid pointers during unwinding.
-            const QoreStackLocation* saved = get_runtime_stack_location();
-            // Mark that JIT cleared the stack so exception handler can skip unsafe call stack building
-            set_jit_cleared_stack_flag(true);
-            update_runtime_stack_location(nullptr);
-
             // Execute the JIT-compiled function
+            // NOTE: Do NOT clear the runtime stack location here.
+            // JIT-compiled code calls into normal Qore functions which manage
+            // their own stack locations via CodeEvaluationHelper. Clearing
+            // the stack breaks exception call stacks.
             uint64_t result_bits = fn(xsink);
-
-            // Restore the stack location and clear the flag
-            set_jit_cleared_stack_flag(false);
-            update_runtime_stack_location(saved);
 
             // Reconstruct QoreValue from NaN-boxed bits
             QoreValue result;

@@ -430,8 +430,9 @@ public:
 
     //! returns the source location of the element
     DLLLOCAL virtual const QoreProgramLocation& getLocation() const {
-        // return loc_builtin for Qore builtin calls
-        return *loc;
+        // loc can be null during IR/JIT execution when swap_runtime_statement_location
+        // sets runtime_loc to nullptr; fall back to loc_builtin to avoid null dereference
+        return loc ? *loc : loc_builtin;
     }
 
     //! returns the name of the function or method call (ex: "[Class::]method")

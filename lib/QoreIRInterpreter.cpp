@@ -625,7 +625,16 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (!var) {
         return;
     }
-    ClosureVarValue* cv = thread_get_runtime_closure_var(var);
+    // Use the thread-local cvstack lookup (by name) to find the topmost closure
+    // variable, which is the current function's own variable.  This is critical
+    // when a function with closure-use variables is called from within a closure:
+    // thread_get_runtime_closure_var() would return the calling closure's variable
+    // (wrong scope), while thread_find_closure_var() returns the current function's
+    // own cvstack variable (correct scope).
+    ClosureVarValue* cv = thread_find_closure_var(var->getName());
+    if (!cv) {
+        cv = thread_get_runtime_closure_var(var);
+    }
     if (!cv) {
         return;
     }
@@ -2407,10 +2416,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         QoreValue val = it->second;
                         out = val.hasNode() ? val.refSelf() : val;
                     } else if (local_inst->local) {
-                        // Read from the runtime closure environment (set by
-                        // ThreadSafeLocalVarRuntimeEnvironmentHelper in
-                        // UserClosureFunction::evalClosure)
-                        ClosureVarValue* cv = thread_get_runtime_closure_var(local_inst->local);
+                        // Read closure variable: prefer cvstack (topmost = current
+                        // function's own variable) over runtime closure env (which
+                        // may point to the calling closure's variable in recursive
+                        // scenarios).
+                        ClosureVarValue* cv = thread_find_closure_var(local_inst->local->getName());
+                        if (!cv) {
+                            cv = thread_get_runtime_closure_var(local_inst->local);
+                        }
                         if (cv) {
                             QoreValue val = cv->eval(xsink);
                             if (xsink && *xsink) {
@@ -4497,6 +4510,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
+                }
+                // Reload the modified lvalue (list with element removed) and update local var cache
+                {
+                    QoreValue updated = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        return false;
+                    }
+                    updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue,
+                        updated, xsink, pre_instantiated, function_own_locals,
+                        &locally_uninstantiated, &func.local_var_slots, &locals_slot_cache);
+                    updated.discard(xsink);
                 }
                 ++ip;
                 break;

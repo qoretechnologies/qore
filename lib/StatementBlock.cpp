@@ -46,9 +46,6 @@
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 
-// Declare JIT stack location flag functions from QoreJIT.cpp
-extern void set_jit_cleared_stack_flag(bool cleared);
-extern bool is_jit_cleared_stack();
 
 #include <atomic>
 #include <cassert>
@@ -788,16 +785,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             return 0;
         }
         if (cached_toplevel_jit_fn) {
-            // Isolate from outer AST stack location chain — the outer chain may contain
-            // pointers to destroyed RAII objects if JIT is called from deep AST context.
-            // Nulling before execution prevents dangling-pointer crashes in
-            // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
-            const QoreStackLocation* saved = get_runtime_stack_location();
-            if (saved) update_runtime_stack_location(nullptr);
-
             uint64_t result_bits = cached_toplevel_jit_fn(xsink);
-
-            if (saved) update_runtime_stack_location(saved);
 
             QoreValue result;
             std::memcpy(&result, &result_bits, sizeof(result));
@@ -922,17 +910,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
 
                 std::string error;
                 if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
-                    // Isolate from outer AST stack location chain — the outer chain may contain
-                    // pointers to destroyed RAII objects if JIT is called from deep AST context.
-                    // Nulling before execution prevents dangling-pointer crashes in
-                    // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
-                    const QoreStackLocation* saved = get_runtime_stack_location();
-                    if (saved) update_runtime_stack_location(nullptr);
-
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
-
-                    if (saved) update_runtime_stack_location(saved);
 
                     // Clear any pending deopt request from top-level JIT execution.
                     // Top-level code handles guard failures internally (e.g., via
@@ -942,18 +921,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // suppress_guard_deopt=true: top-level code must not deopt on
                     // guard failure because re-executing the entire block from the
                     // beginning would duplicate side effects (I/O, mutations).
-                    const QoreStackLocation* saved = get_runtime_stack_location();
-                    // Always clear stack location for IR execution to prevent dangling pointers
-                    // when builtins throw exceptions (same as JIT fix)
-                    set_jit_cleared_stack_flag(true);
-                    update_runtime_stack_location(nullptr);
-
                     ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
                         nullptr, nullptr, &pre_instantiated, nullptr, nullptr, nullptr, true);
-
-                    // Restore stack location and clear flag
-                    set_jit_cleared_stack_flag(false);
-                    update_runtime_stack_location(saved);
                 }
 
                 // Uninstantiate nested locals after JIT execution (reverse order)

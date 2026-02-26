@@ -2969,13 +2969,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreParseOptions old_po;
                 swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
 
-                // Isolate from outer call stack location chain to prevent dangling-pointer crashes
-                // in QoreExceptionBase::QoreExceptionBase() when exceptions are thrown during IR execution.
-                // This mirrors the same isolation done for AST execution (see line 3099-3108).
-                const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-                if (saved_stack_loc) {
-                    update_runtime_stack_location(nullptr);
-                }
+                // Note: We do NOT isolate from outer stack location chain here.
+                // CodeEvaluationHelper RAII properly manages the stack location chain
+                // for all function calls during IR execution, so dangling pointers
+                // should not occur.  Clearing would break exception call stacks.
 
                 // Use the cached set of pre-instantiated locals built during IR lowering.
                 // Pass pointer directly to avoid per-call allocation (critical for recursive calls).
@@ -3007,10 +3004,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     val = statements->exec(xsink);
                 }
 
-                // Restore call stack location and thread-local parse options
-                if (saved_stack_loc) {
-                    update_runtime_stack_location(saved_stack_loc);
-                }
+                // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
                 // Only uninstantiate pre-instantiated AST-visible locals if we didn't already
@@ -3097,19 +3091,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         ArgvContextHelper argv_helper(argv.release(), xsink);
 
         if (!gate || (gate->enter(xsink) >= 0)) {
-            // Isolate from outer AST stack location chain for AST execution too
-            // (not just for JIT) to prevent dangling-pointer crashes in
-            // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown.
-            const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-            if (saved_stack_loc) {
-                update_runtime_stack_location(nullptr);
-            }
-
+            // Note: We do NOT isolate from outer stack location chain here.
+            // CodeEvaluationHelper RAII properly manages the stack location chain
+            // for all function calls during AST execution, so dangling pointers
+            // should not occur.  Clearing would break exception call stacks.
             val = statements->exec(xsink);
-
-            if (saved_stack_loc) {
-                update_runtime_stack_location(saved_stack_loc);
-            }
 
             if (gate) {
                 gate->exit();

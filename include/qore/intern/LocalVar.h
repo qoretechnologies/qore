@@ -127,7 +127,13 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
-        val.removeValue(true).discard(xsink);
+        if (val.static_assignment) {
+            // static_assignment variables (e.g. "self") have borrowed references
+            // that must not be decremented; use unassignIgnore() to clear safely
+            val.unassignIgnore();
+        } else {
+            val.removeValue(true).discard(xsink);
+        }
     }
 
     DLLLOCAL bool isRef() const {
@@ -160,11 +166,20 @@ public:
         // where instantiate() returns &curr->var[curr->pos++] and variables are recycled
         // when uninstantiate() decrements pos.
         if (id) {
-            // Remove and discard the old value to avoid leaving dangling references
-            QoreValue old_val = val.removeValue(true);
-            old_val.discard(nullptr);
-            // Reset the QoreLValue to initial state for reuse
-            val.reset_to_empty();
+            // Clean up stale state from slot reuse.
+            // Handle static_assignment (e.g. from instantiateSelf) by using
+            // reset_to_empty() which avoids the removeValue() assertion.
+            if (val.assigned) {
+                if (val.static_assignment) {
+                    val.reset_to_empty();
+                } else {
+                    QoreValue old_val = val.removeValue(true);
+                    old_val.discard(nullptr);
+                    val.reset_to_empty();
+                }
+            } else {
+                val.reset_to_empty();
+            }
         }
 
         id = n_id;
@@ -478,11 +493,11 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        // First try the closure runtime environment — needed for background thread
-        // closure execution and closures that outlive their enclosing function.
-        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        // Prefer cvstack lookup (topmost = current function's own variable).
+        // Fall back to runtime closure env for background threads / outlived closures.
+        ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_find_closure_var(name.c_str());
+            val = thread_get_runtime_closure_var(this);
         }
         return val->eval(needs_deref, xsink);
     }
@@ -512,9 +527,9 @@ public:
         if (!closure_use) {
             return get_var()->isRef();
         }
-        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_find_closure_var(name.c_str());
+            val = thread_get_runtime_closure_var(this);
         }
         return val->isRef();
     }
@@ -527,13 +542,11 @@ public:
             return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
-        // Try to get runtime closure variable
-        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        // Prefer cvstack lookup (topmost = current function's own variable).
+        // Fall back to runtime closure env for background threads / outlived closures.
+        ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_find_closure_var(name.c_str());
-        }
-        if (!val) {
-            val = thread_find_closure_var(name.c_str());
+            val = thread_get_runtime_closure_var(this);
         }
         return val->getLValue(lvh, for_remove);
     }
@@ -543,10 +556,11 @@ public:
             return get_var()->remove(lvrh, typeInfo);
         }
 
-        // Try the closure runtime environment — needed for closures
-        ClosureVarValue* val = thread_get_runtime_closure_var(this);
+        // Prefer cvstack lookup (topmost = current function's own variable).
+        // Fall back to runtime closure env for background threads / outlived closures.
+        ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_find_closure_var(name.c_str());
+            val = thread_get_runtime_closure_var(this);
         }
         return val->remove(lvrh);
     }
