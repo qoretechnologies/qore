@@ -167,6 +167,26 @@ class BulkPassthroughProcessor inherits DataProvider::AbstractDataProcessor {
     }
 }
 
+#! Slow processor that introduces a deliberate delay per record (for queue wait time tests)
+class SlowProcessor inherits DataProvider::AbstractDataProcessor {
+    private {
+        int delay_us;
+    }
+
+    constructor(int delay_us = 10000) {
+        self.delay_us = delay_us;
+    }
+
+    private bool supportsBulkApiImpl() {
+        return False;
+    }
+
+    private submitImpl(code<nothing(auto)> enqueue, auto _data) {
+        usleep(delay_us);
+        enqueue(_data);
+    }
+}
+
 public class PipelineMetricsDeltaTest inherits QUnit::Test {
     constructor() : Test("PipelineMetricsDelta Test", "1.0") {
         addTestCase("first snapshot delta equals cumulative", \testFirstSnapshotDeltaEqualsCumulative());
@@ -195,6 +215,12 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         addTestCase("fan-out submitted count", \testFanOutSubmittedCount());
         addTestCase("fan-out with processor submitted count", \testFanOutWithProcessorSubmittedCount());
         addTestCase("fan-out with filter accounting", \testFanOutWithFilterAccounting());
+        addTestCase("source element fan-out no inflation", \testSourceElementFanOutNoInflation());
+        addTestCase("source element with processor before fan-out",
+            \testSourceElementWithProcessorBeforeFanOut());
+        addTestCase("queue wait time tracking", \testQueueWaitTimeTracking());
+        addTestCase("backpressure and depth tracking", \testBackpressureAndDepthTracking());
+        addTestCase("source element with 3 child queues", \testSourceElementWith3ChildQueues());
 
         set_return_value(main());
     }
@@ -1407,5 +1433,219 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # total_records_completed = sum of terminal outputs: q1 passes n/2, q2 passes n
         assertEq(n / 2 + n, snap.total_records_completed,
             "total_records_completed must be sum of child queue terminal outputs (n/2 + n)");
+    }
+
+    # =========================================================================
+    # Test 24: source element fan-out — no inflation
+    # =========================================================================
+
+    #! Fan-out topology with source element: Queue 0 → fan-out [Q1(proc), Q2(proc)].
+    #! Verify that source element records are NOT inflated by the fan-out.
+    testSourceElementFanOutNoInflation() {
+        int n = 50;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "source-fanout-no-inflation",
+            "metrics_collector": collector,
+        });
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, new DeltaPassthroughProcessor(), "child-1");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "child-2");
+
+        # Set up external source element
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        mc.initElement("ext:source", "processor", "SourceProvider", "source-state");
+        mc.setSourceElement("ext:source");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Source element must have exactly N records — not 2*N
+        assertEq(n, snap.element_metrics."source-state".records_processed,
+            "source records_processed must equal N (not inflated by fan-out)");
+        assertEq(n, snap.element_metrics."source-state".records_output,
+            "source records_output must equal N (not inflated by fan-out)");
+
+        # Total submitted must equal N
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal N");
+
+        # Total completed = 2*N (each child queue outputs N)
+        assertEq(2 * n, snap.total_records_completed,
+            "total_records_completed must equal 2*N (fan-out)");
+    }
+
+    # =========================================================================
+    # Test 25: source element with processor before fan-out
+    # =========================================================================
+
+    #! Queue 0 [proc] → fan-out [Q1(proc), Q2(proc)], source element set.
+    #! Verify source element is not inflated.
+    testSourceElementWithProcessorBeforeFanOut() {
+        int n = 40;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "source-proc-fanout",
+            "metrics_collector": collector,
+        });
+        pipe.append(0, new DeltaPassthroughProcessor(), "proc-0");
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, new DeltaPassthroughProcessor(), "child-1");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "child-2");
+
+        # Set up external source element
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        mc.initElement("ext:source", "processor", "SourceProvider", "source-state");
+        mc.setSourceElement("ext:source");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Source element must have exactly N records
+        assertEq(n, snap.element_metrics."source-state".records_processed,
+            "source records_processed must equal N");
+        assertEq(n, snap.element_metrics."source-state".records_output,
+            "source records_output must equal N");
+
+        # Total submitted must equal N
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal N");
+
+        # Total completed = 2*N (each child queue outputs N)
+        assertEq(2 * n, snap.total_records_completed,
+            "total_records_completed must equal 2*N (fan-out)");
+
+        # The processor on queue 0 must have processed N records
+        assertEq(n, snap.element_metrics."proc-0".records_processed,
+            "proc-0 must have processed N records");
+    }
+
+    # =========================================================================
+    # Test 26: queue wait time tracking
+    # =========================================================================
+
+    #! Use SlowProcessor to force queue wait time > 0.
+    #! Submit records and verify that the first processor element has non-zero queue_wait_time_us.
+    testQueueWaitTimeTracking() {
+        int n = 10;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "queue-wait-time",
+            "metrics_collector": collector,
+        });
+        # SlowProcessor adds 10ms delay per record — enough to build queue wait time
+        pipe.append(0, new SlowProcessor(10000), "slow-proc");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+        assertEq(n, snap.total_records_submitted, "submitted must equal N");
+        assertEq(n, snap.total_records_completed, "completed must equal N");
+
+        # The processor element must have queue_wait_time_us > 0
+        # because records pile up while the slow processor works
+        assertTrue(snap.element_metrics."slow-proc".queue_wait_time_us > 0,
+            "queue_wait_time_us must be > 0 with slow processor");
+
+        # The delta element must also reflect queue_wait_time_us
+        *hash<DataProvider::PipelineElementDelta> delta_elem =
+            snap.delta.element_metrics."slow-proc";
+        assertNeq(NOTHING, delta_elem, "slow-proc must be in delta");
+        assertTrue(delta_elem.queue_wait_time_us > 0,
+            "delta queue_wait_time_us must be > 0");
+    }
+
+    # =========================================================================
+    # Test 27: backpressure and depth tracking
+    # =========================================================================
+
+    #! Use SlowProcessor with default queue_size=1 to trigger backpressure.
+    #! Submit enough records and verify queue-type metrics (max_queue_depth, queue_full_count)
+    #! via getQueueMetrics(), which returns the queue-type elements filtered from snapshots.
+    testBackpressureAndDepthTracking() {
+        int n = 10;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "backpressure-depth",
+            "metrics_collector": collector,
+        });
+        # SlowProcessor with 10ms delay per record — forces backpressure with default queue_size=1
+        pipe.append(0, new SlowProcessor(10000), "slow-proc");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+        assertEq(n, snap.total_records_submitted, "submitted must equal N");
+        assertEq(n, snap.total_records_completed, "completed must equal N");
+
+        # Access queue-type metrics directly (filtered from snapshots)
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        hash<string, hash<DataProvider::PipelineElementMetrics>> qm = mc.getQueueMetrics();
+
+        # Queue "0" must have been tracked
+        assertTrue(qm.hasKey("0"), "queue '0' must be in queue metrics");
+        assertEq("queue", qm."0".element_type, "element_type must be 'queue'");
+
+        # With queue_size=1 and slow processor, backpressure must have occurred
+        assertTrue(qm."0".queue_full_count > 0,
+            "queue_full_count must be > 0 (backpressure detected)");
+        assertTrue(qm."0".max_queue_depth > 0,
+            "max_queue_depth must be > 0");
+    }
+
+    # =========================================================================
+    # Test 28: source element with 3+ child queues
+    # =========================================================================
+
+    #! Fan-out to 3 queues, verify source records_output == N still holds.
+    testSourceElementWith3ChildQueues() {
+        int n = 30;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "source-3-children",
+            "metrics_collector": collector,
+        });
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        int q3 = pipe.appendQueue(0);
+        pipe.append(q1, new DeltaPassthroughProcessor(), "child-1");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "child-2");
+        pipe.append(q3, new DeltaPassthroughProcessor(), "child-3");
+
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        mc.initElement("ext:source", "processor", "SourceProvider", "source-state");
+        mc.setSourceElement("ext:source");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Source element must have exactly N records — not 3*N
+        assertEq(n, snap.element_metrics."source-state".records_processed,
+            "source records_processed must equal N with 3 children");
+        assertEq(n, snap.element_metrics."source-state".records_output,
+            "source records_output must equal N with 3 children");
+
+        # Total submitted = N
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal N");
+
+        # Total completed = 3*N (each child queue outputs N)
+        assertEq(3 * n, snap.total_records_completed,
+            "total_records_completed must equal 3*N (3-way fan-out)");
     }
 }
