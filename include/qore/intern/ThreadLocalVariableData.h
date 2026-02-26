@@ -162,19 +162,19 @@ public:
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
-        // The function body is responsible for uninstantiating its variables.
-        // We navigate back to the marker position using the recorded location,
-        // properly handling block transitions.
+        // Navigate back to the marker position, properly cleaning up variables
+        // along the way. We must call uninstantiate() (not just uninstantiateIntern())
+        // to ensure variables are properly cleaned up (assigned flags cleared, values deref'd).
         //
-        // Note: curr->pos should be at or near the marker position since the
-        // function should have uninstantiated all its variables already.
-        // We call uninstantiateIntern() to ensure proper block transition handling.
+        // curr->pos should be at or near the marker position since the function
+        // should have uninstantiated most of its variables already. Any variables
+        // between curr->pos and the marker need to be cleaned up.
 
         // First, verify we're looking at something close to the marker
         if (curr == rec.block && curr->pos > rec.pos) {
             // Same block, need to uninstantiate to reach the marker
             while (curr->pos > rec.pos) {
-                uninstantiateIntern();
+                uninstantiate(nullptr);
             }
         } else if (curr != rec.block) {
             // Different block - need to navigate back properly
@@ -185,12 +185,12 @@ public:
                     curr = curr->prev;
                 } else {
                     // Position is wrong, uninstantiate to move back
-                    uninstantiateIntern();
+                    uninstantiate(nullptr);
                 }
             }
             // Now uninstantiate to reach the correct position if needed
             while (curr->pos > rec.pos) {
-                uninstantiateIntern();
+                uninstantiate(nullptr);
             }
         }
 
