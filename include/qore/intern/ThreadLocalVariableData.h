@@ -158,33 +158,45 @@ public:
         assert(frame_count >= 0);
         assert(!frame_marker_stack.empty());
 
-        // Retrieve the recorded marker location (O(1) lookup)
+        // Retrieve the recorded marker location (O(1) lookup via stack-based tracking)
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
-        // The function body is responsible for uninstantiating its variables,
-        // so curr->pos should be at or near the marker position.
-        // Call uninstantiateIntern to handle block transitions if needed
-        uninstantiateIntern();
+        // The function body is responsible for uninstantiating its variables.
+        // We navigate back to the marker position using the recorded location,
+        // properly handling block transitions.
+        //
+        // Note: curr->pos should be at or near the marker position since the
+        // function should have uninstantiated all its variables already.
+        // We call uninstantiateIntern() to ensure proper block transition handling.
 
-        // Verify that we've found the marker
-        if (!curr->var[curr->pos].frame_boundary || curr->var[curr->pos].frame_marker_id != frame_count) {
-            // Mismatch: expected marker at curr position but found something else
-            // This indicates either:
-            // 1. Function didn't properly uninstantiate all its variables before returning
-            // 2. Block layout changed unexpectedly
-            // 3. Recorded marker position was incorrect
-            printd(0, "FRAME_BOUNDARY_MISMATCH:\n");
-            printd(0, "  frame_count: %d\n", frame_count);
-            printd(0, "  recorded: block=%p pos=%d\n", (void*)rec.block, rec.pos);
-            printd(0, "  current:  block=%p pos=%d\n", (void*)curr, curr->pos);
-            printd(0, "  curr->var[curr->pos].frame_boundary: %d\n", curr->var[curr->pos].frame_boundary);
-            printd(0, "  curr->var[curr->pos].frame_marker_id: %d\n", curr->var[curr->pos].frame_marker_id);
-            if (rec.block == curr) {
-                printd(0, "  Expected marker at pos %d, but curr->pos is %d\n", rec.pos, curr->pos);
+        // First, verify we're looking at something close to the marker
+        if (curr == rec.block && curr->pos > rec.pos) {
+            // Same block, need to uninstantiate to reach the marker
+            while (curr->pos > rec.pos) {
+                uninstantiateIntern();
+            }
+        } else if (curr != rec.block) {
+            // Different block - need to navigate back properly
+            // This should be rare in normal execution
+            while (curr != rec.block && curr->prev) {
+                // Only move back blocks if we're at the start of a block
+                if (curr->pos == 0) {
+                    curr = curr->prev;
+                } else {
+                    // Position is wrong, uninstantiate to move back
+                    uninstantiateIntern();
+                }
+            }
+            // Now uninstantiate to reach the correct position if needed
+            while (curr->pos > rec.pos) {
+                uninstantiateIntern();
             }
         }
 
+        // Verify the marker is where we recorded it
+        assert(curr == rec.block);
+        assert(curr->pos == rec.pos);
         assert(curr->var[curr->pos].frame_boundary);
         assert(curr->var[curr->pos].frame_marker_id == frame_count);
 
