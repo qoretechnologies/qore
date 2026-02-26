@@ -757,7 +757,7 @@ hash<auto> json_exp = {
 hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(json_exp);
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<DataProviderExpression> deserializeExpressionFromJson(hash<auto> h) {
         if (!h.hasKey("exp") || h.exp.typeCode() != NT_STRING) {
@@ -788,7 +788,7 @@ hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(j
 
         @throw EXPRESSION-ARG-ERROR if a hash argument has an unrecognized format
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static auto deserializeExpressionArgFromJson(auto arg) {
         if (arg.typeCode() != NT_HASH) {
@@ -858,7 +858,7 @@ hash<auto> json = DataProvider::serializeExpressionToJson(exp);
 # Result: {"exp": "==", "args": ({"field": "name"}, {"value": "John"})}
         @endcode
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static hash<auto> serializeExpressionToJson(hash<DataProviderExpression> exp) {
         return {
@@ -880,7 +880,7 @@ hash<auto> json = DataProvider::serializeExpressionToJson(exp);
         @param arg the argument to serialize
         @return the serialized argument
 
-        @since DataProvider 3.4
+        @since DataProvider 3.3
     */
     static auto serializeExpressionArgToJson(auto arg) {
         if (arg instanceof hash<DataProviderFieldReference>) {
