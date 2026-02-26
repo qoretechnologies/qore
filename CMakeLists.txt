@@ -397,38 +397,33 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
-# Get LLVM libraries
-# Prefer LLVM_LIBRARIES from find_package, but fallback to llvm-config if needed
-if(LLVM_LIBRARIES)
-    set(LLVM_LIBS ${LLVM_LIBRARIES})
-    message(STATUS "Using LLVM libraries from find_package: ${LLVM_LIBS}")
-else()
-    # Fallback: Get library names from llvm-config (LLVM 21+ builds as a single unified library)
-    execute_process(
-        COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libs all
-        OUTPUT_VARIABLE LLVM_LIBS_RAW
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    if(LLVM_LIBS_RAW)
-        # Keep library flags with "-l" prefix for proper linker handling
-        # Don't remove "-l" or we lose the library directive
-        string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS_RAW}")
-        message(STATUS "Using LLVM libraries from llvm-config: ${LLVM_LIBS}")
+# LLVM libraries - use the LLVM target provided by find_package
+# find_package(LLVM) provides LLVM::LLVM which handles all linking correctly
+if(NOT LLVM_LIBRARIES)
+    # Fallback: if LLVM::LLVM target is not available, try to get library from llvm-config
+    message(STATUS "Note: LLVM_LIBRARIES not set by find_package, checking for alternate LLVM target")
+    if(TARGET LLVM::LLVM)
+        # CMake target approach - let's use this
+        set(LLVM_LIBS LLVM::LLVM)
+        message(STATUS "Using LLVM::LLVM target")
     else()
-        message(WARNING "Could not determine LLVM libraries - continuing anyway")
-        set(LLVM_LIBS "")
+        # Last resort: extract from llvm-config
+        execute_process(
+            COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libdir
+            OUTPUT_VARIABLE LLVM_LIB_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+        if(LLVM_LIB_DIR)
+            set(LLVM_LIBRARY_DIR "${LLVM_LIB_DIR}")
+        endif()
     endif()
+else()
+    set(LLVM_LIBS ${LLVM_LIBRARIES})
+    message(STATUS "Using LLVM_LIBRARIES from find_package")
 endif()
 
-# Ensure LLVM_LIBRARY_DIRS is properly set (find_package sets this, but fallback to _DIR if needed)
-if(NOT LLVM_LIBRARY_DIRS AND LLVM_LIBRARY_DIR)
-    set(LLVM_LIBRARY_DIRS "${LLVM_LIBRARY_DIR}")
-endif()
-if(LLVM_LIBRARY_DIRS)
-    list(GET LLVM_LIBRARY_DIRS 0 LLVM_LIBRARY_DIR)
-    message(STATUS "LLVM library directory: ${LLVM_LIBRARY_DIR}")
-endif()
+message(STATUS "LLVM library directory: ${LLVM_LIBRARY_DIR}")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
@@ -1349,14 +1344,23 @@ endif (WIN32 OR MINGW OR MSYS)
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
 target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
 
-set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES} ${LLVM_LIBS})
+set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 # Add LLVM library directory since LLVM libs may not be on the standard linker search path
 # (e.g. MacPorts installs to /opt/local/libexec/llvm-XX/lib/)
-target_link_directories(libqore PRIVATE ${LLVM_LIBRARY_DIR})
+if(LLVM_LIBRARY_DIR)
+    target_link_directories(libqore PRIVATE ${LLVM_LIBRARY_DIR})
+endif()
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
+# Link LLVM libraries - prefer LLVM::LLVM target if available (best approach)
+# Otherwise add LLVM libraries directly to link command
+if(TARGET LLVM::LLVM)
+    target_link_libraries(libqore PRIVATE LLVM::LLVM)
+elseif(LLVM_LIBS)
+    target_link_libraries(libqore PRIVATE ${LLVM_LIBS})
+endif()
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
 endif (WIN32 OR MINGW OR MSYS)
