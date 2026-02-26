@@ -1203,7 +1203,7 @@ void thread_uninstantiate_closure_var(ExceptionSink* xsink) {
 }
 
 ClosureVarValue* thread_find_closure_var(const char* id) {
-    return thread_data.get()->tlpd->cvstack.find(id);
+    return thread_data.get()->tlpd->cvstack.try_find(id);
 }
 
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
