@@ -1145,15 +1145,23 @@ public class PipelineMetricsCollector {
 
                     reference<hash<PipelineElementMetrics>> em = \element_metrics{element_ids[i]};
 
+                    # Skip record count updates for the source element — its records_processed
+                    # and records_output were already updated from submitted_count above.
+                    # Processing time and other metrics still need updating here.
+                    bool is_source = (source_element_id && element_ids[i] == source_element_id);
+
                     # Update timestamps
                     if (!em.first_record_time) {
                         em.first_record_time = timestamp;
                     }
                     em.last_record_time = timestamp;
 
-                    # Update record counts
-                    em.records_processed += records_in[i];
-                    em.records_output += records_out[i];
+                    if (!is_source) {
+                        # Update record counts (source element already updated above)
+                        em.records_processed += records_in[i];
+                        em.records_output += records_out[i];
+                        records_since_callback += records_in[i];
+                    }
 
                     # Update processing time from actual per-element measurement
                     int elem_us = processing_us[i];
@@ -1171,8 +1179,6 @@ public class PipelineMetricsCollector {
                     if (!em.max_processing_time_us || per_record_us > em.max_processing_time_us) {
                         em.max_processing_time_us = per_record_us;
                     }
-
-                    records_since_callback += records_in[i];
                 }
             }
 

@@ -221,6 +221,8 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         addTestCase("queue wait time tracking", \testQueueWaitTimeTracking());
         addTestCase("backpressure and depth tracking", \testBackpressureAndDepthTracking());
         addTestCase("source element with 3 child queues", \testSourceElementWith3ChildQueues());
+        addTestCase("source element as queue processor no double-count",
+            \testSourceElementAsQueueProcessorNoDoubleCount());
 
         set_return_value(main());
     }
@@ -1647,5 +1649,67 @@ public class PipelineMetricsDeltaTest inherits QUnit::Test {
         # Total completed = 3*N (each child queue outputs N)
         assertEq(3 * n, snap.total_records_completed,
             "total_records_completed must equal 3*N (3-way fan-out)");
+    }
+
+    # =========================================================================
+    # Test 29: source element as queue 0 processor — no double-count
+    # =========================================================================
+
+    #! When setSourceElement uses an auto-generated ID that's also in elem_ids,
+    #! verify records are NOT double-counted (once from source path, once from
+    #! per-element path).  Reproduces the bug where source metrics were inflated
+    #! by the number of processors when source_element_id was in element_ids.
+    testSourceElementAsQueueProcessorNoDoubleCount() {
+        int n = 500;
+
+        CapturingMetricsCollector collector();
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "source-as-processor",
+            "metrics_collector": collector,
+        });
+
+        # Source processor in queue 0 — gets auto_id "0:0"
+        pipe.append(0, new DeltaPassthroughProcessor(), "source-state");
+
+        # Fan-out to 2 child queues
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+
+        # Queue 1: 2 processors
+        pipe.append(q1, new DeltaPassthroughProcessor(), "proc-1a");
+        pipe.append(q1, new DeltaPassthroughProcessor(), "proc-1b");
+
+        # Queue 2: 4 processors
+        pipe.append(q2, new DeltaPassthroughProcessor(), "proc-2a");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "proc-2b");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "proc-2c");
+        pipe.append(q2, new DeltaPassthroughProcessor(), "proc-2d");
+
+        # Set source element to auto-generated ID "0:0" (same as the first processor)
+        PipelineMetricsCollector mc = pipe.getMetricsCollector();
+        mc.setSourceElement("0:0");
+
+        pipe.submit(getGeneratorIterator(n));
+        pipe.waitDone();
+
+        hash<DataProvider::PipelineMetricsSnapshot> snap = collector.last_snapshot;
+
+        # Source element must have exactly N records — not 2*N (double-counted)
+        assertEq(n, snap.element_metrics."source-state".records_processed,
+            "source records_processed must equal N (not double-counted)");
+        assertEq(n, snap.element_metrics."source-state".records_output,
+            "source records_output must equal N (not double-counted)");
+
+        # Source must still have processing time (per-element path must update it)
+        assertTrue(snap.element_metrics."source-state".processing_time_us > 0,
+            "source processing_time_us must be > 0");
+
+        # Total submitted must equal N
+        assertEq(n, snap.total_records_submitted,
+            "total_records_submitted must equal N");
+
+        # Total completed = 2*N (each child queue outputs N)
+        assertEq(2 * n, snap.total_records_completed,
+            "total_records_completed must equal 2*N (fan-out)");
     }
 }
