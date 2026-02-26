@@ -52,6 +52,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         addTestCase("factoryTest", \factoryTest());
         addTestCase("providerHierarchyTest", \providerHierarchyTest());
         addTestCase("negativeTests", \negativeTests());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         setupConnection();
 
@@ -2205,6 +2206,31 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             fail("Expected exception for non-existent collection");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "query-points", "upsert-points", "create-collection",
+            "list-collections", "count-points", "health-check",
+            "delete-points", "get-points", "scroll-points",
+            "get-collection", "delete-collection", "collection-exists",
+            "query-batch-points", "query-groups-points", "list-all-aliases",
+            "update-aliases", "set-payload", "liveness-check",
+            "batch-update-points", "search-points", "create-point",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Qdrant");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
         }
     }
 

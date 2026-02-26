@@ -68,6 +68,7 @@ module QdrantDataProvider {
             "short_desc": "Query points using vector similarity search",
             "desc": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -78,6 +79,7 @@ module QdrantDataProvider {
             "short_desc": "Insert or update points in a collection",
             "desc": "Insert or update points with vectors and optional payloads in a Qdrant collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -88,6 +90,7 @@ module QdrantDataProvider {
             "short_desc": "Create a new Qdrant collection",
             "desc": "Create a new vector collection with configurable vector parameters and distance metrics",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -98,6 +101,7 @@ module QdrantDataProvider {
             "short_desc": "List all Qdrant collections",
             "desc": "Retrieve a list of all collections in the Qdrant instance",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -108,6 +112,7 @@ module QdrantDataProvider {
             "short_desc": "Count points in a collection",
             "desc": "Count the number of points in a Qdrant collection, optionally with a filter",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -118,6 +123,7 @@ module QdrantDataProvider {
             "short_desc": "Check Qdrant server health",
             "desc": "Check the health status of the Qdrant server",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -128,6 +134,7 @@ module QdrantDataProvider {
             "short_desc": "Delete points from a collection",
             "desc": "Delete points from a Qdrant collection by point IDs or by filter conditions",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -139,6 +146,7 @@ module QdrantDataProvider {
             "desc": "Retrieve specific points from a Qdrant collection by their IDs, including vectors "
                 "and payloads",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -150,6 +158,7 @@ module QdrantDataProvider {
             "desc": "Iterate through all points in a Qdrant collection using scroll-based pagination "
                 "with optional filtering",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -161,6 +170,7 @@ module QdrantDataProvider {
             "desc": "Retrieve detailed information about a specific Qdrant collection, including its "
                 "configuration and status",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -171,6 +181,7 @@ module QdrantDataProvider {
             "short_desc": "Delete a Qdrant collection",
             "desc": "Delete a collection and all its data from the Qdrant instance",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -181,6 +192,7 @@ module QdrantDataProvider {
             "short_desc": "Check if a collection exists",
             "desc": "Check whether a specific collection exists in the Qdrant instance",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -192,6 +204,7 @@ module QdrantDataProvider {
             "desc": "Execute multiple vector similarity search queries in a single batch request "
                 "against a Qdrant collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -203,6 +216,7 @@ module QdrantDataProvider {
             "desc": "Execute a vector similarity search on a Qdrant collection with results grouped "
                 "by a specified payload field",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -214,6 +228,7 @@ module QdrantDataProvider {
             "desc": "Retrieve a list of all aliases and their associated collections in the Qdrant "
                 "instance",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -224,6 +239,7 @@ module QdrantDataProvider {
             "short_desc": "Update collection aliases",
             "desc": "Create, rename, or delete collection aliases in the Qdrant instance",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -235,6 +251,7 @@ module QdrantDataProvider {
             "desc": "Set or update payload key-value pairs on points in a Qdrant collection by point "
                 "IDs or filter conditions",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -245,6 +262,7 @@ module QdrantDataProvider {
             "short_desc": "Check Qdrant server liveness",
             "desc": "Check if the Qdrant server is alive and responsive",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -257,6 +275,7 @@ module QdrantDataProvider {
                 "delete/clear payload, update/delete vectors) in a single request for high-performance "
                 "bulk updates",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -268,6 +287,7 @@ module QdrantDataProvider {
             "desc": "Vector similarity search on a Qdrant collection returning results as a "
                 "record stream for efficient pipeline processing",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -278,6 +298,7 @@ module QdrantDataProvider {
             "short_desc": "Create or upsert a point in a collection",
             "desc": "Create or upsert a point with a vector and optional payload in a Qdrant collection",
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
         });
     };
 }

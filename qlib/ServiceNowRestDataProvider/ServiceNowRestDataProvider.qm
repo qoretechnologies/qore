@@ -67,6 +67,7 @@ module ServiceNowRestDataProvider {
             "desc": "Create an incident in ServiceNow by creating a record in the `incident` table using "
                 "ServiceNow's REST API",
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "data_provider_info": ServiceNowTableDataProvider::ProviderInfo,
         });
 
@@ -78,6 +79,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Find a specific incident in ServiceNow",
             "desc": "Find a specific record in the `incident` table using ServiceNow's REST API",
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "data_provider_info": ServiceNowTableDataProvider::ProviderInfo,
         });
 
@@ -89,6 +91,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Find incident records in ServiceNow",
             "desc": "Find records in the `incident` table using ServiceNow's REST API",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "data_provider_info": ServiceNowTableDataProvider::ProviderInfo,
         });
 
@@ -100,6 +103,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Update incident records in ServiceNow",
             "desc": "Update records in the `incident` table using ServiceNow's REST API",
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "data_provider_info": ServiceNowTableDataProvider::ProviderInfo,
         });
 
@@ -111,6 +115,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Delete incident records in ServiceNow",
             "desc": "Delete records in the `incident` table using ServiceNow's REST API",
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "data_provider_info": ServiceNowTableDataProvider::ProviderInfo,
         });
 
@@ -122,6 +127,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Create a record in a ServiceNow table",
             "desc": "Create a record in a ServiceNow table using ServiceNow's REST API",
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -141,6 +147,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Find a specific record in ServiceNow",
             "desc": "Find a specific record in a ServiceNow table using ServiceNow's REST API",
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -160,6 +167,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Find records in ServiceNow",
             "desc": "Find records in a ServiceNow table using ServiceNow's REST API",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -179,6 +187,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Update records in ServiceNow",
             "desc": "Update records in a ServiceNow table using ServiceNow's REST API",
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -198,6 +207,7 @@ module ServiceNowRestDataProvider {
             "short_desc": "Delete records in ServiceNow",
             "desc": "Delete records in a ServiceNow table using ServiceNow's REST API",
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
