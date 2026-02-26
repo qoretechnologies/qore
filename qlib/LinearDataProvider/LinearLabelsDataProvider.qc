@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearLabelsDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearLabelsDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,7 +48,7 @@ public class LinearLabelsDataProvider inherits LinearDataProviderBase {
                 "display_name": "Team ID",
                 "short_desc": "Filter by team ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter labels by team ID (null for workspace labels)",
+                "desc": "Filter labels by team ID (`NOTHING` for workspace labels)",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",

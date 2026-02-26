@@ -507,6 +507,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(archiveIssue.options.hasKey("id"), "archive-issue should have id option");
         assertEq("issues", archiveIssue.options.id.ref_data, "archive-issue id should have ref_data=issues");
         assertTrue(archiveIssue.options.id.required, "archive-issue id should be required");
+        assertTrue(exists archiveIssue.output_type, "archive-issue should have output_type");
 
         # Verify search-issues action (FIND type)
         *hash<DataProviderActionInfo> searchIssues = DataProviderActionCatalog::getAppAction("Linear", "search-issues");
@@ -514,6 +515,17 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_FIND, searchIssues.action_code);
         assertTrue(searchIssues.options.hasKey("teamId"), "search-issues should have teamId option");
         assertEq("teams", searchIssues.options.teamId.ref_data, "search-issues teamId should have ref_data=teams");
+        assertTrue(searchIssues.options.hasKey("cycleId"), "search-issues should have cycleId option");
+        assertEq("cycles", searchIssues.options.cycleId.ref_data, "search-issues cycleId should have ref_data=cycles");
+        assertTrue(searchIssues.options.hasKey("priority"), "search-issues should have priority option");
+        assertTrue(searchIssues.options.priority.allowed_values.size() > 0, "search-issues priority should have allowed_values");
+        assertTrue(searchIssues.options.hasKey("projectId"), "search-issues should have projectId option");
+        assertEq("projects", searchIssues.options.projectId.ref_data, "search-issues projectId should have ref_data=projects");
+        assertTrue(searchIssues.options.hasKey("assigneeId"), "search-issues should have assigneeId option");
+        assertEq("users", searchIssues.options.assigneeId.ref_data, "search-issues assigneeId should have ref_data=users");
+        assertTrue(searchIssues.options.hasKey("stateId"), "search-issues should have stateId option");
+        assertEq("states", searchIssues.options.stateId.ref_data, "search-issues stateId should have ref_data=states");
+        assertTrue(searchIssues.options.hasKey("limit"), "search-issues should have limit option");
 
         # Verify create-comment action has issueId option
         *hash<DataProviderActionInfo> createComment = DataProviderActionCatalog::getAppAction("Linear", "create-comment");
@@ -580,6 +592,10 @@ public class LinearDataProviderTest inherits QUnit::Test {
         assertTrue(exists searchProjects, "search-projects action should exist");
         assertEq(DPAT_FIND, searchProjects.action_code);
         assertTrue(searchProjects.options.state.allowed_values.size() > 0, "search-projects state should have allowed_values");
+        assertTrue(searchProjects.options.state.preselected, "search-projects state should be preselected");
+
+        # Verify search-teams preselection
+        assertTrue(searchTeams.options.limit.preselected, "search-teams limit should be preselected");
 
         if (m_options.verbose) {
             printf("Action catalog tests passed - all actions have proper options with ref_data\n");

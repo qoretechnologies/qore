@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore LinearDataProvider module definition
 
-/*  LinearIssuesDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  LinearIssuesDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,12 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
 
         #! Search options
         const SearchOptions = {
+            "id": <DataProviderOptionInfo>{
+                "display_name": "Issue ID",
+                "short_desc": "Get a specific issue by ID",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "The unique ID of the issue to retrieve",
+            },
             "teamId": <DataProviderOptionInfo>{
                 "display_name": "Team ID",
                 "short_desc": "Filter by team ID",
@@ -145,6 +151,14 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
     #! Searches for issues
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        # Handle single-record lookup by ID
+        if (search_options.id) {
+            hash<auto> data = doGraphQL(GetIssueQuery, {"id": search_options.id});
+            return new DefaultRecordIterator(new ListHashIterator(data.issue
+                ? (flattenConnections(data.issue),) : ()), where_cond, search_options,
+                recordType.getFields());
+        }
+
         hash<auto> filter;
 
         # Build filter from search options
