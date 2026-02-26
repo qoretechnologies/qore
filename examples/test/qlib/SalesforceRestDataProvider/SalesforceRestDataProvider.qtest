@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%requires DataProvider
+%requires SalesforceRestDataProvider
+
+%exec-class SalesforceRestDataProviderTest
+
+public class SalesforceRestDataProviderTest inherits QUnit::Test {
+    constructor() : Test("SalesforceRestDataProvider test", "1.0") {
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
+
+        set_return_value(main());
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "create", "find_single", "find", "update", "upsert", "delete",
+        );
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActions("Salesforce");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
+    }
+}

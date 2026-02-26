@@ -69,6 +69,7 @@ module MemcachedDataProvider {
             "short_desc": "Store a value in the cache",
             "desc": "Store a key-value pair in memcached, overwriting any existing value",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -79,6 +80,7 @@ module MemcachedDataProvider {
             "short_desc": "Store a value only if key doesn't exist",
             "desc": "Store a key-value pair in memcached only if the key doesn't already exist",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -89,6 +91,7 @@ module MemcachedDataProvider {
             "short_desc": "Replace an existing value",
             "desc": "Replace a value in memcached only if the key already exists",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -99,6 +102,7 @@ module MemcachedDataProvider {
             "short_desc": "Update value with optimistic locking",
             "desc": "Update a value only if its CAS token matches (optimistic locking)",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register retrieval actions
@@ -110,6 +114,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve a value from the cache",
             "desc": "Retrieve a cached value by key",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -120,6 +125,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve a value with CAS token",
             "desc": "Retrieve a cached value with its CAS token for optimistic locking",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -130,6 +136,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve multiple values",
             "desc": "Retrieve multiple cached values in a single batch request",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register delete action
@@ -141,6 +148,7 @@ module MemcachedDataProvider {
             "short_desc": "Delete a key from the cache",
             "desc": "Remove a key and its value from the cache",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register numeric actions
@@ -152,6 +160,7 @@ module MemcachedDataProvider {
             "short_desc": "Increment a numeric value",
             "desc": "Atomically increment a numeric value in the cache",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -162,6 +171,7 @@ module MemcachedDataProvider {
             "short_desc": "Decrement a numeric value",
             "desc": "Atomically decrement a numeric value in the cache",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register touch action
@@ -173,6 +183,7 @@ module MemcachedDataProvider {
             "short_desc": "Update expiration time",
             "desc": "Update the expiration time of an existing key",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register stats actions
@@ -184,6 +195,7 @@ module MemcachedDataProvider {
             "short_desc": "Get server statistics",
             "desc": "Retrieve general server statistics and metrics",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register admin actions
@@ -195,6 +207,7 @@ module MemcachedDataProvider {
             "short_desc": "Get server version",
             "desc": "Retrieve the memcached server version",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -205,6 +218,7 @@ module MemcachedDataProvider {
             "short_desc": "Clear all cached data",
             "desc": "Invalidate all items in the cache",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
     };
 }

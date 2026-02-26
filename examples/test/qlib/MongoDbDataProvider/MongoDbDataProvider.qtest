@@ -54,6 +54,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("invalid connection test", \invalidConnectionTest());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 %else
         addTestCase("module check", \moduleCheck());
 %endif
@@ -790,6 +791,24 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         assertThrows("MONGODB-CLIENT-ERROR", sub() {
             new MongoClient("not-a-valid-url");
         });
+    }
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "insert", "find", "update", "delete", "aggregate", "bulk",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("MongoDB");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
     }
 %endif
 }

@@ -38,6 +38,7 @@ public class DatasourceConnectionTest inherits QUnit::Test {
         addTestCase("vendor app connection options", \testVendorAppConnectionOptions());
         addTestCase("new vendor apps", \testNewVendorApps());
         addTestCase("jdbc jar info", \testJdbcJarInfo());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         set_return_value(main());
     }
@@ -529,6 +530,28 @@ public class DatasourceConnectionTest inherits QUnit::Test {
             *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("MariaDB");
             @assert(app);
             assertFalse(exists app.info.jdbc_jar, "MariaDB: no jdbc_jar");
+        }
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "select-sql", "exec-sql", "create", "find_single",
+            "find", "update", "upsert", "delete",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Db");
+        # verify all expected actions are present and have data_dependent_options
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
         }
     }
 

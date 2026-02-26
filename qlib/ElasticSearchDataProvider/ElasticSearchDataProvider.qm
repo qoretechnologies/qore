@@ -79,6 +79,7 @@ module ElasticSearchDataProvider {
             "short_desc": "Search for data in an ElasticSearch index",
             "desc": "Search for data in an ElasticSearch index",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
             "output_type": ElasticSearchAcknowledgedDataType,
         });
 
@@ -90,6 +91,7 @@ module ElasticSearchDataProvider {
             "short_desc": "Add a document to ElasticSearch",
             "desc": "Add a document to / ingest data in ElasticSearch",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
             "output_type": ElasticSearchDocumentCreateResponseDataType,
         });
 
@@ -101,6 +103,7 @@ module ElasticSearchDataProvider {
             "short_desc": "Perform bulk document operations",
             "desc": "Perform bulk index, create, update, and delete operations on ElasticSearch documents",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
             "output_type": ElasticSearchBulkResponseType,
         });
 
@@ -112,6 +115,7 @@ module ElasticSearchDataProvider {
             "short_desc": "Search with scroll API for large result sets",
             "desc": "Search an ElasticSearch index using the Scroll API for efficient iteration over large result sets",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -122,6 +126,7 @@ module ElasticSearchDataProvider {
             "short_desc": "Compute aggregations over search results",
             "desc": "Compute analytics and aggregations over ElasticSearch search results (terms, histogram, metrics, etc.)",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
     };
 }

@@ -69,6 +69,7 @@ module RedisDataProvider {
             "short_desc": "Set the string value of a key",
             "desc": "Set the string value of a key in Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -79,6 +80,7 @@ module RedisDataProvider {
             "short_desc": "Get the string value of a key",
             "desc": "Get the string value of a key from Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register actions for hashes
@@ -90,6 +92,7 @@ module RedisDataProvider {
             "short_desc": "Set a hash field value",
             "desc": "Set the value of a hash field in Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -100,6 +103,7 @@ module RedisDataProvider {
             "short_desc": "Get hash field values",
             "desc": "Get the values of hash fields from Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register actions for lists
@@ -111,6 +115,7 @@ module RedisDataProvider {
             "short_desc": "Push elements to a list",
             "desc": "Push elements to a list in Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -121,6 +126,7 @@ module RedisDataProvider {
             "short_desc": "Pop elements from a list",
             "desc": "Pop elements from a list in Redis",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         # register actions for pub/sub
@@ -132,6 +138,7 @@ module RedisDataProvider {
             "short_desc": "Publish a message to a channel",
             "desc": "Publish a message to a Redis pub/sub channel",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
     };
 }
