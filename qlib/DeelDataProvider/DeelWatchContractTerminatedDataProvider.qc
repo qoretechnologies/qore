@@ -53,10 +53,10 @@ public class DeelWatchContractTerminatedDataProvider inherits DeelWatchDataProvi
         return "Watch for terminated contracts in Deel";
     }
 
-    #! Fetches terminated contracts
+    #! Fetches terminated contracts since the given date
     private list<hash<auto>> fetchRecords(date since) {
         return fetchAllPages("contracts", "contracts",
-            {"status": "terminated", "limit": DefaultPageSize});
+            {"status": "terminated", "dateFrom": formatDate(since), "limit": DefaultPageSize});
     }
 
     #! Returns the timestamp from a contract record (use updated_at for terminations)

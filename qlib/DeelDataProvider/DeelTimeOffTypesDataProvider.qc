@@ -111,6 +111,9 @@ public class DeelTimeOffTypesDataProvider inherits DeelDataProviderBase {
             page_size = max;
         }
         hash<auto> params = {"pageSize": page_size};
+        if (search_options.contract_id) {
+            params.contract_id = search_options.contract_id;
+        }
 
         list<hash<auto>> all_records = ();
         while (True) {

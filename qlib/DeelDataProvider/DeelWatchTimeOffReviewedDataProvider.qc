@@ -55,7 +55,8 @@ public class DeelWatchTimeOffReviewedDataProvider inherits DeelWatchDataProvider
 
     #! Fetches recently updated time-off requests with full cursor-based pagination
     private list<hash<auto>> fetchRecords(date since) {
-        # time_offs uses pageSize and cursor-based pagination with has_next_page/next
+        # NOTE: the Deel time_offs API does not support date filtering (no dateFrom param);
+        # deduplication and time-based filtering is handled by the base class pollOnce()
         list<hash<auto>> all_records = ();
         hash<auto> params = {"pageSize": DefaultPageSize};
         while (True) {
