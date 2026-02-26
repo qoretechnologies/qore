@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! ShipStation store record type
 public class ShipStationStoreDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "storeId": {
                 "type": IntType,

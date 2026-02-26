@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for creating an order
 public class ShipStationCreateOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderNumber": {
                 "type": StringType,
@@ -35,6 +35,7 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Your internal order number",
                 "desc": "A unique identifier for the order in your system",
                 "required": True,
+                "preselected": True,
             },
             "orderKey": {
                 "type": SoftStringOrNothingType,
@@ -48,6 +49,7 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Date the order was placed",
                 "desc": "The date the order was placed",
                 "required": True,
+                "preselected": True,
             },
             "orderStatus": {
                 "type": StringType,
@@ -55,6 +57,7 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Initial order status",
                 "desc": "The initial status of the order",
                 "required": True,
+                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "awaiting_payment", "desc": "Awaiting payment"},
                     <AllowedValueInfo>{"value": "awaiting_shipment", "desc": "Awaiting shipment"},
@@ -68,6 +71,7 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Billing address",
                 "desc": "The billing address for the order",
                 "required": True,
+                "preselected": True,
             },
             "shipTo": {
                 "type": new ShipStationAddressDataType(),
@@ -75,9 +79,10 @@ public class ShipStationCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Shipping address",
                 "desc": "The shipping destination address",
                 "required": True,
+                "preselected": True,
             },
             "items": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("OrderItems", new ShipStationOrderItemDataType(), True),
                 "display_name": "Items",
                 "short_desc": "Order line items",
                 "desc": "Array of order items with sku, name, quantity, unitPrice, etc.",

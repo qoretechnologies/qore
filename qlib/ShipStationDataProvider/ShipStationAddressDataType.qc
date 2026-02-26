@@ -29,7 +29,7 @@ public namespace ShipStationDataProvider {
 /** Used for billing and shipping addresses in orders, warehouses, and other entities.
 */
 public class ShipStationAddressDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for ShipStation addresses
         const Fields = {
             "name": {
@@ -119,6 +119,10 @@ public class ShipStationAddressDataType inherits HashDataType {
 
     #! Creates the type
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
         addQoreFields(Fields);
     }
 }

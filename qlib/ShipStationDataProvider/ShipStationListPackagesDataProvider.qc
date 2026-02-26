@@ -27,14 +27,15 @@ public namespace ShipStationDataProvider {
 
 #! Request type for listing carrier packages
 public class ShipStationListPackagesRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "carrierCode": {
                 "type": StringType,
                 "display_name": "Carrier Code",
                 "short_desc": "The carrier code",
-                "desc": "The carrier code to list packages for (e.g., 'ups', 'fedex', 'stamps_com')",
+                "desc": "The carrier code to list packages for (e.g., `ups`, `fedex`, `stamps_com`)",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -46,7 +47,7 @@ public class ShipStationListPackagesRequestDataType inherits HashDataType {
 
 #! Response type for listing packages
 public class ShipStationListPackagesResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "packages": {
                 "type": SoftAutoListType,

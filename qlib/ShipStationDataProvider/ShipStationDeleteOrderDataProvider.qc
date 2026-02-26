@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for deleting an order
 public class ShipStationDeleteOrderRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "orderId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationDeleteOrderRequestDataType inherits HashDataType {
                 "short_desc": "The order ID to delete",
                 "desc": "The ShipStation order ID to delete",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -46,7 +47,7 @@ public class ShipStationDeleteOrderRequestDataType inherits HashDataType {
 
 #! Response type for deleting an order
 public class ShipStationDeleteOrderResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

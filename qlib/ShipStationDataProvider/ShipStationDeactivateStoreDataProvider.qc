@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for deactivating a store
 public class ShipStationDeactivateStoreRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "storeId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationDeactivateStoreRequestDataType inherits HashDataType {
                 "short_desc": "The store ID to deactivate",
                 "desc": "The unique ShipStation store ID to deactivate",
                 "required": True,
+                "preselected": True,
             },
         };
     }
@@ -46,7 +47,7 @@ public class ShipStationDeactivateStoreRequestDataType inherits HashDataType {
 
 #! Response type for deactivating a store
 public class ShipStationDeactivateStoreResponseDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "success": {
                 "type": SoftBoolType,

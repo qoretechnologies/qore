@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for updating a warehouse
 public class ShipStationUpdateWarehouseRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "warehouseId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationUpdateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "The warehouse ID to update",
                 "desc": "The unique ShipStation warehouse ID to update",
                 "required": True,
+                "preselected": True,
             },
             "warehouseName": {
                 "type": StringType,
@@ -42,6 +43,7 @@ public class ShipStationUpdateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Name for the warehouse",
                 "desc": "A descriptive name for the warehouse",
                 "required": True,
+                "preselected": True,
             },
             "originAddress": {
                 "type": new ShipStationAddressDataType(),
@@ -49,6 +51,7 @@ public class ShipStationUpdateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Warehouse address",
                 "desc": "The ship-from address for this warehouse",
                 "required": True,
+                "preselected": True,
             },
             "returnAddress": {
                 "type": new ShipStationAddressDataType(),

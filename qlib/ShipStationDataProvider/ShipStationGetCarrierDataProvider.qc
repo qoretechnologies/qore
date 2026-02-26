@@ -27,14 +27,15 @@ public namespace ShipStationDataProvider {
 
 #! Request type for getting a carrier
 public class ShipStationGetCarrierRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "carrierCode": {
                 "type": StringType,
                 "display_name": "Carrier Code",
                 "short_desc": "The carrier code to retrieve",
-                "desc": "The carrier code (e.g., 'ups', 'fedex', 'stamps_com')",
+                "desc": "The carrier code (e.g., `ups`, `fedex`, `stamps_com`)",
                 "required": True,
+                "preselected": True,
             },
         };
     }

@@ -27,7 +27,7 @@ public namespace ShipStationDataProvider {
 
 #! Request type for updating a product
 public class ShipStationUpdateProductRequestDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "productId": {
                 "type": IntType,
@@ -35,6 +35,7 @@ public class ShipStationUpdateProductRequestDataType inherits HashDataType {
                 "short_desc": "The product ID to update",
                 "desc": "The unique ShipStation product ID to update",
                 "required": True,
+                "preselected": True,
             },
             "sku": {
                 "type": SoftStringOrNothingType,
