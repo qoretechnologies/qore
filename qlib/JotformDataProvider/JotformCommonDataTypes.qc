@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformFieldDataTypes.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformFieldDataTypes.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,7 +30,7 @@ public namespace JotformDataProvider {
     The JotForm API expects data in the format: submission[qid_first], submission[qid_last], etc.
 */
 public class JotformFullNameDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for full name
         const Fields = {
             "first": {
@@ -82,7 +82,7 @@ public class JotformFullNameDataType inherits HashDataType {
     The JotForm API expects data in the format: submission[qid_addr_line1], submission[qid_city], etc.
 */
 public class JotformAddressDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for address
         const Fields = {
             "addr_line1": {
@@ -141,7 +141,7 @@ public class JotformAddressDataType inherits HashDataType {
     The JotForm API expects data in the format: submission[qid_area], submission[qid_phone], etc.
 */
 public class JotformPhoneDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for phone
         const Fields = {
             "area": {
@@ -179,7 +179,7 @@ public class JotformPhoneDataType inherits HashDataType {
     with the email address and a confirmation field.
 */
 public class JotformEmailDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for email
         const Fields = {
             "email": {
@@ -209,7 +209,7 @@ public class JotformEmailDataType inherits HashDataType {
 /** Used for capturing date and time with separate components.
 */
 public class JotformDateTimeDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for datetime
         const Fields = {
             "year": {
@@ -274,7 +274,7 @@ public class JotformDateTimeDataType inherits HashDataType {
 /** Used for capturing date of birth with separate components.
 */
 public class JotformBirthDateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for birthdate
         const Fields = {
             "year": {
@@ -311,7 +311,7 @@ public class JotformBirthDateDataType inherits HashDataType {
 /** Used for capturing time only.
 */
 public class JotformTimeDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for time
         const Fields = {
             "hourSelect": {
@@ -348,7 +348,7 @@ public class JotformTimeDataType inherits HashDataType {
 /** Used for capturing matrix/grid responses where rows and columns form a grid of choices.
 */
 public class JotformMatrixDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for matrix - dynamic based on row/column configuration
         const Fields = {};
     }
@@ -368,7 +368,7 @@ public class JotformMatrixDataType inherits HashDataType {
 /** Used for capturing payment information.
 */
 public class JotformPaymentDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for payment
         const Fields = {
             "paymentArray": {
@@ -404,7 +404,7 @@ public class JotformPaymentDataType inherits HashDataType {
 /** Used for capturing electronic signatures.
 */
 public class JotformSignatureDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for signature
         const Fields = {
             "signature": {

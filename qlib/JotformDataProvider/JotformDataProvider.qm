@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformDataProvider.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformDataProvider.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -97,14 +97,14 @@ module JotformDataProvider {
         # Get Submission
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": JotformDataProvider::AppName,
-            "path": "/submissions/get",
+            "path": "/submissions",
             "action": "get-submission",
             "groups": "Submissions",
             "display_name": "Get Submission",
             "short_desc": "Get a specific form submission",
             "desc": "Retrieve a specific submission by its ID",
             "action_code": DPAT_FIND_SINGLE,
-            "data_provider_info": JotformSubmissionDataProvider::ProviderInfo,
+            "data_provider_info": JotformFormSubmissionsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return new JotformSubmissionDataType(); },
             "options": {
                 "submissionID": <ActionOptionInfo>{
@@ -151,7 +151,7 @@ module JotformDataProvider {
                 "orderby": <ActionOptionInfo>{
                     "display_name": "Order By",
                     "short_desc": "Sort order",
-                    "desc": "Field to sort by (e.g., 'created_at', 'updated_at')",
+                    "desc": "Field to sort by (e.g., `created_at`, `updated_at`)",
                     "type": AbstractDataProviderTypeMap."*string",
                     "example_value": "created_at",
                 },
@@ -161,6 +161,7 @@ module JotformDataProvider {
                     "desc": "Maximum number of submissions to return",
                     "type": AbstractDataProviderTypeMap."*int",
                     "example_value": 100,
+                    "preselected": True,
                 },
             },
         });
@@ -223,6 +224,7 @@ module JotformDataProvider {
                     "preselected": True,
                 },
             },
+            "output_type": new JotformDeleteSubmissionResponseDataType(),
         });
 
         # ========== FORM ACTIONS ==========
@@ -276,7 +278,7 @@ module JotformDataProvider {
                 "orderby": <ActionOptionInfo>{
                     "display_name": "Order By",
                     "short_desc": "Sort order",
-                    "desc": "Field to sort by (e.g., 'created_at', 'updated_at', 'title')",
+                    "desc": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
                     "type": AbstractDataProviderTypeMap."*string",
                     "example_value": "created_at",
                 },
@@ -286,6 +288,7 @@ module JotformDataProvider {
                     "desc": "Maximum number of forms to return",
                     "type": AbstractDataProviderTypeMap."*int",
                     "example_value": 100,
+                    "preselected": True,
                 },
             },
         });
@@ -293,7 +296,7 @@ module JotformDataProvider {
         # Get Form Reports
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": JotformDataProvider::AppName,
-            "path": "/forms/reports",
+            "path": "/reports",
             "action": "get-form-reports",
             "groups": "Forms",
             "display_name": "Get Form Reports",

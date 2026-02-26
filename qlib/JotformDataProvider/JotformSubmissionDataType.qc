@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformSubmissionDataType.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformSubmissionDataType.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace JotformDataProvider {
 
 #! JotForm submission record type
 public class JotformSubmissionDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for JotForm submissions
         const Fields = {
             "id": {
@@ -55,21 +55,21 @@ public class JotformSubmissionDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Status",
                 "short_desc": "The submission status",
-                "desc": "The status of the submission (ACTIVE, DELETED, etc.)",
+                "desc": "The status of the submission (`ACTIVE`, `DELETED`, etc.)",
                 "example_value": "ACTIVE",
             },
             "new": {
                 "type": StringOrNothingType,
                 "display_name": "New",
                 "short_desc": "Whether the submission is new/unread",
-                "desc": "Indicates if the submission has been read (0 = read, 1 = new/unread)",
+                "desc": "Indicates if the submission has been read (`0` = read, `1` = new/unread)",
                 "example_value": "0",
             },
             "flag": {
                 "type": StringOrNothingType,
                 "display_name": "Flag",
                 "short_desc": "Whether the submission is flagged",
-                "desc": "Indicates if the submission has been flagged (0 = not flagged, 1 = flagged)",
+                "desc": "Indicates if the submission has been flagged (`0` = not flagged, `1` = flagged)",
                 "example_value": "0",
             },
             "notes": {
@@ -90,7 +90,7 @@ public class JotformSubmissionDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "When the submission was created",
-                "desc": "The date and time when the submission was created (YYYY-MM-DD HH:MM:SS format)",
+                "desc": "The date and time when the submission was created (`YYYY-MM-DD HH:MM:SS` format)",
                 "example_value": "2025-01-15 10:30:45",
             },
             "updated_at": {
@@ -115,7 +115,7 @@ public class JotformSubmissionDataType inherits HashDataType {
     is used instead, which has form-specific fields at the top level.
 */
 public class JotformSubmissionCreateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for creating submissions
         const Fields = {
             "formID": {
@@ -150,7 +150,7 @@ public class JotformSubmissionCreateDataType inherits HashDataType {
     is used instead, which has form-specific fields at the top level.
 */
 public class JotformSubmissionUpdateDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for updating submissions
         const Fields = {
             "submissionID": {

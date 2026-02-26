@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformWebhookEventDataTypes.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformWebhookEventDataTypes.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,7 +30,7 @@ public namespace JotformDataProvider {
     JotForm sends submission data in JSON format with the form submission details.
 */
 public class JotformSubmissionWebhookEventDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "submissionID": {
                 "type": StringType,
@@ -92,7 +92,7 @@ public class JotformSubmissionWebhookEventDataType inherits HashDataType {
     This includes both the submission data and payment-specific information.
 */
 public class JotformPaymentWebhookEventDataType inherits HashDataType {
-    private {
+    public {
         const Fields = {
             "submissionID": {
                 "type": StringType,

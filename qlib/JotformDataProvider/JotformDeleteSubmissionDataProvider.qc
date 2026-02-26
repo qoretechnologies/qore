@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore JotformDataProvider module definition
 
-/*  JotformDeleteSubmissionDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  JotformDeleteSubmissionDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace JotformDataProvider {
 
 #! Delete submission request type
 public class JotformDeleteSubmissionRequestDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for delete request
         const Fields = {
             "submissionID": {
@@ -49,7 +49,7 @@ public class JotformDeleteSubmissionRequestDataType inherits HashDataType {
 
 #! Delete submission response type
 public class JotformDeleteSubmissionResponseDataType inherits HashDataType {
-    private {
+    public {
         #! Field definitions for delete response
         const Fields = {
             "success": {
