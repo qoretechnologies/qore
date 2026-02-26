@@ -404,7 +404,9 @@ public class MailgunDataProviderTest inherits QUnit::Test {
 
         # Verify route and domain actions
         assertTrue(actionNames.contains("create-route"));
+        assertTrue(actionNames.contains("list-routes"));
         assertTrue(actionNames.contains("list-domains"));
+        assertTrue(actionNames.contains("list-mailing-lists"));
 
         # Verify trigger actions
         assertTrue(actionNames.contains("clicked"));
@@ -681,11 +683,14 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         assertTrue(eventTypes.hasKey("clicked"));
         assertTrue(eventTypes{"clicked"}.desc.val());
 
-        # Test example event data
+        # Test example event data - verify event-specific fields
         auto exampleData = eventProv.getExampleEventData("clicked");
         assertTrue(exampleData.event.val());
         assertTrue(exampleData.hasKey("recipient"));
-        assertTrue(exampleData.hasKey("url"));
+        assertTrue(exampleData.hasKey("url"), "Clicked example data must have url");
+        assertTrue(exampleData.hasKey("ip"), "Clicked example data must have ip");
+        assertTrue(exampleData.hasKey("client-info"), "Clicked example data must have client-info");
+        assertTrue(exampleData.hasKey("geolocation"), "Clicked example data must have geolocation");
 
         if (m_options.verbose) {
             printf("  Event types: %y\n", keys eventTypes);
@@ -706,8 +711,43 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         hash<string, hash<DataProviderMessageInfo>> deliveredEventTypes = deliveredProv.getEventTypes();
         assertTrue(deliveredEventTypes.hasKey("delivered"));
 
+        # Test example event data - verify delivery-specific fields
+        auto deliveredExample = deliveredProv.getExampleEventData("delivered");
+        assertTrue(deliveredExample.event.val());
+        assertTrue(deliveredExample.hasKey("recipient"));
+        assertTrue(deliveredExample.hasKey("delivery-status"), "Delivered example data must have delivery-status");
+        assertTrue(deliveredExample.hasKey("envelope"), "Delivered example data must have envelope");
+
         if (m_options.verbose) {
             printf("  Event types: %y\n", keys deliveredEventTypes);
+            printf("  Delivered example data has keys: %y\n", keys deliveredExample);
+        }
+
+        # ============================================
+        # Test Opened Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunOpenedEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunOpenedEventDataProvider openedProv(client, testDomain, {});
+        assertEq("opened", openedProv.getName());
+        assertTrue(openedProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> openedEventTypes = openedProv.getEventTypes();
+        assertTrue(openedEventTypes.hasKey("opened"));
+
+        # Test example event data - verify open-specific fields
+        auto openedExample = openedProv.getExampleEventData("opened");
+        assertTrue(openedExample.event.val());
+        assertTrue(openedExample.hasKey("recipient"));
+        assertTrue(openedExample.hasKey("ip"), "Opened example data must have ip");
+        assertTrue(openedExample.hasKey("client-info"), "Opened example data must have client-info");
+        assertTrue(openedExample.hasKey("geolocation"), "Opened example data must have geolocation");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys openedEventTypes);
+            printf("  Opened example data has keys: %y\n", keys openedExample);
         }
 
         # ============================================
@@ -724,8 +764,98 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         hash<string, hash<DataProviderMessageInfo>> failEventTypes = failProv.getEventTypes();
         assertTrue(failEventTypes.hasKey("permanent_fail"));
 
+        # Test example event data - verify failure-specific fields
+        auto failExample = failProv.getExampleEventData("permanent_fail");
+        assertTrue(failExample.event.val());
+        assertTrue(failExample.hasKey("recipient"));
+        assertTrue(failExample.hasKey("severity"), "PermanentFail example data must have severity");
+        assertTrue(failExample.hasKey("reason"), "PermanentFail example data must have reason");
+        assertTrue(failExample.hasKey("delivery-status"), "PermanentFail example data must have delivery-status");
+        assertTrue(failExample.hasKey("envelope"), "PermanentFail example data must have envelope");
+
         if (m_options.verbose) {
             printf("  Event types: %y\n", keys failEventTypes);
+            printf("  PermanentFail example data has keys: %y\n", keys failExample);
+        }
+
+        # ============================================
+        # Test Temporary Fail Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunTemporaryFailEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunTemporaryFailEventDataProvider tempFailProv(client, testDomain, {});
+        assertEq("temporary_fail", tempFailProv.getName());
+        assertTrue(tempFailProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> tempFailEventTypes = tempFailProv.getEventTypes();
+        assertTrue(tempFailEventTypes.hasKey("temporary_fail"));
+
+        # Test example event data - verify temporary failure-specific fields
+        auto tempFailExample = tempFailProv.getExampleEventData("temporary_fail");
+        assertTrue(tempFailExample.event.val());
+        assertTrue(tempFailExample.hasKey("recipient"));
+        assertTrue(tempFailExample.hasKey("severity"), "TemporaryFail example data must have severity");
+        assertTrue(tempFailExample.hasKey("reason"), "TemporaryFail example data must have reason");
+        assertTrue(tempFailExample.hasKey("delivery-status"), "TemporaryFail example data must have delivery-status");
+        assertTrue(tempFailExample.hasKey("envelope"), "TemporaryFail example data must have envelope");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys tempFailEventTypes);
+            printf("  TemporaryFail example data has keys: %y\n", keys tempFailExample);
+        }
+
+        # ============================================
+        # Test Complained Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunComplainedEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunComplainedEventDataProvider complainedProv(client, testDomain, {});
+        assertEq("complained", complainedProv.getName());
+        assertTrue(complainedProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> complainedEventTypes = complainedProv.getEventTypes();
+        assertTrue(complainedEventTypes.hasKey("complained"));
+
+        # Test example event data - complained uses base fields only
+        auto complainedExample = complainedProv.getExampleEventData("complained");
+        assertTrue(complainedExample.event.val());
+        assertTrue(complainedExample.hasKey("recipient"));
+        assertTrue(complainedExample.hasKey("message"));
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys complainedEventTypes);
+            printf("  Complained example data has keys: %y\n", keys complainedExample);
+        }
+
+        # ============================================
+        # Test Unsubscribed Event Provider
+        # ============================================
+        if (m_options.verbose) {
+            printf("\nTesting MailgunUnsubscribedEventDataProvider...\n");
+        }
+
+        MailgunDataProvider::MailgunUnsubscribedEventDataProvider unsubProv(client, testDomain, {});
+        assertEq("unsubscribed", unsubProv.getName());
+        assertTrue(unsubProv.getInfo().supports_observable);
+
+        hash<string, hash<DataProviderMessageInfo>> unsubEventTypes = unsubProv.getEventTypes();
+        assertTrue(unsubEventTypes.hasKey("unsubscribed"));
+
+        # Test example event data - verify unsubscribe-specific fields
+        auto unsubExample = unsubProv.getExampleEventData("unsubscribed");
+        assertTrue(unsubExample.event.val());
+        assertTrue(unsubExample.hasKey("recipient"));
+        assertTrue(unsubExample.hasKey("ip"), "Unsubscribed example data must have ip");
+        assertTrue(unsubExample.hasKey("client-info"), "Unsubscribed example data must have client-info");
+        assertTrue(unsubExample.hasKey("geolocation"), "Unsubscribed example data must have geolocation");
+
+        if (m_options.verbose) {
+            printf("  Event types: %y\n", keys unsubEventTypes);
+            printf("  Unsubscribed example data has keys: %y\n", keys unsubExample);
         }
 
         # ============================================
