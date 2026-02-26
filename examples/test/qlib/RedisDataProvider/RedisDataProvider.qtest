@@ -39,6 +39,7 @@ public class RedisDataProviderTest inherits QUnit::Test {
         addTestCase("key operations test", \keyOpsTest());
         addTestCase("server operations test", \serverOpsTest());
         addTestCase("transaction operations test", \transactionOpsTest());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         setupConnection();
 
@@ -402,5 +403,25 @@ public class RedisDataProviderTest inherits QUnit::Test {
         assertEq("OK", result.results[1]);
         assertEq("value1", result.results[2]);
         assertEq("value2", result.results[3]);
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "set-string", "get-string", "set-hash", "get-hash",
+            "push-list", "pop-list", "publish-message",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Redis");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
     }
 }

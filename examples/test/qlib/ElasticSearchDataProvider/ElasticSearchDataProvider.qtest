@@ -43,6 +43,7 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
         addTestCase("aggregationTest", \aggregationTest());
         addTestCase("bulkOperationTest", \bulkOperationTest());
         addTestCase("negativeTests", \negativeTests());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         setupConnection();
 
@@ -512,6 +513,27 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
         ElasticSearchBulkErrorDataType errType();
         assertTrue(errType.getField("type").val());
         assertTrue(errType.getField("reason").val());
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "search-index", "create-document", "bulk-operations",
+            "scroll-search", "aggregate",
+        );
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActions("ElasticSearch");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
     }
 
     private usageIntern() {

@@ -35,6 +35,7 @@ public class MemcachedDataProviderTest inherits QUnit::Test {
         addTestCase("addSuccessTest", \addSuccessTest());
         addTestCase("gatsTest", \gatsTest());
         addTestCase("dataProviderTest", \dataProviderTest());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         setupConnection();
         set_return_value(main());
@@ -444,6 +445,26 @@ public class MemcachedDataProviderTest inherits QUnit::Test {
         # Cleanup
         MemcachedDataProvider::MemcachedDeleteDataProvider delProv(client);
         delProv.doRequest({"key": key});
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "set", "add", "replace", "cas", "get", "gets", "multi-get",
+            "delete", "incr", "decr", "touch", "stats", "version", "flush-all",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Memcached");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
     }
 
     private usageIntern() {

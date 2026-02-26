@@ -4509,9 +4509,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForSearchWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
         return action.options + {
-            "where_cond": getWhereCondActionOption(expressions),
+            "where_cond": getWhereCondActionOption(),
         } + getSearchOptionsAsActionOptions();
     }
 
@@ -4565,9 +4564,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "type": new HashDataType(AutoHashType, "RecordInfo", rt),
             };
         }
-        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
         return action.options + rv + {
-            "where_cond": getWhereCondActionOption(expressions),
+            "where_cond": getWhereCondActionOption(),
         } + getSearchOptionsAsActionOptions();
     }
 
@@ -4583,9 +4581,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private *hash<string, hash<ActionOptionInfo>> tryGetActionOptionsForDeleteWithOptionsImpl(
             hash<DataProviderActionInfo> action, *hash<auto> options) {
-        *hash<string, hash<DataProviderExpressionInfo>> expressions = getExpressionsWithOptions(options);
         return action.options + {
-            "where_cond": getWhereCondActionOption(expressions),
+            "where_cond": getWhereCondActionOption(),
         } + getSearchOptionsAsActionOptions();
     }
 
@@ -4670,9 +4667,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     /**
         @since DataProvider 3.3
     */
-    private hash<ActionOptionInfo> getWhereCondActionOption(
-            *hash<string, hash<DataProviderExpressionInfo>> expressions
-    ) {
+    private hash<ActionOptionInfo> getWhereCondActionOption() {
         return <ActionOptionInfo>{
             "display_name": "Search Expression",
             "desc": "A boolean expression to be applied to each record to determine if it will be "
@@ -4681,10 +4676,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             "supports_templates": False,
             "supports_custom_values": False,
             "supports_expressions": True,
-            "server_expression_handling": (expressions && expressions != DataProviderGenericExpressions)
-                ? True
-                : False,
+            "server_expression_handling": True,
             "preselected": True,
+            "default_view": UiOptionView::Expression,
         };
     }
 

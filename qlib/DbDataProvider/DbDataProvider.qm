@@ -77,6 +77,7 @@ module DbDataProvider {
             "short_desc": "Execute an SQL select statement",
             "desc": "Execute an SQL select statement",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "data_provider_info": DbDataProvider::ProviderInfo,
         });
 
@@ -89,6 +90,7 @@ module DbDataProvider {
             "short_desc": "Execute an SQL statement",
             "desc": "Execute an SQL statement",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
             "data_provider_info": DbDataProvider::ProviderInfo,
         });
 
@@ -107,6 +109,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
@@ -125,6 +128,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
@@ -143,6 +147,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
@@ -161,6 +166,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
@@ -179,6 +185,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_UPSERT,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 
@@ -197,6 +204,7 @@ module DbDataProvider {
                 },
             },
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "data_provider_info": DbTableDataProvider::ProviderInfo,
         });
 

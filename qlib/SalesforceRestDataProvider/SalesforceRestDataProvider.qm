@@ -73,6 +73,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
@@ -92,6 +93,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
@@ -111,6 +113,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
@@ -130,6 +133,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
@@ -149,6 +153,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_UPSERT,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
 
@@ -168,6 +173,7 @@ module SalesforceRestDataProvider {
                 },
             },
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "data_provider_info": SalesforceRestObjectDataProvider::ProviderInfo,
         });
     };

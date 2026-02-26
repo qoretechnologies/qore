@@ -84,6 +84,7 @@ module MongoDbDataProvider {
             "short_desc": "Insert a document into a collection",
             "desc": "Insert one or more documents into a MongoDB collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -95,6 +96,7 @@ module MongoDbDataProvider {
             "short_desc": "Query documents in a collection",
             "desc": "Find documents in a MongoDB collection using query filters",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -106,6 +108,7 @@ module MongoDbDataProvider {
             "short_desc": "Update documents in a collection",
             "desc": "Update one or more documents in a MongoDB collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -117,6 +120,7 @@ module MongoDbDataProvider {
             "short_desc": "Delete documents from a collection",
             "desc": "Delete one or more documents from a MongoDB collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -128,6 +132,7 @@ module MongoDbDataProvider {
             "short_desc": "Run aggregation pipeline",
             "desc": "Execute an aggregation pipeline on a MongoDB collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -139,6 +144,7 @@ module MongoDbDataProvider {
             "short_desc": "Execute bulk write operations",
             "desc": "Execute bulk insert, update, and delete operations on a MongoDB collection",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
         });
     };
 }

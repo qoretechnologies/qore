@@ -36,6 +36,7 @@ public class Main inherits QUnit::Test {
     constructor() : Test("DiscordDataProviderTest", "1.0", \ARGV, MyOpts) {
         addTestCase("discord sanity tests", \discordSanityTests());
         addTestCase("discord tests", \discordTests());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         try {
             setupConnection();
@@ -97,6 +98,27 @@ public class Main inherits QUnit::Test {
         assertEq(Type::String, info.id.type());
         assertEq(Type::String, info.name.type());
         assertEq(Type::String, info.icon.type());
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "user-info", "guild-info",
+        );
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Discord");
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        for (int i = 0; i < actions.size(); ++i) {
+            action_map{actions[i].action} = actions[i];
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            string action_name = expected_actions[i];
+            assertTrue(action_map.hasKey(action_name),
+                sprintf("action %y is registered", action_name));
+            if (action_map.hasKey(action_name)) {
+                assertTrue(action_map{action_name}.data_dependent_options,
+                    sprintf("action %y has data_dependent_options", action_name));
+            }
+        }
     }
 
     private usageIntern() {
