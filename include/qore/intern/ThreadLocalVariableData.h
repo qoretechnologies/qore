@@ -162,35 +162,25 @@ public:
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
-        // Navigate back to the marker position, properly cleaning up variables
-        // along the way. We must call uninstantiate() (not just uninstantiateIntern())
-        // to ensure variables are properly cleaned up (assigned flags cleared, values deref'd).
+        // Navigate to marker position using only uninstantiateIntern() which is safe.
+        // Frame boundaries are SCOPE MARKERS ONLY - functions are responsible for
+        // uninstantiating their own variables before popFrameBoundary() is called.
+        // We only need to handle the position movement, not variable cleanup.
         //
-        // curr->pos should be at or near the marker position since the function
-        // should have uninstantiated most of its variables already. Any variables
-        // between curr->pos and the marker need to be cleaned up.
+        // curr->pos should be at or very close to the marker position since the
+        // function should have already uninstantiated all its local variables.
 
-        // First, verify we're looking at something close to the marker
-        if (curr == rec.block && curr->pos > rec.pos) {
-            // Same block, need to uninstantiate to reach the marker
+        // Navigate to the marker position - same block case
+        if (curr == rec.block) {
+            // Same block - just move position back to the marker
             while (curr->pos > rec.pos) {
-                uninstantiate(nullptr);
+                uninstantiateIntern();
             }
-        } else if (curr != rec.block) {
-            // Different block - need to navigate back properly
-            // This should be rare in normal execution
-            while (curr != rec.block && curr->prev) {
-                // Only move back blocks if we're at the start of a block
-                if (curr->pos == 0) {
-                    curr = curr->prev;
-                } else {
-                    // Position is wrong, uninstantiate to move back
-                    uninstantiate(nullptr);
-                }
-            }
-            // Now uninstantiate to reach the correct position if needed
-            while (curr->pos > rec.pos) {
-                uninstantiate(nullptr);
+        } else {
+            // Different block - navigate back using uninstantiateIntern()
+            // which safely handles block transitions
+            while (curr != rec.block || curr->pos > rec.pos) {
+                uninstantiateIntern();
             }
         }
 
