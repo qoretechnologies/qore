@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%requires DataProvider
+%requires ServiceNowRestDataProvider
+
+%exec-class ServiceNowRestDataProviderTest
+
+public class ServiceNowRestDataProviderTest inherits QUnit::Test {
+    constructor() : Test("ServiceNowRestDataProvider test", "1.0") {
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
+
+        set_return_value(main());
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "create-incident", "find-single-incident", "find-incidents",
+            "update-incidents", "delete-incidents",
+            "create-record", "find-single-record", "find-records",
+            "update-records", "delete-records",
+        );
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActions("ServiceNow");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
+    }
+}

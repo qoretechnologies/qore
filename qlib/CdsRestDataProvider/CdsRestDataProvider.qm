@@ -66,6 +66,7 @@ module CdsRestDataProvider {
             "short_desc": "Create a record in a Dynamics table",
             "desc": "Create a record in a Dynamics table using the Dynamics REST API",
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -85,6 +86,7 @@ module CdsRestDataProvider {
             "short_desc": "Find a specific record in Dynamics",
             "desc": "Find a specific record in a Dynamics table using the Dynamics REST API",
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -104,6 +106,7 @@ module CdsRestDataProvider {
             "short_desc": "Find records in Dynamics",
             "desc": "Find records in a Dynamics table using the Dynamics REST API",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -123,6 +126,7 @@ module CdsRestDataProvider {
             "short_desc": "Update records in Dynamics",
             "desc": "Update records in a Dynamics table using the Dynamics REST API",
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -142,6 +146,7 @@ module CdsRestDataProvider {
             "short_desc": "Delete records in Dynamics",
             "desc": "Delete records in a Dynamics table using the Dynamics REST API",
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "path_vars": {
                 "table": <DataProviderPathVarInfo>{
                     "display_name": "Table",
@@ -176,6 +181,7 @@ module CdsRestDataProvider {
             "short_desc": "Create a record in a Business Central table",
             "desc": "Create a record in a Business Central table using the Business Central REST API",
             "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "company": <DataProviderPathVarInfo>{
                     "display_name": "Company",
@@ -201,6 +207,7 @@ module CdsRestDataProvider {
             "short_desc": "Find a specific record in Business Central",
             "desc": "Find a specific record in a Business Central table using the Business Central REST API",
             "action_code": DPAT_FIND_SINGLE,
+            "data_dependent_options": True,
             "path_vars": {
                 "company": <DataProviderPathVarInfo>{
                     "display_name": "Company",
@@ -226,6 +233,7 @@ module CdsRestDataProvider {
             "short_desc": "Find records in Business Central",
             "desc": "Find records in a Business Central table using the Business Central REST API",
             "action_code": DPAT_FIND,
+            "data_dependent_options": True,
             "path_vars": {
                 "company": <DataProviderPathVarInfo>{
                     "display_name": "Company",
@@ -251,6 +259,7 @@ module CdsRestDataProvider {
             "short_desc": "Update records in Business Central",
             "desc": "Update records in a Business Central table using the Business Central REST API",
             "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
             "path_vars": {
                 "company": <DataProviderPathVarInfo>{
                     "display_name": "Company",
@@ -276,6 +285,7 @@ module CdsRestDataProvider {
             "short_desc": "Delete records in Business Central",
             "desc": "Delete records in a Business Central table using the Business Central REST API",
             "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
             "path_vars": {
                 "company": <DataProviderPathVarInfo>{
                     "display_name": "Company",

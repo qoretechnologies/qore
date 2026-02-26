@@ -73,6 +73,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         addTestCase("App registration tests", \appRegistrationTests());
         addTestCase("Expression support tests", \expressionSupportTests());
         addTestCase("Child provider summary info tests", \childProviderSummaryInfoTests());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
 
         # Integration tests (require credentials)
         addTestCase("Dynamics DataProvider integration tests", \dynamicsDataProviderIntegrationTests());
@@ -779,6 +780,46 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             # display_name is the human-readable name
             assertEq("Company 0", summary[0].display_name);
             assertEq("Company 99", summary[99].display_name);
+        }
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "create-record", "find-single-record", "find-records",
+            "update-records", "delete-records",
+        );
+
+        # check Dynamics app
+        {
+            list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Dynamics");
+            hash<string, bool> found;
+            for (int i = 0; i < actions.size(); ++i) {
+                hash<DataProviderActionInfo> action = actions[i];
+                assertTrue(action.data_dependent_options,
+                    sprintf("Dynamics action %y has data_dependent_options", action.action));
+                found{action.action} = True;
+            }
+            for (int i = 0; i < expected_actions.size(); ++i) {
+                assertTrue(found{expected_actions[i]},
+                    sprintf("Dynamics action %y is registered", expected_actions[i]));
+            }
+        }
+
+        # check BusinessCentral app
+        {
+            list<hash<DataProviderActionInfo>> actions =
+                DataProviderActionCatalog::getActions("BusinessCentral");
+            hash<string, bool> found;
+            for (int i = 0; i < actions.size(); ++i) {
+                hash<DataProviderActionInfo> action = actions[i];
+                assertTrue(action.data_dependent_options,
+                    sprintf("BusinessCentral action %y has data_dependent_options", action.action));
+                found{action.action} = True;
+            }
+            for (int i = 0; i < expected_actions.size(); ++i) {
+                assertTrue(found{expected_actions[i]},
+                    sprintf("BusinessCentral action %y is registered", expected_actions[i]));
+            }
         }
     }
 
