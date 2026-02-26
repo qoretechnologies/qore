@@ -354,6 +354,17 @@ class PipelineQueue {
         */
         bool has_metrics = False;
 
+        #! Cached metrics collector reference — avoids getMetricsCollector() call per record
+        /** Set alongside has_metrics by DataProviderPipeline.checkSubmitIntern()
+        */
+        *PipelineMetricsCollector mc_cache;
+
+        #! Local max queue depth since last batch flush — avoids per-record metrics_lock
+        int local_max_queue_depth = 0;
+
+        #! Local backpressure event count since last batch flush — avoids per-record metrics_lock
+        int local_backpressure_count = 0;
+
         #! Cached flag: True when the pipeline uses bulk API
         /** Set by DataProviderPipeline.checkSubmitIntern(); enables fast record counting
             via lsize() instead of per-record type checks.
@@ -424,12 +435,14 @@ class PipelineQueue {
         # so dequeue can compute queue wait time from the same entry (no parallel list to desync)
         if (has_metrics) {
             push queue, {"data": qdata, "enqueue_time": now_us()};
-            *PipelineMetricsCollector mc = parent.getMetricsCollector();
-            if (mc) {
-                mc.recordQueueDepth(id_str, queue.lsize());
-                if (waited) {
-                    mc.recordBackpressure(id_str);
-                }
+            # Track queue depth and backpressure locally — flushed in flushMetricsBatch()
+            # to avoid acquiring metrics_lock on every record
+            int depth = queue.lsize();
+            if (depth > local_max_queue_depth) {
+                local_max_queue_depth = depth;
+            }
+            if (waited) {
+                ++local_backpressure_count;
             }
         } else {
             # do not use the += operator in case the data is a list
@@ -544,10 +557,6 @@ class PipelineQueue {
                 # Unwrap the {data, enqueue_time} envelope
                 qdata = qentry.data;
                 record_queue_wait_us = (now_us() - qentry.enqueue_time).durationMicroseconds();
-                *PipelineMetricsCollector mc = parent.getMetricsCollector();
-                if (mc) {
-                    mc.recordQueueDepth(id_str, queue.lsize());
-                }
             } else {
                 qdata = qentry;
             }
@@ -609,15 +618,11 @@ class PipelineQueue {
                                 (now_us() - elem_start).durationMicroseconds();
 
                             if (do_bulk) {
-                                # Bulk: count actual records via type inspection
+                                # Bulk: data is always hash with list values
                                 int elem_in_count = 0;
-                                map elem_in_count += ($1.typeCode() == NT_HASH
-                                    && $1.firstValue().typeCode() == NT_LIST)
-                                    ? $1.firstValue().lsize() : 1, data_recs;
+                                map elem_in_count += $1.firstValue().lsize(), data_recs;
                                 int elem_out_count = 0;
-                                map elem_out_count += ($1.typeCode() == NT_HASH
-                                    && $1.firstValue().typeCode() == NT_LIST)
-                                    ? $1.firstValue().lsize() : 1, new_recs;
+                                map elem_out_count += $1.firstValue().lsize(), new_recs;
                                 acc_in[elem_index] += elem_in_count;
                                 acc_out[elem_index] += elem_out_count;
                                 if (elem_index == elem_count - 1) {
@@ -641,9 +646,7 @@ class PipelineQueue {
                             int fanout_count;
                             if (do_bulk) {
                                 fanout_count = 0;
-                                map fanout_count += ($1.typeCode() == NT_HASH
-                                    && $1.firstValue().typeCode() == NT_LIST)
-                                    ? $1.firstValue().lsize() : 1, data_recs;
+                                map fanout_count += $1.firstValue().lsize(), data_recs;
                             } else {
                                 fanout_count = data_recs.lsize();
                             }
@@ -672,11 +675,8 @@ class PipelineQueue {
                     flushMetricsBatch(\batch_count, \acc_in, \acc_out,
                         \acc_completed, \acc_processing_us, \acc_queue_wait_us);
                 }
-                if (has_metrics) {
-                    *PipelineMetricsCollector mc = parent.getMetricsCollector();
-                    if (mc) {
-                        mc.recordError(id_str);
-                    }
+                if (mc_cache) {
+                    mc_cache.recordError(id_str);
                 }
                 parent.reportError(self, ex);
             }
@@ -706,8 +706,7 @@ class PipelineQueue {
             reference<list<int>> acc_completed,
             reference<list<int>> acc_processing_us,
             reference<list<int>> acc_queue_wait_us) {
-        *PipelineMetricsCollector mc = parent.getMetricsCollector();
-        if (mc) {
+        if (mc_cache) {
             date now = now_us();
             int n = acc_in.size();
 
@@ -717,8 +716,16 @@ class PipelineQueue {
             int submitted = (!id && acc_in && acc_in[0] > 0) ? acc_in[0] : 0;
 
             # Atomically update all metrics and trigger at most one snapshot
-            mc.recordBatchFlush(submitted, elem_ids, acc_processing_us, acc_queue_wait_us,
+            mc_cache.recordBatchFlush(submitted, elem_ids, acc_processing_us, acc_queue_wait_us,
                 acc_in, acc_out, acc_completed, now);
+
+            # Flush local queue metrics (depth + backpressure) in batch
+            if (local_max_queue_depth || local_backpressure_count) {
+                mc_cache.recordQueueBatch(id_str, queue.lsize(), local_max_queue_depth,
+                    local_backpressure_count);
+                local_max_queue_depth = 0;
+                local_backpressure_count = 0;
+            }
 
             # Reset accumulators
             for (int i = 0; i < n; ++i) {
@@ -733,11 +740,8 @@ class PipelineQueue {
     }
 
     private flushIntern() {
-        # Get metrics collector only when metrics are enabled (avoids weak-ref deref)
-        *PipelineMetricsCollector mc;
-        if (has_metrics) {
-            mc = parent.getMetricsCollector();
-        }
+        # Use cached collector reference (avoids weak-ref deref per call)
+        *PipelineMetricsCollector mc = mc_cache;
 
         int elem_count = elems.size();
 
@@ -770,12 +774,10 @@ class PipelineQueue {
                     if (mc) {
                         string element_id = elem_ids[elem_index];
                         int records_out = 0;
-                        foreach auto out_rec in (flush_results) {
-                            if (out_rec.typeCode() == NT_HASH && out_rec.firstValue().typeCode() == NT_LIST) {
-                                records_out += out_rec.firstValue().lsize();
-                            } else {
-                                ++records_out;
-                            }
+                        if (do_bulk) {
+                            map records_out += $1.firstValue().lsize(), flush_results;
+                        } else {
+                            records_out = flush_results.lsize();
                         }
                         # Flush produces records without input, so records_in = 0.
                         int completed = 0;
@@ -1143,15 +1145,23 @@ public class PipelineMetricsCollector {
 
                     reference<hash<PipelineElementMetrics>> em = \element_metrics{element_ids[i]};
 
+                    # Skip record count updates for the source element — its records_processed
+                    # and records_output were already updated from submitted_count above.
+                    # Processing time and other metrics still need updating here.
+                    bool is_source = (source_element_id && element_ids[i] == source_element_id);
+
                     # Update timestamps
                     if (!em.first_record_time) {
                         em.first_record_time = timestamp;
                     }
                     em.last_record_time = timestamp;
 
-                    # Update record counts
-                    em.records_processed += records_in[i];
-                    em.records_output += records_out[i];
+                    if (!is_source) {
+                        # Update record counts (source element already updated above)
+                        em.records_processed += records_in[i];
+                        em.records_output += records_out[i];
+                        records_since_callback += records_in[i];
+                    }
 
                     # Update processing time from actual per-element measurement
                     int elem_us = processing_us[i];
@@ -1169,8 +1179,6 @@ public class PipelineMetricsCollector {
                     if (!em.max_processing_time_us || per_record_us > em.max_processing_time_us) {
                         em.max_processing_time_us = per_record_us;
                     }
-
-                    records_since_callback += records_in[i];
                 }
             }
 
@@ -1271,6 +1279,33 @@ public class PipelineMetricsCollector {
             };
         }
         ++element_metrics{queue_id}.queue_full_count;
+    }
+
+    #! Records batched queue metrics (depth + backpressure) in a single lock acquisition
+    /** Called by PipelineQueue.flushMetricsBatch() to avoid per-record metrics_lock overhead.
+
+        @param queue_id the queue identifier
+        @param current_depth current queue depth at flush time
+        @param max_depth maximum queue depth observed since last flush
+        @param backpressure_count number of backpressure events since last flush
+    */
+    recordQueueBatch(string queue_id, int current_depth, int max_depth, int backpressure_count) {
+        metrics_lock.lock();
+        on_exit metrics_lock.unlock();
+
+        # Initialize element if not already tracked
+        if (!element_metrics{queue_id}) {
+            element_metrics{queue_id} = <PipelineElementMetrics>{
+                "element_id": queue_id,
+                "element_type": "queue",
+            };
+        }
+        element_metrics{queue_id}.current_queue_depth = current_depth;
+        if (!element_metrics{queue_id}.max_queue_depth
+                || max_depth > element_metrics{queue_id}.max_queue_depth) {
+            element_metrics{queue_id}.max_queue_depth = max_depth;
+        }
+        element_metrics{queue_id}.queue_full_count += backpressure_count;
     }
 
     #! Records an error for an element
@@ -2244,6 +2279,7 @@ public class DataProviderPipeline {
             if (metrics_collector) {
                 foreach PipelineQueue q in (pmap.iterator()) {
                     q.has_metrics = True;
+                    q.mc_cache = metrics_collector;
                     q.do_bulk = do_bulk;
                 }
             }
