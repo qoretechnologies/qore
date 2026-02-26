@@ -308,6 +308,174 @@ module BigMLDataProvider {
                 }
             ),
         });
+
+        # register projection action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/projection",
+            "action": "projection",
+            "display_name": "PCA Projection",
+            "short_desc": "Project records using a BigML PCA model for dimensionality reduction",
+            "desc": "Sends each record in the pipeline to the BigML projection API using a "
+                "pre-trained PCA model. Each record is enriched with principal component values, "
+                "reducing high-dimensional data to its most important features.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLProjectionProcessor",
+            "groups": ("Dimensionality Reduction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLProjectionProcessor::ConstructorOptions{
+                    "pca", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register batch-projection action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/batch-projection",
+            "action": "batch-projection",
+            "display_name": "Batch PCA Projection",
+            "short_desc": "Create batch PCA projections for multiple records",
+            "desc": "Accumulates records in a window and sends them as a batch to BigML for "
+                "PCA projection. More efficient than per-record projection for large volumes. "
+                "Creates a temporary source and dataset in BigML, runs the batch projection, "
+                "and emits enriched records.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "BigMLDataProvider::BigMLBatchProjectionProcessor",
+            "groups": ("Dimensionality Reduction",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchProjectionProcessor::ConstructorOptions{
+                    "pca", "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLBatchProjectionProcessor::ConstructorOptions{
+                    "poll_interval_ms", "timeout_ms",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register linear-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/linear-regression",
+            "action": "linear-regression",
+            "display_name": "Linear Regression Prediction",
+            "short_desc": "Get predictions from a BigML linear regression model",
+            "desc": "Sends each record in the pipeline to the BigML prediction API using a "
+                "pre-trained linear regression model. Each record is enriched with the predicted "
+                "numeric value and confidence score. Use this for continuous value prediction "
+                "tasks like price estimation or demand forecasting.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLLinearRegressionProcessor",
+            "groups": ("Predictions",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLLinearRegressionProcessor::ConstructorOptions{
+                    "linearregression", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register forecast action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/forecast",
+            "action": "forecast",
+            "display_name": "Time Series Forecast",
+            "short_desc": "Get time series forecasts from a BigML model",
+            "desc": "Sends each record in the pipeline to the BigML forecast API using a "
+                "pre-trained time series model. Each record is enriched with forecast "
+                "predictions and confidence intervals. Use this for time series forecasting "
+                "tasks like sales projections or capacity planning.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLForecastProcessor",
+            "groups": ("Time Series",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLForecastProcessor::ConstructorOptions{
+                    "timeseries", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLForecastProcessor::ConstructorOptions{
+                    "horizon",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register logistic-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/logistic-regression",
+            "action": "logistic-regression",
+            "display_name": "Logistic Regression Classification",
+            "short_desc": "Classify records using a BigML logistic regression model",
+            "desc": "Sends each record in the pipeline to the BigML prediction API using a "
+                "pre-trained logistic regression model. Each record is enriched with the "
+                "predicted class and per-class probability distribution. Use this for "
+                "classification tasks like spam detection, churn prediction, or sentiment "
+                "analysis.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLLogisticRegressionProcessor",
+            "groups": ("Classification",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLLogisticRegressionProcessor::ConstructorOptions{
+                    "logisticregression", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register association-set action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BigMLApp::AppName,
+            "path": "/association-set",
+            "action": "association-set",
+            "display_name": "Association Rule Matching",
+            "short_desc": "Match records against association rules from a BigML model",
+            "desc": "Sends each record in the pipeline to the BigML association set API using a "
+                "pre-trained association model. Each record is enriched with matching association "
+                "rules and their confidence scores. Use this for market basket analysis, "
+                "recommendation systems, and discovering item co-occurrence patterns.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "BigMLDataProvider::BigMLAssociationSetProcessor",
+            "groups": ("Association Rules",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BigMLAssociationSetProcessor::ConstructorOptions{
+                    "association", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -420,15 +588,15 @@ public namespace BigMLDataProvider {
     public hashdecl BigMLTrainAndPredictEventInfo {
         #! The type of analysis that produced this result
         string event_type = "bigml-train-and-predict";
-        #! The model type that was trained (model, ensemble, anomaly, cluster)
+        #! The model type that was trained (model, ensemble, anomaly, cluster, linearregression, logisticregression, timeseries, pca)
         string model_type;
         #! The BigML resource ID of the trained model (can be reused with predict processor)
         string model_resource;
-        #! The prediction result (for model/ensemble types)
+        #! The prediction result (for model/ensemble/linearregression/logisticregression types)
         auto prediction;
         #! The confidence score for the prediction (for model/ensemble types)
         *float confidence;
-        #! The name of the objective field (for model/ensemble types)
+        #! The name of the objective field (for model/ensemble/linearregression/logisticregression types)
         *string objective_field;
         #! The anomaly score from 0.0 to 1.0 (for anomaly type)
         *float anomaly_score;
@@ -438,9 +606,113 @@ public namespace BigMLDataProvider {
         *string centroid_id;
         #! The distance from the record to the centroid (for cluster type)
         *float distance;
+        #! The probability of the predicted class (for logisticregression type)
+        *float probability;
+        #! Per-class probabilities (for logisticregression type)
+        *hash<auto> probabilities;
+        #! The projection results (for pca type)
+        *hash<auto> projection;
+        #! The forecast results (for timeseries type)
+        *hash<auto> forecast;
         #! The BigML resource ID of the individual prediction/score/centroid result
         string resource;
         #! The original input values used for prediction
+        hash<auto> record_values;
+    }
+
+    #! BigML projection event hashdecl
+    /** Emitted by the projection processor when using a BigML PCA model
+        to reduce dimensionality of input records.
+
+        @since %BigMLDataProvider 1.1
+    */
+    public hashdecl BigMLProjectionEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-projection";
+        #! The projected values from PCA (component values)
+        hash<auto> projection;
+        #! The BigML resource ID of the projection
+        string resource;
+        #! The original input values sent to the PCA model
+        hash<auto> record_values;
+    }
+
+    #! BigML linear regression event hashdecl
+    /** Emitted by the linear regression processor when using a BigML
+        linear regression model for predictions.
+
+        @since %BigMLDataProvider 1.1
+    */
+    public hashdecl BigMLLinearRegressionEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-linear-regression";
+        #! The predicted value
+        auto prediction;
+        #! The confidence score for the prediction (0.0 to 1.0)
+        float confidence;
+        #! The name of the objective field that was predicted
+        string objective_field;
+        #! The BigML resource ID of the prediction
+        string resource;
+        #! The original input values sent to the model
+        hash<auto> record_values;
+    }
+
+    #! BigML forecast event hashdecl
+    /** Emitted by the forecast processor when using a BigML time series
+        model for time series forecasting.
+
+        @since %BigMLDataProvider 1.1
+    */
+    public hashdecl BigMLForecastEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-forecast";
+        #! The forecast results keyed by field name; each contains point forecasts
+        #! and confidence intervals
+        hash<auto> forecast;
+        #! The BigML resource ID of the forecast
+        string resource;
+        #! The original input values sent to the time series model
+        hash<auto> record_values;
+    }
+
+    #! BigML logistic regression event hashdecl
+    /** Emitted by the logistic regression processor when using a BigML
+        logistic regression model for classification.
+
+        @since %BigMLDataProvider 1.1
+    */
+    public hashdecl BigMLLogisticRegressionEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-logistic-regression";
+        #! The predicted class
+        auto prediction;
+        #! The probability of the predicted class (0.0 to 1.0)
+        float probability;
+        #! Per-class probabilities keyed by class name
+        hash<auto> probabilities;
+        #! The name of the objective field that was predicted
+        string objective_field;
+        #! The BigML resource ID of the prediction
+        string resource;
+        #! The original input values sent to the model
+        hash<auto> record_values;
+    }
+
+    #! BigML association set event hashdecl
+    /** Emitted by the association set processor when using a BigML
+        association model for market basket analysis / association rule matching.
+
+        @since %BigMLDataProvider 1.1
+    */
+    public hashdecl BigMLAssociationSetEventInfo {
+        #! The type of analysis that produced this result
+        string event_type = "bigml-association-set";
+        #! The matching association rules with confidence and support scores
+        list<auto> rules;
+        #! The BigML resource ID of the association set
+        string resource;
+        #! The original input values sent to the association model
         hash<auto> record_values;
     }
 }

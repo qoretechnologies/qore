@@ -45,6 +45,12 @@ public class BigMLDataProvider inherits DataProvider::AbstractDataProvider {
             "batch-predict": "BigMLBatchPredictionProcessor",
             "batch-anomaly-score": "BigMLBatchAnomalyScoreProcessor",
             "batch-centroid": "BigMLBatchCentroidProcessor",
+            "projection": "BigMLProjectionProcessor",
+            "batch-projection": "BigMLBatchProjectionProcessor",
+            "linear-regression": "BigMLLinearRegressionProcessor",
+            "forecast": "BigMLForecastProcessor",
+            "logistic-regression": "BigMLLogisticRegressionProcessor",
+            "association-set": "BigMLAssociationSetProcessor",
         };
     }
 
@@ -74,7 +80,9 @@ public class BigMLDataProvider inherits DataProvider::AbstractDataProvider {
     #! Returns the data provider description
     *string getDesc() {
         return "Root data provider for BigML machine learning pipeline processors providing "
-            "predictions, anomaly detection, clustering, and topic modeling via the BigML API";
+            "predictions, anomaly detection, clustering, topic modeling, PCA projections, "
+            "linear regression, logistic regression, time series forecasting, and association "
+            "rule matching via the BigML API";
     }
 
     #! Registers a child data provider from TypeScript actions
@@ -118,6 +126,18 @@ public class BigMLDataProvider inherits DataProvider::AbstractDataProvider {
                 return new BigMLBatchAnomalyScoreProcessor();
             case "batch-centroid":
                 return new BigMLBatchCentroidProcessor();
+            case "projection":
+                return new BigMLProjectionProcessor();
+            case "batch-projection":
+                return new BigMLBatchProjectionProcessor();
+            case "linear-regression":
+                return new BigMLLinearRegressionProcessor();
+            case "forecast":
+                return new BigMLForecastProcessor();
+            case "logistic-regression":
+                return new BigMLLogisticRegressionProcessor();
+            case "association-set":
+                return new BigMLAssociationSetProcessor();
         }
         # Check dynamic children (TypeScript actions)
         if (conn) {

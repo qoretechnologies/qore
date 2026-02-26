@@ -170,7 +170,17 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         # Train-and-predict processor
         assertTrue(children.contains("train-and-predict"));
 
-        assertEq(8, children.lsize());
+        # New per-record processors
+        assertTrue(children.contains("projection"));
+        assertTrue(children.contains("linear-regression"));
+        assertTrue(children.contains("forecast"));
+        assertTrue(children.contains("logistic-regression"));
+        assertTrue(children.contains("association-set"));
+
+        # New batch processor
+        assertTrue(children.contains("batch-projection"));
+
+        assertEq(14, children.lsize());
 
         # Check that each child can be retrieved
         foreach string name in (children) {
@@ -217,6 +227,26 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
         assertEq(DPC_AGGREGATE, batchCentroid.getProcessorCapabilities());
+
+        # New per-record processors should be DPC_TRANSFORM
+        BigMLDataProvider::BigMLProjectionProcessor projection();
+        assertEq(DPC_TRANSFORM, projection.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLLinearRegressionProcessor linearReg();
+        assertEq(DPC_TRANSFORM, linearReg.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLForecastProcessor forecast();
+        assertEq(DPC_TRANSFORM, forecast.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLLogisticRegressionProcessor logisticReg();
+        assertEq(DPC_TRANSFORM, logisticReg.getProcessorCapabilities());
+
+        BigMLDataProvider::BigMLAssociationSetProcessor assocSet();
+        assertEq(DPC_TRANSFORM, assocSet.getProcessorCapabilities());
+
+        # New batch processor should be DPC_AGGREGATE
+        BigMLDataProvider::BigMLBatchProjectionProcessor batchProjection();
+        assertEq(DPC_AGGREGATE, batchProjection.getProcessorCapabilities());
 
         # Train-and-predict processor should be DPC_AGGREGATE
         BigMLDataProvider::BigMLTrainAndPredictProcessor trainPredict();
@@ -319,6 +349,72 @@ public class BigMLDataProviderTest inherits QUnit::Test {
             });
         });
 
+        # Projection: missing required pca option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLProjectionProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Linear regression: missing required linearregression option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLLinearRegressionProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Forecast: missing required timeseries option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLForecastProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Logistic regression: missing required logisticregression option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLLogisticRegressionProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Association set: missing required association option
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLAssociationSetProcessor({
+                "input_fields": "x,y",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Batch projection: window_size too small
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLBatchProjectionProcessor({
+                "pca": "pca/abc123",
+                "input_fields": "x,y",
+                "window_size": 1,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Projection: empty input_fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLProjectionProcessor({
+                "pca": "pca/abc123",
+                "input_fields": " , ",
+                "token": "test",
+                "username": "test",
+            });
+        });
+
         # Train-and-predict: missing objective_field for supervised model
         assertThrows("CONSTRUCTOR-ERROR", sub() {
             new BigMLDataProvider::BigMLTrainAndPredictProcessor({
@@ -342,6 +438,28 @@ public class BigMLDataProviderTest inherits QUnit::Test {
             });
         });
 
+        # Train-and-predict: missing objective_field for linearregression (supervised)
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLTrainAndPredictProcessor({
+                "model_type": "linearregression",
+                "input_fields": "x,y",
+                "window_size": 10,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
+        # Train-and-predict: missing objective_field for logisticregression (supervised)
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new BigMLDataProvider::BigMLTrainAndPredictProcessor({
+                "model_type": "logisticregression",
+                "input_fields": "x,y",
+                "window_size": 10,
+                "token": "test",
+                "username": "test",
+            });
+        });
+
         # Train-and-predict: unsupervised model type does not require objective_field
         BigMLDataProvider::BigMLTrainAndPredictProcessor validAnomaly({
             "model_type": "anomaly",
@@ -351,6 +469,26 @@ public class BigMLDataProviderTest inherits QUnit::Test {
             "username": "test",
         });
         assertEq("train-and-predict", validAnomaly.getName());
+
+        # Train-and-predict: unsupervised timeseries does not require objective_field
+        BigMLDataProvider::BigMLTrainAndPredictProcessor validTimeseries({
+            "model_type": "timeseries",
+            "input_fields": "x,y",
+            "window_size": 10,
+            "token": "test",
+            "username": "test",
+        });
+        assertEq("train-and-predict", validTimeseries.getName());
+
+        # Train-and-predict: unsupervised pca does not require objective_field
+        BigMLDataProvider::BigMLTrainAndPredictProcessor validPca({
+            "model_type": "pca",
+            "input_fields": "x,y",
+            "window_size": 10,
+            "token": "test",
+            "username": "test",
+        });
+        assertEq("train-and-predict", validPca.getName());
 
         # Train-and-predict: valid supervised model
         BigMLDataProvider::BigMLTrainAndPredictProcessor validModel({
@@ -453,7 +591,17 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("batch-anomaly-score"));
         assertTrue(actionNames.contains("batch-centroid"));
 
-        assertEq(8, actions.size());
+        # New per-record processor actions
+        assertTrue(actionNames.contains("projection"));
+        assertTrue(actionNames.contains("linear-regression"));
+        assertTrue(actionNames.contains("forecast"));
+        assertTrue(actionNames.contains("logistic-regression"));
+        assertTrue(actionNames.contains("association-set"));
+
+        # New batch processor action
+        assertTrue(actionNames.contains("batch-projection"));
+
+        assertEq(14, actions.size());
 
         # Verify predict action details
         *hash<DataProviderActionInfo> predictAction = DataProviderActionCatalog::getAppAction(
@@ -545,6 +693,65 @@ public class BigMLDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_PIPELINE_PROCESSOR, batchCentroidAction.action_code);
         assertEq(DPC_AGGREGATE, batchCentroidAction.processor_capabilities);
 
+        # Verify projection action details
+        *hash<DataProviderActionInfo> projectionAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "projection");
+        assertTrue(exists projectionAction, "projection action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, projectionAction.action_code);
+        assertEq(DPC_TRANSFORM, projectionAction.processor_capabilities);
+        assertTrue(projectionAction.options.hasKey("pca"), "projection should have pca option");
+        assertTrue(projectionAction.options.hasKey("input_fields"),
+            "projection should have input_fields option");
+
+        # Verify batch-projection action details
+        *hash<DataProviderActionInfo> batchProjectionAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "batch-projection");
+        assertTrue(exists batchProjectionAction, "batch-projection action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, batchProjectionAction.action_code);
+        assertEq(DPC_AGGREGATE, batchProjectionAction.processor_capabilities);
+        assertTrue(batchProjectionAction.options.hasKey("pca"),
+            "batch-projection should have pca option");
+        assertTrue(batchProjectionAction.options.hasKey("window_size"),
+            "batch-projection should have window_size option");
+
+        # Verify linear-regression action details
+        *hash<DataProviderActionInfo> linearRegAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "linear-regression");
+        assertTrue(exists linearRegAction, "linear-regression action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, linearRegAction.action_code);
+        assertEq(DPC_TRANSFORM, linearRegAction.processor_capabilities);
+        assertTrue(linearRegAction.options.hasKey("linearregression"),
+            "linear-regression should have linearregression option");
+
+        # Verify forecast action details
+        *hash<DataProviderActionInfo> forecastAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "forecast");
+        assertTrue(exists forecastAction, "forecast action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, forecastAction.action_code);
+        assertEq(DPC_TRANSFORM, forecastAction.processor_capabilities);
+        assertTrue(forecastAction.options.hasKey("timeseries"),
+            "forecast should have timeseries option");
+        assertTrue(forecastAction.options.hasKey("horizon"),
+            "forecast should have horizon option");
+
+        # Verify logistic-regression action details
+        *hash<DataProviderActionInfo> logRegAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "logistic-regression");
+        assertTrue(exists logRegAction, "logistic-regression action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, logRegAction.action_code);
+        assertEq(DPC_TRANSFORM, logRegAction.processor_capabilities);
+        assertTrue(logRegAction.options.hasKey("logisticregression"),
+            "logistic-regression should have logisticregression option");
+
+        # Verify association-set action details
+        *hash<DataProviderActionInfo> assocAction = DataProviderActionCatalog::getAppAction(
+            BigMLDataProvider::BigMLApp::AppName, "association-set");
+        assertTrue(exists assocAction, "association-set action should exist");
+        assertEq(DPAT_PIPELINE_PROCESSOR, assocAction.action_code);
+        assertEq(DPC_TRANSFORM, assocAction.processor_capabilities);
+        assertTrue(assocAction.options.hasKey("association"),
+            "association-set should have association option");
+
         # Verify train-and-predict dynamic options
         assertTrue(trainPredictAction.data_dependent_options,
             "train-and-predict should have data_dependent_options");
@@ -604,6 +811,41 @@ public class BigMLDataProviderTest inherits QUnit::Test {
             "objective_field should be disabled for cluster model_type");
         assertFalse(clusterOpts.objective_field.required,
             "objective_field should not be required for cluster model_type");
+
+        # New supervised model_type (linearregression): objective_field should be required
+        *hash<string, hash<ActionOptionInfo>> linRegOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction,
+                {"model_type": "linearregression"});
+        assertTrue(linRegOpts.objective_field.required,
+            "objective_field should be required for linearregression model_type");
+        assertFalse(linRegOpts.objective_field.disabled,
+            "objective_field should not be disabled for linearregression model_type");
+
+        # New supervised model_type (logisticregression): objective_field should be required
+        *hash<string, hash<ActionOptionInfo>> logRegOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction,
+                {"model_type": "logisticregression"});
+        assertTrue(logRegOpts.objective_field.required,
+            "objective_field should be required for logisticregression model_type");
+        assertFalse(logRegOpts.objective_field.disabled,
+            "objective_field should not be disabled for logisticregression model_type");
+
+        # New unsupervised model_type (timeseries): objective_field should be disabled
+        *hash<string, hash<ActionOptionInfo>> tsOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction,
+                {"model_type": "timeseries"});
+        assertTrue(tsOpts.objective_field.disabled,
+            "objective_field should be disabled for timeseries model_type");
+        assertFalse(tsOpts.objective_field.required,
+            "objective_field should not be required for timeseries model_type");
+
+        # New unsupervised model_type (pca): objective_field should be disabled
+        *hash<string, hash<ActionOptionInfo>> pcaOpts =
+            proc.tryGetActionOptionsWithOptions(trainPredictAction, {"model_type": "pca"});
+        assertTrue(pcaOpts.objective_field.disabled,
+            "objective_field should be disabled for pca model_type");
+        assertFalse(pcaOpts.objective_field.required,
+            "objective_field should not be required for pca model_type");
 
         # Also test with wrapped option format (as UI sends it)
         *hash<string, hash<ActionOptionInfo>> wrappedOpts =
@@ -723,6 +965,24 @@ public class BigMLDataProviderTest inherits QUnit::Test {
 
         BigMLDataProvider::BigMLBatchCentroidProcessor batchCentroid();
         assertTrue(exists batchCentroid.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLProjectionProcessor projection();
+        assertTrue(exists projection.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLBatchProjectionProcessor batchProjection();
+        assertTrue(exists batchProjection.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLLinearRegressionProcessor linearReg();
+        assertTrue(exists linearReg.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLForecastProcessor forecast();
+        assertTrue(exists forecast.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLLogisticRegressionProcessor logisticReg();
+        assertTrue(exists logisticReg.getPipelineProcessorOutputType());
+
+        BigMLDataProvider::BigMLAssociationSetProcessor assocSet();
+        assertTrue(exists assocSet.getPipelineProcessorOutputType());
 
         BigMLDataProvider::BigMLTrainAndPredictProcessor trainPredict();
         assertTrue(exists trainPredict.getPipelineProcessorOutputType());

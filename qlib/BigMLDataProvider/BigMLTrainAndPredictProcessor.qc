@@ -30,11 +30,15 @@ public namespace BigMLDataProvider {
     trained model. This combines training and prediction into a single pipeline step,
     eliminating the need for users to manually create sources, datasets, and models.
 
-    Supports four model types:
+    Supports eight model types:
     - \b model: Standard decision tree for classification/regression (supervised)
     - \b ensemble: Random forest for improved accuracy (supervised)
+    - \b linearregression: Linear regression for numeric prediction (supervised)
+    - \b logisticregression: Logistic regression for classification (supervised)
     - \b anomaly: Isolation forest for anomaly detection (unsupervised)
     - \b cluster: K-means clustering for segmentation (unsupervised)
+    - \b timeseries: Time series for forecasting (unsupervised)
+    - \b pca: PCA for dimensionality reduction (unsupervised)
 
     @since %BigMLDataProvider 1.0
 */
@@ -49,18 +53,17 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
         };
 
         #! Valid model types
-        const ModelTypes = ("model", "ensemble", "anomaly", "cluster");
+        const ModelTypes = ("model", "ensemble", "anomaly", "cluster",
+            "linearregression", "logisticregression", "timeseries", "pca");
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions + {
             "model_type": <DataProviderOptionInfo>{
                 "display_name": "Model Type",
                 "short_desc": "Type of BigML model to train",
-                "desc": "The type of BigML model to train: 'model' (decision tree for "
-                    "classification/regression), 'ensemble' (random forest for improved "
-                    "accuracy), 'anomaly' (isolation forest for anomaly detection), or "
-                    "'cluster' (k-means for segmentation). Supervised types (model, ensemble) "
-                    "require an objective field; unsupervised types (anomaly, cluster) do not.",
+                "desc": "The type of BigML model to train. Supervised types (model, ensemble, "
+                    "linearregression, logisticregression) require an objective field; "
+                    "unsupervised types (anomaly, cluster, timeseries, pca) do not.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "allowed_values": (
@@ -80,6 +83,22 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
                         "value": "cluster",
                         "desc": "K-means clustering for segmentation (unsupervised)",
                     },
+                    <AllowedValueInfo>{
+                        "value": "linearregression",
+                        "desc": "Linear regression for numeric prediction (supervised)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "logisticregression",
+                        "desc": "Logistic regression for classification (supervised)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "timeseries",
+                        "desc": "Time series for forecasting (unsupervised)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "pca",
+                        "desc": "PCA for dimensionality reduction (unsupervised)",
+                    },
                 ),
             },
             "input_fields": <DataProviderOptionInfo>{
@@ -95,8 +114,9 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
                 "display_name": "Objective Field",
                 "short_desc": "Target field to predict (supervised models only)",
                 "desc": "The field name from the input records that contains the target value "
-                    "to predict; required for supervised model types (model, ensemble); "
-                    "ignored for unsupervised types (anomaly, cluster)",
+                    "to predict; required for supervised model types (model, ensemble, "
+                    "linearregression, logisticregression); ignored for unsupervised types "
+                    "(anomaly, cluster, timeseries, pca)",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "window_size": <DataProviderOptionInfo>{
@@ -190,7 +210,8 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'input_fields' option";
         }
         # supervised models require an objective field
-        if (model_type == "model" || model_type == "ensemble") {
+        if (model_type == "model" || model_type == "ensemble"
+                || model_type == "linearregression" || model_type == "logisticregression") {
             if (!copts.objective_field) {
                 throw "CONSTRUCTOR-ERROR",
                     sprintf("'objective_field' is required for supervised model type '%s'",
@@ -265,12 +286,13 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
             return action.options;
         }
         hash<string, hash<ActionOptionInfo>> rv = action.options;
-        if (mt == "model" || mt == "ensemble") {
+        if (mt == "model" || mt == "ensemble" || mt == "linearregression"
+                || mt == "logisticregression") {
             # supervised: objective_field is required and enabled
             rv.objective_field.required = True;
             rv.objective_field.disabled = False;
         } else {
-            # unsupervised (anomaly, cluster): disable objective_field
+            # unsupervised (anomaly, cluster, timeseries, pca): disable objective_field
             rv.objective_field.disabled = True;
             rv.objective_field.required = False;
         }
@@ -359,7 +381,8 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
             "dataset": dataset_id,
             "name": model_name ?? sprintf("bigml-%s-%s", model_type, ts),
         };
-        if (objective_field && (model_type == "model" || model_type == "ensemble")) {
+        if (objective_field && (model_type == "model" || model_type == "ensemble"
+                || model_type == "linearregression" || model_type == "logisticregression")) {
             model_body.objective_field = objective_field;
         }
         hash<auto> trained_model = doPost(model_type, model_body);
@@ -424,6 +447,85 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
                         "centroid_id": centroid.centroid_id ?? "",
                         "distance": centroid.distance ?? 0.0,
                         "resource": centroid.resource ?? "",
+                        "record_values": input_data,
+                    };
+                    break;
+                }
+                case "linearregression": {
+                    hash<auto> pred = doPost("prediction", {
+                        "linearregression": model_id,
+                        "input_data": input_data,
+                    });
+                    push events, <BigMLTrainAndPredictEventInfo>{
+                        "event_type": "bigml-train-and-predict",
+                        "model_type": model_type,
+                        "model_resource": model_id,
+                        "prediction": pred.prediction,
+                        "confidence": pred.confidence ?? 0.0,
+                        "objective_field": pred.objective_field_name ?? objective_field,
+                        "resource": pred.resource ?? "",
+                        "record_values": input_data,
+                    };
+                    break;
+                }
+                case "logisticregression": {
+                    hash<auto> pred = doPost("prediction", {
+                        "logisticregression": model_id,
+                        "input_data": input_data,
+                    });
+                    # Extract per-class probabilities
+                    hash<auto> probs;
+                    if (pred.probabilities.typeCode() == NT_LIST) {
+                        foreach auto p in (pred.probabilities) {
+                            if (p.typeCode() == NT_HASH) {
+                                probs{p.category} = p.probability;
+                            }
+                        }
+                    }
+                    push events, <BigMLTrainAndPredictEventInfo>{
+                        "event_type": "bigml-train-and-predict",
+                        "model_type": model_type,
+                        "model_resource": model_id,
+                        "prediction": pred.prediction,
+                        "confidence": pred.probability.typeCode() == NT_FLOAT
+                            || pred.probability.typeCode() == NT_NUMBER
+                            ? pred.probability.toFloat() : 0.0,
+                        "probability": pred.probability.typeCode() == NT_FLOAT
+                            || pred.probability.typeCode() == NT_NUMBER
+                            ? pred.probability.toFloat() : 0.0,
+                        "probabilities": probs,
+                        "objective_field": pred.objective_field_name ?? objective_field,
+                        "resource": pred.resource ?? "",
+                        "record_values": input_data,
+                    };
+                    break;
+                }
+                case "timeseries": {
+                    hash<auto> fc = doPost("forecast", {
+                        "timeseries": model_id,
+                        "input_data": input_data,
+                    });
+                    push events, <BigMLTrainAndPredictEventInfo>{
+                        "event_type": "bigml-train-and-predict",
+                        "model_type": model_type,
+                        "model_resource": model_id,
+                        "forecast": fc.forecast ?? {},
+                        "resource": fc.resource ?? "",
+                        "record_values": input_data,
+                    };
+                    break;
+                }
+                case "pca": {
+                    hash<auto> proj = doPost("projection", {
+                        "pca": model_id,
+                        "input_data": input_data,
+                    });
+                    push events, <BigMLTrainAndPredictEventInfo>{
+                        "event_type": "bigml-train-and-predict",
+                        "model_type": model_type,
+                        "model_resource": model_id,
+                        "projection": proj.projection ?? {},
+                        "resource": proj.resource ?? "",
                         "record_values": input_data,
                     };
                     break;
