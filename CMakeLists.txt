@@ -374,24 +374,28 @@ find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
 
 # LLVM configuration for JIT compilation (required)
-find_package(LLVM REQUIRED CONFIG)
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
-
-# Handle platform-specific LLVM installation locations
-if(NOT LLVM_FOUND AND APPLE)
-    # Try MacPorts
-    find_package(LLVM REQUIRED CONFIG PATHS /opt/local/libexec/llvm-* NO_DEFAULT_PATH)
-    if(LLVM_FOUND)
-        message(STATUS "Found LLVM via MacPorts: ${LLVM_INCLUDE_DIRS}")
-    else()
-        # Try Homebrew
-        find_package(LLVM REQUIRED CONFIG PATHS /usr/local/opt/llvm/lib/cmake/llvm /opt/homebrew/opt/llvm/lib/cmake/llvm NO_DEFAULT_PATH)
-        if(LLVM_FOUND)
-            message(STATUS "Found LLVM via Homebrew: ${LLVM_INCLUDE_DIRS}")
+# On macOS, LLVM is typically not in the default search path (MacPorts installs
+# to /opt/local/libexec/llvm-XX/, Homebrew to /opt/homebrew/opt/llvm/).
+# Use llvm-config --cmakedir to find the active version (respects port select / brew link).
+if(APPLE AND NOT DEFINED LLVM_DIR)
+    find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config
+        PATHS /opt/local/bin /opt/homebrew/bin /usr/local/bin
+        NO_DEFAULT_PATH)
+    if(LLVM_CONFIG_EXECUTABLE)
+        execute_process(
+            COMMAND ${LLVM_CONFIG_EXECUTABLE} --cmakedir
+            OUTPUT_VARIABLE LLVM_CMAKE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(LLVM_CMAKE_DIR)
+            set(LLVM_DIR "${LLVM_CMAKE_DIR}" CACHE PATH "LLVM cmake directory")
+            message(STATUS "Auto-detected LLVM cmake dir via llvm-config: ${LLVM_DIR}")
         endif()
     endif()
 endif()
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
 # Get LLVM libraries
 # LLVM 21+ builds as a single unified library, get the name from llvm-config
@@ -399,11 +403,21 @@ execute_process(
     COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libs all
     OUTPUT_VARIABLE LLVM_LIBS_RAW
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
 )
 # Convert space-separated -l flags to semicolon-separated CMake list
 string(REPLACE " " ";" LLVM_LIBS "${LLVM_LIBS_RAW}")
 string(REPLACE "-l" "" LLVM_LIBS "${LLVM_LIBS}")
 message(STATUS "LLVM libraries from llvm-config: ${LLVM_LIBS}")
+
+# Ensure LLVM_LIBRARY_DIRS is properly set (find_package sets this, but fallback to _DIR if needed)
+if(NOT LLVM_LIBRARY_DIRS AND LLVM_LIBRARY_DIR)
+    set(LLVM_LIBRARY_DIRS "${LLVM_LIBRARY_DIR}")
+endif()
+if(LLVM_LIBRARY_DIRS)
+    list(GET LLVM_LIBRARY_DIRS 0 LLVM_LIBRARY_DIR)
+    message(STATUS "LLVM library directory: ${LLVM_LIBRARY_DIR}")
+endif()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
@@ -1331,7 +1345,7 @@ string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 # Add LLVM library directory since LLVM libs may not be on the standard linker search path
 # (e.g. MacPorts installs to /opt/local/libexec/llvm-XX/lib/)
 target_link_directories(libqore PRIVATE ${LLVM_LIBRARY_DIR})
-target_link_libraries(libqore ${QORE_LIBS})
+target_link_libraries(libqore PRIVATE ${QORE_LIBS})
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
 endif (WIN32 OR MINGW OR MSYS)
