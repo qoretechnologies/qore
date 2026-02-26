@@ -162,25 +162,26 @@ public:
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
-        // Navigate to marker position using only uninstantiateIntern() which is safe.
-        // Frame boundaries are SCOPE MARKERS ONLY - functions are responsible for
-        // uninstantiating their own variables before popFrameBoundary() is called.
-        // We only need to handle the position movement, not variable cleanup.
+        // Navigate back to the marker position, cleaning up any variables that
+        // weren't properly uninstantiated by the function.
         //
-        // curr->pos should be at or very close to the marker position since the
-        // function should have already uninstantiated all its local variables.
+        // Important: LocalVarValue::uninstantiate() calls del() which calls
+        // val.removeValue(true), NOT QoreLValue::removeValue(). So it's safe to
+        // call even for variables with special assignment flags.
+        //
+        // curr->pos should be at or near the marker position since the function
+        // should have uninstantiated most of its variables already.
 
         // Navigate to the marker position - same block case
         if (curr == rec.block) {
-            // Same block - just move position back to the marker
+            // Same block - uninstantiate back to the marker
             while (curr->pos > rec.pos) {
-                uninstantiateIntern();
+                uninstantiate(nullptr);
             }
         } else {
-            // Different block - navigate back using uninstantiateIntern()
-            // which safely handles block transitions
+            // Different block - navigate back and clean up
             while (curr != rec.block || curr->pos > rec.pos) {
-                uninstantiateIntern();
+                uninstantiate(nullptr);
             }
         }
 
