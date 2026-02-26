@@ -372,6 +372,13 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::RefForeachRecord: return "ref.foreach.record";
         case QoreIROpcode::RefForeachFinalize: return "ref.foreach.finalize";
         case QoreIROpcode::RefForeachCleanup: return "ref.foreach.cleanup";
+        case QoreIROpcode::AddNumber: return "add.number";
+        case QoreIROpcode::SubNumber: return "sub.number";
+        case QoreIROpcode::MulNumber: return "mul.number";
+        case QoreIROpcode::DivNumber: return "div.number";
+        case QoreIROpcode::HashKeyStore: return "hash.key.store";
+        case QoreIROpcode::ListIndexAccess: return "list.index.access";
+        case QoreIROpcode::ListIndexStore: return "list.index.store";
     }
     return "unknown";
 }

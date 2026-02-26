@@ -103,7 +103,7 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     }
 
     // Create a target machine for the native target (needed by PassBuilder for target-specific opts)
-    std::string triple = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(llvm::sys::getDefaultTargetTriple());
     std::string target_error;
     auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
     if (!target) {
