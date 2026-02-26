@@ -63,7 +63,7 @@ public class ZohoBooksPurchaseOrderDataType inherits HashDataType {
             "date": {
                 "display_name": "Purchase Order Date",
                 "short_desc": "Date of the purchase order",
-                "desc": "The date of the purchase order (YYYY-MM-DD format)",
+                "desc": "The date of the purchase order (`YYYY-MM-DD` format)",
                 "type": SoftStringOrNothingType,
             },
             "delivery_date": {
@@ -161,8 +161,7 @@ public class ZohoBooksPurchaseOrderDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 

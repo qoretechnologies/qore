@@ -84,62 +84,22 @@ module ZohoBooksDataProvider {
                     "ref_data": "organizations",
                 },
                 "customer_id": <ActionOptionInfo>{
-                    "display_name": "Customer",
-                    "short_desc": "The customer for the invoice",
+                    "display_name": "Customer ID",
+                    "short_desc": "Customer identifier",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "preselected": True,
                     "ref_data": "customers",
                 },
-                "invoice_number": <ActionOptionInfo>{
-                    "display_name": "Invoice Number",
-                    "short_desc": "Unique invoice identifier",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "A unique sequential identifier for the invoice",
-                },
-                "date": <ActionOptionInfo>{
-                    "display_name": "Invoice Date",
-                    "short_desc": "Invoice issue date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Invoice issue date in yyyy-mm-dd format",
-                },
-                "due_date": <ActionOptionInfo>{
-                    "display_name": "Due Date",
-                    "short_desc": "Payment due date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment due date in yyyy-mm-dd format",
-                },
-                "payment_terms": <ActionOptionInfo>{
-                    "display_name": "Payment Terms",
-                    "short_desc": "Payment terms in days",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "desc": "Number of days within which payment must be made",
-                },
-                "line_items": <ActionOptionInfo>{
-                    "display_name": "Line Items",
-                    "short_desc": "Invoice line items",
-                    "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
-                },
-                "discount": <ActionOptionInfo>{
-                    "display_name": "Discount",
-                    "short_desc": "Invoice discount",
-                    "type": AbstractDataProviderTypeMap."*float",
-                    "desc": "Discount amount or percentage applied to invoice",
-                },
-                "notes": <ActionOptionInfo>{
-                    "display_name": "Notes",
-                    "short_desc": "Customer notes",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Notes visible to the customer on the invoice",
-                },
-                "terms": <ActionOptionInfo>{
-                    "display_name": "Terms",
-                    "short_desc": "Terms and conditions",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Terms and conditions for the invoice",
-                },
-            },
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                ZohoBooksCreateInvoiceRequestDataType::Fields{"line_items",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ZohoBooksCreateInvoiceRequestDataType::Fields - ("customer_id", "line_items",)
+            ),
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksInvoiceDataType(); },
         });
 
         # Update Invoice
@@ -161,64 +121,16 @@ module ZohoBooksDataProvider {
                     "preselected": True,
                     "ref_data": "organizations",
                 },
-                "invoice_id": <ActionOptionInfo>{
-                    "display_name": "Invoice ID",
-                    "short_desc": "The invoice to update",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                ZohoBooksUpdateInvoiceRequestDataType::Fields{"invoice_id",}, {
                     "preselected": True,
+                    "required": True,
                     "ref_data": "invoices",
-                },
-                "customer_id": <ActionOptionInfo>{
-                    "display_name": "Customer",
-                    "short_desc": "The customer for the invoice",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "ref_data": "customers",
-                },
-                "invoice_number": <ActionOptionInfo>{
-                    "display_name": "Invoice Number",
-                    "short_desc": "Unique invoice identifier",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-                "date": <ActionOptionInfo>{
-                    "display_name": "Invoice Date",
-                    "short_desc": "Invoice issue date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Invoice issue date in yyyy-mm-dd format",
-                },
-                "due_date": <ActionOptionInfo>{
-                    "display_name": "Due Date",
-                    "short_desc": "Payment due date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment due date in yyyy-mm-dd format",
-                },
-                "payment_terms": <ActionOptionInfo>{
-                    "display_name": "Payment Terms",
-                    "short_desc": "Payment terms in days",
-                    "type": AbstractDataProviderTypeMap."*int",
-                },
-                "line_items": <ActionOptionInfo>{
-                    "display_name": "Line Items",
-                    "short_desc": "Invoice line items",
-                    "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, tax_id",
-                },
-                "discount": <ActionOptionInfo>{
-                    "display_name": "Discount",
-                    "short_desc": "Invoice discount",
-                    "type": AbstractDataProviderTypeMap."*float",
-                },
-                "notes": <ActionOptionInfo>{
-                    "display_name": "Notes",
-                    "short_desc": "Customer notes",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-                "terms": <ActionOptionInfo>{
-                    "display_name": "Terms",
-                    "short_desc": "Terms and conditions",
-                    "type": AbstractDataProviderTypeMap."*string",
-                },
-            },
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ZohoBooksUpdateInvoiceRequestDataType::Fields - ("invoice_id",)
+            ),
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksInvoiceDataType(); },
         });
 
         # Delete Invoice
@@ -249,6 +161,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "invoices",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return ZohoBooksDeleteInvoiceDataProvider::ResponseType; },
         });
 
         # Get Invoice
@@ -279,6 +192,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "invoices",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksInvoiceDataType(); },
         });
 
         # List Invoices
@@ -367,6 +281,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return ZohoBooksEmailInvoiceDataProvider::ResponseType; },
         });
 
         # ========== BILL ACTIONS ==========
@@ -408,13 +323,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Bill Date",
                     "short_desc": "Bill issue date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Bill issue date in yyyy-mm-dd format",
+                    "desc": "Bill issue date in `yyyy-mm-dd` format",
                 },
                 "due_date": <ActionOptionInfo>{
                     "display_name": "Due Date",
                     "short_desc": "Payment due date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment due date in yyyy-mm-dd format",
+                    "desc": "Payment due date in `yyyy-mm-dd` format",
                 },
                 "reference_number": <ActionOptionInfo>{
                     "display_name": "Reference Number",
@@ -426,7 +341,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Line Items",
                     "short_desc": "Bill line items",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                    "desc": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
                 },
                 "notes": <ActionOptionInfo>{
                     "display_name": "Notes",
@@ -439,6 +354,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksBillDataType(); },
         });
 
         # Update Bill
@@ -483,13 +399,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Bill Date",
                     "short_desc": "Bill issue date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Bill issue date in yyyy-mm-dd format",
+                    "desc": "Bill issue date in `yyyy-mm-dd` format",
                 },
                 "due_date": <ActionOptionInfo>{
                     "display_name": "Due Date",
                     "short_desc": "Payment due date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment due date in yyyy-mm-dd format",
+                    "desc": "Payment due date in `yyyy-mm-dd` format",
                 },
                 "reference_number": <ActionOptionInfo>{
                     "display_name": "Reference Number",
@@ -500,7 +416,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Line Items",
                     "short_desc": "Bill line items",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of line items with fields: item_id, name, description, quantity, rate, account_id, tax_id",
+                    "desc": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
                 },
                 "notes": <ActionOptionInfo>{
                     "display_name": "Notes",
@@ -513,6 +429,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksBillDataType(); },
         });
 
         # Delete Bill
@@ -543,6 +460,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "bills",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderTypeMap."hash"; },
         });
 
         # Get Bill
@@ -573,6 +491,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "bills",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksBillDataType(); },
         });
 
         # List Bills
@@ -655,13 +574,21 @@ module ZohoBooksDataProvider {
                     "display_name": "Payment Date",
                     "short_desc": "Date of payment",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment date in yyyy-mm-dd format",
+                    "desc": "Payment date in `yyyy-mm-dd` format",
                 },
                 "payment_mode": <ActionOptionInfo>{
                     "display_name": "Payment Mode",
                     "short_desc": "Mode of payment",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Mode of payment (e.g., Cash, Check, Bank Transfer, Credit Card)",
+                    "desc": "The mode of payment used",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "cash", "desc": "Cash payment"},
+                        <AllowedValueInfo>{"value": "check", "desc": "Check payment"},
+                        <AllowedValueInfo>{"value": "creditcard", "desc": "Credit card payment"},
+                        <AllowedValueInfo>{"value": "banktransfer", "desc": "Bank transfer"},
+                        <AllowedValueInfo>{"value": "bankremittance", "desc": "Bank remittance"},
+                        <AllowedValueInfo>{"value": "autotransaction", "desc": "Auto transaction"},
+                    ),
                 },
                 "reference_number": <ActionOptionInfo>{
                     "display_name": "Reference Number",
@@ -678,7 +605,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Invoices",
                     "short_desc": "Invoices to apply payment to",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of invoices with fields: invoice_id, amount_applied",
+                    "desc": "List of invoices with fields: `invoice_id`, `amount_applied`",
                 },
                 "account_id": <ActionOptionInfo>{
                     "display_name": "Deposit Account",
@@ -687,6 +614,7 @@ module ZohoBooksDataProvider {
                     "desc": "ID of the account where the payment will be deposited",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksPaymentDataType(); },
         });
 
         # Update Payment
@@ -731,7 +659,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Payment Date",
                     "short_desc": "Date of payment",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Payment date in yyyy-mm-dd format",
+                    "desc": "Payment date in `yyyy-mm-dd` format",
                 },
                 "payment_mode": <ActionOptionInfo>{
                     "display_name": "Payment Mode",
@@ -752,9 +680,10 @@ module ZohoBooksDataProvider {
                     "display_name": "Invoices",
                     "short_desc": "Invoices to apply payment to",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of invoices with fields: invoice_id, amount_applied",
+                    "desc": "List of invoices with fields: `invoice_id`, `amount_applied`",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksPaymentDataType(); },
         });
 
         # Delete Payment
@@ -785,6 +714,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "payments",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderTypeMap."hash"; },
         });
 
         # Get Payment
@@ -815,6 +745,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "payments",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksPaymentDataType(); },
         });
 
         # ========== CONTACT ACTIONS ==========
@@ -866,7 +797,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Contact Persons",
                     "short_desc": "List of contact persons",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                    "desc": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
                 },
                 "website": <ActionOptionInfo>{
                     "display_name": "Website",
@@ -877,13 +808,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Billing Address",
                     "short_desc": "Billing address details",
                     "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                    "desc": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
                 },
                 "shipping_address": <ActionOptionInfo>{
                     "display_name": "Shipping Address",
                     "short_desc": "Shipping address details",
                     "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                    "desc": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
                 },
                 "payment_terms": <ActionOptionInfo>{
                     "display_name": "Payment Terms",
@@ -896,6 +827,7 @@ module ZohoBooksDataProvider {
                     "short_desc": "Currency for transactions",
                     "type": AbstractDataProviderTypeMap."*string",
                     "desc": "Currency ID for transactions with this contact",
+                    "ref_data": "currencies",
                 },
                 "notes": <ActionOptionInfo>{
                     "display_name": "Notes",
@@ -903,6 +835,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksContactDataType(); },
         });
 
         # Update Contact
@@ -955,7 +888,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Contact Persons",
                     "short_desc": "List of contact persons",
                     "type": AbstractDataProviderTypeMap."*list",
-                    "desc": "List of contact persons with fields: salutation, first_name, last_name, email, phone, mobile, designation, department, is_primary_contact",
+                    "desc": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
                 },
                 "website": <ActionOptionInfo>{
                     "display_name": "Website",
@@ -966,13 +899,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Billing Address",
                     "short_desc": "Billing address details",
                     "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Billing address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                    "desc": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
                 },
                 "shipping_address": <ActionOptionInfo>{
                     "display_name": "Shipping Address",
                     "short_desc": "Shipping address details",
                     "type": AbstractDataProviderTypeMap."*hash",
-                    "desc": "Shipping address with fields: attention, address, street2, city, state, zip, country, phone, fax",
+                    "desc": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
                 },
                 "payment_terms": <ActionOptionInfo>{
                     "display_name": "Payment Terms",
@@ -990,6 +923,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksContactDataType(); },
         });
 
         # List Contacts
@@ -1051,6 +985,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "contacts",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksContactDataType(); },
         });
 
         # ========== EXPENSE ACTIONS ==========
@@ -1088,7 +1023,43 @@ module ZohoBooksDataProvider {
                     "required": True,
                     "preselected": True,
                 },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Expense date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in `yyyy-mm-dd` format",
+                    "preselected": True,
+                },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Expense description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "vendor_id": <ActionOptionInfo>{
+                    "display_name": "Vendor",
+                    "short_desc": "Vendor for the expense",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "vendors",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_billable": <ActionOptionInfo>{
+                    "display_name": "Billable",
+                    "short_desc": "Is this expense billable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer",
+                    "short_desc": "Customer to bill",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Customer to bill if the expense is billable",
+                    "ref_data": "customers",
+                },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksExpenseDataType(); },
         });
 
         # Update Expense
@@ -1132,7 +1103,7 @@ module ZohoBooksDataProvider {
                     "display_name": "Date",
                     "short_desc": "Expense date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Date in yyyy-mm-dd format",
+                    "desc": "Date in `yyyy-mm-dd` format",
                 },
                 "description": <ActionOptionInfo>{
                     "display_name": "Description",
@@ -1162,6 +1133,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "customers",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksExpenseDataType(); },
         });
 
         # List Expenses
@@ -1214,6 +1186,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "expenses",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksExpenseDataType(); },
         });
 
         # ========== ITEM ACTIONS ==========
@@ -1251,7 +1224,44 @@ module ZohoBooksDataProvider {
                     "required": True,
                     "preselected": True,
                 },
+                "description": <ActionOptionInfo>{
+                    "display_name": "Description",
+                    "short_desc": "Item description",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Stock keeping unit code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "unit": <ActionOptionInfo>{
+                    "display_name": "Unit",
+                    "short_desc": "Unit of measurement",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Unit of measurement (e.g., `pcs`, `kg`, `hrs`)",
+                },
+                "product_type": <ActionOptionInfo>{
+                    "display_name": "Product Type",
+                    "short_desc": "Type of product",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "goods", "desc": "Physical goods"},
+                        <AllowedValueInfo>{"value": "service", "desc": "Services"},
+                    ),
+                },
+                "is_taxable": <ActionOptionInfo>{
+                    "display_name": "Taxable",
+                    "short_desc": "Whether the item is taxable",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "tax_id": <ActionOptionInfo>{
+                    "display_name": "Tax",
+                    "short_desc": "Tax to apply",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "taxes",
+                },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksItemDataType(); },
         });
 
         # List Items
@@ -1304,6 +1314,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "items",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksItemDataType(); },
         });
 
         # ========== ESTIMATE ACTIONS ==========
@@ -1335,7 +1346,48 @@ module ZohoBooksDataProvider {
                     "preselected": True,
                     "ref_data": "customers",
                 },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Estimate date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in `yyyy-mm-dd` format",
+                    "preselected": True,
+                },
+                "expiry_date": <ActionOptionInfo>{
+                    "display_name": "Expiry Date",
+                    "short_desc": "Estimate expiry date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in `yyyy-mm-dd` format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Estimate line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+                    "preselected": True,
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksEstimateDataType(); },
         });
 
         # Update Estimate
@@ -1375,13 +1427,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Date",
                     "short_desc": "Estimate date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Date in yyyy-mm-dd format",
+                    "desc": "Date in `yyyy-mm-dd` format",
                 },
                 "expiry_date": <ActionOptionInfo>{
                     "display_name": "Expiry Date",
                     "short_desc": "Estimate expiry date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Date in yyyy-mm-dd format",
+                    "desc": "Date in `yyyy-mm-dd` format",
                 },
                 "line_items": <ActionOptionInfo>{
                     "display_name": "Line Items",
@@ -1410,6 +1462,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksEstimateDataType(); },
         });
 
         # List Estimates
@@ -1462,6 +1515,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "estimates",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksEstimateDataType(); },
         });
 
         # ========== SALES ORDER ACTIONS ==========
@@ -1493,7 +1547,53 @@ module ZohoBooksDataProvider {
                     "preselected": True,
                     "ref_data": "customers",
                 },
+                "date": <ActionOptionInfo>{
+                    "display_name": "Date",
+                    "short_desc": "Sales order date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in `yyyy-mm-dd` format",
+                    "preselected": True,
+                },
+                "shipment_date": <ActionOptionInfo>{
+                    "display_name": "Shipment Date",
+                    "short_desc": "Expected shipment date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Date in `yyyy-mm-dd` format",
+                },
+                "line_items": <ActionOptionInfo>{
+                    "display_name": "Line Items",
+                    "short_desc": "Sales order line items",
+                    "type": AbstractDataProviderTypeMap."*list",
+                    "desc": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+                    "preselected": True,
+                },
+                "discount": <ActionOptionInfo>{
+                    "display_name": "Discount",
+                    "short_desc": "Discount amount",
+                    "type": AbstractDataProviderTypeMap."*float",
+                },
+                "notes": <ActionOptionInfo>{
+                    "display_name": "Notes",
+                    "short_desc": "Customer notes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "terms": <ActionOptionInfo>{
+                    "display_name": "Terms",
+                    "short_desc": "Terms and conditions",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_number": <ActionOptionInfo>{
+                    "display_name": "Reference Number",
+                    "short_desc": "Reference number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "delivery_method": <ActionOptionInfo>{
+                    "display_name": "Delivery Method",
+                    "short_desc": "Delivery method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksSalesOrderDataType(); },
         });
 
         # Update Sales Order
@@ -1533,13 +1633,13 @@ module ZohoBooksDataProvider {
                     "display_name": "Date",
                     "short_desc": "Sales order date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Date in yyyy-mm-dd format",
+                    "desc": "Date in `yyyy-mm-dd` format",
                 },
                 "shipment_date": <ActionOptionInfo>{
                     "display_name": "Shipment Date",
                     "short_desc": "Expected shipment date",
                     "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Date in yyyy-mm-dd format",
+                    "desc": "Date in `yyyy-mm-dd` format",
                 },
                 "line_items": <ActionOptionInfo>{
                     "display_name": "Line Items",
@@ -1573,6 +1673,7 @@ module ZohoBooksDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksSalesOrderDataType(); },
         });
 
         # Delete Sales Order
@@ -1603,6 +1704,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "salesorders",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return AbstractDataProviderTypeMap."hash"; },
         });
 
         # List Sales Orders
@@ -1655,6 +1757,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "salesorders",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksSalesOrderDataType(); },
         });
 
         # ========== PURCHASE ORDER ACTIONS ==========
@@ -1709,6 +1812,7 @@ module ZohoBooksDataProvider {
                     "ref_data": "purchaseorders",
                 },
             },
+            "get_output_type": AbstractDataProviderType sub () { return new ZohoBooksPurchaseOrderDataType(); },
         });
 
         # ========== PAYMENT ACTIONS ==========

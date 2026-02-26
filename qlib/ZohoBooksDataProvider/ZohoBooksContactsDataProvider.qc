@@ -11,6 +11,7 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
             "type": "ZohoBooksContactsDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "constructor_options": BaseConstructorOptions,
             "search_options": SearchOptions,
         };
@@ -27,14 +28,18 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
                 "display_name": "Contact Type",
                 "short_desc": "Filter by contact type",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
-                "desc": "Filter contacts by type (customer, vendor)",
+                "desc": "Filter contacts by type",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "customer", "desc": "Customer contacts"},
+                    <AllowedValueInfo>{"value": "vendor", "desc": "Vendor contacts"},
+                ),
             },
         };
     }
 
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "contacts"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksContactDataType(); }
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksContactDataType().getFields(); }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
@@ -56,7 +61,7 @@ public class ZohoBooksCreateContactDataProvider inherits ZohoBooksDataProviderBa
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-contact"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksContactDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) { return doPost("/contacts", req).contact; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -66,7 +71,7 @@ public class ZohoBooksUpdateContactDataProvider inherits ZohoBooksDataProviderBa
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-contact"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksContactDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.contact_id ?? request_options.contact_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "contact_id required";

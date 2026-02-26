@@ -11,6 +11,7 @@ public class ZohoBooksEstimatesDataProvider inherits ZohoBooksDataProviderBase {
             "type": "ZohoBooksEstimatesDataProvider",
             "supports_read": True,
             "supports_native_search": True,
+            "has_record": True,
             "search_options": SearchOptions,
         };
 
@@ -26,7 +27,7 @@ public class ZohoBooksEstimatesDataProvider inherits ZohoBooksDataProviderBase {
     }
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "estimates"; }
-    private *AbstractDataProviderType getRecordTypeImpl() { return new ZohoBooksEstimateDataType(); }
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksEstimateDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
@@ -43,7 +44,7 @@ public class ZohoBooksCreateEstimateDataProvider inherits ZohoBooksDataProviderB
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-estimate"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksEstimateDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) { return doPost("/estimates", req).estimate; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -53,7 +54,7 @@ public class ZohoBooksUpdateEstimateDataProvider inherits ZohoBooksDataProviderB
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-estimate"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
-    private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksEstimateDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = req.estimate_id ?? request_options.estimate_id;
         if (!id) throw "ZOHOBOOKS-ERROR", "estimate_id required";

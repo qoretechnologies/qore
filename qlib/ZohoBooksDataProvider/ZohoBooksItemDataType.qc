@@ -69,8 +69,12 @@ public class ZohoBooksItemDataType inherits HashDataType {
             "product_type": {
                 "display_name": "Product Type",
                 "short_desc": "Type of product",
-                "desc": "The type of product (goods or service)",
+                "desc": "The type of product",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "goods", "desc": "Physical goods"},
+                    <AllowedValueInfo>{"value": "service", "desc": "Services"},
+                ),
             },
             "is_taxable": {
                 "display_name": "Is Taxable",
@@ -117,8 +121,12 @@ public class ZohoBooksItemDataType inherits HashDataType {
             "status": {
                 "display_name": "Status",
                 "short_desc": "Item status",
-                "desc": "Status of the item (active, inactive)",
+                "desc": "Status of the item",
                 "type": SoftStringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "active", "desc": "Active item"},
+                    <AllowedValueInfo>{"value": "inactive", "desc": "Inactive item"},
+                ),
             },
             "created_time": {
                 "display_name": "Created Time",
@@ -137,8 +145,7 @@ public class ZohoBooksItemDataType inherits HashDataType {
 
     #! Creates the object
     constructor() {
-        map addField(new QoreDataField($1.key, $1.value.desc, $1.value.type, $1.value.default_value)),
-            Fields.pairIterator();
+        addQoreFields(Fields);
     }
 }
 
