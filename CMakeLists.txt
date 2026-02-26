@@ -397,32 +397,26 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
-# LLVM libraries - use the LLVM target provided by find_package
-# find_package(LLVM) provides LLVM::LLVM which handles all linking correctly
-if(NOT LLVM_LIBRARIES)
-    # Fallback: if LLVM::LLVM target is not available, try to get library from llvm-config
-    message(STATUS "Note: LLVM_LIBRARIES not set by find_package, checking for alternate LLVM target")
-    if(TARGET LLVM::LLVM)
-        # CMake target approach - let's use this
-        set(LLVM_LIBS LLVM::LLVM)
-        message(STATUS "Using LLVM::LLVM target")
+# LLVM libraries - find_package(LLVM CONFIG) sets LLVM_LIBRARY_DIRS
+# but not LLVM_LIBRARIES, so we need to find the main LLVM library ourselves
+if(LLVM_LIBRARY_DIRS)
+    # Try to find the unified LLVM library in the provided directory
+    find_library(LLVM_LIBRARIES NAMES LLVM HINTS ${LLVM_LIBRARY_DIRS} NO_DEFAULT_PATH)
+    if(LLVM_LIBRARIES)
+        message(STATUS "Found LLVM library: ${LLVM_LIBRARIES}")
     else()
-        # Last resort: extract from llvm-config
-        execute_process(
-            COMMAND "${LLVM_TOOLS_BINARY_DIR}/llvm-config" --libdir
-            OUTPUT_VARIABLE LLVM_LIB_DIR
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-        )
-        if(LLVM_LIB_DIR)
-            set(LLVM_LIBRARY_DIR "${LLVM_LIB_DIR}")
+        message(WARNING "Could not find LLVM library in ${LLVM_LIBRARY_DIRS}, searching standard paths...")
+        find_library(LLVM_LIBRARIES NAMES LLVM)
+        if(LLVM_LIBRARIES)
+            message(STATUS "Found LLVM library (standard path): ${LLVM_LIBRARIES}")
+        else()
+            message(FATAL_ERROR "Could not find LLVM library")
         endif()
     endif()
-else()
-    set(LLVM_LIBS ${LLVM_LIBRARIES})
-    message(STATUS "Using LLVM_LIBRARIES from find_package")
 endif()
 
+set(LLVM_LIBS ${LLVM_LIBRARIES})
+message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
 message(STATUS "LLVM library directory: ${LLVM_LIBRARY_DIR}")
 
 find_package(PkgConfig REQUIRED)
@@ -1356,10 +1350,11 @@ endif()
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
 # Link LLVM libraries - prefer LLVM::LLVM target if available (best approach)
 # Otherwise add LLVM libraries directly to link command
+# Use PUBLIC so LLVM propagates to consumers (e.g., qore executable)
 if(TARGET LLVM::LLVM)
-    target_link_libraries(libqore PRIVATE LLVM::LLVM)
+    target_link_libraries(libqore PUBLIC LLVM::LLVM)
 elseif(LLVM_LIBS)
-    target_link_libraries(libqore PRIVATE ${LLVM_LIBS})
+    target_link_libraries(libqore PUBLIC ${LLVM_LIBS})
 endif()
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
