@@ -132,10 +132,10 @@ public:
         if (assigned && type == QV_Node && v.n) {
             // DGC violation: Variable being destroyed with assigned node value
             // This indicates improper variable uninstantiation during frame boundary handling
-            // See GitHub issue #5164 subtask: Frame boundary uninstantiation fix
-            fprintf(stderr, "DGC VIOLATION: QoreLValue destructor with assigned node (v.n=%p)\n", v.n);
-            fprintf(stderr, "  This indicates variables were not properly uninstantiated during\n");
-            fprintf(stderr, "  frame boundary operations. Frame boundaries must be properly cleaned.\n");
+            // This diagnostic helps identify Task #5: Frame boundary variable uninstantiation fix
+            fprintf(stderr, "DGC VIOLATION: QoreLValue destructor with assigned node (v.n=%p, type=%d)\n", v.n, type);
+            fprintf(stderr, "  This indicates variables were not properly uninstantiated during frame boundary operations.\n");
+            fflush(stderr);
         }
         assert(!assigned || type != QV_Node || !v.n);
     }
