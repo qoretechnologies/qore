@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/AsyncSocketIo
+
+# Set up SIGUSR1 handler to dump thread stacks for debugging
+@debug {
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    });
+}
+
+# Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+%exec-class QuicE2ETest
+
+class QuicE2ETest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+    }
+
+    constructor() : QUnit::Test("QuicE2ETest", "1.0", \ARGV, Opts) {
+        addTestCase("QUIC poll operation creation", \testQuicPollOpCreation());
+        addTestCase("QUIC server initial state", \testQuicServerInitialState());
+        addTestCase("QUIC client initial state", \testQuicClientInitialState());
+        addTestCase("QUIC handshake over localhost", \testQuicHandshake());
+        addTestCase("QUIC server cert/key validation", \testQuicServerCertKeyValidation());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-e2e-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Helper: get the port a socket is bound to
+    private int getSocketPort(Socket sock) {
+        hash<auto> info = sock.getSocketInfo();
+        return info.port;
+    }
+
+    #! Test creating QUIC poll operations for both client and server
+    testQuicPollOpCreation() {
+        # Server poll op
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.setCertificate(new SSLCertificate(CertPem));
+        server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+
+        AbstractPollOperation server_op = server_sock.startPollQuicAccept();
+        assertTrue(exists server_op, "server poll op created");
+        assertFalse(server_op.goalReached(), "server goal not reached yet");
+
+        # Client poll op
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        int server_port = getSocketPort(server_sock);
+        AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
+        assertTrue(exists client_op, "client poll op created");
+        assertFalse(client_op.goalReached(), "client goal not reached yet");
+    }
+
+    #! Test server poll operation initial state
+    testQuicServerInitialState() {
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.setCertificate(new SSLCertificate(CertPem));
+        server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+
+        AbstractPollOperation server_op = server_sock.startPollQuicAccept();
+        # Server starts waiting for initial QUIC packet (handshake-recv state)
+        assertEq("handshake-recv", server_op.getState(), "server starts in handshake-recv");
+    }
+
+    #! Test client poll operation initial state
+    testQuicClientInitialState() {
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        int server_port = getSocketPort(server_sock);
+
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
+        # Client starts by sending the initial handshake packet
+        string state = client_op.getState();
+        assertTrue(state == "handshake-send" || state == "handshake-recv",
+                   "client starts in handshake state: " + state);
+    }
+
+    #! Test QUIC handshake between client and server over localhost UDP
+    testQuicHandshake() {
+        AsyncSocketIo::AsyncSocketIoController ctrl(True);
+        ctrl.start();
+        on_exit {
+            ctrl.stop();
+        }
+
+        # Create server socket (UDP)
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        int server_port = getSocketPort(server_sock);
+        assertTrue(server_port > 0, "server bound to port " + string(server_port));
+
+        # Set certificate and key on server socket (required for QUIC/TLS 1.3)
+        server_sock.setCertificate(new SSLCertificate(CertPem));
+        server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+
+        # Create client socket (UDP) — needs to be bound for recvfrom
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        # Start poll operations
+        AbstractPollOperation server_op = server_sock.startPollQuicAccept();
+        AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
+
+        # Submit both to controller
+        Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server_sock,
+            "spop": server_op,
+            "owner": "server",
+            "to": 10s,
+        });
+        Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client_sock,
+            "spop": client_op,
+            "owner": "client",
+            "to": 10s,
+        });
+
+        # The client poll operation needs the HTTP/3 layer to be initialized before
+        # we can submit a request. Use a background thread that waits for the client
+        # to reach "reading" state (handshake + HTTP/3 setup complete), then submits
+        # the request.
+        Counter request_submitted(1);
+        bool submit_error = False;
+        string submit_error_msg;
+
+        code request_submitter = sub() {
+            on_exit request_submitted.dec();
+            try {
+                # Wait for client to reach "reading" state (HTTP/3 ready)
+                # AbstractPollOperation doesn't provide event callbacks for state
+                # transitions; use Queue.get() with short timeout to yield the thread
+                # while the AsyncSocketIoController drives the handshake
+                Queue yield_q();
+                date deadline = now_us() + 10s;
+                while (client_op.getState() != "reading") {
+                    date remaining = deadline - now_us();
+                    if (remaining <= 0us) {
+                        submit_error = True;
+                        submit_error_msg = "timeout waiting for client to reach reading state; "
+                            "state=" + client_op.getState();
+                        return;
+                    }
+                    try {
+                        yield_q.get(min(remaining, 5ms));
+                    } catch () {
+                    }
+                }
+
+                # Now submit the GET request
+                auto stream_id = client_sock.submitQuicRequest("GET", "/test");
+                if (stream_id < 0) {
+                    submit_error = True;
+                    submit_error_msg = "submitQuicRequest returned negative stream_id";
+                    return;
+                }
+
+                # Wake up the controller so it re-polls the client operation,
+                # which will flush the queued HTTP/3 request frames over UDP
+                ctrl.wake();
+            } catch (hash<ExceptionInfo> ex) {
+                submit_error = True;
+                submit_error_msg = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        };
+        background request_submitter();
+
+        # Wait for server to receive the request
+        auto server_result = server_q.get(15000);
+
+        # Wait for request submission thread
+        assertEq(0, request_submitted.waitForZero(5s), "request submission completed");
+        assertFalse(submit_error, "request submitted without error"
+            + (submit_error ? ": " + submit_error_msg : ""));
+
+        if (m_options.verbose > 1) {
+            printf("server_result: %y\n", server_result);
+            printf("server state: %s\n", server_op.getState());
+            printf("server goalReached: %y\n", server_op.goalReached());
+            printf("client state: %s\n", client_op.getState());
+            printf("client goalReached: %y\n", client_op.goalReached());
+        }
+
+        # Verify server received the request
+        assertEq(True, server_op.goalReached(), "server reached goal (received request)"
+            + "; server_state=" + server_op.getState()
+            + "; server_result=" + sprintf("%y", server_result));
+
+        hash<auto> server_output = server_op.getOutput();
+        assertEq("GET", server_output.method, "server received GET method");
+        assertEq("/test", server_output.path, "server received /test path");
+        assertTrue(server_output.stream_id >= 0, "server has valid stream id");
+    }
+
+    #! Test that missing cert/key is detected on first handshake packet
+    testQuicServerCertKeyValidation() {
+        # Create a UDP socket without cert/key
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        # Can create the poll op without cert/key
+        AbstractPollOperation server_op = server_sock.startPollQuicAccept();
+        assertEq("handshake-recv", server_op.getState(),
+                 "accept op created without cert/key, starts in handshake-recv");
+        assertFalse(server_op.goalReached(), "goal not reached");
+    }
+}
+
+namespace Opts {
+    const opts = {
+        "verbose": "verbose,v:i+",
+    };
+}

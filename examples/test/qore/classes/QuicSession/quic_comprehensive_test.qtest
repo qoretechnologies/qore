@@ -1,0 +1,1013 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/AsyncSocketIo
+
+# Set up SIGUSR1 handler to dump thread stacks for debugging
+@debug {
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    });
+}
+
+# Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+%exec-class QuicComprehensiveTest
+
+class QuicComprehensiveTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+    }
+
+    constructor() : QUnit::Test("QuicComprehensiveTest", "1.0", \ARGV, Opts) {
+        # Group 1: Full Round-Trip
+        addTestCase("Full GET round-trip", \testFullRoundTrip());
+        addTestCase("POST with body echo", \testPostWithBody());
+        addTestCase("Multiple status codes", \testMultipleStatusCodes());
+        addTestCase("Custom headers", \testCustomHeaders());
+
+        # Group 2: Stream Multiplexing
+        addTestCase("Multiple sequential requests", \testMultipleSequentialRequests());
+        addTestCase("Concurrent streams", \testConcurrentStreams());
+
+        # Group 3: Large Payloads
+        addTestCase("Large response body", \testLargeResponseBody());
+        addTestCase("Large request body", \testLargeRequestBody());
+
+        # Group 4: Stress & Scalability
+        addTestCase("Sustained throughput", \testSustainedThroughput());
+        addTestCase("Multiple connections", \testMultipleConnections());
+
+        # Group 5: Error Handling & Edge Cases
+        addTestCase("Connection timeout", \testConnectionTimeout());
+        addTestCase("Empty body", \testEmptyBody());
+        addTestCase("Binary body", \testBinaryBody());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-comprehensive-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Helper: create a QUIC server+client socket pair bound to localhost
+    private hash<auto> createSocketPair() {
+        Socket server_sock();
+        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.setCertificate(new SSLCertificate(CertPem));
+        server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+        int port = server_sock.getSocketInfo().port;
+
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        return {
+            "server_sock": server_sock,
+            "client_sock": client_sock,
+            "port": port,
+        };
+    }
+
+    #! Helper: perform QUIC handshake and return context with controller+ops
+    private hash<auto> performHandshake(hash<auto> pair, *timeout to) {
+        if (!to) {
+            to = 15s;
+        }
+        AsyncSocketIo::AsyncSocketIoController ctrl(True);
+        ctrl.start();
+
+        AbstractPollOperation server_op = pair.server_sock.startPollQuicAccept();
+        AbstractPollOperation client_op = pair.client_sock.startPollQuicConnect("127.0.0.1", pair.port);
+
+        Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.server_sock,
+            "spop": server_op,
+            "owner": "server",
+            "to": to,
+        });
+        Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": pair.client_sock,
+            "spop": client_op,
+            "owner": "client",
+            "to": to,
+        });
+
+        return pair + {
+            "ctrl": ctrl,
+            "server_op": server_op,
+            "client_op": client_op,
+            "server_q": server_q,
+            "client_q": client_q,
+        };
+    }
+
+    #! Helper: wait for client to reach "reading" state (HTTP/3 ready)
+    /** @note Uses short Queue.get() waits to yield the thread while the
+        AsyncSocketIoController drives the handshake in its I/O thread.
+        AbstractPollOperation does not provide an event/callback mechanism
+        for state transitions, so we must poll getState() with yields.
+    */
+    private waitForClientReading(AbstractPollOperation client_op, *timeout to) {
+        if (!to) {
+            to = 10s;
+        }
+        Queue yield_q();
+        date deadline = now_us() + to;
+        while (client_op.getState() != "reading") {
+            date remaining = deadline - now_us();
+            if (remaining <= 0us) {
+                throw "TIMEOUT", sprintf("timeout waiting for client reading state; state=%s",
+                    client_op.getState());
+            }
+            # Yield via Queue.get() with short timeout; the I/O controller
+            # thread drives the QUIC handshake and transitions the state
+            try {
+                yield_q.get(min(remaining, 5ms));
+            } catch () {
+                # Queue.get() throws QUEUE-TIMEOUT; continue checking state
+            }
+        }
+    }
+
+    #! Helper: submit a request from client, wake controller, wait for server to receive it
+    private hash<auto> submitRequestAndWaitForServer(hash<auto> ctx, string method, string path,
+            *hash<auto> req_headers, *data req_body) {
+        # Wait for client to be in reading state
+        waitForClientReading(ctx.client_op);
+
+        # Submit request
+        int stream_id = ctx.client_sock.submitQuicRequest(method, path, req_headers, req_body);
+        assertTrue(stream_id >= 0, sprintf("submitQuicRequest(%s, %s) returned valid stream_id=%d",
+            method, path, stream_id));
+
+        # Wake controller to flush request
+        ctx.ctrl.wake();
+
+        # Wait for server to receive request
+        auto server_result = ctx.server_q.get(30000);
+
+        assertTrue(ctx.server_op.goalReached(),
+            sprintf("server reached goal for %s %s; state=%s", method, path, ctx.server_op.getState()));
+
+        hash<auto> server_output = ctx.server_op.getOutput();
+        return {
+            "stream_id": stream_id,
+            "server_output": server_output,
+            "server_result": server_result,
+        };
+    }
+
+    #! Helper: send response from server and wait for client to receive it
+    private hash<auto> sendResponseAndWaitForClient(hash<auto> ctx, int session_id, int stream_id,
+            int status_code, *hash<auto> resp_headers, *data resp_body) {
+        # Start send-response poll operation on the server socket
+        AbstractPollOperation send_op = ctx.server_sock.startPollQuicSendResponse(
+            session_id, stream_id, status_code, resp_headers, resp_body);
+
+        # Submit the send-response operation; use a custom key to avoid conflict with
+        # the accept op that may still be registered on the same socket
+        Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.server_sock,
+            "spop": send_op,
+            "owner": "server-send",
+            "key": "server-send-" + string(stream_id),
+            "to": 30s,
+        }, True);
+
+        # Wait for both send and client concurrently using background threads
+        # Both the send-response and client read run in the same controller,
+        # so they must make progress simultaneously
+        hash<SocketPollResultInfo> send_result;
+        hash<SocketPollResultInfo> client_result;
+        Counter wait_cnt(2);
+
+        background sub() {
+            on_exit wait_cnt.dec();
+            try {
+                send_result = send_q.get(30000);
+            } catch (hash<ExceptionInfo> ex) {
+                send_result = <SocketPollResultInfo>{"ex": ex};
+            }
+        }();
+        background sub() {
+            on_exit wait_cnt.dec();
+            try {
+                client_result = ctx.client_q.get(30000);
+            } catch (hash<ExceptionInfo> ex) {
+                client_result = <SocketPollResultInfo>{"ex": ex};
+            }
+        }();
+
+        int wrc = wait_cnt.waitForZero(35s);
+        if (wrc) {
+            throw "TIMEOUT", sprintf("send-response/client wait timed out; "
+                "send_state=%s send_goal=%y client_state=%s client_goal=%y",
+                send_op.getState(), send_op.goalReached(),
+                ctx.client_op.getState(), ctx.client_op.goalReached());
+        }
+
+        if (send_result.ex) {
+            throw send_result.ex.err, sprintf("send-response failed: %s", send_result.ex.desc);
+        }
+        assertTrue(send_op.goalReached(),
+            sprintf("send-response goal reached for status %d; state=%s", status_code,
+                send_op.getState()));
+
+        if (client_result.ex) {
+            throw client_result.ex.err, sprintf("client response failed: %s", client_result.ex.desc);
+        }
+        assertTrue(ctx.client_op.goalReached(),
+            sprintf("client received response; state=%s", ctx.client_op.getState()));
+
+        hash<auto> client_output = ctx.client_op.getOutput();
+        return {
+            "client_output": client_output,
+            "client_result": client_result,
+            "send_result": send_result,
+        };
+    }
+
+    #! Helper: perform a full round-trip (request + response) and return results
+    private hash<auto> doRoundTrip(hash<auto> ctx, string method, string path,
+            *hash<auto> req_headers, *data req_body,
+            int resp_status, *hash<auto> resp_headers, *data resp_body) {
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, method, path, req_headers, req_body);
+
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, req_result.server_output.session_id,
+            req_result.stream_id, resp_status, resp_headers, resp_body);
+
+        return req_result + resp_result;
+    }
+
+    #! Helper: re-enter reading state on server and client after a round-trip
+    /** After a round trip completes, both the server's accept op and the client's connect op
+        are in their "goal reached" states (request-ready / response-ready). To handle another
+        request on the same connection, we need to re-submit them to the controller so they
+        transition back to "reading" state.
+    */
+    private resubmitForNextRequest(reference<hash<auto>> ctx) {
+        # Re-submit server accept op - it will go from request-ready -> reading
+        ctx.server_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.server_sock,
+            "spop": ctx.server_op,
+            "owner": "server",
+            "to": 30s,
+        }, True);
+
+        # Re-submit client connect op - it will go from response-ready -> reading
+        ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.client_sock,
+            "spop": ctx.client_op,
+            "owner": "client",
+            "to": 30s,
+        }, True);
+    }
+
+    # ===== Group 1: Full Round-Trip =====
+
+    #! Test full GET round-trip: client sends GET, server responds 200
+    testFullRoundTrip() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        string resp_body_str = "Hello World";
+        hash<auto> resp_headers = {
+            "content-type": "text/plain",
+            "x-test": "full-roundtrip",
+        };
+
+        hash<auto> result = doRoundTrip(ctx, "GET", "/hello", NOTHING, NOTHING,
+            200, resp_headers, resp_body_str);
+
+        # Verify server received correct request
+        assertEq("GET", result.server_output.method, "server received GET method");
+        assertEq("/hello", result.server_output.path, "server received /hello path");
+
+        # Verify client received correct response
+        assertEq(200, result.client_output.status_code, "client received 200 status");
+
+        # Check response body
+        auto body = result.client_output.body;
+        if (body.typeCode() == NT_BINARY) {
+            body = body.toString();
+        }
+        assertEq(resp_body_str, body, "client received correct response body");
+
+        # Check response headers
+        assertEq("text/plain", result.client_output.headers."content-type",
+            "content-type header preserved");
+    }
+
+    #! Test POST with body: server echoes back the body
+    testPostWithBody() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        string req_body = "This is the POST body content for testing";
+        hash<auto> req_headers = {
+            "content-type": "application/octet-stream",
+        };
+
+        # Submit request and wait for server
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, "POST", "/echo",
+            req_headers, req_body);
+
+        # Verify server received the request with body
+        assertEq("POST", req_result.server_output.method, "server received POST");
+        assertEq("/echo", req_result.server_output.path, "server received /echo path");
+
+        # Check server received the body
+        auto server_body = req_result.server_output.body;
+        if (server_body.typeCode() == NT_BINARY) {
+            server_body = server_body.toString();
+        }
+        assertEq(req_body, server_body, "server received correct request body");
+
+        # Echo it back
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, req_result.server_output.session_id,
+            req_result.stream_id, 200, {"content-type": "application/octet-stream"}, req_body);
+
+        # Verify client received the echoed body
+        auto resp_body = resp_result.client_output.body;
+        if (resp_body.typeCode() == NT_BINARY) {
+            resp_body = resp_body.toString();
+        }
+        assertEq(req_body, resp_body, "client received echoed body");
+        assertEq(200, resp_result.client_output.status_code, "client received 200");
+    }
+
+    #! Test multiple HTTP status codes
+    testMultipleStatusCodes() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        list<int> status_codes = (200, 201, 204, 301, 400, 404, 500);
+
+        for (int i = 0; i < status_codes.size(); i++) {
+            int expected_status = status_codes[i];
+            string path = sprintf("/status/%d", expected_status);
+
+            if (i > 0) {
+                resubmitForNextRequest(\ctx);
+            }
+
+            hash<auto> result = doRoundTrip(ctx, "GET", path, NOTHING, NOTHING,
+                expected_status, NOTHING, NOTHING);
+
+            assertEq(expected_status, result.client_output.status_code,
+                sprintf("status code %d returned correctly", expected_status));
+        }
+    }
+
+    #! Test custom headers in both directions
+    testCustomHeaders() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        hash<auto> req_headers = {
+            "x-custom-request": "req-value-123",
+            "x-another-header": "another-value",
+        };
+
+        hash<auto> resp_headers = {
+            "x-custom-response": "resp-value-456",
+            "x-server-id": "quic-test-server",
+            "content-type": "application/json",
+        };
+
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, "GET", "/headers",
+            req_headers, NOTHING);
+
+        # Verify server received custom request headers
+        assertEq("req-value-123", req_result.server_output.headers."x-custom-request",
+            "server received x-custom-request header");
+        assertEq("another-value", req_result.server_output.headers."x-another-header",
+            "server received x-another-header");
+
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, req_result.server_output.session_id,
+            req_result.stream_id, 200, resp_headers, "{\"status\": \"ok\"}");
+
+        # Verify client received custom response headers
+        assertEq("resp-value-456", resp_result.client_output.headers."x-custom-response",
+            "client received x-custom-response header");
+        assertEq("quic-test-server", resp_result.client_output.headers."x-server-id",
+            "client received x-server-id header");
+        assertEq("application/json", resp_result.client_output.headers."content-type",
+            "client received content-type header");
+    }
+
+    # ===== Group 2: Stream Multiplexing =====
+
+    #! Test multiple sequential requests on the same connection
+    testMultipleSequentialRequests() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        int num_requests = 5;
+
+        for (int i = 0; i < num_requests; i++) {
+            string path = sprintf("/seq/%d", i);
+            string resp_body = sprintf("Response %d", i);
+
+            if (i > 0) {
+                resubmitForNextRequest(\ctx);
+            }
+
+            hash<auto> result = doRoundTrip(ctx, "GET", path, NOTHING, NOTHING,
+                200, {"x-seq": string(i)}, resp_body);
+
+            assertEq("GET", result.server_output.method,
+                sprintf("request %d: correct method", i));
+            assertEq(path, result.server_output.path,
+                sprintf("request %d: correct path", i));
+            assertEq(200, result.client_output.status_code,
+                sprintf("request %d: correct status", i));
+
+            auto body = result.client_output.body;
+            if (body.typeCode() == NT_BINARY) {
+                body = body.toString();
+            }
+            assertEq(resp_body, body, sprintf("request %d: correct body", i));
+        }
+    }
+
+    #! Test concurrent streams: multiple requests before any response
+    testConcurrentStreams() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        int num_streams = 3;
+
+        # Wait for client reading state
+        waitForClientReading(ctx.client_op);
+
+        # Submit multiple requests before getting any response
+        list<int> stream_ids = ();
+        for (int i = 0; i < num_streams; i++) {
+            int sid = ctx.client_sock.submitQuicRequest("GET", sprintf("/concurrent/%d", i));
+            assertTrue(sid >= 0, sprintf("concurrent stream %d: valid stream_id=%d", i, sid));
+            stream_ids += sid;
+        }
+
+        # Wake controller to flush all requests
+        ctx.ctrl.wake();
+
+        # Server should receive first request
+        auto server_result = ctx.server_q.get(30000);
+        assertTrue(ctx.server_op.goalReached(), "server received first concurrent request");
+
+        hash<auto> first_req = ctx.server_op.getOutput();
+        assertEq("GET", first_req.method, "first concurrent request is GET");
+        assertTrue(first_req.path.regex("^/concurrent/"), "first concurrent request has correct path prefix");
+
+        # Send response for first request
+        AbstractPollOperation send_op = ctx.server_sock.startPollQuicSendResponse(
+            first_req.session_id, first_req.stream_id, 200, NOTHING, sprintf("reply-%d", first_req.stream_id));
+        Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.server_sock,
+            "spop": send_op,
+            "owner": "server-send",
+            "to": 30s,
+        });
+        send_q.get(30000);
+        assertTrue(send_op.goalReached(), "first response sent");
+
+        # Client should get the response
+        auto client_result = ctx.client_q.get(30000);
+        assertTrue(ctx.client_op.goalReached(), "client received first response");
+        hash<auto> first_resp = ctx.client_op.getOutput();
+        assertEq(200, first_resp.status_code, "first concurrent response is 200");
+
+        # Process remaining streams
+        int received = 1;
+        for (int i = 1; i < num_streams; i++) {
+            # Re-submit server for next request
+            ctx.server_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+                "sock": ctx.server_sock,
+                "spop": ctx.server_op,
+                "owner": "server",
+                "to": 30s,
+            }, True);
+
+            # Re-submit client for next response
+            ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+                "sock": ctx.client_sock,
+                "spop": ctx.client_op,
+                "owner": "client",
+                "to": 30s,
+            }, True);
+
+            # Wait for server to receive next request
+            server_result = ctx.server_q.get(30000);
+            assertTrue(ctx.server_op.goalReached(), sprintf("server received request %d", i));
+
+            hash<auto> req = ctx.server_op.getOutput();
+            assertEq("GET", req.method, sprintf("concurrent request %d is GET", i));
+
+            # Send response
+            send_op = ctx.server_sock.startPollQuicSendResponse(
+                req.session_id, req.stream_id, 200, NOTHING, sprintf("reply-%d", req.stream_id));
+            send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+                "sock": ctx.server_sock,
+                "spop": send_op,
+                "owner": "server-send",
+                "to": 30s,
+            });
+            send_q.get(30000);
+
+            # Wait for client response
+            client_result = ctx.client_q.get(30000);
+            assertTrue(ctx.client_op.goalReached(), sprintf("client received response %d", i));
+            hash<auto> resp = ctx.client_op.getOutput();
+            assertEq(200, resp.status_code, sprintf("concurrent response %d is 200", i));
+            received++;
+        }
+
+        assertEq(num_streams, received, "all concurrent streams processed");
+    }
+
+    # ===== Group 3: Large Payloads =====
+
+    #! Test large response body (100KB+)
+    testLargeResponseBody() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        # Generate 100KB payload
+        string large_str = strmul("A", 100 * 1024);
+        binary large_body = binary(large_str);
+
+        # Submit request
+        waitForClientReading(ctx.client_op);
+        int stream_id = ctx.client_sock.submitQuicRequest("GET", "/large-response");
+        assertTrue(stream_id >= 0, "large response: valid stream_id");
+        ctx.ctrl.wake();
+
+        # Wait for server to receive request
+        ctx.server_q.get(30000);
+        assertTrue(ctx.server_op.goalReached(), "large response: server got request");
+        hash<auto> req = ctx.server_op.getOutput();
+
+        # Send large response
+        AbstractPollOperation send_op = ctx.server_sock.startPollQuicSendResponse(
+            req.session_id, req.stream_id, 200, {"content-type": "application/octet-stream"}, large_body);
+
+        # Use exec() to block on the send - this is simpler than submit()
+        # but the client op is still being polled by the controller
+        Queue send_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.server_sock,
+            "spop": send_op,
+            "owner": "server-send",
+            "key": "server-send",
+            "to": 30s,
+        }, True);
+
+        # Wait for client to receive response - the controller polls both ops
+        hash<SocketPollResultInfo> client_result = ctx.client_q.get(30000);
+
+        if (client_result.ex) {
+            # Debug: print the states
+            if (m_options.verbose > 1) {
+                printf("  client error: %s: %s\n", client_result.ex.err, client_result.ex.desc);
+                printf("  send state: %s, goalReached: %y\n",
+                    send_op.getState(), send_op.goalReached());
+                printf("  client state: %s, goalReached: %y\n",
+                    ctx.client_op.getState(), ctx.client_op.goalReached());
+            }
+            throw client_result.ex.err, sprintf("client failed: %s", client_result.ex.desc);
+        }
+
+        assertTrue(ctx.client_op.goalReached(), "large response: client got response");
+        hash<auto> resp = ctx.client_op.getOutput();
+        assertEq(200, resp.status_code, "large response: 200 status");
+        auto received_body = resp.body;
+        if (received_body.typeCode() != NT_BINARY) {
+            received_body = binary(received_body);
+        }
+        assertEq(large_body.size(), received_body.size(),
+            sprintf("large response: body size matches (%d bytes)", large_body.size()));
+        assertEq(large_body, received_body, "large response: body content matches");
+    }
+
+    #! Test large request body (100KB+)
+    testLargeRequestBody() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        # Generate 100KB payload
+        string chunk = strmul("0123456789", 1024);  # 10KB chunk
+        string large_str = strmul(chunk, 10);  # 100KB
+        binary large_body = binary(large_str);
+
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, "POST", "/large-request",
+            {"content-type": "application/octet-stream"}, large_body);
+
+        # Verify server received the complete body
+        auto server_body = req_result.server_output.body;
+        if (server_body.typeCode() != NT_BINARY) {
+            server_body = binary(server_body);
+        }
+        assertEq(large_body.size(), server_body.size(),
+            sprintf("large request: server received correct body size (%d bytes)",
+                large_body.size()));
+        assertEq(large_body, server_body, "large request: server body content matches");
+
+        # Send simple response
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, req_result.server_output.session_id,
+            req_result.stream_id, 200, NOTHING, "OK");
+
+        assertEq(200, resp_result.client_output.status_code, "large request: got 200 response");
+    }
+
+    # ===== Group 4: Stress & Scalability =====
+
+    #! Test sustained throughput over time
+    testSustainedThroughput() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        int completed = 0;
+        date start = now_us();
+        date deadline = start + 3s;
+
+        while (now_us() < deadline) {
+            string path = sprintf("/throughput/%d", completed);
+            string resp_body = sprintf("resp-%d", completed);
+
+            if (completed > 0) {
+                resubmitForNextRequest(\ctx);
+            }
+
+            try {
+                hash<auto> result = doRoundTrip(ctx, "GET", path, NOTHING, NOTHING,
+                    200, NOTHING, resp_body);
+                assertEq(200, result.client_output.status_code,
+                    sprintf("throughput request %d: 200", completed));
+                completed++;
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose > 0) {
+                    printf("throughput test error at request %d: %s: %s\n",
+                        completed, ex.err, ex.desc);
+                }
+                break;
+            }
+
+            # Check if we're under valgrind (very slow) - skip after a few requests
+            if (completed >= 3 && now_us() - start > 2s) {
+                # Likely under valgrind, skip extended throughput
+                break;
+            }
+        }
+
+        assertTrue(completed > 0, sprintf("sustained throughput: %d requests completed", completed));
+        if (completed < 5) {
+            testSkip("likely running under valgrind");
+        }
+        if (m_options.verbose > 0) {
+            date elapsed_d = now_us() - start;
+            float elapsed_s = get_duration_microseconds(elapsed_d) / 1000000.0;
+            if (elapsed_s > 0) {
+                printf("  throughput: %d requests in %.2f seconds (%.1f req/s)\n",
+                    completed, elapsed_s, completed / elapsed_s);
+            } else {
+                printf("  throughput: %d requests completed\n", completed);
+            }
+        }
+    }
+
+    #! Test multiple independent QUIC connections to same server
+    testMultipleConnections() {
+        int num_connections = 3;
+        Counter done(num_connections);
+        list<hash<auto>> results = ();
+        Mutex m();
+
+        for (int i = 0; i < num_connections; i++) {
+            background sub(int conn_idx) {
+                on_exit done.dec();
+                try {
+                    # Each connection gets its own server and client socket
+                    Socket srv();
+                    srv.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+                    srv.setCertificate(new SSLCertificate(CertPem));
+                    srv.setPrivateKey(new SSLPrivateKey(KeyPem));
+                    int srv_port = srv.getSocketInfo().port;
+
+                    Socket cli();
+                    cli.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+                    AsyncSocketIo::AsyncSocketIoController ctrl(True);
+                    ctrl.start();
+                    on_exit {
+                        ctrl.stop();
+                    }
+
+                    AbstractPollOperation server_op = srv.startPollQuicAccept();
+                    AbstractPollOperation client_op = cli.startPollQuicConnect("127.0.0.1", srv_port);
+
+                    Queue server_q = ctrl.submit(<SocketPollOperationInfo>{
+                        "sock": srv,
+                        "spop": server_op,
+                        "owner": "server-" + string(conn_idx),
+                        "to": 30s,
+                    });
+                    Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
+                        "sock": cli,
+                        "spop": client_op,
+                        "owner": "client-" + string(conn_idx),
+                        "to": 30s,
+                    });
+
+                    # Wait for client reading state (see waitForClientReading() for rationale)
+                    Queue yield_q();
+                    date deadline = now_us() + 10s;
+                    while (client_op.getState() != "reading") {
+                        date remaining = deadline - now_us();
+                        if (remaining <= 0us) {
+                            throw "TIMEOUT", sprintf("conn %d: timeout waiting for reading state",
+                                conn_idx);
+                        }
+                        try {
+                            yield_q.get(min(remaining, 5ms));
+                        } catch () {
+                        }
+                    }
+
+                    # Submit request
+                    string path = sprintf("/conn/%d", conn_idx);
+                    cli.submitQuicRequest("GET", path);
+                    ctrl.wake();
+
+                    # Wait for server
+                    server_q.get(30000);
+                    hash<auto> req = server_op.getOutput();
+
+                    # Send response
+                    string resp_body = sprintf("Connection %d OK", conn_idx);
+                    AbstractPollOperation send_op = srv.startPollQuicSendResponse(
+                        req.session_id, req.stream_id, 200, NOTHING, resp_body);
+                    Queue send_q = ctrl.submit(<SocketPollOperationInfo>{
+                        "sock": srv,
+                        "spop": send_op,
+                        "owner": "server-send-" + string(conn_idx),
+                        "to": 30s,
+                    });
+                    send_q.get(30000);
+
+                    # Wait for client response
+                    client_q.get(30000);
+                    hash<auto> resp = client_op.getOutput();
+
+                    { AutoLock al(m); results += {
+                        "conn": conn_idx,
+                        "status": resp.status_code,
+                        "path": req.path,
+                        "success": True,
+                    }; }
+                } catch (hash<ExceptionInfo> ex) {
+                    { AutoLock al(m); results += {
+                        "conn": conn_idx,
+                        "error": sprintf("%s: %s", ex.err, ex.desc),
+                        "success": False,
+                    }; }
+                }
+            }(i);
+        }
+
+        int rc = done.waitForZero(30s);
+        assertEq(0, rc, "all connections completed within timeout");
+        assertEq(num_connections, results.size(), "got results from all connections");
+
+        for (int i = 0; i < results.size(); i++) {
+            assertTrue(results[i].success,
+                sprintf("connection %d succeeded%s", results[i].conn,
+                    results[i].error ? ": " + results[i].error : ""));
+            if (results[i].success) {
+                assertEq(200, results[i].status, sprintf("connection %d: got 200", results[i].conn));
+            }
+        }
+    }
+
+    # ===== Group 5: Error Handling & Edge Cases =====
+
+    #! Test connection timeout to non-responding address
+    testConnectionTimeout() {
+        # Bind a UDP socket to reserve a port — keep it alive to prevent the
+        # race where another process could bind to the port after we close it.
+        # The plain UDP socket won't respond to QUIC Initial packets, so
+        # the handshake will time out deterministically.
+        Socket dummy_server();
+        dummy_server.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        on_exit delete dummy_server;
+        int port = dummy_server.getSocketInfo().port;
+
+        Socket client_sock();
+        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+
+        AsyncSocketIo::AsyncSocketIoController ctrl(True);
+        ctrl.start();
+        on_exit {
+            ctrl.stop();
+        }
+
+        AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", port);
+
+        # Use a short timeout so the test doesn't hang
+        Queue q = ctrl.submit(<SocketPollOperationInfo>{
+            "sock": client_sock,
+            "spop": client_op,
+            "owner": "timeout-client",
+            "to": 2s,
+        });
+
+        auto result = q.get(5000);
+        # The operation should have timed out or errored - it should NOT have succeeded
+        # in connecting (no server to respond)
+        hash<SocketPollResultInfo> poll_result = result;
+
+        # Either canceled (timeout) or exception
+        bool timed_out_or_errored = poll_result.canceled || exists poll_result.ex
+            || !client_op.goalReached();
+        assertTrue(timed_out_or_errored,
+            "connection to non-responding port timed out or errored as expected");
+    }
+
+    #! Test empty body handling
+    testEmptyBody() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        hash<auto> result = doRoundTrip(ctx, "GET", "/empty", NOTHING, NOTHING,
+            200, NOTHING, NOTHING);
+
+        assertEq("GET", result.server_output.method, "empty body: correct method");
+        assertEq("/empty", result.server_output.path, "empty body: correct path");
+        assertEq(200, result.client_output.status_code, "empty body: 200 status");
+
+        # Body should be NOTHING or empty
+        auto body = result.client_output.body;
+        bool empty = !exists body || (body.typeCode() == NT_BINARY && body.size() == 0)
+            || (body.typeCode() == NT_STRING && body.empty());
+        assertTrue(empty, sprintf("empty body: body is empty (got %y)", body));
+    }
+
+    #! Test binary data integrity
+    testBinaryBody() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit {
+            ctx.ctrl.stop();
+        }
+
+        # Generate random binary data with all byte values
+        binary req_bin = binary();
+        for (int i = 0; i < 256; i++) {
+            req_bin += <00>;
+        }
+        # Fill with byte values 0-255
+        for (int i = 0; i < 256; i++) {
+            splice req_bin, i, 1, chr(i);
+        }
+        # Repeat to make it larger (1KB)
+        binary large_bin = req_bin;
+        for (int i = 0; i < 3; i++) {
+            large_bin += req_bin;
+        }
+
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, "POST", "/binary",
+            {"content-type": "application/octet-stream"}, large_bin);
+
+        # Verify server received binary data intact
+        auto server_body = req_result.server_output.body;
+        if (server_body.typeCode() != NT_BINARY) {
+            server_body = binary(server_body);
+        }
+        assertEq(large_bin.size(), server_body.size(), "binary request: correct size");
+        assertEq(large_bin, server_body, "binary request: data integrity preserved");
+
+        # Server echoes binary data back
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, req_result.server_output.session_id,
+            req_result.stream_id, 200, {"content-type": "application/octet-stream"}, large_bin);
+
+        auto resp_body = resp_result.client_output.body;
+        if (resp_body.typeCode() != NT_BINARY) {
+            resp_body = binary(resp_body);
+        }
+        assertEq(large_bin.size(), resp_body.size(), "binary response: correct size");
+        assertEq(large_bin, resp_body, "binary response: data integrity preserved");
+    }
+}
+
+namespace Opts {
+    const opts = {
+        "verbose": "verbose,v:i+",
+    };
+}

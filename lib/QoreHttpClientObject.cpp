@@ -50,12 +50,24 @@
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QuicSession.h"
+#include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
 
+#include <atomic>
+#include <cassert>
 #include <cctype>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
+
+#include <poll.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <cinttypes>
 
 // issue #3564: set the I/O timeout for reading an incoming HTTP header after an aborted outbound chunked transfer
 static const int ABORTED_TIMEOUT_MS = 5000;
@@ -145,7 +157,7 @@ public:
         if (!stream || stream->headers.empty()) {
             return nullptr;
         }
-        return h2HeadersToQoreHash(stream->headers);
+        return httpMultiHeadersToQoreHash(stream->headers);
     }
 
     //! Returns the HTTP status code
@@ -588,6 +600,37 @@ static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* 
     return nullptr;
 }
 
+//! Returns a binary decompressor for the given content-encoding, or nullptr if none needed.
+/** Used by the HTTP/2 and HTTP/3 binary response paths where the body stays as BinaryNode.
+    @param content_encoding the Content-Encoding header value (must not be nullptr)
+    @param xsink for raising exceptions on unknown encodings
+    @return the decompressor function, or nullptr for identity/character encodings
+*/
+static qore_uncompress_to_binary_t get_binary_decoder_for_content_encoding(const char* content_encoding,
+        ExceptionSink* xsink) {
+    if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate")) {
+        return qore_inflate_to_binary;
+    }
+    if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip")) {
+        return qore_gunzip_to_binary;
+    }
+    if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2")) {
+        return qore_bunzip2_to_binary;
+    }
+    if (!strcasecmp(content_encoding, "br")) {
+        return qore_unbrotli_to_binary;
+    }
+    if (!strcasecmp(content_encoding, "zstd")) {
+        return qore_unzstd_to_binary;
+    }
+    if (!strcasecmp(content_encoding, "identity")) {
+        return nullptr;
+    }
+    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+        "don't know how to handle content-encoding '%s'", content_encoding);
+    return nullptr;
+}
+
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
         const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
         ExceptionSink* xsink) {
@@ -685,6 +728,30 @@ struct qore_httpclient_priv {
     int http2_mode = HTTP2_MODE_AUTO
         ;
 
+    // HTTP/3 mode (HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, HTTP3_MODE_REQUIRED)
+    // Atomic: may be read from I/O thread while set from API thread
+    std::atomic<int> http3_mode{HTTP3_MODE_AUTO};
+
+    // HTTP/3 is currently active on the connection
+    // Atomic: read from public isHttp3Active() without locking
+    std::atomic<bool> http3_active{false};
+
+    // Alt-Svc cache entry
+    struct AltSvcEntry {
+        int port;              // QUIC port from Alt-Svc header
+        int64 expiry_epoch;    // When this entry expires (epoch seconds)
+    };
+
+    // Alt-Svc cache: "host:port" → {quic_port, expiry}
+    // Thread safety: protected by msock->m (held on all access paths)
+    std::unordered_map<std::string, AltSvcEntry> alt_svc_cache;
+
+    // QUIC connection state
+    std::shared_ptr<QuicSession> quic_session;
+    int quic_fd = -1;  // UDP socket fd for QUIC
+    struct sockaddr_storage quic_local_addr{};
+    socklen_t quic_local_addrlen = 0;
+
     // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
     int32_t h2_stream_id = 0;
 
@@ -759,6 +826,7 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL ~qore_httpclient_priv() {
+        disconnectQuic();
     }
 
     QoreHashNode* getConfig(my_socket_priv& priv) const {
@@ -830,6 +898,23 @@ struct qore_httpclient_priv {
                 break;
         }
         h->setKeyValueIntern("http_version", new QoreStringNode(version_str));
+        // HTTP/3 mode
+        {
+            const char* h3_mode_str;
+            switch (http3_mode) {
+                case HTTP3_MODE_DISABLED:
+                    h3_mode_str = "disabled";
+                    break;
+                case HTTP3_MODE_REQUIRED:
+                    h3_mode_str = "required";
+                    break;
+                case HTTP3_MODE_AUTO:
+                default:
+                    h3_mode_str = "auto";
+                    break;
+            }
+            h->setKeyValueIntern("http3_mode", new QoreStringNode(h3_mode_str));
+        }
         if (max_redirects != HTTPCLIENT_DEFAULT_MAX_REDIRECTS) {
             h->setKeyValueIntern("max_redirects", max_redirects);
         }
@@ -1111,6 +1196,38 @@ struct qore_httpclient_priv {
             persistent_count = 0;
             clearH2Session();
         }
+        disconnectQuic();
+    }
+
+    // Disconnect QUIC session and clean up state
+    // Always invalidates Alt-Svc cache (even on normal idle disconnects) so we
+    // fall back to HTTP/1.x or HTTP/2 on the next request; the server will
+    // re-advertise h3 support via Alt-Svc if it's still available.  This is
+    // conservative but correct — stale cache entries for a down server would
+    // cause repeated connection failures.
+    // Thread safety: caller must hold priv->m (same as msock->m), or be in the
+    // destructor where concurrent access is impossible.
+    DLLLOCAL void disconnectQuic() {
+        if (!connection.host.empty() && connection.port) {
+            std::string origin = std::string(connection.host) + ":" + std::to_string(connection.port);
+            alt_svc_cache.erase(origin);
+        }
+        // Send CONNECTION_CLOSE for graceful shutdown (best-effort, non-blocking).
+        // The UDP socket is connect()-ed, so send() works without specifying the peer.
+        if (quic_session && quic_fd >= 0) {
+            uint8_t close_buf[1280];
+            ssize_t nwrite = quic_session->writeConnectionClose(close_buf, sizeof(close_buf));
+            if (nwrite > 0) {
+                // Best-effort: ignore send errors (fd may already be invalid)
+                ::send(quic_fd, close_buf, static_cast<size_t>(nwrite), MSG_DONTWAIT | MSG_NOSIGNAL);
+            }
+        }
+        quic_session.reset();
+        if (quic_fd >= 0) {
+            ::close(quic_fd);
+            quic_fd = -1;
+        }
+        http3_active = false;
     }
 
     DLLLOCAL int setNoDelay(bool nd) {
@@ -1861,6 +1978,20 @@ struct qore_httpclient_priv {
 
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
+        const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink);
+
+    // Parse Alt-Svc header value and update the cache
+    DLLLOCAL void parseAltSvc(const char* value, const char* host, int port);
+
+    // Look up Alt-Svc entry for a given origin; returns nullptr if not found or expired
+    DLLLOCAL std::optional<AltSvcEntry> lookupAltSvc(const char* host, int port);
+
+    // Establish a QUIC/HTTP3 connection to the given server
+    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection);
+
+    // Send an HTTP/3 request and get the response
+    DLLLOCAL QoreHashNode* sendHttp3MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
         const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
         QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink);
 
@@ -3048,21 +3179,9 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
             if (!strncasecmp(content_encoding, "iso", 3) || !strncasecmp(content_encoding, "utf-", 4)) {
                 client->http_priv->msock->socket->setEncoding(QEM.findCreate(content_encoding));
             } else {
-                qore_uncompress_to_binary_t dec = nullptr;
-                // only decode message bodies automatically if there is no receive callback
-                if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate")) {
-                    dec = qore_inflate_to_binary;
-                } else if (!strcasecmp(content_encoding, "gzip") || !strcasecmp(content_encoding, "x-gzip")) {
-                    dec = qore_gunzip_to_binary;
-                } else if (!strcasecmp(content_encoding, "bzip2") || !strcasecmp(content_encoding, "x-bzip2")) {
-                    dec = qore_bunzip2_to_binary;
-                } else if (!strcasecmp(content_encoding, "br")) {
-                    dec = qore_unbrotli_to_binary;
-                } else if (!strcasecmp(content_encoding, "zstd")) {
-                    dec = qore_unzstd_to_binary;
-                } else if (strcasecmp(content_encoding, "identity")) {
-                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding "
-                        "'%s'", content_encoding);
+                qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(
+                    content_encoding, xsink);
+                if (*xsink) {
                     return -1;
                 }
                 if (dec) {
@@ -3602,8 +3721,35 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "as value for the \"http_version\" key in the options hash");
             return -1;
         }
-        if (setHTTPVersion((n.get<const QoreStringNode>())->c_str(), xsink))
+        if (setHTTPVersion((n.get<const QoreStringNode>())->c_str(), xsink)) {
             return -1;
+        }
+    }
+
+    n = opts->getKeyValue("http3_mode");
+    if (!n.isNothing()) {
+        if (n.getType() == NT_STRING) {
+            const char* str = n.get<const QoreStringNode>()->c_str();
+            int mode = parseHttp3ModeString(str);
+            if (mode < 0) {
+                xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "invalid http3_mode value '%s'; "
+                    "valid values are: 'disabled', 'auto', 'required'", str);
+                return -1;
+            }
+            http_priv->http3_mode = mode;
+        } else if (n.getType() == NT_INT) {
+            int mode = (int)n.getAsBigInt();
+            if (mode < HTTP3_MODE_DISABLED || mode > HTTP3_MODE_REQUIRED) {
+                xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "invalid http3_mode value %d; "
+                    "valid values are: 0 (disabled), 1 (auto), 2 (required)", mode);
+                return -1;
+            }
+            http_priv->http3_mode = mode;
+        } else {
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string or int for the "
+                "\"http3_mode\" key in the options hash");
+            return -1;
+        }
     }
 
     n = opts->getKeyValue("headers");
@@ -3941,6 +4087,26 @@ int QoreHttpClientObject::getHttp2Mode() const {
     return http_priv->http2_mode;
 }
 
+void QoreHttpClientObject::setHttp3Mode(int mode, ExceptionSink* xsink) {
+    if (mode < HTTP3_MODE_DISABLED || mode > HTTP3_MODE_REQUIRED) {
+        xsink->raiseException("HTTP3-MODE-ERROR", "invalid HTTP/3 mode %d; valid modes are: 0 (disabled), "
+            "1 (auto), 2 (required)", mode);
+        return;
+    }
+    // NOTE: Setting to DISABLED does not disconnect an active QUIC session;
+    // the mode change takes effect on the next request cycle when the existing
+    // connection drops or the caller explicitly calls disconnect().
+    http_priv->http3_mode = mode;
+}
+
+int QoreHttpClientObject::getHttp3Mode() const {
+    return http_priv->http3_mode;
+}
+
+bool QoreHttpClientObject::isHttp3Active() const {
+    return http_priv->http3_active;
+}
+
 bool QoreHttpClientObject::isHttp2Active() const {
     return http_priv->http2_active;
 }
@@ -4013,7 +4179,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     }
 
     // Build headers map with :protocol for extended CONNECT (RFC 8441)
-    std::map<std::string, std::string> h2_headers;
+    strcase_str_map_t h2_headers;
     h2_headers[":protocol"] = protocol;
 
     // Add Host header with port when needed (used to derive :authority)
@@ -4134,7 +4300,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             rv->setKeyValue("stream_id", stream_id, xsink);
 
             // Add response headers (handle duplicate headers per RFC 7540)
-            rv->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
+            rv->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
 
             // Store stream ID on both HTTPClient and socket for isDataAvailable()
             http_priv->setActiveH2StreamId(stream_id);
@@ -4551,7 +4717,18 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
         }
     }
 
-    // Use HTTP/2 if active
+    // Use HTTP/3 if already active
+    if (http3_active && quic_session) {
+        if (send_callback || is || trailer_callback) {
+            xsink->raiseException("HTTP3-CALLBACK-ERROR", "streaming callbacks are not supported with "
+                "HTTP/3 connections");
+            return nullptr;
+        }
+        return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            info, timeout_ms, code, xsink);
+    }
+
+    // Use HTTP/2 if active (check before HTTP/3 upgrade attempt below)
     if (http2_active && getH2Session()) {
         // HTTP/2 doesn't support streaming callbacks - raise an error if they are used
         if (send_callback || is || trailer_callback) {
@@ -4562,6 +4739,44 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
         }
         return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
             info, timeout_ms, code, xsink);
+    }
+
+    // Try HTTP/3 upgrade if Alt-Svc is cached and no active multiplexed connection.
+    // Skip QUIC if a prior exception is already set — xsink->clear() below must
+    // only clear exceptions from the QUIC attempt itself, not unrelated errors.
+    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
+        auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
+        if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
+            if (send_callback || is || trailer_callback) {
+                // Streaming callbacks are not supported over HTTP/3
+                if (http3_mode == HTTP3_MODE_REQUIRED) {
+                    xsink->raiseException("HTTP3-CALLBACK-ERROR",
+                        "HTTP/3 mode is required but streaming callbacks "
+                        "(send_callback, InputStream, trailer_callback) are not "
+                        "supported over HTTP/3");
+                    return nullptr;
+                }
+                // HTTP3_MODE_AUTO: fall through to HTTP/1.x
+            } else {
+                if (!connectQuic(xsink, connection)) {
+                    return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+                        info, timeout_ms, code, xsink);
+                }
+                if (http3_mode == HTTP3_MODE_REQUIRED) {
+                    return nullptr;
+                }
+                // Log QUIC error details before clearing for HTTP/1.x fallback.
+                // xsink->clear() is intentional: the QUIC failure is non-fatal when
+                // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
+                {
+                    QoreStringValueHelper err(xsink->getExceptionErr());
+                    QoreStringValueHelper desc(xsink->getExceptionDesc());
+                    printd(2, "QoreHttpClientObject: QUIC connection failed (%s: %s), "
+                        "falling back to HTTP/1.x\n", err->c_str(), desc->c_str());
+                }
+                xsink->clear();
+            }
+        }
     }
 
     // send the message (HTTP/1.x path)
@@ -4626,6 +4841,15 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
         xsink->clear();
     }
 
+    // Parse Alt-Svc header from HTTP/1.x response for future HTTP/3 upgrades
+    if (http3_mode != HTTP3_MODE_DISABLED && *response_hash) {
+        QoreValue alt_svc_val = response_hash->getKeyValue("alt-svc");
+        if (alt_svc_val.getType() == NT_STRING) {
+            parseAltSvc(alt_svc_val.get<const QoreStringNode>()->c_str(),
+                connection.host.c_str(), connection.port);
+        }
+    }
+
     return response_hash.release();
 }
 
@@ -4636,7 +4860,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     assert(h2_session);
 
     // Convert request headers to std::map
-    std::map<std::string, std::string> headers;
+    strcase_str_map_t headers;
     ConstHashIterator hi(nh);
     while (hi.next()) {
         const char* key = hi.getKey();
@@ -4655,10 +4879,11 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         }
     }
 
-    // Add :authority header from Host if present
+    // Convert Host to :authority pseudo-header (RFC 9114 Section 4.3.1)
     auto host_it = headers.find("Host");
     if (host_it != headers.end()) {
         headers[":authority"] = host_it->second;
+        headers.erase(host_it);
     }
 
     // Get request body data
@@ -4819,7 +5044,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     // Add response headers (handle duplicate headers per RFC 7540)
     // Merge into the response hash directly (headers are at the top level)
     {
-        ReferenceHolder<QoreHashNode> h2h(h2HeadersToQoreHash(stream->headers), xsink);
+        ReferenceHolder<QoreHashNode> h2h(httpMultiHeadersToQoreHash(stream->headers), xsink);
         ConstHashIterator hi(*(*h2h));
         while (hi.next()) {
             response->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
@@ -4833,11 +5058,789 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         response->setKeyValue("body", body, xsink);
     }
 
+    // Parse Alt-Svc header from HTTP/2 response for future HTTP/3 upgrades
+    if (http3_mode != HTTP3_MODE_DISABLED) {
+        auto alt_svc_it = stream->headers.find("alt-svc");
+        if (alt_svc_it != stream->headers.end() && !alt_svc_it->second.empty()) {
+            parseAltSvc(alt_svc_it->second[0].c_str(), connection.host.c_str(), connection.port);
+        }
+    }
+
     if (info) {
         info->setKeyValue("response-headers", response->refSelf(), xsink);
         // Set response-uri for compatibility with HTTP/1.x clients (e.g., rest -l)
         QoreStringNode* response_uri = new QoreStringNode();
         response_uri->sprintf("HTTP/2 %d %s", code, status_msg);
+        info->setKeyValue("response-uri", response_uri, xsink);
+    }
+
+    return response.release();
+}
+
+void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int port) {
+    // Parse Alt-Svc header: h3=":443"; ma=3600, h3-29=":443"; ma=3600
+    // We only care about h3= entries (not h3-29 or other drafts)
+    // NOTE: alternate hostnames (e.g. h3="other.host:443") are ignored per RFC 7838;
+    // only the port is extracted.  CDN redirect scenarios would need hostname support.
+    const char* p = value;
+    while (*p) {
+        // Skip whitespace
+        while (*p && isspace(*p)) {
+            ++p;
+        }
+        if (!*p) {
+            break;
+        }
+
+        // Check for "clear" directive
+        if (!strncmp(p, "clear", 5)) {
+            // Clear all Alt-Svc entries for this origin
+            std::string origin = std::string(host) + ":" + std::to_string(port);
+            alt_svc_cache.erase(origin);
+            return;
+        }
+
+        // Parse protocol-id=alt-authority
+        const char* proto_start = p;
+        while (*p && *p != '=') {
+            ++p;
+        }
+        if (!*p) {
+            break;
+        }
+        std::string proto(proto_start, p - proto_start);
+        ++p; // skip '='
+
+        // Parse quoted alt-authority: ":<port>"
+        if (*p != '"') {
+            // Skip to next entry
+            while (*p && *p != ',') {
+                ++p;
+            }
+            if (*p == ',') {
+                ++p;
+            }
+            continue;
+        }
+        ++p; // skip opening quote
+
+        // Parse ":port"
+        int alt_port = 0;
+        if (*p == ':') {
+            ++p;
+            long val = strtol(p, nullptr, 10);
+            alt_port = (val > 0 && val <= 65535) ? static_cast<int>(val) : 0;
+            while (*p && *p != '"') {
+                ++p;
+            }
+        } else {
+            // Parse host:port format (RFC 7838 alt-authority)
+            int alt_port_val = 0;
+            if (*p == '[') {
+                // IPv6 bracketed: [addr]:port
+                while (*p && *p != ']' && *p != '"') {
+                    ++p;
+                }
+                if (*p == ']') {
+                    ++p;
+                    if (*p == ':') {
+                        long val = strtol(p + 1, nullptr, 10);
+                        alt_port_val = (val > 0 && val <= 65535) ? static_cast<int>(val) : 0;
+                    }
+                }
+                while (*p && *p != '"') {
+                    ++p;
+                }
+            } else {
+                const char* colon = nullptr;
+                while (*p && *p != '"') {
+                    if (*p == ':') {
+                        colon = p;
+                    }
+                    ++p;
+                }
+                if (colon) {
+                    long val = strtol(colon + 1, nullptr, 10);
+                    alt_port_val = (val > 0 && val <= 65535) ? static_cast<int>(val) : 0;
+                }
+            }
+            alt_port = alt_port_val;
+        }
+        if (*p == '"') {
+            ++p;
+        }
+
+        // Parse optional parameters (ma=, persist=, etc.)
+        int64 max_age = 86400; // default: 24 hours per RFC 7838
+        while (*p && *p != ',') {
+            // Skip whitespace and semicolons
+            while (*p && (*p == ';' || isspace(*p))) {
+                ++p;
+            }
+            if (!strncmp(p, "ma=", 3)) {
+                p += 3;
+                long long val = strtoll(p, nullptr, 10);
+                // Clamp to [0, 86400*100] per RFC 7838 (max ~100 days)
+                if (val < 0) {
+                    val = 0;
+                } else if (val > 8640000) {
+                    val = 8640000;
+                }
+                max_age = val;
+                while (*p && *p != ';' && *p != ',') {
+                    ++p;
+                }
+            } else {
+                // Skip unknown parameter
+                while (*p && *p != ';' && *p != ',') {
+                    ++p;
+                }
+            }
+        }
+        if (*p == ',') {
+            ++p;
+        }
+
+        // Only store h3 (not h3-29 or other draft versions)
+        if (proto == "h3" && alt_port > 0) {
+            std::string origin = std::string(host) + ":" + std::to_string(port);
+            alt_svc_cache[origin] = AltSvcEntry{
+                alt_port,
+                q_epoch() + max_age,
+            };
+        }
+    }
+}
+
+std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAltSvc(const char* host, int port) {
+    std::string origin = std::string(host) + ":" + std::to_string(port);
+    auto it = alt_svc_cache.find(origin);
+    if (it == alt_svc_cache.end()) {
+        return std::nullopt;
+    }
+    // Check if entry has expired
+    if (it->second.expiry_epoch <= q_epoch()) {
+        alt_svc_cache.erase(it);
+        return std::nullopt;
+    }
+    return it->second;
+}
+
+// Synchronous QUIC connect + handshake for the HTTPClient send path.
+// This is analogous to TCP connect + TLS handshake: it blocks under msock->m
+// until the handshake completes or times out.  The asynchronous (poll-based)
+// path uses SocketQuicClientPollOperation instead.
+int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection) {
+    // Resolve server address
+    struct addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    std::string port_str = std::to_string(connection.port);
+    // Check Alt-Svc cache for the QUIC port
+    auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
+    if (alt.has_value()) {
+        port_str = std::to_string(alt->port);
+    }
+
+    struct addrinfo* res = nullptr;
+    int rv = getaddrinfo(connection.host.c_str(), port_str.c_str(), &hints, &res);
+    if (rv != 0) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to resolve host '%s': %s",
+            connection.host.c_str(), gai_strerror(rv));
+        return -1;
+    }
+    ON_BLOCK_EXIT(freeaddrinfo, res);
+
+    // Create UDP socket with SOCK_CLOEXEC to prevent FD leak on fork/exec
+    int fd = socket(res->ai_family, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
+    if (fd < 0) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to create UDP socket: %s", strerror(errno));
+        return -1;
+    }
+
+    // Bind to ephemeral port
+    struct sockaddr_storage local_addr{};
+    socklen_t local_addrlen;
+    if (res->ai_family == AF_INET6) {
+        auto* addr = reinterpret_cast<struct sockaddr_in6*>(&local_addr);
+        addr->sin6_family = AF_INET6;
+        addr->sin6_addr = in6addr_any;
+        addr->sin6_port = 0;
+        local_addrlen = sizeof(struct sockaddr_in6);
+    } else {
+        auto* addr = reinterpret_cast<struct sockaddr_in*>(&local_addr);
+        addr->sin_family = AF_INET;
+        addr->sin_addr.s_addr = INADDR_ANY;
+        addr->sin_port = 0;
+        local_addrlen = sizeof(struct sockaddr_in);
+    }
+
+    if (::bind(fd, reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen) < 0) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to bind UDP socket: %s", strerror(errno));
+        ::close(fd);
+        return -1;
+    }
+
+    // Connect to the remote server so the kernel selects the correct local
+    // interface and getsockname() returns a specific address (not wildcard).
+    // This is standard for QUIC clients (see ngtcp2 examples).
+    // Also filters incoming packets to only those from the connected peer.
+    if (::connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "UDP connect() failed: %s", strerror(errno));
+        ::close(fd);
+        return -1;
+    }
+
+    // Get actual local address after connect
+    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr), &local_addrlen) < 0) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "getsockname() failed: %s", strerror(errno));
+        ::close(fd);
+        return -1;
+    }
+    // Enable per-packet destination address reporting for multi-homed host support
+    // Non-fatal: falls back to cached getsockname address if not available
+    if (enableQuicPktinfo(fd, local_addr.ss_family) < 0) {
+        printd(2, "enableQuicPktinfo() failed for fd %d family %d: %s\n",
+            fd, local_addr.ss_family, strerror(errno));
+    }
+
+    // Store remote address
+    uint16_t quic_port = alt ? static_cast<uint16_t>(alt->port)
+        : static_cast<uint16_t>(connection.port);
+
+    // Create QUIC client session
+    // QuicSession::createClient() needs a qore_socket_private for TLS context;
+    // use a temporary one with the fd set so crypto can access it.
+    // RAII guard detaches fd from tmp_sock (preventing ~QoreSocket double-close)
+    // AND closes fd on any exit path that doesn't call release().  This covers
+    // both Qore-level errors (xsink) and C++ exceptions (e.g. std::bad_alloc
+    // from std::make_shared inside createClient).
+    QoreSocket tmp_sock;
+    tmp_sock.priv->sock = fd;
+    struct FdGuard {
+        int fd;
+        int& sock_ref;
+        ~FdGuard() { sock_ref = -1; if (fd >= 0) ::close(fd); }
+        void release() { fd = -1; }
+    } fd_guard{fd, tmp_sock.priv->sock};
+    quic_session = QuicSession::createClient(
+        tmp_sock.priv, xsink,
+        connection.host.c_str(), quic_port,
+        reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen,
+        res->ai_addr, res->ai_addrlen,
+        msock->socket->priv->ssl_verify_mode);
+
+    if (!quic_session || *xsink) {
+        quic_session.reset();
+        return -1;  // fd_guard destructor closes fd
+    }
+    fd_guard.release();  // success: fd ownership transferred to quic_session
+
+    // Store the fd and local address for I/O
+    quic_fd = fd;
+    memcpy(&quic_local_addr, &local_addr, local_addrlen);
+    quic_local_addrlen = local_addrlen;
+
+    // Drive QUIC handshake
+    int64 deadline_ms = connect_timeout_ms < 0 ? -1 : q_clock_getmillis() + connect_timeout_ms;
+
+    while (!quic_session->isHandshakeComplete()) {
+        if (quic_session->isClosed()) {
+            xsink->raiseException("HTTP3-CONNECT-ERROR", "QUIC connection closed during handshake");
+            disconnectQuic();
+            return -1;
+        }
+
+        // Write pending packets
+        QuicPacketBatch pkt_batch;
+        int nw = quic_session->writePackets(pkt_batch, xsink);
+        if (nw < 0 || *xsink) {
+            disconnectQuic();
+            return -1;
+        }
+
+        // Send packets via connected UDP socket (nullptr dest → kernel uses connected peer)
+        if (!pkt_batch.empty()) {
+            int sent = sendQuicPacketsBatch(quic_fd, pkt_batch, nullptr, 0);
+            if (sent < 0) {
+                xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to send QUIC packets: %s",
+                    strerror(errno));
+                disconnectQuic();
+                return -1;
+            }
+        }
+
+        // Check timeout
+        int poll_timeout_ms = 100;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP3-CONNECT-ERROR", "QUIC handshake timed out after %d ms",
+                    connect_timeout_ms);
+                disconnectQuic();
+                return -1;
+            }
+            poll_timeout_ms = std::min(100, static_cast<int>(deadline_ms - now_ms));
+        }
+
+        // Handle timer expiry
+        ngtcp2_tstamp expiry = quic_session->getExpiry();
+        if (expiry != UINT64_MAX) {
+            ngtcp2_tstamp now = QuicSession::timestamp();
+            if (expiry <= now) {
+                quic_session->handleExpiry(xsink);
+                if (*xsink) {
+                    disconnectQuic();
+                    return -1;
+                }
+                continue;
+            }
+            int timer_ms = static_cast<int>((expiry - now) / 1000000);
+            if (timer_ms < poll_timeout_ms) {
+                poll_timeout_ms = timer_ms > 0 ? timer_ms : 1;
+            }
+        }
+
+        // Poll for incoming data
+        struct pollfd pfd;
+        pfd.fd = quic_fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        int pr = poll(&pfd, 1, poll_timeout_ms);
+        if (pr < 0) {
+            if (errno == EINTR) {
+                if (qore_check_cancel(xsink, "QUIC handshake")) {
+                    disconnectQuic();
+                    return -1;
+                }
+                continue;
+            }
+            xsink->raiseException("HTTP3-CONNECT-ERROR", "poll error: %s", strerror(errno));
+            disconnectQuic();
+            return -1;
+        }
+
+        if (pr > 0 && (pfd.revents & POLLIN)) {
+            // Drain all available packets (not just one), matching driveQuicIo pattern
+            while (true) {
+                uint8_t buf[QUIC_RECV_BUF_SIZE];
+                struct sockaddr_storage peer_addr;
+                socklen_t peer_addrlen = sizeof(peer_addr);
+                uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+                size_t cmsg_len = sizeof(cmsg_buf);
+                ssize_t nread = recvQuicPacket(quic_fd, buf, sizeof(buf), MSG_DONTWAIT,
+                    reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,
+                    cmsg_buf, &cmsg_len);
+                if (nread < 0) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        break;  // no more data
+                    }
+                    xsink->raiseException("HTTP3-CONNECT-ERROR", "recvmsg error: %s", strerror(errno));
+                    disconnectQuic();
+                    return -1;
+                }
+                if (nread == 0) {
+                    break;
+                }
+
+                // Extract per-packet destination IP from pktinfo.
+                // NOTE: Safe here because this socket is connect()ed, so
+                // getsockname() returns a specific address that pktinfo will match.
+                // This is distinct from the poll-op client path (SocketQuicClientPollOperation)
+                // where the socket is unconnected/wildcard-bound — there, pktinfo must NOT
+                // be used (see MEMORY.md "Client pktinfo rule").
+                assert(quic_fd >= 0);
+                struct sockaddr_storage pkt_local;
+                memcpy(&pkt_local, &quic_local_addr, quic_local_addrlen);
+                extractPktinfoAddr(cmsg_buf, cmsg_len, quic_local_addr.ss_family, &pkt_local);
+
+                ngtcp2_path path;
+                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+                path.local.addrlen = quic_local_addrlen;
+                path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
+                path.remote.addrlen = peer_addrlen;
+
+                quic_session->readPacket(buf, static_cast<size_t>(nread), path, xsink);
+                if (*xsink) {
+                    disconnectQuic();
+                    return -1;
+                }
+            }
+        }
+    }
+
+    // Setup HTTP/3
+    rv = quic_session->setupHttp3(xsink);
+    if (rv < 0 || *xsink) {
+        disconnectQuic();
+        return -1;
+    }
+
+    // Flush any HTTP/3 setup frames
+    {
+        QuicPacketBatch pkt_batch;
+        quic_session->writePackets(pkt_batch, xsink);
+        if (*xsink) {
+            disconnectQuic();
+            return -1;
+        }
+        if (!pkt_batch.empty()) {
+            int sent = sendQuicPacketsBatch(quic_fd, pkt_batch, nullptr, 0);
+            if (sent < 0) {
+                xsink->raiseException("HTTP3-SETUP-ERROR",
+                    "failed to send HTTP/3 setup frames: %s", strerror(errno));
+                disconnectQuic();
+                return -1;
+            }
+        }
+    }
+
+    http3_active = true;
+
+    // Close the TCP connection — no longer needed after successful QUIC upgrade.
+    // The HTTP client will automatically reconnect over TCP if QUIC is later
+    // disconnected (e.g. on error fallback in HTTP3_MODE_AUTO).  Keeping the
+    // TCP socket open would waste an fd + kernel buffers for the lifetime of
+    // the QUIC connection.
+    msock->socket->close();
+
+    return 0;
+}
+
+// Helper: drive QUIC I/O (send and receive packets) for the given session/fd
+// Returns 0 on success, -1 on error; caller must call disconnectQuic() on error
+static int driveQuicIo(QuicSession* session, int fd,
+        const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
+        int poll_timeout_ms, ExceptionSink* xsink) {
+    // Write pending packets
+    QuicPacketBatch pkt_batch;
+    int nw = session->writePackets(pkt_batch, xsink);
+    if (nw < 0 || *xsink) {
+        return -1;
+    }
+
+    // Send packets via connected UDP socket (nullptr dest → kernel uses connected peer)
+    if (!pkt_batch.empty()) {
+        int sent = sendQuicPacketsBatch(fd, pkt_batch, nullptr, 0);
+        if (sent < 0) {
+            xsink->raiseException("HTTP3-IO-ERROR", "failed to send QUIC packets: %s",
+                strerror(errno));
+            return -1;
+        }
+    }
+
+    // Handle timer expiry
+    ngtcp2_tstamp expiry = session->getExpiry();
+    if (expiry != UINT64_MAX) {
+        ngtcp2_tstamp now = QuicSession::timestamp();
+        if (expiry <= now) {
+            session->handleExpiry(xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+    }
+
+    // Poll for incoming data — clamp poll timeout to the next QUIC timer expiry
+    // so retransmission/PTO timers fire promptly even if the caller passes a long timeout
+    int actual_timeout_ms = poll_timeout_ms;
+    {
+        ngtcp2_tstamp next_expiry = session->getExpiry();
+        if (next_expiry != UINT64_MAX) {
+            ngtcp2_tstamp now = QuicSession::timestamp();
+            if (next_expiry <= now) {
+                actual_timeout_ms = 0;
+            } else {
+                int64_t timer_ms = static_cast<int64_t>((next_expiry - now) / 1000000);
+                if (timer_ms < actual_timeout_ms) {
+                    actual_timeout_ms = static_cast<int>(timer_ms);
+                }
+            }
+        }
+    }
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    int pr = poll(&pfd, 1, actual_timeout_ms);
+    if (pr < 0) {
+        if (errno == EINTR) {
+            if (qore_check_cancel(xsink, "QUIC I/O")) {
+                return -1;
+            }
+            return 0;
+        }
+        xsink->raiseException("HTTP3-IO-ERROR", "poll error: %s", strerror(errno));
+        return -1;
+    }
+
+    if (pr > 0 && (pfd.revents & POLLIN)) {
+        // Drain all available packets (not just one)
+        while (true) {
+            uint8_t buf[QUIC_RECV_BUF_SIZE];
+            struct sockaddr_storage peer_addr;
+            socklen_t peer_addrlen = sizeof(peer_addr);
+            uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+            size_t cmsg_len = sizeof(cmsg_buf);
+            ssize_t nread = recvQuicPacket(fd, buf, sizeof(buf), MSG_DONTWAIT,
+                reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,
+                cmsg_buf, &cmsg_len);
+            if (nread < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    break;  // no more data
+                }
+                xsink->raiseException("HTTP3-IO-ERROR", "recvmsg error: %s", strerror(errno));
+                return -1;
+            }
+            if (nread == 0) {
+                break;
+            }
+
+            // Extract per-packet destination IP from pktinfo — since the
+            // client socket is connect()ed, getsockname() returns a specific
+            // address and pktinfo will match it.
+            assert(fd >= 0);
+            struct sockaddr_storage pkt_local;
+            memcpy(&pkt_local, &local_addr, local_addrlen);
+            extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr.ss_family, &pkt_local);
+
+            ngtcp2_path path;
+            path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_local);
+            path.local.addrlen = local_addrlen;
+            path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
+            path.remote.addrlen = peer_addrlen;
+
+            session->readPacket(buf, static_cast<size_t>(nread), path, xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* mname, const char* meth,
+        const char* mpath, const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink) {
+    assert(quic_session);
+    assert(quic_fd >= 0);
+
+    // Convert request headers to std::map; RFC 9114 Section 4.2 prohibited
+    // hop-by-hop headers (connection, keep-alive, proxy-connection,
+    // transfer-encoding, upgrade) are filtered by QuicSession::submitRequest()
+    strcase_str_map_t headers;
+    ConstHashIterator hi(nh);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        if (val.getType() == NT_STRING) {
+            headers[key] = val.get<const QoreStringNode>()->c_str();
+        } else if (val.getType() == NT_LIST) {
+            const QoreListNode* l = val.get<const QoreListNode>();
+            std::string joined;
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    if (!joined.empty()) {
+                        joined += ", ";
+                    }
+                    joined += elem.get<const QoreStringNode>()->c_str();
+                }
+            }
+            if (!joined.empty()) {
+                headers[key] = std::move(joined);
+            }
+        }
+    }
+
+    // Convert Host to :authority pseudo-header (RFC 9114 Section 4.3.1)
+    auto host_it = headers.find("Host");
+    if (host_it != headers.end()) {
+        headers[":authority"] = host_it->second;
+        headers.erase(host_it);
+    }
+
+    // Get request body data
+    const void* body_data = data;
+    size_t body_len = size;
+    if (!body_data && body) {
+        body_data = body->c_str();
+        body_len = body->size();
+    }
+
+    // Set Content-Length if body present and header not already set
+    if (body_len > 0) {
+        auto cl_it = headers.find("content-length");
+        if (cl_it == headers.end()) {
+            headers["content-length"] = std::to_string(body_len);
+        }
+    }
+
+    // Add ";charset=xxx" to Content-Type for non-ISO-8859-1 text bodies
+    if (body && body_len > 0) {
+        auto ct_it = headers.find("content-type");
+        if (ct_it != headers.end()) {
+            // Only add charset if not already present and not a boundary type
+            if (ct_it->second.find("charset=") == std::string::npos
+                    && ct_it->second.find("boundary=") == std::string::npos) {
+                const QoreEncoding* enc = msock->socket->getEncoding();
+                if (enc != QCS_ISO_8859_1) {
+                    QoreString code(enc->getCode());
+                    code.tolwr();
+                    ct_it->second += ";charset=";
+                    ct_it->second += code.c_str();
+                }
+            }
+        }
+    }
+
+    // Record request in info if provided
+    if (info) {
+        info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/3", meth, mpath), nullptr);
+    }
+
+    // Submit the HTTP/3 request
+    int64_t stream_id = quic_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink);
+    if (stream_id < 0) {
+        return nullptr;
+    }
+
+    // Drive I/O until we have a complete response
+    int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
+
+    while (!quic_session->hasCompletedStreams()) {
+        if (quic_session->isClosed()) {
+            xsink->raiseException("HTTP3-ERROR", "QUIC connection closed while waiting for response");
+            disconnectQuic();
+            return nullptr;
+        }
+
+        int remaining_ms = 100;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                xsink->raiseException("HTTP3-TIMEOUT", "timeout waiting for HTTP/3 response (timeout: %d ms)",
+                    timeout_ms);
+                disconnectQuic();
+                return nullptr;
+            }
+            remaining_ms = std::min(100, static_cast<int>(deadline_ms - now_ms));
+        }
+
+        if (driveQuicIo(quic_session.get(), quic_fd, quic_local_addr, quic_local_addrlen,
+                remaining_ms, xsink)) {
+            disconnectQuic();
+            return nullptr;
+        }
+    }
+
+    // Get the completed stream and verify it matches the expected stream_id;
+    // drain any stale completed streams from previous requests that were not
+    // consumed (e.g. due to timeout or error)
+    std::unique_ptr<QuicStreamInfo> stream;
+    int drain_count = 0;
+    while (true) {
+        stream = quic_session->takeCompletedStream();
+        if (!stream) {
+            xsink->raiseException("HTTP3-ERROR", "no response received for stream %" PRId64, stream_id);
+            return nullptr;
+        }
+        if (stream->stream_id == stream_id) {
+            break;
+        }
+        // Stale stream from a previous request — discard and try next
+        printd(2, "sendHttp3MessageAndGetResponse() discarding stale stream %" PRId64
+            " (expected %" PRId64 ")\n", stream->stream_id, stream_id);
+        if (++drain_count > 100) {
+            xsink->raiseException("HTTP3-ERROR",
+                "too many stale completed streams while looking for stream %" PRId64, stream_id);
+            disconnectQuic();
+            return nullptr;
+        }
+    }
+
+    if (!stream->error_message.empty()) {
+        xsink->raiseException("QUIC-BODY-TOO-LARGE", stream->error_message.c_str());
+        return nullptr;
+    }
+
+    code = stream->status_code;
+
+    if (code == 0) {
+        xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+            "HTTP/3 stream %" PRId64 " closed without a response (no :status header received)", stream_id);
+        disconnectQuic();
+        return nullptr;
+    }
+
+    // Build response hash in the same format as HTTP/1.x and HTTP/2
+    ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
+
+    response->setKeyValue("status_code", code, xsink);
+
+    const char* status_msg = get_http_status_message(code);
+    response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
+    response->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+
+    // Add response headers
+    {
+        ReferenceHolder<QoreHashNode> h3h(httpMultiHeadersToQoreHash(stream->headers), xsink);
+        ConstHashIterator rhi(*(*h3h));
+        while (rhi.next()) {
+            response->setKeyValue(rhi.getKey(), rhi.get().refSelf(), xsink);
+        }
+    }
+
+    // Parse Alt-Svc from response headers (for future requests)
+    auto alt_svc_it = stream->headers.find("alt-svc");
+    if (alt_svc_it != stream->headers.end() && !alt_svc_it->second.empty()) {
+        parseAltSvc(alt_svc_it->second[0].c_str(), connection.host.c_str(), connection.port);
+    }
+
+    // Add body if present, with content-encoding decompression
+    if (!stream->body.empty()) {
+        SimpleRefHolder<BinaryNode> resp_body(new BinaryNode());
+        resp_body->append(stream->body.data(), stream->body.size());
+
+        // Process Content-Encoding (decompression) — matches HTTP/2 path
+        std::string content_encoding;
+        auto ce_it = stream->headers.find("content-encoding");
+        if (ce_it != stream->headers.end() && !ce_it->second.empty()) {
+            content_encoding = ce_it->second[0];
+        }
+        if (!content_encoding.empty()) {
+            // Check for misuse of this header by including a character encoding value
+            if (!strncasecmp(content_encoding.c_str(), "iso", 3)
+                    || !strncasecmp(content_encoding.c_str(), "utf-", 4)) {
+                msock->socket->setEncoding(QEM.findCreate(content_encoding.c_str()));
+            } else {
+                qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(
+                    content_encoding.c_str(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (dec) {
+                    int64 body_size = resp_body->size();
+                    resp_body = dec(*resp_body, xsink);
+                    if (*xsink) {
+                        xsink->appendLastDescription(
+                            ": while decompressing '%s' Content-Encoding with size " QLLD,
+                            content_encoding.c_str(), body_size);
+                        return nullptr;
+                    }
+                }
+            }
+        }
+        response->setKeyValue("body", resp_body.release(), xsink);
+    }
+
+    if (info) {
+        info->setKeyValue("response-headers", response->refSelf(), xsink);
+        QoreStringNode* response_uri = new QoreStringNode();
+        response_uri->sprintf("HTTP/3 %d %s", code, status_msg);
         info->setKeyValue("response-uri", response_uri, xsink);
     }
 
@@ -5151,9 +6154,11 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
 
     // code >= 300 && < 400 is already handled above
 
-    // For HTTP/2, the body is already in the response hash (as binary)
-    // We need to handle it here and skip the HTTP/1.x body reading logic
-    if (http2_active && !os) {
+    // For HTTP/2 and HTTP/3, the body is already in the response hash (as binary).
+    // Skip the HTTP/1.x body reading logic.
+    // NOTE: HTTP/3 currently returns early from sendHttp3MessageAndGetResponse()
+    // and never reaches this point; this guard is defensive against future refactoring.
+    if ((http2_active || http3_active) && !os) {
         QoreValue h2_body = ans->getKeyValue("body");
         if (h2_body.getType() == NT_BINARY) {
             const BinaryNode* bin = h2_body.get<const BinaryNode>();
@@ -5606,6 +6611,7 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->socket->close();
+    http_priv->disconnectQuic();
     priv->invalidate();
     priv->socket->cleanup(xsink);
 }

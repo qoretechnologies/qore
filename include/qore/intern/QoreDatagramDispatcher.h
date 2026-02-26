@@ -34,6 +34,9 @@
 
 #include <qore/Qore.h>
 
+#include <ngtcp2/ngtcp2.h>
+
+#include <cstring>
 #include <string>
 #include <unordered_map>
 
@@ -42,9 +45,6 @@
     Multiple QUIC connections share a single UDP socket; incoming datagrams
     are dispatched to the appropriate connection handler based on the
     connection ID extracted from the packet header.
-
-    This is a stub implementation — the actual CID extraction logic will
-    be added when ngtcp2 integration is implemented.
 
     Thread safety: all methods are thread-safe (internal locking).
 
@@ -87,14 +87,33 @@ public:
 
         @param data the datagram data
         @param len the datagram length
-        @return the handler pointer, or nullptr if the CID is not registered
-
-        @note This is a stub — actual CID extraction depends on QUIC packet format
-        and will be implemented with ngtcp2 integration.
+        @return the handler pointer (a QuicSession* whose shared_ptr is held
+                in qore_socket_private::quic_sessions), or nullptr if the CID
+                is not registered.  The returned pointer is valid only while the
+                caller holds priv->m, which protects session removal.
     */
     DLLLOCAL void* dispatch(const uint8_t* data, size_t len) {
-        // Stub: QUIC short header CID extraction will go here
-        // For now, return nullptr (no dispatch)
+        if (len < 1) {
+            return nullptr;
+        }
+
+        ngtcp2_version_cid vc;
+        int rv = ngtcp2_pkt_decode_version_cid(&vc, data, len, NGTCP2_MAX_CIDLEN);
+        if (rv != 0) {
+            return nullptr;  // not a valid QUIC packet
+        }
+
+        // Extract DCID (destination connection ID) for lookup.
+        // NGTCP2_MAX_CIDLEN is 20 bytes; most stdlib SSO covers strings up to
+        // ~22 bytes, so this typically avoids heap allocation.
+        std::string dcid(reinterpret_cast<const char*>(vc.dcid), vc.dcidlen);
+
+        AutoLocker al(lock);
+        auto it = cid_map.find(dcid);
+        if (it != cid_map.end()) {
+            return it->second;
+        }
+
         return nullptr;
     }
 

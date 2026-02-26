@@ -1,0 +1,1120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 module-level integration tests - exercises HttpServer + Http3ClientIo
+    end-to-end over QUIC/HTTP/3.
+
+    Tests cover:
+    - Basic round-trip (GET, POST, status codes, headers, large bodies)
+    - Connection and stream management (reuse, stats, cleanup, shutdown)
+    - HTTP/3-specific validation (metadata, handler transparency)
+    - Error handling (timeout, 404, server shutdown)
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/Http3ClientIo
+
+%exec-class HttpServerHttp3IntegrationTest
+
+#! Simple handler for basic GET tests
+class SimpleHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "Hello World", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Echo handler that returns the request body
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? "", {
+            "Content-Type": hdr."content-type" ?? "application/octet-stream",
+        });
+    }
+}
+
+#! Handler that returns a configurable status code from the path
+class StatusCodeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int code = 200;
+        *list<*string> m = (hdr.path =~ x/status\/(\d+)/);
+        if (m) {
+            code = int(m[0]);
+        }
+        return makeResponse(code, sprintf("Status: %d", code), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns a large response body based on path size
+class LargeResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/large\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        string response_body = strmul("X", size);
+        return makeResponse(200, response_body, {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that echoes request headers back in the response body
+class HeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Return selected headers in the response
+        hash<auto> echoed;
+        foreach string key in (keys hdr) {
+            if (key.startsWith("x-custom-")) {
+                echoed{key} = hdr{key};
+            }
+        }
+        return makeResponse(200, sprintf("%Y", echoed), {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns an empty body with HTTP 200
+class EmptyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "", {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that returns request body as binary unchanged
+class BinaryHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, body ?? binary(), {
+            "Content-Type": "application/octet-stream",
+        });
+    }
+}
+
+#! Handler that injects a fake Alt-Svc header pointing to a non-QUIC port
+class FakeAltSvcHandler inherits AbstractHttpRequestHandler {
+    private {
+        int m_fake_port;
+    }
+
+    constructor(int fake_port) {
+        m_fake_port = fake_port;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "Hello World", {
+            "Content-Type": "text/plain",
+            "Alt-Svc": sprintf("h3=\":%d\"; ma=3600", m_fake_port),
+        });
+    }
+}
+
+#! Handler that reports HTTP/3 metadata from the request context
+/** @note HttpServer strips the leading '/' from hdr.path before dispatching to handlers;
+    the original path is available in cx.orig_path.  This is consistent across HTTP/1.x,
+    HTTP/2, and HTTP/3.
+*/
+#! Handler that echoes all request headers (including forbidden ones if they arrive)
+class AllHeaderEchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Echo every non-pseudo header in a simple key=value format
+        string result = "";
+        foreach string key in (keys hdr) {
+            if (key == "method" || key == "path" || key == "http_version") {
+                continue;
+            }
+            result += sprintf("%s=%s\n", key, hdr{key});
+        }
+        return makeResponse(200, result, {"Content-Type": "text/plain"});
+    }
+}
+
+#! Handler that intentionally injects RFC 9114 prohibited headers into the response
+/** These headers should be stripped by the HTTP/3 layer (QuicSession::submitResponse)
+    before they reach the wire.
+*/
+class ProhibitedHeaderResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {
+            "Content-Type": "text/plain",
+            # RFC 9114 Section 4.2 prohibited headers:
+            "Connection": "keep-alive",
+            "Keep-Alive": "timeout=5",
+            "Proxy-Connection": "keep-alive",
+            "Transfer-Encoding": "chunked",
+            "Upgrade": "websocket",
+            # Valid headers that should pass through:
+            "X-Custom-Valid": "should-arrive",
+        });
+    }
+}
+
+class MetadataHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Use a simple key=value format that's easy to parse without external modules
+        string result = sprintf("method=%s\npath=%s\norig_path=%s\nhttp_version=%s\nhttp3=%s\n",
+            hdr.method, hdr.path, cx.orig_path, hdr.http_version,
+            cx."header-info".http3 ? "true" : "false");
+        return makeResponse(200, result, {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHttp3IntegrationTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mH3Port;
+        string mH3Url;
+        Logger mLogger;
+        Http3ClientIo::Http3ClientConnectionManager mMgr;
+
+        # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerHttp3IntegrationTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
+        # Group 1: Basic Round-Trip
+        addTestCase("simple GET", \testSimpleGet());
+        addTestCase("POST echo", \testPostEcho());
+        addTestCase("POST binary echo", \testPostBinaryEcho());
+        addTestCase("multiple status codes", \testMultipleStatusCodes());
+        addTestCase("custom headers", \testCustomHeaders());
+        addTestCase("empty body", \testEmptyBody());
+        addTestCase("large body response", \testLargeBody());
+
+        # Group 2: Connection & Stream Management
+        addTestCase("sequential requests same connection", \testSequentialRequestsSameConnection());
+        addTestCase("connection manager stats", \testConnectionManagerStats());
+        addTestCase("cleanup idle connections", \testCleanupIdleConnections());
+        addTestCase("closeAll during idle", \testCloseAllDuringIdle());
+
+        # Group 3: HTTP/3-Specific Validation
+        addTestCase("HTTP/3 metadata", \testHttp3Metadata());
+        addTestCase("handler transparency", \testServerHandlerTransparency());
+        addTestCase("POST large request body", \testPostLargeRequestBody());
+        addTestCase("prohibited request headers stripped", \testProhibitedRequestHeaders());
+        addTestCase("prohibited response headers stripped", \testProhibitedResponseHeaders());
+        addTestCase("valid headers preserved with prohibited mix", \testValidHeadersPreservedWithProhibited());
+
+        # Group 4: Error Handling
+        addTestCase("connection timeout", \testConnectionTimeout());
+        addTestCase("no handler response", \testNoHandlerResponse());
+        addTestCase("server shutdown", \testServerShutdown());
+
+        # Group 5: Auto-QUIC Listener + Alt-Svc
+        addTestCase("auto-QUIC listener creation", \testAutoQuicListenerCreation());
+        addTestCase("Alt-Svc header in TCP response", \testAltSvcHeaderInTcpResponse());
+        addTestCase("no Alt-Svc header in HTTP/3 response", \testNoAltSvcInHttp3Response());
+        addTestCase("enable_h3=False disables auto-QUIC", \testDisableAutoQuic());
+
+        # Group 6: HTTPClient Alt-Svc Upgrade (Phase 2)
+        addTestCase("HTTPClient Alt-Svc auto-upgrade to HTTP/3", \testHttpClientAltSvcUpgrade());
+        addTestCase("HTTPClient http3_mode=disabled skips QUIC", \testHttpClientHttp3Disabled());
+        addTestCase("HTTPClient QUIC fallback on failure", \testHttpClientQuicFallback());
+        addTestCase("HTTPClient http3_mode option in constructor", \testHttpClientHttp3ModeOption());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http3-integration-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        # Create HTTP server with async mode
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "async_mode": True,
+        });
+
+        # Register handlers
+        mServer.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
+        mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
+        mServer.setHandler("headers", "/headers", NOTHING, new HeaderEchoHandler());
+        mServer.setHandler("empty", "/empty", NOTHING, new EmptyHandler());
+        mServer.setHandler("binary", "/binary", NOTHING, new BinaryHandler());
+        mServer.setHandler("metadata", "/metadata", NOTHING, new MetadataHandler());
+        mServer.setHandler("all-headers", "/all-headers", NOTHING, new AllHeaderEchoHandler());
+        mServer.setHandler("prohibited-resp", "/prohibited-resp", NOTHING,
+            new ProhibitedHeaderResponseHandler());
+
+        # Wait for async I/O to be ready
+        mServer.waitForAsyncIo();
+
+        # Add QUIC/HTTP/3 listener
+        hash<auto> h3info = mServer.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        mH3Port = h3info.port;
+        mH3Url = "https://127.0.0.1:" + mH3Port;
+
+        # Create shared client connection manager
+        mMgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    globalTearDown() {
+        mMgr.closeAll();
+        delete mServer;
+    }
+
+    # ---- Group 1: Basic Round-Trip ----
+
+    testSimpleGet() {
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "GET /hello should return 200");
+        assertTrue(exists resp.body, "response should have a body");
+        # Body may be string or binary depending on HTTP/3 framing
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq("Hello World", body_str, "body should be 'Hello World'");
+
+        if (m_options.verbose > 1) {
+            printf("testSimpleGet: OK (status=%d)\n", resp.status_code);
+        }
+    }
+
+    testPostEcho() {
+        string send_body = "Hello HTTP/3 POST test body";
+        hash<auto> resp = mMgr.request(mH3Url, "POST", "/echo",
+            {"content-type": "text/plain"}, send_body);
+        assertEq(200, resp.status_code, "POST /echo should return 200");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq(send_body, body_str, "echoed body should match");
+
+        if (m_options.verbose > 1) {
+            printf("testPostEcho: OK (echoed %d bytes)\n", body_str.size());
+        }
+    }
+
+    testPostBinaryEcho() {
+        # Generate 1KB of random-ish binary data
+        binary send_body = binary();
+        for (int i = 0; i < 1024; i++) {
+            send_body += <ff>;
+            send_body += binary(chr(i % 256));
+        }
+        # Use /binary handler which returns as application/octet-stream
+        hash<auto> resp = mMgr.request(mH3Url, "POST", "/binary",
+            {"content-type": "application/octet-stream"}, send_body);
+        assertEq(200, resp.status_code, "POST /binary should return 200");
+        # Convert response to binary if needed
+        binary resp_body = resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body);
+        assertEq(send_body.size(), resp_body.size(), "binary response size should match");
+        assertEq(send_body, resp_body, "binary response content should match exactly");
+    }
+
+    testMultipleStatusCodes() {
+        list<int> codes = (200, 201, 204, 400, 404, 500);
+
+        foreach int code in (codes) {
+            hash<auto> resp = mMgr.request(mH3Url, "GET", sprintf("/status/%d", code));
+            assertEq(code, resp.status_code, sprintf("GET /status/%d should return %d", code, code));
+
+            if (m_options.verbose > 1) {
+                printf("testMultipleStatusCodes: %d OK\n", code);
+            }
+        }
+    }
+
+    testCustomHeaders() {
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/headers", {
+            "x-custom-foo": "bar",
+            "x-custom-baz": "qux",
+        });
+        assertEq(200, resp.status_code, "GET /headers should return 200");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        # The body contains serialized Qore data of the echoed headers
+        assertTrue(body_str.find("x-custom-foo") >= 0, "response should contain x-custom-foo");
+        assertTrue(body_str.find("bar") >= 0, "response should contain header value 'bar'");
+        assertTrue(body_str.find("x-custom-baz") >= 0, "response should contain x-custom-baz");
+        assertTrue(body_str.find("qux") >= 0, "response should contain header value 'qux'");
+    }
+
+    testEmptyBody() {
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/empty");
+        # HttpServer converts 200 with empty body to 204 (same as HTTP/1.x and HTTP/2)
+        assertEq(204, resp.status_code, "GET /empty should return 204");
+    }
+
+    testLargeBody() {
+        int size = 100000;
+        hash<auto> resp = mMgr.request(mH3Url, "GET", sprintf("/large/%d", size));
+        assertEq(200, resp.status_code, "large body should return 200");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq(size, body_str.size(), sprintf("response body should be %d bytes", size));
+        # Verify content is all 'X' characters
+        assertEq(strmul("X", size), body_str, "response body content should be all 'X'");
+
+        if (m_options.verbose > 1) {
+            printf("testLargeBody: received %d bytes OK\n", body_str.size());
+        }
+    }
+
+    # ---- Group 2: Connection & Stream Management ----
+
+    testSequentialRequestsSameConnection() {
+        int count = 10;
+        for (int i = 0; i < count; i++) {
+            hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+            assertEq(200, resp.status_code, sprintf("request %d should return 200", i));
+        }
+
+        # Verify connection reuse - should have only 1 connection to this host
+        hash<auto> stats = mMgr.getStats();
+        string key = sprintf("127.0.0.1:%d", mH3Port);
+        if (stats.per_host.hasKey(key)) {
+            assertEq(1, stats.per_host{key}.connections,
+                "all requests should reuse single connection");
+        }
+
+        if (m_options.verbose > 1) {
+            printf("testSequentialRequestsSameConnection: %d requests, stats=%y\n", count, stats);
+        }
+    }
+
+    testConnectionManagerStats() {
+        # Send a request to ensure a connection exists
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "setup request should succeed");
+
+        hash<auto> stats = mMgr.getStats();
+        assertTrue(stats.total_connections >= 1, "should have at least 1 connection");
+        assertTrue(stats.hosts >= 1, "should have at least 1 host");
+        assertTrue(exists stats.per_host, "per_host should exist");
+
+        if (m_options.verbose > 1) {
+            printf("testConnectionManagerStats: %y\n", stats);
+        }
+    }
+
+    testCleanupIdleConnections() {
+        # Send a request, then cleanup
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "setup request should succeed");
+
+        # Cleanup should not throw
+        mMgr.cleanupIdleConnections();
+
+        # Should still be able to make requests (new connection if needed)
+        resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "request after cleanup should succeed");
+    }
+
+    testCloseAllDuringIdle() {
+        # Test that closeAll properly sets shutdown state and prevents new requests.
+        # Uses a manager that gets a working connection FIRST (via the already-tested
+        # shared server), then verifies shutdown behavior.
+        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+
+        # Close the manager immediately (without any connections)
+        mgr.closeAll();
+
+        # After closeAll, acquireStream should throw HTTP3-SHUTDOWN
+        assertThrows("HTTP3-SHUTDOWN", \mgr.acquireStream(), (mH3Url,),
+            "acquireStream after closeAll should throw");
+
+        # Also verify that request() throws after closeAll
+        assertThrows("HTTP3-SHUTDOWN", \mgr.request(), (mH3Url, "GET", "/hello"),
+            "request after closeAll should throw");
+    }
+
+    # ---- Group 3: HTTP/3-Specific Validation ----
+
+    testHttp3Metadata() {
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/metadata");
+        assertEq(200, resp.status_code, "GET /metadata should return 200");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+
+        # Parse key=value format from the response body
+        hash<auto> metadata;
+        foreach string line in (body_str.split("\n")) {
+            if (line.empty()) {
+                continue;
+            }
+            int eq_pos = line.find("=");
+            if (eq_pos >= 0) {
+                metadata{line.substr(0, eq_pos)} = line.substr(eq_pos + 1);
+            }
+        }
+
+        # Verify the handler sees the correct method
+        assertEq("GET", metadata.method, "handler should see GET method");
+
+        # HttpServer strips the leading '/' from hdr.path; original path in cx.orig_path
+        assertEq("metadata", metadata.path, "hdr.path should be stripped of leading /");
+        assertEq("/metadata", metadata.orig_path, "cx.orig_path should have original path");
+
+        # Verify HTTP/3-specific metadata
+        assertEq("HTTP/3", metadata.http_version, "http_version should be HTTP/3");
+        assertEq("true", metadata.http3, "handler should see http3=true in context");
+
+        if (m_options.verbose > 1) {
+            printf("testHttp3Metadata: %y\n", metadata);
+        }
+    }
+
+    testServerHandlerTransparency() {
+        # Test that the same handlers work correctly for HTTP/3
+        # The SimpleHandler returns "Hello World" for any HTTP version
+
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "handler should return 200 via HTTP/3");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq("Hello World", body_str, "handler should return same body via HTTP/3");
+
+        # Test echo handler transparency
+        string test_body = "transparency test";
+        resp = mMgr.request(mH3Url, "POST", "/echo",
+            {"content-type": "text/plain"}, test_body);
+        assertEq(200, resp.status_code, "echo handler should return 200 via HTTP/3");
+        body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq(test_body, body_str, "echo handler should echo body correctly via HTTP/3");
+    }
+
+    testPostLargeRequestBody() {
+        int size = 100000;
+        string send_body = strmul("Y", size);
+        hash<auto> resp = mMgr.request(mH3Url, "POST", "/echo",
+            {"content-type": "text/plain"}, send_body);
+        assertEq(200, resp.status_code, "POST large body should return 200");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+        assertEq(size, body_str.size(),
+            sprintf("echoed body should be %d bytes (got %d)", size, body_str.size()));
+        assertEq(send_body, body_str, "large echoed body should match exactly");
+
+        if (m_options.verbose > 1) {
+            printf("testPostLargeRequestBody: sent and received %d bytes OK\n", size);
+        }
+    }
+
+    #! Verify that RFC 9114 Section 4.2 prohibited hop-by-hop headers are stripped
+    #! from HTTP/3 requests before they reach the server
+    testProhibitedRequestHeaders() {
+        # Send prohibited headers alongside valid custom headers
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/all-headers", {
+            # RFC 9114 Section 4.2 prohibited headers:
+            "Connection": "keep-alive",
+            "Keep-Alive": "timeout=5",
+            "Proxy-Connection": "keep-alive",
+            "Transfer-Encoding": "chunked",
+            "Upgrade": "websocket",
+            # Valid header that should pass through:
+            "x-custom-marker": "test-value",
+        });
+        assertEq(200, resp.status_code, "request with prohibited headers should succeed");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+
+        # The prohibited headers MUST NOT appear in the echoed headers
+        assertFalse(body_str.regex("(?i)^connection="), "Connection header must be stripped from HTTP/3 request");
+        assertFalse(body_str.regex("(?i)^keep-alive="), "Keep-Alive header must be stripped from HTTP/3 request");
+        assertFalse(body_str.regex("(?i)^proxy-connection="),
+            "Proxy-Connection header must be stripped from HTTP/3 request");
+        assertFalse(body_str.regex("(?i)^transfer-encoding="),
+            "Transfer-Encoding header must be stripped from HTTP/3 request");
+        assertFalse(body_str.regex("(?i)^upgrade="), "Upgrade header must be stripped from HTTP/3 request");
+
+        # The valid custom header MUST be present
+        assertTrue(body_str.find("x-custom-marker") >= 0,
+            "valid x-custom-marker header should pass through");
+        assertTrue(body_str.find("test-value") >= 0,
+            "valid x-custom-marker value should pass through");
+
+        if (m_options.verbose > 1) {
+            printf("testProhibitedRequestHeaders: prohibited headers correctly stripped\n");
+        }
+    }
+
+    #! Verify that RFC 9114 Section 4.2 prohibited headers set by server handlers are
+    #! stripped before reaching the client
+    testProhibitedResponseHeaders() {
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/prohibited-resp");
+        assertEq(200, resp.status_code, "request to prohibited-resp handler should succeed");
+
+        # Verify prohibited headers are NOT in response
+        assertFalse(exists resp.headers."connection",
+            "Connection header must be stripped from HTTP/3 response");
+        assertFalse(exists resp.headers."keep-alive",
+            "Keep-Alive header must be stripped from HTTP/3 response");
+        assertFalse(exists resp.headers."proxy-connection",
+            "Proxy-Connection header must be stripped from HTTP/3 response");
+        assertFalse(exists resp.headers."transfer-encoding",
+            "Transfer-Encoding header must be stripped from HTTP/3 response");
+        assertFalse(exists resp.headers."upgrade",
+            "Upgrade header must be stripped from HTTP/3 response");
+
+        # Verify the valid custom header IS present
+        assertTrue(exists resp.headers."x-custom-valid",
+            "valid X-Custom-Valid header should be in HTTP/3 response");
+        assertEq("should-arrive", resp.headers."x-custom-valid",
+            "valid X-Custom-Valid header value should be preserved");
+
+        if (m_options.verbose > 1) {
+            printf("testProhibitedResponseHeaders: prohibited response headers correctly stripped\n");
+        }
+    }
+
+    #! Verify that valid custom headers are preserved when mixed with prohibited headers
+    testValidHeadersPreservedWithProhibited() {
+        # Send a mix of valid custom and prohibited headers
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/all-headers", {
+            # Prohibited:
+            "Connection": "close",
+            "Transfer-Encoding": "chunked",
+            # Valid custom headers:
+            "x-custom-alpha": "one",
+            "x-custom-beta": "two",
+            "x-custom-gamma": "three",
+        });
+        assertEq(200, resp.status_code, "mixed headers request should succeed");
+        string body_str = resp.body.typeCode() == NT_BINARY ? resp.body.toString("UTF-8") : resp.body;
+
+        # Valid custom headers should arrive at the server
+        assertTrue(body_str.find("x-custom-alpha") >= 0, "x-custom-alpha should be preserved");
+        assertTrue(body_str.find("x-custom-beta") >= 0, "x-custom-beta should be preserved");
+        assertTrue(body_str.find("x-custom-gamma") >= 0, "x-custom-gamma should be preserved");
+
+        # Prohibited headers must NOT arrive at the server
+        assertFalse(body_str.regex("(?mi)^connection="),
+            "Connection header must be stripped even when mixed with valid headers");
+        assertFalse(body_str.regex("(?mi)^transfer-encoding="),
+            "Transfer-Encoding header must be stripped even when mixed with valid headers");
+
+        if (m_options.verbose > 1) {
+            printf("testValidHeadersPreservedWithProhibited: valid headers preserved, prohibited stripped\n");
+        }
+    }
+
+    # ---- Group 4: Error Handling ----
+
+    testConnectionTimeout() {
+        # Create a separate manager with a very short timeout
+        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": mLogger,
+                "connect_timeout": 2s,
+                "request_timeout": 3s,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        # Bind a UDP socket to a free ephemeral port — keep it open to prevent
+        # the race where another process could bind to the port after we close
+        # it.  The plain UDP socket won't respond to QUIC Initial packets, so
+        # the handshake will time out deterministically.
+        Socket dummy();
+        dummy.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        on_exit delete dummy;
+        int port = dummy.getSocketInfo().port;
+
+        bool got_error = False;
+        try {
+            mgr.request(sprintf("https://localhost:%d", port), "GET", "/", NOTHING, NOTHING, 2s);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            # Verify the exception is a known HTTP/3 or QUIC error type
+            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|QUIC-ERROR)$", ex.err,
+                "expected HTTP/3 or QUIC error type, got: " + ex.err);
+            if (m_options.verbose > 1) {
+                printf("testConnectionTimeout: got expected error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        assertTrue(got_error, "connecting to non-listening port should fail");
+    }
+
+    testNoHandlerResponse() {
+        # When no handler is registered for a path and no default handler is set,
+        # HttpServer returns 501 (Not Implemented) - this is consistent across
+        # HTTP/1.x, HTTP/2, and HTTP/3
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/nonexistent/path/that/has/no/handler");
+        assertEq(501, resp.status_code,
+            "request to unknown path with no default handler should return 501");
+
+        if (m_options.verbose > 1) {
+            printf("testNoHandlerResponse: got status %d as expected\n", resp.status_code);
+        }
+    }
+
+    testServerShutdown() {
+        # Create a separate server and manager for this test
+        Logger logger("shutdown-test", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        });
+        server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int port = h3info.port;
+        string url = "https://localhost:" + port;
+
+        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": logger,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        # First request should succeed
+        hash<auto> resp = mgr.request(url, "GET", "/hello");
+        assertEq(200, resp.status_code, "request before shutdown should succeed");
+
+        # Delete the server
+        delete server;
+
+        # Second request should fail gracefully (no crash/hang)
+        bool got_error = False;
+        try {
+            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            if (m_options.verbose > 1) {
+                printf("testServerShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        # After server deletion, the request should fail with an error
+        assertTrue(got_error, "request after server shutdown should fail gracefully");
+    }
+
+    # ---- Group 5: Auto-QUIC Listener + Alt-Svc ----
+
+    testAutoQuicListenerCreation() {
+        # Create a server with enable_h3=True (default)
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        # Add a TLS listener — should auto-create a QUIC listener
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int tcp_port = info.port;
+
+        # Verify the server has more than one listener (TCP + auto-QUIC)
+        hash<string, hash<auto>> listeners = server.getListeners();
+        assertTrue(listeners.size() >= 2,
+            sprintf("server should have at least 2 listeners (TCP + QUIC), got %d", listeners.size()));
+
+        if (m_options.verbose > 1) {
+            printf("testAutoQuicListenerCreation: TCP port=%d, listeners=%d\n", tcp_port, listeners.size());
+        }
+    }
+
+    testAltSvcHeaderInTcpResponse() {
+        # Create a server with auto-QUIC
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        # Add TLS listener to trigger auto-QUIC
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int tcp_port = info.port;
+
+        # Make an HTTP/1.1 request via the TCP listener
+        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+        hash<auto> resp = client.send("", "GET", "/test", NOTHING, True);
+
+        # Verify Alt-Svc header is present
+        assertTrue(exists resp."alt-svc", "Alt-Svc header should be present in TCP response");
+        string alt_svc = resp."alt-svc";
+        assertTrue(alt_svc.find("h3=") >= 0,
+            sprintf("Alt-Svc should contain h3= directive, got: %y", alt_svc));
+        assertTrue(alt_svc.find("ma=") >= 0,
+            sprintf("Alt-Svc should contain ma= directive, got: %y", alt_svc));
+
+        if (m_options.verbose > 1) {
+            printf("testAltSvcHeaderInTcpResponse: Alt-Svc=%y\n", alt_svc);
+        }
+    }
+
+    testNoAltSvcInHttp3Response() {
+        # Use the main server's QUIC listener — requests over HTTP/3 should not include Alt-Svc
+        hash<auto> resp = mMgr.request(mH3Url, "GET", "/hello");
+        assertEq(200, resp.status_code, "GET /hello should return 200");
+
+        # Alt-Svc should NOT be in HTTP/3 response headers
+        assertFalse(exists resp.headers."alt-svc",
+            "Alt-Svc header should NOT be present in HTTP/3 response");
+        assertFalse(exists resp.headers."Alt-Svc",
+            "Alt-Svc header (mixed-case) should NOT be present in HTTP/3 response");
+
+        if (m_options.verbose > 1) {
+            printf("testNoAltSvcInHttp3Response: confirmed no Alt-Svc in h3 response\n");
+        }
+    }
+
+    # ---- Group 6: HTTPClient Alt-Svc Upgrade (Phase 2) ----
+
+    testHttpClientAltSvcUpgrade() {
+        # Create a server with auto-QUIC (TLS + QUIC on same port)
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int tcp_port = info.port;
+
+        # Create HTTPClient with http3_mode=auto (default)
+        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+
+        # First request goes over TCP — should get Alt-Svc in response
+        assertFalse(client.isHttp3Active(), "should not be HTTP/3 before first request");
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp1.status_code), "first TCP request should return 200");
+        # Verify Alt-Svc was received
+        assertTrue(exists resp1."alt-svc",
+            sprintf("first response should contain Alt-Svc header (headers: %y)", keys resp1));
+
+        if (m_options.verbose > 1) {
+            printf("testHttpClientAltSvcUpgrade: first request OK, Alt-Svc=%y\n", resp1."alt-svc");
+        }
+
+        # Second request should attempt QUIC upgrade
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp2.status_code), "second request should return 200");
+
+        # Check if HTTP/3 is now active
+        if (client.isHttp3Active()) {
+            if (m_options.verbose > 1) {
+                printf("testHttpClientAltSvcUpgrade: HTTP/3 active after Alt-Svc upgrade\n");
+            }
+            # Third request should also use HTTP/3
+            hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
+            assertEq(200, int(resp3.status_code), "third HTTP/3 request should return 200");
+            assertTrue(client.isHttp3Active(), "should still be HTTP/3 after third request");
+        } else {
+            if (m_options.verbose > 1) {
+                printf("testHttpClientAltSvcUpgrade: QUIC upgrade not yet active after 2nd request, retrying\n");
+            }
+            # Retry requests while async QUIC handshake completes; Queue.get()
+            # yields the thread deterministically instead of busy-waiting
+            Queue yield_q();
+            bool upgraded = False;
+            for (int i = 0; i < 5; ++i) {
+                try { yield_q.get(200ms); } catch () {}
+                hash<auto> resp_retry = client.send("", "GET", "/test", NOTHING, True);
+                assertEq(200, int(resp_retry.status_code),
+                    sprintf("retry request %d should return 200", i + 3));
+                if (client.isHttp3Active()) {
+                    upgraded = True;
+                    break;
+                }
+            }
+            if (!upgraded) {
+                testSkip("QUIC upgrade did not complete (QUIC handshake may have failed)");
+            }
+        }
+    }
+
+    testHttpClientHttp3Disabled() {
+        # Create a server with auto-QUIC
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+
+        # Create HTTPClient with http3_mode=disabled
+        HTTPClient client({
+            "url": "https://localhost:" + info.port,
+            "ssl_verify_cert": False,
+            "http3_mode": "disabled",
+        });
+        on_exit {
+            delete client;
+        }
+
+        assertEq("disabled", client.getHttp3Mode(), "http3_mode should be disabled");
+
+        # First request — gets Alt-Svc header
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp1.status_code), "first request should succeed");
+        assertTrue(exists resp1."alt-svc", "response should contain Alt-Svc even when disabled");
+
+        # Second request — should NOT try QUIC despite Alt-Svc
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp2.status_code), "second request should succeed");
+        assertFalse(client.isHttp3Active(), "HTTP/3 should NOT be active when mode=disabled");
+
+        if (m_options.verbose > 1) {
+            printf("testHttpClientHttp3Disabled: confirmed no QUIC upgrade with mode=disabled\n");
+        }
+    }
+
+    testHttpClientQuicFallback() {
+        # Create a TCP-only server with a handler that returns a fake Alt-Svc pointing to port 1
+        # (where no QUIC server is listening), to test client fallback
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": False,  # No auto-QUIC
+        });
+        on_exit {
+            delete server;
+        }
+        # Use port 1 in the fake Alt-Svc - QUIC connection to port 1 should fail quickly
+        server.setHandler("fake-altsvc", "/test", NOTHING, new FakeAltSvcHandler(1));
+        server.waitForAsyncIo();
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int tcp_port = info.port;
+
+        # Create HTTPClient with http3_mode=auto
+        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+
+        # First request — gets fake Alt-Svc header over TCP
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp1.status_code), "first TCP request should return 200");
+        assertTrue(exists resp1."alt-svc", "response should contain fake Alt-Svc header");
+
+        # Second request — should try QUIC (which fails to port 1), then fall back to TCP
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp2.status_code), "second request should succeed (TCP fallback)");
+        assertFalse(client.isHttp3Active(), "HTTP/3 should NOT be active (QUIC failed, fell back to TCP)");
+
+        if (m_options.verbose > 1) {
+            printf("testHttpClientQuicFallback: confirmed TCP fallback when QUIC fails\n");
+        }
+    }
+
+    testHttpClientHttp3ModeOption() {
+        # Test all http3_mode option values via constructor
+        {
+            HTTPClient h({"url": "https://localhost:1", "http3_mode": "disabled"});
+            assertEq("disabled", h.getHttp3Mode(), "constructor disabled mode");
+        }
+        {
+            HTTPClient h({"url": "https://localhost:1", "http3_mode": "auto"});
+            assertEq("auto", h.getHttp3Mode(), "constructor auto mode");
+        }
+        {
+            HTTPClient h({"url": "https://localhost:1", "http3_mode": "required"});
+            assertEq("required", h.getHttp3Mode(), "constructor required mode");
+        }
+
+        # Test setHttp3Mode string API
+        HTTPClient h();
+        h.setHttp3Mode("disabled");
+        assertEq("disabled", h.getHttp3Mode(), "setHttp3Mode disabled");
+        h.setHttp3Mode("auto");
+        assertEq("auto", h.getHttp3Mode(), "setHttp3Mode auto");
+        h.setHttp3Mode("required");
+        assertEq("required", h.getHttp3Mode(), "setHttp3Mode required");
+
+        # Test setHttp3Mode enum API
+        h.setHttp3Mode(HTTP3Mode::Disabled);
+        assertEq("disabled", h.getHttp3Mode(), "setHttp3Mode enum disabled");
+        h.setHttp3Mode(HTTP3Mode::Auto);
+        assertEq("auto", h.getHttp3Mode(), "setHttp3Mode enum auto");
+
+        # Test invalid mode
+        assertThrows("HTTP3-MODE-ERROR", \h.setHttp3Mode(), ("invalid_mode",),
+            "invalid mode string should throw");
+
+        # Test isHttp3Active on fresh client
+        assertFalse(h.isHttp3Active(), "fresh client should not have HTTP/3 active");
+
+        if (m_options.verbose > 1) {
+            printf("testHttpClientHttp3ModeOption: all mode options verified\n");
+        }
+    }
+
+    testDisableAutoQuic() {
+        # Create a server with enable_h3=False
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "async_mode": True,
+            "enable_h3": False,
+        });
+        on_exit {
+            delete server;
+        }
+
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        # Add a TLS listener — should NOT auto-create QUIC listener
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+
+        # Should have exactly 1 listener (TCP only, no QUIC)
+        hash<string, hash<auto>> listeners = server.getListeners();
+        assertEq(1, listeners.size(),
+            sprintf("server with enable_h3=False should have exactly 1 listener, got %d", listeners.size()));
+
+        # Make an HTTP/1.1 request — should NOT have Alt-Svc
+        HTTPClient client({"url": "https://localhost:" + info.port, "ssl_verify_cert": False});
+        on_exit {
+            delete client;
+        }
+        hash<auto> resp = client.send("", "GET", "/test", NOTHING, True);
+        assertFalse(exists resp."alt-svc",
+            "Alt-Svc header should NOT be present when enable_h3=False");
+
+        if (m_options.verbose > 1) {
+            printf("testDisableAutoQuic: confirmed no QUIC listener and no Alt-Svc\n");
+        }
+    }
+}

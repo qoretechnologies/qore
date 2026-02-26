@@ -38,6 +38,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/InputStream.h"
+#include "qore/intern/QuicSession.h"
 
 #include <memory>
 #include <deque>
@@ -51,6 +52,11 @@ constexpr int SPS_NONE = 0;
 constexpr int SPS_CONNECTING = 1;
 constexpr int SPS_CONNECTING_SSL = 2;
 constexpr int SPS_CONNECTED = 3;
+
+//! Max single QUIC UDP datagram receive buffer (1500 typical MTU + headroom for jumbo frames)
+//! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
+//! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
+constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
 
 class SocketPollSocketOperationBase : public SocketPollOperationBase {
 public:
@@ -68,7 +74,6 @@ public:
         // This prevents memory accumulation if the operation object remains referenced after timeout
         poll_state.reset();
         if (set_non_block) {
-            set_non_block = false;
             AutoLocker al(sock->priv->m);
             sock->priv->clearNonBlock();
             if (abortNeedsClose()) {
@@ -76,6 +81,9 @@ public:
                 // QoreSocketObject cleanup is handled by the owning code path.
                 sock->priv->socket->close();
             }
+            // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
+            // if clearNonBlock() or close() threw
+            set_non_block = false;
             state = SPS_NONE;
         }
     }
@@ -401,13 +409,13 @@ public:
         SocketAcceptPollSocketOperationBase::abort(xsink);
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return state == SPS_ACCEPTED;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
-    DLLLOCAL virtual QoreValue getOutput() const;
+    DLLLOCAL virtual QoreValue getOutput() const override;
 
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
@@ -454,7 +462,7 @@ private:
 
     int sgoal = 0;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (state) {
             case SPS_NONE:
                 return "none";
@@ -515,7 +523,7 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return ((h2_state == H2S_REQUEST_READY || h2_state == H2S_HEADERS_READY) && !peer_closed);
     }
 
@@ -527,11 +535,11 @@ public:
         }
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
-    DLLLOCAL virtual QoreValue getOutput() const;
+    DLLLOCAL virtual QoreValue getOutput() const override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (h2_state) {
             case H2S_NONE: return "none";
             case H2S_SEND_PREFACE: return "sending-preface";
@@ -564,7 +572,7 @@ private:
     //! Cached completed stream info, dequeued in continuePoll(), used by getOutput()
     std::unique_ptr<Http2StreamInfo> cached_stream;
 
-    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+    DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 
     //! Initialize HTTP/2 session
     DLLLOCAL int initSession(ExceptionSink* xsink);
@@ -613,13 +621,13 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return h2_state == H2S_SENT;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (h2_state) {
             case H2S_NONE: return "none";
             case H2S_SENDING: return "sending";
@@ -637,7 +645,7 @@ private:
     int h2_state = H2S_NONE;
     int32_t stream_id = 0;
 
-    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+    DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 };
 
 //! Poll operation for sending HTTP/2 streaming responses from an InputStream
@@ -671,13 +679,13 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return ss_state == SS_DONE;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (ss_state) {
             case SS_READ_CHUNK: return "reading-chunk";
             case SS_SEND_CHUNK: return "sending-chunk";
@@ -722,7 +730,7 @@ private:
     int stream_fd = -1;
     SimpleRefHolder<BinaryNode> current_chunk;
 
-    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+    DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 };
 
 //! Poll operation for flushing pending HTTP/2 data
@@ -750,13 +758,13 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return h2f_state == H2F_DONE;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (h2f_state) {
             case H2F_FLUSHING: return "flushing";
             case H2F_DONE: return "done";
@@ -768,7 +776,7 @@ private:
     enum FlushState { H2F_FLUSHING, H2F_DONE };
     FlushState h2f_state = H2F_FLUSHING;
 
-    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+    DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 };
 
 //! Fused send HTTP response + idle wait + read next HTTP header poll operation
@@ -797,13 +805,13 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return phase == Phase::Complete || phase == Phase::Timeout;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const;
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-    DLLLOCAL virtual QoreValue getOutput() const;
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+    DLLLOCAL virtual QoreValue getOutput() const override;
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         // Clear buffers to prevent memory accumulation on abort
@@ -827,7 +835,7 @@ private:
     // Header reading phase: parsed HTTP headers output
     mutable ReferenceHolder<QoreHashNode> header_output;
 
-    DLLLOCAL virtual bool abortNeedsClose() const {
+    DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;
     }
 };
@@ -871,15 +879,15 @@ public:
     }
 
     //! Returns true when a response is ready or connection is closed
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         AutoLocker al(response_lock);
         return !completed_responses.empty() || h2_state == H2C_CLOSED;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     //! Returns the next completed response, or NOTHING if none available
-    DLLLOCAL virtual QoreValue getOutput() const {
+    DLLLOCAL virtual QoreValue getOutput() const override {
         AutoLocker al(response_lock);
         if (completed_responses.empty()) {
             return QoreValue();
@@ -890,7 +898,7 @@ public:
         return response;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         switch (h2_state) {
             case H2C_NONE: return "none";
             case H2C_SEND_PREFACE: return "sending-preface";
@@ -918,7 +926,7 @@ public:
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Cancel a pending stream
@@ -951,7 +959,7 @@ private:
     };
     std::shared_ptr<CallbackGuard> callback_guard = std::make_shared<CallbackGuard>();
 
-    DLLLOCAL virtual bool abortNeedsClose() const { return true; }
+    DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 
     //! Initialize HTTP/2 client session
     DLLLOCAL int initSession(ExceptionSink* xsink);
@@ -981,19 +989,19 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return received;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         return received ? "received" : "receiving";
     }
 
-    DLLLOCAL virtual QoreValue getOutput() const {
+    DLLLOCAL virtual QoreValue getOutput() const override {
         return output ? output->hashRefSelf() : QoreValue();
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         output = nullptr;
@@ -1005,7 +1013,7 @@ private:
     bool received = false;
     mutable ReferenceHolder<QoreHashNode> output;
 
-    DLLLOCAL virtual bool abortNeedsClose() const {
+    DLLLOCAL virtual bool abortNeedsClose() const override {
         return false;  // UDP is connectionless, no need to close on abort
     }
 };
@@ -1031,23 +1039,321 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return sent;
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         return sent ? "sent" : "sending";
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
 private:
-    struct sockaddr_storage dest_addr;
+    struct sockaddr_storage dest_addr{};
     socklen_t dest_addr_len = 0;
     bool sent = false;
 
-    DLLLOCAL virtual bool abortNeedsClose() const {
+    DLLLOCAL virtual bool abortNeedsClose() const override {
         return false;  // UDP is connectionless, no need to close on abort
+    }
+};
+
+//! QUIC poll operation state machine states
+enum class QCS : int {
+    NONE = 0,            //!< initial state
+    HANDSHAKE_SEND = 1,  //!< sending handshake packets
+    HANDSHAKE_RECV = 2,  //!< receiving handshake packets
+    SETUP_HTTP3 = 3,     //!< setting up HTTP/3 layer
+    READING = 4,         //!< reading request/response packets
+    REQUEST_READY = 5,   //!< HTTP/3 request ready (server)
+    RESPONSE_READY = 6,  //!< HTTP/3 response ready (client)
+    SENDING = 7,         //!< sending response/request data
+    FLUSHING = 8,        //!< flushing pending QUIC packets
+    SENT = 9,            //!< response sent
+    CLOSED = 10,         //!< connection closed
+};
+
+//! Poll operation for QUIC client: handshake + HTTP/3 request/response
+/** Creates a QUIC connection, performs the TLS 1.3 handshake over QUIC,
+    sets up HTTP/3, submits a request, and reads the response.
+
+    @since %Qore 2.3
+*/
+class SocketQuicClientPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+                                           const char* host, uint16_t port, int family);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return qcs_state == QCS::RESPONSE_READY || qcs_state == QCS::CLOSED;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreValue getOutput() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    // NOTE: intentionally does NOT call SocketPollSocketOperationBase::abort() because:
+    //  1. The base class closes the socket (abortNeedsClose()), but QUIC uses a shared
+    //     UDP socket that must stay open for other sessions
+    //  2. poll_state is never used by QUIC operations (QUIC manages its own state)
+    //  3. QUIC uses qcs_state, not the base class 'state' member
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Hold socket lock for the entire abort to prevent races with
+        // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
+        AutoLocker al(sock->priv->m);
+        // Remove session from socket's session map and release our reference;
+        // QuicSession destructor handles ngtcp2/nghttp3 cleanup
+        if (quic_session) {
+            sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
+            quic_session.reset();
+        }
+        // Restore OS-level blocking mode
+        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
+        // if set_non_blocking() threw
+        if (set_non_block) {
+            sock->priv->socket->priv->set_non_blocking(false, xsink);
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+
+    //! Submit an HTTP/3 request on this connection
+    DLLLOCAL int64_t submitRequest(const char* method, const char* path,
+                                   const strcase_str_map_t& headers,
+                                   const void* body, size_t body_len,
+                                   ExceptionSink* xsink);
+
+    //! Get the QuicSession
+    DLLLOCAL std::shared_ptr<QuicSession> getSession() const { return quic_session; }
+
+    //! Check if connection is still open
+    DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
+
+private:
+    std::shared_ptr<QuicSession> quic_session;
+    QCS qcs_state = QCS::NONE;
+    struct sockaddr_storage local_addr_{};
+    socklen_t local_addrlen_ = 0;
+    struct sockaddr_storage remote_addr_{};
+    socklen_t remote_addrlen_ = 0;
+    //! Cached completed stream info; mutable so getOutput() (const) can consume it.
+    //! Thread safety: the poll framework serializes continuePoll() and getOutput()
+    //! calls on a single operation — no concurrent mutation occurs.
+    mutable std::unique_ptr<QuicStreamInfo> cached_stream;
+    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
+    //! Reusable packet batch (avoids per-call heap allocations)
+    QuicPacketBatch pkt_batch_;
+
+    //! Send all pending QUIC packets via UDP
+    DLLLOCAL int sendPendingPackets(ExceptionSink* xsink);
+
+    //! Receive and process a UDP datagram
+    DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink);
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return false;  // UDP is connectionless
+    }
+};
+
+//! Poll operation for QUIC server: accept connection + read HTTP/3 request
+/** Waits for QUIC packets, dispatches to the correct session by DCID,
+    creates new sessions for Initial packets, and reads HTTP/3 requests.
+    Supports multiple concurrent QUIC connections on a single UDP socket.
+
+    @since %Qore 2.3
+*/
+class SocketQuicServerPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketQuicServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return qcs_state == QCS::REQUEST_READY;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreValue getOutput() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    // NOTE: intentionally does NOT call SocketPollSocketOperationBase::abort() because:
+    //  1. The base class closes the socket (abortNeedsClose()), but QUIC uses a shared
+    //     UDP socket that must stay open for other sessions
+    //  2. poll_state is never used by QUIC operations (QUIC manages its own state)
+    //  3. QUIC uses qcs_state, not the base class 'state' member
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Hold socket lock for the entire abort to prevent races with
+        // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
+        AutoLocker al(sock->priv->m);
+        // Clean up local session map and remove sessions from the authoritative map;
+        // without a poll operation driving timers/ACKs, orphaned sessions would leak
+        for (auto& [id, session] : sessions_) {
+            sock->priv->socket->priv->removeQuicSession(id);
+        }
+        sessions_.clear();
+        cached_stream_.reset();
+        // Restore OS-level blocking mode
+        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
+        // if set_non_blocking() threw
+        if (set_non_block) {
+            sock->priv->socket->priv->set_non_blocking(false, xsink);
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+
+    //! Maximum concurrent QUIC sessions per server socket.
+    //! Prevents memory exhaustion from a flood of Initial packets;
+    //! new connection attempts beyond this limit are silently dropped
+    //! (clients will retry or time out).
+    static constexpr size_t MAX_QUIC_SERVER_SESSIONS = 10000;
+
+private:
+    //! Cached completed stream with session ID and session pointer (for peer address extraction)
+    struct CachedStream {
+        int64_t session_id;
+        std::unique_ptr<QuicStreamInfo> stream;
+        std::shared_ptr<QuicSession> session;
+    };
+
+    //! Local session map — single-threaded working copy used only from the I/O
+    //! thread during continuePoll().  This is NOT the authoritative map; the
+    //! authoritative map is qore_socket_private::quic_sessions (protected by
+    //! quic_sessions_lock).  This copy avoids lock contention in the hot path.
+    std::unordered_map<int64_t, std::shared_ptr<QuicSession>> sessions_;
+
+    QCS qcs_state = QCS::NONE;
+
+    //! Cached completed stream info; mutable so getOutput() (const) can consume it.
+    //! Thread safety: the poll framework serializes continuePoll() and getOutput()
+    //! calls on a single operation — no concurrent mutation occurs.
+    mutable std::unique_ptr<CachedStream> cached_stream_;
+
+    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
+    //! Reusable packet batch (avoids per-call heap allocations)
+    QuicPacketBatch pkt_batch_;
+
+    //! Cached local address (from getsockname at construction time)
+    //! avoids per-datagram getsockname() syscall
+    struct sockaddr_storage local_addr_{};
+    socklen_t local_addrlen_ = 0;
+
+    //! Send all pending QUIC packets for ALL sessions via UDP
+    DLLLOCAL int sendAllPendingPackets(ExceptionSink* xsink);
+
+    //! Receive and process a UDP datagram (dispatches to correct session)
+    DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink, QuicSession** target_out = nullptr);
+
+    //! Process QUIC timers for all sessions (retransmission, idle timeout, PTO)
+    DLLLOCAL int processTimers(ExceptionSink* xsink);
+
+    //! Get minimum expiry across all sessions (nanosecond timestamp, UINT64_MAX if none)
+    DLLLOCAL ngtcp2_tstamp getMinExpiry() const;
+
+    //! Clean up closed sessions (called periodically, not every poll cycle)
+    DLLLOCAL void cleanupClosedSessions();
+
+    //! Poll cycle counter for periodic cleanup scheduling
+    //! With up to 10K sessions, iterating all sessions every poll cycle is O(n);
+    //! running cleanup every CLEANUP_INTERVAL cycles amortizes the cost.
+    int cleanup_counter_ = 0;
+    static constexpr int CLEANUP_INTERVAL = 100;
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return false;  // UDP is connectionless
+    }
+};
+
+//! Poll operation to send an HTTP/3 response over QUIC
+/** Queues an HTTP/3 response and flushes all pending QUIC packets.
+
+    @since %Qore 2.3
+*/
+class SocketQuicSendResponsePollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketQuicSendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+                                                  int64_t session_id, int64_t stream_id,
+                                                  int status_code,
+                                                  const QoreHashNode* headers,
+                                                  const AbstractQoreNode* body);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return qcs_state == QCS::SENT;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        // Hold socket lock for the entire abort to prevent races with
+        // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
+        AutoLocker al(sock->priv->m);
+        // Release session reference to allow cleanup if the socket is closed
+        quic_session.reset();
+        // Restore OS-level blocking mode
+        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
+        // if set_non_blocking() threw
+        if (set_non_block) {
+            sock->priv->socket->priv->set_non_blocking(false, xsink);
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+
+private:
+    std::shared_ptr<QuicSession> quic_session;
+    QCS qcs_state = QCS::NONE;
+
+    //! Stored remote peer address for sendto()
+    struct sockaddr_storage peer_addr_{};
+    socklen_t peer_addrlen_ = 0;
+
+    //! Receive buffer for incoming packets (ACKs)
+    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
+    //! Reusable packet batch (avoids per-call heap allocations)
+    QuicPacketBatch pkt_batch_;
+
+    //! Cached local address (from getsockname at construction time)
+    struct sockaddr_storage local_addr_{};
+    socklen_t local_addrlen_ = 0;
+
+    //! Send all pending QUIC packets via UDP
+    DLLLOCAL int sendPendingPackets(ExceptionSink* xsink);
+
+    //! Receive and process incoming packets (ACKs for flow control)
+    DLLLOCAL int recvAndProcessPackets(ExceptionSink* xsink);
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return false;  // UDP is connectionless
     }
 };
 

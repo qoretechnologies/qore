@@ -38,12 +38,14 @@
 
 #include <qore/Qore.h>
 
+#include <cctype>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // Forward declarations
@@ -147,6 +149,12 @@ struct Http2Settings {
 //! HTTP/2 Session wrapper using nghttp2
 class Http2Session {
 public:
+    //! Compaction threshold for the send buffer (bytes consumed before erasing)
+    /** When send_offset exceeds this value, the consumed prefix is erased.
+        O(remaining_data) but amortized: only fires after this many bytes consumed.
+    */
+    static constexpr size_t SEND_BUFFER_COMPACTION_THRESHOLD = 65536;
+
     //! Create a client-side HTTP/2 session
     /** @param sock Socket for the connection
         @param xsink Exception sink for error reporting
@@ -192,7 +200,7 @@ public:
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitRequest(const char* method, const char* path,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming = false);
 
@@ -223,7 +231,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitResponse(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Submit a response with support for duplicate header names (server-side)
@@ -253,7 +261,7 @@ public:
         @since Qore 2.2
     */
     DLLLOCAL int submitResponseStreaming(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
+        const strcase_str_map_t& headers, ExceptionSink* xsink);
 
     //! Submit a PUSH_PROMISE (server-side)
     /** @param stream_id Stream ID of the associated request
@@ -263,7 +271,7 @@ public:
         @return promised stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitPushPromise(int32_t stream_id, const char* path,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
+        const strcase_str_map_t& headers, ExceptionSink* xsink);
 
     //! Submit a RST_STREAM frame to cancel a stream
     DLLLOCAL int submitRstStream(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
@@ -314,7 +322,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitTrailers(int32_t stream_id,
-        const std::map<std::string, std::string>& trailers, ExceptionSink* xsink);
+        const strcase_str_map_t& trailers, ExceptionSink* xsink);
 
     //! Set the stream type (for protocol upgrades like WebSocket/SSE)
     DLLLOCAL void setStreamType(int32_t stream_id, Http2StreamType type);
@@ -328,7 +336,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitConnectResponse(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink);
+        const strcase_str_map_t& headers, ExceptionSink* xsink);
 
     //! Returns true if RFC 8441 extended CONNECT protocol is enabled locally
     DLLLOCAL bool isConnectProtocolEnabled() const {
@@ -520,7 +528,7 @@ public:
     /** This is separate from wantWrite() because nghttp2_session_want_write()
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
-    DLLLOCAL bool hasPendingData() const { return !send_buffer.empty(); }
+    DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
 
     //! Returns the remote flow control window size for a given stream
     /** Returns the number of bytes the server can send on this stream before
@@ -577,7 +585,17 @@ private:
         const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data);
 
     // Helper to convert headers to nghttp2 format
-    DLLLOCAL std::vector<nghttp2_nv> makeNv(const std::map<std::string, std::string>& headers);
+    DLLLOCAL std::vector<nghttp2_nv> makeNv(const strcase_str_map_t& headers);
+
+    // Template implementations for submit methods to avoid map→vector<pair> copy
+    template<typename HeaderRange>
+    DLLLOCAL int32_t submitRequestImpl(const char* method, const char* path,
+        const HeaderRange& headers, const void* body, size_t body_len,
+        ExceptionSink* xsink, bool streaming);
+    template<typename HeaderRange>
+    DLLLOCAL int submitResponseImpl(int32_t stream_id, int status_code,
+        const HeaderRange& headers, const void* body, size_t body_len,
+        ExceptionSink* xsink);
 
     // Internal stream management
     DLLLOCAL Http2StreamInfo* getOrCreateStream(int32_t stream_id);
@@ -588,8 +606,8 @@ private:
     bool is_server;
     std::string scheme;  //!< "https" for h2, "http" for h2c
 
-    // Stream management
-    std::map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
+    // Stream management (unordered_map: O(1) lookup by stream_id, no ordered iteration needed)
+    std::unordered_map<int32_t, std::unique_ptr<Http2StreamInfo>> streams;
     std::queue<std::unique_ptr<Http2StreamInfo>> completed_streams;
 
     // Stream completion callback for client multiplexing
@@ -624,7 +642,7 @@ private:
                    reinterpret_cast<const uint8_t*>(src) + len),
               end_stream(end_stream) {}
     };
-    std::map<int32_t, BodyData> pending_body_data;
+    std::unordered_map<int32_t, BodyData> pending_body_data;
 
     struct DataProviderContext {
         nghttp2_data_provider provider{};
@@ -637,7 +655,7 @@ private:
         //! Error from nghttp2_submit_trailer() failure in data provider callback
         int trailer_submit_error = 0;
     };
-    std::map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
+    std::unordered_map<int32_t, std::unique_ptr<DataProviderContext>> pending_data_providers;
 
     DLLLOCAL static ssize_t dataProviderReadCallback(nghttp2_session* session, int32_t stream_id,
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
@@ -647,18 +665,61 @@ private:
 //! Shared pointer type for Http2Session with thread-safe atomic reference counting
 using Http2SessionPtr = std::shared_ptr<Http2Session>;
 
-//! Converts HTTP/2 stream headers to a Qore hash
-/** Handles duplicate header names per RFC 7540 Section 8.1.2.5:
+//! Convert HTTP/2 or HTTP/3 multi-value headers map to a QoreHashNode
+/** Template to accept maps with any comparator (e.g. std::less or ltstrcase).
+
+    Handles duplicate header names per RFC 7540 Section 8.1.2.5:
     - cookie: concatenated with "; " into a single string
     - Single-value headers: stored as QoreStringNode
     - Multi-value headers: stored as QoreListNode (matches HTTP/1.1 behavior)
 
-    @param h2_headers HTTP/2 headers map (name -> vector of values)
+    @param h2_headers HTTP/2 or HTTP/3 headers map (name -> vector of values)
     @param lowercase if true, convert header names to lowercase
     @return new QoreHashNode with the converted headers
 */
-DLLLOCAL QoreHashNode* h2HeadersToQoreHash(
-    const std::map<std::string, std::vector<std::string>>& h2_headers,
-    bool lowercase = false);
+template<typename Comparator>
+DLLLOCAL inline QoreHashNode* httpMultiHeadersToQoreHash(
+    const std::map<std::string, std::vector<std::string>, Comparator>& h2_headers,
+    bool lowercase = false) {
+    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
+    for (const auto& h : h2_headers) {
+        std::string name;
+        if (lowercase) {
+            name.reserve(h.first.size());
+            for (unsigned char ch : h.first) {
+                name.push_back(std::tolower(ch));
+            }
+        } else {
+            name = h.first;
+        }
+
+        const std::vector<std::string>& vals = h.second;
+        if (vals.empty()) {
+            continue;
+        }
+        if (vals.size() == 1) {
+            // Single value: store as plain string
+            headers->setKeyValue(name.c_str(), new QoreStringNode(vals[0]), nullptr);
+        } else if (strcasecmp(name.c_str(), "cookie") == 0) {
+            // RFC 7540 Section 8.1.2.5: concatenate cookie values with "; "
+            QoreStringNode* joined = new QoreStringNode;
+            for (size_t i = 0; i < vals.size(); ++i) {
+                if (i > 0) {
+                    joined->concat("; ");
+                }
+                joined->concat(vals[i].c_str());
+            }
+            headers->setKeyValue(name.c_str(), joined, nullptr);
+        } else {
+            // Multiple values: store as list (matches HTTP/1.1 duplicate header behavior)
+            QoreListNode* l = new QoreListNode(autoTypeInfo);
+            for (const auto& v : vals) {
+                l->push(new QoreStringNode(v), nullptr);
+            }
+            headers->setKeyValue(name.c_str(), l, nullptr);
+        }
+    }
+    return headers;
+}
 
 #endif // _QORE_HTTP2_SESSION_H

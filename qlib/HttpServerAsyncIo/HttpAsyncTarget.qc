@@ -37,6 +37,11 @@ public namespace HttpServerAsyncIo {
     - WebSocket frames (onWebSocketFrame)
     - WebSocket connection closes (onWebSocketClose)
 
+    @note Callback signatures use @ref HttpServer::HttpListenerInterface for the
+    \c listener parameter.  In practice the runtime object is always an
+    \c HttpListener (which inherits both \c Socket and \c HttpListenerInterface),
+    but only the \c HttpListenerInterface surface should be used — direct
+    socket I/O on the listener is not supported in async mode.
 */
 public class HttpAsyncTarget {
     #! Called when an HTTP request is ready (header fully parsed)
@@ -72,7 +77,7 @@ public class HttpAsyncTarget {
         @param listener The listener that accepted this connection
         @param cx Connection context
     */
-    abstract onIdleTimeout(Socket sock, object listener, hash<auto> cx);
+    abstract onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
     #! Called on I/O errors
     /** This is called when an I/O error occurs during async operations.
@@ -83,7 +88,7 @@ public class HttpAsyncTarget {
         @param listener The listener for this connection
         @param cx Connection context (may be empty for errors during accept)
     */
-    abstract onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx);
+    abstract onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx);
 
     #! Called when an SSE client disconnects
     /** This is called when the client closes an SSE connection or the
@@ -94,7 +99,7 @@ public class HttpAsyncTarget {
         @param listener The listener for this connection
         @param cx Connection context
     */
-    abstract onSseDisconnect(Socket sock, object listener, hash<auto> cx);
+    abstract onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
     #! Called when a WebSocket frame is received
     /** This is called for text and binary WebSocket frames. Ping frames
@@ -108,7 +113,7 @@ public class HttpAsyncTarget {
 
         @see WebSocketFrameInfo
     */
-    abstract onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx);
+    abstract onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
     #! Called when a WebSocket connection closes
     /** This is called when the WebSocket close handshake completes or
@@ -120,7 +125,7 @@ public class HttpAsyncTarget {
         @param listener The listener for this connection
         @param cx Connection context
     */
-    abstract onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx);
+    abstract onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
     #! Attempts to handle a request inline in the I/O thread
     /** Returns a result hash if the request was handled inline, or @ref nothing

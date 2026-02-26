@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,11 +40,27 @@
 #define get_port(a) ((a) * (((a) < 0) ? -1 : 1))
 #define get_ssl(a) (((a) < 0) ? true : false)
 
+//! Parse an HTTP/3 mode string ("disabled"/"auto"/"required" or "0"/"1"/"2")
+/** @return the mode constant, or -1 on invalid input
+*/
+static inline int parseHttp3ModeString(const char* str) {
+    if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
+        return HTTP3_MODE_DISABLED;
+    } else if (!strcasecmp(str, "auto") || !strcmp(str, "1")) {
+        return HTTP3_MODE_AUTO;
+    } else if (!strcasecmp(str, "required") || !strcmp(str, "2")) {
+        return HTTP3_MODE_REQUIRED;
+    }
+    return -1;
+}
+
 // protocol map class to recognize user-defined protocols (mostly useful for derived classes)
 typedef std::map<std::string, int> prot_map_t;
 typedef std::map<std::string, bool, ltstrcase> method_map_t;
 typedef std::set<std::string, ltstrcase> strcase_set_t;
-typedef std::map<std::string, std::string> header_map_t;
+// Case-insensitive per RFC 7230 Section 3.2: "each header field consists of a
+// case-insensitive field name"
+typedef strcase_str_map_t header_map_t;
 
 struct con_info {
     int port;

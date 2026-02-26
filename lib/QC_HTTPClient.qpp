@@ -191,6 +191,34 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     @since %Qore 2.2
 
+    @section httpclient_http3 HTTP/3 Support
+
+    The %Qore HTTPClient class supports HTTP/3 (QUIC) with automatic Alt-Svc-based upgrade.
+    By default, HTTP/3 mode is \c "auto", meaning the client will use HTTP/3 if the server advertises it
+    via an \c Alt-Svc response header, with automatic fallback to TCP (HTTP/1.x or HTTP/2) if the QUIC
+    connection fails.
+
+    HTTP/3 modes:
+    - \c "auto" (default): Use HTTP/3 if advertised via Alt-Svc, fallback to TCP
+    - \c "disabled": Never use HTTP/3, even if the server advertises it
+    - \c "required": Require HTTP/3, fail if unavailable
+
+    Use @ref setHttp3Mode() to control the HTTP/3 mode, or set the \c http3_mode constructor option.
+
+    @note
+    - HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
+    - An active HTTP/2 connection takes priority over an HTTP/3 upgrade attempt; HTTP/3 upgrade
+      is only attempted for new connections that are not yet using HTTP/2
+    - <b>Limitations:</b> Streaming callbacks (send_callback, InputStream, trailer_callback) are not
+      supported with HTTP/3 connections
+
+    @see
+    - @ref setHttp3Mode()
+    - @ref getHttp3Mode()
+    - @ref isHttp3Active()
+
+    @since %Qore 2.3
+
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
     The %Qore HTTPClient class allows \c GET requests to be made with a message body, however please note
@@ -265,6 +293,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       \c HTTP-CLIENT-RECEIVE-ERROR exception to be raised, rather such responses will be passed through to the caller
       like any other response
     - \c headers: A hash of headers to send in every outgoing request
+    - \c http3_mode: The HTTP/3 mode for QUIC connections; valid values are: \c "disabled" (never use HTTP/3),
+      \c "auto" (use HTTP/3 if advertised via Alt-Svc, default), or \c "required" (require HTTP/3, fail if
+      unavailable); @ref HTTP3Mode enum values are also accepted
     - \c http_version: Either \c "1.0" or \c "1.1" for the claimed HTTP protocol version compliancy in outgoing
       message headers
     - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
@@ -341,6 +372,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.0 added the following options:
       - \c username
       - \c password
+    - %Qore 2.3 added the following option:
+      - \c http3_mode
 */
 HTTPClient::constructor(hash<auto> opts) {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -800,6 +833,100 @@ printf("Using protocol: %s\n", proto);
 */
 string HTTPClient::getHttpVersion() [flags=CONSTANT] {
     return client->getHttpVersion();
+}
+
+//! Sets the HTTP/3 protocol mode
+/** The HTTP/3 mode controls how HTTP/3 (QUIC) is used:
+    - \c "disabled" or 0: Never use HTTP/3, even if the server advertises it
+    - \c "auto" or 1: Use HTTP/3 if advertised via Alt-Svc, fall back to TCP (default)
+    - \c "required" or 2: Require HTTP/3, fail if unavailable
+
+    @param mode the HTTP/3 mode string: "disabled", "auto", "required" (or 0-2)
+
+    @par Example:
+    @code{.py}
+httpclient.setHttp3Mode("auto");
+# or
+httpclient.setHttp3Mode(HTTP3Mode::Auto);
+    @endcode
+
+    @note HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
+
+    @throw HTTP3-MODE-ERROR invalid mode value
+
+    @since %Qore 2.3
+
+    @see getHttp3Mode()
+*/
+nothing HTTPClient::setHttp3Mode(string mode) {
+    const char* str = mode->c_str();
+    int mode_int = parseHttp3ModeString(str);
+    if (mode_int < 0) {
+        xsink->raiseException("HTTP3-MODE-ERROR", "invalid value '%s' for HTTP/3 mode; "
+            "valid values are: \"disabled\", \"auto\", \"required\" (or 0-2)", str);
+        return QoreValue();
+    }
+    client->setHttp3Mode(mode_int, xsink);
+}
+
+//! Sets the HTTP/3 protocol mode
+/** @param mode the HTTP/3 mode as an enum
+
+    @throw HTTP3-MODE-ERROR if the mode value is invalid
+
+    @since %Qore 2.3
+
+    @see getHttp3Mode()
+*/
+nothing HTTPClient::setHttp3Mode(enum<HTTP3Mode> mode) {
+    int64 mode_int = mode.getAsBigInt();
+    if (mode_int < HTTP3_MODE_DISABLED || mode_int > HTTP3_MODE_REQUIRED) {
+        xsink->raiseException("HTTP3-MODE-ERROR", "invalid mode value %d; valid values are: 0-2", (int)mode_int);
+        return QoreValue();
+    }
+    client->setHttp3Mode((int)mode_int, xsink);
+}
+
+//! Returns the current HTTP/3 protocol mode
+/** @return the current HTTP/3 mode as a string: "disabled", "auto", or "required"
+
+    @par Example:
+    @code{.py}
+string mode = httpclient.getHttp3Mode();
+printf("HTTP/3 mode: %s\n", mode);
+    @endcode
+
+    @since %Qore 2.3
+
+    @see setHttp3Mode()
+*/
+string HTTPClient::getHttp3Mode() [flags=CONSTANT] {
+    int mode = client->getHttp3Mode();
+    switch (mode) {
+        case HTTP3_MODE_DISABLED:
+            return new QoreStringNode("disabled");
+        case HTTP3_MODE_REQUIRED:
+            return new QoreStringNode("required");
+        case HTTP3_MODE_AUTO:
+        default:
+            return new QoreStringNode("auto");
+    }
+}
+
+//! Returns @ref True if the connection is currently using HTTP/3 (QUIC)
+/** @return @ref True if HTTP/3 is active on the current connection
+
+    @par Example:
+    @code{.py}
+if (httpclient.isHttp3Active()) {
+    printf("Using HTTP/3 (QUIC)\n");
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isHttp3Active() [flags=CONSTANT] {
+    return client->isHttp3Active();
 }
 
 //! Sets the object to make a secure SSL/TLS connection on the next connect if the passed argument is @ref True, or an unencrypted cleartext connection if it is @ref False

@@ -68,6 +68,9 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketSendAndReadHeaderPollOperation;
     friend class SocketRecvFromPollOperation;
     friend class SocketSendToPollOperation;
+    friend class SocketQuicClientPollOperation;
+    friend class SocketQuicServerPollOperation;
+    friend class SocketQuicSendResponsePollOperation;
 
 public:
     DLLEXPORT QoreSocketObject();
@@ -490,6 +493,58 @@ public:
 
     //! Clears the non-blocking connection flag
     DLLEXPORT void clearNonBlock();
+
+    //! Returns true if the socket has an active QUIC/HTTP/3 session
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuic() const;
+
+    //! Submits an HTTP/3 request on an active QUIC client connection
+    /** @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers (hash of string key -> string value)
+        @param body optional request body
+        @param body_len request body length
+        @param xsink exception sink
+
+        @return the stream ID on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitQuicRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
+
+    //! Returns the first QUIC session ID for this socket (for client connections with one session)
+    /** @return the session ID of the first (or only) QUIC session, 0 if no session is active
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t getFirstQuicSessionId(ExceptionSink* xsink = nullptr) const;
+
+    //! Cancels a pending HTTP/3 stream on an active QUIC connection
+    /** @param session_id the QUIC session ID
+        @param stream_id the stream ID to cancel
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Submits an HTTP/3 response on an active QUIC server connection
+    /** @param session_id the QUIC session ID
+        @param stream_id the stream ID to respond on
+        @param status_code HTTP status code
+        @param headers response headers (hash of string key -> string value)
+        @param body optional response body
+        @param body_len response body length
+        @param xsink exception sink
+
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

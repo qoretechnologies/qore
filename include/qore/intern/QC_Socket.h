@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     provides a thread-safe interface to the QoreSocket object
 
@@ -173,6 +173,9 @@ public:
         assert(non_block_accept_count > 0);
         --non_block_accept_count;
     }
+
+    //! Check if the socket has an active QUIC session
+    DLLLOCAL bool hasQuicSession() const;
 
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
     DLLLOCAL void setAccept(QoreObject* o) {

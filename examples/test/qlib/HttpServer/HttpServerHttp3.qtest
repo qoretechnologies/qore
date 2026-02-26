@@ -1,0 +1,428 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 server integration tests - validates HttpServer and HttpServerAsyncIo HTTP/3 types,
+    enums, Http3ServerPollOperation, and addQuicListener validation.
+*/
+
+%modern
+
+# Set up SIGUSR1 handler to dump thread stacks for debugging
+@debug {
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    });
+}
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class HttpServerHttp3Test
+
+class HttpServerHttp3Test inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        # Self-signed certificate valid until 2036-02-20 (10-year cert for localhost)
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerHttp3Test", "1.0") {
+        # Type and enum definition tests
+        addTestCase("HTTP/3 connection state enums", \testHttpConnectionStates());
+        addTestCase("HTTP/3 poll type enum", \testHttpPollTypes());
+        addTestCase("HTTP/3 version mode enum", \testHttpVersionMode());
+
+        # Http3ServerPollOperation interface tests
+        addTestCase("Http3ServerPollOperation constants", \testH3PollOpConstants());
+        addTestCase("Http3ServerPollOperation with UDP socket", \testH3PollOpWithUdpSocket());
+
+        # HttpServer addQuicListener validation tests
+        addTestCase("addQuicListener requires async mode", \testAddQuicListenerRequiresAsyncMode());
+        addTestCase("addQuicListener requires cert and key", \testAddQuicListenerRequiresCertKey());
+        addTestCase("addQuicListener binds UDP socket", \testAddQuicListenerBindsUdp());
+
+        # HttpConnectionInfo hashdecl HTTP/3 fields
+        addTestCase("HttpConnectionInfo HTTP/3 fields", \testConnectionInfoHttp3Fields());
+
+        # HttpRequestResultInfo for HTTP/3 responses
+        addTestCase("HttpRequestResultInfo hashdecl", \testRequestResultInfo());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http3-server-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Test that Http3, Http3Sending connection states exist and have correct values
+    testHttpConnectionStates() {
+        # Verify Http3 state exists and is a string
+        assertEq("http3", HttpServerAsyncIo::HttpConnectionState::Http3, "Http3 state value");
+        assertEq("http3_sending", HttpServerAsyncIo::HttpConnectionState::Http3Sending,
+            "Http3Sending state value");
+
+        # Verify these are distinct from HTTP/2 states
+        assertNeq(HttpServerAsyncIo::HttpConnectionState::Http3,
+            HttpServerAsyncIo::HttpConnectionState::Http2, "Http3 != Http2");
+        assertNeq(HttpServerAsyncIo::HttpConnectionState::Http3Sending,
+            HttpServerAsyncIo::HttpConnectionState::Http2Sending, "Http3Sending != Http2Sending");
+
+        # Verify key connection states are accessible
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::Idle,
+            "Idle state exists");
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::ReadHeader,
+            "ReadHeader state exists");
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::Http2,
+            "Http2 state exists");
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::Http2Sending,
+            "Http2Sending state exists");
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::Http3,
+            "Http3 state exists");
+        assertTrue(exists HttpServerAsyncIo::HttpConnectionState::Http3Sending,
+            "Http3Sending state exists");
+    }
+
+    #! Test that Http3 poll type exists
+    testHttpPollTypes() {
+        assertEq("http3", HttpServerAsyncIo::HttpPollType::Http3, "Http3 poll type value");
+
+        # Distinct from other poll types
+        assertNeq(HttpServerAsyncIo::HttpPollType::Http3,
+            HttpServerAsyncIo::HttpPollType::Accept, "Http3 != Accept");
+        assertNeq(HttpServerAsyncIo::HttpPollType::Http3,
+            HttpServerAsyncIo::HttpPollType::Http2, "Http3 != Http2");
+    }
+
+    #! Test that H3 version mode exists
+    testHttpVersionMode() {
+        assertEq("h3", HttpServerAsyncIo::HttpVersionMode::H3, "H3 version mode value");
+
+        # Distinct from other version modes
+        assertNeq(HttpServerAsyncIo::HttpVersionMode::H3,
+            HttpServerAsyncIo::HttpVersionMode::Http20, "H3 != Http20");
+        assertNeq(HttpServerAsyncIo::HttpVersionMode::H3,
+            HttpServerAsyncIo::HttpVersionMode::Http11, "H3 != Http11");
+        assertNeq(HttpServerAsyncIo::HttpVersionMode::H3,
+            HttpServerAsyncIo::HttpVersionMode::Auto, "H3 != Auto");
+    }
+
+    #! Test Http3ServerPollOperation state constants
+    testH3PollOpConstants() {
+        # Verify state constants are accessible
+        assertEq("init", HttpServerAsyncIo::Http3ServerPollOperation::STATE_INIT,
+            "STATE_INIT value");
+        assertEq("reading", HttpServerAsyncIo::Http3ServerPollOperation::STATE_READING,
+            "STATE_READING value");
+        assertEq("wait_read", HttpServerAsyncIo::Http3ServerPollOperation::STATE_WAIT_READ,
+            "STATE_WAIT_READ value");
+        assertEq("request_ready", HttpServerAsyncIo::Http3ServerPollOperation::STATE_REQUEST_READY,
+            "STATE_REQUEST_READY value");
+        assertEq("sending", HttpServerAsyncIo::Http3ServerPollOperation::STATE_SENDING,
+            "STATE_SENDING value");
+        assertEq("sent", HttpServerAsyncIo::Http3ServerPollOperation::STATE_SENT,
+            "STATE_SENT value");
+        assertEq("closed", HttpServerAsyncIo::Http3ServerPollOperation::STATE_CLOSED,
+            "STATE_CLOSED value");
+
+        # All states should be distinct
+        list<string> states = (
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_INIT,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_READING,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_WAIT_READ,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_REQUEST_READY,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_SENDING,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_SENT,
+            HttpServerAsyncIo::Http3ServerPollOperation::STATE_CLOSED,
+        );
+        hash<string, bool> seen;
+        foreach string state in (states) {
+            assertFalse(seen{state} ?? False, sprintf("state '%s' is unique", state));
+            seen{state} = True;
+        }
+        assertEq(7, seen.size(), "7 unique state values");
+
+        # MAX_EMPTY_READS constant
+        assertEq(100, HttpServerAsyncIo::Http3ServerPollOperation::MAX_EMPTY_READS,
+            "MAX_EMPTY_READS value");
+    }
+
+    #! Test Http3ServerPollOperation with a real bound UDP socket
+    testH3PollOpWithUdpSocket() {
+        # Create and bind a UDP socket
+        Socket udp();
+        udp.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        hash<auto> info = udp.getSocketInfo();
+        assertTrue(info.port > 0, "UDP socket bound to a port");
+
+        # Create Http3ServerPollOperation — constructor calls startReadRequest()
+        # which sets state to STATE_READING
+        HttpServerAsyncIo::Http3ServerPollOperation h3op(udp);
+
+        # Verify state after construction (constructor starts reading immediately)
+        assertEq(HttpServerAsyncIo::Http3ServerPollOperation::STATE_READING, h3op.getState(),
+            "state is READING after construction");
+        assertEq("http3_connection", h3op.getGoal(), "goal is http3_connection");
+        assertFalse(h3op.goalReached(), "goal not reached while reading");
+        assertFalse(h3op.isClosed(), "not closed while reading");
+        assertFalse(h3op.hasError(), "no error while reading");
+        assertNothing(h3op.getError(), "error info is NOTHING while reading");
+        assertTrue(h3op.shouldKeepAlive(), "keep-alive is true initially");
+
+        # Verify getSocket() returns the same socket
+        assertEq(udp.uniqueHash(), h3op.getSocket().uniqueHash(), "getSocket returns same socket");
+
+        # Test state error: cannot send response while reading
+        assertThrows("HTTP3-STATE-ERROR", \h3op.startSendResponse(), (200, {}, binary("test")),
+            "cannot send response while reading");
+
+        # Test state error: cannot continue reading while already reading
+        assertThrows("HTTP3-STATE-ERROR", \h3op.continueReading(), NOTHING,
+            "cannot continueReading while reading");
+    }
+
+    #! Test addQuicListener requires async mode
+    testAddQuicListenerRequiresAsyncMode() {
+        # Create server WITHOUT async mode
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": False,
+        });
+        on_exit {
+            delete server;
+        }
+
+        # Should throw because async_mode is not enabled
+        assertThrows("HTTP3-ERROR", "async mode", \server.addQuicListener(),
+            (<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            },),
+            "addQuicListener requires async mode");
+    }
+
+    #! Test addQuicListener requires cert and key
+    testAddQuicListenerRequiresCertKey() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit {
+            delete server;
+        }
+
+        # No cert or key
+        assertThrows("HTTP3-ERROR", "certificate", \server.addQuicListener(),
+            (<HttpListenerOptionInfo>{},),
+            "addQuicListener requires cert and key");
+
+        # Only cert, no key
+        assertThrows("HTTP3-ERROR", "certificate", \server.addQuicListener(),
+            (<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+            },),
+            "addQuicListener requires key");
+
+        # Only key, no cert
+        assertThrows("HTTP3-ERROR", "certificate", \server.addQuicListener(),
+            (<HttpListenerOptionInfo>{
+                "key": new SSLPrivateKey(KeyPem),
+            },),
+            "addQuicListener requires cert");
+    }
+
+    #! Test addQuicListener successfully binds a UDP socket and returns port info
+    testAddQuicListenerBindsUdp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+        });
+        on_exit {
+            delete server;
+        }
+
+        # Wait for async I/O to be ready before adding QUIC listener
+        server.waitForAsyncIo();
+
+        hash<auto> result = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+
+        # Verify result hash structure
+        assertTrue(result.port > 0, sprintf("QUIC listener bound to port %d", result.port));
+        assertEq("h3", result.protocol, "protocol is h3");
+        assertTrue(exists result.name, "listener name exists");
+
+        if (m_options.verbose > 1) {
+            printf("QUIC listener bound: port=%d name=%s protocol=%s\n",
+                result.port, result.name, result.protocol);
+        }
+    }
+
+    #! Test HttpConnectionInfo hashdecl supports HTTP/3 header_info fields
+    testConnectionInfoHttp3Fields() {
+        # Create an HttpConnectionInfo with HTTP/3-style header_info
+        hash<HttpServerAsyncIo::HttpConnectionInfo> conn_info = <HttpServerAsyncIo::HttpConnectionInfo>{
+            "hdr": {
+                "method": "GET",
+                "path": "/test",
+                ":authority": "example.com",
+                ":scheme": "https",
+                "http_version": "HTTP/3",
+            },
+            "header_info": {
+                "http3": True,
+                "stream_id": 4,
+            },
+            "keep_alive": True,
+            "ssl": True,
+        };
+
+        assertEq(True, conn_info.header_info.http3, "http3 flag in header_info");
+        assertEq(4, conn_info.header_info.stream_id, "stream_id in header_info");
+        assertEq("GET", conn_info.hdr.method, "method in hdr");
+        assertEq("/test", conn_info.hdr.path, "path in hdr");
+        assertEq("example.com", conn_info.hdr.":authority", "authority in hdr");
+        assertEq("https", conn_info.hdr.":scheme", "scheme in hdr");
+        assertEq("HTTP/3", conn_info.hdr.http_version, "http_version in hdr");
+        assertTrue(conn_info.ssl, "ssl is True (QUIC always uses TLS)");
+        assertTrue(conn_info.keep_alive, "keep_alive is True");
+    }
+
+    #! Test HttpRequestResultInfo hashdecl for HTTP/3 response construction
+    testRequestResultInfo() {
+        # Test constructing a basic HTTP/3 response result
+        hash<HttpServerAsyncIo::HttpRequestResultInfo> result = <HttpServerAsyncIo::HttpRequestResultInfo>{
+            "code": 200,
+            "hdr": {"content-type": "text/plain", "x-custom": "test"},
+            "body": "Hello HTTP/3",
+        };
+
+        assertEq(200, result.code, "response code");
+        assertEq("text/plain", result.hdr."content-type", "content-type header");
+        assertEq("test", result.hdr."x-custom", "custom header");
+        assertEq("Hello HTTP/3", result.body, "response body");
+        assertFalse(result.close, "close defaults to False");
+        assertFalse(result.streaming, "streaming defaults to False");
+        assertFalse(result.dedicated, "dedicated defaults to False");
+
+        # Test close response
+        hash<HttpServerAsyncIo::HttpRequestResultInfo> close_result = <HttpServerAsyncIo::HttpRequestResultInfo>{
+            "close": True,
+        };
+        assertTrue(close_result.close, "close result");
+
+        # Test streaming response
+        hash<HttpServerAsyncIo::HttpRequestResultInfo> stream_result = <HttpServerAsyncIo::HttpRequestResultInfo>{
+            "streaming": True,
+            "stream_type": "websocket",
+        };
+        assertTrue(stream_result.streaming, "streaming result");
+        assertEq("websocket", stream_result.stream_type, "stream type");
+
+        # Test dedicated handler response
+        hash<HttpServerAsyncIo::HttpRequestResultInfo> dedicated_result = <HttpServerAsyncIo::HttpRequestResultInfo>{
+            "dedicated": True,
+        };
+        assertTrue(dedicated_result.dedicated, "dedicated result");
+
+        # Test InputStream response
+        BinaryInputStream bis(binary("test data"));
+        hash<HttpServerAsyncIo::HttpRequestResultInfo> stream_body_result = <HttpServerAsyncIo::HttpRequestResultInfo>{
+            "code": 200,
+            "input_stream": bis,
+            "hdr": {"content-type": "application/octet-stream"},
+        };
+        assertEq(200, stream_body_result.code, "InputStream response code");
+        assertTrue(exists stream_body_result.input_stream, "InputStream exists");
+    }
+}

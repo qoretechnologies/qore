@@ -3446,7 +3446,7 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
     }
 
     // Convert Qore headers hash to std::map
-    std::map<std::string, std::string> h2_headers;
+    strcase_str_map_t h2_headers;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
@@ -3470,7 +3470,7 @@ int QoreSocket::submitHttp2Response(int32_t stream_id, int status_code,
     }
 
     // Convert Qore headers hash to std::map
-    std::map<std::string, std::string> h2_headers;
+    strcase_str_map_t h2_headers;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
@@ -3493,7 +3493,7 @@ int QoreSocket::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
     }
 
     // Convert Qore headers hash to std::map
-    std::map<std::string, std::string> h2_headers;
+    strcase_str_map_t h2_headers;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
@@ -3521,7 +3521,7 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
     }
 
     // Convert Qore headers hash to std::map and extract :method, :path
-    std::map<std::string, std::string> h2_headers;
+    strcase_str_map_t h2_headers;
     std::string method;
     std::string path;
 
@@ -3605,7 +3605,7 @@ int QoreSocket::submitHttp2StreamingResponseHeaders(int32_t stream_id, int statu
     }
 
     // Convert QoreHashNode to map
-    std::map<std::string, std::string> header_map;
+    strcase_str_map_t header_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
@@ -3627,7 +3627,7 @@ int QoreSocket::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailer
     }
 
     // Convert QoreHashNode to map
-    std::map<std::string, std::string> trailer_map;
+    strcase_str_map_t trailer_map;
     if (trailers) {
         ConstHashIterator hi(trailers);
         while (hi.next()) {
@@ -6415,7 +6415,7 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     result->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
     // Build headers hash (lowercase names, handle duplicate headers per RFC 7540)
-    QoreHashNode* headers = h2HeadersToQoreHash(cached_stream->headers, true);
+    QoreHashNode* headers = httpMultiHeadersToQoreHash(cached_stream->headers, true);
     result->setKeyValue("headers", headers, nullptr);
 
     // Body as binary
@@ -6439,7 +6439,7 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
 
     // Include trailers from client if present (e.g., gRPC client-streaming)
     if (!cached_stream->trailers.empty()) {
-        QoreHashNode* trailers_hash = h2HeadersToQoreHash(cached_stream->trailers, true);
+        QoreHashNode* trailers_hash = httpMultiHeadersToQoreHash(cached_stream->trailers, true);
         result->setKeyValue("trailers", trailers_hash, nullptr);
     }
 
@@ -6507,7 +6507,7 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
     if (is_connect) {
         // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
         // submitConnectResponse still uses map (CONNECT doesn't need duplicate headers)
-        std::map<std::string, std::string> hdr_map;
+        strcase_str_map_t hdr_map;
         for (const auto& p : hdr_pairs) {
             hdr_map[p.first] = p.second;
         }
@@ -6673,7 +6673,7 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     set_non_block = true;
 
     // Build headers map
-    std::map<std::string, std::string> hdr_map;
+    strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
@@ -7114,7 +7114,7 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
 
     // Convert headers map to Qore hash (handle duplicate headers per RFC 7540)
     if (!stream->headers.empty()) {
-        response->setKeyValue("headers", h2HeadersToQoreHash(stream->headers), xsink);
+        response->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
     }
 
     // Convert body vector to Qore binary or string based on content-type
@@ -7163,7 +7163,7 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
 
     // Include trailers if present
     if (!stream->trailers.empty()) {
-        response->setKeyValue("trailers", h2HeadersToQoreHash(stream->trailers, true), xsink);
+        response->setKeyValue("trailers", httpMultiHeadersToQoreHash(stream->trailers, true), xsink);
     }
 
     // Mark that the stream has ended (END_STREAM was received)
@@ -7185,7 +7185,7 @@ void SocketHttp2ClientMultiplexPollOperation::cancelStream(int32_t stream_id, Ex
 }
 
 int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* method, const char* path,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
     if (!h2_session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");

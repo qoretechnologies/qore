@@ -45,6 +45,12 @@
 #include "qore/intern/QC_Queue.h"
 
 #include "qore/intern/Http2Session.h"
+// NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
+// A forward declaration would suffice for the shared_ptr members, but the inline
+// methods (addQuicSession, etc.) call QuicSession::getSessionId() and need the
+// full definition.  With single-compilation-unit builds this is not a concern.
+#include "qore/intern/QuicSession.h"
+#include "qore/intern/QoreDatagramDispatcher.h"
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cctype>
@@ -724,6 +730,84 @@ struct qore_socket_private {
     */
     std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> h2_stream_complete_callback;
 
+    //! Connection-ID based datagram dispatcher for QUIC multi-connection support
+    /** Routes incoming UDP datagrams to the correct QuicSession based on DCID.
+        Used by SocketQuicServerPollOperation for CID-based packet routing.
+        Lazily initialized to avoid overhead for non-QUIC sockets.
+    */
+    std::unique_ptr<QoreDatagramDispatcher> quic_dispatcher;
+
+    //! Get or create the QUIC datagram dispatcher (lazy initialization)
+    /** Thread-safe: uses quic_sessions_lock to protect the lazy init.
+        Although typically called from the I/O thread (which holds sock->priv->m),
+        this lock makes it safe regardless of caller context.
+
+        @note The returned reference remains valid for the lifetime of the socket
+        because quic_dispatcher is only set once (lazy init) and never cleared
+        or moved.
+    */
+    DLLLOCAL QoreDatagramDispatcher& getQuicDispatcher() {
+        AutoLocker al(quic_sessions_lock);
+        if (!quic_dispatcher) {
+            quic_dispatcher = std::make_unique<QoreDatagramDispatcher>();
+        }
+        return *quic_dispatcher;
+    }
+
+    //! Authoritative map of session_id -> QuicSession for multi-connection support.
+    /** Multiple QUIC clients can connect to a single UDP socket.
+        Each session is identified by a unique session_id.
+        Protected by quic_sessions_lock; SocketQuicServerPollOperation::sessions_
+        is a single-threaded working copy used only from the I/O thread.
+    */
+    std::unordered_map<int64_t, std::shared_ptr<QuicSession>> quic_sessions;
+    //! Lock ordering: QoreSocketObject::priv->m → quic_sessions_lock → QuicSession::mtx_ (never reverse)
+    mutable QoreThreadLock quic_sessions_lock;
+
+    //! Add a QUIC session to the session map
+    DLLLOCAL void addQuicSession(const std::shared_ptr<QuicSession>& session) {
+        AutoLocker al(quic_sessions_lock);
+        quic_sessions[session->getSessionId()] = session;
+    }
+
+    //! Remove a QUIC session from the session map
+    DLLLOCAL void removeQuicSession(int64_t session_id) {
+        AutoLocker al(quic_sessions_lock);
+        quic_sessions.erase(session_id);
+    }
+
+    //! Get a QUIC session by session ID
+    /** Acquires quic_sessions_lock internally; caller may hold priv->m (safe per
+        lock ordering: priv->m → quic_sessions_lock → QuicSession::mtx_).
+    */
+    DLLLOCAL std::shared_ptr<QuicSession> getQuicSession(int64_t session_id) {
+        AutoLocker al(quic_sessions_lock);
+        auto it = quic_sessions.find(session_id);
+        return it != quic_sessions.end() ? it->second : nullptr;
+    }
+
+    //! Get the first QUIC session ID (for client connections with a single session)
+    /** @return session ID or 0 if no sessions exist (0 is never a valid session
+        ID since IDs start at 1)
+        @note Returns an arbitrary session from the unordered_map; used only for
+        single-session client sockets where exactly one session exists.
+    */
+    DLLLOCAL int64_t getFirstQuicSessionId(ExceptionSink* xsink = nullptr) const {
+        AutoLocker al(quic_sessions_lock);
+        if (quic_sessions.empty()) {
+            return 0;
+        }
+        if (quic_sessions.size() != 1) {
+            if (xsink) {
+                xsink->raiseException("QUIC-SESSION-ERROR",
+                    "getFirstQuicSessionId() is only valid for single-session client sockets; "
+                    "this socket has %d sessions", (int)quic_sessions.size());
+            }
+            return 0;
+        }
+        return quic_sessions.begin()->first;
+    }
+
 #ifdef DARWIN
     //! Write end of a notification pipe used by Socket::poll() on macOS
     /** When a socket FD is closed during a kqueue poll, macOS silently removes
@@ -740,6 +824,14 @@ struct qore_socket_private {
     }
 
     DLLLOCAL ~qore_socket_private() {
+        // Clear dispatcher references in all QUIC sessions before destroying the dispatcher
+        {
+            AutoLocker al(quic_sessions_lock);
+            for (auto& [id, session] : quic_sessions) {
+                session->clearDispatcher();
+            }
+        }
+
         close_internal();
 
         // must be dereferenced and removed before deleting
@@ -904,6 +996,14 @@ struct qore_socket_private {
         }
         // Reset shared_ptr - will delete session if this is the last reference
         h2_session.reset();
+        // Clear dispatcher references before clearing sessions to avoid dangling pointers
+        {
+            AutoLocker al(quic_sessions_lock);
+            for (auto& [id, session] : quic_sessions) {
+                session->clearDispatcher();
+            }
+            quic_sessions.clear();
+        }
         // Clear HTTP/2 client multiplexing state
         {
             AutoLocker al(h2_stream_callbacks_lock);
@@ -922,8 +1022,9 @@ struct qore_socket_private {
             }
 
             if (!socketname.empty()) {
-                if (del)
+                if (del) {
                     unlink(socketname.c_str());
+                }
                 socketname.clear();
             }
             do_close_event();
@@ -3829,7 +3930,7 @@ struct qore_socket_private {
                     "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
                 return -1;
             }
-            std::map<std::string, std::string> hdr_map;
+            strcase_str_map_t hdr_map;
             if (headers) {
                 ConstHashIterator hi(headers);
                 while (hi.next()) {

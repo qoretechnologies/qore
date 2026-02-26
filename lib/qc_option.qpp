@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -222,6 +222,7 @@
 #define QORE_CONST_HAVE_THREAD_NAME 0
 #endif
 
+
 /** @defgroup option_constants Option Constants
     Option constants
 */
@@ -397,4 +398,11 @@ const HAVE_THREAD_NAME = bool(QORE_CONST_HAVE_THREAD_NAME);
     @since %Qore 2.3
 */
 const HAVE_HTTP2 = bool(true);
+
+//! Indicates if QUIC/HTTP/3 support is available
+/** QUIC/HTTP/3 support is built into the %Qore library and is always available.
+
+    @since %Qore 2.3
+*/
+const HAVE_HTTP3 = bool(true);
 ///@}

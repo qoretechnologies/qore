@@ -134,22 +134,37 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     %Qore now requires a C++ compiler with C++17 support. Previously, C++11 was sufficient.
     @endparblock
 
+    @par Autotools Build System Removed
+    @parblock
+    The autotools build system (\c configure.ac, \c Makefile.am, \c reconf.sh, \c m4/) has been
+    removed. CMake is now the only supported build system. See the \c BUILDING and \c README-GIT
+    files for build instructions.
+    @endparblock
+
     @subsection qore_2_3_0_new_features New Features in Qore
-    @par New Required Libraries: nghttp2, Brotli, Zstd, and LZ4
+    @par New Required Libraries: nghttp2, ngtcp2, nghttp3, Brotli, Zstd, and LZ4
     @parblock
     The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
     - <b>nghttp2:</b> HTTP/2 support is always available
+    - <b>ngtcp2, ngtcp2_crypto_ossl, nghttp3:</b> QUIC/HTTP/3 support is always available.
+      The \c ngtcp2_crypto_ossl backend requires OpenSSL 3.5+ (QUIC TLS API). On platforms with
+      older OpenSSL (e.g., Ubuntu 24.04, macOS Homebrew), build ngtcp2 and nghttp3 from source
+      with OpenSSL 3.5+; see the \c BUILDING file for instructions.
     - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
 
     Systems that previously built %Qore without these libraries will need to install the development packages:
-    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
-    - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel
-    - <b>Alpine:</b> \c nghttp2-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev
+    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libngtcp2-dev, \c libngtcp2-crypto-ossl-dev,
+      \c libnghttp3-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev
+    - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c ngtcp2-devel, \c ngtcp2-crypto-ossl-devel,
+      \c nghttp3-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel
+    - <b>Alpine:</b> \c nghttp2-dev, \c ngtcp2-dev, \c ngtcp2-crypto-ossl-dev,
+      \c nghttp3-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
     - @ref Qore::Option::HAVE_ZSTD "Option::HAVE_ZSTD"
     - @ref Qore::Option::HAVE_LZ4 "Option::HAVE_LZ4"
+    - @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3"
     @endparblock
 
     @par New Build Requirement: Rust Toolchain and tree-sitter CLI
@@ -237,6 +252,18 @@ cargo install tree-sitter-cli@0.26.5
         (requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
+    - <b>QUIC/HTTP/3 support (h3 over QUIC via ngtcp2 + nghttp3)</b>
+      - new builtin ngtcp2 + nghttp3 library support for QUIC transport and HTTP/3 binary framing
+      - QUIC handshake with TLS 1.3 over UDP for 0-RTT and 1-RTT connection establishment
+      - HTTPClient support for HTTP/3 with automatic discovery via Alt-Svc headers and fallback to HTTP/1.x or HTTP/2
+      - new @ref Qore::HTTPClient::setHttp3Mode() "HTTPClient::setHttp3Mode()" method to control HTTP/3 mode ("auto", "disabled", "required")
+      - new @ref Qore::HTTP3Mode "HTTP3Mode" enum for type-safe HTTP/3 mode selection
+      - HttpServer support for HTTP/3 with async I/O integration
+      - new @ref Qore::Socket::startPollQuicConnect() "Socket::startPollQuicConnect()" for non-blocking QUIC client handshake and HTTP/3 requests
+      - new @ref Qore::Socket::startPollQuicAccept() "Socket::startPollQuicAccept()" for non-blocking QUIC server connection acceptance
+      - new @ref Qore::Socket::startPollQuicSendResponse() "Socket::startPollQuicSendResponse()" for non-blocking HTTP/3 response sending
+      - new @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3" constant (always \c True as ngtcp2/nghttp3 are now required)
+      - new \c Http3ClientIo user module for HTTP/3 client I/O with connection management
     - <b>Parameterized date type restrictions</b>
       - new @ref date_type "date<absolute>" and @ref date_type "date<relative>" types restrict date values to absolute
         or relative date/time values

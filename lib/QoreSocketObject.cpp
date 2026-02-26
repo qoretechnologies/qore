@@ -1115,3 +1115,95 @@ void QoreSocketObject::clearNonBlock() {
     AutoLocker al(priv->m);
     priv->clearNonBlock();
 }
+
+bool QoreSocketObject::isQuic() const {
+    AutoLocker al(priv->m);
+    return priv->hasQuicSession();
+}
+
+int64_t QoreSocketObject::submitQuicRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    // Get the first QUIC session (client connections have exactly one)
+    std::shared_ptr<QuicSession> session;
+    {
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        AutoLocker al2(sp->quic_sessions_lock);
+        if (!sp->quic_sessions.empty()) {
+            session = sp->quic_sessions.begin()->second;
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket; "
+            "use startPollQuicConnect() first");
+        return -1;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    return session->submitRequest(method, path, hdr_map, body, body_len, xsink);
+}
+
+void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    // Get the QUIC session by session_id
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+
+    session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
+}
+
+int QoreSocketObject::submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
+    // Thread safety: priv->m serializes concurrent calls from multiple handler
+    // threads.  The lock is held while building headers and calling
+    // session->submitResponse(), which only mutates QuicSession internal state
+    // (body_data_, nghttp3 submit).  Actual packet I/O happens later when the
+    // poll operation calls writePackets()/sendPendingPackets().
+    AutoLocker al(priv->m);
+    // Get the QUIC session by session_id
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+
+    // Convert headers hash to std::map
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreStringValueHelper val(hi.get());
+            hdr_map[hi.getKey()] = val->c_str();
+        }
+    }
+
+    return session->submitResponse(stream_id, status_code, hdr_map, body, body_len, xsink);
+}
+
+int64_t QoreSocketObject::getFirstQuicSessionId(ExceptionSink* xsink) const {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    return sp->getFirstQuicSessionId(xsink);
+}
+
+bool my_socket_priv::hasQuicSession() const {
+    qore_socket_private* sp = qore_socket_private::get(*socket);
+    AutoLocker al(sp->quic_sessions_lock);
+    return !sp->quic_sessions.empty();
+}

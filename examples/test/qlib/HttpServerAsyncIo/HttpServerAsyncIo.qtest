@@ -23,22 +23,22 @@ class TestTarget inherits HttpAsyncTarget {
         };
     }
 
-    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx) {
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
     }
 
-    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 }
@@ -82,22 +82,22 @@ class InstrumentedTarget inherits HttpAsyncTarget {
         };
     }
 
-    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, object listener, hash<auto> cx) {
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
     }
 
-    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 }
@@ -220,7 +220,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "sock": sock,
             "hdr": {},
             "header_info": {},
-            "listener": sock,  # Just use sock as listener for test
+            # listener is *HttpListenerInterface; NOTHING is fine for standalone tests
             "cx": {},
             "keep_alive": False,
             "ssl": False,

@@ -1,0 +1,260 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Http3ClientIo.qm Qore user module providing HTTP/3 multiplexed client I/O over QUIC
+
+/*  Http3ClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Logger
+%requires AsyncSocketIo
+
+module Http3ClientIo {
+    version = "1.0";
+    desc = "HTTP/3 multiplexed client I/O over QUIC";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Module initialization
+    };
+}
+
+/** @mainpage Http3ClientIo Module
+
+    @tableofcontents
+
+    @section http3clientiointro Introduction
+
+    The %Http3ClientIo module provides HTTP/3 multiplexed client I/O support over QUIC,
+    enabling multiple concurrent streams on a single UDP connection.
+
+    HTTP/3 uses QUIC as its transport protocol, which provides:
+    - No head-of-line blocking between streams (unlike HTTP/2 over TCP)
+    - Built-in TLS 1.3 encryption in the transport layer
+    - Potential for connection migration (not yet implemented)
+    - Faster connection establishment (0-RTT in some cases)
+
+    This module leverages the @ref Qore::AbstractPollOperation pattern and integrates with
+    @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" for efficient
+    multiplexed I/O handling.
+
+    @section http3clientio_features Features
+
+    - **True HTTP/3 multiplexing**: Multiple concurrent streams over QUIC (UDP)
+    - **No head-of-line blocking**: Stream independence at the transport layer
+    - **Connection pooling**: Shared connections across multiple clients
+    - **Sync and async APIs**: Blocking and callback-based interfaces
+    - **Planned**: WebSocket and SSE over HTTP/3 (not yet implemented)
+
+    @section http3clientio_components Components
+
+    - @ref Http3ClientIo::Http3ClientConnectionManager "Http3ClientConnectionManager" - Connection pool per host:port
+    - @ref Http3ClientIo::Http3ClientConnection "Http3ClientConnection" - Single QUIC connection, multiple streams
+    - @ref Http3ClientIo::Http3ClientStreamHandle "Http3ClientStreamHandle" - Per-request handle (sync/async)
+    - @ref Http3ClientIo::Http3ClientPollOperation "Http3ClientPollOperation" - QUIC packet reading and HTTP/3 frame dispatch
+
+    @section http3clientio_usage Usage
+
+    @par Basic Usage (sync API)
+    @code{.py}
+%requires Http3ClientIo
+
+# Create a connection manager
+Http3ClientConnectionManager manager();
+
+# Acquire a stream for a request
+Http3ClientStreamHandle stream = manager.acquireStream("https://example.com");
+
+# Submit request and wait for response
+hash<auto> response = stream.request("GET", "/api/resource");
+    @endcode
+
+    @par Async Usage (callback API with controller)
+    @code{.py}
+%requires Http3ClientIo
+%requires AsyncSocketIo
+
+# Create manager with async controller
+Http3ClientConnectionManager manager();
+AsyncSocketIoController controller(False);
+manager.setController(controller);
+
+# Start the controller I/O thread
+controller.start();
+
+# Submit async request with callback
+manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
+    NOTHING, NOTHING,
+    sub (hash<auto> response, *hash<auto> error) {
+        if (error) {
+            printf("Error: %y\n", error);
+        } else {
+            printf("Response: %y\n", response);
+        }
+    });
+
+# Controller runs in background, processing I/O events
+# ... do other work ...
+
+# When done
+controller.stop();
+manager.closeAll();
+    @endcode
+
+    @section http3clientio_relnotes Release Notes
+
+    @subsection http3clientio_v1_0 Version 1.0
+    - Initial release of Http3ClientIo module
+    - HTTP/3 multiplexing over QUIC for client scenarios
+    - Connection pooling with configurable limits
+    - Sync and async request APIs
+    - Streaming support
+*/
+
+#! Main namespace for Http3ClientIo module
+public namespace Http3ClientIo {
+    #! Default maximum connections per host
+    public const DefaultMaxConnectionsPerHost = 6;
+
+    #! Default maximum streams per connection
+    public const DefaultMaxStreamsPerConnection = 100;
+
+    #! Default connection idle timeout (60 seconds)
+    public const DefaultConnectionIdleTimeout = 60s;
+
+    #! Default connect timeout (30 seconds)
+    public const DefaultConnectTimeout = 30s;
+
+    #! Default request timeout (60 seconds)
+    public const DefaultRequestTimeout = 60s;
+
+    #! Stream state enum
+    public enum Http3ClientStreamState {
+        #! Stream is pending (not yet submitted)
+        Pending = 0,
+        #! Stream is open (request submitted, awaiting response)
+        Open = 1,
+        #! Stream has received headers
+        HeadersReceived = 2,
+        #! Stream is receiving body data
+        ReceivingBody = 3,
+        #! Stream is complete (response fully received)
+        Complete = 4,
+        #! Stream was cancelled
+        Cancelled = 5,
+        #! Stream encountered an error
+        Error = 6,
+    }
+
+    #! Connection state enum
+    public enum Http3ClientConnectionState {
+        #! Connection is connecting (QUIC handshake in progress)
+        Connecting = 0,
+        #! Connection is ready (QUIC handshake + HTTP/3 setup complete)
+        Ready = 1,
+        #! Connection is draining (GOAWAY received or connection closing)
+        Draining = 2,
+        #! Connection is closed
+        Closed = 3,
+    }
+
+    #! Request options for HTTP/3 client requests
+    public hashdecl Http3ClientRequestOptions {
+        #! Request timeout
+        *timeout timeout;
+    }
+
+    #! Response info for HTTP/3 client requests
+    public hashdecl Http3ClientResponseInfo {
+        #! HTTP status code
+        int status_code;
+
+        #! Response headers
+        hash<auto> headers;
+
+        #! Response body (binary data from the HTTP/3 response)
+        *binary body;
+
+        #! Stream ID used for this request
+        int stream_id;
+    }
+
+    #! Error info for HTTP/3 client operations
+    public hashdecl Http3ClientErrorInfo {
+        #! Error code
+        string err;
+
+        #! Error description
+        string desc;
+
+        #! Stream ID (if stream-level error)
+        *int stream_id;
+    }
+
+    #! Connection info for HTTP/3 client connections
+    public hashdecl Http3ClientConnectionInfo {
+        #! Host name
+        string host;
+
+        #! Port number
+        int port;
+
+        #! Connection state
+        Http3ClientConnectionState state;
+
+        #! Number of active streams
+        int active_streams;
+
+        #! Maximum concurrent streams
+        int max_concurrent_streams;
+
+        #! Connection ID
+        int connection_id;
+    }
+
+    #! Connection manager options
+    public hashdecl Http3ClientConnectionManagerOptions {
+        #! Maximum connections per host
+        int max_connections_per_host = DefaultMaxConnectionsPerHost;
+
+        #! Maximum streams per connection
+        int max_streams_per_connection = DefaultMaxStreamsPerConnection;
+
+        #! Connection idle timeout
+        timeout idle_timeout = DefaultConnectionIdleTimeout;
+
+        #! Connect timeout
+        timeout connect_timeout = DefaultConnectTimeout;
+
+        #! Default request timeout
+        timeout request_timeout = DefaultRequestTimeout;
+
+        #! SSL certificate verification mode (see @ref Qore::SSL_VERIFY_NONE, @ref Qore::SSL_VERIFY_PEER, etc.)
+        *int ssl_verify_mode;
+
+        #! If True, accept all server certificates (sets SSL_VERIFY_NONE)
+        bool accept_all_certs = False;
+
+        #! Logger for connection manager
+        *Logger logger;
+    }
+}

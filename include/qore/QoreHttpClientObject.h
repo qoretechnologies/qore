@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -65,6 +65,15 @@ enum Http2Mode {
     HTTP2_MODE_REQUIRED = 2,  //!< Require HTTP/2, fail if unavailable
     HTTP2_MODE_H2C_DIRECT = 3,    //!< h2c (HTTP/2 cleartext) using prior knowledge - starts HTTP/2 directly
     HTTP2_MODE_H2C_UPGRADE = 4    //!< h2c via HTTP/1.1 Upgrade header
+};
+
+//! HTTP/3 protocol mode options
+/** @since %Qore 2.3
+*/
+enum Http3Mode {
+    HTTP3_MODE_DISABLED = 0,  //!< Never use HTTP/3
+    HTTP3_MODE_AUTO = 1,      //!< Use HTTP/3 if advertised via Alt-Svc (default)
+    HTTP3_MODE_REQUIRED = 2   //!< Require HTTP/3, fail if unavailable
 };
 
 //! provides a way to communicate with HTTP servers using Qore data structures
@@ -338,6 +347,30 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Sets the HTTP/3 protocol mode
+    /** @param mode the HTTP/3 mode: HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, or HTTP3_MODE_REQUIRED
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @note The default mode is HTTP3_MODE_AUTO, which uses HTTP/3 if advertised via Alt-Svc
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp3Mode(int mode, ExceptionSink* xsink);
+
+    //! Returns the current HTTP/3 protocol mode
+    /** @return the current HTTP/3 mode: HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, or HTTP3_MODE_REQUIRED
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int getHttp3Mode() const;
+
+    //! Returns @ref True if the connection is currently using HTTP/3 (QUIC)
+    /** @return @ref True if HTTP/3 is active on the current connection
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isHttp3Active() const;
 
     //! sets the connection URL
     /** @param url the URL to use for connection parameters

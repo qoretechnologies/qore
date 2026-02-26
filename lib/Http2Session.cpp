@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QuicCommon.h"
 #include "qore/intern/qore_socket_private.h"
 
 #include <algorithm>
@@ -42,6 +43,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <unordered_set>
 
 static bool http2DebugEnabled() {
     static std::once_flag flag;
@@ -208,7 +210,7 @@ int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* x
     return 0;
 }
 
-std::vector<nghttp2_nv> Http2Session::makeNv(const std::map<std::string, std::string>& headers) {
+std::vector<nghttp2_nv> Http2Session::makeNv(const strcase_str_map_t& headers) {
     std::vector<nghttp2_nv> nva;
     nva.reserve(headers.size());
 
@@ -225,34 +227,68 @@ std::vector<nghttp2_nv> Http2Session::makeNv(const std::map<std::string, std::st
     return nva;
 }
 
-static std::string toLowerHeaderName(const std::string& name) {
-    std::string out(name);
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return out;
+// HTTP/2 forbids hop-by-hop headers from HTTP/1.x (RFC 9113 Section 8.2.2)
+static const auto& forbidden_headers = getForbiddenHopByHopHeaders();
+
+//! Build regular (non-pseudo) headers for nghttp2, lowercasing names in-place
+/** Works with any range of pair-like elements (std::map, std::vector<std::pair>, etc.)
+    @param nva output vector of nghttp2_nv to append to
+    @param lowered_names storage for lowered name strings (must outlive nghttp2 call)
+    @param headers input headers to process
+    @param skip_host if true, skip "host" header (used for requests where :authority replaces host)
+*/
+template<typename HeaderRange>
+static void buildRegularHeaders(std::vector<nghttp2_nv>& nva,
+        std::vector<std::string>& lowered_names, const HeaderRange& headers,
+        bool skip_host) {
+    for (const auto& h : headers) {
+        // Lowercase in-place
+        std::string lname(h.first);
+        if (lname.empty()) {
+            continue;
+        }
+        std::transform(lname.begin(), lname.end(), lname.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (lname[0] == ':') {
+            continue;
+        }
+        if (skip_host && lname == "host") {
+            continue;
+        }
+        if (forbidden_headers.count(lname)) {
+            continue;
+        }
+        lowered_names.push_back(std::move(lname));
+        nghttp2_nv nv = {
+            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
+            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
+            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
+        };
+        nva.push_back(nv);
+    }
 }
 
 int32_t Http2Session::submitRequest(const char* method, const char* path,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming) {
-    // Delegate to vector<pair> overload
-    std::vector<std::pair<std::string, std::string>> pairs(headers.begin(), headers.end());
-    return submitRequest(method, path, pairs, body, body_len, xsink, streaming);
+    return submitRequestImpl(method, path, headers, body, body_len, xsink, streaming);
 }
 
 int32_t Http2Session::submitRequest(const char* method, const char* path,
         const std::vector<std::pair<std::string, std::string>>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming) {
-    std::lock_guard<std::recursive_mutex> lg(m);
-    if (is_server) {
-        xsink->raiseException("HTTP2-ERROR", "cannot submit request on server session");
-        return -1;
-    }
+    return submitRequestImpl(method, path, headers, body, body_len, xsink, streaming);
+}
 
-    // Build pseudo-headers
+template<typename HeaderRange>
+int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
+        const HeaderRange& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming) {
+    // Build headers outside the lock - no session state access needed here
     std::vector<nghttp2_nv> nva;
     nva.reserve(headers.size() + 5);
 
@@ -273,6 +309,12 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         } else if (!strcasecmp(h.first.c_str(), "host") && authority.empty()) {
             authority = h.second;
         }
+    }
+
+    // is_server and scheme are set once at construction and never change — safe to read without lock
+    if (is_server) {
+        xsink->raiseException("HTTP2-ERROR", "cannot submit request on server session");
+        return -1;
     }
 
     if (scheme_str.empty()) {
@@ -319,40 +361,15 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
         nva.push_back(nv_protocol);
     }
 
-    // Add regular headers (excluding pseudo-headers, host, and connection-specific headers)
-    // Store lowered names to keep them alive for the nghttp2 call
+    // Add regular headers (excluding pseudo-headers, host, and forbidden headers)
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    for (const auto& h : headers) {
-        std::string lname = toLowerHeaderName(h.first);
-        if (lname[0] == ':' || lname == "host") {
-            continue;
-        }
-        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
-            lname == "transfer-encoding" || lname == "upgrade") {
-            continue;
-        }
-        lowered_names.push_back(lname);
-        nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
-        };
-        nva.push_back(nv);
-    }
-
-    nghttp2_data_provider* data_prd = nullptr;
-    std::unique_ptr<DataProviderContext> provider_ctx;
+    buildRegularHeaders(nva, lowered_names, headers, true /* skip_host */);
 
     bool is_extended_connect = (method_str == "CONNECT" && !protocol.empty());
 
-    if (is_extended_connect && remote_settings_received
-            && !remote_settings.enable_connect_protocol) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
-            "server does not support extended CONNECT protocol (RFC 8441); "
-            "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
-        return -1;
-    }
+    nghttp2_data_provider* data_prd = nullptr;
+    std::unique_ptr<DataProviderContext> provider_ctx;
 
     bool has_body = false;
     BodyData pending_data;
@@ -372,11 +389,22 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
     }
 
     if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: submitRequest (pairs) sending %zu headers:\n", nva.size());
+        fprintf(stderr, "HTTP2 DEBUG: submitRequest sending %zu headers:\n", nva.size());
         for (const auto& nv : nva) {
             fprintf(stderr, "  %.*s: %.*s\n", (int)nv.namelen, nv.name, (int)nv.valuelen, nv.value);
         }
         fflush(stderr);
+    }
+
+    // Lock only for nghttp2 API calls and session state access
+    std::lock_guard<std::recursive_mutex> lg(m);
+
+    if (is_extended_connect && remote_settings_received
+            && !remote_settings.enable_connect_protocol) {
+        xsink->raiseException("HTTP2-CONNECT-ERROR",
+            "server does not support extended CONNECT protocol (RFC 8441); "
+            "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
+        return -1;
     }
 
     int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
@@ -411,23 +439,28 @@ int32_t Http2Session::submitRequest(const char* method, const char* path,
 }
 
 int Http2Session::submitResponse(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers,
+        const strcase_str_map_t& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
-    // Delegate to vector<pair> overload
-    std::vector<std::pair<std::string, std::string>> pairs(headers.begin(), headers.end());
-    return submitResponse(stream_id, status_code, pairs, body, body_len, xsink);
+    return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
 }
 
 int Http2Session::submitResponse(int32_t stream_id, int status_code,
         const std::vector<std::pair<std::string, std::string>>& headers,
         const void* body, size_t body_len, ExceptionSink* xsink) {
-    std::lock_guard<std::recursive_mutex> lg(m);
+    return submitResponseImpl(stream_id, status_code, headers, body, body_len, xsink);
+}
+
+template<typename HeaderRange>
+int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
+        const HeaderRange& headers,
+        const void* body, size_t body_len, ExceptionSink* xsink) {
+    // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
         return -1;
     }
 
-    // Build response headers
+    // Build response headers outside the lock
     std::vector<nghttp2_nv> nva;
     nva.reserve(headers.size() + 1);
 
@@ -440,33 +473,15 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
     };
     nva.push_back(nv_status);
 
-    // Add regular headers, filtering out connection-specific headers
+    // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    for (const auto& h : headers) {
-        std::string lname = toLowerHeaderName(h.first);
-        if (lname[0] == ':') {
-            continue;
-        }
-        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
-            lname == "transfer-encoding" || lname == "upgrade") {
-            continue;
-        }
-        lowered_names.push_back(lname);
-        nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
-        };
-        nva.push_back(nv);
-    }
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
 
     nghttp2_data_provider* data_prd = nullptr;
     std::unique_ptr<DataProviderContext> provider_ctx;
 
     if (body && body_len > 0) {
-        pending_body_data[stream_id] = BodyData(body, body_len);
-
         provider_ctx = std::make_unique<DataProviderContext>();
         provider_ctx->h2 = this;
         provider_ctx->provider.source.ptr = provider_ctx.get();
@@ -474,8 +489,15 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
         data_prd = &provider_ctx->provider;
     }
 
-    printd(5, "submitResponse(pairs) stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
+    printd(5, "submitResponse() stream_id=%d status=%d body_len=%zu nva.size=%zu\n",
         stream_id, status_code, body_len, nva.size());
+
+    // Lock only for nghttp2 API calls and session state access
+    std::lock_guard<std::recursive_mutex> lg(m);
+
+    if (body && body_len > 0) {
+        pending_body_data[stream_id] = BodyData(body, body_len);
+    }
 
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(), data_prd);
     if (rv != 0) {
@@ -491,14 +513,14 @@ int Http2Session::submitResponse(int32_t stream_id, int status_code,
 }
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
-    std::lock_guard<std::recursive_mutex> lg(m);
+        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+    // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
         return -1;
     }
 
-    // Build response headers
+    // Build response headers outside the lock
     std::vector<nghttp2_nv> nva;
     nva.reserve(headers.size() + 1);
 
@@ -511,26 +533,10 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
     };
     nva.push_back(nv_status);
 
-    // Add regular headers, filtering out connection-specific headers
+    // Add regular headers, filtering out pseudo and forbidden headers
     std::vector<std::string> lowered_names;
     lowered_names.reserve(headers.size());
-    for (const auto& h : headers) {
-        std::string lname = toLowerHeaderName(h.first);
-        if (lname[0] == ':') {
-            continue;
-        }
-        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
-            lname == "transfer-encoding" || lname == "upgrade") {
-            continue;
-        }
-        lowered_names.push_back(lname);
-        nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            lowered_names.back().size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
-        };
-        nva.push_back(nv);
-    }
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
 
     // Create a deferred data provider - body will be fed via sendStreamData()
     auto provider_ctx = std::make_unique<DataProviderContext>();
@@ -543,6 +549,9 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
 
     printd(5, "submitResponseStreaming() stream_id=%d status=%d nva.size=%zu\n",
         stream_id, status_code, nva.size());
+
+    // Lock only for nghttp2 API calls and session state access
+    std::lock_guard<std::recursive_mutex> lg(m);
 
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
         &provider_ctx->provider);
@@ -558,7 +567,7 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
 }
 
 int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
+        const strcase_str_map_t& headers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit push promise on client session");
@@ -704,8 +713,9 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d send_buffer.size=%zu\n",
-        nghttp2_session_want_write(session), is_server, timeout_ms, send_buffer.size());
+    size_t pending = send_buffer.size() - send_offset;
+    printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d pending=%zu\n",
+        nghttp2_session_want_write(session), is_server, timeout_ms, pending);
     // First, collect data from nghttp2; drain until it reports no more data.
     // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
     // relying on nghttp2_session_want_write() as a loop condition.
@@ -733,14 +743,22 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         send_buffer.insert(send_buffer.end(), data, data + len);
         total_collected += len;
     }
-    printd(5, "sendPendingData() collected %zu bytes from nghttp2, send_buffer.size=%zu\n",
-        total_collected, send_buffer.size());
+
+    // Compact send buffer when consumed prefix exceeds threshold
+    if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
+        send_offset = 0;
+    }
+
+    pending = send_buffer.size() - send_offset;
+    printd(5, "sendPendingData() collected %zu bytes from nghttp2, pending=%zu\n",
+        total_collected, pending);
 
     // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
-    if (!send_buffer.empty()) {
-        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", send_buffer.size(), sock->ssl);
+    if (send_offset < send_buffer.size()) {
+        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending, sock->ssl);
         {
-            size_t off = 0;
+            size_t off = send_offset;
             int count = 0;
             while (off + 9 <= send_buffer.size() && count < 32) {
                 const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
@@ -768,26 +786,28 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
             return -1;
         }
 
-        // Loop until buffer is empty or we need to poll
-        while (!send_buffer.empty()) {
+        // Loop until buffer consumed or we need to poll
+        while (send_offset < send_buffer.size()) {
             ssize_t rc;
+            size_t to_send = send_buffer.size() - send_offset;
             if (sock->ssl) {
                 // Use doNonBlockingIo for proper async SSL I/O
                 // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
                 size_t real_io = 0;
-                printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", send_buffer.size());
+                printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
                 rc = sock->ssl->doNonBlockingIo(xsink, "sendPendingData",
-                    const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data())),
-                    send_buffer.size(), SslAction::WRITE, real_io);
+                    const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
+                    to_send, SslAction::WRITE, real_io);
                 printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
                 if (*xsink) {
                     return -1;
                 }
 
-                // Erase sent data immediately (even if we need to poll after)
+                // Advance offset past sent data
                 if (real_io > 0) {
-                    send_buffer.erase(send_buffer.begin(), send_buffer.begin() + real_io);
-                    printd(5, "sendPendingData() erased %zu bytes, remaining=%zu\n", real_io, send_buffer.size());
+                    send_offset += real_io;
+                    printd(5, "sendPendingData() sent %zu bytes, remaining=%zu\n",
+                        real_io, send_buffer.size() - send_offset);
                 }
 
                 if (!rc) {
@@ -798,7 +818,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                     // SSL needs to wait for socket - return the actual poll direction
                     // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
                     printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
-                        rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size());
+                        rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size() - send_offset);
                     return rc;  // Return actual poll direction needed
                 }
                 // rc < 0 but no exception - shouldn't happen
@@ -806,12 +826,12 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                 break;
             } else {
                 // Non-SSL: use regular send
-                rc = ::send(sock->sock, send_buffer.data(), send_buffer.size(), 0);
+                rc = ::send(sock->sock, send_buffer.data() + send_offset, to_send, 0);
                 printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
                 if (rc >= 0) {
-                    // Erase sent data immediately
+                    // Advance offset past sent data
                     if (rc > 0) {
-                        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + rc);
+                        send_offset += rc;
                     }
                     continue;
                 }
@@ -825,7 +845,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 #endif
                 ) {
                     // Would block - signal poll needed
-                    printd(5, "sendPendingData() socket would block, remaining=%zu\n", send_buffer.size());
+                    printd(5, "sendPendingData() socket would block, remaining=%zu\n",
+                        send_buffer.size() - send_offset);
                     return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
                 }
                 xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
@@ -838,15 +859,23 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         printd(5, "sendPendingData() no data to send\n");
     }
 
-    printd(5, "sendPendingData() complete, want_write=%d send_buffer.size=%zu\n",
-        nghttp2_session_want_write(session), send_buffer.size());
+    // Release memory when fully drained to prevent long-lived idle connections
+    // from holding onto large send buffer allocations
+    if (send_offset == send_buffer.size()) {
+        send_buffer.clear();
+        send_offset = 0;
+    }
+
+    printd(5, "sendPendingData() complete, want_write=%d pending=%zu\n",
+        nghttp2_session_want_write(session), send_buffer.size() - send_offset);
     return 0;
 }
 
 int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    printd(5, "sendPendingDataBlocking() want_write=%d send_buffer.size=%zu timeout_ms=%d\n",
-        nghttp2_session_want_write(session), send_buffer.size(), timeout_ms);
+    size_t pending = send_buffer.size() - send_offset;
+    printd(5, "sendPendingDataBlocking() want_write=%d pending=%zu timeout_ms=%d\n",
+        nghttp2_session_want_write(session), pending, timeout_ms);
 
     // First, collect any additional data from nghttp2
     while (true) {
@@ -872,12 +901,19 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
         send_buffer.insert(send_buffer.end(), data, data + len);
     }
 
+    // Compact send buffer when consumed prefix exceeds threshold
+    if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
+        send_offset = 0;
+    }
+
     // Send buffered data using blocking I/O with timeout
-    if (!send_buffer.empty()) {
+    pending = send_buffer.size() - send_offset;
+    if (send_offset < send_buffer.size()) {
         printd(5, "sendPendingDataBlocking() sending %zu bytes with blocking timeout=%d\n",
-            send_buffer.size(), timeout_ms);
+            pending, timeout_ms);
         {
-            size_t off = 0;
+            size_t off = send_offset;
             int count = 0;
             while (off + 9 <= send_buffer.size() && count < 32) {
                 const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
@@ -901,18 +937,19 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 
         int64 total_sent = 0;
         ssize_t rc = sock->sendIntern(xsink, "Http2Session", "sendPendingDataBlocking",
-            reinterpret_cast<const char*>(send_buffer.data()), send_buffer.size(),
+            reinterpret_cast<const char*>(send_buffer.data() + send_offset), pending,
             timeout_ms, total_sent);
 
         printd(5, "sendPendingDataBlocking() sendIntern returned rc=%zd total_sent=%" PRId64 "\n", rc, total_sent);
 
         if (total_sent > 0) {
-            send_buffer.erase(send_buffer.begin(), send_buffer.begin() + total_sent);
+            send_offset += total_sent;
         }
-        printd(5, "sendPendingDataBlocking() remaining send_buffer.size=%zu\n", send_buffer.size());
+        pending = send_buffer.size() - send_offset;
+        printd(5, "sendPendingDataBlocking() remaining pending=%zu\n", pending);
 
-        if (!send_buffer.empty()) {
-            printd(5, "sendPendingDataBlocking() buffer not empty, remaining=%zu\n", send_buffer.size());
+        if (send_offset < send_buffer.size()) {
+            printd(5, "sendPendingDataBlocking() buffer not empty, remaining=%zu\n", pending);
             return -1;  // Still have data to send
         }
 
@@ -921,8 +958,15 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
         }
     }
 
-    printd(5, "sendPendingDataBlocking() complete, want_write=%d send_buffer.size=%zu\n",
-        nghttp2_session_want_write(session), send_buffer.size());
+    // Release memory when fully drained to prevent long-lived idle connections
+    // from holding onto large send buffer allocations
+    if (send_offset == send_buffer.size()) {
+        send_buffer.clear();
+        send_offset = 0;
+    }
+
+    printd(5, "sendPendingDataBlocking() complete, want_write=%d pending=%zu\n",
+        nghttp2_session_want_write(session), send_buffer.size() - send_offset);
     return 0;
 }
 
@@ -1896,7 +1940,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
 }
 
 int Http2Session::submitTrailers(int32_t stream_id,
-        const std::map<std::string, std::string>& trailers, ExceptionSink* xsink) {
+        const strcase_str_map_t& trailers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
 
     if (http2DebugEnabled()) {
@@ -1926,9 +1970,15 @@ int Http2Session::submitTrailers(int32_t stream_id,
         // called AFTER the data provider callback signals EOF + NO_END_STREAM, not before.
         // The dataProviderReadCallback will call nghttp2_submit_trailer() at the right time.
         for (const auto& t : trailers) {
-            std::string lname = toLowerHeaderName(t.first);
+            std::string lname(t.first);
+            if (lname.empty()) {
+                continue;
+            }
+            std::transform(lname.begin(), lname.end(), lname.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
             if (lname[0] != ':') {
-                dp_it->second->pending_trailers.emplace_back(lname, t.second);
+                dp_it->second->pending_trailers.emplace_back(std::move(lname), t.second);
             }
         }
 
@@ -1958,11 +2008,17 @@ int Http2Session::submitTrailers(int32_t stream_id,
         lowered_names.reserve(trailers.size());
 
         for (const auto& t : trailers) {
-            std::string lname = toLowerHeaderName(t.first);
+            std::string lname(t.first);
+            if (lname.empty()) {
+                continue;
+            }
+            std::transform(lname.begin(), lname.end(), lname.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
             if (lname[0] == ':') {
                 continue;
             }
-            lowered_names.push_back(lname);
+            lowered_names.push_back(std::move(lname));
             nghttp2_nv nv = {
                 reinterpret_cast<uint8_t*>(const_cast<char*>(lowered_names.back().c_str())),
                 reinterpret_cast<uint8_t*>(const_cast<char*>(t.second.c_str())),
@@ -1992,7 +2048,7 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 }
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
-        const std::map<std::string, std::string>& headers, ExceptionSink* xsink) {
+        const strcase_str_map_t& headers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");
@@ -2041,8 +2097,7 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
         // RFC 7540 Section 8.1.2.2: Skip connection-specific headers (forbidden in HTTP/2)
         std::string lname = h.first;
         std::transform(lname.begin(), lname.end(), lname.begin(), ::tolower);
-        if (lname == "connection" || lname == "keep-alive" || lname == "proxy-connection" ||
-            lname == "transfer-encoding" || lname == "upgrade") {
+        if (forbidden_headers.count(lname)) {
             continue;
         }
         // Store lowercase name
@@ -2084,46 +2139,4 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     return 0;
 }
 
-QoreHashNode* h2HeadersToQoreHash(
-        const std::map<std::string, std::vector<std::string>>& h2_headers,
-        bool lowercase) {
-    QoreHashNode* headers = new QoreHashNode(autoTypeInfo);
-    for (const auto& h : h2_headers) {
-        std::string name;
-        if (lowercase) {
-            name.reserve(h.first.size());
-            for (unsigned char ch : h.first) {
-                name.push_back(std::tolower(ch));
-            }
-        } else {
-            name = h.first;
-        }
-
-        const std::vector<std::string>& vals = h.second;
-        if (vals.empty()) {
-            continue;
-        }
-        if (vals.size() == 1) {
-            // Single value: store as plain string
-            headers->setKeyValue(name.c_str(), new QoreStringNode(vals[0]), nullptr);
-        } else if (name == "cookie") {
-            // RFC 7540 Section 8.1.2.5: concatenate cookie values with "; "
-            QoreStringNode* joined = new QoreStringNode;
-            for (size_t i = 0; i < vals.size(); ++i) {
-                if (i > 0) {
-                    joined->concat("; ");
-                }
-                joined->concat(vals[i].c_str());
-            }
-            headers->setKeyValue(name.c_str(), joined, nullptr);
-        } else {
-            // Multiple values: store as list (matches HTTP/1.1 duplicate header behavior)
-            QoreListNode* l = new QoreListNode(autoTypeInfo);
-            for (const auto& v : vals) {
-                l->push(new QoreStringNode(v), nullptr);
-            }
-            headers->setKeyValue(name.c_str(), l, nullptr);
-        }
-    }
-    return headers;
-}
+// httpMultiHeadersToQoreHash is a template defined in Http2Session.h

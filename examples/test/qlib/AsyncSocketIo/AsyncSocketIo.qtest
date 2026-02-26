@@ -999,22 +999,22 @@ class StubAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
     }
 
-    onIdleTimeout(Socket sock, object listener, hash<auto> cx) {
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onError(Socket sock, hash<ExceptionInfo> ex, object listener, *hash<auto> cx) {
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
         try { sock.close(); } catch () {}
     }
 
-    onSseDisconnect(Socket sock, object listener, hash<auto> cx) {
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
     }
 
     onWebSocketFrame(Socket sock, hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
-            object listener, hash<auto> cx) {
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
     }
 
-    onWebSocketClose(Socket sock, int code, string reason, object listener, hash<auto> cx) {
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
     }
 }
 

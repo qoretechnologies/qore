@@ -2,7 +2,7 @@
 *** COMPILING and INSTALLING QORE FROM SOURCE ***
 *************************************************
 
-see README-GIT to lean how to build qore from git sources
+see README-GIT to learn how to build qore from git sources
 see README-WINDOWS for info specific to the windows builds
 
 Build Requirements
@@ -10,9 +10,8 @@ Build Requirements
 *) a C++ compiler with C++17 support
 
 *) flex 2.5.31 (or greater -- 2.5.4 or before will NOT work, sorry.  flex 2.5.37 or greater is recommended)
-qore requires this very new version of flex in order to build a reentrant parser.  I was not able to build a reentrant parser with earler versions of flex (including 2.5.4).  many older linux distributions ship with flex 2.5.4; this version will not work and the configure script will exit an error message if only this version is found.  You can download flex 2.5.37 at:
-	 http://sourceforge.net/projects/flex
-To use a flex in an alternative location, set the environment variable LEX before running configure (i.e.: LEX=/usr/local/bin/flex configure ...)
+qore requires flex 2.5.31+ to build a reentrant parser; flex 2.5.37 or greater is recommended.
+CMake will locate flex automatically; to use a non-default flex, set -DFLEX_EXECUTABLE=/path/to/flex when configuring.
 
 *) bison 1.85 (or better, 2.* versions are fine)
 qore requires bison 1.85+ to be able to interface properly with the scanner produced by flex 2.5.3*+
@@ -23,11 +22,9 @@ OS-level POSIX thread support is required to build qore.
 *) PCRE2 (libpcre2-8)
 for Perl-Compatible Regular Expressions. Install libpcre2-dev (Debian/Ubuntu), pcre2-devel (RHEL/Fedora), or pcre2-dev (Alpine).
 	https://github.com/PCRE2Project/pcre2
-if you have the PCRE2 headers and libraries in a location the configure script cannot find, then you can either use the --with-pcre2-libs and --with-pcre2-libraries options, or set the PCRE_DIR environment variable before running configure
 
 *) openssl 0.9.7 or higher (3.0 or better recommended)
 	http://www.openssl.org
-if you have the open headers and libraries in a location the configure script cannot find, then you can either use the --with-openssl-libs and --with-openssl-libraries options, or set the OPENSSL_DIR environment variable before running configure
 
 *) bzlib 1.0.4 or higher
 
@@ -54,6 +51,41 @@ Required for LZ4 compression support. Install liblz4-dev (Debian/Ubuntu), lz4-de
 	https://nghttp2.org/
 Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu), nghttp2-devel (RHEL/Fedora), or nghttp2-dev (Alpine).
 
+*) ngtcp2 + ngtcp2_crypto_ossl + nghttp3
+	https://github.com/ngtcp2/ngtcp2
+	https://github.com/ngtcp2/nghttp3
+Required for QUIC/HTTP/3 support. The ngtcp2_crypto_ossl backend requires OpenSSL 3.5+ (the QUIC TLS API).
+Install libngtcp2-dev and libngtcp2-crypto-ossl-dev and libnghttp3-dev (Debian/Ubuntu),
+ngtcp2-devel and ngtcp2-crypto-ossl-devel and nghttp3-devel (RHEL/Fedora),
+or ngtcp2-dev and ngtcp2-crypto-ossl-dev and nghttp3-dev (Alpine).
+
+Note: System packages on Ubuntu 24.04 (OpenSSL 3.0) and macOS Homebrew (OpenSSL 3.x) do not provide
+the OpenSSL QUIC TLS backend. On these platforms, build ngtcp2 and nghttp3 from source with OpenSSL 3.5+:
+
+    # First, build and install OpenSSL 3.5+ if not already available
+    # Then build ngtcp2 with the OpenSSL backend:
+    git clone https://github.com/ngtcp2/ngtcp2.git && cd ngtcp2
+    git submodule update --init
+    cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DENABLE_OPENSSL=ON -DENABLE_GNUTLS=OFF -DBUILD_TESTING=OFF
+    cmake --build build && sudo cmake --install build
+
+    git clone https://github.com/ngtcp2/nghttp3.git && cd nghttp3
+    git submodule update --init
+    cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_TESTING=OFF
+    cmake --build build && sudo cmake --install build
+
+If OpenSSL 3.5+ is installed in a non-standard location (e.g. /opt/openssl-3.5), pass its
+location to both the ngtcp2 and Qore builds:
+
+    # ngtcp2 build with custom OpenSSL:
+    cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DENABLE_OPENSSL=ON -DENABLE_GNUTLS=OFF -DBUILD_TESTING=OFF \
+      -DOPENSSL_ROOT_DIR=/opt/openssl-3.5
+
+    # Qore build with custom OpenSSL:
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DOPENSSL_ROOT_DIR=/opt/openssl-3.5
+
 *) Rust toolchain with cargo (optional)
 	https://rustup.rs/
 Optional; only needed for installing the tree-sitter CLI tool when developing the astparser grammar.
@@ -70,53 +102,11 @@ Install with: cargo install tree-sitter-cli@0.26.5
 CMAKE Build
 -----------
 
-The cmake build is the recommended build method; support for autotools builds will likely be removed in a future
-release.
-
-example from the root source directory:
+Example from the root source directory:
 
     mkdir build; cd build
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr
     make && make docs && sudo make install
-
-Autotools Build
----------------
-
-Note that the cmake build is the recommended build method; support for autotools builds will likely be removed in a
-future release.
-
-"configure" Option Overview
----------------------------
---enable-64bit                      : to build a 64-bit binary (support for x86_64, sparc, and pa-risc architectures)
---disable-static                    : to disable builing a static libqore.a library
---disable-debug                     : to disable debugging code - if you are not planning on debugging the qore language itself then it is highly advised to include this flag, as enabling debugging in qore slows down the language a great deal
---prefix=<dir>                      : default=/usr/local = qore in /usr/local/bin, libraries in /usr/local/lib, modules in /usr/local/lib/qore-module-api-<ver>/
---with-openssl-dir=<dir>            : directory of openssl installation
---with-pcre2-dir=<dir>              : directory of pcre2 installation
---with-zlib-dir=<dir>               : directory of zlib installation
---with-mpfr-dir=<dir>               : directory of mpfr installation
---with-gmp-dir=<dir>                : directory of gmp installation
-
-rarely used options
--------------------
---disable-single-compilation-unit   : to disable building all related files at once in each directory.  This is enabled by default because it normally makes for much quicker compiles and also allows the compiler to optimize based on the entire source at the same time.  However if you don't have enough memory (at least 1G RAM) then you should turn it off, otherwise leave it on.
-
-********************************
-recommended configure arguments: configure --disable-static --disable-debug --prefix=/usr
-********************************
-
-To build qore, run the following commands:
-
-   ./configure [options]  (for non-debugging builds I recommend: configure --disable-static --disable-debug --prefix=/usr)
-   make
-
-Installing Qore
----------------
-To install qore once it's been built, run the following commands:
-
-   make install
-
-by default the program will be installed in /usr/local/bin and libraries in /usr/local/lib, with language modules in /usr/local/lib/qore-<ver>.  This can be changed with the --prefix option to configure.  The name of the binary is "qore"
 
 OS-Specific Issues
 ------------------
@@ -126,7 +116,7 @@ Various distributions have been tested: FC3-8, Gentoo, Ubuntu, ARCH, etc
 
 *) FreeBSD:
 building from source - for FreeBSD up to 9.1: flex has to be installed from ports
-as long as all the prerequisite libraries are installed, the configure script should set up Qore for building and installing on FreeBSD without the need for any particular configure options or environment variables
+as long as all the prerequisite libraries are installed, cmake should set up Qore for building and installing on FreeBSD without the need for any particular options or environment variables
 note that there is a freebsd port of Qore available (http://www.freebsd.org/cgi/cvsweb.cgi/ports/lang/qore)
 
 *) Darwin - OS/X
@@ -138,8 +128,6 @@ Supported with g++ with c++17 support, Oracle Studio CC not tested recently
 *) HP-UX
 Qore supported HP-UX in the past, but it has not been tested for a few years.
 Itanium should be supported better than PA-RISC.
-With aCC, PA-RISC 2.0 32-bit binaries are produced in 32-bit mode, with --enable-64-bit, PA-RISC 2.0 64-bit binaries are produced
-With g++, PA-RISC 1.1 32-bit binaries are produced in 32-bit mode, with --enable-64-bit, PA-RISC 2.0 64-bit binaries are produced
 
 *) Windows
 A fully functional version of Qore can now be build for Windows; see README-WINDOWS for more information

@@ -1007,6 +1007,25 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         int64 poll_deadline_us = 0;
         bool forced = false;
 
+        // Helper: apply protocol-level poll timeout hint (e.g., QUIC timer expiry)
+        // Returns true if timer already expired (caller should force immediate continuePoll)
+        auto apply_poll_timeout = [&poll_deadline_us](const QoreHashNode* poll_info, int64 now_us) -> bool {
+            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+            if (ptv.isNullOrNothing()) {
+                return false;
+            }
+            int64 pt_ms = ptv.getAsBigInt();
+            if (pt_ms > 0) {
+                int64 timer_deadline_us = now_us + pt_ms * 1000;
+                if (poll_deadline_us == 0 || timer_deadline_us < poll_deadline_us) {
+                    poll_deadline_us = timer_deadline_us;
+                }
+                return false;
+            }
+            // pt_ms <= 0: timer already expired
+            return true;
+        };
+
         {
             AutoLocker al(m);
 
@@ -1049,6 +1068,14 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                 poll_deadline_us = pinfo.timeout_date_us;
                             }
                         }
+
+                        // Check for protocol-level poll timeout hint (e.g., QUIC timer expiry)
+                        if (apply_poll_timeout(pinfo.poll_info, now_us)) {
+                            // Timer already expired; force immediate continuePoll
+                            ops_to_poll.push_back({key, pinfo.spop_obj, false});
+                            continue;
+                        }
+
                         continue;
                     }
                 }
@@ -1201,6 +1228,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             if (poll_deadline_us == 0 || pinfo.timeout_date_us < poll_deadline_us) {
                                 poll_deadline_us = pinfo.timeout_date_us;
                             }
+                        }
+
+                        // Check for protocol-level poll timeout hint (e.g., QUIC timer expiry)
+                        if (apply_poll_timeout(result.new_poll_info, get_epoch_us())) {
+                            // Timer already expired; force immediate poll on next iteration
+                            poll_deadline_us = 1;
                         }
                     }
                 }

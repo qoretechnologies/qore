@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** quic_feature_test.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+# Set up SIGUSR1 handler to dump thread stacks for debugging
+@debug {
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+            get_all_thread_call_stacks());
+    });
+}
+
+%exec-class QuicFeatureTest
+
+#! Test that QUIC/HTTP/3 support is detected and available
+class QuicFeatureTest inherits QUnit::Test {
+    constructor() : Test("QuicFeatureTest", "1.0") {
+        addTestCase("HTTP3 feature detection", \testHttp3Feature());
+        set_return_value(main());
+    }
+
+    #! Verify HTTP3 feature constant and feature list
+    testHttp3Feature() {
+        # HTTP2 is always available (required)
+        assertTrue(HAVE_HTTP2, "HAVE_HTTP2 constant is true");
+
+        # HTTP3 is always available (required)
+        assertTrue(HAVE_HTTP3, "HAVE_HTTP3 constant is true");
+
+        # Verify HTTP3 is in the feature list
+        assertTrue(inlist_hard("HTTP3", get_feature_list()), "HTTP3 feature is registered");
+    }
+}

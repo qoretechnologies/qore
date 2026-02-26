@@ -219,10 +219,12 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclTimerEventInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
+const QoreEnumDecl* enumHTTP3Mode;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
+DLLLOCAL QoreEnumDecl* init_enum_HTTP3Mode(QoreNamespace& ns);
 
 GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, qore_var_t type) :
@@ -1228,6 +1230,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSandboxConfigInfo = init_hashdecl_SandboxConfigInfo(qns);
 
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);
+    enumHTTP3Mode = init_enum_HTTP3Mode(qns);
 
     qore_ns_private::addNamespace(qns, get_thread_ns(qns));
 
