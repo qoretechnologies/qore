@@ -122,6 +122,9 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
         #! True when an async controller drives the I/O loop (continuePoll calls)
         #! Set by Http3ClientConnection.setControllerRef() via setControllerDriven()
         bool controller_driven = False;
+
+        #! True when a GOAWAY has been received from the server
+        bool goaway_received = False;
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -208,6 +211,13 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
     bool isReady() {
         string s = state;
         return s == STATE_READING || s == STATE_WAIT_READ;
+    }
+
+    #! Returns True if a GOAWAY has been received from the server
+    /** @note Safe to call from any thread; takes a snapshot of the atomically-assigned bool.
+    */
+    bool isGoawayReceived() {
+        return goaway_received;
     }
 
     #! Returns True if a callback was dispatched during the last continuePoll() call
@@ -535,6 +545,13 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
 
         try {
             auto poll_info = current_op.continuePoll();
+
+            # Check for GOAWAY from server after processing packets
+            # Uses lightweight bool check to avoid hash allocation on every I/O cycle
+            if (!goaway_received && session_id && sock.isQuicGoawayReceived(session_id)) {
+                goaway_received = True;
+                log(LoggerLevel::DEBUG, "GOAWAY received from server");
+            }
 
             # Signal threads waiting on STREAM_ID_BLOCKED only when there are
             # actually waiters — avoids acquiring stream_lock on every

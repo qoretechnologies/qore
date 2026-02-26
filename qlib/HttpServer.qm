@@ -504,6 +504,19 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     int alt_svc_max_age = 3600;
+
+    #! QUIC GOAWAY drain timeout — duration to wait for in-flight requests during graceful shutdown
+    /** Per RFC 9114 Section 5.2, the server sends a GOAWAY notice first, then waits
+        for in-flight requests to complete before sending the final GOAWAY.  This
+        timeout controls that waiting period.
+
+        The default (5s) allows sufficient time for remote clients to receive the
+        GOAWAY notice and for in-flight requests to complete.  For localhost or
+        low-latency testing, a shorter value (e.g. 100ms) may be used.
+
+        @since HttpServer 1.6
+    */
+    timeout quic_drain_timeout = 5s;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -2031,6 +2044,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "max_handler_threads": opts.max_handler_threads,
                 "min_idle_handler_threads": opts.min_idle_handler_threads,
                 "max_idle_handler_threads": opts.max_idle_handler_threads,
+                "quic_drain_timeout": opts.quic_drain_timeout,
             });
             asyncIo.start();
         }

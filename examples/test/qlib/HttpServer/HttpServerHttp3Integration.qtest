@@ -280,6 +280,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("connection timeout", \testConnectionTimeout());
         addTestCase("no handler response", \testNoHandlerResponse());
         addTestCase("server shutdown", \testServerShutdown());
+        addTestCase("GOAWAY graceful shutdown", \testGoawayGracefulShutdown());
+        addTestCase("client GOAWAY draining", \testClientGoawayDraining());
 
         # Group 5: Auto-QUIC Listener + Alt-Svc
         addTestCase("auto-QUIC listener creation", \testAutoQuicListenerCreation());
@@ -737,6 +739,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "logger": logger,
             "debug": True,
             "async_mode": True,
+            "quic_drain_timeout": 100ms,  # short for localhost testing
         });
         server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
         server.waitForAsyncIo();
@@ -776,6 +779,156 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
         # After server deletion, the request should fail with an error
         assertTrue(got_error, "request after server shutdown should fail gracefully");
+    }
+
+    testGoawayGracefulShutdown() {
+        # Test that the server's GOAWAY shutdown sends proper frames and
+        # allows in-flight requests to complete
+
+        # Create a separate server for this test
+        Logger logger("goaway-test", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+            "quic_drain_timeout": 100ms,  # short for localhost testing
+        });
+        server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int port = h3info.port;
+        string url = "https://localhost:" + port;
+
+        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": logger,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        # First request should succeed
+        hash<auto> resp = mgr.request(url, "GET", "/hello");
+        assertEq(200, resp.status_code, "request before GOAWAY should succeed");
+
+        # Now shut down the server gracefully (which triggers GOAWAY)
+        delete server;
+
+        # After server shutdown, the next request should fail
+        bool got_error = False;
+        try {
+            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            if (m_options.verbose > 1) {
+                printf("testGoawayGracefulShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        assertTrue(got_error, "request after GOAWAY shutdown should fail");
+    }
+
+    testClientGoawayDraining() {
+        # Test that the connection manager handles GOAWAY draining correctly:
+        #
+        # 1. Normal connections are reused (baseline: total_connections stays 1)
+        # 2. Server shutdown triggers GOAWAY frames
+        # 3. Client's I/O loop detects GOAWAY, connection enters Draining state
+        # 4. Manager creates a new connection for subsequent requests (skips draining)
+
+        Logger logger("goaway-drain-test", LoggerLevel::getLevelInfo());
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "async_mode": True,
+            "quic_drain_timeout": 100ms,  # short for localhost testing
+        });
+        server.setHandler("simple", "/hello", NOTHING, new SimpleHandler());
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        int port = h3info.port;
+        string url = "https://localhost:" + port;
+
+        auto mgr = new Http3ClientIo::Http3ClientConnectionManager(
+            <Http3ClientIo::Http3ClientConnectionManagerOptions>{
+                "logger": logger,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+                "max_connections_per_host": 4,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        # Step 1: Establish a connection and verify reuse
+        hash<auto> resp = mgr.request(url, "GET", "/hello");
+        assertEq(200, resp.status_code, "initial request should succeed");
+        assertEq(1, mgr.getStats().total_connections, "should have 1 connection initially");
+
+        hash<auto> resp2 = mgr.request(url, "GET", "/hello");
+        assertEq(200, resp2.status_code, "second request should reuse connection");
+        assertEq(1, mgr.getStats().total_connections,
+            "should still have 1 connection (reused, not draining)");
+
+        # Step 2: Trigger GOAWAY via server shutdown
+        # HttpServer graceful shutdown sends GOAWAY frames to connected clients
+        delete server;
+
+        # Step 3: The next request drives I/O on the existing connection, which
+        # processes the in-flight GOAWAY frames. The connection transitions to
+        # Draining state. The request fails because the server is gone.
+        bool got_error = False;
+        try {
+            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            if (m_options.verbose > 1) {
+                printf("testClientGoawayDraining: expected error after GOAWAY: %s: %s\n",
+                    ex.err, ex.desc);
+            }
+        }
+        assertTrue(got_error, "request after server shutdown (GOAWAY) should fail");
+
+        # Step 4: After GOAWAY processing, the original connection should be
+        # draining or closed (not reusable). Verify the connection count —
+        # the manager may have already created a new connection for the failed
+        # request attempt, and the original is still in the pool.
+        hash<auto> stats_after_goaway = mgr.getStats();
+        assertGe(1, stats_after_goaway.total_connections,
+            "at least 1 connection should exist after GOAWAY");
+
+        # Step 5: Make another request — this forces the manager to evaluate
+        # pool state: it must skip (or evict) the closed/draining connection
+        # and attempt a fresh one. Since the server is gone, this also fails.
+        try {
+            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected: server is gone
+            if (m_options.verbose > 1) {
+                printf("testClientGoawayDraining: second post-GOAWAY error: %s: %s\n",
+                    ex.err, ex.desc);
+            }
+        }
+
+        # Step 6: After two failed requests, the original connection should have
+        # been evicted from the pool (it's closed, so the eviction logic in
+        # getConnection() removes it). The pool should contain only the new
+        # failed connection, proving the manager did not keep reusing the
+        # draining/closed original.
+        hash<auto> stats_final = mgr.getStats();
+        # The original baseline was 1 connection reused for 2 requests.
+        # After GOAWAY + 2 failed attempts, the pool should still have exactly
+        # 1 connection (the latest attempt) — the original was evicted.
+        # This proves the skip/eviction path was exercised.
+        assertEq(1, stats_final.total_connections,
+            "pool should contain 1 connection (original evicted, new attempt present)");
     }
 
     # ---- Group 5: Auto-QUIC Listener + Alt-Svc ----

@@ -118,6 +118,10 @@ class QuicComprehensiveTest inherits QUnit::Test {
         addTestCase("Empty body", \testEmptyBody());
         addTestCase("Binary body", \testBinaryBody());
 
+        # Group 6: GOAWAY / Graceful Shutdown
+        addTestCase("GOAWAY shutdown notice and shutdown", \testGoawayShutdown());
+        addTestCase("GOAWAY state query", \testGoawayStateQuery());
+
         set_return_value(main());
     }
 
@@ -1003,6 +1007,110 @@ class QuicComprehensiveTest inherits QUnit::Test {
         }
         assertEq(large_bin.size(), resp_body.size(), "binary response: correct size");
         assertEq(large_bin, resp_body, "binary response: data integrity preserved");
+    }
+
+    # ---- Group 6: GOAWAY / Graceful Shutdown ----
+
+    #! Helper: poll until a condition returns True or deadline expires
+    /** Uses Queue.get() with short timeout to yield to the controller's I/O
+        thread between checks, matching the waitForClientReading() pattern.
+    */
+    private waitForCondition(code<bool()> condition, timeout to = 10s) {
+        Queue yield_q();
+        date deadline = now_us() + to;
+        while (!condition()) {
+            date remaining = deadline - now_us();
+            if (remaining <= 0us) {
+                throw "TIMEOUT", "condition not met within timeout";
+            }
+            try {
+                yield_q.get(min(remaining, 5ms));
+            } catch () {
+                # QUEUE-TIMEOUT; continue checking
+            }
+        }
+    }
+
+    testGoawayShutdown() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit ctx.ctrl.stop();
+
+        # First, do a normal round-trip to confirm the connection works
+        hash<auto> req_result = submitRequestAndWaitForServer(ctx, "GET", "/test");
+        assertEq("GET", req_result.server_output.method, "GOAWAY: initial request method");
+        assertEq("/test", req_result.server_output.path, "GOAWAY: initial request path");
+
+        int session_id = req_result.server_output.session_id;
+        int stream_id = req_result.stream_id;
+
+        # Send response to complete the first request
+        hash<auto> resp_result = sendResponseAndWaitForClient(ctx, session_id, stream_id,
+            200, {"content-type": "text/plain"}, "OK");
+        assertEq(200, resp_result.client_output.status_code, "GOAWAY: initial response status");
+
+        # Now submit shutdown notice on the server side
+        # This sends GOAWAY with max stream ID (notice phase)
+        ctx.server_sock.submitQuicShutdownNotice(session_id);
+
+        # Wake the controller to flush the GOAWAY frame
+        ctx.ctrl.wake();
+
+        # Submit final shutdown (sends GOAWAY with actual last stream ID)
+        ctx.server_sock.submitQuicShutdown(session_id);
+
+        # Wake again to flush the final GOAWAY
+        ctx.ctrl.wake();
+
+        # Poll until the server reports goaway_sent (deterministic: the controller
+        # I/O thread flushes packets between our yield-via-Queue.get() calls)
+        waitForCondition(bool sub() {
+            return ctx.server_sock.getQuicSessionGoawayState(session_id).goaway_sent;
+        });
+
+        # Verify the server session reports goaway_sent
+        hash<auto> server_state = ctx.server_sock.getQuicSessionGoawayState(session_id);
+        assertTrue(server_state.goaway_sent, "server should report goaway_sent=True");
+        assertEq(-1, server_state.goaway_max_stream_id,
+            "server should not have received GOAWAY (max_stream_id=-1)");
+
+        if (m_options.verbose > 1) {
+            printf("testGoawayShutdown: server goaway_state=%y\n", server_state);
+        }
+    }
+
+    testGoawayStateQuery() {
+        hash<auto> pair = createSocketPair();
+        hash<auto> ctx = performHandshake(pair);
+        on_exit ctx.ctrl.stop();
+
+        # Wait for client to be ready
+        waitForClientReading(ctx.client_op);
+
+        # Get the session ID from the client
+        int client_session_id = ctx.client_sock.getQuicSessionId();
+        assertTrue(client_session_id > 0, "client should have a valid session ID");
+
+        # Initially, no GOAWAY should be sent or received
+        hash<auto> client_state = ctx.client_sock.getQuicSessionGoawayState(client_session_id);
+        assertFalse(client_state.goaway_sent, "client initially: goaway_sent should be False");
+        assertFalse(client_state.goaway_received, "client initially: goaway_received should be False");
+        assertEq(-1, client_state.goaway_max_stream_id,
+            "client initially: goaway_max_stream_id should be -1");
+
+        # Test that invalid session ID raises exception
+        bool got_error = False;
+        try {
+            ctx.client_sock.getQuicSessionGoawayState(99999);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            assertEq("QUIC-SESSION-ERROR", ex.err, "invalid session should raise QUIC-SESSION-ERROR");
+        }
+        assertTrue(got_error, "getQuicSessionGoawayState with invalid session should throw");
+
+        if (m_options.verbose > 1) {
+            printf("testGoawayStateQuery: initial state verified\n");
+        }
     }
 }
 

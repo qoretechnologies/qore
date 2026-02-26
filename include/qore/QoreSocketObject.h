@@ -546,6 +546,42 @@ public:
     DLLEXPORT int submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Sends an HTTP/3 GOAWAY shutdown notice on a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void submitQuicShutdownNotice(int64_t session_id, ExceptionSink* xsink);
+
+    //! Sends an HTTP/3 GOAWAY shutdown on a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void submitQuicShutdown(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns GOAWAY state for a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return hash with goaway_sent, goaway_received, goaway_max_stream_id keys
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* getQuicSessionGoawayState(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns True if a GOAWAY has been received from the peer on a QUIC session
+    /** Lightweight check — avoids hash allocation; suitable for polling on every I/O cycle.
+
+        @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return True if a GOAWAY has been received, False otherwise (also False if session not found)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicGoawayReceived(int64_t session_id, ExceptionSink* xsink);
+
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);
 

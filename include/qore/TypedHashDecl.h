@@ -271,6 +271,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclDatagramInfo;
 
+//! QuicGoawayStateInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclQuicGoawayStateInfo;
+
 //! PipeInfo hashdecl
 /** @since %Qore 1.12
 */

@@ -292,6 +292,37 @@ public:
         dispatcher_ = nullptr;
     }
 
+    //! Submit an HTTP/3 GOAWAY shutdown notice (first phase: max stream ID)
+    /** Sends a GOAWAY frame with the maximum stream ID, indicating that the
+        server intends to shut down but hasn't decided on the final stream ID yet.
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitShutdownNotice(ExceptionSink* xsink);
+
+    //! Submit an HTTP/3 GOAWAY shutdown (second phase: actual last stream ID)
+    /** Sends a GOAWAY frame with the actual last stream ID that the server will
+        process.  After this, no new streams will be accepted.
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int submitShutdown(ExceptionSink* xsink);
+
+    //! Check if the final GOAWAY has been queued via submitShutdown()
+    /** Returns false during the notice phase (submitShutdownNotice only).
+        Set eagerly when queued; frame may not yet be on the wire.
+    */
+    DLLLOCAL bool isGoawaySent() const { return goaway_sent_.load(std::memory_order_acquire); }
+
+    //! Check if a GOAWAY has been received from the peer
+    DLLLOCAL bool isGoawayReceived() const { return goaway_received_.load(std::memory_order_acquire); }
+
+    //! Get the max stream ID from received GOAWAY (-1 if none received)
+    DLLLOCAL int64_t getGoawayMaxStreamId() const {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        return goaway_max_stream_id_;
+    }
+
 private:
     DLLLOCAL QuicSession();
 
@@ -430,6 +461,10 @@ private:
                                          uint64_t datalen, void* conn_user_data,
                                          void* stream_user_data);
 
+    //! HTTP/3 shutdown (GOAWAY) callback — invoked when remote sends GOAWAY
+    DLLLOCAL static int h3ShutdownCallback(nghttp3_conn* conn, int64_t id,
+                                           void* conn_user_data);
+
     // --- Member data ---
 
     //! Unique session ID (monotonically increasing)
@@ -453,6 +488,9 @@ private:
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)
+    std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
+    std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
+    int64_t goaway_max_stream_id_{-1};               //!< max stream ID from received GOAWAY; protected by mtx_
     std::string host_;                               //!< server hostname for :authority fallback
     uint16_t port_ = 0;                             //!< server port
 

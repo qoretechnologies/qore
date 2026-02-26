@@ -50,10 +50,23 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         const STATE_REQUEST_READY = "request_ready";
         const STATE_SENDING = "sending";
         const STATE_SENT = "sent";
+        const STATE_DRAINING = "draining";
         const STATE_CLOSED = "closed";
 
         #! Maximum consecutive empty reads before closing
         const MAX_EMPTY_READS = 100;
+
+        #! Default duration to continue processing in-flight requests after sending GOAWAY notice
+        /** Per RFC 9114 Section 5.2, the server sends a shutdown notice first, then
+            waits for in-flight requests to complete before sending the final GOAWAY
+            with the actual last stream ID.
+
+            The default (5s) allows sufficient time for remote clients to receive the
+            GOAWAY notice (1-2 RTTs) and for in-flight requests to complete.  Override
+            via the constructor's \a drain_timeout parameter or the HttpServer's
+            \c quic_drain_timeout option.
+        */
+        const DefaultDrainTimeout = 5s;
     }
 
     private {
@@ -78,6 +91,15 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Counter for consecutive empty reads
         int empty_read_count = 0;
 
+        #! Timestamp when draining started (set by shutdown())
+        *date drain_start;
+
+        #! Session ID being drained (set by shutdown())
+        *int drain_session_id;
+
+        #! Effective drain timeout for this operation
+        timeout drain_timeout;
+
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (startSendResponse)
         Mutex op_lock();
@@ -85,8 +107,10 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
 
     #! Creates the poll operation
     /** @param sock the UDP socket bound and ready for QUIC connections
+        @param drain_timeout duration to wait for in-flight requests to complete
+        during GOAWAY graceful shutdown; defaults to @ref DefaultDrainTimeout (5s)
     */
-    constructor(Socket sock) {
+    constructor(Socket sock, timeout drain_timeout = DefaultDrainTimeout) {
         if (!sock) {
             throw "HTTP3-ERROR", "socket cannot be null";
         }
@@ -94,6 +118,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
             throw "HTTP3-ERROR", "socket must be open";
         }
         self.sock = sock;
+        self.drain_timeout = drain_timeout;
         # Start accepting QUIC connection and reading HTTP/3 request
         startReadRequest();
     }
@@ -149,7 +174,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                 case STATE_READING: {
                     if (!current_op) {
                         state = STATE_CLOSED;
-                        return NOTHING;
+                        return;
                     }
                     try {
                         auto poll_info = current_op.continuePoll();
@@ -161,7 +186,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                         if (request) {
                             empty_read_count = 0;
                             state = STATE_REQUEST_READY;
-                            return NOTHING;
+                            return;
                         }
 
                         if (poll_info) {
@@ -177,7 +202,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                                     MAX_EMPTY_READS),
                             };
                             state = STATE_CLOSED;
-                            return NOTHING;
+                            return;
                         }
                         state = STATE_WAIT_READ;
                         return <SocketPollInfo>{
@@ -190,7 +215,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                             "desc": ex.desc,
                         };
                         state = STATE_CLOSED;
-                        return NOTHING;
+                        return;
                     }
                 }
 
@@ -203,7 +228,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                 case STATE_SENDING: {
                     if (!current_op) {
                         state = STATE_CLOSED;
-                        return NOTHING;
+                        return;
                     }
                     try {
                         auto poll_info = current_op.continuePoll();
@@ -213,7 +238,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
                         # since they are finite (not long-running multiplexed).
                         if (current_op.goalReached()) {
                             state = STATE_SENT;
-                            return NOTHING;
+                            return;
                         }
 
                         if (poll_info) {
@@ -222,21 +247,80 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
 
                         # continuePoll returned NOTHING but goal not reached
                         state = STATE_CLOSED;
-                        return NOTHING;
+                        return;
                     } catch (hash<ExceptionInfo> ex) {
                         error_info = {
                             "err": ex.err,
                             "desc": ex.desc,
                         };
                         state = STATE_CLOSED;
-                        return NOTHING;
+                        return;
+                    }
+                }
+
+                case STATE_DRAINING: {
+                    # Continue processing for a brief period to let in-flight
+                    # requests complete and GOAWAY frames to be sent
+                    if (!current_op) {
+                        state = STATE_CLOSED;
+                        return;
+                    }
+                    try {
+                        auto poll_info = current_op.continuePoll();
+
+                        # Check if any final requests arrived before GOAWAY was processed
+                        request = current_op.getOutput();
+                        if (request) {
+                            state = STATE_REQUEST_READY;
+                            return;
+                        }
+
+                        # After drain_timeout, send final shutdown and close
+                        if (now_us() - drain_start > drain_timeout) {
+                            # Send final GOAWAY with actual last stream ID
+                            if (drain_session_id) {
+                                try {
+                                    sock.submitQuicShutdown(drain_session_id);
+                                } catch () {
+                                    # Best-effort; close anyway
+                                }
+                                # Do one more continuePoll() to flush the GOAWAY frame
+                                # to the wire before closing
+                                try {
+                                    current_op.continuePoll();
+                                } catch () {
+                                    # Best-effort flush
+                                }
+                            }
+                            state = STATE_CLOSED;
+                            if (current_op) {
+                                try { current_op.abort(); } catch () {}
+                            }
+                            return;
+                        }
+
+                        if (poll_info) {
+                            return poll_info;
+                        }
+                        # Return poll info to wait briefly for remaining data
+                        return <SocketPollInfo>{
+                            "events": SOCK_POLLIN,
+                            "socket": sock,
+                        };
+                    } catch (hash<ExceptionInfo> ex) {
+                        error_info = {"err": ex.err, "desc": ex.desc};
+                        state = STATE_CLOSED;
+                        if (current_op) {
+                            try { current_op.abort(); } catch () {}
+                        }
+                        return;
                     }
                 }
 
                 case STATE_REQUEST_READY:
                 case STATE_SENT:
                 case STATE_CLOSED:
-                    return NOTHING;
+                    return;
             }
         }
     }
@@ -270,7 +354,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
     #! Returns True if the connection should be kept alive
     bool shouldKeepAlive() {
         AutoLock al(op_lock);
-        return keep_alive && state != STATE_CLOSED && !error_info;
+        return keep_alive && state != STATE_CLOSED && state != STATE_DRAINING && !error_info;
     }
 
     #! Starts sending an HTTP/3 response
@@ -335,13 +419,49 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
     }
 
     #! Gracefully shuts down the QUIC connection
-    /** @note Full HTTP/3 GOAWAY handling requires nghttp3_conn_shutdown() which needs
-        C++ API additions; for now, this performs a clean close without sending GOAWAY.
+    /** Sends HTTP/3 GOAWAY frames per RFC 9114 Section 5.2:
+        1. Submit shutdown notice (GOAWAY with max stream ID)
+        2. Continue processing in-flight requests during draining period
+        3. Submit final shutdown (GOAWAY with actual last stream ID)
+
+        @param session_id optional session ID to shut down; if not provided,
+        uses the session_id from the last request
     */
-    shutdown() {
-        # NOTE: full HTTP/3 GOAWAY handling requires nghttp3_conn_shutdown()
-        # which needs C++ API additions; for now delegates to abort()
-        abort();
+    shutdown(*int session_id) {
+        AutoLock al(op_lock);
+        if (state == STATE_CLOSED || state == STATE_DRAINING) {
+            return;
+        }
+        # Determine the session to shut down
+        if (!session_id && request) {
+            session_id = request.session_id;
+        }
+        # No session to shut down (shutdown before any request arrived) — close immediately
+        if (!session_id) {
+            state = STATE_CLOSED;
+            if (current_op) {
+                try { current_op.abort(); } catch () {}
+            }
+            return;
+        }
+        try {
+            sock.submitQuicShutdownNotice(session_id);
+        } catch (hash<ExceptionInfo> ex) {
+            # If shutdown notice fails, record the error for diagnostics and fall back to abort
+            error_info = {
+                "err": ex.err,
+                "desc": sprintf("GOAWAY shutdown notice failed (session %d): %s", session_id,
+                    ex.desc),
+            };
+            state = STATE_CLOSED;
+            if (current_op) {
+                try { current_op.abort(); } catch () {}
+            }
+            return;
+        }
+        drain_start = now_us();
+        drain_session_id = session_id;
+        state = STATE_DRAINING;
     }
 
     #! Aborts the operation

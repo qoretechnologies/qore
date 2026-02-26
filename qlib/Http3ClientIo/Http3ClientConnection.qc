@@ -263,6 +263,12 @@ public class Http3ClientConnection {
             state = Http3ClientConnectionState::Ready;
             ready_cond.broadcast();
         }
+        # Check for GOAWAY received from server
+        if (poll_op.isGoawayReceived() && state == Http3ClientConnectionState::Ready) {
+            state = Http3ClientConnectionState::Draining;
+            log(LoggerLevel::DEBUG, "GOAWAY detected, transitioning to Draining");
+            ready_cond.broadcast();
+        }
     }
 
     #! Waits for the connection to become ready
@@ -407,6 +413,12 @@ public class Http3ClientConnection {
                 ready_cond.broadcast();
             } else if (poll_op.isReady() && state == Http3ClientConnectionState::Connecting) {
                 state = Http3ClientConnectionState::Ready;
+                ready_cond.broadcast();
+            }
+            # Check for GOAWAY received from server
+            if (poll_op.isGoawayReceived() && state == Http3ClientConnectionState::Ready) {
+                state = Http3ClientConnectionState::Draining;
+                log(LoggerLevel::DEBUG, "GOAWAY detected in drivePoll, transitioning to Draining");
                 ready_cond.broadcast();
             }
             return state != Http3ClientConnectionState::Closed && !poll_op.hasError();

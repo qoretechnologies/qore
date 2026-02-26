@@ -869,7 +869,8 @@ public class HttpAsyncSocketIoController {
         }
         string op_key = sprintf("quic-accept:%s:%d", owner, seq);
 
-        Http3ServerPollOperation h3op(listener);
+        Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
+            ?? Http3ServerPollOperation::DefaultDrainTimeout);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 

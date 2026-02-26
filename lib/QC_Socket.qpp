@@ -167,6 +167,33 @@ hashdecl Qore::DatagramInfo {
     *string familystr;
 }
 
+//! QUIC session GOAWAY state information
+/** Contains the GOAWAY state for a QUIC session, as returned by
+    @ref Qore::Socket::getQuicSessionGoawayState() "Socket::getQuicSessionGoawayState()".
+
+    @since %Qore 2.3
+*/
+hashdecl Qore::QuicGoawayStateInfo {
+    //! True if the final GOAWAY has been queued via @ref Qore::Socket::submitQuicShutdown() "submitQuicShutdown()"
+    /** This is \c False during the notice phase (@ref Qore::Socket::submitQuicShutdownNotice()
+        "submitQuicShutdownNotice()") and only becomes \c True when the final GOAWAY — which
+        carries the actual last stream ID — is submitted.
+
+        @note Set eagerly when the frame is queued in the HTTP/3 layer, before it is
+        flushed to the wire.  The next I/O cycle flushes the frame.
+    */
+    bool goaway_sent = False;
+
+    //! True if a GOAWAY frame has been received from the peer
+    bool goaway_received = False;
+
+    //! The maximum stream ID from a received GOAWAY frame, or -1 if no GOAWAY has been received
+    /** Streams with IDs above this value were not processed by the peer and
+        should be retried on a new connection.
+    */
+    int goaway_max_stream_id = -1;
+}
+
 /** @defgroup socket_poll_constants Socket Poll Constants
 */
 ///@{
@@ -5290,4 +5317,105 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
         return QoreValue();
     }
     s->submitQuicResponse(session_id, stream_id, status_code, headers, body_ptr, body_len, xsink);
+}
+
+//! Sends an HTTP/3 GOAWAY shutdown notice on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicShutdownNotice(session_id);
+    @endcode
+
+    Sends a GOAWAY frame with the maximum stream ID (shutdown notice phase),
+    indicating that the server intends to shut down.
+
+    @param session_id the QUIC session ID
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicShutdownNotice(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    s->submitQuicShutdownNotice(session_id, xsink);
+}
+
+//! Sends an HTTP/3 GOAWAY shutdown on a QUIC session
+/** @par Example:
+    @code{.py}
+    sock.submitQuicShutdown(session_id);
+    @endcode
+
+    Sends a GOAWAY frame with the actual last stream ID that the server will
+    process.  After this, no new streams will be accepted.
+
+    @param session_id the QUIC session ID
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitQuicShutdown(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    s->submitQuicShutdown(session_id, xsink);
+}
+
+//! Returns GOAWAY state for a QUIC session
+/** @par Example:
+    @code{.py}
+    hash<QuicGoawayStateInfo> state = sock.getQuicSessionGoawayState(session_id);
+    if (state.goaway_received) {
+        # connection is draining — streams above goaway_max_stream_id were not processed
+    }
+    @endcode
+
+    @param session_id the QUIC session ID
+
+    @return a @ref QuicGoawayStateInfo hash with the session's GOAWAY state
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+*/
+hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    return s->getQuicSessionGoawayState(session_id, xsink);
+}
+
+//! Returns True if a GOAWAY has been received from the peer on a QUIC session
+/** @par Example:
+    @code{.py}
+    if (sock.isQuicGoawayReceived(session_id)) {
+        # connection is draining
+    }
+    @endcode
+
+    Lightweight check suitable for calling on every I/O cycle — avoids hash
+    allocation.  Returns False (without raising an exception) if the session
+    does not exist.
+
+    @param session_id the QUIC session ID
+
+    @return True if a GOAWAY has been received, False otherwise
+
+    @since %Qore 2.3
+*/
+bool Socket::isQuicGoawayReceived(int session_id) {
+    if (session_id <= 0) {
+        return false;
+    }
+    return s->isQuicGoawayReceived(session_id, xsink);
 }

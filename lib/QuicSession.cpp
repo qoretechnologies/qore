@@ -595,6 +595,7 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     h3_cbs.stop_sending = h3StopSendingCallback;
     h3_cbs.reset_stream = h3ResetStreamCallback;
     h3_cbs.acked_stream_data = h3AckedStreamDataCallback;
+    h3_cbs.shutdown = h3ShutdownCallback;
 
     nghttp3_settings h3_settings;
     nghttp3_settings_default(&h3_settings);
@@ -1278,6 +1279,44 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
     return 0;
 }
 
+// ===== HTTP/3 GOAWAY (Graceful Shutdown) =====
+
+int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+    int rv = nghttp3_conn_submit_shutdown_notice(h3_conn_);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "failed to submit shutdown notice: %s",
+                              nghttp3_strerror(rv));
+        return -1;
+    }
+    pending_write_.store(true, std::memory_order_release);
+    return 0;
+}
+
+int QuicSession::submitShutdown(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!h3_conn_) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+    int rv = nghttp3_conn_shutdown(h3_conn_);
+    if (rv != 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "failed to submit shutdown: %s",
+                              nghttp3_strerror(rv));
+        return -1;
+    }
+    // Note: goaway_sent_ is set eagerly before the GOAWAY frame is flushed
+    // to the wire.  pending_write_ ensures the next I/O cycle writes the
+    // queued nghttp3 data (including the GOAWAY frame) via writeStreams().
+    goaway_sent_.store(true, std::memory_order_release);
+    pending_write_.store(true, std::memory_order_release);
+    return 0;
+}
+
 // ===== ngtcp2 Static Callbacks =====
 
 ngtcp2_conn* QuicSession::getConnFromRef(ngtcp2_crypto_conn_ref* conn_ref) {
@@ -1697,5 +1736,18 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     // Do NOT erase body_data_ here: nghttp3 may still hold a cached vec pointing
     // to the body data buffer.  Cleanup happens in streamCloseCallback after
     // nghttp3_conn_close_stream releases all internal references.
+    return 0;
+}
+
+int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
+                                     void* conn_user_data) {
+    auto* session = static_cast<QuicSession*>(conn_user_data);
+    // Invariant: mtx_ is already held by the calling thread.
+    // Call chain: readPacket() [acquires mtx_] -> ngtcp2_conn_read_pkt()
+    //   -> nghttp3_conn_read_stream() -> h3ShutdownCallback()
+    // goaway_max_stream_id_ is protected by mtx_ (not atomic), so this
+    // write is safe only because the caller holds the lock.
+    session->goaway_received_.store(true, std::memory_order_release);
+    session->goaway_max_stream_id_ = id;
     return 0;
 }

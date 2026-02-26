@@ -307,7 +307,7 @@ public class Http3ClientConnectionManager {
             }
             if (pool.hasKey(key)) {
                 foreach Http3ClientConnection conn in (pool{key}) {
-                    if (!conn.isClosed() && conn.canAcceptStream()) {
+                    if (!conn.isClosed() && !conn.isDraining() && conn.canAcceptStream()) {
                         log(LoggerLevel::DEBUG, "reusing connection %d to %s",
                             conn.getConnectionId(), key);
                         return conn;
@@ -333,7 +333,7 @@ public class Http3ClientConnectionManager {
                             conn.getConnectionId(), key);
                     } else {
                         push live, conn;
-                        if (!reusable && conn.canAcceptStream()) {
+                        if (!reusable && !conn.isDraining() && conn.canAcceptStream()) {
                             reusable = conn;
                         }
                     }
@@ -459,6 +459,12 @@ public class Http3ClientConnectionManager {
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
             removeConnectionFromPool(key, conn);
             return;
+        }
+
+        # If GOAWAY received, the connection is draining — don't remove it yet
+        # (in-flight streams will still complete), but log it
+        if (conn.isDraining()) {
+            log(LoggerLevel::DEBUG, "connection %d is draining (GOAWAY received)", conn.getConnectionId());
         }
 
         try {

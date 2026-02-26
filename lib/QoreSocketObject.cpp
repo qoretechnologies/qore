@@ -1202,6 +1202,61 @@ int64_t QoreSocketObject::getFirstQuicSessionId(ExceptionSink* xsink) const {
     return sp->getFirstQuicSessionId(xsink);
 }
 
+void QoreSocketObject::submitQuicShutdownNotice(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
+                              (long long)session_id);
+        return;
+    }
+    session->submitShutdownNotice(xsink);
+}
+
+void QoreSocketObject::submitQuicShutdown(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
+                              (long long)session_id);
+        return;
+    }
+    session->submitShutdown(xsink);
+}
+
+QoreHashNode* QoreSocketObject::getQuicSessionGoawayState(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
+                              (long long)session_id);
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclQuicGoawayStateInfo, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    h->setKeyValue("goaway_sent", session->isGoawaySent(), xsink);
+    h->setKeyValue("goaway_received", session->isGoawayReceived(), xsink);
+    h->setKeyValue("goaway_max_stream_id", session->getGoawayMaxStreamId(), xsink);
+    return h.release();
+}
+
+bool QoreSocketObject::isQuicGoawayReceived(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        // Return false rather than raising an exception for a lightweight check;
+        // the session may have been cleaned up between checks
+        return false;
+    }
+    return session->isGoawayReceived();
+}
+
 bool my_socket_priv::hasQuicSession() const {
     qore_socket_private* sp = qore_socket_private::get(*socket);
     AutoLocker al(sp->quic_sessions_lock);
