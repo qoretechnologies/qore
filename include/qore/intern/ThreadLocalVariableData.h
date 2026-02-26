@@ -162,12 +162,16 @@ public:
         FrameMarkerRecord rec = frame_marker_stack.back();
         frame_marker_stack.pop_back();
 
-        // The function body is responsible for uninstantiating its variables,
-        // so curr->pos should be at or near the marker position.
-        // Call uninstantiateIntern to handle block transitions if needed
-        uninstantiateIntern();
+        // Uninstantiate variables until we reach (or pass) the marker position
+        // Variables should already be uninstantiated by the caller, but we handle
+        // the case where curr->pos is at the marker or one past it
+        while (curr != rec.block || curr->pos > rec.pos) {
+            uninstantiateIntern();
+        }
 
-        // Verify that we've found the marker
+        // Now curr should be at the marker position
+        assert(curr == rec.block);
+        assert(curr->pos == rec.pos);
         assert(curr->var[curr->pos].frame_boundary);
         assert(curr->var[curr->pos].frame_marker_id == frame_count);
 
