@@ -714,78 +714,6 @@ static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink
     helper.assign(stored);
 }
 
-// Walk a compound lvalue expression (e.g., rv.body, obj.member) to find the root
-// variable reference, then invalidate it from the stored values cache.  This is
-// necessary because LValueHelper may trigger copy-on-write (COW) on the container,
-// replacing the object on the thread-local variable stack with a new copy.  The cached
-// version in locals/globals/closures maps would then be stale.
-static void invalidateLvalueRoot(const QoreValue& lvalue,
-        std::unordered_map<const void*, QoreValue>& locals,
-        std::unordered_map<const void*, QoreValue>& globals,
-        std::unordered_map<const void*, QoreValue>& threadlocals,
-        std::unordered_map<const void*, QoreValue>& closures,
-        const std::unordered_map<const LocalVar*, uint32_t>* local_var_slots = nullptr,
-        std::vector<QoreValue>* locals_slot_cache_ptr = nullptr) {
-    if (!lvalue.hasNode()) {
-        return;
-    }
-    const AbstractQoreNode* node = lvalue.getInternalNode();
-    // Walk through binary operator nodes (like . or {} dereference) to find
-    // the root VarRefNode
-    while (node) {
-        if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
-            qore_var_t type = var_ref->getType();
-            if (type == VT_LOCAL || type == VT_LOCAL_TS) {
-                auto it = locals.find(var_ref->ref.id);
-                if (it != locals.end()) {
-                    it->second.discard(nullptr);
-                    locals.erase(it);
-                }
-                if (local_var_slots && locals_slot_cache_ptr) {
-                    const LocalVar* lv = reinterpret_cast<const LocalVar*>(var_ref->ref.id);
-                    auto slot_it = local_var_slots->find(lv);
-                    if (slot_it != local_var_slots->end()
-                            && slot_it->second < locals_slot_cache_ptr->size()) {
-                        (*locals_slot_cache_ptr)[slot_it->second].discard(nullptr);
-                        (*locals_slot_cache_ptr)[slot_it->second] = QoreValue();
-                    }
-                }
-            } else if (type == VT_GLOBAL) {
-                auto it = globals.find(var_ref->ref.id);
-                if (it != globals.end()) {
-                    it->second.discard(nullptr);
-                    globals.erase(it);
-                }
-            } else if (type == VT_THREAD_LOCAL) {
-                auto it = threadlocals.find(var_ref->ref.id);
-                if (it != threadlocals.end()) {
-                    it->second.discard(nullptr);
-                    threadlocals.erase(it);
-                }
-            } else if (type == VT_CLOSURE || type == VT_LOCAL_TS) {
-                auto it = closures.find(var_ref->ref.id);
-                if (it != closures.end()) {
-                    it->second.discard(nullptr);
-                    closures.erase(it);
-                }
-            }
-            return;
-        }
-        // Binary operators (., {}, [], etc.) have left and right operands.
-        // The root variable is on the left side.
-        if (auto* bin_op = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-            QoreValue left_val = bin_op->getLeft();
-            node = left_val.hasNode() ? left_val.getInternalNode() : nullptr;
-        } else {
-            // Can't identify the root variable — fall back to full invalidation
-            cleanupStoredValues(locals, nullptr);
-            cleanupStoredValues(globals, nullptr);
-            cleanupStoredValues(threadlocals, nullptr);
-            cleanupStoredValues(closures, nullptr);
-            return;
-        }
-    }
-}
 
 static void updateLocalVarFromLvalue(std::unordered_map<const void*, QoreValue>& locals,
         std::unordered_set<const LocalVar*>& instantiated_locals, const QoreValue& lvalue,
@@ -1353,7 +1281,7 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
         // Execute compiled handler via IR interpreter
         QoreValue rv;
         QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink);
-        rv.discard(nullptr);
+        rv.discard(obe_xsink);
     } else if (handler.code) {
         // AST fallback
         QoreValue rv;
@@ -1529,7 +1457,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
                 // can modify locals via the thread-local variable stack)
-                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(locals, xsink);
             }
         }
     };
@@ -1551,12 +1479,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // released while the underlying locals are still valid on the thread-local stack.
     struct SlotCacheCleanup {
         std::vector<QoreValue>& cache;
+        ExceptionSink* xsink;
         ~SlotCacheCleanup() {
             for (auto& v : cache) {
-                v.discard(nullptr);
+                v.discard(xsink);
             }
         }
-    } slot_cache_cleanup{locals_slot_cache};
+    } slot_cache_cleanup{locals_slot_cache, xsink};
 
     // RAII guard: delete active iterators on any function exit path.
     // IteratorNext deletes iterators on the normal done path, but return/exception
@@ -1637,10 +1566,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block");
             }
             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-            cleanupStoredValues(locals, nullptr);
-            cleanupStoredValues(globals, nullptr);
-            cleanupStoredValues(threadlocals, nullptr);
-            cleanupStoredValues(closures, nullptr);
+            cleanupStoredValues(locals, xsink);
+            cleanupStoredValues(globals, xsink);
+            cleanupStoredValues(threadlocals, xsink);
+            cleanupStoredValues(closures, xsink);
             return false;
         }
         while (ip < block->instructions.size() && block->instructions[ip]->opcode == QoreIROpcode::Phi) {
@@ -1650,10 +1579,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("IR-EXEC-ERROR", "phi instruction cast failed");
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             if (!prev_block) {
@@ -1661,10 +1590,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             QoreIRValue incoming_value;
@@ -1681,10 +1610,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             QoreValue val = getIRValue(values, incoming_value);
@@ -1700,10 +1629,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
             }
             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-            cleanupStoredValues(locals, nullptr);
-            cleanupStoredValues(globals, nullptr);
-            cleanupStoredValues(threadlocals, nullptr);
-            cleanupStoredValues(closures, nullptr);
+            cleanupStoredValues(locals, xsink);
+            cleanupStoredValues(globals, xsink);
+            cleanupStoredValues(threadlocals, xsink);
+            cleanupStoredValues(closures, xsink);
             return false;
         }
         QoreIRInstruction* inst = block->instructions[ip].get();
@@ -1812,10 +1741,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                     if (list->push(stored, xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                 }
@@ -1838,10 +1767,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "make.hash requires even operands");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 for (size_t i = 0; i < inst->operands.size(); i += 2) {
@@ -1859,10 +1788,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     hash->setKeyValue(key->c_str(), stored, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                 }
@@ -1916,10 +1845,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (xsink && *xsink) {
                     result.discard(xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, result, xsink);
@@ -2068,10 +1997,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("CALL-REFERENCE-ERROR",
                         "cannot call a NOTHING value as a closure/call reference");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
 
@@ -2081,10 +2010,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("CALL-REFERENCE-ERROR",
                         "value is not a call reference or closure");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
 
@@ -2112,18 +2041,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // Closure/callref execution can run arbitrary code that may modify
                 // globals, thread-locals, or other cached state
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 setValueSlot(values, inst->result.id, result, xsink);
                 if (result.hasNode()) {
                     cleanup.push_back(inst->result.id);
@@ -2155,10 +2084,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         if (xsink && *xsink) {
                             result->deref();
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                     }
@@ -2175,10 +2104,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "incref missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreIRValue id = inst->operands.front();
@@ -2195,10 +2124,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "decref missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreIRValue id = inst->operands.front();
@@ -2216,10 +2145,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "invoke instruction cast failed");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // For lvalue-modifying invoke opcodes, invalidate the slot cache BEFORE
@@ -2269,12 +2198,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     case QoreIROpcode::PushAny:
                     case QoreIROpcode::ListAssignAny:
                     case QoreIROpcode::StoreLValue: {
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                            locals_slot_cache[i].discard(nullptr);
+                            locals_slot_cache[i].discard(xsink);
                             locals_slot_cache[i] = QoreValue();
                         }
                         // Also clean values[] entries for the lvalue target variable
@@ -2288,7 +2217,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             if (inv_llslot_it != local_load_slots.end()) {
                                 for (uint32_t slot_id : inv_llslot_it->second) {
                                     if (slot_id < values.size()) {
-                                        values[slot_id].discard(nullptr);
+                                        values[slot_id].discard(xsink);
                                         values[slot_id] = QoreValue();
                                     }
                                 }
@@ -2302,10 +2231,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = evalInvoke(inv, values, xsink);
                 // Invalidate all variable caches after Invoke - the AST call may have modified
                 // globals, thread-locals, or closure variables
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 if (xsink && *xsink) {
                     if (debug_active) {
                         tlpd->dbgException(nullptr, xsink);
@@ -2380,10 +2309,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                     QoreValue rv;
                                     on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
                                     // Invalidate caches after AST execution
-                                    cleanupStoredValues(locals, nullptr);
-                                    cleanupStoredValues(globals, nullptr);
-                                    cleanupStoredValues(threadlocals, nullptr);
-                                    cleanupStoredValues(closures, nullptr);
+                                    cleanupStoredValues(locals, xsink);
+                                    cleanupStoredValues(globals, xsink);
+                                    cleanupStoredValues(threadlocals, xsink);
+                                    cleanupStoredValues(closures, xsink);
                                 }
                                 if (obe_xsink) {
                                     if (xsink) {
@@ -2508,10 +2437,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                     // eval() returns a referenced value; use it directly for the value slot.
@@ -2548,13 +2477,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             QoreValue val = local_inst->local->eval(needs_deref, xsink);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupStoredValues(locals, nullptr);
-                                cleanupStoredValues(globals, nullptr);
-                                cleanupStoredValues(threadlocals, nullptr);
-                                cleanupStoredValues(closures, nullptr);
+                                cleanupStoredValues(locals, xsink);
+                                cleanupStoredValues(globals, xsink);
+                                cleanupStoredValues(threadlocals, xsink);
+                                cleanupStoredValues(closures, xsink);
                                 return false;
                             }
-                            storeValue(locals, local_inst->local, val, nullptr);
+                            storeValue(locals, local_inst->local, val, xsink);
                             // Also store in slot cache for fast access on next load
                             auto slot_it = func.local_var_slots.find(local_inst->local);
                             if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
@@ -2567,7 +2496,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             // independent +1 refs.  The original owned ref in `val` is
                             // now surplus — release it to avoid a permanent refcount leak.
                             if (needs_deref && val.hasNode()) {
-                                val.getInternalNode()->deref(nullptr);
+                                val.getInternalNode()->deref(xsink);
                             }
                         }
                     }
@@ -2579,10 +2508,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         out = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                         // ClosureVarValue::eval() always returns an owned ref
@@ -2660,10 +2589,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             QoreValue val = cv->eval(xsink);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupStoredValues(locals, nullptr);
-                                cleanupStoredValues(globals, nullptr);
-                                cleanupStoredValues(threadlocals, nullptr);
-                                cleanupStoredValues(closures, nullptr);
+                                cleanupStoredValues(locals, xsink);
+                                cleanupStoredValues(globals, xsink);
+                                cleanupStoredValues(threadlocals, xsink);
+                                cleanupStoredValues(closures, xsink);
                                 return false;
                             }
                             // cv->eval() returns a referenced value (+1); store a separate
@@ -2694,10 +2623,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                 } else if (base.getType() == NT_HASH) {
@@ -2705,10 +2634,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                     out.refSelf();
@@ -2717,10 +2646,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                 }
@@ -2766,25 +2695,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         auto slot_it = func.local_var_slots.find(lv);
                         if (slot_it != func.local_var_slots.end()
                                 && slot_it->second < locals_slot_cache.size()) {
-                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second].discard(xsink);
                             locals_slot_cache[slot_it->second] = QoreValue();
                         }
                         // Write new_h to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
-                            new_h->deref(nullptr);
+                            new_h->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                         // Release the original copy() reference; assignLocalVarValue()
                         // took its own ref via refSelf() internally.  Without this deref,
                         // every COW copy leaks.  The object is still alive because the
                         // variable stack holds a reference (refcount >= 1).
-                        new_h->deref(nullptr);
+                        new_h->deref(xsink);
                         h = new_h;
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Without this, subsequent IR instructions reading operands[0]
@@ -2796,10 +2725,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         values[hks_inst->operands[0].id] = QoreValue(new_h);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                     }
@@ -2810,10 +2739,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 if (hks_inst->result.isValid()) {
@@ -2846,25 +2775,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         auto slot_it = func.local_var_slots.find(lv);
                         if (slot_it != func.local_var_slots.end()
                                 && slot_it->second < locals_slot_cache.size()) {
-                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second].discard(xsink);
                             locals_slot_cache[slot_it->second] = QoreValue();
                         }
                         // Write new_l to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_l), xsink);
                         if (xsink && *xsink) {
-                            new_l->deref(nullptr);
+                            new_l->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                         // Release the original copy() reference; assignLocalVarValue()
                         // took its own ref via refSelf() internally.  Without this deref,
                         // every COW copy leaks.  The object is still alive because the
                         // variable stack holds a reference (refcount >= 1).
-                        new_l->deref(nullptr);
+                        new_l->deref(xsink);
                         l = new_l;
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Use direct assignment (not setValueSlot) to avoid discarding
@@ -2873,10 +2802,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cleanup.push_back(lis_inst->operands[0].id);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupStoredValues(locals, nullptr);
-                            cleanupStoredValues(globals, nullptr);
-                            cleanupStoredValues(threadlocals, nullptr);
-                            cleanupStoredValues(closures, nullptr);
+                            cleanupStoredValues(locals, xsink);
+                            cleanupStoredValues(globals, xsink);
+                            cleanupStoredValues(threadlocals, xsink);
+                            cleanupStoredValues(closures, xsink);
                             return false;
                         }
                     }
@@ -2884,10 +2813,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 if (lis_inst->result.isValid()) {
@@ -3044,19 +2973,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ValueHolder val(obj->getReferencedMemberNoMethod(sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, sm_inst->result.id, out, xsink);
@@ -3073,19 +3002,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, sv_inst->result.id, out, xsink);
@@ -3102,10 +3031,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         no_inst->variant, no_inst->args, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, no_inst->result.id, out, xsink);
@@ -3125,10 +3054,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, lc_inst->result.id, out, xsink);
@@ -3148,10 +3077,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, cc_inst->result.id, out, xsink);
@@ -3172,10 +3101,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, cr_inst->result.id, out, xsink);
@@ -3196,10 +3125,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, mr_inst->result.id, out, xsink);
@@ -3219,10 +3148,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, pr_inst->result.id, out, xsink);
@@ -3241,10 +3170,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, nhd_inst->result.id, out, xsink);
@@ -3263,10 +3192,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, nch_inst->result.id, out, xsink);
@@ -3285,10 +3214,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, ncl_inst->result.id, out, xsink);
@@ -3303,10 +3232,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue out = fromBits(result_bits);
@@ -3330,10 +3259,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // Do NOT discard key_val here - it's managed by the IR value map cleanup
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -3366,10 +3295,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ensureLocalInstantiated(local_inst->local, instantiated_locals, pre_instantiated,
@@ -3410,7 +3339,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (local_inst->local) {
                         auto slot_it = func.local_var_slots.find(local_inst->local);
                         if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
-                            locals_slot_cache[slot_it->second].discard(nullptr);
+                            locals_slot_cache[slot_it->second].discard(xsink);
                             locals_slot_cache[slot_it->second] = QoreValue();
                         }
                     }
@@ -3442,10 +3371,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -3566,10 +3495,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue val = getIRValue(values, local_inst->operands.front());
@@ -3601,10 +3530,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -3635,10 +3564,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "store.global missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
@@ -3670,10 +3599,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -3704,10 +3633,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "store.threadlocal missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
@@ -3738,10 +3667,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -3866,16 +3795,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 ++ip;
                 break;
             }
@@ -3892,16 +3821,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 ++ip;
                 break;
             }
@@ -3918,16 +3847,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 ++ip;
                 break;
             }
@@ -3944,16 +3873,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 ++ip;
                 break;
             }
@@ -3964,10 +3893,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "foreach requires a statement");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue stmt_return;
@@ -3980,16 +3909,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 ++ip;
                 break;
             }
@@ -4006,10 +3935,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // Store iterator pointer as int64_t in result
@@ -4039,10 +3968,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     active_iterators.erase(iter);
                     delete iter;
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 if (done) {
@@ -4079,10 +4008,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id,
@@ -4113,10 +4042,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue result = fromBits(entry);
@@ -4135,10 +4064,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     toBits(value_val), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -4152,10 +4081,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     fill_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 ++ip;
@@ -4177,10 +4106,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                     executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // Record the handler for deferred execution at block/function exit.
@@ -4247,7 +4176,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // Handler execution (both AST and compiled IR) can modify any local
                         // variable on the thread-local stack.  Clear the locals cache so
                         // subsequent LoadLocal re-reads from the runtime.
-                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(locals, xsink);
                     }
                 }
                 ++ip;
@@ -4258,10 +4187,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseThreadExit();
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             case QoreIROpcode::GuardInt:
             case QoreIROpcode::GuardFloat:
@@ -4273,10 +4202,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "guard missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue value = getIRValue(values, guard_inst->operands.front());
@@ -4297,10 +4226,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // and resources like mutexes remain locked.
                         executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                     // No deopt target, or top-level code (suppress_guard_deopt) —
@@ -4325,20 +4254,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 QoreValue res = QoreIRInterpreter::evalUnary(inst->opcode, val, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -4490,10 +4419,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
@@ -4501,10 +4430,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -4531,10 +4460,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 } else {
                     QoreValue first = getIRValue(values, inst->operands[0]);
@@ -4544,10 +4473,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -4569,10 +4498,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 } else {
                     QoreValue first = getIRValue(values, inst->operands[0]);
@@ -4583,10 +4512,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -4601,10 +4530,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, lval_inst->result.id, res, xsink);
@@ -4623,10 +4552,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "store.lvalue missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // Extract the base variable from the (possibly complex) lvalue
@@ -4646,12 +4575,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // LValueHelper::ensureUnique() sees the variable's natural
                 // refcount and only triggers COW when truly necessary.
                 // See design/lvalue-loads-in-ir.md for the full invariant.
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
                 // Also discard values[] entries from LoadLocal results for the
@@ -4665,7 +4594,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (llslot_it != local_load_slots.end()) {
                         for (uint32_t slot_id : llslot_it->second) {
                             if (slot_id < values.size()) {
-                                values[slot_id].discard(nullptr);
+                                values[slot_id].discard(xsink);
                                 values[slot_id] = QoreValue();
                             }
                         }
@@ -4675,10 +4604,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     lval_inst->weak);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // StoreLValue has no result register (result.id == 0); discard
@@ -4704,16 +4633,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 // For post-increment/decrement, use the old value (res) as the result;
                 // for pre-increment/decrement, reload the updated value
                 bool is_post = (inst->opcode == QoreIROpcode::PostIncLValue
@@ -4726,10 +4655,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     result_val = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                 }
@@ -4741,10 +4670,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue updated = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, updated, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
@@ -4759,21 +4688,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             case QoreIROpcode::ShiftLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
                 // Invalidate all caches BEFORE the lvalue operation (see design/lvalue-loads-in-ir.md)
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // shift returns the removed element, not the updated list
@@ -4801,10 +4730,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue right = getIRValue(values, lval_inst->operands[0]);
@@ -4813,21 +4742,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 // causing LValueHelper::ensureUnique() to trigger COW unnecessarily.
                 // The modification would be applied to the COW copy while the cache
                 // retains the stale original.  See design/lvalue-loads-in-ir.md.
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
                 QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, lval_inst->result.id, res, xsink);
@@ -4844,32 +4773,32 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue ternary op missing operands");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreValue first = getIRValue(values, lval_inst->operands[0]);
                 QoreValue second = getIRValue(values, lval_inst->operands[1]);
                 QoreValue third = getIRValue(values, lval_inst->operands[2]);
                 // Invalidate all caches BEFORE the lvalue operation (see design/lvalue-loads-in-ir.md)
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
                 QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
                     third, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, lval_inst->result.id, res, xsink);
@@ -4916,10 +4845,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             arg_list->deref(xsink);
                         }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
                         return false;
                     }
                     if (effective_opcode == QoreIROpcode::Call) {
@@ -4980,16 +4909,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(inst->result.id);
@@ -5010,10 +4939,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             "no self object in direct method call");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
 
@@ -5035,10 +4964,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, direct_inst->result.id, res, xsink);
@@ -5061,10 +4990,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             "no self object in invoke method direct");
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
 
@@ -5086,10 +5015,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 // Invalidate all variable caches after method call - the call may have modified
                 // globals, thread-locals, or closure variables
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
@@ -5136,16 +5065,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -5179,10 +5108,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
 
                 // Invalidate all variable caches after method call
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
@@ -5235,10 +5164,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink && *xsink) {
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             setValueSlot(values, expr_inst->result.id, res, xsink);
@@ -5262,10 +5191,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink && *xsink) {
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             setValueSlot(values, regex_inst->result.id, res, xsink);
@@ -5309,10 +5238,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             if (xsink && *xsink) {
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             setValueSlot(values, expr_inst->result.id, res, xsink);
@@ -5351,21 +5280,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::ListAssignAny: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 // Invalidate all caches BEFORE the lvalue operation
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
                 QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -5388,10 +5317,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -5420,10 +5349,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // Cast opcodes are now native — no cache invalidation needed
@@ -5459,10 +5388,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 // DotEval opcodes are pure expression opcodes — no cache invalidation needed
@@ -5507,20 +5436,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
                 fireScopeExits();
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             case QoreIROpcode::Rethrow: {
                 auto* rethrow_inst = static_cast<QoreIRThrowInstruction*>(inst);
                 if (!xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, nullptr);
-                    cleanupStoredValues(globals, nullptr);
-                    cleanupStoredValues(threadlocals, nullptr);
-                    cleanupStoredValues(closures, nullptr);
+                    cleanupStoredValues(locals, xsink);
+                    cleanupStoredValues(globals, xsink);
+                    cleanupStoredValues(threadlocals, xsink);
+                    cleanupStoredValues(closures, xsink);
                     return false;
                 }
                 QoreException* ex = catch_get_exception();
@@ -5567,10 +5496,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 fireScopeExits();
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
             }
             case QoreIROpcode::Return: {
@@ -5620,10 +5549,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     xsink->raiseException("IR-EXEC-ERROR", msg.c_str());
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
+                cleanupStoredValues(locals, xsink);
+                cleanupStoredValues(globals, xsink);
+                cleanupStoredValues(threadlocals, xsink);
+                cleanupStoredValues(closures, xsink);
                 return false;
         }
 
@@ -5633,10 +5562,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
     }
     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-    cleanupStoredValues(locals, nullptr);
-    cleanupStoredValues(globals, nullptr);
-    cleanupStoredValues(threadlocals, nullptr);
-    cleanupStoredValues(closures, nullptr);
+    cleanupStoredValues(locals, xsink);
+    cleanupStoredValues(globals, xsink);
+    cleanupStoredValues(threadlocals, xsink);
+    cleanupStoredValues(closures, xsink);
     return false;
 }
 
