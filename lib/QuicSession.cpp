@@ -512,6 +512,12 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
         callbacks.tls_early_data_rejected = earlyDataRejectedCallback;
     }
 
+    // Connection migration callbacks (RFC 9000 §9)
+    callbacks.path_validation = pathValidationCallback;
+    callbacks.begin_path_validation = beginPathValidationCallback;
+    callbacks.remove_connection_id = removeConnectionIdCallback;
+    callbacks.dcid_status = dcidStatusCallback;
+
     // Settings
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
@@ -529,6 +535,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     // Idle timeout: ngtcp2 default is 0 (no timeout), which prevents cleanup of
     // lost connections and enables resource exhaustion.  30s is standard for clients.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
+    params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
 
     // Build path from actual socket addresses
     ngtcp2_path path;
@@ -630,6 +637,12 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
     callbacks.recv_tx_key = recvTxKeyCallback;
 
+    // Connection migration callbacks (RFC 9000 §9)
+    callbacks.path_validation = pathValidationCallback;
+    callbacks.begin_path_validation = beginPathValidationCallback;
+    callbacks.remove_connection_id = removeConnectionIdCallback;
+    callbacks.dcid_status = dcidStatusCallback;
+
     // Settings
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
@@ -647,6 +660,7 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     // Idle timeout: ngtcp2 default is 0 (no timeout), which allows malicious clients
     // to hold server sessions open indefinitely.  30s matches the client setting.
     params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
+    params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
     params.original_dcid = initial_hdr->dcid;
     params.original_dcid_present = 1;
 
@@ -1079,6 +1093,34 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
         // that must be sent as its own UDP datagram
         packets.addPacket(pkt_buf_, static_cast<size_t>(nwrite));
         ++total_packets;
+
+        // Update stored addresses from ngtcp2's output path.  During migration,
+        // ngtcp2 updates the active path and outputs packets for the new address;
+        // we must track this so the caller sends to the correct destination.
+        // This runs under mtx_ (caller holds the lock).
+        //
+        // Performance: the memcmp per packet is negligible — addresses are typically
+        // 16 bytes (IPv4) or 28 bytes (IPv6), memcmp short-circuits on the first
+        // differing byte (matching addresses are the common case), and this code
+        // already runs under the session mutex.  This is the only place that catches
+        // implicit path updates from ngtcp2 (e.g. server-side passive migration),
+        // so it cannot be moved to a less frequent path.
+        if (ps.path.remote.addrlen > 0 && ps.path.remote.addrlen <= sizeof(remote_addr_)) {
+            if (memcmp(&remote_addr_, ps.path.remote.addr, ps.path.remote.addrlen) != 0) {
+                memcpy(&remote_addr_, ps.path.remote.addr, ps.path.remote.addrlen);
+                remote_addrlen_ = ps.path.remote.addrlen;
+                path_migrated_.store(true, std::memory_order_release);
+                migration_gen_.fetch_add(1, std::memory_order_release);
+                printd(2, "QuicSession::writePacketsLocked(): remote address updated from "
+                    "ngtcp2 output path (session %lld)\n", (long long)session_id_);
+            }
+        }
+        if (ps.path.local.addrlen > 0 && ps.path.local.addrlen <= sizeof(local_addr_)) {
+            if (memcmp(&local_addr_, ps.path.local.addr, ps.path.local.addrlen) != 0) {
+                memcpy(&local_addr_, ps.path.local.addr, ps.path.local.addrlen);
+                local_addrlen_ = ps.path.local.addrlen;
+            }
+        }
     }
 
     return total_packets;
@@ -2043,6 +2085,270 @@ int QuicSession::earlyDataRejectedCallback(ngtcp2_conn* /* conn */, void* user_d
     } catch (...) {
         printd(0, "QuicSession::earlyDataRejectedCallback(): unknown exception\n");
     }
+
+    return 0;
+}
+
+// ===== Path Validation / Migration Callbacks =====
+//
+// All ngtcp2 callbacks below are invoked from C code (ngtcp2_conn_read_pkt,
+// ngtcp2_conn_writev_stream, etc.).  C++ exceptions must NEVER propagate
+// through C stack frames — this is undefined behavior.  Every callback wraps
+// its body in try/catch(...) to guarantee this invariant.
+
+int QuicSession::pathValidationCallback(ngtcp2_conn* /* conn */,
+                                         uint32_t /* flags */,
+                                         const ngtcp2_path* path,
+                                         const ngtcp2_path* /* old_path */,
+                                         ngtcp2_path_validation_result res,
+                                         void* user_data) {
+    auto* session = static_cast<QuicSession*>(user_data);
+    try {
+        switch (res) {
+            case NGTCP2_PATH_VALIDATION_RESULT_SUCCESS:
+                printd(2, "QuicSession::pathValidationCallback(): path validation SUCCESS "
+                    "(session %lld)\n", (long long)session->session_id_);
+                // Use *Locked variants: this callback is invoked from
+                // ngtcp2_conn_read_pkt() inside readPacketLocked() which
+                // already holds mtx_.  Avoids recursive lock acquisition.
+                session->updateRemoteAddrLocked(
+                    reinterpret_cast<const struct sockaddr*>(path->remote.addr),
+                    path->remote.addrlen);
+                session->updateLocalAddrLocked(
+                    reinterpret_cast<const struct sockaddr*>(path->local.addr),
+                    path->local.addrlen);
+                break;
+            case NGTCP2_PATH_VALIDATION_RESULT_FAILURE:
+                printd(2, "QuicSession::pathValidationCallback(): path validation FAILURE "
+                    "(session %lld)\n", (long long)session->session_id_);
+                break;
+            case NGTCP2_PATH_VALIDATION_RESULT_ABORTED:
+                printd(2, "QuicSession::pathValidationCallback(): path validation ABORTED "
+                    "(session %lld)\n", (long long)session->session_id_);
+                break;
+        }
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::pathValidationCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::pathValidationCallback(): unknown exception\n");
+    }
+    return 0;
+}
+
+int QuicSession::beginPathValidationCallback(ngtcp2_conn* /* conn */,
+                                              uint32_t /* flags */,
+                                              const ngtcp2_path* /* path */,
+                                              const ngtcp2_path* /* fallback_path */,
+                                              void* user_data) {
+    try {
+        auto* session = static_cast<QuicSession*>(user_data);
+        printd(3, "QuicSession::beginPathValidationCallback(): path validation started "
+            "(session %lld)\n", (long long)session->session_id_);
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::beginPathValidationCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::beginPathValidationCallback(): unknown exception\n");
+    }
+    return 0;
+}
+
+int QuicSession::removeConnectionIdCallback(ngtcp2_conn* /* conn */,
+                                             const ngtcp2_cid* cid,
+                                             void* user_data) {
+    auto* session = static_cast<QuicSession*>(user_data);
+    // Lifecycle guarantee: dispatcher_ is set once during initServer() and cleared
+    // only in ~QuicSession() (after ngtcp2_conn_del destroys conn_, which prevents
+    // further callbacks).  This callback runs inside ngtcp2_conn_read_pkt() under
+    // mtx_, so dispatcher_ is guaranteed non-null for the session's entire active
+    // lifetime.  The null check is defensive — the try/catch guards against
+    // unregisterConnectionId() throwing if the CID was already removed.
+    try {
+        if (session->dispatcher_) {
+            std::string cid_str(reinterpret_cast<const char*>(cid->data), cid->datalen);
+            session->dispatcher_->unregisterConnectionId(cid_str);
+            printd(3, "QuicSession::removeConnectionIdCallback(): unregistered retired CID "
+                "(session %lld, cid_len=%zu)\n",
+                (long long)session->session_id_, cid->datalen);
+        }
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::removeConnectionIdCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::removeConnectionIdCallback(): unknown exception\n");
+    }
+    return 0;
+}
+
+int QuicSession::dcidStatusCallback(ngtcp2_conn* /* conn */,
+                                     ngtcp2_connection_id_status_type type,
+                                     uint64_t seq,
+                                     const ngtcp2_cid* cid,
+                                     const uint8_t* /* token */,
+                                     void* user_data) {
+    try {
+        auto* session = static_cast<QuicSession*>(user_data);
+        const char* type_str;
+        switch (type) {
+            case NGTCP2_CONNECTION_ID_STATUS_TYPE_ACTIVATE:
+                type_str = "ACTIVATE";
+                break;
+            case NGTCP2_CONNECTION_ID_STATUS_TYPE_DEACTIVATE:
+                type_str = "DEACTIVATE";
+                break;
+            default:
+                type_str = "UNKNOWN";
+                break;
+        }
+        printd(3, "QuicSession::dcidStatusCallback(): DCID %s seq=%" PRIu64 " cid_len=%zu "
+            "(session %lld)\n",
+            type_str, seq, cid->datalen, (long long)session->session_id_);
+    } catch (const std::exception& e) {
+        printd(0, "QuicSession::dcidStatusCallback(): exception: %s\n", e.what());
+    } catch (...) {
+        printd(0, "QuicSession::dcidStatusCallback(): unknown exception\n");
+    }
+    return 0;
+}
+
+// ===== Path Update Methods =====
+
+void QuicSession::updateRemoteAddr(const struct sockaddr* addr, socklen_t len) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    updateRemoteAddrLocked(addr, len);
+}
+
+void QuicSession::updateRemoteAddrLocked(const struct sockaddr* addr, socklen_t len) {
+    if (len > sizeof(remote_addr_)) {
+        printd(0, "QuicSession::updateRemoteAddrLocked(): address too large (%d > %zu), "
+            "ignoring (session %lld)\n", (int)len, sizeof(remote_addr_),
+            (long long)session_id_);
+        return;
+    }
+    memcpy(&remote_addr_, addr, len);
+    remote_addrlen_ = len;
+    path_migrated_.store(true, std::memory_order_release);
+    migration_gen_.fetch_add(1, std::memory_order_release);
+    printd(3, "QuicSession::updateRemoteAddrLocked(): remote address updated (session %lld, gen=%" PRIu64 ")\n",
+        (long long)session_id_, migration_gen_.load(std::memory_order_relaxed));
+}
+
+void QuicSession::updateLocalAddr(const struct sockaddr* addr, socklen_t len) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    updateLocalAddrLocked(addr, len);
+}
+
+void QuicSession::updateLocalAddrLocked(const struct sockaddr* addr, socklen_t len) {
+    if (len > sizeof(local_addr_)) {
+        printd(0, "QuicSession::updateLocalAddrLocked(): address too large (%d > %zu), "
+            "ignoring (session %lld)\n", (int)len, sizeof(local_addr_),
+            (long long)session_id_);
+        return;
+    }
+    memcpy(&local_addr_, addr, len);
+    local_addrlen_ = len;
+    printd(3, "QuicSession::updateLocalAddrLocked(): local address updated (session %lld)\n",
+        (long long)session_id_);
+}
+
+// ===== Connection Migration =====
+
+int QuicSession::initiateMigration(
+    const struct sockaddr* new_local, socklen_t new_local_len,
+    const struct sockaddr* new_remote, socklen_t new_remote_len,
+    ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    if (!conn_) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC connection not initialized");
+        return -1;
+    }
+    if (is_server_) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "connection migration can only be initiated by the client");
+        return -1;
+    }
+    if (!handshake_completed_.load(std::memory_order_acquire)) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "cannot migrate before handshake is complete");
+        return -1;
+    }
+
+    // Validate address family consistency — QUIC does not support cross-family
+    // migration (e.g. IPv4 → IPv6); ngtcp2 would reject it, but we provide a
+    // clearer error message here
+    sa_family_t current_family = remote_addr_.ss_family;
+    if (new_remote->sa_family != current_family) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "address family mismatch: connection uses %s but new remote address is %s",
+            current_family == AF_INET ? "IPv4" : "IPv6",
+            new_remote->sa_family == AF_INET ? "IPv4" : "IPv6");
+        return -1;
+    }
+    if (new_local->sa_family != current_family) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "address family mismatch: connection uses %s but new local address is %s",
+            current_family == AF_INET ? "IPv4" : "IPv6",
+            new_local->sa_family == AF_INET ? "IPv4" : "IPv6");
+        return -1;
+    }
+
+    // Build the new path
+    ngtcp2_path path = {};
+    // NOTE: ngtcp2_conn_initiate_immediate_migration() copies the path addresses,
+    // so stack-local storage is safe here
+    struct sockaddr_storage local_storage, remote_storage;
+    memcpy(&local_storage, new_local, new_local_len);
+    memcpy(&remote_storage, new_remote, new_remote_len);
+    path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_storage);
+    path.local.addrlen = new_local_len;
+    path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&remote_storage);
+    path.remote.addrlen = new_remote_len;
+
+    int rv = ngtcp2_conn_initiate_immediate_migration(conn_, &path, timestamp());
+    if (rv != 0) {
+        const char* detail;
+        switch (rv) {
+            case NGTCP2_ERR_INVALID_STATE:
+                detail = "connection not in a migratable state "
+                    "(handshake may not be confirmed or connection is closing)";
+                break;
+            case NGTCP2_ERR_CONN_ID_BLOCKED:
+                detail = "no spare connection IDs available for migration "
+                    "(active_connection_id_limit exhausted)";
+                break;
+            case NGTCP2_ERR_INVALID_ARGUMENT:
+                detail = "invalid path addresses";
+                break;
+            default:
+                detail = ngtcp2_strerror(rv);
+                break;
+        }
+        xsink->raiseException("QUIC-MIGRATION-ERROR",
+            "ngtcp2_conn_initiate_immediate_migration failed: %s (rv=%d)", detail, rv);
+        return -1;
+    }
+
+    // Exception safety: the ngtcp2 call above is the only fallible operation.
+    // If it fails, we return early without modifying any session state.  The
+    // operations below are all infallible (memcpy, atomic store/fetch_add on
+    // POD types), so there is no partial-update risk.  The entire sequence runs
+    // under mtx_ to prevent concurrent readers from seeing inconsistent state.
+
+    // Update stored addresses to the new path
+    memcpy(&local_addr_, new_local, new_local_len);
+    local_addrlen_ = new_local_len;
+    memcpy(&remote_addr_, new_remote, new_remote_len);
+    remote_addrlen_ = new_remote_len;
+
+    // Set migration flag and increment generation
+    path_migrated_.store(true, std::memory_order_release);
+    migration_gen_.fetch_add(1, std::memory_order_release);
+
+    // Flush PATH_CHALLENGE packets
+    pending_write_.store(true, std::memory_order_release);
+
+    printd(2, "QuicSession::initiateMigration(): migration initiated "
+        "(session %lld, gen=%" PRIu64 ")\n",
+        (long long)session_id_, migration_gen_.load(std::memory_order_relaxed));
 
     return 0;
 }

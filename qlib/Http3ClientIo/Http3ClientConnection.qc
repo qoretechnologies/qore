@@ -245,6 +245,63 @@ public class Http3ClientConnection {
         return stream_id;
     }
 
+    #! Initiates QUIC connection migration to a new network path
+    /** Creates a new connected UDP socket, migrates the QUIC session to the new path,
+        and swaps the underlying file descriptor. Path validation proceeds in the
+        background; if it fails, ngtcp2 automatically falls back to the previous path.
+
+        @par Thread Safety
+        Coordinates with the I/O driving mechanism: waits for any active
+        continuePoll() call to finish, then sets driving=True to prevent
+        concurrent I/O during the fd swap.  This ensures the socket fd is not
+        read by recvmsg()/sendto() while it is being replaced.
+
+        @param migration_timeout maximum time to wait for the driver thread to
+            yield before aborting the migration attempt (default 10s)
+
+        @return True if migration was initiated successfully
+
+        @throw HTTP3-STATE-ERROR if the connection is not in Ready state
+        @throw QUIC-MIGRATION-ERROR if migration fails or times out waiting for I/O thread
+
+        @since %Qore 2.3
+    */
+    bool migrate(timeout migration_timeout = 10s) {
+        {
+            AutoLock al(lock);
+            if (state != Http3ClientConnectionState::Ready) {
+                throw "HTTP3-STATE-ERROR",
+                    sprintf("cannot migrate: connection not ready (state=%y)", state);
+            }
+            # Wait for any active I/O driver to finish its continuePoll() call.
+            # The fd swap in migrateConnection() must not race with recvmsg/sendto.
+            date end_time = now_us() + migration_timeout;
+            while (driving) {
+                date remaining = end_time - now_us();
+                if (remaining <= 0us) {
+                    throw "QUIC-MIGRATION-ERROR",
+                        "timed out waiting for I/O driver thread to yield";
+                }
+                ready_cond.wait(lock, min(remaining, 1s));
+            }
+            # Claim the driving slot to prevent concurrent continuePoll() calls
+            # during the fd swap.  drivePoll() callers will wait on ready_cond.
+            driving = True;
+            last_activity = now_us();
+        }
+
+        on_exit {
+            AutoLock al(lock);
+            driving = False;
+            ready_cond.broadcast();
+        }
+
+        log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
+        poll_op.migrate();
+        log(LoggerLevel::DEBUG, "QUIC connection migration completed");
+        return True;
+    }
+
     #! Cancels a pending request
     cancelRequest(int stream_id) {
         log(LoggerLevel::DEBUG, "cancelling request: stream_id=%d", stream_id);

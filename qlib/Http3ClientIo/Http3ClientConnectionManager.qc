@@ -247,6 +247,59 @@ public class Http3ClientConnectionManager {
         }
     }
 
+    #! Migrates all ready connections to new network paths
+    /** Iterates all connections in the pool and calls migrate() on each connection
+        that is in the Ready state. Connections that fail to migrate are marked as
+        draining (a new connection will be created on the next request).
+
+        @return the number of connections successfully migrated
+
+        @since %Qore 2.3
+    */
+    int migrateAll() {
+        # Collect ready connections under read lock
+        list<hash<auto>> to_migrate = ();
+        {
+            AutoReadLock al(pool_lock);
+            foreach string key in (keys pool) {
+                foreach Http3ClientConnection conn in (pool{key}) {
+                    if (conn.isReady()) {
+                        push to_migrate, {"key": key, "conn": conn};
+                    }
+                }
+            }
+        }
+
+        # Exception isolation: each connection is migrated independently in a
+        # try/catch so that one failure does not prevent migration of the rest.
+        # Failed connections are marked as draining (not removed) so they can
+        # complete any in-flight requests before being replaced.  The collect-
+        # then-iterate pattern avoids holding pool_lock during migration I/O;
+        # Qore reference counting keeps connection objects alive even if another
+        # thread removes them from the pool between collect and migrate.
+        int migrated = 0;
+        foreach hash<auto> item in (to_migrate) {
+            try {
+                item.conn.migrate();
+                ++migrated;
+                log(LoggerLevel::DEBUG, "migrated connection %d to %s",
+                    item.conn.getConnectionId(), item.key);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "migration failed for connection %d to %s: %s: %s",
+                    item.conn.getConnectionId(), item.key, ex.err, ex.desc);
+                # Mark as draining — a new connection will be created on the next request
+                try {
+                    item.conn.setDraining();
+                } catch () {
+                    # Ignore errors during setDraining
+                }
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "migrateAll: %d/%d connections migrated", migrated, to_migrate.size());
+        return migrated;
+    }
+
     #! Removes idle connections older than the idle timeout
     cleanupIdleConnections() {
         date cutoff = now_us() - opts.idle_timeout;

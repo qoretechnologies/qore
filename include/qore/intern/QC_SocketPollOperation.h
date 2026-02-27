@@ -1142,6 +1142,15 @@ public:
     //! Check if connection is still open
     DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
 
+    //! Migrate the QUIC connection to a new socket (client-side active migration)
+    /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
+        and swaps the fd on the underlying socket object.
+
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int migrateConnection(ExceptionSink* xsink);
+
 private:
     std::shared_ptr<QuicSession> quic_session;
     QCS qcs_state = QCS::NONE;

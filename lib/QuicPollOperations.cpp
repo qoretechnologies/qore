@@ -39,6 +39,8 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 
 // Maximum packets per recvmmsg() batch
 constexpr int QUIC_MAX_RECV_BATCH = 16;
@@ -808,6 +810,107 @@ int64_t SocketQuicClientPollOperation::submitRequest(
     return quic_session->submitRequest(method, path, headers, body, body_len, xsink);
 }
 
+int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
+    if (!quic_session) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR", "QUIC session not initialized");
+        return -1;
+    }
+
+    int old_fd = sock->priv->socket->getSocket();
+    if (old_fd < 0) {
+        xsink->raiseException("QUIC-MIGRATION-ERROR", "socket is not open");
+        return -1;
+    }
+
+    // RAII guard: auto-closes the fd on error paths; release() on success
+    struct FdGuard {
+        int fd;
+        FdGuard(int fd) : fd(fd) {}
+        ~FdGuard() { if (fd >= 0) { ::close(fd); } }
+        int release() { int r = fd; fd = -1; return r; }
+    };
+
+    // Create a new UDP socket with the same address family.
+    // NOTE: remote_addr_ is this poll operation's cached copy (not the session's),
+    // so no session lock is needed.  The caller (Http3ClientConnection::migrate())
+    // holds driving=True which prevents concurrent continuePoll() from modifying
+    // poll operation state.
+    int new_fd = ::socket(remote_addr_.ss_family, SOCK_DGRAM, 0);
+    if (new_fd < 0) {
+        xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
+            "failed to create new UDP socket for migration");
+        return -1;
+    }
+    FdGuard fd_guard(new_fd);
+
+    // Connect the new socket to the same remote address (gives us a specific
+    // local address via getsockname and filters incoming packets)
+    if (::connect(new_fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_),
+                  remote_addrlen_) < 0) {
+        xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
+            "UDP connect() failed for migration socket");
+        return -1;
+    }
+
+    // Get the new local address
+    struct sockaddr_storage new_local;
+    socklen_t new_local_len = sizeof(new_local);
+    if (::getsockname(new_fd, reinterpret_cast<struct sockaddr*>(&new_local),
+                      &new_local_len) < 0) {
+        xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
+            "getsockname() failed on migration socket");
+        return -1;
+    }
+
+    // Enable pktinfo on the new socket.  Failure is non-fatal for client sockets:
+    // the client poll-op path does NOT use extractPktinfoAddr() (see MEMORY.md
+    // "Client pktinfo rule"), so pktinfo is only used for best-effort local address
+    // reporting.  The migration path always has a valid local address from
+    // getsockname() on the connected socket.
+    if (enableQuicPktinfo(new_fd, new_local.ss_family) < 0) {
+        printd(2, "SocketQuicClientPollOperation::migrateConnection(): enableQuicPktinfo() "
+            "failed (non-fatal for client): errno=%d (%s)\n", errno, strerror(errno));
+    }
+
+    // Set non-blocking mode on the new socket
+    int flags = fcntl(new_fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(new_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        xsink->raiseErrnoException("QUIC-MIGRATION-ERROR", errno,
+            "failed to set non-blocking mode on migration socket");
+        return -1;
+    }
+
+    // Initiate migration at the QUIC layer
+    if (quic_session->initiateMigration(
+            reinterpret_cast<const struct sockaddr*>(&new_local), new_local_len,
+            reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
+            xsink) != 0) {
+        return -1;
+    }
+
+    // Migration succeeded — swap the fd.  Set the new fd BEFORE closing the old
+    // one so the socket object always holds a valid fd (no window where it holds
+    // a closed fd that could be recycled by a concurrent socket() call).
+    //
+    // NOTE: direct assignment to sock->priv->socket->priv->sock is the established
+    // pattern in qore_socket_private (no setter abstraction exists).  The socket
+    // object has no cached state derived from the fd that would become inconsistent
+    // — socket options, non-blocking mode, and pktinfo are set on the new fd above.
+    fd_guard.release();
+    sock->priv->socket->priv->sock = new_fd;
+    ::close(old_fd);
+
+    // Update cached local address
+    memcpy(&local_addr_, &new_local, new_local_len);
+    local_addrlen_ = new_local_len;
+
+    printd(2, "SocketQuicClientPollOperation::migrateConnection(): migrated fd %d -> %d "
+        "(session %lld)\n", old_fd, new_fd,
+        (long long)quic_session->getSessionId());
+
+    return 0;
+}
+
 // ============================================================
 // SocketQuicServerPollOperation
 // ============================================================
@@ -904,7 +1007,9 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
 
     // Extract peer address from the session that owns this stream
     if (cached_stream_->session) {
-        const struct sockaddr_storage& raddr = cached_stream_->session->getRemoteAddr();
+        struct sockaddr_storage raddr;
+        socklen_t raddr_len;
+        cached_stream_->session->getRemoteAddrCopy(raddr, raddr_len);
         char addr_buf[INET6_ADDRSTRLEN];
         int peer_port = 0;
         if (raddr.ss_family == AF_INET) {
@@ -976,9 +1081,12 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
             continue;
         }
 
-        // Send QUIC packets as UDP datagrams to the session's remote address
-        const struct sockaddr_storage& peer_addr = session->getRemoteAddr();
-        socklen_t peer_addrlen = session->getRemoteAddrLen();
+        // Send QUIC packets as UDP datagrams to the session's remote address.
+        // Copy the address under the session lock to avoid reading a partially-
+        // updated address if migration changes it concurrently.
+        struct sockaddr_storage peer_addr;
+        socklen_t peer_addrlen;
+        session->getRemoteAddrCopy(peer_addr, peer_addrlen);
 
         int sent = sendQuicPacketsBatch(fd, pkt_batch_,
             reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen);
@@ -1411,8 +1519,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     }
 
     // Copy the remote peer address from the QUIC session for sendto()
-    memcpy(&peer_addr_, &quic_session->getRemoteAddr(), sizeof(peer_addr_));
-    peer_addrlen_ = quic_session->getRemoteAddrLen();
+    quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
 
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPackets()
@@ -1454,6 +1561,24 @@ const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
 
 int SocketQuicSendResponsePollOperation::sendPendingPackets(
     ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Refresh cached peer address if path migration has occurred.
+    //
+    // IMPORTANT: SINGLE-THREADED ASSUMPTION.  This check-then-copy sequence is safe
+    // ONLY because this function runs exclusively in the single-threaded server poll
+    // loop.  If the server I/O model ever becomes multi-threaded, the hasPathMigrated()
+    // check, getRemoteAddrCopy(), and clearPathMigrated() calls must be made atomic
+    // (e.g. via a combined getAndClearMigratedAddr() method under the session lock).
+    //
+    // hasPathMigrated() is a lock-free atomic check (near-zero cost on the common
+    // non-migration path).  When migration is detected, getRemoteAddrCopy() acquires
+    // the session lock to read the new address atomically.  The migration_gen_ counter
+    // provides eventual consistency — if a second migration occurs between check and
+    // copy, the flag will be set again and the next call will refresh the cache.
+    if (quic_session->hasPathMigrated()) {
+        quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->clearPathMigrated();
+    }
+
     // Coalesced timer check + packet generation under a single lock
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {
@@ -1661,8 +1786,7 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     }
 
     // Copy the remote peer address from the QUIC session for sendto()
-    memcpy(&peer_addr_, &quic_session->getRemoteAddr(), sizeof(peer_addr_));
-    peer_addrlen_ = quic_session->getRemoteAddrLen();
+    quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
 
     // Cache local address
     int fd = sock->priv->socket->getSocket();
@@ -1715,6 +1839,14 @@ const char* SocketQuicSendStreamingResponsePollOperation::getStateImpl() const {
 
 int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
     ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Refresh cached peer address if path migration has occurred.
+    // IMPORTANT: same single-threaded assumption as
+    // SocketQuicSendResponsePollOperation::sendPendingPackets() — see comment there.
+    if (quic_session->hasPathMigrated()) {
+        quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->clearPathMigrated();
+    }
+
     // Coalesced timer check + packet generation under a single lock
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {

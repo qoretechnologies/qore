@@ -141,6 +141,13 @@ public:
     */
     static constexpr uint64_t QUIC_IDLE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
 
+    //! Maximum active connection IDs (CIDs) advertised to the peer
+    /** Each migration consumes one CID; 8 allows 7 migrations before CID
+        exhaustion (default ngtcp2 value is 2, which is too low for mobile
+        clients that may experience multiple network transitions).
+    */
+    static constexpr uint64_t QUIC_ACTIVE_CONNECTION_ID_LIMIT = 8;
+
     //! Maximum buffered data before HTTP/3 layer is initialized
     static constexpr size_t QUIC_MAX_PRE_H3_BUFFER = 65536;
     //! Maximum buffered entries before HTTP/3 layer is initialized
@@ -360,11 +367,82 @@ public:
     //! Get current timestamp in nanoseconds (monotonic clock)
     DLLLOCAL static ngtcp2_tstamp timestamp();
 
-    //! Get the stored remote peer address
-    DLLLOCAL const struct sockaddr_storage& getRemoteAddr() const { return remote_addr_; }
+    //! Copy the stored remote peer address into caller-provided buffers
+    /** Thread-safe: acquires mtx_ to ensure the address and length are read
+        atomically.  Copies only the actual address length, not the full
+        sockaddr_storage.
+        @param out destination buffer (must be at least sizeof(sockaddr_storage))
+        @param out_len set to the actual address length
+    */
+    DLLLOCAL void getRemoteAddrCopy(struct sockaddr_storage& out, socklen_t& out_len) const {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        memcpy(&out, &remote_addr_, remote_addrlen_);
+        out_len = remote_addrlen_;
+    }
 
-    //! Get the stored remote peer address length
-    DLLLOCAL socklen_t getRemoteAddrLen() const { return remote_addrlen_; }
+    //! Update the stored remote peer address (called after path validation succeeds)
+    /** Thread-safe: acquires mtx_ internally.
+        @param addr new remote address
+        @param len address length
+    */
+    DLLLOCAL void updateRemoteAddr(const struct sockaddr* addr, socklen_t len);
+
+    //! Update the stored remote peer address — caller MUST hold mtx_
+    /** Used by ngtcp2 callbacks (pathValidationCallback) and writePacketsLocked()
+        which are already executing under mtx_.  Avoids recursive mutex acquisition.
+        @param addr new remote address
+        @param len address length
+    */
+    DLLLOCAL void updateRemoteAddrLocked(const struct sockaddr* addr, socklen_t len);
+
+    //! Update the stored local address (called after path validation succeeds)
+    /** Thread-safe: acquires mtx_ internally.
+        @param addr new local address
+        @param len address length
+    */
+    DLLLOCAL void updateLocalAddr(const struct sockaddr* addr, socklen_t len);
+
+    //! Update the stored local address — caller MUST hold mtx_
+    /** Used by ngtcp2 callbacks (pathValidationCallback) which are already executing
+        under mtx_.  Avoids recursive mutex acquisition.
+        @param addr new local address
+        @param len address length
+    */
+    DLLLOCAL void updateLocalAddrLocked(const struct sockaddr* addr, socklen_t len);
+
+    //! Get the migration generation counter (incremented on each path update)
+    /** Memory ordering: acquire pairs with the release in updateRemoteAddr() /
+        writePacketsLocked() to ensure the caller sees the updated address data
+        (memcpy'd under mtx_) after observing the incremented counter. */
+    DLLLOCAL uint64_t getMigrationGen() const { return migration_gen_.load(std::memory_order_acquire); }
+
+    //! Check if a path migration has occurred since the last clearPathMigrated() call
+    /** Memory ordering: acquire pairs with the release store in updateRemoteAddr()
+        to ensure the new address data is visible when the flag reads true. */
+    DLLLOCAL bool hasPathMigrated() const { return path_migrated_.load(std::memory_order_acquire); }
+
+    //! Clear the path migration flag (called after cached addresses are refreshed)
+    /** Memory ordering: relaxed would suffice (single-threaded server poll loop),
+        but release is used for consistency with the store-true path and to remain
+        correct if the threading model ever changes. */
+    DLLLOCAL void clearPathMigrated() { path_migrated_.store(false, std::memory_order_release); }
+
+    //! Initiate client-side connection migration to a new network path
+    /** Calls ngtcp2_conn_initiate_immediate_migration() to start sending on
+        the new path immediately while validating in the background. If validation
+        fails, ngtcp2 falls back to the old path automatically.
+
+        @param new_local new local address (from getsockname on new socket)
+        @param new_local_len local address length
+        @param new_remote new remote address
+        @param new_remote_len remote address length
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int initiateMigration(
+        const struct sockaddr* new_local, socklen_t new_local_len,
+        const struct sockaddr* new_remote, socklen_t new_remote_len,
+        ExceptionSink* xsink);
 
     //! Get unique session ID (assigned at creation)
     DLLLOCAL int64_t getSessionId() const { return session_id_; }
@@ -541,6 +619,37 @@ private:
     //! TLS early data rejected callback (for 0-RTT rejection handling)
     DLLLOCAL static int earlyDataRejectedCallback(ngtcp2_conn* conn, void* user_data);
 
+    //! Path validation result callback (SUCCESS/FAILURE/ABORTED)
+    /** On SUCCESS: updates stored addresses via updateRemoteAddr()/updateLocalAddr().
+        On FAILURE/ABORTED: logs a diagnostic message.
+    */
+    DLLLOCAL static int pathValidationCallback(ngtcp2_conn* conn,
+                                               uint32_t flags,
+                                               const ngtcp2_path* path,
+                                               const ngtcp2_path* old_path,
+                                               ngtcp2_path_validation_result res,
+                                               void* user_data);
+
+    //! Path validation started callback (logging only)
+    DLLLOCAL static int beginPathValidationCallback(ngtcp2_conn* conn,
+                                                    uint32_t flags,
+                                                    const ngtcp2_path* path,
+                                                    const ngtcp2_path* fallback_path,
+                                                    void* user_data);
+
+    //! Connection ID removal callback (unregisters retired CID from dispatcher)
+    DLLLOCAL static int removeConnectionIdCallback(ngtcp2_conn* conn,
+                                                   const ngtcp2_cid* cid,
+                                                   void* user_data);
+
+    //! DCID status callback (logging only: activate/deactivate lifecycle)
+    DLLLOCAL static int dcidStatusCallback(ngtcp2_conn* conn,
+                                           ngtcp2_connection_id_status_type type,
+                                           uint64_t seq,
+                                           const ngtcp2_cid* cid,
+                                           const uint8_t* token,
+                                           void* user_data);
+
     // --- nghttp3 static callbacks ---
 
     //! HTTP/3 begin headers
@@ -626,6 +735,16 @@ private:
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
+    std::atomic<bool> path_migrated_{false};         //!< set by pathValidationCallback on SUCCESS; cleared by clearPathMigrated()
+    //! Address change generation counter — incremented each time remote_addr_ is updated.
+    /** NOTE: this is a "change generation", NOT a "migration count".  A single
+        connection migration can trigger 2-3 increments: once from initiateMigration(),
+        once from writePacketsLocked() (ngtcp2 output path), and/or once from
+        pathValidationCallback().  This is harmless — the counter's purpose is stale
+        address detection, not counting logical migration events.  Consumers must not
+        assume a 1:1 mapping between increments and migration operations.
+    */
+    std::atomic<uint64_t> migration_gen_{0};
     int64_t goaway_max_stream_id_{-1};               //!< max stream ID from received GOAWAY; protected by mtx_
     std::string host_;                               //!< server hostname for :authority fallback
     uint16_t port_ = 0;                             //!< server port

@@ -326,9 +326,15 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
         # Submit request AND register callback atomically under stream_lock.
         # The capacity check is inside the lock to eliminate the TOCTOU race
         # between canAcceptStream() (optimistic hint) and actual submission.
-        # Retry on STREAM_ID_BLOCKED: the server may not have extended max streams yet.
-        # Uses exponential backoff: 1ms, 2ms, ..., 512ms; wakes early when
-        # continuePoll() signals stream_capacity_cond (MAX_STREAMS processed)
+        #
+        # Retry on STREAM_ID_BLOCKED: the server may not have extended max streams
+        # yet.  Uses exponential backoff: 1ms, 2ms, ..., 512ms (total ~1s); wakes
+        # early when continuePoll() signals stream_capacity_cond (MAX_STREAMS
+        # processed).  The retry limit (10) prevents infinite loops while allowing
+        # reasonable recovery from temporary stream ID exhaustion.  Additional
+        # safeguards: the connection state check after each wait detects connection
+        # closure during retry, and the capacity re-check prevents oversubscription
+        # when multiple threads compete for newly available stream slots.
         int stream_id;
         {
             AutoLock al(stream_lock);
@@ -469,6 +475,31 @@ public class Http3ClientPollOperation inherits AbstractPollOperation {
         }
         empty_read_count = 0;
         state = STATE_READING;
+    }
+
+    #! Initiates QUIC connection migration to a new network path
+    /** Creates a new connected UDP socket, migrates the QUIC session to the new path,
+        and swaps the underlying file descriptor. Path validation proceeds in the
+        background; if it fails, ngtcp2 automatically falls back to the previous path.
+
+        @throw HTTP3-STATE-ERROR if the connection is not ready
+        @throw QUIC-MIGRATION-ERROR if migration fails
+
+        @since %Qore 2.3
+    */
+    migrate() {
+        # State check without stream_lock: safe because the caller
+        # (Http3ClientConnection::migrate()) holds driving=True, which prevents
+        # concurrent continuePoll() calls that could change state.  The state
+        # field uses Qore's atomic string assignment, so the snapshot is consistent.
+        string current_state = state;
+        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot migrate in state: %y", current_state);
+        }
+
+        log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
+        current_op.migrateQuicConnection();
+        log(LoggerLevel::DEBUG, "QUIC connection migration initiated successfully");
     }
 
     #! Aborts the operation and closes the connection
