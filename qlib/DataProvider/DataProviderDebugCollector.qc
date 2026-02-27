@@ -101,6 +101,9 @@ public hashdecl DataProviderDebugInfo {
     #! True if this is an HTTP/2 connection
     *bool http2;
 
+    #! True if this is an HTTP/3 connection
+    *bool http3;
+
     #! HTTP/2 stream ID if applicable
     *int h2_stream_id;
 

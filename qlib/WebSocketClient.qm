@@ -2396,6 +2396,7 @@ class MyObserver inherits Observer {
     private hash<auto> getConnectionEventInfo() {
         return {
             "http2": isHttp2(),
+            "http3": isHttp3(),
         };
     }
 
@@ -3003,12 +3004,14 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 # HTTP/2 WebSocket (RFC 8441) session management. HTTP/2 WebSocket is also
                 # temporarily disabled on the server side (HttpServer.qm).
                 "desc": "The HTTP version to use: `1.1` (default), `auto` (HTTP/2 if available), `1.0`, "
-                    "or `2.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN",
+                    "`2.0`, or `3.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN. "
+                    "HTTP/3 (RFC 9220) requires TLS and uses QUIC",
                 "default_value": "1.1",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1",
+                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1; upgrade to "
+                            "HTTP/3 if advertised via Alt-Svc",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -3021,6 +3024,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                     <AllowedValueInfo>{
                         "value": "2.0",
                         "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "3.0",
+                        "desc": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
                     },
                 ),
             },
@@ -3438,11 +3445,12 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
             "end_time": end_time,
             "duration_ms": duration_ms,
             "url": client.getUrl(),
-            "protocol": client.isHttp2() ? "HTTP/2" : "HTTP/1.1",
+            "protocol": client.isHttp3() ? "HTTP/3" : (client.isHttp2() ? "HTTP/2" : "HTTP/1.1"),
             "request_body": msg,
             "request_size": msg_size,
             "ws_message_type": ws_message_type,
             "http2": client.isHttp2(),
+            "http3": client.isHttp3(),
             "tls": client.getUrl() =~ /^wss:/i,
             "error": error_msg,
         };
@@ -3595,6 +3603,8 @@ public class WebSocketClientConnectedEventDataType inherits HashDataType {
     #! Creates the type
     constructor() {
         addField(new QoreDataField("http2", "True if using HTTP/2 WebSocket (RFC 8441), False if using HTTP/1.1",
+            AbstractDataProviderType::get(BoolType)));
+        addField(new QoreDataField("http3", "True if using HTTP/3 WebSocket (RFC 9220)",
             AbstractDataProviderType::get(BoolType)));
     }
 }

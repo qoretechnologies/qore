@@ -606,15 +606,19 @@ public hashdecl HttpListenerOptionInfo {
     bool ssl_accept_all_certs = True;
 
     #! HTTP version mode for this listener
-    /** Controls HTTP/2 support for incoming connections:
+    /** Controls HTTP/2 and HTTP/3 support for incoming connections:
         - \c "auto": Use HTTP/2 if client negotiates via ALPN, fall back to HTTP/1.1 (default)
         - \c "1.0": HTTP/1.0 only
         - \c "1.1": HTTP/1.1 only
         - \c "2.0": Require HTTP/2, reject connections that don't negotiate HTTP/2
+        - \c "3.0": HTTP/3 (QUIC) listener — uses QUIC sockets configured separately
 
         @note HTTP/2 requires:
         - TLS (non-TLS connections always use HTTP/1.x)
         - Async I/O mode enabled on the HttpServer (\c async_mode: \c True, which is the default)
+
+        @note HTTP/3 requires TLS and uses QUIC as the transport protocol; HTTP/3 listeners are configured
+        via QUIC-specific paths
 
         When async mode is disabled, the server only supports HTTP/1.x regardless of this setting.
 
@@ -769,6 +773,19 @@ public class CookieHelper {
             hdr."Cache-Control" = "no-cache, no-store, must-revalidate, max-age=0";
         }
     }
+}
+
+#! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket
+/** @param cx the call context hash
+    @param hdr the header hash
+
+    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket (RFC 8441 / RFC 9220)
+
+    @since %HttpServerUtil 1.0.14
+*/
+public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
+    return cx."header-info".is_websocket_connect
+        || (hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
 }
 
 #! returns a complete URL from a bind address

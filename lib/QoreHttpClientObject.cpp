@@ -884,18 +884,22 @@ struct qore_httpclient_priv {
                 h->setKeyValueIntern("headers", amm.release());
             }
         }
-        // Output http_version based on http2_mode and http11
+        // Output http_version based on http3_mode, http2_mode, and http11
         const char* version_str;
-        switch (http2_mode) {
-            case HTTP2_MODE_AUTO:
-                version_str = "auto";
-                break;
-            case HTTP2_MODE_REQUIRED:
-                version_str = "2.0";
-                break;
-            default:
-                version_str = http11 ? "1.1" : "1.0";
-                break;
+        if (http3_mode == HTTP3_MODE_REQUIRED) {
+            version_str = "3.0";
+        } else {
+            switch (http2_mode) {
+                case HTTP2_MODE_AUTO:
+                    version_str = "auto";
+                    break;
+                case HTTP2_MODE_REQUIRED:
+                    version_str = "2.0";
+                    break;
+                default:
+                    version_str = http11 ? "1.1" : "1.0";
+                    break;
+            }
         }
         h->setKeyValueIntern("http_version", new QoreStringNode(version_str));
         // HTTP/3 mode
@@ -1135,14 +1139,12 @@ struct qore_httpclient_priv {
                     return -1;
                 }
             } else if (effective_http2_mode == HTTP2_MODE_H2C_UPGRADE && !connect_ssl) {
-                // TODO: h2c upgrade via HTTP/1.1 Upgrade header is not yet implemented
-                // This requires:
-                // 1. Sending HTTP/1.1 request with Upgrade: h2c and HTTP2-Settings headers
-                // 2. Handling 101 Switching Protocols response
-                // 3. Using nghttp2_session_upgrade2() to complete upgrade
-                // For now, raise an exception
-                xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not yet implemented; "
-                    "use h2c (h2c-direct) mode for HTTP/2 cleartext with prior knowledge");
+                // h2c upgrade via HTTP/1.1 Upgrade header is deprecated by RFC 9113 §3.2
+                // RFC 9113 removed the HTTP/1.1 Upgrade mechanism for HTTP/2.
+                // Use h2c (h2c-direct / prior knowledge) mode instead.
+                xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not supported "
+                    "(deprecated by RFC 9113); use h2c (h2c-direct) mode for HTTP/2 cleartext "
+                    "with prior knowledge");
                 msock->socket->close();
                 return -1;
             } else
@@ -1979,6 +1981,8 @@ struct qore_httpclient_priv {
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
         const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
+        const ResolvedCallReferenceNode* trailer_callback,
         QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink);
 
     // Parse Alt-Svc header value and update the cache
@@ -1993,6 +1997,8 @@ struct qore_httpclient_priv {
     // Send an HTTP/3 request and get the response
     DLLLOCAL QoreHashNode* sendHttp3MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
         const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
+        const ResolvedCallReferenceNode* trailer_callback,
         QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink);
 
     DLLLOCAL void addProxyAuthorization(const QoreHashNode* headers, QoreHashNode& h, ExceptionSink* xsink) const {
@@ -3717,8 +3723,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("http_version");
     if (!n.isNothing()) {
         if (n.getType() != NT_STRING) {
-            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string version ('auto', '1.0', '1.1', '2.0') "
-                "as value for the \"http_version\" key in the options hash");
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting string version ('auto', '1.0', '1.1', "
+                "'2.0', '3.0') as value for the \"http_version\" key in the options hash");
             return -1;
         }
         if (setHTTPVersion((n.get<const QoreStringNode>())->c_str(), xsink)) {
@@ -4033,9 +4039,13 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_REQUIRED;
         // ALPN protocols are set at connect time based on both object mode and global mode
+    } else if (!strcmp(version, "3.0") || !strcmp(version, "3")) {
+        http_priv->http11 = true;
+        http_priv->http2_mode = HTTP2_MODE_DISABLED;
+        http_priv->http3_mode = HTTP3_MODE_REQUIRED;
     } else {
-        xsink->raiseException("HTTP-VERSION-ERROR", "only 'auto', '1.0', '1.1', '2.0', '2' are valid "
-            "(value passed: '%s')", version);
+        xsink->raiseException("HTTP-VERSION-ERROR", "only 'auto', '1.0', '1.1', '2.0', '2', '3.0', '3' are "
+            "valid (value passed: '%s')", version);
         rc = -1;
     }
     return rc;
@@ -4043,6 +4053,9 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
 
 const char* QoreHttpClientObject::getHTTPVersion() const {
     // Return the configured version, not the active version
+    if (http_priv->http3_mode == HTTP3_MODE_REQUIRED) {
+        return "3.0";
+    }
     switch (http_priv->http2_mode) {
         case HTTP2_MODE_AUTO:
             return "auto";
@@ -4324,6 +4337,164 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     }
 }
 
+// Forward declaration — defined later in the file
+static int driveQuicIo(QuicSession* session, int fd,
+        const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
+        int poll_timeout_ms, ExceptionSink* xsink);
+
+QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const QoreHashNode* headers,
+        const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    // Ensure we're connected with HTTP/3 (QUIC)
+    if (!http_priv->http3_active || !http_priv->quic_session) {
+        // Establish QUIC connection directly (not TCP+TLS)
+        if (http_priv->connectQuic(xsink, http_priv->connection)) {
+            return nullptr;
+        }
+        if (!http_priv->http3_active || !http_priv->quic_session) {
+            xsink->raiseException("HTTP3-ERROR", "HTTP/3 connection required for extended CONNECT");
+            return nullptr;
+        }
+    }
+
+    // RFC 9220: Check if server supports extended CONNECT before sending
+    if (http_priv->quic_session->isExtendedConnectRejected()) {
+        xsink->raiseException("HTTP3-CONNECT-ERROR",
+            "server does not support extended CONNECT "
+            "(enable_connect_protocol not advertised in SETTINGS)");
+        return nullptr;
+    }
+
+    // Build headers map
+    strcase_str_map_t h3_headers;
+
+    // Add Host header with port when needed (used to derive :authority)
+    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
+    if (host_header) {
+        h3_headers["host"] = host_header->c_str();
+    }
+
+    // Copy custom headers
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                h3_headers[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    // Submit CONNECT request with :protocol pseudo-header
+    int64_t stream_id = http_priv->quic_session->submitConnectRequest(path, h3_headers,
+        protocol, xsink);
+    if (stream_id < 0) {
+        return nullptr;
+    }
+
+    // Helper to cancel the CONNECT stream on error paths — cleans up streaming_body_data_
+    // and connect_tunnel_active entries that would otherwise leak until connection close
+    auto cancel_stream = [&]() {
+        if (http_priv->quic_session && !http_priv->quic_session->isClosed()) {
+            ExceptionSink tmp_xsink;
+            http_priv->quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &tmp_xsink);
+            // ignore cancelStream errors — we're already on an error path
+        }
+    };
+
+    // Drive I/O to send the request and wait for response
+    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
+
+    while (true) {
+        if (http_priv->quic_session->isClosed()) {
+            xsink->raiseException("HTTP3-CONNECT-ERROR",
+                "QUIC connection closed while waiting for CONNECT response");
+            http_priv->disconnectQuic();
+            return nullptr;
+        }
+
+        int remaining_ms = 100;
+        if (deadline_ms >= 0) {
+            int64 now_ms = q_clock_getmillis();
+            if (now_ms >= deadline_ms) {
+                cancel_stream();
+                xsink->raiseException("HTTP3-CONNECT-ERROR",
+                    "timeout waiting for HTTP/3 CONNECT response (timeout: %d ms)",
+                    (int)http_priv->timeout);
+                return nullptr;
+            }
+            remaining_ms = std::min(100, static_cast<int>(deadline_ms - now_ms));
+        }
+
+        if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
+                http_priv->quic_local_addr, http_priv->quic_local_addrlen,
+                remaining_ms, xsink)) {
+            http_priv->disconnectQuic();
+            return nullptr;
+        }
+
+        // Check if SETTINGS revealed that server doesn't support extended CONNECT
+        if (http_priv->quic_session->isExtendedConnectRejected()) {
+            cancel_stream();
+            xsink->raiseException("HTTP3-CONNECT-ERROR",
+                "server does not support extended CONNECT "
+                "(enable_connect_protocol not advertised in SETTINGS)");
+            return nullptr;
+        }
+
+        // Check if we have a completed stream (CONNECT response headers received)
+        if (http_priv->quic_session->hasCompletedStreams()) {
+            break;
+        }
+    }
+
+    // Get the completed stream
+    std::unique_ptr<QuicStreamInfo> stream = http_priv->quic_session->takeCompletedStream();
+    if (!stream) {
+        cancel_stream();
+        xsink->raiseException("HTTP3-CONNECT-ERROR",
+            "no response received for CONNECT stream %" PRId64, stream_id);
+        return nullptr;
+    }
+
+    // Verify we got the right stream
+    if (stream->stream_id != stream_id) {
+        cancel_stream();
+        xsink->raiseException("HTTP3-CONNECT-ERROR",
+            "unexpected stream %" PRId64 " in CONNECT response (expected %" PRId64 ")",
+            stream->stream_id, stream_id);
+        return nullptr;
+    }
+
+    // Build response hash
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status_code", stream->status_code, xsink);
+    rv->setKeyValue("stream_id", stream_id, xsink);
+    rv->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+
+    // Add response headers
+    rv->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
+
+    // Add info if requested
+    if (info) {
+        info->setKeyValue("http3", true, xsink);
+        info->setKeyValue("stream_id", stream_id, xsink);
+        info->setKeyValue("status_code", stream->status_code, xsink);
+    }
+
+    // RFC 9220: 200 OK means CONNECT succeeded
+    if (stream->status_code != 200) {
+        cancel_stream();
+        xsink->raiseException("HTTP3-CONNECT-ERROR",
+            "HTTP/3 CONNECT request failed with status %d", stream->status_code);
+        return nullptr;
+    }
+
+    return rv.release();
+}
+
 int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
     SafeLocker sl(priv->m);
@@ -4575,6 +4746,70 @@ bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_m
     return stream && !stream->body.empty();
 }
 
+int QoreHttpClientObject::sendHttp3StreamData(int64_t stream_id, const BinaryNode* data,
+        bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->http3_active || !http_priv->quic_session) {
+        xsink->raiseException("HTTP3-ERROR", "HTTP/3 is not active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+
+    int rv = http_priv->quic_session->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (*xsink || rv < 0) {
+        return -1;
+    }
+
+    // Drive I/O to flush the data
+    if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
+            http_priv->quic_local_addr, http_priv->quic_local_addrlen,
+            timeout_ms, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SafeLocker sl(priv->m);
+
+    if (!http_priv->http3_active || !http_priv->quic_session) {
+        xsink->raiseException("HTTP3-ERROR", "HTTP/3 is not active");
+        return nullptr;
+    }
+
+    // First check if data is already in the connect stream buffer
+    {
+        QoreValue val = http_priv->quic_session->readConnectStreamData(stream_id, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (val.getType() == NT_BINARY) {
+            return static_cast<BinaryNode*>(val.takeIfNode());
+        }
+    }
+
+    // No data available — drive I/O and try again
+    if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
+            http_priv->quic_local_addr, http_priv->quic_local_addrlen,
+            timeout_ms, xsink)) {
+        return nullptr;
+    }
+
+    {
+        QoreValue val = http_priv->quic_session->readConnectStreamData(stream_id, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (val.getType() == NT_BINARY) {
+            return static_cast<BinaryNode*>(val.takeIfNode());
+        }
+    }
+    return nullptr;
+}
+
 int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  {
     SafeLocker sl(priv->m);
 
@@ -4719,25 +4954,15 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
 
     // Use HTTP/3 if already active
     if (http3_active && quic_session) {
-        if (send_callback || is || trailer_callback) {
-            xsink->raiseException("HTTP3-CALLBACK-ERROR", "streaming callbacks are not supported with "
-                "HTTP/3 connections");
-            return nullptr;
-        }
         return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            send_callback, is, max_chunk_size, trailer_callback,
             info, timeout_ms, code, xsink);
     }
 
     // Use HTTP/2 if active (check before HTTP/3 upgrade attempt below)
     if (http2_active && getH2Session()) {
-        // HTTP/2 doesn't support streaming callbacks - raise an error if they are used
-        if (send_callback || is || trailer_callback) {
-            xsink->raiseException("HTTP2-CALLBACK-ERROR", "streaming callbacks (send_callback, InputStream, "
-                "trailer_callback) are not supported with HTTP/2 connections; use the synchronous send() method "
-                "or disable HTTP/2 with http_version=1.1");
-            return nullptr;
-        }
         return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            send_callback, is, max_chunk_size, trailer_callback,
             info, timeout_ms, code, xsink);
     }
 
@@ -4747,35 +4972,24 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
     if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
         auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
         if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
-            if (send_callback || is || trailer_callback) {
-                // Streaming callbacks are not supported over HTTP/3
-                if (http3_mode == HTTP3_MODE_REQUIRED) {
-                    xsink->raiseException("HTTP3-CALLBACK-ERROR",
-                        "HTTP/3 mode is required but streaming callbacks "
-                        "(send_callback, InputStream, trailer_callback) are not "
-                        "supported over HTTP/3");
-                    return nullptr;
-                }
-                // HTTP3_MODE_AUTO: fall through to HTTP/1.x
-            } else {
-                if (!connectQuic(xsink, connection)) {
-                    return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
-                        info, timeout_ms, code, xsink);
-                }
-                if (http3_mode == HTTP3_MODE_REQUIRED) {
-                    return nullptr;
-                }
-                // Log QUIC error details before clearing for HTTP/1.x fallback.
-                // xsink->clear() is intentional: the QUIC failure is non-fatal when
-                // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
-                {
-                    QoreStringValueHelper err(xsink->getExceptionErr());
-                    QoreStringValueHelper desc(xsink->getExceptionDesc());
-                    printd(2, "QoreHttpClientObject: QUIC connection failed (%s: %s), "
-                        "falling back to HTTP/1.x\n", err->c_str(), desc->c_str());
-                }
-                xsink->clear();
+            if (!connectQuic(xsink, connection)) {
+                return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+                    send_callback, is, max_chunk_size, trailer_callback,
+                    info, timeout_ms, code, xsink);
             }
+            if (http3_mode == HTTP3_MODE_REQUIRED) {
+                return nullptr;
+            }
+            // Log QUIC error details before clearing for HTTP/1.x fallback.
+            // xsink->clear() is intentional: the QUIC failure is non-fatal when
+            // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
+            {
+                QoreStringValueHelper err(xsink->getExceptionErr());
+                QoreStringValueHelper desc(xsink->getExceptionDesc());
+                printd(2, "QoreHttpClientObject: QUIC connection failed (%s: %s), "
+                    "falling back to HTTP/1.x\n", err->c_str(), desc->c_str());
+            }
+            xsink->clear();
         }
     }
 
@@ -4855,6 +5069,8 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
 
 QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* mname, const char* meth,
         const char* mpath, const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
+        const ResolvedCallReferenceNode* trailer_callback,
         QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink) {
     Http2Session* h2_session = getH2Session();
     assert(h2_session);
@@ -4886,12 +5102,19 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         headers.erase(host_it);
     }
 
-    // Get request body data
-    const void* body_data = data;
-    size_t body_len = size;
-    if (!body_data && body) {
-        body_data = body->c_str();
-        body_len = body->size();
+    // Determine streaming mode
+    bool streaming = send_callback || is;
+
+    // Get request body data (not used in streaming mode)
+    const void* body_data = nullptr;
+    size_t body_len = 0;
+    if (!streaming) {
+        body_data = data;
+        body_len = size;
+        if (!body_data && body) {
+            body_data = body->c_str();
+            body_len = body->size();
+        }
     }
 
     // Record request in info if provided
@@ -4899,19 +5122,218 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/2", meth, mpath), nullptr);
     }
 
-    // Submit the HTTP/2 request
-    int32_t stream_id = h2_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink);
+    // Submit the HTTP/2 request — streaming=true sets up deferred data provider
+    int32_t stream_id = h2_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink, streaming);
     if (stream_id < 0) {
         return nullptr;
     }
 
-    // Send pending data (the request) - use blocking version for client-side operations
+    // Send pending data (the request headers) - use blocking version for client-side operations
     if (h2_session->sendPendingDataBlocking(timeout_ms, xsink)) {
         return nullptr;
     }
 
-    // Ensure the request body is fully sent, driving flow control if necessary
+    // Streaming body: feed chunks from send_callback or InputStream
     int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
+    if (streaming) {
+        if (send_callback) {
+            // Chunk-feed loop using send_callback
+            bool done = false;
+            while (!done) {
+                // Check timeout
+                if (deadline_ms >= 0 && q_clock_getmillis() >= deadline_ms) {
+                    xsink->raiseException("HTTP2-TIMEOUT",
+                        "timeout sending HTTP/2 streaming request body (timeout: %d ms)", timeout_ms);
+                    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                    return nullptr;
+                }
+
+                // Call the callback (no lock held — safe for arbitrary Qore code)
+                ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+                if (*xsink) {
+                    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                    return nullptr;
+                }
+
+                // Process callback return value
+                const void* chunk_data = nullptr;
+                size_t chunk_len = 0;
+                switch (res->getType()) {
+                    case NT_STRING: {
+                        const QoreStringNode* str = res->get<const QoreStringNode>();
+                        if (str->empty()) {
+                            done = true;
+                        } else {
+                            chunk_data = str->c_str();
+                            chunk_len = str->size();
+                        }
+                        break;
+                    }
+                    case NT_BINARY: {
+                        const BinaryNode* b = res->get<const BinaryNode>();
+                        if (b->empty()) {
+                            done = true;
+                        } else {
+                            chunk_data = b->getPtr();
+                            chunk_len = b->size();
+                        }
+                        break;
+                    }
+                    case NT_NOTHING:
+                    case NT_NULL:
+                        done = true;
+                        break;
+                    default:
+                        xsink->raiseException("HTTP2-CALLBACK-ERROR",
+                            "send_callback returned type '%s'; expected 'string', 'binary', or NOTHING",
+                            res->getTypeName());
+                        h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                        return nullptr;
+                }
+
+                if (chunk_data && chunk_len > 0) {
+                    // Send chunk data with backpressure handling
+                    while (true) {
+                        int srv = h2_session->sendStreamData(stream_id, chunk_data, chunk_len, false, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        if (srv == 0) {
+                            break;  // data accepted
+                        }
+                        if (srv == 1) {
+                            // Buffer full — drive I/O to drain and retry
+                            int remaining_ms = -1;
+                            if (deadline_ms >= 0) {
+                                remaining_ms = static_cast<int>(deadline_ms - q_clock_getmillis());
+                                if (remaining_ms <= 0) {
+                                    xsink->raiseException("HTTP2-TIMEOUT",
+                                        "timeout during HTTP/2 streaming body backpressure");
+                                    return nullptr;
+                                }
+                            }
+                            h2_session->receiveData(remaining_ms, xsink);
+                            if (*xsink) {
+                                return nullptr;
+                            }
+                            h2_session->sendPendingDataBlocking(remaining_ms, xsink);
+                            if (*xsink) {
+                                return nullptr;
+                            }
+                            continue;
+                        }
+                        return nullptr;  // error
+                    }
+                    // Flush the chunk
+                    h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+            }
+        } else if (is) {
+            // Chunk-feed loop using InputStream
+            size_t chunk_size = max_chunk_size > 0 ? max_chunk_size : 65536;
+            while (true) {
+                // Check timeout
+                if (deadline_ms >= 0 && q_clock_getmillis() >= deadline_ms) {
+                    xsink->raiseException("HTTP2-TIMEOUT",
+                        "timeout sending HTTP/2 streaming request body (timeout: %d ms)", timeout_ms);
+                    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                    return nullptr;
+                }
+
+                // Read from InputStream (no lock held — safe for arbitrary Qore code)
+                SimpleRefHolder<BinaryNode> buf(is->readHelper(chunk_size, xsink));
+                if (*xsink) {
+                    h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                    return nullptr;
+                }
+                if (!buf) {
+                    break;  // EOF
+                }
+
+                // Send the chunk with backpressure handling
+                while (true) {
+                    int srv = h2_session->sendStreamData(stream_id, buf->getPtr(), buf->size(), false, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (srv == 0) {
+                        break;
+                    }
+                    if (srv == 1) {
+                        int remaining_ms = -1;
+                        if (deadline_ms >= 0) {
+                            remaining_ms = static_cast<int>(deadline_ms - q_clock_getmillis());
+                            if (remaining_ms <= 0) {
+                                xsink->raiseException("HTTP2-TIMEOUT",
+                                    "timeout during HTTP/2 streaming body backpressure");
+                                return nullptr;
+                            }
+                        }
+                        h2_session->receiveData(remaining_ms, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        h2_session->sendPendingDataBlocking(remaining_ms, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        continue;
+                    }
+                    return nullptr;
+                }
+                h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+
+        // Handle trailers if provided
+        if (trailer_callback) {
+            ValueHolder trailer_val(trailer_callback->execValue(nullptr, xsink), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (trailer_val->getType() == NT_HASH) {
+                const QoreHashNode* trailers = trailer_val->get<const QoreHashNode>();
+                strcase_str_map_t trailer_map;
+                ConstHashIterator ti(*trailers);
+                while (ti.next()) {
+                    QoreValue v = ti.get();
+                    if (v.getType() == NT_STRING) {
+                        trailer_map[ti.getKey()] = v.get<const QoreStringNode>()->c_str();
+                    }
+                }
+                if (!trailer_map.empty()) {
+                    h2_session->submitTrailers(stream_id, trailer_map, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                }
+            }
+        }
+
+        // Signal EOF (no trailers) — close the stream for writing
+        if (!trailer_callback) {
+            h2_session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
+    // Ensure the request body is fully sent, driving flow control if necessary
     if (body_len > 0) {
         while (h2_session->hasPendingBodyData(stream_id)) {
             int remaining_ms = -1;
@@ -5331,7 +5753,8 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
         reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen,
         res->ai_addr, res->ai_addrlen,
         msock->socket->priv->ssl_verify_mode,
-        /*enable_0rtt=*/true);
+        /*enable_0rtt=*/true,
+        msock->cert, msock->pk);
 
     if (!quic_session || *xsink) {
         quic_session.reset();
@@ -5663,6 +6086,8 @@ static int driveQuicIo(QuicSession* session, int fd,
 
 QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* mname, const char* meth,
         const char* mpath, const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
+        const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
+        const ResolvedCallReferenceNode* trailer_callback,
         QoreHashNode* info, int timeout_ms, int& code, ExceptionSink* xsink) {
     assert(quic_session);
     assert(quic_fd >= 0);
@@ -5702,15 +6127,22 @@ QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* m
         headers.erase(host_it);
     }
 
-    // Get request body data
-    const void* body_data = data;
-    size_t body_len = size;
-    if (!body_data && body) {
-        body_data = body->c_str();
-        body_len = body->size();
+    // Determine streaming mode
+    bool streaming = send_callback || is;
+
+    // Get request body data (not used in streaming mode)
+    const void* body_data = nullptr;
+    size_t body_len = 0;
+    if (!streaming) {
+        body_data = data;
+        body_len = size;
+        if (!body_data && body) {
+            body_data = body->c_str();
+            body_len = body->size();
+        }
     }
 
-    // Set Content-Length if body present and header not already set
+    // Set Content-Length if body present and header not already set (non-streaming only)
     if (body_len > 0) {
         auto cl_it = headers.find("content-length");
         if (cl_it == headers.end()) {
@@ -5719,7 +6151,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* m
     }
 
     // Add ";charset=xxx" to Content-Type for non-ISO-8859-1 text bodies
-    if (body && body_len > 0) {
+    if (!streaming && body && body_len > 0) {
         auto ct_it = headers.find("content-type");
         if (ct_it != headers.end()) {
             // Only add charset if not already present and not a boundary type
@@ -5742,13 +6174,238 @@ QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* m
     }
 
     // Submit the HTTP/3 request
-    int64_t stream_id = quic_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink);
+    int64_t stream_id;
+    if (streaming) {
+        stream_id = quic_session->submitRequestStreaming(meth, mpath, headers, xsink);
+    } else {
+        stream_id = quic_session->submitRequest(meth, mpath, headers, body_data, body_len, xsink);
+    }
     if (stream_id < 0) {
         return nullptr;
     }
 
     // Drive I/O until we have a complete response
     int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
+
+    // Helper lambda: drive QUIC I/O and check for errors
+    auto drive_h3_io = [&]() -> int {
+        int remaining_ms = 100;
+        if (deadline_ms >= 0) {
+            remaining_ms = std::min(100, static_cast<int>(deadline_ms - q_clock_getmillis()));
+            if (remaining_ms <= 0) {
+                return -2;  // timeout
+            }
+        }
+        return driveQuicIo(quic_session.get(), quic_fd, quic_local_addr, quic_local_addrlen,
+                remaining_ms, xsink) ? -1 : 0;
+    };
+
+    // Streaming body: feed chunks from send_callback or InputStream
+    if (streaming) {
+        // Flush headers first
+        if (drive_h3_io()) {
+            if (!*xsink) {
+                xsink->raiseException("HTTP3-TIMEOUT",
+                    "timeout sending HTTP/3 streaming request headers");
+            }
+            disconnectQuic();
+            return nullptr;
+        }
+
+        if (send_callback) {
+            // Chunk-feed loop using send_callback
+            bool done = false;
+            while (!done) {
+                if (deadline_ms >= 0 && q_clock_getmillis() >= deadline_ms) {
+                    xsink->raiseException("HTTP3-TIMEOUT",
+                        "timeout sending HTTP/3 streaming request body (timeout: %d ms)", timeout_ms);
+                    disconnectQuic();
+                    return nullptr;
+                }
+
+                // Call the callback (no lock held — safe for arbitrary Qore code)
+                ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+                if (*xsink) {
+                    quic_session->cancelStream(stream_id, NGHTTP3_H3_INTERNAL_ERROR, xsink);
+                    disconnectQuic();
+                    return nullptr;
+                }
+
+                const void* chunk_data = nullptr;
+                size_t chunk_len = 0;
+                switch (res->getType()) {
+                    case NT_STRING: {
+                        const QoreStringNode* str = res->get<const QoreStringNode>();
+                        if (str->empty()) {
+                            done = true;
+                        } else {
+                            chunk_data = str->c_str();
+                            chunk_len = str->size();
+                        }
+                        break;
+                    }
+                    case NT_BINARY: {
+                        const BinaryNode* b = res->get<const BinaryNode>();
+                        if (b->empty()) {
+                            done = true;
+                        } else {
+                            chunk_data = b->getPtr();
+                            chunk_len = b->size();
+                        }
+                        break;
+                    }
+                    case NT_NOTHING:
+                    case NT_NULL:
+                        done = true;
+                        break;
+                    default:
+                        xsink->raiseException("HTTP3-CALLBACK-ERROR",
+                            "send_callback returned type '%s'; expected 'string', 'binary', or NOTHING",
+                            res->getTypeName());
+                        quic_session->cancelStream(stream_id, NGHTTP3_H3_INTERNAL_ERROR, xsink);
+                        disconnectQuic();
+                        return nullptr;
+                }
+
+                if (chunk_data && chunk_len > 0) {
+                    while (true) {
+                        int srv = quic_session->sendStreamData(stream_id, chunk_data, chunk_len, false, xsink);
+                        if (*xsink) {
+                            disconnectQuic();
+                            return nullptr;
+                        }
+                        if (srv == 0) {
+                            break;
+                        }
+                        if (srv == 1) {
+                            // Buffer full — drive I/O to drain and retry
+                            int rv = drive_h3_io();
+                            if (rv) {
+                                if (!*xsink) {
+                                    xsink->raiseException("HTTP3-TIMEOUT",
+                                        "timeout during HTTP/3 streaming body backpressure");
+                                }
+                                disconnectQuic();
+                                return nullptr;
+                            }
+                            continue;
+                        }
+                        disconnectQuic();
+                        return nullptr;
+                    }
+                    // Flush the chunk
+                    if (drive_h3_io()) {
+                        if (!*xsink) {
+                            xsink->raiseException("HTTP3-TIMEOUT",
+                                "timeout flushing HTTP/3 streaming body chunk");
+                        }
+                        disconnectQuic();
+                        return nullptr;
+                    }
+                }
+            }
+        } else if (is) {
+            // Chunk-feed loop using InputStream
+            size_t chunk_size = max_chunk_size > 0 ? max_chunk_size : 65536;
+            while (true) {
+                if (deadline_ms >= 0 && q_clock_getmillis() >= deadline_ms) {
+                    xsink->raiseException("HTTP3-TIMEOUT",
+                        "timeout sending HTTP/3 streaming request body (timeout: %d ms)", timeout_ms);
+                    disconnectQuic();
+                    return nullptr;
+                }
+
+                SimpleRefHolder<BinaryNode> buf(is->readHelper(chunk_size, xsink));
+                if (*xsink) {
+                    quic_session->cancelStream(stream_id, NGHTTP3_H3_INTERNAL_ERROR, xsink);
+                    disconnectQuic();
+                    return nullptr;
+                }
+                if (!buf) {
+                    break;
+                }
+
+                while (true) {
+                    int srv = quic_session->sendStreamData(stream_id, buf->getPtr(), buf->size(), false, xsink);
+                    if (*xsink) {
+                        disconnectQuic();
+                        return nullptr;
+                    }
+                    if (srv == 0) {
+                        break;
+                    }
+                    if (srv == 1) {
+                        int rv = drive_h3_io();
+                        if (rv) {
+                            if (!*xsink) {
+                                xsink->raiseException("HTTP3-TIMEOUT",
+                                    "timeout during HTTP/3 streaming body backpressure");
+                            }
+                            disconnectQuic();
+                            return nullptr;
+                        }
+                        continue;
+                    }
+                    disconnectQuic();
+                    return nullptr;
+                }
+                if (drive_h3_io()) {
+                    if (!*xsink) {
+                        xsink->raiseException("HTTP3-TIMEOUT",
+                            "timeout flushing HTTP/3 streaming body chunk");
+                    }
+                    disconnectQuic();
+                    return nullptr;
+                }
+            }
+        }
+
+        // Handle trailers if provided
+        if (trailer_callback) {
+            ValueHolder trailer_val(trailer_callback->execValue(nullptr, xsink), xsink);
+            if (*xsink) {
+                disconnectQuic();
+                return nullptr;
+            }
+            if (trailer_val->getType() == NT_HASH) {
+                const QoreHashNode* trailers = trailer_val->get<const QoreHashNode>();
+                strcase_str_map_t trailer_map;
+                ConstHashIterator ti(*trailers);
+                while (ti.next()) {
+                    QoreValue v = ti.get();
+                    if (v.getType() == NT_STRING) {
+                        trailer_map[ti.getKey()] = v.get<const QoreStringNode>()->c_str();
+                    }
+                }
+                if (!trailer_map.empty()) {
+                    quic_session->submitTrailers(stream_id, trailer_map, xsink);
+                    if (*xsink) {
+                        disconnectQuic();
+                        return nullptr;
+                    }
+                }
+            }
+        }
+
+        // Signal EOF (no trailers) — close the stream for writing
+        if (!trailer_callback) {
+            quic_session->sendStreamData(stream_id, nullptr, 0, true, xsink);
+            if (*xsink) {
+                disconnectQuic();
+                return nullptr;
+            }
+        }
+
+        // Flush any remaining data
+        if (drive_h3_io()) {
+            if (!*xsink) {
+                xsink->raiseException("HTTP3-TIMEOUT",
+                    "timeout flushing HTTP/3 streaming request EOF");
+            }
+            disconnectQuic();
+            return nullptr;
+        }
+    }
 
     while (!quic_session->hasCompletedStreams()) {
         if (quic_session->isClosed()) {
@@ -6197,11 +6854,18 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     // Skip the HTTP/1.x body reading logic.
     // NOTE: HTTP/3 currently returns early from sendHttp3MessageAndGetResponse()
     // and never reaches this point; this guard is defensive against future refactoring.
-    if ((http2_active || http3_active) && !os) {
+    if (http2_active || http3_active) {
         QoreValue h2_body = ans->getKeyValue("body");
         if (h2_body.getType() == NT_BINARY) {
             const BinaryNode* bin = h2_body.get<const BinaryNode>();
             if (bin && bin->size()) {
+                if (os) {
+                    // Write body to OutputStream
+                    sl.unlock();
+                    os->write(bin->getPtr(), bin->size(), xsink);
+                    // OutputStream callers (sendChunked) return void; let ans auto-free
+                    return nullptr;
+                }
                 const QoreEncoding* body_enc = msock->socket->getEncoding();
                 if (!*xsink && !recv_callback) {
                     // Only process body encoding/conversion when no recv_callback
@@ -6221,6 +6885,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                     return nullptr;
                 }
             }
+        }
+        // For HTTP/2 with OutputStream but no/empty body; let ans auto-free
+        if (os) {
+            return nullptr;
         }
         // For HTTP/2, set response-body in info if needed
         if (info && !recv_callback) {

@@ -1091,6 +1091,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "name": lname,
             "cert": opts.cert,
             "key": opts.key,
+            "ssl_verify_flags": opts.ssl_verify_flags,
+            "get_remote_certs": opts.get_remote_certs,
             "no_start_main_thread": True,
             "no_bind": True,
         });
@@ -1103,7 +1105,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         if (!asyncIo) {
             throw "HTTP3-ERROR", "async I/O controller not initialized";
         }
-        asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener);
+        asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener,
+            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs);
 
         listeners{lid} = http_listener;
         nmap{lname} = lid;
@@ -2617,12 +2620,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
             if (rv.reply_sent) {
                 if (is_multiplexed && async_response_out) {
-                    # Async multiplexed mode: the handler claimed reply_sent but didn't actually
-                    # send a response; generate a 500 error for the controller to send
-                    string err = sprintf("handler %y set reply_sent without sending a response",
-                        cx.handler_name);
-                    logError("%s", err);
-                    async_response_out = buildAsyncErrorResponse(500, err, cx, listener, s, False);
+                    if (rv.streaming) {
+                        # Streaming handler already sent response directly via protocol-specific
+                        # APIs (e.g., HTTP/3 QUIC submitQuicResponseStreaming + submitQuicStreamData
+                        # for SSE).  Signal the controller to acknowledge and continue.
+                        async_response_out = <HttpAsyncResponseInfo>{
+                            "streaming": True,
+                            "stream_type": rv.stream_type,
+                        };
+                    } else {
+                        # Async multiplexed mode: the handler claimed reply_sent but didn't actually
+                        # send a response; generate a 500 error for the controller to send
+                        string err = sprintf("handler %y set reply_sent without sending a response",
+                            cx.handler_name);
+                        logError("%s", err);
+                        async_response_out = buildAsyncErrorResponse(500, err, cx, listener, s, False);
+                    }
                 } else if (!is_multiplexed && rv."code" >= 200) {
                     cx."response-sent" = True;
                 }
@@ -2761,6 +2774,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         HttpServer::http_set_reply_headers(s, cx, \rv);
 
+        # Detect HTTP/2 or HTTP/3 WebSocket extended CONNECT (RFC 8441 / RFC 9220)
+        bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
+
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv, \async_response_out);
@@ -2820,10 +2836,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     ?? s.getEncoding().lwr());
             }
 
-            # For HTTP/2 WebSocket streaming, don't send response here - it's handled in the dedicated socket section
-            bool is_h2_ws_connect = cx."header-info".is_websocket_connect
-                || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket");
-            if (!rv.streaming || !is_h2_ws_connect) {
+            # For HTTP/2 and HTTP/3 WebSocket streaming, don't send response here -
+            # it's handled in the dedicated socket section
+            if (!rv.streaming || !is_extended_connect) {
                 doResponse(listener, s, cx, rv, \async_response_out);
             }
         }
@@ -2838,18 +2853,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.user_state += rv.user_state;
         }
 
-        # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE, or HTTP/2 WebSocket (200 + streaming)
-        bool is_http2_websocket = rv.streaming && (cx."header-info".is_websocket_connect
-            || (cx."header-info".http2 && hdr.method == "CONNECT" && hdr.":protocol" == "websocket"));
-        if (is_http2_websocket) {
+        # Check for dedicated socket handlers: HTTP/1.1 WebSocket (101), SSE,
+        # HTTP/2 WebSocket (200 + streaming), or HTTP/3 WebSocket (200 + streaming)
+        bool is_http3 = is_extended_connect && (cx."header-info".http3 ?? False);
+        if (rv.streaming && is_extended_connect) {
+            string proto_label = is_http3 ? "HTTP/3" : "HTTP/2";
             string ws_id = sprintf("%y:%d", cx.id, cx."header-info".stream_id);
             if (rv.close) {
-                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the close flag is set",
-                    cx.id, cx.handler_name);
+                listener.logError("cid %d: %s WebSocket returned from handler %y, but the close flag is set",
+                    cx.id, proto_label, cx.handler_name);
             } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                listener.logError("cid %d: HTTP/2 WebSocket returned from handler %y, but the handler does "
-                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
-                    handler.className());
+                listener.logError("cid %d: %s WebSocket returned from handler %y, but the handler does "
+                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, proto_label,
+                    cx.handler_name, handler.className());
                 self.sendHttpError(listener, cx, s, 501,
                     "WebSocket handler must inherit AbstractHttpSocketHandlerInterface",
                     NOTHING, NOTHING, cx."response-encoding", False);
@@ -2862,9 +2878,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> ws_hdr = rv.hdr ?? {};
 
-                        if (cx.async_mode) {
-                            # Multiplexed mode: submit CONNECT response directly to the
-                            # nghttp2 session.  h2op on the I/O thread will flush it.
+                        if (is_http3) {
+                            # HTTP/3 (RFC 9220): submit CONNECT response via QUIC session
+                            int session_id = cx."header-info".session_id;
+                            s.submitQuicConnectResponse(session_id, stream_id,
+                                rv."code" ?? 200, ws_hdr);
+                            *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                            if (ctrl) {
+                                ctrl.wake();
+                            }
+                        } else if (cx.async_mode) {
+                            # HTTP/2 multiplexed mode: submit CONNECT response directly
+                            # to the nghttp2 session.  h2op on the I/O thread will flush it.
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, ws_hdr);
                             # Wake the I/O controller so h2op's continuePoll() flushes
                             # the pending CONNECT response
@@ -2885,25 +2910,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         }
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
-                            listener.logError("cid %d: HTTP/2 WebSocket handler %y: socket closed by remote", cx.id,
-                                cx.handler_name);
+                            listener.logError("cid %d: %s WebSocket handler %y: socket closed by remote",
+                                cx.id, proto_label, cx.handler_name);
                         } else {
                             string desc = !debug
                                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                                 : get_exception_string(ex);
-                            listener.logError("cid %d: error in HTTP/2 WebSocket handler %y: %s", cx.id,
-                                cx.handler_name, desc);
+                            listener.logError("cid %d: error in %s WebSocket handler %y: %s",
+                                cx.id, proto_label, cx.handler_name, desc);
                         }
                     }
                     if (request_helper.isDedicatedExternal()) {
-                        listener.log("cid %d: HTTP/2 WebSocket handler %y managed externally", cx.id, cx.handler_name);
+                        listener.log("cid %d: %s WebSocket handler %y managed externally",
+                            cx.id, proto_label, cx.handler_name);
                     } else {
                         listener.removeDedicatedSocket(ws_id);
-                        listener.log("cid %d: stopped HTTP/2 WebSocket handler: %y", cx.id, cx.handler_name);
+                        listener.log("cid %d: stopped %s WebSocket handler: %y",
+                            cx.id, proto_label, cx.handler_name);
                     }
                 } else {
-                    listener.logError("cid %d: cannot start HTTP/2 WebSocket handler %y because the listener is "
-                        "shutting down", cx.id, cx.handler_name);
+                    listener.logError("cid %d: cannot start %s WebSocket handler %y because the listener is "
+                        "shutting down", cx.id, proto_label, cx.handler_name);
                 }
             }
             return;
@@ -3787,7 +3814,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Returns the HTTP version mode for this listener
-    /** @return the HTTP version mode: "auto", "1.0", "1.1", or "2.0"
+    /** @return the HTTP version mode: "auto", "1.0", "1.1", "2.0", or "3.0"
 
         @note If get_global_http2_mode() returns "disabled", HTTP/2 is not offered even if the listener is
         configured with "auto" or "2.0"
@@ -4461,7 +4488,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Add client certificate if requested and available
         if (get_remote_certs) {
-            cx."client-cert" = s.getRemoteCertificate();
+            if (header_info.http3) {
+                # For HTTP/3 (QUIC), the TLS handshake is in the QuicSession, not
+                # the listener socket — use getQuicPeerCertificate() with the session ID
+                cx."client-cert" = s.getQuicPeerCertificate(header_info.session_id);
+            } else {
+                cx."client-cert" = s.getRemoteCertificate();
+            }
         }
 
         # Capture the response for the controller to send
@@ -4501,6 +4534,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<HttpAsyncResponseInfo> async_response, RequestHelper request_helper,
             hash<auto> cx, Socket s) {
         bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
+
+        # Handler already sent a streaming response (e.g., HTTP/3 SSE via QUIC APIs)
+        if (async_response.streaming) {
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "streaming": True,
+                "stream_type": async_response.stream_type,
+            };
+        }
 
         if (async_response.code && !request_helper.isDedicated()) {
             # Normal response - return response data for controller to send
@@ -5405,6 +5446,22 @@ hashdecl HttpAsyncResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! Whether this is a streaming response already sent by the handler
+    /** Set when a handler sends a streaming response (e.g., HTTP/3 SSE) directly
+        via protocol-specific APIs and sets \c reply_sent in the response.
+        The controller should not send a response — it just acknowledges and continues.
+
+        @since HttpServer 1.6
+    */
+    bool streaming = False;
+
+    #! The type of streaming connection: "sse" or "websocket"
+    /** Only used when \c streaming is @ref True.
+
+        @since HttpServer 1.6
+    */
+    *string stream_type;
 }
 } # namespace Priv
 
