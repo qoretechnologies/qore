@@ -155,12 +155,7 @@ public class BigMLBatchCentroidProcessor inherits BigMLDataProviderBase {
         if (buffer.lsize() == 1) {
             hash<auto> record = buffer[0];
             buffer = ();
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                if (exists record{f}) {
-                    input_data{f} = record{f};
-                }
-            }
+            hash<auto> input_data = extractInputData(record, input_fields);
             hash<auto> response = doPost("centroid", {
                 "cluster": cluster_resource,
                 "input_data": input_data,
@@ -180,23 +175,7 @@ public class BigMLBatchCentroidProcessor inherits BigMLDataProviderBase {
 
     private list<auto> processWindow(list<hash<auto>> records) {
         # Create CSV data
-        string csv_data = input_fields.join(",") + "\n";
-        foreach hash<auto> rec in (records) {
-            list<string> row;
-            foreach string f in (input_fields) {
-                auto val = rec{f};
-                if (exists val) {
-                    string sval = string(val);
-                    if (sval =~ /[,"\n]/) {
-                        sval = "\"" + regex_subst(sval, "\"", "\"\"", RE_Global) + "\"";
-                    }
-                    push row, sval;
-                } else {
-                    push row, "";
-                }
-            }
-            csv_data += row.join(",") + "\n";
-        }
+        string csv_data = buildCsvData(input_fields, records);
 
         # Create source -> dataset -> batch centroid
         hash<auto> source = doPost("source", {"data": csv_data,
@@ -211,23 +190,37 @@ public class BigMLBatchCentroidProcessor inherits BigMLDataProviderBase {
         hash<auto> batch = doPost("batchcentroid", {
             "cluster": cluster_resource,
             "dataset": dataset_resource,
+            "output_dataset": True,
             "all_fields": True,
         });
         string batch_resource = batch.resource;
         batch = pollUntilFinished(batch_resource, poll_interval_ms, timeout_ms);
 
-        # Emit events
+        # Download batch results
+        list<hash<auto>> result_rows;
+        try {
+            result_rows = downloadBatchResults(batch_resource);
+        } catch () {
+            # Fall back to output dataset download if batch download fails
+            try {
+                *string output_dataset = batch.output_dataset_resource;
+                if (output_dataset) {
+                    pollUntilFinished(output_dataset, poll_interval_ms, timeout_ms);
+                    result_rows = downloadBatchResults(output_dataset);
+                }
+            } catch () {}
+        }
+
+        # Emit events with actual results
         list<auto> events;
         for (int i = 0; i < records.lsize(); ++i) {
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                input_data{f} = records[i]{f};
-            }
+            hash<auto> input_data = extractInputData(records[i], input_fields);
+            *hash<auto> result = i < result_rows.lsize() ? result_rows[i] : NOTHING;
             push events, <BigMLCentroidEventInfo>{
                 "event_type": "bigml-centroid",
-                "centroid_name": "",
-                "centroid_id": "",
-                "distance": 0.0,
+                "centroid_name": result.centroid_name ?? "",
+                "centroid_id": result.centroid_id ?? "",
+                "distance": result.distance.toFloat() ?? 0.0,
                 "resource": batch_resource,
                 "record_values": input_data,
             };

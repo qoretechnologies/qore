@@ -87,6 +87,7 @@ DOX_MODULES = qlib/DatasourceProvider.qm \
 	qlib/TableauRestClient.qm \
 	qlib/BigCommerceRestClient.qm \
 	qlib/BigMLRestClient.qm \
+	qlib/DatabricksRestClient.qm \
 	qlib/Cin7CoreRestClient.qm \
 	qlib/UnleashedRestClient.qm \
 	qlib/FilePoller.qm \
@@ -161,6 +162,7 @@ DOX_SPLIT_MODULES = \
     qlib/ChargebeeDataProvider \
     qlib/SquarespaceDataProvider \
     qlib/BigMLDataProvider \
+    qlib/DatabricksDataProvider \
     qlib/TableauDataProvider \
     qlib/BigCommerceDataProvider \
     qlib/Cin7CoreDataProvider \
@@ -241,6 +243,7 @@ SquarespaceDataProvider_modverdir = $(modverdir)/SquarespaceDataProvider
 TableauDataProvider_modverdir = $(modverdir)/TableauDataProvider
 BigCommerceDataProvider_modverdir = $(modverdir)/BigCommerceDataProvider
 BigMLDataProvider_modverdir = $(modverdir)/BigMLDataProvider
+DatabricksDataProvider_modverdir = $(modverdir)/DatabricksDataProvider
 Cin7CoreDataProvider_modverdir = $(modverdir)/Cin7CoreDataProvider
 UnleashedDataProvider_modverdir = $(modverdir)/UnleashedDataProvider
 SqlUtil_modverdir = $(modverdir)/SqlUtil
@@ -303,6 +306,7 @@ dist_SquarespaceDataProvider_modver_DATA = $(wildcard qlib/SquarespaceDataProvid
 dist_TableauDataProvider_modver_DATA = $(wildcard qlib/TableauDataProvider/*.q[cm]) $(wildcard qlib/TableauDataProvider/*.svg)
 dist_BigCommerceDataProvider_modver_DATA = $(wildcard qlib/BigCommerceDataProvider/*.q[cm]) $(wildcard qlib/BigCommerceDataProvider/*.svg)
 dist_BigMLDataProvider_modver_DATA = $(wildcard qlib/BigMLDataProvider/*.q[cm]) $(wildcard qlib/BigMLDataProvider/*.svg)
+dist_DatabricksDataProvider_modver_DATA = $(wildcard qlib/DatabricksDataProvider/*.q[cm]) $(wildcard qlib/DatabricksDataProvider/*.svg)
 dist_Cin7CoreDataProvider_modver_DATA = $(wildcard qlib/Cin7CoreDataProvider/*.q[cm]) $(wildcard qlib/Cin7CoreDataProvider/*.svg)
 dist_UnleashedDataProvider_modver_DATA = $(wildcard qlib/UnleashedDataProvider/*.q[cm]) $(wildcard qlib/UnleashedDataProvider/*.svg)
 dist_SqlUtil_modver_DATA = $(wildcard qlib/SqlUtil/*.q[cm])

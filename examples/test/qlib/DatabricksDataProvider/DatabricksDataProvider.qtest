@@ -1,0 +1,848 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DatabricksDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/DatabricksRestClient.qm
+%requires ../../../../qlib/DatabricksDataProvider
+
+%exec-class DatabricksDataProviderTest
+
+public class DatabricksDataProviderTest inherits QUnit::Test {
+    private {
+        #! Databricks REST client for integration tests
+        *DatabricksRestClient::DatabricksRestClient client;
+
+        #! Databricks PAT
+        *string token;
+
+        #! Databricks workspace hostname
+        *string workspace;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "workspace": "w,workspace=s",
+        };
+    }
+
+    constructor() : Test("DatabricksDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("processor capabilities tests", \processorCapabilitiesTests());
+        addTestCase("constructor validation tests", \constructorValidationTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("output type tests", \outputTypeTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("response type tests", \responseTypeTests());
+
+        # Integration tests (require DATABRICKS_TOKEN and DATABRICKS_WORKSPACE)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Databricks client for integration tests
+    private setupConnection() {
+        token = m_options.token ?? ENV.DATABRICKS_TOKEN;
+        workspace = m_options.workspace ?? ENV.DATABRICKS_WORKSPACE;
+        if (!token || !workspace) {
+            if (m_options.verbose) {
+                printf("No Databricks credentials provided (use -t and -w options or "
+                    "DATABRICKS_TOKEN and DATABRICKS_WORKSPACE env vars)\n");
+            }
+            return;
+        }
+        hash<auto> opts = {
+            "token": token,
+            "workspace": workspace,
+        };
+        client = new DatabricksRestClient::DatabricksRestClient(opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    # ===================== Sanity Tests =====================
+
+    sanityTests() {
+        checkJson();
+        DatabricksDataProvider::DatabricksDataProvider prov();
+        assertEq("databricks", prov.getName());
+        assertTrue(prov.getDesc().val());
+    }
+
+    # ===================== Factory Tests =====================
+
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("databricks");
+        assertEq("databricks", factory.getInfo().name);
+    }
+
+    # ===================== Metadata Tests =====================
+
+    metadataTests() {
+        checkJson();
+        DatabricksDataProvider::DatabricksDataProvider prov();
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertEq("DatabricksDataProvider", info.type);
+    }
+
+    # ===================== Child Provider Tests =====================
+
+    childProviderTests() {
+        checkJson();
+        DatabricksDataProvider::DatabricksDataProvider prov();
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.val());
+
+        # Verify key child providers exist
+        assertTrue(inlist("jobs", children));
+        assertTrue(inlist("clusters", children));
+        assertTrue(inlist("sql-warehouses", children));
+        assertTrue(inlist("dbfs", children));
+        assertTrue(inlist("workspace", children));
+        assertTrue(inlist("pipelines", children));
+        assertTrue(inlist("unity-catalog", children));
+        assertTrue(inlist("secrets", children));
+        assertTrue(inlist("identity", children));
+        assertTrue(inlist("processors", children));
+        assertTrue(inlist("events", children));
+
+        # Verify action providers exist
+        assertTrue(inlist("create-job", children));
+        assertTrue(inlist("run-job", children));
+        assertTrue(inlist("create-cluster", children));
+        assertTrue(inlist("execute-sql", children));
+    }
+
+    # ===================== Processor Capabilities Tests =====================
+
+    processorCapabilitiesTests() {
+        checkJson();
+
+        # Model Prediction — DPC_TRANSFORM
+        DatabricksDataProvider::DatabricksModelPredictionProcessor mp();
+        hash<DataProviderInfo> mp_info = mp.getInfo();
+        assertTrue(mp_info.supports_pipeline_processor);
+        assertEq(DPC_TRANSFORM, mp_info.processor_capabilities);
+
+        # Batch Model Prediction — DPC_AGGREGATE
+        DatabricksDataProvider::DatabricksBatchModelPredictionProcessor bmp();
+        hash<DataProviderInfo> bmp_info = bmp.getInfo();
+        assertTrue(bmp_info.supports_pipeline_processor);
+        assertEq(DPC_AGGREGATE, bmp_info.processor_capabilities);
+
+        # Chat Completion — DPC_TRANSFORM
+        DatabricksDataProvider::DatabricksChatCompletionProcessor cc();
+        hash<DataProviderInfo> cc_info = cc.getInfo();
+        assertTrue(cc_info.supports_pipeline_processor);
+        assertEq(DPC_TRANSFORM, cc_info.processor_capabilities);
+
+        # Text Embeddings — DPC_TRANSFORM
+        DatabricksDataProvider::DatabricksTextEmbeddingsProcessor te();
+        hash<DataProviderInfo> te_info = te.getInfo();
+        assertTrue(te_info.supports_pipeline_processor);
+        assertEq(DPC_TRANSFORM, te_info.processor_capabilities);
+
+        # Text Completion — DPC_TRANSFORM
+        DatabricksDataProvider::DatabricksTextCompletionProcessor tc();
+        hash<DataProviderInfo> tc_info = tc.getInfo();
+        assertTrue(tc_info.supports_pipeline_processor);
+        assertEq(DPC_TRANSFORM, tc_info.processor_capabilities);
+    }
+
+    # ===================== Constructor Validation Tests =====================
+
+    constructorValidationTests() {
+        checkJson();
+
+        # Model Prediction: missing endpoint_name should throw
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new DatabricksModelPredictionProcessor({"endpoint_name": "ep", "input_fields": ""});
+        });
+
+        # Batch Model Prediction: window_size < 2 should throw
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new DatabricksBatchModelPredictionProcessor({
+                "endpoint_name": "ep",
+                "input_fields": "a,b",
+                "window_size": 1,
+            });
+        });
+
+        # REST client: missing workspace should throw
+        assertThrows("DATABRICKS-ERROR", sub () {
+            new DatabricksRestClient::DatabricksRestClient({"token": "t"});
+        });
+
+        # REST client: missing token should throw
+        assertThrows("DATABRICKS-ERROR", sub () {
+            new DatabricksRestClient::DatabricksRestClient({"workspace": "w"});
+        });
+    }
+
+    # ===================== Connection Tests =====================
+
+    connectionTests() {
+        checkJson();
+
+        DatabricksRestClient::DatabricksRestConnection conn("test-conn",
+            "Databricks test connection",
+            "databricks://localhost",
+            {},
+            {"token": "test-token", "workspace": "test.azuredatabricks.net"},
+        );
+        assertEq("databricks", conn.getType());
+        assertTrue(conn.hasDataProvider());
+    }
+
+    # ===================== Action Catalog Tests =====================
+
+    actionCatalogTests() {
+        checkJson();
+
+        # Verify app registration
+        *hash<auto> app = DataProviderActionCatalog::getApp(
+            DatabricksDataProvider::AppName);
+        assertTrue(app.val());
+        assertEq("Databricks", app.display_name);
+        assertEq("databricks", app.scheme);
+
+        # Verify some key actions are registered
+        list<auto> actions = DataProviderActionCatalog::getActionsEx(
+            DatabricksDataProvider::AppName);
+        assertTrue(actions.val());
+
+        # Find the model-predict processor action
+        *hash<auto> predict_action;
+        foreach hash<auto> act in (actions) {
+            if (act.action == "model-predict") {
+                predict_action = act;
+                break;
+            }
+        }
+        assertTrue(predict_action.val());
+        assertEq(DPAT_PIPELINE_PROCESSOR, predict_action.action_code);
+    }
+
+    # ===================== Output Type Tests =====================
+
+    outputTypeTests() {
+        checkJson();
+
+        # Model Prediction output type
+        DatabricksDataProvider::DatabricksModelPredictionProcessor mp();
+        *AbstractDataProviderType mp_out = mp.getPipelineProcessorOutputType();
+        assertTrue(mp_out.val());
+
+        # Chat Completion output type
+        DatabricksDataProvider::DatabricksChatCompletionProcessor cc();
+        *AbstractDataProviderType cc_out = cc.getPipelineProcessorOutputType();
+        assertTrue(cc_out.val());
+
+        # Text Embeddings output type
+        DatabricksDataProvider::DatabricksTextEmbeddingsProcessor te();
+        *AbstractDataProviderType te_out = te.getPipelineProcessorOutputType();
+        assertTrue(te_out.val());
+
+        # Text Completion output type
+        DatabricksDataProvider::DatabricksTextCompletionProcessor tc();
+        *AbstractDataProviderType tc_out = tc.getPipelineProcessorOutputType();
+        assertTrue(tc_out.val());
+    }
+
+    # ===================== Data Type Tests =====================
+
+    dataTypeTests() {
+        checkJson();
+
+        # Verify request data types can be instantiated and have expected fields
+        DatabricksDataProvider::DatabricksCreateJobRequestDataType cjt();
+        *hash<string, AbstractDataField> cj_fields = cjt.getFields();
+        assertTrue(cj_fields.hasKey("name"));
+        assertTrue(cj_fields.hasKey("tasks"));
+        assertTrue(cj_fields.hasKey("schedule"));
+        assertTrue(cj_fields.hasKey("tags"));
+
+        DatabricksDataProvider::DatabricksCreateClusterRequestDataType cct();
+        *hash<string, AbstractDataField> cc_fields = cct.getFields();
+        assertTrue(cc_fields.hasKey("cluster_name"));
+        assertTrue(cc_fields.hasKey("spark_version"));
+        assertTrue(cc_fields.hasKey("node_type_id"));
+        assertTrue(cc_fields.hasKey("spark_conf"));
+        assertTrue(cc_fields.hasKey("aws_attributes"));
+
+        DatabricksDataProvider::DatabricksExecuteSqlRequestDataType est();
+        *hash<string, AbstractDataField> es_fields = est.getFields();
+        assertTrue(es_fields.hasKey("warehouse_id"));
+        assertTrue(es_fields.hasKey("statement"));
+        assertTrue(es_fields.hasKey("wait_timeout"));
+        assertTrue(es_fields.hasKey("on_wait_timeout"));
+        assertTrue(es_fields.hasKey("disposition"));
+
+        DatabricksDataProvider::DatabricksCreatePipelineRequestDataType cpt();
+        *hash<string, AbstractDataField> cp_fields = cpt.getFields();
+        assertTrue(cp_fields.hasKey("name"));
+        assertTrue(cp_fields.hasKey("libraries"));
+        assertTrue(cp_fields.hasKey("storage"));
+        assertTrue(cp_fields.hasKey("configuration"));
+
+        DatabricksDataProvider::DatabricksUpdatePipelineRequestDataType upt();
+        *hash<string, AbstractDataField> up_fields = upt.getFields();
+        assertTrue(up_fields.hasKey("pipeline_id"));
+        assertTrue(up_fields.hasKey("storage"));
+        assertTrue(up_fields.hasKey("target"));
+        assertTrue(up_fields.hasKey("configuration"));
+    }
+
+    # ===================== Response Type Tests =====================
+
+    responseTypeTests() {
+        checkJson();
+
+        # Create Job response type
+        DatabricksDataProvider::DatabricksCreateJobResponseDataType cjr();
+        *hash<string, AbstractDataField> cjr_fields = cjr.getFields();
+        assertTrue(cjr_fields.hasKey("job_id"));
+
+        # Run Job response type
+        DatabricksDataProvider::DatabricksRunJobResponseDataType rjr();
+        *hash<string, AbstractDataField> rjr_fields = rjr.getFields();
+        assertTrue(rjr_fields.hasKey("run_id"));
+        assertTrue(rjr_fields.hasKey("number_in_job"));
+
+        # Create Cluster response type
+        DatabricksDataProvider::DatabricksCreateClusterResponseDataType ccr();
+        *hash<string, AbstractDataField> ccr_fields = ccr.getFields();
+        assertTrue(ccr_fields.hasKey("cluster_id"));
+
+        # Create SQL Warehouse response type
+        DatabricksDataProvider::DatabricksCreateSqlWarehouseResponseDataType cswr();
+        *hash<string, AbstractDataField> cswr_fields = cswr.getFields();
+        assertTrue(cswr_fields.hasKey("id"));
+
+        # Create Pipeline response type
+        DatabricksDataProvider::DatabricksCreatePipelineResponseDataType cpr();
+        *hash<string, AbstractDataField> cpr_fields = cpr.getFields();
+        assertTrue(cpr_fields.hasKey("pipeline_id"));
+
+        # Start Pipeline Update response type
+        DatabricksDataProvider::DatabricksStartPipelineUpdateResponseDataType spur();
+        *hash<string, AbstractDataField> spur_fields = spur.getFields();
+        assertTrue(spur_fields.hasKey("update_id"));
+
+        # Verify provider ResponseType constants are typed (not generic AutoHash)
+        assertTrue(DatabricksCreateJobDataProvider::ResponseType instanceof
+            DatabricksCreateJobResponseDataType);
+        assertTrue(DatabricksRunJobDataProvider::ResponseType instanceof
+            DatabricksRunJobResponseDataType);
+        assertTrue(DatabricksCreateClusterDataProvider::ResponseType instanceof
+            DatabricksCreateClusterResponseDataType);
+        assertTrue(DatabricksCreateSqlWarehouseDataProvider::ResponseType instanceof
+            DatabricksCreateSqlWarehouseResponseDataType);
+        assertTrue(DatabricksCreatePipelineDataProvider::ResponseType instanceof
+            DatabricksCreatePipelineResponseDataType);
+        assertTrue(DatabricksStartPipelineUpdateDataProvider::ResponseType instanceof
+            DatabricksStartPipelineUpdateResponseDataType);
+    }
+
+    # ===================== Integration Tests =====================
+
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Databricks credentials provided");
+        }
+
+        # Test listing clusters (basic read operation)
+        {
+            DatabricksDataProvider::DatabricksClustersDataProvider clusters(client);
+            AbstractDataProviderRecordIterator i = clusters.searchRecords();
+            # Verify the iterator is valid (may be empty if no clusters exist)
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("cluster_id"));
+                assertTrue(rec.hasKey("state"));
+            }
+        }
+
+        # Test listing jobs
+        {
+            DatabricksDataProvider::DatabricksJobsDataProvider jobs(client);
+            AbstractDataProviderRecordIterator i = jobs.searchRecords(NOTHING, {"limit": 5});
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("job_id"));
+            }
+        }
+
+        # Test listing SQL warehouses
+        {
+            DatabricksDataProvider::DatabricksSqlWarehousesDataProvider warehouses(client);
+            AbstractDataProviderRecordIterator i = warehouses.searchRecords();
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("id"));
+                assertTrue(rec.hasKey("name"));
+            }
+        }
+
+        # Test listing secret scopes
+        {
+            DatabricksDataProvider::DatabricksSecretsDataProvider secrets(client);
+            AbstractDataProviderRecordIterator i = secrets.searchRecords();
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+        }
+
+        # Test listing pipelines
+        {
+            DatabricksDataProvider::DatabricksPipelinesDataProvider pipelines(client);
+            AbstractDataProviderRecordIterator i = pipelines.searchRecords();
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("pipeline_id"));
+            }
+        }
+
+        # Test Unity Catalog - list catalogs
+        {
+            DatabricksDataProvider::DatabricksUnityCatalogDataProvider uc(client);
+            AbstractDataProviderRecordIterator i = uc.searchRecords(NOTHING, {
+                "resource_type": "catalogs",
+            });
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("name"));
+            }
+        }
+
+        # Test DBFS - list root
+        {
+            DatabricksDataProvider::DatabricksDbfsDataProvider dbfs(client);
+            AbstractDataProviderRecordIterator i = dbfs.searchRecords(NOTHING, {"path": "/"});
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("path"));
+            }
+        }
+
+        # Test workspace - list root
+        {
+            DatabricksDataProvider::DatabricksWorkspaceDataProvider ws(client);
+            AbstractDataProviderRecordIterator i = ws.searchRecords(NOTHING, {"path": "/"});
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            if (i.next()) {
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("path"));
+            }
+        }
+
+        # Test identity - list users with count limit
+        {
+            DatabricksDataProvider::DatabricksIdentityDataProvider id_prov(client);
+            AbstractDataProviderRecordIterator i = id_prov.searchRecords(NOTHING, {
+                "resource_type": "users",
+                "count": 2,
+            });
+            assertTrue(i instanceof AbstractDataProviderRecordIterator);
+            int user_count = 0;
+            while (i.next()) {
+                ++user_count;
+                hash<auto> rec = i.getValue();
+                assertTrue(rec.hasKey("id"));
+            }
+            # Verify count limit is respected
+            assertTrue(user_count <= 2);
+        }
+
+        # Test trigger example event data
+        {
+            # Watch Job Runs
+            DatabricksDataProvider::DatabricksWatchJobRunsDataProvider wjr(client);
+            auto jrd = wjr.getExampleEventData(EVENT_WATCH_JOB_RUNS);
+            assertTrue(jrd.val());
+            assertTrue(jrd.hasKey("run_id"));
+            assertTrue(jrd.hasKey("job_id"));
+            assertTrue(jrd.hasKey("state"));
+
+            # Watch Cluster State
+            DatabricksDataProvider::DatabricksWatchClusterStateDataProvider wcs(client);
+            auto csd = wcs.getExampleEventData(EVENT_WATCH_CLUSTER_STATE);
+            assertTrue(csd.val());
+            assertTrue(csd.hasKey("cluster_id"));
+            assertTrue(csd.hasKey("cluster_name"));
+            assertTrue(csd.hasKey("old_state"));
+            assertTrue(csd.hasKey("new_state"));
+
+            # Watch Pipeline Updates
+            DatabricksDataProvider::DatabricksWatchPipelineUpdatesDataProvider wpu(client);
+            auto pud = wpu.getExampleEventData(EVENT_WATCH_PIPELINE_UPDATES);
+            assertTrue(pud.val());
+            assertTrue(pud.hasKey("pipeline_id"));
+            assertTrue(pud.hasKey("pipeline_name"));
+            assertTrue(pud.hasKey("update_id"));
+        }
+
+        # ---- CRUD Tests: Secret Scopes & Secrets ----
+        string test_scope = "qtest-scope-" + get_random_string(8);
+        {
+            # Create a secret scope
+            DatabricksDataProvider::DatabricksCreateSecretScopeDataProvider creator(client);
+            auto resp = creator.doRequest({"scope": test_scope});
+            assertTrue(resp instanceof hash);
+
+            # Verify scope appears in list
+            DatabricksDataProvider::DatabricksSecretsDataProvider secrets(client);
+            AbstractDataProviderRecordIterator i = secrets.searchRecords();
+            bool found = False;
+            while (i.next()) {
+                hash<auto> rec = i.getValue();
+                if (rec.name == test_scope) {
+                    found = True;
+                    break;
+                }
+            }
+            assertTrue(found);
+
+            # Put a secret in the scope
+            DatabricksDataProvider::DatabricksPutSecretDataProvider putter(client);
+            putter.doRequest({
+                "scope": test_scope,
+                "key": "test-key",
+                "string_value": "test-value-123",
+            });
+
+            # Verify secret appears in scope listing
+            AbstractDataProviderRecordIterator si = secrets.searchRecords(NOTHING, {
+                "scope": test_scope,
+            });
+            bool secret_found = False;
+            while (si.next()) {
+                hash<auto> sec = si.getValue();
+                if (sec.key == "test-key") {
+                    secret_found = True;
+                    break;
+                }
+            }
+            assertTrue(secret_found);
+
+            # Delete the secret
+            DatabricksDataProvider::DatabricksDeleteSecretDataProvider deleter(client);
+            deleter.doRequest({"scope": test_scope, "key": "test-key"});
+
+            # Verify secret is gone
+            AbstractDataProviderRecordIterator si2 = secrets.searchRecords(NOTHING, {
+                "scope": test_scope,
+            });
+            bool secret_still_exists = False;
+            while (si2.next()) {
+                hash<auto> sec = si2.getValue();
+                if (sec.key == "test-key") {
+                    secret_still_exists = True;
+                    break;
+                }
+            }
+            assertFalse(secret_still_exists);
+
+            # Delete the scope
+            DatabricksDataProvider::DatabricksDeleteSecretScopeDataProvider scope_del(client);
+            scope_del.doRequest({"scope": test_scope});
+        }
+
+        # ---- CRUD Tests: DBFS Directories ----
+        string test_dir = "/qtest-dir-" + get_random_string(8);
+        try {
+            # Create directory
+            DatabricksDataProvider::DatabricksMkdirDbfsDataProvider mkdir(client);
+            mkdir.doRequest({"path": test_dir});
+
+            # Verify directory exists via get-status
+            DatabricksDataProvider::DatabricksDbfsDataProvider dbfs(client);
+            AbstractDataProviderRecordIterator i = dbfs.searchRecords(NOTHING, {
+                "path": test_dir,
+                "get_status_only": True,
+            });
+            assertTrue(i.next());
+            hash<auto> rec = i.getValue();
+            assertEq(test_dir, rec.path);
+            assertTrue(rec.is_dir);
+
+            # Clean up: delete directory
+            DatabricksDataProvider::DatabricksDeleteDbfsDataProvider deldbfs(client);
+            deldbfs.doRequest({"path": test_dir});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /PERMISSION_DENIED|FEATURE_DISABLED|403/) {
+                if (m_options.verbose) {
+                    printf("DBFS CRUD test skipped: %s\n", ex.desc);
+                }
+            } else {
+                rethrow;
+            }
+        }
+
+        # ---- CRUD Tests: Jobs (create, get, delete) ----
+        {
+            # Create a test job
+            DatabricksDataProvider::DatabricksCreateJobDataProvider creator(client);
+            hash<auto> create_resp = creator.doRequest({
+                "name": "qtest-job-" + get_random_string(8),
+                "tasks": (
+                    {
+                        "task_key": "test_task",
+                        "notebook_task": {
+                            "notebook_path": "/nonexistent/test_notebook",
+                        },
+                    },
+                ),
+            });
+            assertTrue(create_resp.hasKey("job_id"));
+            int job_id = create_resp.job_id;
+            assertTrue(job_id > 0);
+
+            # Get the job back and verify
+            DatabricksDataProvider::DatabricksJobsDataProvider jobs(client);
+            AbstractDataProviderRecordIterator i = jobs.searchRecords(NOTHING, {
+                "job_id": job_id,
+            });
+            assertTrue(i.next());
+            hash<auto> job = i.getValue();
+            assertEq(job_id, job.job_id);
+
+            # Run the job and immediately cancel (tests run-job + cancel-job-run)
+            DatabricksDataProvider::DatabricksRunJobDataProvider runner(client);
+            hash<auto> run_resp = runner.doRequest({"job_id": job_id});
+            assertTrue(run_resp.hasKey("run_id"));
+            int run_id = run_resp.run_id;
+            assertTrue(run_id > 0);
+
+            # Cancel the run
+            DatabricksDataProvider::DatabricksCancelJobRunDataProvider canceller(client);
+            canceller.doRequest({"run_id": run_id});
+
+            # Verify the run exists in job-runs listing
+            DatabricksDataProvider::DatabricksJobRunsDataProvider runs(client);
+            AbstractDataProviderRecordIterator ri = runs.searchRecords(NOTHING, {
+                "run_id": run_id,
+            });
+            assertTrue(ri.next());
+            hash<auto> run = ri.getValue();
+            assertEq(run_id, run.run_id);
+
+            # Also test listing runs by job_id
+            AbstractDataProviderRecordIterator ri2 = runs.searchRecords(NOTHING, {
+                "job_id": job_id,
+                "limit": 5,
+            });
+            assertTrue(ri2 instanceof AbstractDataProviderRecordIterator);
+
+            # Clean up: delete the job
+            DatabricksDataProvider::DatabricksDeleteJobDataProvider deleter(client);
+            deleter.doRequest({"job_id": job_id});
+
+            # Verify job is deleted (should throw or return empty)
+            bool deleted = False;
+            try {
+                jobs.searchRecords(NOTHING, {"job_id": job_id});
+            } catch () {
+                deleted = True;
+            }
+            assertTrue(deleted);
+        }
+
+        # ---- CRUD Tests: Pipeline (create, get, update, delete) ----
+        try {
+            DatabricksDataProvider::DatabricksCreatePipelineDataProvider pl_creator(client);
+            hash<auto> pl_resp = pl_creator.doRequest({
+                "name": "qtest-pipeline-" + get_random_string(8),
+                "libraries": (
+                    {"notebook": {"path": "/nonexistent/test_notebook"}},
+                ),
+            });
+            assertTrue(pl_resp.hasKey("pipeline_id"));
+            string pipeline_id = pl_resp.pipeline_id;
+            assertTrue(pipeline_id.val());
+
+            # Get the pipeline back
+            DatabricksDataProvider::DatabricksPipelinesDataProvider pipelines(client);
+            AbstractDataProviderRecordIterator pi = pipelines.searchRecords(NOTHING, {
+                "pipeline_id": pipeline_id,
+            });
+            assertTrue(pi.next());
+            hash<auto> pl = pi.getValue();
+            assertEq(pipeline_id, pl.pipeline_id);
+
+            # Update the pipeline name
+            DatabricksDataProvider::DatabricksUpdatePipelineDataProvider pl_updater(client);
+            pl_updater.doRequest({
+                "pipeline_id": pipeline_id,
+                "name": "qtest-pipeline-updated",
+            });
+
+            # Verify the update
+            AbstractDataProviderRecordIterator pi2 = pipelines.searchRecords(NOTHING, {
+                "pipeline_id": pipeline_id,
+            });
+            assertTrue(pi2.next());
+            hash<auto> pl2 = pi2.getValue();
+            assertEq("qtest-pipeline-updated", pl2.name);
+
+            # Delete the pipeline
+            DatabricksDataProvider::DatabricksDeletePipelineDataProvider pl_deleter(client);
+            pl_deleter.doRequest({"pipeline_id": pipeline_id});
+        } catch (hash<ExceptionInfo> ex) {
+            string err_str = sprintf("%s %y", ex.desc, ex.arg);
+            if (err_str =~ /PERMISSION_DENIED|FEATURE_DISABLED|SERVERLESS|serverless|403/) {
+                if (m_options.verbose) {
+                    printf("Pipeline CRUD test skipped: %s\n", ex.desc);
+                }
+            } else {
+                rethrow;
+            }
+        }
+
+        # ---- CRUD Tests: Workspace import/delete ----
+        string ws_path = "/qtest-notebook-" + get_random_string(8);
+        try {
+            # Import a simple Python notebook (base64 of "# Databricks notebook source\nprint('hello')")
+            string content = make_base64_string("# Databricks notebook source\nprint('hello')");
+            DatabricksDataProvider::DatabricksImportWorkspaceDataProvider importer(client);
+            importer.doRequest({
+                "path": ws_path,
+                "format": "SOURCE",
+                "language": "PYTHON",
+                "content": content,
+                "overwrite": True,
+            });
+
+            # Verify notebook exists via workspace list (get-status)
+            DatabricksDataProvider::DatabricksWorkspaceDataProvider ws(client);
+            AbstractDataProviderRecordIterator wi = ws.searchRecords(NOTHING, {
+                "path": ws_path,
+                "get_status_only": True,
+            });
+            assertTrue(wi.next());
+            hash<auto> ws_obj = wi.getValue();
+            assertEq(ws_path, ws_obj.path);
+
+            # Delete the notebook (cleanup — errors here are non-fatal)
+            try {
+                DatabricksDataProvider::DatabricksDeleteWorkspaceDataProvider ws_del(client);
+                ws_del.doRequest({"path": ws_path});
+            } catch () {
+                if (m_options.verbose) {
+                    printf("Workspace delete cleanup failed (non-fatal)\n");
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /PERMISSION_DENIED|FEATURE_DISABLED|403/) {
+                if (m_options.verbose) {
+                    printf("Workspace CRUD test skipped: %s\n", ex.desc);
+                }
+            } else {
+                rethrow;
+            }
+        }
+
+        # ---- Execute SQL (requires an active warehouse) ----
+        try {
+            # Find first available SQL warehouse
+            DatabricksDataProvider::DatabricksSqlWarehousesDataProvider warehouses(client);
+            AbstractDataProviderRecordIterator whi = warehouses.searchRecords();
+            *string warehouse_id;
+            while (whi.next()) {
+                hash<auto> wh = whi.getValue();
+                if (wh.state == "RUNNING") {
+                    warehouse_id = wh.id;
+                    break;
+                }
+            }
+            if (warehouse_id) {
+                DatabricksDataProvider::DatabricksExecuteSqlDataProvider executor(client);
+                hash<auto> sql_resp = executor.doRequest({
+                    "warehouse_id": warehouse_id,
+                    "statement": "SELECT 1 AS test_col",
+                    "wait_timeout": "10s",
+                });
+                assertTrue(sql_resp.hasKey("statement_id"));
+                assertTrue(sql_resp.hasKey("status"));
+            } else {
+                if (m_options.verbose) {
+                    printf("Execute SQL test skipped: no running warehouse found\n");
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /PERMISSION_DENIED|FEATURE_DISABLED|403/) {
+                if (m_options.verbose) {
+                    printf("Execute SQL test skipped: %s\n", ex.desc);
+                }
+            } else {
+                rethrow;
+            }
+        }
+    }
+}

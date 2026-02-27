@@ -93,6 +93,7 @@ public class DataProvider {
             "cin7core": "Cin7CoreDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
+            "databricks": "DatabricksDataProvider",
             "db": "DbDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",

@@ -180,12 +180,7 @@ public class BigMLBatchProjectionProcessor inherits BigMLDataProviderBase {
         if (buffer.lsize() == 1) {
             hash<auto> record = buffer[0];
             buffer = ();
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                if (exists record{f}) {
-                    input_data{f} = record{f};
-                }
-            }
+            hash<auto> input_data = extractInputData(record, input_fields);
             hash<auto> response = doPost("projection", {
                 "pca": pca_resource,
                 "input_data": input_data,
@@ -204,24 +199,7 @@ public class BigMLBatchProjectionProcessor inherits BigMLDataProviderBase {
     #! Processes a window of records as a batch projection
     private list<auto> processWindow(list<hash<auto>> records) {
         # Create CSV data from records
-        string csv_data = input_fields.join(",") + "\n";
-        foreach hash<auto> rec in (records) {
-            list<string> row;
-            foreach string f in (input_fields) {
-                auto val = rec{f};
-                if (exists val) {
-                    string sval = string(val);
-                    # Escape CSV fields containing commas or quotes
-                    if (sval =~ /[,"\n]/) {
-                        sval = "\"" + regex_subst(sval, "\"", "\"\"", RE_Global) + "\"";
-                    }
-                    push row, sval;
-                } else {
-                    push row, "";
-                }
-            }
-            csv_data += row.join(",") + "\n";
-        }
+        string csv_data = buildCsvData(input_fields, records);
 
         # Step 1: Create a source from the CSV data
         hash<auto> source = doPost("source", {
@@ -248,20 +226,38 @@ public class BigMLBatchProjectionProcessor inherits BigMLDataProviderBase {
         string batch_resource = batch.resource;
         batch = pollUntilFinished(batch_resource, poll_interval_ms, timeout_ms);
 
-        # Step 4: Get the output dataset with results
-        string output_dataset = batch.output_dataset_resource;
-        hash<auto> output = pollUntilFinished(output_dataset, poll_interval_ms, timeout_ms);
+        # Step 4: Download batch projection results
+        list<hash<auto>> result_rows;
+        *string output_dataset;
+        try {
+            result_rows = downloadBatchResults(batch_resource);
+        } catch () {
+            # Fall back to output dataset download
+            try {
+                output_dataset = batch.output_dataset_resource;
+                if (output_dataset) {
+                    pollUntilFinished(output_dataset, poll_interval_ms, timeout_ms);
+                    result_rows = downloadBatchResults(output_dataset);
+                }
+            } catch () {}
+        }
 
         # Step 5: Emit projection events for each record
         list<auto> events;
         for (int i = 0; i < records.lsize(); ++i) {
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                input_data{f} = records[i]{f};
+            hash<auto> input_data = extractInputData(records[i], input_fields);
+            # Extract projection fields (non-input fields from the result row)
+            hash<auto> projection;
+            if (i < result_rows.lsize()) {
+                foreach string key in (keys result_rows[i]) {
+                    if (!input_fields.contains(key)) {
+                        projection{key} = result_rows[i]{key};
+                    }
+                }
             }
             push events, <BigMLProjectionEventInfo>{
                 "event_type": "bigml-projection",
-                "projection": {},
+                "projection": projection,
                 "resource": batch_resource,
                 "record_values": input_data,
             };

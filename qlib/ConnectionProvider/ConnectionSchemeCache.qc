@@ -95,6 +95,8 @@ public class ConnectionSchemeCache {
 
             "cin7core": "Cin7CoreRestClient",
 
+            "databricks": "DatabricksRestClient",
+
             "db": "DbDataProvider",
 
             "discord": "DiscordRestClient",

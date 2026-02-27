@@ -367,6 +367,7 @@ public class BigMLRestConnection inherits RestClient::RestConnection {
 
     #! Sets child data provider capabilities
     private setChildCapabilities() {
+        children_can_support_apis = True;
     }
 
     #! returns a @ref BigMLRestClient object
@@ -376,7 +377,7 @@ public class BigMLRestConnection inherits RestClient::RestConnection {
         @return a @ref BigMLRestClient object
     */
     private BigMLRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new BigMLRestClient(getConnectionOptions(), !connect);
+        return new BigMLRestClient(getConnectionOptions(rtopts), !connect);
     }
 
     #! Overrides async poll connect to inject BigML authentication

@@ -279,7 +279,7 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
             hash<DataProviderActionInfo> action, *hash<auto> options) {
         # handle both wrapped {"value": "model"} and unwrapped "model" formats
         *string mt = options.model_type.value ?? options.model_type;
-        LoggerWrapper::info("BigML train-and-predict dynamic options: model_type=%y options=%y "
+        LoggerWrapper::debug("BigML train-and-predict dynamic options: model_type=%y options=%y "
             "action.data_dependent_options=%y action.action_code=%y", mt, keys options,
             action.data_dependent_options, action.action_code);
         if (!mt) {
@@ -296,7 +296,7 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
             rv.objective_field.disabled = True;
             rv.objective_field.required = False;
         }
-        LoggerWrapper::info("BigML train-and-predict returning: objective_field.required=%y "
+        LoggerWrapper::debug("BigML train-and-predict returning: objective_field.required=%y "
             "objective_field.disabled=%y", rv.objective_field.required, rv.objective_field.disabled);
         return rv;
     }
@@ -321,14 +321,27 @@ public class BigMLTrainAndPredictProcessor inherits BigMLDataProviderBase {
         if (!configured || !buffer) {
             return;
         }
-        # need at least 5 records for meaningful training
-        if (buffer.lsize() >= 5) {
+        # need at least 2 records for training; fewer are dropped with a warning
+        if (buffer.lsize() >= 2) {
             list<auto> results = processWindow(buffer);
             buffer = ();
             return results;
         }
+        # Cannot train a model with fewer than 2 records; emit events with no prediction
+        list<auto> events;
+        foreach hash<auto> rec in (buffer) {
+            hash<auto> input_data = BigMLDataProviderBase::extractInputData(rec, input_fields);
+            push events, <BigMLTrainAndPredictEventInfo>{
+                "event_type": "bigml-train-and-predict",
+                "prediction": NOTHING,
+                "confidence": 0.0,
+                "model_type": model_type,
+                "resource": "",
+                "record_values": input_data,
+            };
+        }
         buffer = ();
-        return;
+        return events;
     }
 
     #! Trains a model on the records and predicts on each one

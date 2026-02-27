@@ -180,20 +180,8 @@ public class BigMLBatchPredictionProcessor inherits BigMLDataProviderBase {
         if (buffer.lsize() == 1) {
             hash<auto> record = buffer[0];
             buffer = ();
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                if (exists record{f}) {
-                    input_data{f} = record{f};
-                }
-            }
-            string resource_key;
-            if (model_resource =~ /^ensemble\//) {
-                resource_key = "ensemble";
-            } else if (model_resource =~ /^deepnet\//) {
-                resource_key = "deepnet";
-            } else {
-                resource_key = "model";
-            }
+            hash<auto> input_data = extractInputData(record, input_fields);
+            string resource_key = getResourceKey(model_resource);
             hash<auto> response = doPost("prediction", {
                 resource_key: model_resource,
                 "input_data": input_data,
@@ -214,24 +202,7 @@ public class BigMLBatchPredictionProcessor inherits BigMLDataProviderBase {
     #! Processes a window of records as a batch prediction
     private list<auto> processWindow(list<hash<auto>> records) {
         # Create CSV data from records
-        string csv_data = input_fields.join(",") + "\n";
-        foreach hash<auto> rec in (records) {
-            list<string> row;
-            foreach string f in (input_fields) {
-                auto val = rec{f};
-                if (exists val) {
-                    string sval = string(val);
-                    # Escape CSV fields containing commas or quotes
-                    if (sval =~ /[,"\n]/) {
-                        sval = "\"" + regex_subst(sval, "\"", "\"\"", RE_Global) + "\"";
-                    }
-                    push row, sval;
-                } else {
-                    push row, "";
-                }
-            }
-            csv_data += row.join(",") + "\n";
-        }
+        string csv_data = buildCsvData(input_fields, records);
 
         # Step 1: Create a source from the CSV data
         hash<auto> source = doPost("source", {
@@ -249,14 +220,7 @@ public class BigMLBatchPredictionProcessor inherits BigMLDataProviderBase {
         dataset = pollUntilFinished(dataset_resource, poll_interval_ms, timeout_ms);
 
         # Step 3: Create batch prediction
-        string resource_key;
-        if (model_resource =~ /^ensemble\//) {
-            resource_key = "ensemble";
-        } else if (model_resource =~ /^deepnet\//) {
-            resource_key = "deepnet";
-        } else {
-            resource_key = "model";
-        }
+        string resource_key = getResourceKey(model_resource);
         hash<auto> batch = doPost("batchprediction", {
             resource_key: model_resource,
             "dataset": dataset_resource,
@@ -266,22 +230,32 @@ public class BigMLBatchPredictionProcessor inherits BigMLDataProviderBase {
         string batch_resource = batch.resource;
         batch = pollUntilFinished(batch_resource, poll_interval_ms, timeout_ms);
 
-        # Step 4: Get the output dataset with results
-        string output_dataset = batch.output_dataset_resource;
-        hash<auto> output = pollUntilFinished(output_dataset, poll_interval_ms, timeout_ms);
+        # Step 4: Download batch prediction results
+        list<hash<auto>> result_rows;
+        *string output_dataset;
+        try {
+            result_rows = downloadBatchResults(batch_resource);
+        } catch () {
+            # Fall back to output dataset download if batch download fails
+            try {
+                output_dataset = batch.output_dataset_resource;
+                if (output_dataset) {
+                    pollUntilFinished(output_dataset, poll_interval_ms, timeout_ms);
+                    result_rows = downloadBatchResults(output_dataset);
+                }
+            } catch () {}
+        }
 
         # Step 5: Emit prediction events for each record
         list<auto> events;
         for (int i = 0; i < records.lsize(); ++i) {
-            hash<auto> input_data;
-            foreach string f in (input_fields) {
-                input_data{f} = records[i]{f};
-            }
+            hash<auto> input_data = extractInputData(records[i], input_fields);
+            *hash<auto> result = i < result_rows.lsize() ? result_rows[i] : NOTHING;
             push events, <BigMLPredictionEventInfo>{
                 "event_type": "bigml-predict",
-                "prediction": NOTHING,
-                "confidence": 0.0,
-                "objective_field": "",
+                "prediction": result.prediction,
+                "confidence": result.confidence.toFloat() ?? 0.0,
+                "objective_field": result.objective_field_name ?? "",
                 "resource": batch_resource,
                 "record_values": input_data,
             };

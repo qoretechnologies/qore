@@ -742,6 +742,25 @@ cargo install tree-sitter-cli@0.26.5
       - 4 per-record processors: predict, anomaly-score, centroid, topic-distribution
       - 3 batch processors: batch-predict, batch-anomaly-score, batch-centroid
       - connection support with \c bigml:// URL scheme
+    - @ref databricksrestclientintro "DatabricksRestClient" module
+      - new module providing a REST client for the Databricks REST API
+      - supports Personal Access Token (PAT) authentication
+      - provides DatabricksRestConnection for connection management with \c databricks:// URL scheme
+    - @ref databricksdataproviderintro "DatabricksDataProvider" module
+      - new module providing a data provider API for Databricks unified analytics platform
+      - job management (create, delete, run, cancel, find, watch runs)
+      - cluster management (create, start, delete, find, watch state)
+      - SQL warehouse management (create, start, stop, delete, find)
+      - SQL statement execution
+      - DBFS file management (mkdir, delete)
+      - workspace management (import, delete)
+      - Delta Live Tables pipeline management (create, update, delete, start, find, watch updates)
+      - Unity Catalog browsing (catalogs, schemas, tables)
+      - secrets management (create/delete scopes, put/delete secrets)
+      - identity management (SCIM users)
+      - ML pipeline processors: model prediction, batch prediction, chat completion, text completion, text embeddings
+      - event-based triggers for job runs, cluster state, and pipeline updates
+      - connection support with \c databricks:// URL scheme
     - @ref cin7corerestclientintro "Cin7CoreRestClient" module
       - new module providing a REST client for Cin7Core (DEAR Inventory) API
       - supports Account ID and API Key authentication via headers

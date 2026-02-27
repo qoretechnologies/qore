@@ -212,6 +212,119 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Downloads and parses batch operation results as CSV rows
+    /** @param resource_path the batch resource or output dataset path to download
+        @return a list of hashes, one per row, keyed by header names
+    */
+    list<hash<auto>> downloadBatchResults(string resource_path) {
+        auto csv = doGet(resource_path + "/download");
+        if (!csv || csv.typeCode() != NT_STRING) {
+            return ();
+        }
+        return parseCsvString(csv);
+    }
+
+    #! Parses a CSV string into a list of hashes keyed by header names
+    static list<hash<auto>> parseCsvString(string csv) {
+        # Normalize line endings (handle \r\n and bare \r)
+        csv =~ s/\r\n/\n/g;
+        csv =~ s/\r/\n/g;
+        list<string> lines = csv.split("\n");
+        if (lines.lsize() < 2) {
+            return ();
+        }
+        list<string> headers = BigMLDataProviderBase::parseCsvLine(lines[0]);
+        list<hash<auto>> rows;
+        for (int i = 1; i < lines.lsize(); ++i) {
+            if (!lines[i].val()) {
+                continue;
+            }
+            list<string> values = BigMLDataProviderBase::parseCsvLine(lines[i]);
+            hash<auto> row;
+            for (int j = 0; j < headers.lsize(); ++j) {
+                row{headers[j]} = j < values.lsize() ? values[j] : NOTHING;
+            }
+            push rows, row;
+        }
+        return rows;
+    }
+
+    #! Parses a single CSV line respecting quoted fields
+    static list<string> parseCsvLine(string line) {
+        list<string> fields;
+        string current = "";
+        bool in_quotes = False;
+        for (int i = 0; i < line.length(); ++i) {
+            string ch = line[i];
+            if (in_quotes) {
+                if (ch == "\"") {
+                    if (i + 1 < line.length() && line[i + 1] == "\"") {
+                        current += "\"";
+                        ++i;
+                    } else {
+                        in_quotes = False;
+                    }
+                } else {
+                    current += ch;
+                }
+            } else {
+                if (ch == "\"") {
+                    in_quotes = True;
+                } else if (ch == ",") {
+                    push fields, current;
+                    current = "";
+                } else {
+                    current += ch;
+                }
+            }
+        }
+        push fields, current;
+        return fields;
+    }
+
+    #! Builds CSV data from record fields
+    static string buildCsvData(list<string> fields, list<hash<auto>> records) {
+        string csv_data = fields.join(",") + "\n";
+        foreach hash<auto> rec in (records) {
+            list<string> row;
+            foreach string f in (fields) {
+                auto val = rec{f};
+                if (exists val) {
+                    string sval = string(val);
+                    if (sval =~ /[,"\n]/) {
+                        sval = "\"" + regex_subst(sval, "\"", "\"\"", RE_Global) + "\"";
+                    }
+                    push row, sval;
+                } else {
+                    push row, "";
+                }
+            }
+            csv_data += row.join(",") + "\n";
+        }
+        return csv_data;
+    }
+
+    #! Extracts input data from a record based on field names
+    static hash<auto> extractInputData(auto record, list<string> fields) {
+        hash<auto> input_data;
+        foreach string f in (fields) {
+            if (exists record{f}) {
+                input_data{f} = record{f};
+            }
+        }
+        return input_data;
+    }
+
+    #! Determines the BigML resource key from a resource ID
+    static string getResourceKey(string resource_id) {
+        if (resource_id =~ /^ensemble\//) {
+            return "ensemble";
+        } else if (resource_id =~ /^deepnet\//) {
+            return "deepnet";
+        }
+        return "model";
+    }
+
     #! Checks the BigML API response for errors
     private checkResponse(hash<auto> response) {
         if (response.status_code >= 400) {
@@ -223,7 +336,7 @@ public class BigMLDataProviderBase inherits DataProvider::AbstractDataProvider {
             } else {
                 err_msg = sprintf("BigML API error (HTTP %d)", response.status_code);
             }
-            throw "BIGML-API-ERROR", err_msg, response.body;
+            throw "BIGML-API-ERROR", err_msg, {"status": response.body.status};
         }
     }
 }

@@ -30,7 +30,7 @@
 %requires(reexport) BigMLRestClient
 
 module BigMLDataProvider {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing BigML data pipeline processors for ML predictions, "
         "anomaly detection, clustering, and topic modeling via the BigML API";
     author = "Qore Technologies <info@qoretechnologies.com>";

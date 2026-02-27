@@ -1,0 +1,1085 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DatabricksDataProvider.qm Qore user module for Databricks data provider integration
+
+/*  DatabricksDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) DatabricksRestClient
+
+module DatabricksDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Databricks workspace management, "
+        "data engineering, and ML pipeline processors";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new DatabricksDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": DatabricksDataProvider::AppName,
+            "display_name": "Databricks",
+            "short_desc": "Unified analytics platform for data engineering, ML, and AI",
+            "desc": "Databricks provides a unified analytics platform for data engineering, "
+                "collaborative data science, machine learning, and business analytics.\n\n"
+                "This integration supports managing jobs, clusters, SQL warehouses, DBFS, "
+                "workspace objects, Delta Live Tables pipelines, Unity Catalog, secrets, "
+                "and identity (SCIM). It also provides ML pipeline processors for model "
+                "serving predictions, chat completions, text embeddings, and text completions "
+                "via Databricks Foundation Model and custom Model Serving endpoints.",
+            "scheme": "databricks",
+            "logo": DatabricksLogo,
+            "logo_file_name": "databricks-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (
+                DataProvider::AppGroup::Analytics,
+                DataProvider::AppGroup::Databases,
+                DataProvider::AppGroup::AiLlm,
+            ),
+        });
+
+        # ========== JOB ACTIONS ==========
+
+        # Find Jobs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/jobs",
+            "action": "find-jobs",
+            "groups": "Jobs",
+            "display_name": "Find Jobs",
+            "short_desc": "List or search for Databricks jobs",
+            "desc": "Retrieve a list of jobs defined in the Databricks workspace with optional "
+                "filtering by name",
+            "action_code": DPAT_FIND,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Job Name",
+                    "short_desc": "Filter by job name substring",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "default_value": 25,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Find Job Runs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/job-runs",
+            "action": "find-job-runs",
+            "groups": "Jobs",
+            "display_name": "Find Job Runs",
+            "short_desc": "List or search for Databricks job runs",
+            "desc": "Retrieve a list of job runs with optional filtering by job ID and status",
+            "action_code": DPAT_FIND,
+            "options": {
+                "job_id": <ActionOptionInfo>{
+                    "display_name": "Job ID",
+                    "short_desc": "Filter runs by job ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "active_only": <ActionOptionInfo>{
+                    "display_name": "Active Only",
+                    "short_desc": "Show only active runs",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
+                },
+                "completed_only": <ActionOptionInfo>{
+                    "display_name": "Completed Only",
+                    "short_desc": "Show only completed runs",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum number of results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "default_value": 25,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Job
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/create-job",
+            "action": "create-job",
+            "groups": "Jobs",
+            "display_name": "Create Job",
+            "short_desc": "Create a new Databricks job",
+            "desc": "Create a new job in the Databricks workspace with the specified tasks and schedule",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCreateJobDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateJobRequestDataType::Fields{"name", "tasks",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateJobRequestDataType::Fields{
+                    "schedule", "max_concurrent_runs", "timeout_seconds", "tags",
+                }
+            ),
+        });
+
+        # Run Job
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/run-job",
+            "action": "run-job",
+            "groups": "Jobs",
+            "display_name": "Run Job Now",
+            "short_desc": "Trigger a job run immediately",
+            "desc": "Trigger an immediate run of a Databricks job with optional parameters",
+            "action_code": DPAT_API,
+            "output_type": DatabricksRunJobDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksRunJobRequestDataType::Fields{"job_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksRunJobRequestDataType::Fields{"job_parameters",}
+            ),
+        });
+
+        # Cancel Job Run
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/cancel-job-run",
+            "action": "cancel-job-run",
+            "groups": "Jobs",
+            "display_name": "Cancel Job Run",
+            "short_desc": "Cancel a running job",
+            "desc": "Cancel a currently running Databricks job run",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCancelJobRunDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCancelJobRunRequestDataType::Fields{"run_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Delete Job
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-job",
+            "action": "delete-job",
+            "groups": "Jobs",
+            "display_name": "Delete Job",
+            "short_desc": "Delete a Databricks job",
+            "desc": "Permanently delete a job from the Databricks workspace",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteJobDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteJobRequestDataType::Fields{"job_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # ========== CLUSTER ACTIONS ==========
+
+        # Find Clusters
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/clusters",
+            "action": "find-clusters",
+            "groups": "Clusters",
+            "display_name": "Find Clusters",
+            "short_desc": "List Databricks clusters",
+            "desc": "Retrieve a list of all clusters in the Databricks workspace",
+            "action_code": DPAT_FIND,
+            "options": {
+                "cluster_id": <ActionOptionInfo>{
+                    "display_name": "Cluster ID",
+                    "short_desc": "Look up a specific cluster by ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Cluster
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/create-cluster",
+            "action": "create-cluster",
+            "groups": "Clusters",
+            "display_name": "Create Cluster",
+            "short_desc": "Create a new Databricks cluster",
+            "desc": "Create a new cluster in the Databricks workspace",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCreateClusterDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateClusterRequestDataType::Fields{
+                    "cluster_name", "spark_version", "node_type_id",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateClusterRequestDataType::Fields{
+                    "num_workers", "autoscale", "driver_node_type_id", "spark_conf",
+                    "aws_attributes", "autotermination_minutes",
+                }
+            ),
+        });
+
+        # Start Cluster
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/start-cluster",
+            "action": "start-cluster",
+            "groups": "Clusters",
+            "display_name": "Start Cluster",
+            "short_desc": "Start a terminated cluster",
+            "desc": "Start a previously terminated Databricks cluster",
+            "action_code": DPAT_API,
+            "output_type": DatabricksStartClusterDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksStartClusterRequestDataType::Fields{"cluster_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Delete Cluster
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-cluster",
+            "action": "delete-cluster",
+            "groups": "Clusters",
+            "display_name": "Delete Cluster",
+            "short_desc": "Permanently delete a cluster",
+            "desc": "Permanently delete a Databricks cluster",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteClusterDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteClusterRequestDataType::Fields{"cluster_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # ========== SQL WAREHOUSE ACTIONS ==========
+
+        # Find SQL Warehouses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/sql-warehouses",
+            "action": "find-sql-warehouses",
+            "groups": "SQL",
+            "display_name": "Find SQL Warehouses",
+            "short_desc": "List Databricks SQL warehouses",
+            "desc": "Retrieve a list of all SQL warehouses in the Databricks workspace",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Warehouse ID",
+                    "short_desc": "Look up a specific SQL warehouse by ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create SQL Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/create-sql-warehouse",
+            "action": "create-sql-warehouse",
+            "groups": "SQL",
+            "display_name": "Create SQL Warehouse",
+            "short_desc": "Create a new SQL warehouse",
+            "desc": "Create a new Databricks SQL warehouse",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCreateSqlWarehouseDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateSqlWarehouseRequestDataType::Fields{"name", "cluster_size",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateSqlWarehouseRequestDataType::Fields{
+                    "max_num_clusters", "auto_stop_mins", "warehouse_type",
+                }
+            ),
+        });
+
+        # Start SQL Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/start-sql-warehouse",
+            "action": "start-sql-warehouse",
+            "groups": "SQL",
+            "display_name": "Start SQL Warehouse",
+            "short_desc": "Start a stopped SQL warehouse",
+            "desc": "Start a previously stopped Databricks SQL warehouse",
+            "action_code": DPAT_API,
+            "output_type": DatabricksStartSqlWarehouseDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksStartSqlWarehouseRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Stop SQL Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/stop-sql-warehouse",
+            "action": "stop-sql-warehouse",
+            "groups": "SQL",
+            "display_name": "Stop SQL Warehouse",
+            "short_desc": "Stop a running SQL warehouse",
+            "desc": "Stop a running Databricks SQL warehouse",
+            "action_code": DPAT_API,
+            "output_type": DatabricksStopSqlWarehouseDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksStopSqlWarehouseRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Delete SQL Warehouse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-sql-warehouse",
+            "action": "delete-sql-warehouse",
+            "groups": "SQL",
+            "display_name": "Delete SQL Warehouse",
+            "short_desc": "Delete a SQL warehouse",
+            "desc": "Permanently delete a Databricks SQL warehouse",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteSqlWarehouseDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteSqlWarehouseRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Execute SQL
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/execute-sql",
+            "action": "execute-sql",
+            "groups": "SQL",
+            "display_name": "Execute SQL Statement",
+            "short_desc": "Execute a SQL statement on a warehouse",
+            "desc": "Execute a SQL statement on a Databricks SQL warehouse and return results",
+            "action_code": DPAT_API,
+            "output_type": DatabricksExecuteSqlDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksExecuteSqlRequestDataType::Fields{"warehouse_id", "statement",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksExecuteSqlRequestDataType::Fields{"catalog", "schema",}
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksExecuteSqlRequestDataType::Fields{"wait_timeout", "on_wait_timeout",
+                    "disposition",}
+            ),
+        });
+
+        # ========== DBFS ACTIONS ==========
+
+        # Find DBFS Files
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/dbfs",
+            "action": "find-dbfs",
+            "groups": "DBFS",
+            "display_name": "List DBFS Files",
+            "short_desc": "List files in Databricks File System",
+            "desc": "List files and directories at the specified DBFS path",
+            "action_code": DPAT_FIND,
+            "options": {
+                "path": <ActionOptionInfo>{
+                    "display_name": "Path",
+                    "short_desc": "DBFS path to list",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Mkdir DBFS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/mkdir-dbfs",
+            "action": "mkdir-dbfs",
+            "groups": "DBFS",
+            "display_name": "Create DBFS Directory",
+            "short_desc": "Create a directory in DBFS",
+            "desc": "Create a directory and all parent directories in DBFS",
+            "action_code": DPAT_API,
+            "output_type": DatabricksMkdirDbfsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksMkdirDbfsRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Delete DBFS
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-dbfs",
+            "action": "delete-dbfs",
+            "groups": "DBFS",
+            "display_name": "Delete DBFS Path",
+            "short_desc": "Delete a file or directory in DBFS",
+            "desc": "Delete a file or directory from DBFS, optionally recursively",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteDbfsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteDbfsRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteDbfsRequestDataType::Fields{"recursive",}
+            ),
+        });
+
+        # ========== WORKSPACE ACTIONS ==========
+
+        # Find Workspace Objects
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/workspace",
+            "action": "find-workspace",
+            "groups": "Workspace",
+            "display_name": "List Workspace Objects",
+            "short_desc": "List objects in the Databricks workspace",
+            "desc": "List notebooks, directories, and other objects at the specified workspace path",
+            "action_code": DPAT_FIND,
+            "options": {
+                "path": <ActionOptionInfo>{
+                    "display_name": "Path",
+                    "short_desc": "Workspace path to list",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Import Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/import-workspace",
+            "action": "import-workspace",
+            "groups": "Workspace",
+            "display_name": "Import Workspace Object",
+            "short_desc": "Import a notebook or file to workspace",
+            "desc": "Import a notebook, file, or directory into the Databricks workspace",
+            "action_code": DPAT_API,
+            "output_type": DatabricksImportWorkspaceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksImportWorkspaceRequestDataType::Fields{"path", "format",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksImportWorkspaceRequestDataType::Fields{"content", "language", "overwrite",}
+            ),
+        });
+
+        # Delete Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-workspace",
+            "action": "delete-workspace",
+            "groups": "Workspace",
+            "display_name": "Delete Workspace Object",
+            "short_desc": "Delete a workspace object",
+            "desc": "Delete a notebook, directory, or other object from the Databricks workspace",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteWorkspaceDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteWorkspaceRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteWorkspaceRequestDataType::Fields{"recursive",}
+            ),
+        });
+
+        # ========== PIPELINE ACTIONS ==========
+
+        # Find Pipelines
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/pipelines",
+            "action": "find-pipelines",
+            "groups": "Pipelines",
+            "display_name": "Find Pipelines",
+            "short_desc": "List Delta Live Tables pipelines",
+            "desc": "Retrieve a list of Delta Live Tables pipelines in the workspace",
+            "action_code": DPAT_FIND,
+            "options": {
+                "pipeline_id": <ActionOptionInfo>{
+                    "display_name": "Pipeline ID",
+                    "short_desc": "Look up a specific pipeline by ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Filter pipelines by name substring",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Pipeline
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/create-pipeline",
+            "action": "create-pipeline",
+            "groups": "Pipelines",
+            "display_name": "Create Pipeline",
+            "short_desc": "Create a Delta Live Tables pipeline",
+            "desc": "Create a new Delta Live Tables pipeline in the workspace",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCreatePipelineDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreatePipelineRequestDataType::Fields{"name", "libraries",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreatePipelineRequestDataType::Fields{
+                    "storage", "target", "continuous", "configuration",
+                }
+            ),
+        });
+
+        # Update Pipeline
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/update-pipeline",
+            "action": "update-pipeline",
+            "groups": "Pipelines",
+            "display_name": "Update Pipeline",
+            "short_desc": "Update a Delta Live Tables pipeline",
+            "desc": "Update an existing Delta Live Tables pipeline configuration",
+            "action_code": DPAT_API,
+            "output_type": DatabricksUpdatePipelineDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksUpdatePipelineRequestDataType::Fields{"pipeline_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksUpdatePipelineRequestDataType::Fields{
+                    "name", "libraries", "storage", "target", "continuous", "configuration",
+                }
+            ),
+        });
+
+        # Delete Pipeline
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-pipeline",
+            "action": "delete-pipeline",
+            "groups": "Pipelines",
+            "display_name": "Delete Pipeline",
+            "short_desc": "Delete a Delta Live Tables pipeline",
+            "desc": "Permanently delete a Delta Live Tables pipeline",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeletePipelineDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeletePipelineRequestDataType::Fields{"pipeline_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Start Pipeline Update
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/start-pipeline-update",
+            "action": "start-pipeline-update",
+            "groups": "Pipelines",
+            "display_name": "Start Pipeline Update",
+            "short_desc": "Start a pipeline update/run",
+            "desc": "Start a new update (run) of a Delta Live Tables pipeline",
+            "action_code": DPAT_API,
+            "output_type": DatabricksStartPipelineUpdateDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksStartPipelineUpdateRequestDataType::Fields{"pipeline_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksStartPipelineUpdateRequestDataType::Fields{"full_refresh",}
+            ),
+        });
+
+        # ========== UNITY CATALOG ACTIONS ==========
+
+        # Find Catalogs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/unity-catalog",
+            "action": "find-catalogs",
+            "groups": "Unity Catalog",
+            "display_name": "Find Catalogs",
+            "short_desc": "List Unity Catalog catalogs",
+            "desc": "Retrieve a list of catalogs from the Unity Catalog metastore",
+            "action_code": DPAT_FIND,
+            "options": {
+                "resource_type": <ActionOptionInfo>{
+                    "display_name": "Resource Type",
+                    "short_desc": "The type of catalog resource to list",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "default_value": "catalogs",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "catalogs", "desc": "List catalogs"},
+                        <AllowedValueInfo>{"value": "schemas", "desc": "List schemas in a catalog"},
+                        <AllowedValueInfo>{"value": "tables", "desc": "List tables in a schema"},
+                    ),
+                },
+                "catalog_name": <ActionOptionInfo>{
+                    "display_name": "Catalog Name",
+                    "short_desc": "Catalog name for schemas and tables",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The catalog name; required when listing schemas or tables",
+                    "preselected": True,
+                },
+                "schema_name": <ActionOptionInfo>{
+                    "display_name": "Schema Name",
+                    "short_desc": "Schema name for tables",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The schema name; required when listing tables",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== SECRETS ACTIONS ==========
+
+        # Find Secret Scopes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/secrets",
+            "action": "find-secret-scopes",
+            "groups": "Secrets",
+            "display_name": "Find Secret Scopes",
+            "short_desc": "List Databricks secret scopes",
+            "desc": "Retrieve a list of secret scopes in the workspace. Provide a scope name "
+                "to list individual secrets within that scope.",
+            "action_code": DPAT_FIND,
+            "options": {
+                "scope": <ActionOptionInfo>{
+                    "display_name": "Scope",
+                    "short_desc": "List secrets in this scope instead of listing scopes",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Secret Scope
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/create-secret-scope",
+            "action": "create-secret-scope",
+            "groups": "Secrets",
+            "display_name": "Create Secret Scope",
+            "short_desc": "Create a new secret scope",
+            "desc": "Create a new Databricks secret scope for storing secrets",
+            "action_code": DPAT_API,
+            "output_type": DatabricksCreateSecretScopeDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksCreateSecretScopeRequestDataType::Fields{"scope",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Delete Secret Scope
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-secret-scope",
+            "action": "delete-secret-scope",
+            "groups": "Secrets",
+            "display_name": "Delete Secret Scope",
+            "short_desc": "Delete a secret scope",
+            "desc": "Permanently delete a Databricks secret scope and all its secrets",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteSecretScopeDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteSecretScopeRequestDataType::Fields{"scope",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # Put Secret
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/put-secret",
+            "action": "put-secret",
+            "groups": "Secrets",
+            "display_name": "Put Secret",
+            "short_desc": "Create or update a secret",
+            "desc": "Store a secret value in the specified scope and key",
+            "action_code": DPAT_API,
+            "output_type": DatabricksPutSecretDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksPutSecretRequestDataType::Fields{"scope", "key",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksPutSecretRequestDataType::Fields{"string_value",}, {
+                    "preselected": True,
+                }
+            ),
+        });
+
+        # Delete Secret
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/delete-secret",
+            "action": "delete-secret",
+            "groups": "Secrets",
+            "display_name": "Delete Secret",
+            "short_desc": "Delete a secret",
+            "desc": "Delete a secret from a Databricks secret scope",
+            "action_code": DPAT_API,
+            "output_type": DatabricksDeleteSecretDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksDeleteSecretRequestDataType::Fields{"scope", "key",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+        });
+
+        # ========== IDENTITY ACTIONS ==========
+
+        # Find Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/identity",
+            "action": "find-users",
+            "groups": "Identity",
+            "display_name": "Find Users",
+            "short_desc": "List workspace users via SCIM",
+            "desc": "Retrieve a list of users in the Databricks workspace via the SCIM API",
+            "action_code": DPAT_FIND,
+            "options": {
+                "resource_type": <ActionOptionInfo>{
+                    "display_name": "Resource Type",
+                    "short_desc": "The type of identity resource to list",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "default_value": "users",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "users", "desc": "List users"},
+                        <AllowedValueInfo>{"value": "groups", "desc": "List groups"},
+                        <AllowedValueInfo>{
+                            "value": "service-principals",
+                            "desc": "List service principals",
+                        },
+                    ),
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "SCIM filter expression",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "SCIM filter expression for results "
+                        "(e.g., `displayName co \"John\"`)",
+                },
+            },
+        });
+
+        # ========== TRIGGER ACTIONS ==========
+
+        # Watch Job Runs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/events/watch-job-runs",
+            "action": EVENT_WATCH_JOB_RUNS,
+            "groups": "Triggers",
+            "display_name": "Watch Job Runs",
+            "short_desc": "Trigger when new job runs are detected",
+            "desc": "Polls for new Databricks job runs and fires an event for each new run detected",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_JOB_RUNS,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for new runs (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Cluster State
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/events/watch-cluster-state",
+            "action": EVENT_WATCH_CLUSTER_STATE,
+            "groups": "Triggers",
+            "display_name": "Watch Cluster State",
+            "short_desc": "Trigger when a cluster changes state",
+            "desc": "Polls Databricks clusters and fires an event when a cluster changes state "
+                "(e.g., `PENDING` to `RUNNING`, `RUNNING` to `TERMINATED`)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_CLUSTER_STATE,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check cluster states (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # Watch Pipeline Updates
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/events/watch-pipeline-updates",
+            "action": EVENT_WATCH_PIPELINE_UPDATES,
+            "groups": "Triggers",
+            "display_name": "Watch Pipeline Updates",
+            "short_desc": "Trigger when pipeline updates are detected",
+            "desc": "Polls Databricks pipelines and fires an event when new pipeline updates "
+                "are detected (e.g., a pipeline run starts or completes)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_WATCH_PIPELINE_UPDATES,
+            "options": {
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "How often to check for pipeline updates (seconds)",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "default_value": DefaultPollInterval,
+                },
+            },
+        });
+
+        # ========== ML PIPELINE PROCESSOR ACTIONS ==========
+
+        # Model Prediction
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/processors/model-predict",
+            "action": "model-predict",
+            "groups": "ML Processors",
+            "display_name": "Model Prediction",
+            "short_desc": "Get predictions from a Model Serving endpoint",
+            "desc": "Sends each record in the pipeline to a Databricks Model Serving endpoint "
+                "using the DataFrame split format and returns the prediction result",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DatabricksDataProvider::DatabricksModelPredictionProcessor",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksModelPredictionProcessor::ConstructorOptions{
+                    "endpoint_name", "input_fields",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # Batch Model Prediction
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/processors/batch-model-predict",
+            "action": "batch-model-predict",
+            "groups": "ML Processors",
+            "display_name": "Batch Model Prediction",
+            "short_desc": "Get batched predictions from a Model Serving endpoint",
+            "desc": "Accumulates records in a window and sends them as a batch to a Databricks "
+                "Model Serving endpoint using the DataFrame split format. More efficient than "
+                "per-record predictions for large volumes.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DatabricksDataProvider::DatabricksBatchModelPredictionProcessor",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksBatchModelPredictionProcessor::ConstructorOptions{
+                    "endpoint_name", "input_fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # Chat Completion
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/processors/chat-completion",
+            "action": "chat-completion",
+            "groups": "ML Processors",
+            "display_name": "Chat Completion",
+            "short_desc": "Get chat completions from a Foundation Model endpoint",
+            "desc": "Sends each record's prompt field to a Databricks Foundation Model Serving "
+                "endpoint using the OpenAI-compatible chat completions format and returns the "
+                "completion result",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DatabricksDataProvider::DatabricksChatCompletionProcessor",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksChatCompletionProcessor::ConstructorOptions{
+                    "endpoint_name", "prompt_field",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksChatCompletionProcessor::ConstructorOptions{
+                    "system_prompt", "max_tokens", "temperature",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # Text Embeddings
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/processors/text-embeddings",
+            "action": "text-embeddings",
+            "groups": "ML Processors",
+            "display_name": "Text Embeddings",
+            "short_desc": "Get text embeddings from a Foundation Model endpoint",
+            "desc": "Sends each record's text field to a Databricks Foundation Model Serving "
+                "endpoint and returns the embedding vector",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DatabricksDataProvider::DatabricksTextEmbeddingsProcessor",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksTextEmbeddingsProcessor::ConstructorOptions{
+                    "endpoint_name", "text_field",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # Text Completion
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/processors/text-completion",
+            "action": "text-completion",
+            "groups": "ML Processors",
+            "display_name": "Text Completion",
+            "short_desc": "Get text completions from a Foundation Model endpoint",
+            "desc": "Sends each record's prompt field to a Databricks Foundation Model Serving "
+                "endpoint and returns the text completion result",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DatabricksDataProvider::DatabricksTextCompletionProcessor",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksTextCompletionProcessor::ConstructorOptions{
+                    "endpoint_name", "prompt_field",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                DatabricksTextCompletionProcessor::ConstructorOptions{
+                    "max_tokens", "temperature",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage DatabricksDataProvider Module
+
+    @tableofcontents
+
+    @section databricksdataproviderintro DatabricksDataProvider Introduction
+
+    The %DatabricksDataProvider module provides a data provider API for Databricks workspace
+    management, data engineering, and ML pipeline processors.
+
+    To use this module, use \c "%requires DatabricksDataProvider" in your code.
+
+    All public symbols are defined in the DatabricksDataProvider namespace.
+
+    The module provides:
+    - <b>Workspace Management</b>: Jobs, clusters, SQL warehouses, DBFS, workspace objects
+    - <b>Data Engineering</b>: Delta Live Tables pipelines, Unity Catalog, SQL execution
+    - <b>Security</b>: Secret scopes and secrets, identity management (SCIM)
+    - <b>ML Processors</b>: Model prediction, batch prediction, chat completion, embeddings,
+      text completion via Model Serving endpoints
+    - <b>Triggers</b>: Polling-based watchers for job runs, cluster state changes, and
+      pipeline updates
+
+    @section databricksdataprovider_relnotes Release Notes
+
+    @subsection databricksdataprovider_v1_0 DatabricksDataProvider v1.0
+    - initial release with workspace management, ML pipeline processors, and polling triggers
+*/
