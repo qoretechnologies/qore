@@ -2369,6 +2369,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
+                    // Check for thread cancellation or program interrupt at loop headers
+                    if (qore_check_cancel(xsink, "IR loop")) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
+                        return false;
+                    }
                 }
                 break;
             }
@@ -2385,6 +2394,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         func.osr_jit_requested = true;
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
+                    }
+                    // Check for thread cancellation or program interrupt at loop headers
+                    if (qore_check_cancel(xsink, "IR loop")) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupStoredValues(locals, xsink);
+                        cleanupStoredValues(globals, xsink);
+                        cleanupStoredValues(threadlocals, xsink);
+                        cleanupStoredValues(closures, xsink);
+                        return false;
                     }
                 }
                 break;
@@ -3384,9 +3402,33 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // Uninstantiate the local variable (calls destructor for objects)
                 if (local_inst->local) {
+                    // Skip outer-scope variables: these were never instantiated by
+                    // this function (ensureLocalInstantiated skips them) and must
+                    // not be uninstantiated here — doing so would pop an entry
+                    // from the calling function's stack frame, corrupting the
+                    // variable stack.
+                    if (function_own_locals
+                            && !function_own_locals->count(
+                                reinterpret_cast<const void*>(local_inst->local))) {
+                        ++ip;
+                        break;
+                    }
+                    bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+                    // Check if this variable was actually instantiated by the IR
+                    // interpreter. For non-pre-instantiated (IR-only) variables,
+                    // ensureLocalInstantiated() pushes them on first use. If a
+                    // variable was never used (e.g. in a code path not taken),
+                    // it was never pushed, so we must not pop it here.
+                    bool was_instantiated = instantiated_locals.count(local_inst->local) > 0;
                     // Remove from instantiated_locals since we're explicitly cleaning it up
                     instantiated_locals.erase(local_inst->local);
-                    bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+                    if (!is_pre && !was_instantiated) {
+                        // Variable was never instantiated by this function —
+                        // skip uninstantiation to avoid popping an unrelated
+                        // stack entry.
+                        ++ip;
+                        break;
+                    }
 
                     // Track any variable that we're explicitly uninstantiating mid-execution
                     // (both pre-instantiated loop variables AND block-local variables).
@@ -5410,6 +5452,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
                 } else if (xsink) {
                     QoreValue arg = getIRValue(values, inst->operands[0]);
+                    // Set the runtime location to the throw statement's location so
+                    // that the exception gets the correct source file/line info
+                    QoreProgramOptionalLocationHelper loc_helper(inst->loc);
                     // throw args are always a list: (err, desc[, arg])
                     // use the same raiseException(list) API as the AST path
                     if (arg.getType() == NT_LIST) {

@@ -714,7 +714,7 @@ sse.setEventQueue();
     }
 
     private waitTidCleared(int old_tid) {
-        while (tid && tid != old_tid) {
+        while (tid == old_tid) {
             ++tid_waiting;
             tid_cond.wait(m);
             --tid_waiting;
@@ -819,6 +819,11 @@ sse.setEventQueue();
                 }
                 break;
             }
+        }
+
+        # issue #4697: went out of scope in event loop
+        if (!self) {
+            return;
         }
 
         closingConnection();

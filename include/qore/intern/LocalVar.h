@@ -488,6 +488,12 @@ public:
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         if (!closure_use) {
             LocalVarValue* val = get_var();
+            if (!val) {
+                // Variable not on the current thread's lvstack (IR-managed context);
+                // return NOTHING with no deref needed
+                needs_deref = false;
+                return QoreValue();
+            }
             //printd(5, "LocalVar::eval '%s' typeInfo: %p '%s'\n", name.c_str(), typeInfo,
             //    QoreTypeInfo::getName(typeInfo));
             return val->eval(needs_deref, xsink);
@@ -525,7 +531,11 @@ public:
 
     DLLLOCAL bool isRef() const {
         if (!closure_use) {
-            return get_var()->isRef();
+            LocalVarValue* val = get_var();
+            if (!val) {
+                return false;
+            }
+            return val->isRef();
         }
         ClosureVarValue* val = thread_find_closure_var(name.c_str());
         if (!val) {
@@ -538,8 +548,13 @@ public:
         //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (!closure_use) {
+            LocalVarValue* val = get_var();
+            if (!val) {
+                // Variable not on the current thread's lvstack (IR-managed context)
+                return -1;
+            }
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
-            return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
+            return val->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
@@ -553,7 +568,11 @@ public:
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
         if (!closure_use) {
-            return get_var()->remove(lvrh, typeInfo);
+            LocalVarValue* val = get_var();
+            if (!val) {
+                return;
+            }
+            return val->remove(lvrh, typeInfo);
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
@@ -597,11 +616,19 @@ public:
     }
 
     DLLLOCAL qore_type_t getValueType() const {
-        return !closure_use ? get_var()->val.getType() : thread_find_closure_var(name.c_str())->val.getType();
+        if (!closure_use) {
+            LocalVarValue* val = get_var();
+            return val ? val->val.getType() : NT_NOTHING;
+        }
+        return thread_find_closure_var(name.c_str())->val.getType();
     }
 
     DLLLOCAL const char* getValueTypeName() const {
-        return !closure_use ? get_var()->val.getTypeName() : thread_find_closure_var(name.c_str())->val.getTypeName();
+        if (!closure_use) {
+            LocalVarValue* val = get_var();
+            return val ? val->val.getTypeName() : "nothing";
+        }
+        return thread_find_closure_var(name.c_str())->val.getTypeName();
     }
 
     DLLLOCAL bool isSelf() const {

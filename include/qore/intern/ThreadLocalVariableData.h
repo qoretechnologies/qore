@@ -103,8 +103,8 @@ public:
                 delete curr->next;
                 curr->next = 0;
             }
+            assert(curr->prev);
             curr = curr->prev;
-            assert(curr);
         }
         --curr->pos;
     }
