@@ -1921,26 +1921,43 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
         {
             AutoLocker al(&waiter->lock);
             if (!waiter->notified) {
+                // Check for cancellation before waiting
+                if (xsink && qore_check_cancel(xsink, "channel_select")) {
+                    break;
+                }
+
+                // Use wait2 directly instead of waitWithInterrupt to avoid the
+                // 500ms polling wrapper.  waitWithInterrupt chunks the wait into
+                // QORE_IO_POLL_INTERVAL_MS sub-waits with its own internal loop;
+                // on macOS, pthread_cond_timedwait_relative_np can fail to deliver
+                // broadcasts promptly through the sub-wait boundaries, causing
+                // significant latency (observed 168ms for a 20ms expected wakeup).
+                //
+                // By calling wait2 with the exact remaining timeout, the condvar
+                // wait covers the full period and wakes deterministically on
+                // broadcast.  Interrupt responsiveness is maintained by capping
+                // individual waits at QORE_IO_POLL_INTERVAL_MS for the infinite-
+                // timeout case and by checking qore_check_cancel in the outer loop.
                 if (has_deadline) {
                     int64 remaining_ms = deadline_ms - now_ms();
                     if (remaining_ms <= 0) {
                         break;  // user timeout expired
                     }
-                    int rc = waiter->cond.waitWithInterrupt(&waiter->lock, remaining_ms, xsink);
-                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
-                        break;
-                    }
+                    waiter->cond.wait2(&waiter->lock, remaining_ms);
                 } else {
-                    int rc = waiter->cond.waitWithInterrupt(&waiter->lock, -1, xsink);
-                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
-                        break;
-                    }
+                    // Infinite timeout — wait for one poll interval then re-check
+                    waiter->cond.wait2(&waiter->lock, QORE_IO_POLL_INTERVAL_MS);
                 }
             }
-            // If notified or woken by condvar: loop back and try_cases again
+            // If notified or woken by condvar/timeout: loop back and try_cases again
         }
 
         if (*xsink) {
+            break;
+        }
+
+        // Check for cancellation after wakeup
+        if (xsink && qore_check_cancel(xsink, "channel_select")) {
             break;
         }
 
