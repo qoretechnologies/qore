@@ -26,6 +26,7 @@
 
 %requires Logger
 %requires HttpServerUtil
+%requires AsyncSocketIo
 
 module HttpServerAsyncIo {
     # NOTE: this module has never been released; version starts at 1.0
@@ -60,6 +61,7 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
     - @ref HttpServerAsyncIo::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC
+    - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
 

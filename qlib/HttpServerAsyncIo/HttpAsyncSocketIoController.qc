@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires AsyncSocketIo
-
 #! Main namespace
 public namespace HttpServerAsyncIo {
 
@@ -45,8 +43,6 @@ public enum HttpConnectionState : string {
     Http2 = "http2",
     #! HTTP/2 sending response (async send via I/O thread)
     Http2Sending = "http2_sending",
-    #! HTTP/2 Server-Sent Events
-    Http2Sse = "http2_sse",
     #! HTTP/2 WebSocket (RFC 8441)
     Http2WebSocket = "http2_websocket",
     #! Fused send response + idle wait + read next header (HTTP/1.x keep-alive optimization)
@@ -75,8 +71,6 @@ public enum HttpPollType : string {
     WebSocket = "websocket",
     #! HTTP/2
     Http2 = "http2",
-    #! HTTP/2 SSE
-    Http2Sse = "http2_sse",
     #! HTTP/2 WebSocket
     Http2WebSocket = "http2_websocket",
     #! HTTP/3
@@ -422,7 +416,9 @@ public class HttpAsyncSocketIoController {
         The socket must already be bound to a UDP port before calling this method.
     */
     addQuicListener(Socket listener, HttpAsyncTarget target, auto cert, auto key,
-            HttpServer::HttpListenerInterface http_listener) {
+            HttpServer::HttpListenerInterface http_listener,
+            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
+            bool get_remote_certs = False) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(cert && key, "QUIC requires certificate and key for TLS 1.3");
@@ -437,6 +433,15 @@ public class HttpAsyncSocketIoController {
             listener.setPrivateKey(key);
         }
 
+        # Configure SSL verification mode for mTLS (mutual TLS) if requested
+        if (get_remote_certs) {
+            ssl_verify_flags |= SSL_VERIFY_PEER;
+        }
+        if (ssl_verify_flags != SSL_VERIFY_NONE) {
+            listener.setSslVerifyMode(ssl_verify_flags);
+        }
+        listener.acceptAllCertificates(ssl_accept_all_certs);
+
         {
             AutoWriteLock al(m);
             if (has_been_stopped) {
@@ -444,8 +449,6 @@ public class HttpAsyncSocketIoController {
                     sprintf("cannot add QUIC listener %s: controller has been stopped", lhash);
             }
             @assert(!listeners{lhash}, "listener already registered: %s", lhash);
-            # NOTE: ssl_accept_all_certs is True because QUIC server sockets do not
-            # perform mutual TLS verification; client cert validation is not yet supported
             listeners{lhash} = <HttpListenerInfo>{
                 "listener": listener,
                 "target": target,
@@ -453,7 +456,9 @@ public class HttpAsyncSocketIoController {
                 "cert": cert,
                 "key": key,
                 "http_version": HttpVersionMode::H3,
-                "ssl_accept_all_certs": True,
+                "ssl_accept_all_certs": ssl_accept_all_certs,
+                "ssl_verify_flags": ssl_verify_flags,
+                "get_remote_certs": get_remote_certs,
                 "http_listener": http_listener,
             };
         }
@@ -1029,6 +1034,14 @@ public class HttpAsyncSocketIoController {
         }
         submitConnectionOp(uh, new_cinfo);
 
+        # Check for RFC 9220 WebSocket over HTTP/3 (CONNECT with :protocol=websocket)
+        bool is_websocket_connect = request.method == "CONNECT"
+            && request.headers.":protocol" == "websocket";
+        if (is_websocket_connect) {
+            log(LoggerLevel::DEBUG, "HTTP/3 WebSocket CONNECT: session=%d stream=%d %s",
+                session_id, stream_id, request.path);
+        }
+
         # Build header hash (same format as HTTP/2)
         hash<auto> hdr = request.headers ?? {};
         hdr.method = request.method;
@@ -1053,6 +1066,7 @@ public class HttpAsyncSocketIoController {
                 "http3": True,
                 "session_id": session_id,
                 "stream_id": stream_id,
+                "is_websocket_connect": is_websocket_connect,
                 "accept-encoding": accept_encoding,
                 "body": request.body,
             },
@@ -1184,13 +1198,13 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.streaming) {
-            log(LoggerLevel::WARN, "HTTP/3 streaming not yet supported for session=%d stream=%d on %y",
-                session_id, stream_id, uh);
-            try {
-                cinfo.sock.submitQuicResponse(session_id, stream_id, 501,
-                    {"content-type": "text/plain"}, "HTTP/3 streaming not implemented");
-                controllers[cinfo.controller_idx].wake();
-            } catch () {}
+            log(LoggerLevel::DEBUG, "HTTP/3 streaming response for session=%d stream=%d on %y (type=%y)",
+                session_id, stream_id, uh, result.stream_type);
+            # The streaming handler manages the stream lifecycle directly
+            # (SSE events sent via submitQuicStreamData).
+            # h3op stays on the I/O thread handling other streams.
+            # Wake the controller in case the handler already queued data.
+            controllers[cinfo.controller_idx].wake();
             return;
         }
 
@@ -1438,12 +1452,6 @@ public class HttpAsyncSocketIoController {
                 timeout = -1s;
                 break;
             }
-            case HttpConnectionState::Http2Sse: {
-                if (!cinfo.stream_op) return;
-                op = cinfo.stream_op;
-                timeout = -1s;
-                break;
-            }
             case HttpConnectionState::Http2WebSocket: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
@@ -1592,13 +1600,6 @@ public class HttpAsyncSocketIoController {
                     handleHttp2SendComplete(uh, cinfo, h2op);
                 } else if (h2op.isClosed() || h2op.hasError()) {
                     handleHttp2ConnectionClosed(uh, cinfo, h2op);
-                }
-                break;
-            }
-            case HttpConnectionState::Http2Sse: {
-                Http2SseStream sse_stream = cast<Http2SseStream>(result.spop);
-                if (sse_stream.isDisconnected()) {
-                    handleHttp2SseDisconnect(uh, cinfo, sse_stream);
                 }
                 break;
             }
@@ -2449,30 +2450,6 @@ public class HttpAsyncSocketIoController {
                 remove connections{uh};
             }
             try { cinfo.sock.close(); } catch () {}
-        }
-    }
-
-    #! Handles HTTP/2 SSE disconnect
-    private handleHttp2SseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo,
-            Http2SseStream sse_stream) {
-        log(LoggerLevel::DEBUG, "HTTP/2 SSE disconnect: %y stream=%d", uh, sse_stream.getStreamId());
-
-        {
-            AutoWriteLock al(m);
-            remove connections{uh};
-        }
-
-        # Cancel the poll operation from the I/O controller cache to release socket reference
-        try {
-            controllers[cinfo.controller_idx].cancel(cinfo.sock);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "Error cancelling HTTP/2 SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
-        }
-
-        try {
-            cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "onSseDisconnect callback threw for %s: %s: %s", uh, ex.err, ex.desc);
         }
     }
 
