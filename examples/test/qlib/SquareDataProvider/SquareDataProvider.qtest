@@ -186,6 +186,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping sanity tests");
             }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Square API: %s", ex.desc));
+            }
             rethrow;
         }
     }
@@ -225,6 +229,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping metadata tests");
             }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Square API: %s", ex.desc));
+            }
             rethrow;
         }
     }
@@ -242,6 +250,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping child provider tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Square API: %s", ex.desc));
             }
             rethrow;
         }
@@ -442,6 +454,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping trigger tests");
             }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Square API: %s", ex.desc));
+            }
             rethrow;
         }
 
@@ -488,6 +504,10 @@ public class SquareDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OAUTH2-ERROR") {
                 testSkip("OAuth2 requires manual authorization - skipping negative tests");
+            }
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Square API: %s", ex.desc));
             }
             rethrow;
         }
