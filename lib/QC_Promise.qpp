@@ -1,0 +1,186 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Promise.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_Promise.h"
+#include "qore/intern/QC_Future.h"
+
+//! The producer side of a Promise/Future pair for cross-thread result delivery
+/** Promise objects allow a thread to set a result that another thread can retrieve via
+    the associated @ref Qore::Thread::Future "Future" object.
+
+    A Promise can be resolved with a value via @ref set() or rejected with an error via @ref setError().
+    If a Promise is destroyed without being resolved or rejected, the Future will receive a
+    \c PROMISE-ERROR exception.
+
+    @par Example: Basic usage
+    @code{.py}
+Promise p();
+Future f = p.getFuture();
+background sub() { p.set(42); }();
+auto result = f.get();  # blocks until set, returns 42
+    @endcode
+
+    @par Example: Error propagation
+    @code{.py}
+Promise p();
+Future f = p.getFuture();
+background sub() {
+    try {
+        auto data = fetch_data_from_api();
+        p.set(data);
+    } catch (hash<ExceptionInfo> ex) {
+        p.setError(ex.err, ex.desc, ex.arg);
+    }
+}();
+# The exception is re-thrown to the consumer
+auto data = f.get();  # throws the same exception if setError() was called
+    @endcode
+
+    @par Example: Promise destroyed without set
+    @code{.py}
+Future f;
+{
+    Promise p();
+    f = p.getFuture();
+    # p goes out of scope without calling set() or setError()
+}
+try {
+    f.get();
+} catch (hash<ExceptionInfo> ex) {
+    printf("%s: %s\n", ex.err, ex.desc);
+    # prints: PROMISE-ERROR: Promise destroyed without setting a value
+}
+    @endcode
+
+    @par Example: Worker thread pattern
+    @code{.py}
+# Create a pool of async workers
+list<Future> futures = ();
+for (int i = 0; i < 10; ++i) {
+    Promise p();
+    push futures, p.getFuture();
+    background sub(Promise p, int id) {
+        on_error p.setError($1.err, $1.desc);
+        p.set(process_item(id));
+    }(p, i);
+}
+
+# Wait for all results
+for (int i = 0; i < 10; ++i) {
+    printf("item %d: %y\n", i, futures[i].get());
+}
+    @endcode
+
+    @see @ref Qore::Thread::Future "Future"
+    @see @ref call_async()
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass Promise [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread];
+
+//! Creates the Promise object
+/** @par Example:
+    @code{.py}
+Promise p();
+    @endcode
+ */
+Promise::constructor() {
+    self->setPrivate(CID_PROMISE, new QorePromise());
+}
+
+//! Destroys the Promise object
+/** If the Promise has not been resolved or rejected, the associated Future is automatically rejected
+    with a \c PROMISE-ERROR exception.
+ */
+Promise::destructor() {
+    p->destructor(xsink);
+    p->deref(xsink);
+}
+
+//! Throws an exception; Promise objects cannot be copied
+/** @throw PROMISE-COPY-ERROR Objects of this class cannot be copied
+ */
+Promise::copy() {
+    xsink->raiseException("PROMISE-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Resolves the Future with the given value
+/** @param value the value to set as the result of the Future
+
+    @par Example:
+    @code{.py}
+p.set(42);
+    @endcode
+
+    @throw PROMISE-ERROR Promise has already been resolved or rejected
+ */
+nothing Promise::set(auto value) {
+    p->set(value.refSelf(), xsink);
+}
+
+//! Rejects the Future with an error
+/** @param err the error code string
+    @param desc the error description string
+    @param arg an optional error argument
+
+    @par Example:
+    @code{.py}
+p.setError("MY-ERROR", "something went wrong");
+    @endcode
+
+    @throw PROMISE-ERROR Promise has already been resolved or rejected
+ */
+nothing Promise::setError(string err, string desc, auto arg) {
+    p->setError(err->c_str(), desc->c_str(), arg.refSelf(), xsink);
+}
+
+//! Returns the Future associated with this Promise
+/** This method can only be called once per Promise.
+
+    @return the Future object associated with this Promise
+
+    @par Example:
+    @code{.py}
+Future f = p.getFuture();
+    @endcode
+
+    @throw PROMISE-ERROR Future has already been retrieved from this Promise
+ */
+Future Promise::getFuture() {
+    QoreFuture* future = p->getFuture(xsink);
+    if (!future) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_FUTURE, getProgram(), future);
+}

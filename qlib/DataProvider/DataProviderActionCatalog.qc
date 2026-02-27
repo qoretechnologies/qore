@@ -296,9 +296,6 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     #! Does this option support expressions?
     bool supports_expressions = True;
 
-    #! Will any expression specified by this option be handled by the server?
-    bool server_expression_handling = False;
-
     #! Option location for record-based data providers and data providers provided by a class
     /** values:
         - \c where: in the where clause
@@ -1531,7 +1528,7 @@ public class DataProviderActionCatalog {
             if (i.value instanceof hash<DataProviderOptionInfo>) {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "on_change", "metadata", "messages", "icon", "image"}
+                    "on_change", "metadata", "messages", "icon", "image", "server_expression_handling"}
                     + additional_fields;
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",

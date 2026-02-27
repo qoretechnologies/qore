@@ -119,8 +119,8 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         #! Observers ready flag
         bool ready;
 
-        #! Thread counter
-        Counter cnt();
+        #! Thread WaitGroup
+        WaitGroup cnt();
 
         #! Thread lock
         Mutex m();
@@ -189,8 +189,8 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
             return;
         }
         started = True;
-        cnt.inc();
-        on_error cnt.dec();
+        cnt.add();
+        on_error cnt.done();
         background eventLoop();
     }
 
@@ -205,13 +205,13 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
         if (stream) {
             stream.close();
         }
-        cnt.waitForZero();
+        cnt.wait();
     }
 
     #! SSE event loop
     private eventLoop() {
         on_exit {
-            cnt.dec();
+            cnt.done();
         }
         try {
             hash<auto> ctx_info = {};

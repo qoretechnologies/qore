@@ -27,7 +27,7 @@ public namespace FreshBooksDataProvider {
 
 #! Base class for FreshBooks polling watch data providers
 public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Maximum number of seen IDs to track before pruning
         const MaxSeenIds = 10000;
@@ -51,24 +51,6 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
     }
 
     private {
-        #! Mutex for thread synchronization
-        Mutex lck();
-
-        #! Condition variable for sleeping
-        Condition cond();
-
-        #! Background thread ID
-        int io_tid;
-
-        #! Stop flag
-        bool stop = False;
-
-        #! Poll interval in seconds
-        int poll_secs;
-
-        #! Start date for filtering
-        date start_date;
-
         #! Last check time
         date last_check;
 
@@ -78,90 +60,17 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
 
     #! Creates the object with a REST client
     constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
-            : FreshBooksDataProviderBase(rest) {
+            : FreshBooksDataProviderBase(rest),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
         if (options.account_id) {
             rest.setAccountId(options.account_id);
         }
-        poll_secs = options.poll_interval ?? DefaultPollInterval;
-        if (poll_secs < MinPollInterval) {
-            poll_secs = MinPollInterval;
-        }
-        if (options.start_date) {
-            start_date = options.start_date;
-        }
+        last_check = options.start_date ?? now_us();
     }
 
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Called when observers are ready
-    observersReady() {
-        lck.lock();
-        on_exit lck.unlock();
-        if (io_tid) {
-            return;
-        }
-        io_tid = background pollThread();
-    }
-
-    #! Stops event generation
-    stopEvents() {
-        stopEventsIntern();
-    }
-
-    #! Internal method to stop events
-    private stopEventsIntern() {
-        lck.lock();
-        on_exit lck.unlock();
-        stop = True;
-        cond.broadcast();
-        # Wait for the polling thread to exit; no timeout needed since pollThread always broadcasts on exit
-        while (io_tid) {
-            cond.wait(lck);
-        }
-    }
-
-    #! Returns True if events are still being generated
-    bool isActive() {
-        return !stop && io_tid > 0;
-    }
-
-    #! The polling thread
-    private pollThread() {
-        on_exit {
-            lck.lock();
-            on_exit lck.unlock();
-            remove io_tid;
-            cond.broadcast();
-        }
-
-        # Initialize tracking state
-        last_check = start_date ?? now_us();
-
-        while (True) {
-            # Check stop flag under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-            }
-
-            pollOnce();
-
-            # Wait for next poll interval under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-                cond.wait(lck, poll_secs * 1000ms);
-            }
-        }
     }
 
     #! Polls for new records once
@@ -177,7 +86,7 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
 
             foreach hash<auto> record in (records) {
                 # check for shutdown between iterations
-                if (stop) {
+                if (isStopping()) {
                     break;
                 }
                 string id = getRecordId(record);

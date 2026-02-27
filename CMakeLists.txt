@@ -160,6 +160,13 @@ set(LIBQORE_QPP_SRC
     lib/QC_AutoWriteLock.qpp
     lib/QC_Condition.qpp
     lib/QC_Counter.qpp
+    lib/QC_Channel.qpp
+    lib/QC_ChannelIterator.qpp
+    lib/QC_Future.qpp
+    lib/QC_Promise.qpp
+    lib/QC_Semaphore.qpp
+    lib/QC_AutoSemaphore.qpp
+    lib/QC_WaitGroup.qpp
     lib/QC_AbstractIterator.qpp
     lib/QC_AbstractQuantifiedIterator.qpp
     lib/QC_AbstractBidirectionalIterator.qpp
@@ -1186,7 +1193,14 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SandboxManager.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Gate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Sequence.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Channel.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Semaphore.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AutoSemaphore.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WaitGroup.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLCertificate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"

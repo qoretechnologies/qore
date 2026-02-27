@@ -1,0 +1,306 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class FutureTest
+
+class FutureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Future/Promise/WaitGroup", "1.0", \ARGV) {
+        addTestCase("Promise set/Future get roundtrip", \testBasicSetGet());
+        addTestCase("Promise setError/Future get throws", \testErrorPropagation());
+        addTestCase("Future get timeout", \testTimeout());
+        addTestCase("Multiple getters on same Future", \testMultipleGetters());
+        addTestCase("Promise destroyed without set", \testPromiseDestroyedPending());
+        addTestCase("Promise double set throws", \testDoubleSet());
+        addTestCase("Promise double getFuture throws", \testDoubleGetFuture());
+        addTestCase("Future cannot be constructed directly", \testFutureDirectConstruct());
+        addTestCase("Future cannot be copied", \testFutureCopy());
+        addTestCase("Promise cannot be copied", \testPromiseCopy());
+        addTestCase("Future isDone/isError", \testIsDoneIsError());
+        addTestCase("call_async with return value", \testCallAsyncReturn());
+        addTestCase("call_async with exception", \testCallAsyncException());
+        addTestCase("call_async with arguments", \testCallAsyncArgs());
+        addTestCase("WaitGroup basic add/done/wait", \testWaitGroupBasic());
+        addTestCase("WaitGroup timeout", \testWaitGroupTimeout());
+        addTestCase("WaitGroup done before add throws", \testWaitGroupDoneBeforeAdd());
+        addTestCase("WaitGroup multiple tasks", \testWaitGroupMultipleTasks());
+        addTestCase("Promise set NOTHING", \testSetNothing());
+        addTestCase("setError arg propagation", \testSetErrorArg());
+        addTestCase("call_async with NOTHING return", \testCallAsyncNothing());
+        addTestCase("WaitGroup reuse", \testWaitGroupReuse());
+        addTestCase("WaitGroup add with invalid value throws", \testWaitGroupAddInvalid());
+        addTestCase("WaitGroup copy is independent", \testWaitGroupCopy());
+        set_return_value(main());
+    }
+
+    testBasicSetGet() {
+        Promise p();
+        Future f = p.getFuture();
+        assertFalse(f.isDone());
+        Counter c(1);
+        auto result;
+        background sub() {
+            on_exit c.dec();
+            result = f.get();
+        }();
+        p.set(42);
+        c.waitForZero();
+        assertEq(42, result);
+        assertTrue(f.isDone());
+        assertFalse(f.isError());
+    }
+
+    testErrorPropagation() {
+        Promise p();
+        Future f = p.getFuture();
+        p.setError("MY-ERROR", "test error description");
+        assertTrue(f.isDone());
+        assertTrue(f.isError());
+        assertThrows("MY-ERROR", "test error description", sub() { f.get(); });
+    }
+
+    testTimeout() {
+        Promise p();
+        Future f = p.getFuture();
+        # Use a short timeout
+        assertThrows("FUTURE-TIMEOUT", sub() { f.get(100ms); });
+    }
+
+    testMultipleGetters() {
+        Promise p();
+        Future f = p.getFuture();
+        Counter c(3);
+        list<auto> results = ();
+        Mutex m();
+        for (int i = 0; i < 3; ++i) {
+            background sub() {
+                on_exit c.dec();
+                auto val = f.get();
+                {
+                    AutoLock al(m);
+                    push results, val;
+                }
+            }();
+        }
+        p.set("hello");
+        c.waitForZero();
+        assertEq(3, results.size());
+        for (int i = 0; i < 3; ++i) {
+            assertEq("hello", results[i]);
+        }
+    }
+
+    testPromiseDestroyedPending() {
+        Future f;
+        {
+            Promise p();
+            f = p.getFuture();
+            # Promise goes out of scope here without calling set()
+        }
+        assertTrue(f.isDone());
+        assertTrue(f.isError());
+        assertThrows("PROMISE-ERROR", sub() { f.get(); });
+    }
+
+    testDoubleSet() {
+        Promise p();
+        p.set(1);
+        assertThrows("PROMISE-ERROR", sub() { p.set(2); });
+    }
+
+    testDoubleGetFuture() {
+        Promise p();
+        Future f = p.getFuture();
+        assertThrows("PROMISE-ERROR", sub() { p.getFuture(); });
+    }
+
+    testFutureDirectConstruct() {
+        assertThrows("FUTURE-ERROR", sub() { Future f(); });
+    }
+
+    testFutureCopy() {
+        Promise p();
+        Future f = p.getFuture();
+        assertThrows("FUTURE-COPY-ERROR", sub() { Future f2 = f.copy(); });
+    }
+
+    testPromiseCopy() {
+        Promise p();
+        assertThrows("PROMISE-COPY-ERROR", sub() { Promise p2 = p.copy(); });
+    }
+
+    testIsDoneIsError() {
+        # Test resolved
+        {
+            Promise p();
+            Future f = p.getFuture();
+            assertFalse(f.isDone());
+            assertFalse(f.isError());
+            p.set(42);
+            assertTrue(f.isDone());
+            assertFalse(f.isError());
+        }
+
+        # Test rejected
+        {
+            Promise p();
+            Future f = p.getFuture();
+            assertFalse(f.isDone());
+            assertFalse(f.isError());
+            p.setError("ERR", "desc");
+            assertTrue(f.isDone());
+            assertTrue(f.isError());
+        }
+    }
+
+    testCallAsyncReturn() {
+        Future f = call_async(int sub() { return 42; });
+        auto result = f.get();
+        assertEq(42, result);
+    }
+
+    testCallAsyncException() {
+        Future f = call_async(sub() { throw "ASYNC-ERROR", "async test error"; });
+        assertThrows("ASYNC-ERROR", sub() { f.get(); });
+    }
+
+    testCallAsyncArgs() {
+        Future f = call_async(int sub(int x, int y) { return x + y; }, 20, 22);
+        assertEq(42, f.get());
+    }
+
+    testWaitGroupBasic() {
+        WaitGroup wg();
+        assertEq(0, wg.getCount());
+        wg.add(1);
+        assertEq(1, wg.getCount());
+        Counter c(1);
+        background sub() {
+            on_exit c.dec();
+            wg.done();
+        }();
+        assertEq(0, wg.wait());
+        c.waitForZero();
+        assertEq(0, wg.getCount());
+    }
+
+    testWaitGroupTimeout() {
+        WaitGroup wg();
+        wg.add(1);
+        # Wait with short timeout - should timeout since nothing calls done()
+        int rc = wg.wait(100ms);
+        assertEq(-1, rc);
+        # Clean up - call done so destructor doesn't error
+        wg.done();
+    }
+
+    testWaitGroupDoneBeforeAdd() {
+        WaitGroup wg();
+        assertThrows("WAITGROUP-ERROR", sub() { wg.done(); });
+    }
+
+    testWaitGroupMultipleTasks() {
+        WaitGroup wg();
+        int num_tasks = 5;
+        wg.add(num_tasks);
+        Mutex m();
+        int completed = 0;
+        for (int i = 0; i < num_tasks; ++i) {
+            background sub() {
+                {
+                    AutoLock al(m);
+                    ++completed;
+                }
+                wg.done();
+            }();
+        }
+        assertEq(0, wg.wait());
+        assertEq(num_tasks, completed);
+    }
+
+    testSetNothing() {
+        Promise p();
+        Future f = p.getFuture();
+        p.set(NOTHING);
+        auto result = f.get();
+        assertNothing(result);
+    }
+
+    testSetErrorArg() {
+        # Test that setError arg is propagated through Future::get()
+        Promise p();
+        Future f = p.getFuture();
+        hash<auto> error_detail = {"code": 404, "message": "not found"};
+        p.setError("MY-ERROR", "something went wrong", error_detail);
+        try {
+            f.get();
+            assertEq(True, False, "expected exception not thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MY-ERROR", ex.err);
+            assertEq("something went wrong", ex.desc);
+            assertEq(error_detail, ex.arg);
+        }
+    }
+
+    testCallAsyncNothing() {
+        Future f = call_async(auto sub() { return NOTHING; });
+        auto result = f.get();
+        assertNothing(result);
+        assertTrue(f.isDone());
+        assertFalse(f.isError());
+    }
+
+    testWaitGroupReuse() {
+        # Verify a WaitGroup can be used for multiple rounds
+        WaitGroup wg();
+
+        # Round 1
+        wg.add(2);
+        Counter c1(2);
+        for (int i = 0; i < 2; ++i) {
+            background sub() {
+                on_exit {
+                    wg.done();
+                    c1.dec();
+                }
+            }();
+        }
+        assertEq(0, wg.wait());
+        c1.waitForZero();
+        assertEq(0, wg.getCount());
+
+        # Round 2 — reuse the same WaitGroup
+        wg.add(3);
+        Counter c2(3);
+        for (int i = 0; i < 3; ++i) {
+            background sub() {
+                on_exit {
+                    wg.done();
+                    c2.dec();
+                }
+            }();
+        }
+        assertEq(0, wg.wait());
+        c2.waitForZero();
+        assertEq(0, wg.getCount());
+    }
+
+    testWaitGroupAddInvalid() {
+        WaitGroup wg();
+        assertThrows("WAITGROUP-ERROR", sub() { wg.add(0); });
+        assertThrows("WAITGROUP-ERROR", sub() { wg.add(-1); });
+    }
+
+    testWaitGroupCopy() {
+        WaitGroup wg();
+        wg.add(5);
+        WaitGroup wg2 = wg.copy();
+        # Copy starts fresh at 0, independent of original
+        assertEq(0, wg2.getCount());
+        assertEq(5, wg.getCount());
+    }
+}

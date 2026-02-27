@@ -1,0 +1,229 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Semaphore.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QC_Semaphore.h"
+
+//! A counting semaphore for limiting concurrent access to a shared resource
+/** Semaphore objects maintain a set of permits. Each @ref acquire() blocks if necessary until a permit is available,
+    and then takes it. Each @ref release() adds a permit, potentially waking a blocked acquirer.
+
+    Unlike @ref Qore::Thread::Gate "Gate" (which is reentrant/binary), Semaphore supports N permits,
+    making it suitable for controlling access to a pool of resources.
+
+    @par Example: Connection pool limiter
+    @code{.py}
+# Allow at most 3 concurrent database connections
+Semaphore sem(3);
+
+for (int i = 0; i < 10; ++i) {
+    background sub(int id) {
+        sem.acquire();
+        on_exit sem.release();
+        printf("thread %d: using connection\n", id);
+        # ... use database connection ...
+    }(i);
+}
+    @endcode
+
+    @par Example: Rate limiting
+    @code{.py}
+# Limit to 5 concurrent API requests
+Semaphore api_limiter(5);
+
+list<Future> futures = ();
+for (int i = 0; i < 100; ++i) {
+    push futures, call_async(auto sub(auto item) {
+        api_limiter.acquire();
+        on_exit api_limiter.release();
+        return call_external_api(item);
+    }, items[i]);
+}
+
+# Collect results — at most 5 API calls run at any time
+list<auto> results = map $1.get(), futures;
+    @endcode
+
+    @par Example: Non-blocking tryAcquire
+    @code{.py}
+Semaphore sem(3);
+if (sem.tryAcquire()) {
+    on_exit sem.release();
+    # ... use resource ...
+} else {
+    printf("resource busy, trying later\n");
+}
+    @endcode
+
+    @par Example: Timed acquire
+    @code{.py}
+Semaphore sem(1);
+try {
+    sem.acquire(5s);  # wait up to 5 seconds for a permit
+    on_exit sem.release();
+    # ... use resource ...
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "SEMAPHORE-TIMEOUT") {
+        printf("could not acquire permit within 5 seconds\n");
+    }
+}
+    @endcode
+
+    @par Example: RAII with AutoSemaphore
+    @code{.py}
+Semaphore sem(3);
+{
+    AutoSemaphore as(sem);  # blocks until permit acquired
+    # ... permit is held ...
+}  # permit automatically released, even on exception
+    @endcode
+
+    @see @ref Qore::Thread::AutoSemaphore "AutoSemaphore"
+    @see @ref Qore::Thread::Gate "Gate"
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass Semaphore [dom=THREAD_CLASS; arg=QoreSemaphore* sem; ns=Qore::Thread];
+
+//! Creates a Semaphore with the given number of initial permits
+/** @param permits the initial number of permits; must be >= 0
+
+    @par Example:
+    @code{.py}
+Semaphore sem(5);
+    @endcode
+
+    @throw SEMAPHORE-ERROR negative initial permit count
+ */
+Semaphore::constructor(int permits = 1) {
+    if (permits < 0) {
+        xsink->raiseException("SEMAPHORE-ERROR", "Semaphore::constructor() called with negative permits value " QLLD, permits);
+        return;
+    }
+    self->setPrivate(CID_SEMAPHORE, new QoreSemaphore(permits));
+}
+
+//! Destroys the Semaphore object
+/** Note that it is a programming error to delete this object while other threads are blocked on it.
+
+    @throw SEMAPHORE-ERROR Object deleted while other threads blocked on it
+ */
+Semaphore::destructor() {
+    sem->destructor(xsink);
+    sem->deref(xsink);
+}
+
+//! Creates a new Semaphore with the same number of available permits
+/** @par Example:
+    @code{.py}
+Semaphore new_sem = sem.copy();
+    @endcode
+ */
+Semaphore::copy() {
+    self->setPrivate(CID_SEMAPHORE, new QoreSemaphore(sem->getPermits()));
+}
+
+//! Acquires a permit, blocking until one is available
+/** @param timeout_ms a @ref timeout_type "timeout" value to wait; integers are interpreted as milliseconds; @ref relative_dates "relative date/time values" are interpreted literally (with a resolution of milliseconds); 0 (the default) means wait indefinitely
+
+    @par Example:
+    @code{.py}
+sem.acquire();
+    @endcode
+
+    @throw SEMAPHORE-ERROR Semaphore has been deleted in another thread
+    @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked
+ */
+nothing Semaphore::acquire(timeout timeout_ms = 0) {
+    bool timed_out = false;
+    sem->acquire(timeout_ms, xsink, timed_out);
+    if (timed_out && !*xsink) {
+        xsink->raiseException("SEMAPHORE-TIMEOUT",
+            "timed out after " QLLD "ms waiting to acquire semaphore", (int64)timeout_ms);
+    }
+}
+
+//! Attempts to acquire a permit without blocking
+/** @return @ref True if the permit was acquired, @ref False if no permits are available
+
+    @par Example:
+    @code{.py}
+if (sem.tryAcquire()) {
+    on_exit sem.release();
+    # ... use resource ...
+}
+    @endcode
+ */
+bool Semaphore::tryAcquire() {
+    return sem->tryAcquire();
+}
+
+//! Releases one or more permits, potentially waking blocked threads
+/** @param n the number of permits to release; must be >= 1
+
+    @par Example:
+    @code{.py}
+sem.release();
+    @endcode
+
+    @throw SEMAPHORE-ERROR n < 1
+ */
+nothing Semaphore::release(int n = 1) {
+    sem->release(n, xsink);
+}
+
+//! Returns the current number of available permits
+/** @return the current number of available permits
+
+    @par Example:
+    @code{.py}
+int p = sem.availablePermits();
+    @endcode
+ */
+int Semaphore::availablePermits() [flags=CONSTANT] {
+    return sem->availablePermits();
+}
+
+//! Returns the number of threads currently blocked waiting to acquire
+/** @return the number of threads currently blocked on this object
+
+    @par Example:
+    @code{.py}
+int w = sem.getWaiting();
+    @endcode
+ */
+int Semaphore::getWaiting() [flags=CONSTANT] {
+    return sem->getWaiting();
+}

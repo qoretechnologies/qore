@@ -245,8 +245,8 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         #! Flag to signal timer thread to stop
         bool stopTimer = False;
 
-        #! Counter for tracking active flush operations
-        Counter flushCounter(0);
+        #! WaitGroup for tracking active flush operations
+        WaitGroup flushCounter();
 
         #! Whether the appender is open
         bool isOpened = False;
@@ -409,7 +409,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         flush();
 
         # Wait for any in-progress flushes
-        flushCounter.waitForZero();
+        flushCounter.wait();
 
         isOpened = False;
     }
@@ -499,8 +499,8 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             return;
         }
 
-        flushCounter.inc();
-        on_exit flushCounter.dec();
+        flushCounter.add();
+        on_exit flushCounter.done();
 
         string indexName = resolveIndexName();
         string bulkBody = "";

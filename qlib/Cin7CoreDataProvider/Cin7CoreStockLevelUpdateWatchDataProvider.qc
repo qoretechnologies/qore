@@ -63,7 +63,7 @@ public class Cin7CoreStockLevelUpdateWatchDataProvider inherits Cin7CoreWatchDat
     }
 
     #! Poll for stock level changes
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Page": 1,

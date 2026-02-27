@@ -79,8 +79,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         #! Condition variable for timer thread signaling
         Condition timer_cond();
 
-        #! Timer thread counter
-        Counter mcnt();
+        #! Timer thread WaitGroup
+        WaitGroup mcnt();
     }
 
     #! Creates the object with an explicit async I/O controller
@@ -157,7 +157,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         foreach string name in (cancel_names) {
             controller.cancelByOwner("pcm:" + name);
         }
-        mcnt.waitForZero();
+        mcnt.wait();
         {
             AutoLock al(m);
             stopping = False;
@@ -187,7 +187,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         foreach string name in (cancel_names) {
             controller.cancelByOwner("pcm:" + name);
         }
-        mcnt.waitForZero();
+        mcnt.wait();
         {
             AutoLock al(m);
             stopping = False;
@@ -198,7 +198,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Waits for the monitoring thread to stop if it's running
     waitStop() {
-        mcnt.waitForZero();
+        mcnt.wait();
     }
 
     #! Returns @ref True if the timer thread is running
@@ -373,8 +373,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     private startIntern() {
         quit = False;
-        mcnt.inc();
-        on_error mcnt.dec();
+        mcnt.add();
+        on_error mcnt.done();
         tid = background timerThread();
     }
 
@@ -392,7 +392,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 }
             }
             log(LoggerLevel::INFO, "exiting polling connection monitor timer thread");
-            mcnt.dec();
+            mcnt.done();
         }
 
         while (True) {

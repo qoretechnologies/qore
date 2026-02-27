@@ -63,7 +63,7 @@ public class Cin7CoreSaleVoidedWatchDataProvider inherits Cin7CoreWatchDataProvi
     }
 
     #! Poll for voided sales
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Status": "Voided",

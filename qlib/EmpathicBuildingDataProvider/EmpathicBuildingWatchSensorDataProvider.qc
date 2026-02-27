@@ -31,7 +31,7 @@ public const EVENT_EB_SENSOR = "sensor-event";
 
 #! The EmpathicBuilding watch sensor data provider class
 public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -65,36 +65,21 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
         #! Sensor data
         hash<auto> sensor;
 
-        #! callable value to start a new thread; must take a callable object as a parameter and return an integer TID
-        *code start_thread;
-
-        #! TID of the I/O thread
-        int tid;
-
-        #! I/O thread counter
-        Counter cnt();
-
-        #! I/O thread lock
-        Mutex m();
-
-        #! I/O thread condition
-        Condition cond();
-
-        #! Stop flag
-        bool stop_flag;
-
-        #! Poll interval in milliseconds
-        timeout poll_interval_ms;
+        #! Last event data for change detection
+        hash<auto> last_event;
     }
 
     #! Create the object from the REST connection
     constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger, hash<auto> org, hash<auto> loc,
-            hash<auto> sensor) : EmpathicBuildingDataProviderBase(rest, logger) {
+            hash<auto> sensor)
+            : EmpathicBuildingDataProviderBase(rest, logger),
+              AbstractWatchDataProviderBase(
+                  max((DataProviderDataContextHelper::getHash().poll_interval_ms ?? PollInterval) / 1000, 1)) {
         self.org = org;
         self.loc = loc;
         self.sensor = sensor;
 
-        poll_interval_ms = DataProviderDataContextHelper::getHash().poll_interval_ms ?? PollInterval;
+        timeout poll_interval_ms = DataProviderDataContextHelper::getHash().poll_interval_ms ?? PollInterval;
         if (poll_interval_ms < 0) {
             throw "POLL-INTERVAL-ARG-ERROR", sprintf("poll_interval_ms %d is negative", poll_interval_ms);
         }
@@ -102,7 +87,7 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
 
     #! Destroys the object
     destructor() {
-        stop();
+        stopEventsIntern();
     }
 
     #! Returns the data provider name
@@ -118,81 +103,21 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
             EmpathicBuildingSensorDataProvider::getSensorDesc(sensor));
     }
 
-    #! Called when all observers have been added to the object
-    /** This method is meant to trigger event generation
-    */
-    observersReady() {
-        start();
-    }
-
-    #! Called to stop generating events
-    /** Stops polling for new events
-    */
-    stopEvents() {
-        stop();
-    }
-
-    #! Connects and starts receiving messages
-    private start() {
-        hash<auto> info;
-        try {
-            cnt.inc();
-            on_error cnt.dec();
-%ifdef PO_NO_THREAD_CONTROL
-            tid = start_thread(\eventLoop());
-%else
-            tid = start_thread ? start_thread(\ioThread()) : background ioThread();
-%endif
-        } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("Failed to start I/O thread: %s", get_exception_string(ex));
-            rethrow;
+    #! Performs a single polling operation
+    private pollOnce() {
+        hash<auto> event = getEvent();
+        if (event != last_event) {
+            notifyObservers(EVENT_EB_SENSOR, event);
+            last_event = event;
+        } else {
+            debug("No new event data available");
         }
     }
 
-    #! Stops listening for new events
-    private stop() {
-        if (tid) {
-            stop_flag = True;
-            m.lock();
-            on_exit m.unlock();
-            cond.signal();
-        }
-
-        cnt.waitForZero();
-    }
-
-    #! I/O thread
-    private ioThread() {
-        on_exit {
-            debug("Exiting the I/O thread");
-            cnt.dec();
-        }
-
-        hash<auto> last;
-
-        while (!stop_flag) {
-            hash<auto> info;
-            try {
-                hash<auto> event = getEvent(\info);
-                if (event != last) {
-                    notifyObservers(EVENT_EB_SENSOR, event);
-                    last = event;
-                } else {
-                    debug("No new event data available");
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                LoggerWrapper::error("Failed to acquire sensor data for org %s location %s sensor %s: %s", org.id,
-                    loc.id, sensor.id, get_exception_string(ex));
-            }
-
-            debug("Sleeping for %gs until next poll", poll_interval_ms / 1000n);
-
-            m.lock();
-            on_exit m.unlock();
-            if (!stop_flag) {
-                cond.wait(m, poll_interval_ms);
-            }
-        }
+    #! Called when a polling error occurs
+    private logPollError(hash<ExceptionInfo> ex) {
+        LoggerWrapper::error("Failed to acquire sensor data for org %s location %s sensor %s: %s", org.id,
+            loc.id, sensor.id, get_exception_string(ex));
     }
 
     #! Returns a hash of all supported event types
@@ -215,7 +140,8 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
     }
 
     #! Returns event data
-    private hash<auto> getEvent(*reference<hash<auto>> info) {
+    private hash<auto> getEvent() {
+        hash<auto> info;
         hash<auto> event = doRestCommand("GET", "v1/organizations/" + org.id + "/locations/" + loc.id
             + "/sensors/" + sensor.id, NOTHING, \info).body;
         return EmpathicBuildingSensorDataProvider::getSensorData(event);
@@ -234,7 +160,7 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
     private auto getExampleEventDataImpl(string event_id) {
         hash<auto> info;
         try {
-            return getEvent(\info);
+            return getEvent();
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
             hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};

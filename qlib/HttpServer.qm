@@ -612,8 +612,8 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # listener Gate
         Gate lm();
 
-        # running listener counter
-        Counter c();
+        # running listener WaitGroup
+        WaitGroup c();
 
         # dynamic handlers
         DynamicHttpHandlerList dhandlers();
@@ -1119,7 +1119,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! waits for all listeners to be stopped; call after calling HttpServer::stopNoWait()
     waitStop() {
-        c.waitForZero();
+        c.wait();
     }
 
     #! called from listener when the actual listener thread is running
@@ -1136,7 +1136,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     listenerStopped(HttpListener l) {
         # decrement listener count
         on_exit {
-            c.dec();
+            c.done();
         }
 
         lm.enter();
@@ -1214,7 +1214,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         map $1.stop(), listeners.iterator();
-        c.waitForZero();
+        c.wait();
 
         threadPool.stop();
 
@@ -1964,9 +1964,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             info.no_start_main_thread = True;
         }
 
-        c.inc();
+        c.add();
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
-        on_error c.dec();
+        on_error c.done();
 
         HttpListener l = getListener(self, id, info);
 
@@ -2966,10 +2966,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         auto socket;
         hash socket_info;
 
-        # connection counter for normal connection threads
-        Counter cThreads();
-        # connection counter for dedicated socket threads
-        Counter dThreads();
+        # connection WaitGroup for normal connection threads
+        WaitGroup cThreads();
+        # connection WaitGroup for dedicated socket threads
+        WaitGroup dThreads();
 
         bool exit = False;
         bool stopped = False;
@@ -3140,7 +3140,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # start main listener thread (unless using async I/O mode)
         if (!opts.no_start_main_thread) {
-            cThreads.inc();
+            cThreads.add();
             tid = background mainThread();
         }
     }
@@ -3574,7 +3574,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # wait for all connection threads to terminate
-        cThreads.waitForZero();
+        cThreads.wait();
 
         # Close the listener socket explicitly to release the bound port.
         #
@@ -3614,7 +3614,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # wait for all dedicated connection threads to terminate
-        dThreads.waitForZero();
+        dThreads.wait();
 
         stopped = True;
         if (!silent) {
@@ -3759,7 +3759,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     private mainThread() {
-        on_exit cThreads.dec();
+        on_exit cThreads.done();
 
         serv.listenerStarted(id, socket_info);
         # DEBUG
@@ -3792,12 +3792,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             #    r.getPeerInfo().address_desc);
             #log("accepting HTTP connection from %s", r.getPeerInfo().address_desc);
 
-            cThreads.inc();
+            cThreads.add();
             try {
                 # use the thread pool to start the connection
                 serv.startConnection(sub () { connectionThread(r); });
             } catch (hash<ExceptionInfo> ex) {
-                cThreads.dec();
+                cThreads.done();
                 string err = sprintf("failed to start connection thread: %s: %s", ex.err, ex.desc);
                 serv.sendHttpError(self, {"id": -1, "close": True}, r, 500, err, NOTHING, NOTHING, NOTHING, True);
             }
@@ -4118,7 +4118,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     hash<HttpServerAsyncIo::HttpRequestResultInfo> processNativeRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, hash<auto> header_info) {
-        cThreads.inc();
+        cThreads.add();
         RequestHelper request_helper(cThreads, dThreads);
 
         HttpPersistentHandlerInfo phi();
@@ -4751,7 +4751,7 @@ class HttpHandlerList {
 # class containing dynamic handler info
 class DynamicHandlerInfo inherits HandlerInfo {
     public {
-        Counter counter();
+        WaitGroup counter();
     }
 
     constructor(string name, hash<HttpHandlerConfigInfo> info) : HandlerInfo(name, info) {
@@ -4763,16 +4763,16 @@ class DynamicHandlerHelper {
     public {}
 
     private {
-        Counter c;
+        WaitGroup c;
     }
 
-    constructor(Counter n_c) {
+    constructor(WaitGroup n_c) {
         c = n_c;
-        c.inc();
+        c.add();
     }
 
     destructor() {
-        c.dec();
+        c.done();
     }
 }
 
@@ -4819,7 +4819,7 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
     /** @throw REMOVEHANDLER-ERROR if the given dynamic handler does not exist
     */
     removeHandler(string name, *bool force_immediate) {
-        Counter c;
+        WaitGroup c;
         {
             # grab exclusive lock
             dhl.writeLock();
@@ -4837,7 +4837,7 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
             if (!dhi.isregex && exists dhi.path)
                 treeMap.take(dhi.path);
 
-            # take a copy of a reference to the Counter
+            # take a copy of a reference to the WaitGroup
             c = dhi.counter;
 
             # stop handler if it is a dedicated socket handler
@@ -4849,7 +4849,7 @@ class DynamicHttpHandlerList inherits HttpHandlerList {
 
         # wait for the call counter to reach zero
         if (!force_immediate) {
-            c.waitForZero();
+            c.wait();
         }
     }
 
@@ -5136,16 +5136,16 @@ namespace Priv {
     2. **Dedicated connections (dThreads)**: Long-lived connections like WebSocket
        or SSE that take over the socket for bidirectional communication.
 
-    ## Counter Management
+    ## WaitGroup Management
 
-    The server uses counters to track active connections so that shutdown can wait
+    The server uses WaitGroups to track active connections so that shutdown can wait
     for all connections to complete. The flow is:
 
-    1. When a request starts: `cThreads.inc()` is called (before RequestHelper is created)
+    1. When a request starts: `cThreads.add()` is called (before RequestHelper is created)
     2. RequestHelper stores a reference to cThreads in `c`
     3. If the connection becomes dedicated (WebSocket/SSE):
-       - `setDedicated()` is called: increments dThreads, decrements cThreads, switches `c` to dThreads
-    4. When RequestHelper is destroyed: `c.dec()` decrements the appropriate counter
+       - `setDedicated()` is called: adds to dThreads, marks cThreads done, switches `c` to dThreads
+    4. When RequestHelper is destroyed: `c.done()` decrements the appropriate WaitGroup
 
     ## Dedicated External Mode
 
@@ -5153,26 +5153,26 @@ namespace Priv {
     from start()), `setDedicatedExternal()` is called. This:
     - Sets `dedicated_external = True` so the destructor won't close the socket
     - The handler is responsible for socket cleanup
-    - The counter is still decremented in the destructor
+    - The WaitGroup is still decremented in the destructor
 
-    ## Important: Counter Balance
+    ## Important: WaitGroup Balance
 
-    The counter increment happens BEFORE RequestHelper is created (in processNativeRequest
-    or similar). The decrement happens in the destructor. This ensures:
-    - Every increment has a matching decrement
-    - Server shutdown can wait for all counters to reach zero
+    The WaitGroup add() happens BEFORE RequestHelper is created (in processNativeRequest
+    or similar). The done() happens in the destructor. This ensures:
+    - Every add() has a matching done()
+    - Server shutdown can wait for all WaitGroups to reach zero
 
     @see HttpListener::cThreads
     @see HttpListener::dThreads
 */
 class RequestHelper {
     private {
-        #! Counter for normal connection threads (decremented if we stay in normal mode)
-        Counter cThreads;
-        #! Counter for dedicated connection threads (decremented if we switch to dedicated mode)
-        Counter dThreads;
-        #! Reference to the active counter (either cThreads or dThreads) - decremented in destructor
-        Counter c;
+        #! WaitGroup for normal connection threads (decremented if we stay in normal mode)
+        WaitGroup cThreads;
+        #! WaitGroup for dedicated connection threads (decremented if we switch to dedicated mode)
+        WaitGroup dThreads;
+        #! Reference to the active WaitGroup (either cThreads or dThreads) - decremented in destructor
+        WaitGroup c;
         #! Socket to manage (may be null for async connections where socket is managed elsewhere)
         Socket s;
         #! If True, socket is managed externally (e.g., by WebSocket handler) and won't be closed in destructor
@@ -5185,10 +5185,10 @@ class RequestHelper {
         @param s optional socket to manage (not passed for async connections where socket lifecycle
                is managed by the async I/O controller)
 
-        @note The caller must have already called cThreads.inc() before creating this object.
-              The destructor will call c.dec() to balance this.
+        @note The caller must have already called cThreads.add() before creating this object.
+              The destructor will call c.done() to balance this.
     */
-    constructor(Counter cThreads, Counter dThreads, *Socket s) {
+    constructor(WaitGroup cThreads, WaitGroup dThreads, *Socket s) {
         @assert(cThreads.getCount() > 0, "cThreads must be incremented before creating RequestHelper");
         self.cThreads = cThreads;
         self.dThreads = dThreads;
@@ -5204,7 +5204,7 @@ class RequestHelper {
         - Always decrements the active counter (c) to signal this connection is complete
 
         This allows HttpListener::stop() to wait for all connections to finish via
-        cThreads.waitForZero() and dThreads.waitForZero().
+        cThreads.wait() and dThreads.wait().
 
         @note We check isOpen() to avoid double-close if the socket was already closed
         (e.g., by handlePersistentConnectionSync())
@@ -5218,7 +5218,7 @@ class RequestHelper {
                 # Ignore close errors - socket may already be in error state
             }
         }
-        c.dec();
+        c.done();
     }
 
     #! Switches from normal connection mode to dedicated connection mode
@@ -5233,8 +5233,8 @@ class RequestHelper {
     */
     setDedicated() {
         @assert(c === cThreads);
-        dThreads.inc();
-        cThreads.dec();
+        dThreads.add();
+        cThreads.done();
         c = dThreads;
     }
 
@@ -5259,8 +5259,8 @@ class RequestHelper {
         # Only adjust counters if not already in dedicated mode
         # (setDedicated() may have been called first in registerDedicatedSocket)
         if (c === cThreads) {
-            dThreads.inc();
-            cThreads.dec();
+            dThreads.add();
+            cThreads.done();
             c = dThreads;
         }
         dedicated_external = True;

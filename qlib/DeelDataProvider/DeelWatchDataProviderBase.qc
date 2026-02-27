@@ -27,7 +27,7 @@ public namespace DeelDataProvider {
 
 #! Base class for Deel polling watch data providers
 public class DeelWatchDataProviderBase inherits DeelDataProviderBase,
-        DataProvider::DelayedObservable {
+        DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Constructor options for watch providers
         const WatchConstructorOptions = BaseConstructorOptions + {
@@ -48,24 +48,6 @@ public class DeelWatchDataProviderBase inherits DeelDataProviderBase,
     }
 
     private {
-        #! Mutex for thread synchronization
-        Mutex lck();
-
-        #! Condition variable for sleeping
-        Condition cond();
-
-        #! Background thread ID
-        int io_tid;
-
-        #! Stop flag
-        bool stop = False;
-
-        #! Poll interval in seconds
-        int poll_secs;
-
-        #! Start date for filtering (optional; if not set, polling starts from now)
-        *date start_date;
-
         #! Last check time
         date last_check;
 
@@ -78,87 +60,14 @@ public class DeelWatchDataProviderBase inherits DeelDataProviderBase,
 
     #! Creates the object with a REST client
     constructor(DeelRestClient::DeelRestClient rest, *hash<auto> options)
-            : DeelDataProviderBase(rest) {
-        poll_secs = options.poll_interval ?? DefaultPollInterval;
-        if (poll_secs < MinPollInterval) {
-            poll_secs = MinPollInterval;
-        }
-        if (options.start_date) {
-            start_date = options.start_date;
-        }
+            : DeelDataProviderBase(rest),
+              AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        last_check = options.start_date ?? now_us();
     }
 
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Called when observers are ready
-    observersReady() {
-        lck.lock();
-        on_exit lck.unlock();
-        if (io_tid) {
-            return;
-        }
-        io_tid = background pollThread();
-    }
-
-    #! Stops event generation
-    stopEvents() {
-        stopEventsIntern();
-    }
-
-    #! Internal method to stop events
-    private stopEventsIntern() {
-        lck.lock();
-        on_exit lck.unlock();
-        stop = True;
-        cond.broadcast();
-        # Wait in a loop until the polling thread exits
-        while (io_tid) {
-            cond.wait(lck, 5s);
-        }
-    }
-
-    #! Returns True if events are still being generated
-    bool isActive() {
-        return !stop && io_tid > 0;
-    }
-
-    #! The polling thread
-    private pollThread() {
-        on_exit {
-            lck.lock();
-            on_exit lck.unlock();
-            remove io_tid;
-            cond.broadcast();
-        }
-
-        # Initialize tracking state
-        last_check = start_date ?? now_us();
-
-        while (True) {
-            # Check stop flag under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-            }
-
-            pollOnce();
-
-            # Wait for next poll interval under lock
-            {
-                lck.lock();
-                on_exit lck.unlock();
-                if (stop) {
-                    break;
-                }
-                cond.wait(lck, poll_secs * 1000ms);
-            }
-        }
     }
 
     #! Polls for new records once
@@ -168,6 +77,9 @@ public class DeelWatchDataProviderBase inherits DeelDataProviderBase,
             date new_last_check = last_check;
 
             foreach hash<auto> record in (records) {
+                if (isStopping()) {
+                    break;
+                }
                 string id = getRecordId(record);
 
                 # Skip if already seen (check both current and previous buckets)
