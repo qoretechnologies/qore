@@ -1,4 +1,25 @@
-# Lvalue Loads in Qore IR — The auto_ref=false Contract
+# Lvalue Loads in Qore IR — COW Invariant and the auto_ref=false Contract
+
+## Fundamental Invariant
+
+> **All lvalue operations MUST see the variable's natural (unreferenced) refcount
+> and ONLY execute COW if the value is truly not unique.**
+
+This rule must be enforced through every lvalue path — IR caches, SSA value slots,
+guard LoadLocal instructions, and AST-delegated StoreLValue evaluation.  If any
+extra reference inflates the refcount at the point `LValueHelper::ensureUnique()`
+runs, COW creates an unnecessary copy that leaks (the copy is discarded, the
+original retains the old value, and the mutation is silently lost).
+
+### Sources of Refcount Inflation
+
+| Source | Location | Mitigation |
+|---|---|---|
+| `locals` map cache | `storeValue()` does `refSelf()` | `cleanupStoredValues(locals, ...)` before lvalue ops |
+| `locals_slot_cache` | Phase 3 fast cache, `refSelf()` | `discard()` all slot cache entries before lvalue ops |
+| `values[]` (SSA slots) | LoadLocal stores result | Discard values[] entries for the lvalue target variable |
+| `ClosureVarValue::eval()` owned ref | Returns `val.getReferencedValue()` (always +1) | Deref owned ref after caching in LoadLocal auto_ref=true |
+| `SlotCacheCleanup` missing | Slot cache refs leaked on function exit | RAII guard discards all entries on any exit path |
 
 ## Rule
 
@@ -126,6 +147,225 @@ Function exit:
 - Lowering: `LoadLocal(h, auto_ref=false)` + `HashRemove(h, key)`
 - Interpreter: check unique, COW if needed, call `h->removeKey(key)`
 - JIT: helper `qore_rt_hash_remove_cow`, reload after call
+
+---
+
+## Slot Cache Invalidation Rule for Lvalue Operations
+
+### The Problem
+
+The `locals_slot_cache` (Phase 3 vector-based fast cache) holds a `refSelf()` reference to
+local variable values. This extra reference inflates the refcount just like `auto_ref=true`
+LoadLocal does. When any operation modifies a variable through lvalue semantics
+(`LValueHelper`), `ensureUnique()` sees refcount > 1 and triggers COW:
+
+1. A copy of the container is created
+2. The copy is assigned as the variable's new value
+3. The modification (push, remove, trim, +=, etc.) is applied to the **copy**
+4. The slot cache still holds the **original** (stale, unmodified) value
+5. The next LoadLocal reads from the stale slot cache → **mutation is lost**
+
+### The Rule
+
+**For ALL operations that modify a local variable through lvalue semantics, the slot cache
+(and the `locals` map cache) MUST be invalidated BEFORE the modification, not after.**
+
+Invalidating after the modification is too late — COW has already created a copy and the
+slot cache retains the stale original. Invalidating before ensures:
+- The variable's refcount is not inflated by the cache
+- `is_unique()` reflects the true sharing state
+- In-place modification works correctly without unnecessary copies
+
+### Affected Code Paths
+
+1. **Compound assignment lvalue opcodes** (`AddAssignLValue`, `SubAssignLValue`,
+   `MulAssignLValue`, `DivAssignLValue`, `ModAssignLValue`, `AndAssignLValue`,
+   `OrAssignLValue`, `XorAssignLValue`, `ShlAssignLValue`, `ShrAssignLValue`,
+   `UnshiftLValue`):
+   - These call `evalLValueBinary()` which uses `LValueHelper` internally
+   - Invalidate all caches BEFORE calling `evalLValueBinary()`
+
+2. **AST-evaluated lvalue opcodes** (`RemoveAny`, `TrimAny`, `ChompAny`,
+   `RegexSubstAny`, `PopAny`, `PushAny`, `ListAssignAny`, `TransliterateAny`,
+   `ExtractAny`, etc.):
+   - These fall through to `evalExpr()` which evaluates the AST expression
+   - The AST expression internally uses `LValueHelper` for in-place modification
+   - Invalidate all caches BEFORE calling `evalExpr()`
+
+3. **Dedicated lvalue opcodes** (`ShiftLValue`, `SpliceLValue`):
+   - These have their own handlers that may use `LValueHelper` internally
+   - Invalidate the specific variable's cache entry BEFORE the operation
+   - For `ShiftLValue`: only cache invalidation is needed (no re-assignment)
+
+4. **Invoke instructions with lvalue opcodes** (try/catch blocks):
+   - Inside try/catch blocks, the lowering emits `Invoke` instructions with
+     `invoke_opcode` set to the lvalue opcode (e.g., `AddAssignLValue`)
+   - `evalInvoke()` has **native handling** for these opcodes — it extracts
+     the lvalue from the AST expression node and calls `evalLValueBinary()`,
+     `evalLValueUnary()`, or `evalLValueTernary()` with pre-evaluated operands
+   - The Invoke handler in the main loop invalidates all caches BEFORE calling
+     `evalInvoke()` for lvalue invoke_opcodes
+   - **Critical**: without native handling, the default `evalExpr()` fallthrough
+     re-evaluates the full AST expression, which re-evaluates the RHS and loses
+     the IR operand value, and the slot cache references cause COW to silently
+     discard mutations
+
+#### Native Invoke Lvalue Handling (evalInvoke)
+
+Binary lvalue opcodes extract the lvalue from `QoreBinaryOperatorNode<LValueOperatorNode>`
+via `getLeft()` and use `inv->operands[0]` for the pre-evaluated RHS:
+```cpp
+case QoreIROpcode::AddAssignLValue: // ... and all binary lvalue opcodes
+{
+    auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(
+        inv->expr.getInternalNode());
+    QoreValue right = getIRValue(values, inv->operands[0]);
+    return QoreIRInterpreter::evalLValueBinary(op, binop->getLeft(), right, xsink);
+}
+```
+
+Unary lvalue opcodes extract the lvalue from `QoreSingleExpressionOperatorNode<LValueOperatorNode>`
+via `getExp()`:
+```cpp
+case QoreIROpcode::ShiftLValue: // PreInc, PostInc, PreDec, PostDec
+{
+    auto* unaryop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(
+        inv->expr.getInternalNode());
+    return QoreIRInterpreter::evalLValueUnary(op, unaryop->getExp(), xsink);
+}
+```
+
+Ternary lvalue opcodes (SpliceLValue) extract the lvalue from `QoreSpliceOperatorNode`
+via `getLValue()`:
+```cpp
+case QoreIROpcode::SpliceLValue:
+{
+    auto* spliceop = dynamic_cast<const QoreSpliceOperatorNode*>(
+        inv->expr.getInternalNode());
+    return QoreIRInterpreter::evalLValueTernary(op, spliceop->getLValue(),
+        offset, length, replacement, xsink);
+}
+```
+
+### Implementation Pattern
+
+```cpp
+// BEFORE any lvalue-modifying evaluation:
+cleanupStoredValues(locals, nullptr);
+cleanupStoredValues(globals, nullptr);
+cleanupStoredValues(threadlocals, nullptr);
+cleanupStoredValues(closures, nullptr);
+for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+    locals_slot_cache[i].discard(nullptr);
+    locals_slot_cache[i] = QoreValue();
+}
+
+// THEN perform the lvalue operation:
+QoreValue res = evalLValueBinary(...);  // or evalExpr(...)
+```
+
+### Interaction with auto_ref=false
+
+The `auto_ref=false` contract and the slot cache invalidation rule address the same
+fundamental problem (refcount inflation defeating COW) at different levels:
+
+- `auto_ref=false` prevents refcount inflation in the `values[]` array (IR operand slots)
+- Slot cache invalidation prevents refcount inflation in the `locals_slot_cache`
+- Both must be respected for correct lvalue semantics
+
+---
+
+## ClosureVarValue::eval() — Owned Reference Asymmetry
+
+`LocalVarValue::eval(bool& needs_deref, ...)` and `ClosureVarValue::eval(bool& needs_deref, ...)`
+handle non-reference values differently:
+
+- **`LocalVarValue::eval()`** calls `val.getReferencedValue(needs_deref)` — the parameterized
+  version sets `needs_deref=false` for `QV_Node` types, returning a **borrowed** reference
+  (no refcount change).
+
+- **`ClosureVarValue::eval()`** calls `val.getReferencedValue()` — the no-parameter version
+  always does `v.n->ref()`, returning an **owned** reference (`needs_deref` stays true).
+  This is intentional for thread safety: closure variables may be shared across threads,
+  so a borrowed reference could become dangling if another thread modifies the variable
+  after the read lock is released.
+
+### Impact on IR
+
+When a reference parameter points to a closure variable (VT_IMMEDIATE), the IR LoadLocal
+with `auto_ref=true` receives an owned reference from `eval()`.  If the code does not
+account for `needs_deref=true`, the owned reference leaks:
+
+- `storeValue()` does `refSelf()` (+1 for locals map)
+- Slot cache does `refSelf()` (+1 for slot cache)
+- `out = val.refSelf()` (+1 for values[])
+- `val`'s owned reference from eval() is **never discarded** → permanent leak
+
+**Fix**: After caching, when `needs_deref=true`, deref `val` to release the owned ref:
+```cpp
+if (needs_deref && val.hasNode()) {
+    val.getInternalNode()->deref(nullptr);
+}
+```
+
+---
+
+## StoreLValue Pre-Invalidation — values[] Cleanup
+
+The `StoreLValue` handler (and the Invoke handler for lvalue opcodes) invalidates all
+caches (locals map, globals, threadlocals, closures, slot cache) **before** calling
+`evalLValueStore()`.  However, `values[]` entries from guard LoadLocal instructions
+also hold +1 references that inflate the refcount.
+
+**Fix**: Extract the base VarRefNode from the lvalue expression using
+`extractLValueBaseVarRef()`, then discard all `values[]` entries tracked in
+`local_load_slots` for that variable:
+
+```cpp
+const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+if (base_var && base_var->ref.id) {
+    auto it = local_load_slots.find(base_var->ref.id);
+    if (it != local_load_slots.end()) {
+        for (uint32_t slot_id : it->second) {
+            if (slot_id < values.size()) {
+                values[slot_id].discard(nullptr);
+                values[slot_id] = QoreValue();
+            }
+        }
+    }
+}
+```
+
+This is safe because:
+- Guard LoadLocal results are consumed by GuardNotNothing/BrIf before StoreLValue executes
+- `cleanupValues()` at function exit will no-op on NOTHING entries in the cleanup vector
+- For Invoke StoreLValue, `inv->expr` is the full assignment expression (e.g.,
+  `QoreAssignmentOperatorNode`); `extractLValueBaseVarRef()` recurses through operator
+  nodes via `QoreBinaryLValueOperatorNode::getLeft()` to find the base VarRefNode
+
+---
+
+## SlotCacheCleanup RAII Guard
+
+The `locals_slot_cache` vector holds `refSelf()` references to local variable values
+for O(1) cache access.  `std::vector<QoreValue>` destructor does NOT call `discard()`
+on its elements.  Without cleanup, every IR function execution leaks all cached references.
+
+**Fix**: RAII guard constructed after `LocalInstantiationCleanup` so it's destroyed BEFORE
+it — slot cache refs are released while the underlying locals are still valid:
+
+```cpp
+struct SlotCacheCleanup {
+    std::vector<QoreValue>& cache;
+    ~SlotCacheCleanup() {
+        for (auto& v : cache) {
+            v.discard(nullptr);
+        }
+    }
+} slot_cache_cleanup{locals_slot_cache};
+```
+
+This single guard covers ALL exit paths (Return, ReturnNothing, exception, error bailouts).
 
 ---
 

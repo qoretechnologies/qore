@@ -76,6 +76,60 @@
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/QoreObjectIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/QoreSquareBracketsOperatorNode.h>
+#include <qore/intern/QoreBinaryLValueOperatorNode.h>
+
+//! Extract the base VarRefNode from a (possibly complex) lvalue expression tree.
+/** Walks the tree by following the "left" / "base" operand of operator nodes that
+    can serve as lvalue wrappers (square brackets, hash deref, shift, splice, etc.).
+    Returns nullptr when the tree cannot be resolved to a simple variable reference.
+*/
+static const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
+    if (!lvalue.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        return var;
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->get(0));
+    }
+    if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLValue());
+    }
+    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    return nullptr;
+}
 
 static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const QoreTypeInfo* type_info) {
     switch (opcode) {
@@ -574,20 +628,20 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
         return;
     }
     if (locals.insert(var).second) {
-        // Check if this was pre_instantiated AND has been explicitly uninstantiated
-        // during this execution (e.g., loop-scope variable on 2nd+ iteration)
-        bool was_locally_uninstantiated = locally_uninstantiated
-            && locally_uninstantiated->count(var);
-
+        // Pre-instantiated variables (params, argvid, selfid, ast_visible_body_locals)
+        // are already on the thread-local stack from evalTiered and must never be
+        // re-instantiated by the IR interpreter.  When UninstantiateLocal processes a
+        // pre-instantiated variable (e.g., at the end of a loop iteration), it only
+        // clears the value (clearValue/del) without popping the stack entry, so the
+        // entry remains on the stack for reuse on the next iteration.
         bool skip_instantiation = pre_instantiated
-            && pre_instantiated->find(var) != pre_instantiated->end()
-            && !was_locally_uninstantiated;  // Don't skip if it was uninstantiated mid-execution
+            && pre_instantiated->find(var) != pre_instantiated->end();
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
         }
-        // Clear the "locally uninstantiated" flag - it's now re-instantiated
-        if (was_locally_uninstantiated) {
+        // Clear the "locally uninstantiated" flag if present
+        if (locally_uninstantiated) {
             locally_uninstantiated->erase(var);
         }
     }
@@ -1219,6 +1273,65 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
         }
 
+        // Binary compound assignment lvalue opcodes: extract the lvalue from the
+        // AST expression and use the pre-evaluated RHS operand.  This avoids
+        // re-evaluating the RHS through the full AST path and ensures correct
+        // lvalue semantics via evalLValueBinary (which uses LValueHelper).
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::UnshiftLValue: {
+            if (!inv->operands.empty() && inv->expr.hasNode()) {
+                auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(
+                    inv->expr.getInternalNode());
+                if (binop) {
+                    QoreValue right = getIRValue(values, inv->operands[0]);
+                    return QoreIRInterpreter::evalLValueBinary(op, binop->getLeft(), right, xsink);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
+        // Unary lvalue opcodes: extract the lvalue from the AST and delegate
+        // to evalLValueUnary which handles shift, pre/post increment/decrement.
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue: {
+            if (inv->expr.hasNode()) {
+                auto* unaryop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(
+                    inv->expr.getInternalNode());
+                if (unaryop) {
+                    return QoreIRInterpreter::evalLValueUnary(op, unaryop->getExp(), xsink);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
+        // Ternary lvalue opcodes: extract the lvalue and use pre-evaluated operands.
+        case QoreIROpcode::SpliceLValue: {
+            if (inv->operands.size() >= 3 && inv->expr.hasNode()) {
+                auto* spliceop = dynamic_cast<const QoreSpliceOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (spliceop) {
+                    QoreValue offset = getIRValue(values, inv->operands[0]);
+                    QoreValue length = getIRValue(values, inv->operands[1]);
+                    QoreValue replacement = getIRValue(values, inv->operands[2]);
+                    return QoreIRInterpreter::evalLValueTernary(op, spliceop->getLValue(), offset,
+                        length, replacement, xsink);
+                }
+            }
+            return QoreIRInterpreter::evalExpr(op, inv->expr, xsink);
+        }
+
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
@@ -1430,6 +1543,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     } local_cleanup{instantiated_locals, xsink, pre_instantiated};
 
+    // RAII guard: discard all slot cache entries on any function exit path.
+    // The slot cache holds refSelf() references to local variable values for O(1) access.
+    // std::vector<QoreValue> destructor does NOT call discard() on elements, so without
+    // this guard, every IR function execution leaks all cached references.
+    // Constructed AFTER local_cleanup so it's destroyed BEFORE it — slot cache refs are
+    // released while the underlying locals are still valid on the thread-local stack.
+    struct SlotCacheCleanup {
+        std::vector<QoreValue>& cache;
+        ~SlotCacheCleanup() {
+            for (auto& v : cache) {
+                v.discard(nullptr);
+            }
+        }
+    } slot_cache_cleanup{locals_slot_cache};
+
     // RAII guard: delete active iterators on any function exit path.
     // IteratorNext deletes iterators on the normal done path, but return/exception
     // can exit without reaching done, leaking the iterator stored as raw int64_t.
@@ -1509,6 +1637,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block");
             }
             cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupStoredValues(locals, nullptr);
+            cleanupStoredValues(globals, nullptr);
+            cleanupStoredValues(threadlocals, nullptr);
+            cleanupStoredValues(closures, nullptr);
             return false;
         }
         while (ip < block->instructions.size() && block->instructions[ip]->opcode == QoreIROpcode::Phi) {
@@ -2090,6 +2222,83 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
+                // For lvalue-modifying invoke opcodes, invalidate the slot cache BEFORE
+                // the call.  evalInvoke handles these natively via evalLValueBinary/
+                // evalLValueUnary/evalLValueTernary, which use LValueHelper internally.
+                // The slot cache holds refSelf() references that inflate refcounts,
+                // causing ensureUnique() to trigger COW unnecessarily — the modification
+                // would be applied to the copy while the cache retains the stale original.
+                // See design/lvalue-loads-in-ir.md.
+                switch (inv->invoke_opcode) {
+                    case QoreIROpcode::AddAssignLValue:
+                    case QoreIROpcode::SubAssignLValue:
+                    case QoreIROpcode::MulAssignLValue:
+                    case QoreIROpcode::DivAssignLValue:
+                    case QoreIROpcode::ModAssignLValue:
+                    case QoreIROpcode::AndAssignLValue:
+                    case QoreIROpcode::OrAssignLValue:
+                    case QoreIROpcode::XorAssignLValue:
+                    case QoreIROpcode::ShlAssignLValue:
+                    case QoreIROpcode::ShrAssignLValue:
+                    case QoreIROpcode::UnshiftLValue:
+                    case QoreIROpcode::ShiftLValue:
+                    case QoreIROpcode::SpliceLValue:
+                    case QoreIROpcode::PreIncLValue:
+                    case QoreIROpcode::PreDecLValue:
+                    case QoreIROpcode::PostIncLValue:
+                    case QoreIROpcode::PostDecLValue:
+                    case QoreIROpcode::ExtractAny:
+                    case QoreIROpcode::ExtractList:
+                    case QoreIROpcode::ExtractString:
+                    case QoreIROpcode::ExtractBinary:
+                    case QoreIROpcode::RemoveAny:
+                    case QoreIROpcode::RemoveList:
+                    case QoreIROpcode::RemoveHash:
+                    case QoreIROpcode::RemoveObject:
+                    case QoreIROpcode::RemoveString:
+                    case QoreIROpcode::RemoveBinary:
+                    case QoreIROpcode::RegexSubstAny:
+                    case QoreIROpcode::RegexSubstString:
+                    case QoreIROpcode::TrimAny:
+                    case QoreIROpcode::TrimString:
+                    case QoreIROpcode::ChompAny:
+                    case QoreIROpcode::ChompString:
+                    case QoreIROpcode::TransliterateAny:
+                    case QoreIROpcode::TransliterateString:
+                    case QoreIROpcode::PopAny:
+                    case QoreIROpcode::PushAny:
+                    case QoreIROpcode::ListAssignAny:
+                    case QoreIROpcode::StoreLValue: {
+                        cleanupStoredValues(locals, nullptr);
+                        cleanupStoredValues(globals, nullptr);
+                        cleanupStoredValues(threadlocals, nullptr);
+                        cleanupStoredValues(closures, nullptr);
+                        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                            locals_slot_cache[i].discard(nullptr);
+                            locals_slot_cache[i] = QoreValue();
+                        }
+                        // Also clean values[] entries for the lvalue target variable
+                        // to ensure ensureUnique() sees the natural refcount.
+                        // inv->expr is the full assignment expression (e.g.,
+                        // QoreAssignmentOperatorNode) — extractLValueBaseVarRef
+                        // recurses through operator nodes to find the base VarRefNode.
+                        const VarRefNode* inv_base_var = extractLValueBaseVarRef(inv->expr);
+                        if (inv_base_var && inv_base_var->ref.id) {
+                            auto inv_llslot_it = local_load_slots.find(inv_base_var->ref.id);
+                            if (inv_llslot_it != local_load_slots.end()) {
+                                for (uint32_t slot_id : inv_llslot_it->second) {
+                                    if (slot_id < values.size()) {
+                                        values[slot_id].discard(nullptr);
+                                        values[slot_id] = QoreValue();
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
                 QoreValue res = evalInvoke(inv, values, xsink);
                 // Invalidate all variable caches after Invoke - the AST call may have modified
                 // globals, thread-locals, or closure variables
@@ -2305,7 +2514,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         cleanupStoredValues(closures, nullptr);
                         return false;
                     }
-                    // eval() returns a referenced value; use it directly for the value slot
+                    // eval() returns a referenced value; use it directly for the value slot.
+                    // When auto_ref=false (lvalue operand), the common cleanup below won't
+                    // fire, so we must track the owned ref here to avoid a leak.
+                    if (!local_inst->auto_ref && needs_deref && out.hasNode()) {
+                        cleanup.push_back(local_inst->result.id);
+                        local_load_slots[local_inst->local].insert(local_inst->result.id);
+                    }
                 } else if (local_inst->auto_ref) {
                     // Normal path: caching with refcount inflation (auto_ref=true)
                     // Phase 3 optimization: Try fast path with slot cache first
@@ -2346,6 +2561,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 locals_slot_cache[slot_it->second] = val.hasNode() ? val.refSelf() : val;
                             }
                             out = val.hasNode() ? val.refSelf() : val;
+                            // When eval() returned an owned reference (needs_deref=true,
+                            // e.g. ClosureVarValue for VT_IMMEDIATE reference params),
+                            // storeValue/slot-cache/out each did refSelf() to create
+                            // independent +1 refs.  The original owned ref in `val` is
+                            // now surplus — release it to avoid a permanent refcount leak.
+                            if (needs_deref && val.hasNode()) {
+                                val.getInternalNode()->deref(nullptr);
+                            }
                         }
                     }
                 } else {
@@ -2362,11 +2585,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             cleanupStoredValues(closures, nullptr);
                             return false;
                         }
+                        // ClosureVarValue::eval() always returns an owned ref
+                        // (needs_deref=true) for thread safety, even on the
+                        // auto_ref=false lvalue path.  We must track it for
+                        // cleanup so the owned ref is released on function exit.
+                        if (needs_deref && out.hasNode()) {
+                            cleanup.push_back(local_inst->result.id);
+                            local_load_slots[local_inst->local].insert(local_inst->result.id);
+                        }
                     }
                 }
                 setValueSlot(values, local_inst->result.id, out, xsink);
                 if (out.hasNode() && local_inst->auto_ref) {
-                    // Only owned references need cleanup — auto_ref=false is a borrowed view
+                    // Only owned references need cleanup — auto_ref=false borrowed
+                    // views are handled above when needs_deref is true
                     cleanup.push_back(local_inst->result.id);
                 }
                 // Track this LoadLocal result slot for cleanup in UninstantiateLocal.
@@ -2537,7 +2769,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             locals_slot_cache[slot_it->second].discard(nullptr);
                             locals_slot_cache[slot_it->second] = QoreValue();
                         }
-                        // Write new_h to thread-local stack
+                        // Write new_h to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_h), xsink);
                         if (xsink && *xsink) {
                             new_h->deref(nullptr);
@@ -2548,6 +2780,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             cleanupStoredValues(closures, nullptr);
                             return false;
                         }
+                        // Release the original copy() reference; assignLocalVarValue()
+                        // took its own ref via refSelf() internally.  Without this deref,
+                        // every COW copy leaks.  The object is still alive because the
+                        // variable stack holds a reference (refcount >= 1).
+                        new_h->deref(nullptr);
                         h = new_h;
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Without this, subsequent IR instructions reading operands[0]
@@ -2612,7 +2849,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             locals_slot_cache[slot_it->second].discard(nullptr);
                             locals_slot_cache[slot_it->second] = QoreValue();
                         }
-                        // Write new_l to thread-local stack
+                        // Write new_l to thread-local stack (follows references)
                         assignLocalVarValue(lv, QoreValue(new_l), xsink);
                         if (xsink && *xsink) {
                             new_l->deref(nullptr);
@@ -2623,6 +2860,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             cleanupStoredValues(closures, nullptr);
                             return false;
                         }
+                        // Release the original copy() reference; assignLocalVarValue()
+                        // took its own ref via refSelf() internally.  Without this deref,
+                        // every COW copy leaks.  The object is still alive because the
+                        // variable stack holds a reference (refcount >= 1).
+                        new_l->deref(nullptr);
                         l = new_l;
                         // CRITICAL FIX: Update IR values[] array with new COW copy.
                         // Use direct assignment (not setValueSlot) to avoid discarding
@@ -4387,20 +4629,48 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                // Ensure local variables are instantiated before storing
-                // (evalLValueStore requires variables to exist in the thread lvstack)
-                if (lval_inst->lvalue.hasNode()) {
-                    const AbstractQoreNode* lv_node = lval_inst->lvalue.getInternalNode();
-                    const VarRefNode* var_ref = dynamic_cast<const VarRefNode*>(lv_node);
-                    if (var_ref) {
-                        qore_var_t type = var_ref->getType();
-                        if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
-                            ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, pre_instantiated,
-                                    function_own_locals, &locally_uninstantiated);
-                        }
+                // Extract the base variable from the (possibly complex) lvalue
+                // expression — e.g. for `lst[0] = val`, extract the VarRefNode
+                // for `lst`.  Used for ensureLocalInstantiated and for cleaning
+                // LoadLocal values[] entries to prevent refcount inflation.
+                const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+                if (base_var) {
+                    qore_var_t type = base_var->getType();
+                    if ((type == VT_LOCAL || type == VT_LOCAL_TS) && base_var->ref.id) {
+                        ensureLocalInstantiated(base_var->ref.id, instantiated_locals, pre_instantiated,
+                                function_own_locals, &locally_uninstantiated);
                     }
                 }
                 QoreValue val = getIRValue(values, lval_inst->operands[0]);
+                // Invalidate all caches BEFORE the lvalue operation so that
+                // LValueHelper::ensureUnique() sees the variable's natural
+                // refcount and only triggers COW when truly necessary.
+                // See design/lvalue-loads-in-ir.md for the full invariant.
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i] = QoreValue();
+                }
+                // Also discard values[] entries from LoadLocal results for the
+                // target variable.  These hold +1 references (from guard loads
+                // or prior reads) that inflate the refcount beyond the caches.
+                // Setting values[slot] to NOTHING is safe: the guard BrIf has
+                // already consumed the value; cleanupValues() will no-op on
+                // NOTHING entries still in the cleanup vector.
+                if (base_var && base_var->ref.id) {
+                    auto llslot_it = local_load_slots.find(base_var->ref.id);
+                    if (llslot_it != local_load_slots.end()) {
+                        for (uint32_t slot_id : llslot_it->second) {
+                            if (slot_id < values.size()) {
+                                values[slot_id].discard(nullptr);
+                                values[slot_id] = QoreValue();
+                            }
+                        }
+                    }
+                }
                 QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink,
                     lval_inst->weak);
                 if (xsink && *xsink) {
@@ -4411,11 +4681,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                // Invalidate the root variable's cached value — evalLValueStore
-                // may trigger COW on the thread-local stack, making the cached
-                // value stale (the next LoadLocal will re-read from the stack)
-                invalidateLvalueRoot(lval_inst->lvalue, locals, globals, threadlocals, closures,
-                    &func.local_var_slots, &locals_slot_cache);
                 // StoreLValue has no result register (result.id == 0); discard
                 // the returned reference to avoid storing into values[0] which
                 // causes double-free when multiple stores accumulate in cleanup
@@ -4493,6 +4758,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::ShiftLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                // Invalidate all caches BEFORE the lvalue operation (see design/lvalue-loads-in-ir.md)
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i] = QoreValue();
+                }
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -4502,30 +4776,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
                 // shift returns the removed element, not the updated list
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
-                }
-                // Reload the modified lvalue (list with element removed) and update local var cache
-                {
-                    QoreValue updated = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
-                        return false;
-                    }
-                    updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue,
-                        updated, xsink, pre_instantiated, function_own_locals,
-                        &locally_uninstantiated, &func.local_var_slots, &locals_slot_cache);
-                    updated.discard(xsink);
                 }
                 ++ip;
                 break;
@@ -4554,6 +4808,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     return false;
                 }
                 QoreValue right = getIRValue(values, lval_inst->operands[0]);
+                // Invalidate all caches BEFORE the lvalue operation.
+                // The slot cache holds refSelf() references that inflate refcounts,
+                // causing LValueHelper::ensureUnique() to trigger COW unnecessarily.
+                // The modification would be applied to the COW copy while the cache
+                // retains the stale original.  See design/lvalue-loads-in-ir.md.
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i] = QoreValue();
+                }
                 QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -4563,16 +4830,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
-                    &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
             }
@@ -4592,6 +4853,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 QoreValue first = getIRValue(values, lval_inst->operands[0]);
                 QoreValue second = getIRValue(values, lval_inst->operands[1]);
                 QoreValue third = getIRValue(values, lval_inst->operands[2]);
+                // Invalidate all caches BEFORE the lvalue operation (see design/lvalue-loads-in-ir.md)
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i] = QoreValue();
+                }
                 QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
                     third, xsink);
                 if (xsink && *xsink) {
@@ -4602,16 +4872,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, nullptr);
                     return false;
                 }
-                cleanupStoredValues(locals, nullptr);
-                cleanupStoredValues(globals, nullptr);
-                cleanupStoredValues(threadlocals, nullptr);
-                cleanupStoredValues(closures, nullptr);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(locals, instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
-                    &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
             }
@@ -5058,6 +5322,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             ++ip;
             break;
         }
+        // Lvalue-modifying AST opcodes: invalidate all caches BEFORE evalExpr()
+        // because these operations modify variables in-place via LValueHelper.
+        // The extra reference from the slot cache inflates refcounts, causing
+        // ensureUnique() to trigger COW — the modification is applied to the
+        // copy while the cache retains the stale original.
+        // See design/lvalue-loads-in-ir.md "Slot Cache Invalidation Rule".
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::ExtractList:
         case QoreIROpcode::ExtractString:
@@ -5068,22 +5338,49 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::RemoveObject:
         case QoreIROpcode::RemoveString:
         case QoreIROpcode::RemoveBinary:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::ListAssignAny: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                // Invalidate all caches BEFORE the lvalue operation
+                cleanupStoredValues(locals, nullptr);
+                cleanupStoredValues(globals, nullptr);
+                cleanupStoredValues(threadlocals, nullptr);
+                cleanupStoredValues(closures, nullptr);
+                for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    locals_slot_cache[i].discard(nullptr);
+                    locals_slot_cache[i] = QoreValue();
+                }
+                QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupStoredValues(locals, nullptr);
+                    cleanupStoredValues(globals, nullptr);
+                    cleanupStoredValues(threadlocals, nullptr);
+                    cleanupStoredValues(closures, nullptr);
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+        // Non-modifying AST opcodes: no cache invalidation needed
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
-            case QoreIROpcode::RegexSubstAny:
-            case QoreIROpcode::RegexSubstString:
-            case QoreIROpcode::InstanceOfBool:
-            case QoreIROpcode::TrimAny:
-            case QoreIROpcode::TrimString:
-            case QoreIROpcode::ChompAny:
-            case QoreIROpcode::ChompString:
-            case QoreIROpcode::TransliterateAny:
-            case QoreIROpcode::TransliterateString:
-            case QoreIROpcode::BackgroundInt:
-            case QoreIROpcode::ListAssignAny:
-            case QoreIROpcode::PopAny:
-            case QoreIROpcode::PushAny:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
             case QoreIROpcode::InvokeSimError: {
@@ -5096,37 +5393,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(threadlocals, nullptr);
                     cleanupStoredValues(closures, nullptr);
                     return false;
-                }
-                // Invalidate caches for opcodes that modify variables via AST.
-                switch (inst->opcode) {
-                    case QoreIROpcode::ExtractAny:
-                    case QoreIROpcode::ExtractList:
-                    case QoreIROpcode::ExtractString:
-                    case QoreIROpcode::ExtractBinary:
-                    case QoreIROpcode::RemoveAny:
-                    case QoreIROpcode::RemoveList:
-                    case QoreIROpcode::RemoveHash:
-                    case QoreIROpcode::RemoveObject:
-                    case QoreIROpcode::RemoveString:
-                    case QoreIROpcode::RemoveBinary:
-                    case QoreIROpcode::RegexSubstAny:
-                    case QoreIROpcode::RegexSubstString:
-                    case QoreIROpcode::TrimAny:
-                    case QoreIROpcode::TrimString:
-                    case QoreIROpcode::ChompAny:
-                    case QoreIROpcode::ChompString:
-                    case QoreIROpcode::TransliterateAny:
-                    case QoreIROpcode::TransliterateString:
-                    case QoreIROpcode::PopAny:
-                    case QoreIROpcode::PushAny:
-                    case QoreIROpcode::ListAssignAny:
-                        cleanupStoredValues(locals, nullptr);
-                        cleanupStoredValues(globals, nullptr);
-                        cleanupStoredValues(threadlocals, nullptr);
-                        cleanupStoredValues(closures, nullptr);
-                        break;
-                    default:
-                        break;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.hasNode()) {

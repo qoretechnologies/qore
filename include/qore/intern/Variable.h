@@ -608,7 +608,6 @@ public:
         assert(current_value && current_value->getType() != NT_OBJECT);
 
         if (!current_value->is_unique()) {
-            //printd(5, "LValueHelper::ensureUnique() this: %p saving old value: %p '%s'\n", this, current_value, get_type_name(current_value));
             AbstractQoreNode* old = current_value;
             assignNodeIntern(current_value->realCopy());
             saveTemp(old);

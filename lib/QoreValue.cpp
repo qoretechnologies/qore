@@ -216,9 +216,6 @@ double QoreValue::getAsFloat() const {
 
 bool QoreValue::getAsBool() const {
     int type = getType();
-    if (type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST) {
-        fprintf(stderr, "DEBUG getAsBool: WEAKREF type=%d\n", type);
-    }
     if (isBool()) {
         return getBool();
     }
@@ -1006,7 +1003,9 @@ int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
         v = exp;
         return 0;
     }
-    needs_deref = true;
-    v = exp.eval(needs_deref, xsink);
+    this->needs_deref = true;
+    bool local_nd = true;
+    v = exp.eval(local_nd, xsink);
+    this->needs_deref = local_nd;
     return xsink && *xsink ? -1 : 0;
 }

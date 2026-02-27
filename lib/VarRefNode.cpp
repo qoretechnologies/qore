@@ -139,11 +139,9 @@ QoreValue VarRefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSi
         //    v.getTypeName(), getProgram());
         v = ref.id->eval(needs_deref, xsink);
     } else if (type == VT_CLOSURE) {
-        printd(5, "VarRefNode::evalImpl() this: %p closure var %p (%s)\n", this, ref.id, ref.id->getName());
         ClosureVarValue* val = thread_get_runtime_closure_var(ref.id);
         v = val->eval(needs_deref, xsink);
     } else if (type == VT_LOCAL_TS) {
-        printd(5, "VarRefNode::evalImpl() this: %p local thread-safe var %p (%s)\n", this, ref.id, ref.id->getName());
         ClosureVarValue* val = thread_find_closure_var(ref.id->getName());
         v = val->eval(needs_deref, xsink);
     } else if (type == VT_IMMEDIATE) {
