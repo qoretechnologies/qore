@@ -95,6 +95,8 @@ public class ConnectionSchemeCache {
 
             "db": "DbDataProvider",
 
+            "deel": "DeelRestClient",
+
             "discord": "DiscordRestClient",
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
