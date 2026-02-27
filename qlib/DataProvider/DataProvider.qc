@@ -92,6 +92,7 @@ public class DataProvider {
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
             "db": "DbDataProvider",
+            "deel": "DeelDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",

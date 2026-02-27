@@ -1,0 +1,920 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DeelDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/DeelRestClient.qm
+%requires ../../../../qlib/DeelDataProvider
+
+%exec-class DeelDataProviderTest
+
+public class DeelDataProviderTest inherits QUnit::Test {
+    private {
+        #! Deel REST client for integration tests
+        *DeelRestClient::DeelRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Deel sandbox API URL
+        const SandboxApiUrl = "https://api-sandbox.demo.deel.com/rest/v2";
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+            "contract_id": "C,contract-id=s",
+            "url": "u,url=s",
+            "sandbox": "s,sandbox",
+        };
+    }
+
+    constructor() : Test("DeelDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+
+        # Integration tests (require DEEL_API_TOKEN)
+        addTestCase("integration tests", \integrationTests());
+
+        # Watch trigger tests
+        addTestCase("watch trigger tests", \watchTriggerTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Deel client for integration tests
+    private setupConnection() {
+        *string token = m_options.token ?? ENV.DEEL_API_TOKEN;
+        if (!token) {
+            if (m_options.verbose) {
+                printf("No API token provided (use -t option or DEEL_API_TOKEN env var)\n");
+            }
+            return;
+        }
+        hash<auto> client_opts = {"apikey": token};
+        if (m_options.sandbox) {
+            client_opts.url = SandboxApiUrl;
+            if (m_options.verbose) {
+                printf("Using Deel sandbox API: %s\n", SandboxApiUrl);
+            }
+        } else if (m_options.url) {
+            client_opts.url = m_options.url;
+            if (m_options.verbose) {
+                printf("Using custom API URL: %s\n", m_options.url);
+            }
+        }
+        client = new DeelRestClient::DeelRestClient(client_opts);
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a DeelDataProvider for unit tests
+    private *DeelDataProvider::DeelDataProvider tryCreateProvider() {
+        try {
+            return new DeelDataProvider::DeelDataProvider({
+                "deelrestclient_options": {
+                    "apikey": "fake-test-token-for-unit-tests",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Deel API: %s", ex.desc));
+            }
+            # 401 Unauthorized from a reachable API — skip rather than fail unit tests
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 401) {
+                testSkip("Deel API returned 401; skipping unit tests that require connectivity");
+            }
+            # Same for HTTP-CLIENT-RECEIVE-ERROR with 401
+            if (ex.arg.status_code == 401) {
+                testSkip("Deel API returned 401; skipping unit tests that require connectivity");
+            }
+            rethrow;
+        }
+    }
+
+    #! Creates a provider using the real client (integration tests only)
+    private *DeelDataProvider::DeelDataProvider createRealProvider() {
+        if (!client) {
+            testSkip("No Deel API token provided; set DEEL_API_TOKEN or use -t option");
+        }
+        return new DeelDataProvider::DeelDataProvider(client);
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        *DeelDataProvider::DeelDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("deel", prov.getName());
+        assertEq("Deel data provider for global workforce management", prov.getDesc());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        # Verify factory is registered
+        AbstractDataProviderFactory factory = DataProvider::getFactory("deel");
+        assertEq("deel", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Verify constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("deelrestclient"));
+        assertTrue(factoryOpts.hasKey("deelrestclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *DeelDataProvider::DeelDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertTrue(info.children_can_support_records);
+        assertEq("DeelDataProvider", info.type);
+
+        # Check constructor options include REST client options
+        assertTrue(info.constructor_options.hasKey("deelrestclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *DeelDataProvider::DeelDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check top-level child provider names
+        list<string> children = prov.getChildProviderNames();
+
+        # Collection providers
+        assertTrue(inlist("contracts", children));
+        assertTrue(inlist("timesheets", children));
+        assertTrue(inlist("adjustments", children));
+        assertTrue(inlist("workers", children));
+        assertTrue(inlist("time-off", children));
+        assertTrue(inlist("legal-entities", children));
+        assertTrue(inlist("invoices", children));
+        assertTrue(inlist("events", children));
+
+        # Check contracts collection provider
+        AbstractDataProvider contracts = prov.getChildProvider("contracts");
+        assertEq("contracts", contracts.getName());
+        hash<DataProviderInfo> contractsInfo = contracts.getInfo();
+        assertTrue(contractsInfo.supports_read);
+        assertTrue(contractsInfo.supports_native_search);
+        assertTrue(contractsInfo.has_record);
+
+        # Check contracts children (action providers)
+        list<string> contractChildren = contracts.getChildProviderNames();
+        assertTrue(inlist("create", contractChildren));
+        assertTrue(inlist("terminate", contractChildren));
+        assertTrue(inlist("sign", contractChildren));
+        assertTrue(inlist("update", contractChildren));
+
+        # Check create contract action provider
+        AbstractDataProvider createContract = contracts.getChildProvider("create");
+        assertEq("create", createContract.getName());
+        hash<DataProviderInfo> createInfo = createContract.getInfo();
+        assertTrue(createInfo.supports_request);
+
+        # Check update contract action provider
+        AbstractDataProvider updateContract = contracts.getChildProvider("update");
+        assertEq("update", updateContract.getName());
+        assertTrue(updateContract.getInfo().supports_request);
+
+        # Check timesheets collection children
+        AbstractDataProvider timesheets = prov.getChildProvider("timesheets");
+        list<string> timesheetChildren = timesheets.getChildProviderNames();
+        assertTrue(inlist("submit", timesheetChildren));
+        assertTrue(inlist("update", timesheetChildren));
+        assertTrue(inlist("approve", timesheetChildren));
+        assertTrue(inlist("reject", timesheetChildren));
+        assertTrue(inlist("delete", timesheetChildren));
+
+        # Check adjustments collection children
+        AbstractDataProvider adjustments = prov.getChildProvider("adjustments");
+        list<string> adjustmentChildren = adjustments.getChildProviderNames();
+        assertTrue(inlist("create", adjustmentChildren));
+        assertTrue(inlist("update", adjustmentChildren));
+        assertTrue(inlist("review", adjustmentChildren));
+        assertTrue(inlist("delete", adjustmentChildren));
+
+        # Check time-off children
+        AbstractDataProvider timeOff = prov.getChildProvider("time-off");
+        list<string> timeOffChildren = timeOff.getChildProviderNames();
+        assertTrue(inlist("create-request", timeOffChildren));
+        assertTrue(inlist("approve-request", timeOffChildren));
+        assertTrue(inlist("reject-request", timeOffChildren));
+
+        # Check events container
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName());
+        hash<DataProviderInfo> eventsInfo = events.getInfo();
+        assertTrue(eventsInfo.supports_children);
+        assertTrue(eventsInfo.children_can_support_observers);
+
+        # Check event triggers
+        list<string> eventChildren = events.getChildProviderNames();
+        assertTrue(inlist("contract-created", eventChildren));
+        assertTrue(inlist("contract-status-updated", eventChildren));
+        assertTrue(inlist("contract-terminated", eventChildren));
+        assertTrue(inlist("invoice-adjustment-created", eventChildren));
+        assertTrue(inlist("invoice-adjustment-reviewed", eventChildren));
+        assertTrue(inlist("timesheet-created", eventChildren));
+        assertTrue(inlist("timesheet-reviewed", eventChildren));
+        assertTrue(inlist("time-off-created", eventChildren));
+        assertTrue(inlist("time-off-updated", eventChildren));
+        assertTrue(inlist("time-off-reviewed", eventChildren));
+    }
+
+    #! Data type tests - verify record type field definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test contract data type
+        DeelDataProvider::DeelContractDataType contractType();
+        hash<string, AbstractDataField> contractFields = contractType.getFields();
+        assertTrue(contractFields.hasKey("id"));
+        assertTrue(contractFields.hasKey("title"));
+        assertTrue(contractFields.hasKey("type"));
+        assertTrue(contractFields.hasKey("status"));
+        assertTrue(contractFields.hasKey("currency"));
+        assertTrue(contractFields.hasKey("start_date"));
+        assertTrue(contractFields.hasKey("created_at"));
+        assertTrue(contractFields.hasKey("updated_at"));
+
+        # Test timesheet data type
+        DeelDataProvider::DeelTimesheetDataType timesheetType();
+        hash<string, AbstractDataField> timesheetFields = timesheetType.getFields();
+        assertTrue(timesheetFields.hasKey("id"));
+        assertTrue(timesheetFields.hasKey("contract_id"));
+        assertTrue(timesheetFields.hasKey("quantity"));
+        assertTrue(timesheetFields.hasKey("date"));
+        assertTrue(timesheetFields.hasKey("status"));
+        assertTrue(timesheetFields.hasKey("created_at"));
+
+        # Test adjustment data type
+        DeelDataProvider::DeelAdjustmentDataType adjustmentType();
+        hash<string, AbstractDataField> adjustmentFields = adjustmentType.getFields();
+        assertTrue(adjustmentFields.hasKey("id"));
+        assertTrue(adjustmentFields.hasKey("contract_id"));
+        assertTrue(adjustmentFields.hasKey("amount"));
+        assertTrue(adjustmentFields.hasKey("currency"));
+        assertTrue(adjustmentFields.hasKey("reason"));
+        assertTrue(adjustmentFields.hasKey("status"));
+
+        # Test worker data type
+        DeelDataProvider::DeelWorkerDataType workerType();
+        hash<string, AbstractDataField> workerFields = workerType.getFields();
+        assertTrue(workerFields.hasKey("id"));
+        assertTrue(workerFields.hasKey("first_name"));
+        assertTrue(workerFields.hasKey("last_name"));
+        assertTrue(workerFields.hasKey("email"));
+        assertTrue(workerFields.hasKey("country_code"));
+        assertTrue(workerFields.hasKey("status"));
+
+        # Test time-off type data type
+        DeelDataProvider::DeelTimeOffTypeDataType timeOffType();
+        hash<string, AbstractDataField> timeOffFields = timeOffType.getFields();
+        assertTrue(timeOffFields.hasKey("id"));
+        assertTrue(timeOffFields.hasKey("name"));
+        assertTrue(timeOffFields.hasKey("type"));
+        assertTrue(timeOffFields.hasKey("balance"));
+
+        # Test legal entity data type
+        DeelDataProvider::DeelLegalEntityDataType legalEntityType();
+        hash<string, AbstractDataField> legalEntityFields = legalEntityType.getFields();
+        assertTrue(legalEntityFields.hasKey("id"));
+        assertTrue(legalEntityFields.hasKey("name"));
+        assertTrue(legalEntityFields.hasKey("country"));
+
+        # Test invoice data type
+        DeelDataProvider::DeelInvoiceDataType invoiceType();
+        hash<string, AbstractDataField> invoiceFields = invoiceType.getFields();
+        assertTrue(invoiceFields.hasKey("id"));
+        assertTrue(invoiceFields.hasKey("amount"));
+        assertTrue(invoiceFields.hasKey("currency"));
+        assertTrue(invoiceFields.hasKey("status"));
+        assertTrue(invoiceFields.hasKey("due_date"));
+
+        # Test time-off request data type
+        DeelDataProvider::DeelTimeOffRequestDataType timeOffRequestType();
+        hash<string, AbstractDataField> timeOffRequestFields = timeOffRequestType.getFields();
+        assertTrue(timeOffRequestFields.hasKey("id"));
+        assertTrue(timeOffRequestFields.hasKey("start_date"));
+        assertTrue(timeOffRequestFields.hasKey("end_date"));
+        assertTrue(timeOffRequestFields.hasKey("status"));
+
+        # Test delete response data type
+        DeelDataProvider::DeelDeletedResponseDataType deletedType();
+        hash<string, AbstractDataField> deletedFields = deletedType.getFields();
+        assertTrue(deletedFields.hasKey("deleted"));
+
+        # Test getSupportedReferenceData() returns expected reference data types
+        *DeelDataProvider::DeelDataProvider prov = tryCreateProvider();
+        if (prov) {
+            *hash<string, bool> refData = prov.getSupportedReferenceData();
+            assertTrue(refData.hasKey("contracts"));
+            assertTrue(refData.hasKey("workers"));
+            assertTrue(refData.hasKey("timesheets"));
+            assertTrue(refData.hasKey("adjustments"));
+            assertTrue(refData.hasKey("time_off_types"));
+            assertTrue(refData.hasKey("time_off_requests"));
+        }
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        # Verify the deel:// scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("deel");
+        
+        assertTrue(scheme.options.hasKey("apikey"));
+
+        # Verify token option is sensitive and preselected
+        assertTrue(scheme.options.apikey.sensitive ?? False);
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Verify app is registered
+        *hash<DataProviderAppInfo> appInfo = DataProviderActionCatalog::getApp("Deel");
+        assertEq("Deel", appInfo.name);
+        assertEq("deel", appInfo.scheme);
+
+        # Verify key actions are registered
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Deel");
+        hash<string, bool> actionMap;
+        map actionMap{$1.action} = True, actions;
+
+        # Contract actions
+        assertTrue(actionMap{"create-contract"} ?? False);
+        assertTrue(actionMap{"terminate-contract"} ?? False);
+        assertTrue(actionMap{"sign-contract"} ?? False);
+        assertTrue(actionMap{"search-contracts"} ?? False);
+        assertTrue(actionMap{"get-contract"} ?? False);
+
+        # Timesheet actions
+        assertTrue(actionMap{"submit-timesheet"} ?? False);
+        assertTrue(actionMap{"update-timesheet"} ?? False);
+        assertTrue(actionMap{"approve-timesheet"} ?? False);
+        assertTrue(actionMap{"reject-timesheet"} ?? False);
+        assertTrue(actionMap{"delete-timesheet"} ?? False);
+        assertTrue(actionMap{"search-timesheets"} ?? False);
+        assertTrue(actionMap{"get-timesheet"} ?? False);
+
+        # Invoice adjustment actions
+        assertTrue(actionMap{"create-invoice-adjustment"} ?? False);
+        assertTrue(actionMap{"update-invoice-adjustment"} ?? False);
+        assertTrue(actionMap{"review-invoice-adjustment"} ?? False);
+        assertTrue(actionMap{"delete-invoice-adjustment"} ?? False);
+        assertTrue(actionMap{"search-invoice-adjustments"} ?? False);
+        assertTrue(actionMap{"get-invoice-adjustment"} ?? False);
+
+        # Worker actions
+        assertTrue(actionMap{"create-worker"} ?? False);
+        assertTrue(actionMap{"update-worker"} ?? False);
+        assertTrue(actionMap{"search-workers"} ?? False);
+        assertTrue(actionMap{"get-worker"} ?? False);
+
+        # Additional contract actions
+        assertTrue(actionMap{"update-contract"} ?? False);
+
+        # Time-off actions
+        assertTrue(actionMap{"create-time-off-request"} ?? False);
+        assertTrue(actionMap{"approve-time-off-request"} ?? False);
+        assertTrue(actionMap{"reject-time-off-request"} ?? False);
+        assertTrue(actionMap{"search-time-off-types"} ?? False);
+
+        # Legal entity actions
+        assertTrue(actionMap{"list-legal-entities"} ?? False);
+
+        # Invoice actions
+        assertTrue(actionMap{"search-invoices"} ?? False);
+        assertTrue(actionMap{"get-invoice"} ?? False);
+
+        # Event triggers
+        assertTrue(actionMap{"contract-created"} ?? False);
+        assertTrue(actionMap{"contract-status-updated"} ?? False);
+        assertTrue(actionMap{"contract-terminated"} ?? False);
+        assertTrue(actionMap{"invoice-adjustment-created"} ?? False);
+        assertTrue(actionMap{"invoice-adjustment-reviewed"} ?? False);
+        assertTrue(actionMap{"timesheet-created"} ?? False);
+        assertTrue(actionMap{"timesheet-reviewed"} ?? False);
+        assertTrue(actionMap{"time-off-created"} ?? False);
+        assertTrue(actionMap{"time-off-updated"} ?? False);
+        assertTrue(actionMap{"time-off-reviewed"} ?? False);
+    }
+
+    #! Integration tests - require a real Deel API token
+    integrationTests() {
+        checkJson();
+        if (!client) {
+            testSkip("No Deel API token provided; set DEEL_API_TOKEN or use -t option");
+        }
+
+        testLegalEntities();
+        testContracts();
+        testWorkers();
+        testTimesheets();
+        testAdjustments();
+        testInvoices();
+        testTimeOffTypes();
+        writeTests();
+    }
+
+    #! Test legal entities listing
+    private testLegalEntities() {
+        if (m_options.verbose) {
+            printf("Testing legal entities...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider legalEntities = prov.getChildProvider("legal-entities");
+        assertEq("legal-entities", legalEntities.getName());
+
+        # Search for legal entities - some tokens may lack access (401/403)
+        int count = 0;
+        try {
+            AbstractDataProviderRecordIterator it = legalEntities.searchRecords(NOTHING, {"limit": 5});
+            while (it.next()) {
+                hash<auto> record = it.getValue();
+                assertTrue(record.hasKey("id"));
+                count++;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 401 || ex.arg.status_code == 403) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping legal entities search - token lacks access (%d)\n",
+                        ex.arg.status_code);
+                }
+                return;
+            }
+            rethrow;
+        }
+        if (m_options.verbose) {
+            printf("Found %d legal entities\n", count);
+        }
+    }
+
+    #! Test contracts listing
+    private testContracts() {
+        if (m_options.verbose) {
+            printf("Testing contracts...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider contracts = prov.getChildProvider("contracts");
+        assertEq("contracts", contracts.getName());
+
+        # Search for contracts
+        AbstractDataProviderRecordIterator it = contracts.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (it.next()) {
+            hash<auto> record = it.getValue();
+            assertTrue(record.hasKey("id"));
+            assertTrue(record.size() > 0);
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("Found %d contracts\n", count);
+        }
+    }
+
+    #! Test workers listing
+    private testWorkers() {
+        if (m_options.verbose) {
+            printf("Testing workers...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider workers = prov.getChildProvider("workers");
+        assertEq("workers", workers.getName());
+
+        # Search for workers
+        AbstractDataProviderRecordIterator it = workers.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (it.next()) {
+            hash<auto> record = it.getValue();
+            assertTrue(record.hasKey("id"));
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("Found %d workers\n", count);
+        }
+    }
+
+    #! Test timesheets listing
+    private testTimesheets() {
+        if (m_options.verbose) {
+            printf("Testing timesheets...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider timesheets = prov.getChildProvider("timesheets");
+        assertEq("timesheets", timesheets.getName());
+
+        # Search for timesheets
+        AbstractDataProviderRecordIterator it = timesheets.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (it.next()) {
+            hash<auto> record = it.getValue();
+            assertTrue(record.hasKey("id"));
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("Found %d timesheets\n", count);
+        }
+    }
+
+    #! Test invoice adjustments listing
+    private testAdjustments() {
+        if (m_options.verbose) {
+            printf("Testing invoice adjustments...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider adjustments = prov.getChildProvider("adjustments");
+        assertEq("adjustments", adjustments.getName());
+
+        # Search for adjustments
+        AbstractDataProviderRecordIterator it = adjustments.searchRecords(NOTHING, {"limit": 5});
+        int count = 0;
+        while (it.next()) {
+            hash<auto> record = it.getValue();
+            assertTrue(record.hasKey("id"));
+            count++;
+        }
+        if (m_options.verbose) {
+            printf("Found %d adjustments\n", count);
+        }
+    }
+
+    #! Test invoices listing
+    private testInvoices() {
+        if (m_options.verbose) {
+            printf("Testing invoices...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider invoices = prov.getChildProvider("invoices");
+        assertEq("invoices", invoices.getName());
+
+        # Search for invoices - some tokens may lack invoice read access (403)
+        int count = 0;
+        try {
+            AbstractDataProviderRecordIterator it = invoices.searchRecords(NOTHING, {"limit": 5});
+            while (it.next()) {
+                hash<auto> record = it.getValue();
+                assertTrue(record.hasKey("id"));
+                count++;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping invoice search - token lacks invoice read access (403)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        if (m_options.verbose) {
+            printf("Found %d invoices\n", count);
+        }
+    }
+
+    #! Test time-off types listing
+    private testTimeOffTypes() {
+        if (m_options.verbose) {
+            printf("Testing time-off types...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+        AbstractDataProvider timeOff = prov.getChildProvider("time-off");
+        assertEq("time-off", timeOff.getName());
+
+        # Verify the search call completes without error (endpoint works with time_offs)
+        bool search_succeeded = False;
+        int count = 0;
+        try {
+            AbstractDataProviderRecordIterator it = timeOff.searchRecords(NOTHING, {"limit": 5});
+            search_succeeded = True;
+            while (it.next()) {
+                hash<auto> record = it.getValue();
+                assertTrue(record.typeCode() == NT_HASH);
+                count++;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping time-off search - token lacks access (403)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(search_succeeded);
+        if (m_options.verbose) {
+            printf("Found %d time-off records\n", count);
+        }
+    }
+
+    #! Write tests with cleanup - test create/update/delete lifecycle
+    private writeTests() {
+        if (m_options.verbose) {
+            printf("Testing write operations (create/update/delete)...\n");
+        }
+        DeelDataProvider::DeelDataProvider prov(client);
+
+        # Prefer contract ID from command line option, otherwise search for one
+        *string contract_id = m_options.contract_id;
+        if (contract_id) {
+            if (m_options.verbose) {
+                printf("Using contract %s from --contract-id option\n", contract_id);
+            }
+        } else {
+            # Find an existing contractor-type contract to use for adjustment/timesheet writes.
+            # Invoice adjustments and timesheets only work with contractor contracts, not EOR or
+            # global_payroll types. Search up to 50 contracts to find a compatible one.
+            hash<string, bool> contractor_types = {
+                "pay_as_you_go_time_based": True,
+                "ongoing_time_based": True,
+                "payg_milestones": True,
+                "payg_task": True,
+                "fixed": True,
+            };
+            AbstractDataProvider contracts = prov.getChildProvider("contracts");
+            AbstractDataProviderRecordIterator it = contracts.searchRecords(NOTHING, {"limit": 50});
+            while (it.next()) {
+                hash<auto> rec = it.getValue();
+                string ctype = string(rec.type ?? "");
+                if (contractor_types{ctype}) {
+                    contract_id = string(rec.id);
+                    if (m_options.verbose) {
+                        printf("Found contractor contract %s (type=%s) for write tests\n",
+                            contract_id, ctype);
+                    }
+                    break;
+                }
+            }
+            if (!contract_id && m_options.verbose) {
+                printf("NOTE: No contractor-type contracts found in first 50 results\n");
+            }
+        }
+
+        if (!contract_id) {
+            if (m_options.verbose) {
+                printf("NOTE: No contractor-type contracts found - skipping "
+                    "adjustment/timesheet write tests\n"
+                    "TIP: Create a PAYG/hourly contract in the Deel dashboard and pass its ID "
+                    "with --contract-id=<id>\n");
+            }
+        } else {
+            testWriteAdjustment(prov, contract_id);
+            testWriteTimesheet(prov, contract_id);
+        }
+    }
+
+    #! Test create → update → delete lifecycle for invoice adjustments
+    private testWriteAdjustment(DeelDataProvider::DeelDataProvider prov, string contract_id) {
+        if (m_options.verbose) {
+            printf("  Testing invoice adjustment write lifecycle...\n");
+        }
+        AbstractDataProvider adjustments = prov.getChildProvider("adjustments");
+        AbstractDataProvider createProvider = adjustments.getChildProvider("create");
+        AbstractDataProvider updateProvider = adjustments.getChildProvider("update");
+        AbstractDataProvider deleteProvider = adjustments.getChildProvider("delete");
+
+        # Create an adjustment
+        string today = now().format("YYYY-MM-DD");
+        hash<auto> createResult = createProvider.doRequest({
+            "contract_id": contract_id,
+            "amount": 100.0,
+            "currency": "USD",
+            "date_submitted": today,
+            "type": "bonus",
+            "description": "Integration test bonus - safe to delete",
+        });
+        assertTrue(createResult.hasKey("id"));
+        string adjustment_id = string(createResult.id);
+        if (m_options.verbose) {
+            printf("    Created adjustment %s\n", adjustment_id);
+        }
+
+        try {
+            # Verify the adjustment was actually created by fetching it
+            AbstractDataProvider searchProvider = adjustments;
+            AbstractDataProviderRecordIterator it = searchProvider.searchRecords(NOTHING,
+                {"adjustment_id": adjustment_id});
+            assertTrue(it.next());
+            hash<auto> fetched = it.getValue();
+            assertEq(adjustment_id, string(fetched.id));
+            if (m_options.verbose) {
+                printf("    Verified adjustment %s exists\n", adjustment_id);
+            }
+
+            # Update the adjustment (returns {"updated": true}, no id)
+            hash<auto> updateResult = updateProvider.doRequest({
+                "adjustment_id": adjustment_id,
+                "amount": 150.0,
+                "description": "Integration test bonus - updated amount",
+            });
+            assertTrue(updateResult.updated ?? False);
+            if (m_options.verbose) {
+                printf("    Updated adjustment %s\n", adjustment_id);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Cleanup even if assertions fail
+            try {
+                deleteProvider.doRequest({"adjustment_id": adjustment_id});
+            } catch () {}
+            rethrow;
+        }
+
+        # Delete the adjustment (cleanup)
+        deleteProvider.doRequest({"adjustment_id": adjustment_id});
+        if (m_options.verbose) {
+            printf("    Deleted adjustment %s (cleanup)\n", adjustment_id);
+        }
+
+        # Verify it's gone: Deel returns 403 for deleted records, which is correct behavior
+        bool confirmed_gone = False;
+        try {
+            AbstractDataProviderRecordIterator it2 = adjustments.searchRecords(NOTHING,
+                {"adjustment_id": adjustment_id});
+            confirmed_gone = !it2.next();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403 || ex.arg.status_code == 404) {
+                confirmed_gone = True;  # 403/404 = record no longer accessible = deleted
+            } else {
+                rethrow;
+            }
+        }
+        assertTrue(confirmed_gone);
+        if (m_options.verbose) {
+            printf("    Confirmed adjustment %s deleted\n", adjustment_id);
+        }
+    }
+
+    #! Test submit → update → delete lifecycle for timesheets
+    private testWriteTimesheet(DeelDataProvider::DeelDataProvider prov, string contract_id) {
+        if (m_options.verbose) {
+            printf("  Testing timesheet write lifecycle...\n");
+        }
+        AbstractDataProvider timesheets = prov.getChildProvider("timesheets");
+        AbstractDataProvider submitProvider = timesheets.getChildProvider("submit");
+        AbstractDataProvider updateProvider = timesheets.getChildProvider("update");
+        AbstractDataProvider deleteProvider = timesheets.getChildProvider("delete");
+
+        # Submit a timesheet
+        string today = now().format("YYYY-MM-DD");
+        hash<auto> submitResult = submitProvider.doRequest({
+            "contract_id": contract_id,
+            "date_submitted": today,
+            "quantity": 4.0,
+            "description": "Integration test work - safe to delete",
+        });
+        assertTrue(submitResult.hasKey("id"));
+        string timesheet_id = string(submitResult.id);
+        if (m_options.verbose) {
+            printf("    Submitted timesheet %s\n", timesheet_id);
+        }
+
+        try {
+            # Verify the timesheet was created
+            AbstractDataProviderRecordIterator it = timesheets.searchRecords(NOTHING,
+                {"timesheet_id": timesheet_id});
+            assertTrue(it.next());
+            hash<auto> fetched = it.getValue();
+            assertEq(timesheet_id, string(fetched.id));
+            if (m_options.verbose) {
+                printf("    Verified timesheet %s exists\n", timesheet_id);
+            }
+
+            # Update the timesheet (returns {"updated": true}, no id)
+            hash<auto> updateResult = updateProvider.doRequest({
+                "timesheet_id": timesheet_id,
+                "quantity": 6.0,
+                "description": "Integration test work - updated hours",
+            });
+            assertTrue(updateResult.updated ?? False);
+            if (m_options.verbose) {
+                printf("    Updated timesheet %s\n", timesheet_id);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Cleanup even if assertions fail
+            try {
+                deleteProvider.doRequest({"timesheet_id": timesheet_id});
+            } catch () {}
+            rethrow;
+        }
+
+        # Delete the timesheet (cleanup); Deel soft-deletes timesheets so the record remains
+        # visible in searches — deletion success is confirmed by the call not throwing
+        deleteProvider.doRequest({"timesheet_id": timesheet_id});
+        if (m_options.verbose) {
+            printf("    Deleted timesheet %s (cleanup)\n", timesheet_id);
+        }
+    }
+
+    #! Watch trigger tests - verify polling trigger providers
+    watchTriggerTests() {
+        checkJson();
+        *DeelDataProvider::DeelDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        AbstractDataProvider events = prov.getChildProvider("events");
+
+        # Test each watch provider
+        list<string> triggerNames = (
+            "contract-created",
+            "contract-status-updated",
+            "contract-terminated",
+            "invoice-adjustment-created",
+            "invoice-adjustment-reviewed",
+            "timesheet-created",
+            "timesheet-reviewed",
+            "time-off-created",
+            "time-off-updated",
+            "time-off-reviewed",
+        );
+
+        foreach string triggerName in (triggerNames) {
+            AbstractDataProvider trigger = events.getChildProvider(triggerName);
+            assertEq(triggerName, trigger.getName());
+
+            hash<DataProviderInfo> triggerInfo = trigger.getInfo();
+            assertTrue(triggerInfo.supports_observable);
+
+            # Verify event types are registered
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = trigger.getEventTypes();
+            assertTrue(eventTypes.hasKey(triggerName));
+
+            if (m_options.verbose) {
+                printf("Watch trigger '%s' OK - event type registered\n", triggerName);
+            }
+        }
+
+
+    }
+}

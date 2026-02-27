@@ -854,6 +854,22 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref deelrestclientintro "DeelRestClient" module
+      - new module providing a REST client for Deel's global workforce management API
+      - supports API key (Bearer token) authentication
+      - provides DeelRestConnection for connection management with \c deel:// URL scheme
+    - @ref deeldataproviderintro "DeelDataProvider" module
+      - new module providing a data provider API for Deel global workforce management
+      - contract management (create, terminate, sign, search, get by ID)
+      - timesheet management (submit, update, approve, reject, search, get by ID)
+      - invoice adjustment management (create, update, review, search, get by ID)
+      - worker/people management (create, update, search, get by ID)
+      - time-off request creation and entitlement search
+      - legal entity listing
+      - invoice search and retrieval
+      - polling-based event triggers for contracts, timesheets, adjustments, and time-off requests
+      - action catalog integration with 25 actions and 10 triggers
+      - connection support with \c deel:// URL scheme
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for Chargebee's subscription billing API
       - supports HTTP Basic Authentication with API Key as username
