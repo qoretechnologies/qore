@@ -141,27 +141,161 @@ struct QuicPacketBatch {
     DLLLOCAL int size() const { return static_cast<int>(pkt_offsets.size()); }
 };
 
+//! Maximum size of ancillary data buffer for sendmsg() source address pinning
+/** Large enough for IP_PKTINFO (28 bytes on Linux), IPV6_PKTINFO (~36 bytes),
+    or IP_SENDSRCADDR (macOS/FreeBSD, ~20 bytes), plus CMSG alignment padding.
+
+    @since %Qore 2.3
+*/
+constexpr size_t QUIC_SEND_CMSG_BUF_SIZE = 64;
+
+//! Check whether a sockaddr holds a wildcard (any) address
+/** Returns true for INADDR_ANY (0.0.0.0) or in6addr_any (::).
+    Used to skip source-address pinning when the session was created with
+    a wildcard local address (i.e. the kernel should choose the source IP).
+
+    @param addr address to check
+    @return true if the address is a wildcard, false otherwise
+
+    @since %Qore 2.3
+*/
+inline bool isWildcardAddr(const struct sockaddr* addr) {
+    if (addr->sa_family == AF_INET) {
+        auto* sin = reinterpret_cast<const struct sockaddr_in*>(addr);
+        return sin->sin_addr.s_addr == INADDR_ANY;
+    } else if (addr->sa_family == AF_INET6) {
+        auto* sin6 = reinterpret_cast<const struct sockaddr_in6*>(addr);
+        return memcmp(&sin6->sin6_addr, &in6addr_any, sizeof(in6addr_any)) == 0;
+    }
+    return false;
+}
+
+//! Build sendmsg() control message to pin the source IP address
+/** Populates a cmsg buffer suitable for sendmsg()/sendmmsg() to force the
+    outgoing packet's source IP to match the per-session local address captured
+    at connection creation.
+
+    Platform handling:
+    - Linux IPv4: IP_PKTINFO with ipi_spec_dst
+    - macOS/FreeBSD IPv4: IP_SENDSRCADDR (== IP_RECVDSTADDR) with raw in_addr
+    - All platforms IPv6: IPV6_PKTINFO with ipi6_addr
+
+    Returns false (and sets out_len=0) for wildcard addresses — the kernel
+    should choose the source IP in that case.
+
+    @param local_addr  per-session local address (from QuicSession::getLocalAddrCopy)
+    @param local_addrlen  address length
+    @param cmsg_buf  output buffer (must be at least QUIC_SEND_CMSG_BUF_SIZE bytes)
+    @param out_len  [out] set to the total msg_controllen to use, or 0 if no cmsg needed
+    @return true if cmsg was built and should be attached, false if not needed
+
+    @since %Qore 2.3
+*/
+inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_addrlen,
+                           void* cmsg_buf, size_t& out_len) {
+    out_len = 0;
+
+    // Don't pin source address for wildcard binds
+    if (isWildcardAddr(local_addr)) {
+        return false;
+    }
+
+    // Build a temporary msghdr to use CMSG macros for proper alignment
+    struct msghdr msg{};
+    msg.msg_control = cmsg_buf;
+    msg.msg_controllen = QUIC_SEND_CMSG_BUF_SIZE;
+
+    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+    if (!cmsg) {
+        return false;
+    }
+
+    if (local_addr->sa_family == AF_INET) {
+        auto* sin = reinterpret_cast<const struct sockaddr_in*>(local_addr);
+#ifdef IP_PKTINFO
+        cmsg->cmsg_level = IPPROTO_IP;
+        cmsg->cmsg_type = IP_PKTINFO;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+        auto* pi = reinterpret_cast<struct in_pktinfo*>(CMSG_DATA(cmsg));
+        memset(pi, 0, sizeof(*pi));
+        pi->ipi_spec_dst = sin->sin_addr;
+        out_len = CMSG_SPACE(sizeof(struct in_pktinfo));
+        return true;
+#elif defined(IP_RECVDSTADDR)
+        // macOS/FreeBSD: IP_SENDSRCADDR == IP_RECVDSTADDR
+        cmsg->cmsg_level = IPPROTO_IP;
+        cmsg->cmsg_type = IP_RECVDSTADDR;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_addr));
+        auto* dst = reinterpret_cast<struct in_addr*>(CMSG_DATA(cmsg));
+        *dst = sin->sin_addr;
+        out_len = CMSG_SPACE(sizeof(struct in_addr));
+        return true;
+#else
+        return false;
+#endif
+    } else if (local_addr->sa_family == AF_INET6) {
+        auto* sin6 = reinterpret_cast<const struct sockaddr_in6*>(local_addr);
+        cmsg->cmsg_level = IPPROTO_IPV6;
+        cmsg->cmsg_type = IPV6_PKTINFO;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo));
+        auto* pi6 = reinterpret_cast<struct in6_pktinfo*>(CMSG_DATA(cmsg));
+        memset(pi6, 0, sizeof(*pi6));
+        pi6->ipi6_addr = sin6->sin6_addr;
+        out_len = CMSG_SPACE(sizeof(struct in6_pktinfo));
+        return true;
+    }
+
+    return false;
+}
+
 //! Batch-send UDP datagrams from a QuicPacketBatch
-/** Uses sendmmsg() on Linux for efficiency; falls back to sendto() loop
-    on macOS/FreeBSD.  Uses stack-allocated mmsghdr/iovec arrays (no heap
+/** Uses sendmmsg() on Linux for efficiency; falls back to sendmsg()/sendto()
+    loop on macOS/FreeBSD.  Uses stack-allocated mmsghdr/iovec arrays (no heap
     allocations) since batch size is bounded by QUIC_COMMON_MAX_SEND_BATCH.
+
+    When @a local_addr is provided (non-null, non-wildcard), attaches a cmsg
+    control message to each outgoing packet to pin the source IP address.
+    This is required for multi-homed QUIC servers bound to wildcard addresses
+    (0.0.0.0/::) to ensure the source IP matches the per-session local address
+    captured at connection creation.  Without this, the kernel's routing table
+    may choose a different source IP, causing ngtcp2 path validation failures
+    on the client side.
+
+    Client-side call sites pass nullptr (the default) since connected UDP
+    sockets already have the correct source IP from connect().
+
     @param fd socket file descriptor
     @param batch the packet batch to send
     @param addr destination address, or nullptr for connected UDP sockets
     @param addrlen destination address length, or 0 for connected UDP sockets
+    @param local_addr per-session local address for source IP pinning, or nullptr
+    @param local_addrlen local address length, or 0
     @return number of messages sent, or -1 on error (errno set)
 
     @since %Qore 2.3
 */
 inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
-                                       const struct sockaddr* addr, socklen_t addrlen) {
+                                const struct sockaddr* addr, socklen_t addrlen,
+                                const struct sockaddr* local_addr = nullptr,
+                                socklen_t local_addrlen = 0) {
+    // Build cmsg template once (shared by all packets in this batch)
+    uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE];
+    size_t cmsg_len = 0;
+    bool use_cmsg = local_addr && buildSendCmsg(local_addr, local_addrlen,
+                                                 cmsg_template, cmsg_len);
+
     int total = batch.size();
     int offset = 0;
 #ifdef __linux__
+    // Per-message cmsg buffers on stack: each message needs its own copy
+    // because sendmmsg() accesses all msg_control pointers during the single syscall.
+    // ~4KB total (64 * 64 bytes)
+    uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+
     while (offset < total) {
         int batch_size = std::min(total - offset, QUIC_COMMON_MAX_SEND_BATCH);
         // Stack-allocated: batch_size <= QUIC_COMMON_MAX_SEND_BATCH (64)
-        // ~5KB total on stack (64 * 56 + 64 * 16)
+        // ~9KB total on stack with cmsg (mmsghdr + iovec + cmsg_bufs)
         struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
         struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
         memset(msgs, 0, sizeof(struct mmsghdr) * batch_size);
@@ -173,6 +307,11 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
             msgs[i].msg_hdr.msg_namelen = addrlen;
             msgs[i].msg_hdr.msg_iov = &iovecs[i];
             msgs[i].msg_hdr.msg_iovlen = 1;
+            if (use_cmsg) {
+                memcpy(cmsg_bufs[i], cmsg_template, cmsg_len);
+                msgs[i].msg_hdr.msg_control = cmsg_bufs[i];
+                msgs[i].msg_hdr.msg_controllen = cmsg_len;
+            }
         }
 
         int sent;
@@ -198,12 +337,33 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         }
     }
 #else
-    // macOS/FreeBSD: sendto() loop fallback
+    // macOS/FreeBSD: sendmsg()/sendto() loop fallback
     while (offset < total) {
         ssize_t sent;
-        do {
-            sent = sendto(fd, batch.packetData(offset), batch.packetLen(offset), 0, addr, addrlen);
-        } while (sent < 0 && errno == EINTR);
+        if (use_cmsg) {
+            // Use sendmsg() to attach cmsg for source address pinning
+            struct iovec iov;
+            iov.iov_base = const_cast<uint8_t*>(batch.packetData(offset));
+            iov.iov_len = batch.packetLen(offset);
+
+            struct msghdr msg{};
+            msg.msg_name = const_cast<struct sockaddr*>(addr);
+            msg.msg_namelen = addrlen;
+            msg.msg_iov = &iov;
+            msg.msg_iovlen = 1;
+            // Reuse the cmsg template buffer — sendmsg() completes synchronously
+            msg.msg_control = cmsg_template;
+            msg.msg_controllen = cmsg_len;
+
+            do {
+                sent = sendmsg(fd, &msg, 0);
+            } while (sent < 0 && errno == EINTR);
+        } else {
+            do {
+                sent = sendto(fd, batch.packetData(offset), batch.packetLen(offset), 0,
+                              addr, addrlen);
+            } while (sent < 0 && errno == EINTR);
+        }
         if (sent < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (offset > 0) {

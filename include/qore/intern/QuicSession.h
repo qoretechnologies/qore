@@ -380,6 +380,19 @@ public:
         out_len = remote_addrlen_;
     }
 
+    //! Copy the stored local address into caller-provided buffers
+    /** Thread-safe: acquires mtx_ to ensure the address and length are read
+        atomically.  Copies only the actual address length, not the full
+        sockaddr_storage.
+        @param out destination buffer (must be at least sizeof(sockaddr_storage))
+        @param out_len set to the actual address length
+    */
+    DLLLOCAL void getLocalAddrCopy(struct sockaddr_storage& out, socklen_t& out_len) const {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        memcpy(&out, &local_addr_, local_addrlen_);
+        out_len = local_addrlen_;
+    }
+
     //! Update the stored remote peer address (called after path validation succeeds)
     /** Thread-safe: acquires mtx_ internally.
         @param addr new remote address

@@ -1362,6 +1362,14 @@ private:
     struct sockaddr_storage peer_addr_{};
     socklen_t peer_addrlen_ = 0;
 
+    //! Per-session local address for source IP pinning via sendmsg() cmsg
+    /** Distinct from local_addr_ (which is the wildcard from getsockname()
+        used for receive-side pktinfo).  This is the actual per-session local
+        IP captured at connection creation via pktinfo.
+    */
+    struct sockaddr_storage send_local_addr_{};
+    socklen_t send_local_addrlen_ = 0;
+
     //! Receive buffer for incoming packets (ACKs)
     uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
     //! Reusable packet batch (avoids per-call heap allocations)
@@ -1483,6 +1491,14 @@ private:
     //! Stored remote peer address for sendto()
     struct sockaddr_storage peer_addr_{};
     socklen_t peer_addrlen_ = 0;
+
+    //! Per-session local address for source IP pinning via sendmsg() cmsg
+    /** Distinct from local_addr_ (which is the wildcard from getsockname()
+        used for receive-side pktinfo).  This is the actual per-session local
+        IP captured at connection creation via pktinfo.
+    */
+    struct sockaddr_storage send_local_addr_{};
+    socklen_t send_local_addrlen_ = 0;
 
     //! Receive buffer for incoming packets (ACKs)
     uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};

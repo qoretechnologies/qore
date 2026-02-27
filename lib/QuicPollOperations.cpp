@@ -1090,8 +1090,14 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
         socklen_t peer_addrlen;
         session->getRemoteAddrCopy(peer_addr, peer_addrlen);
 
+        // Copy per-session local address for source IP pinning (multi-homed servers)
+        struct sockaddr_storage local_addr;
+        socklen_t local_addrlen;
+        session->getLocalAddrCopy(local_addr, local_addrlen);
+
         int sent = sendQuicPacketsBatch(fd, pkt_batch_,
-            reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen);
+            reinterpret_cast<const struct sockaddr*>(&peer_addr), peer_addrlen,
+            reinterpret_cast<const struct sockaddr*>(&local_addr), local_addrlen);
         if (sent < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 result = SOCK_POLLOUT;
@@ -1524,6 +1530,9 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     // Copy the remote peer address from the QUIC session for sendto()
     quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
 
+    // Copy per-session local address for source IP pinning (multi-homed servers)
+    quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
+
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPackets()
     int fd = sock->priv->socket->getSocket();
@@ -1579,6 +1588,7 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
     // copy, the flag will be set again and the next call will refresh the cache.
     if (quic_session->hasPathMigrated()) {
         quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
         quic_session->clearPathMigrated();
     }
 
@@ -1597,7 +1607,8 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
     int fd = sock->priv->socket->getSocket();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
-        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_);
+        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
+        reinterpret_cast<const struct sockaddr*>(&send_local_addr_), send_local_addrlen_);
     if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return SOCK_POLLOUT;
@@ -1791,6 +1802,9 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     // Copy the remote peer address from the QUIC session for sendto()
     quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
 
+    // Copy per-session local address for source IP pinning (multi-homed servers)
+    quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
+
     // Cache local address
     int fd = sock->priv->socket->getSocket();
     local_addrlen_ = sizeof(local_addr_);
@@ -1847,6 +1861,7 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
     // SocketQuicSendResponsePollOperation::sendPendingPackets() — see comment there.
     if (quic_session->hasPathMigrated()) {
         quic_session->getRemoteAddrCopy(peer_addr_, peer_addrlen_);
+        quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
         quic_session->clearPathMigrated();
     }
 
@@ -1865,7 +1880,8 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
     int fd = sock->priv->socket->getSocket();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
-        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_);
+        reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
+        reinterpret_cast<const struct sockaddr*>(&send_local_addr_), send_local_addrlen_);
     if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return SOCK_POLLOUT;
