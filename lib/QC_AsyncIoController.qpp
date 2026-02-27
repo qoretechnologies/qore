@@ -416,7 +416,11 @@ hash<auto> AsyncIoController::getInfo() {
     ctrl.setLogger(logger);
     @endcode
 
-    @param logger a LoggerInterface object for logging, or @ref nothing to disable logging
+    @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
+    or @ref nothing "NOTHING" to disable per-controller logging (falls back to the global
+    async I/O logger set via @ref set_async_io_logger())
+
+    @since %Qore 2.3
 */
 nothing AsyncIoController::setLogger(*object logger) {
     ctrl->setLogger(logger, xsink);

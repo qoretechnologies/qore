@@ -37,6 +37,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <cerrno>
 #include <cstring>
@@ -644,6 +645,40 @@ nothing remove_signal_handler(softint signal) [dom=PROCESS] {
         "portability, use the constant Option::HAVE_SIGNAL_HANDLING to check if this function is implemented before "
         "calling");
 #endif
+}
+///@}
+
+/** @defgroup async_io_logger_functions Async I/O Logger Functions
+    Functions for setting and getting the global async I/O logger used by QUIC, HTTP/3, and
+    the @ref Qore::AsyncIoController "AsyncIoController" when no per-controller logger is set.
+ */
+///@{
+//! Sets the global logger for async I/O, QUIC, and HTTP/3 operations
+/** @par Example:
+    @code{.py}
+set_async_io_logger(logger);
+    @endcode
+
+    @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object, or @ref nothing "NOTHING" to clear
+
+    @since %Qore 2.3
+*/
+nothing set_async_io_logger(*object logger) [dom=PROCESS] {
+    qore_set_async_io_logger(logger, xsink);
+}
+
+//! Returns the current global async I/O logger, or @ref nothing "NOTHING"
+/** @par Example:
+    @code{.py}
+*object logger = get_async_io_logger();
+    @endcode
+
+    @return the logger object or @ref nothing "NOTHING"
+
+    @since %Qore 2.3
+*/
+*object get_async_io_logger() [flags=CONSTANT;dom=PROCESS] {
+    return qore_get_async_io_logger_object();  // already referenced
 }
 ///@}
 

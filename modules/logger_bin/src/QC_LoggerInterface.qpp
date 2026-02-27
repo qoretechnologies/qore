@@ -49,7 +49,7 @@ static void LoggerInterface_deserializer(QoreObject& self, const QoreHashNode* s
 //! This is the base class for logger levels
 /** This class stores the integer and string log level values
 */
-qclass LoggerInterface [ns=Qore::Logger; arg=QoreLoggerInterface* i; vparent=Serializable; serializer=reinterpret_cast<q_serializer_t>(LoggerInterface_serializer); deserializer=LoggerInterface_deserializer];
+qclass LoggerInterface [ns=Qore::Logger; arg=QoreLoggerInterface* i; vparent=LoggerInterfaceBase,Serializable; serializer=reinterpret_cast<q_serializer_t>(LoggerInterface_serializer); deserializer=LoggerInterface_deserializer];
 
 //! Creates the logger interface object
 /**

@@ -36,6 +36,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreQueue.h>
 #include <qore/QoreAbstractLoggerInterface.h>
+#include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreEventLoop.h"
 #include "qore/intern/QoreEventNotifier.h"
 
@@ -253,24 +254,6 @@ private:
         QoreHashNode* result;              //!< Referenced
     };
 
-    //! Logger bridge that wraps a QoreObject implementing LoggerInterface
-    class LoggerBridge : public QoreAbstractLoggerInterface {
-    public:
-        DLLLOCAL LoggerBridge(QoreObject* logger_obj);
-        DLLLOCAL virtual ~LoggerBridge();
-
-        DLLLOCAL virtual void logArgs(int level, const QoreStringNode* msg,
-            const QoreListNode* args, ExceptionSink* xsink) override;
-        DLLLOCAL virtual bool isEnabledFor(int level) const override;
-
-        DLLLOCAL virtual void deref(ExceptionSink* xsink);
-
-    private:
-        QoreObject* logger_obj;          //!< Referenced
-        const QoreMethod* logArgsMethod; //!< logArgs method pointer
-        const QoreMethod* isEnabledForMethod; //!< isEnabledFor(int) method pointer
-    };
-
     //! Timer info stored under lock
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
@@ -293,7 +276,7 @@ private:
     int submit_seq;                       //!< Incremented on each submit() call
     int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
     QoreCondition processed_cond;         //!< Signaled when processed_seq advances
-    LoggerBridge* logger;                 //!< Referenced or nullptr
+    QoreLoggerBridge* logger;              //!< Referenced or nullptr
     std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
     ResolvedCallReferenceNode* timer_callback; //!< Timer callback (referenced, or nullptr)
 
@@ -359,11 +342,6 @@ private:
 
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     DLLLOCAL void log(int level, const char* fmt, ...) const;
-
-    //! Log a message using a pre-acquired logger reference (lock-free — safe to call with lock held)
-    /** @param lgr a referenced LoggerBridge (caller must deref after call)
-    */
-    DLLLOCAL static void logWithRef(LoggerBridge* lgr, int level, const char* fmt, ...);
 
     //! Get the socket unique hash from a QoreSocketObject
     DLLLOCAL static std::string getSocketHash(QoreSocketObject* sock);

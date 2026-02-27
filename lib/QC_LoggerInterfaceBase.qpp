@@ -1,0 +1,75 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_LoggerInterfaceBase.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+
+class LoggerInterfaceBaseDummy {};
+
+//! Abstract base class for logger interfaces in the Qore core library
+/** Defines the minimal logging contract needed by the core runtime for
+    async I/O, QUIC, and HTTP/3 logging.
+
+    The full @ref Qore::Logger::LoggerInterface "LoggerInterface" in the Logger module inherits from
+    this class, but any user class implementing @ref logArgs() and @ref isEnabledFor() can also
+    be used directly.
+
+    @par Example:
+    @code{.py}
+class MyLogger inherits LoggerInterfaceBase {
+    logArgs(int level, string message, *softlist<auto> args) {
+        printf("LOG [%d]: %s\n", level, vsprintf(message, args));
+    }
+    bool isEnabledFor(int level) {
+        return level >= LoggerLevel::getLevelInfo().getValue();
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass LoggerInterfaceBase [arg=LoggerInterfaceBaseDummy* lib; ns=Qore];
+
+//! Logs a message with an integer level and format arguments
+/** @param level the integer log level
+    @param message the log message format string
+    @param args optional format arguments
+
+    @since %Qore 2.3
+*/
+abstract nothing LoggerInterfaceBase::logArgs(int level, string message, *softlist<auto> args);
+
+//! Returns @ref True "True" if logging is enabled for the given integer level
+/** @param level the integer log level to check
+    @return @ref True "True" if logging is enabled for the given level
+
+    @since %Qore 2.3
+*/
+abstract bool LoggerInterfaceBase::isEnabledFor(int level);

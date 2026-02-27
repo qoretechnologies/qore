@@ -252,6 +252,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_FilePollOperation.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
+    lib/QC_LoggerInterfaceBase.qpp
     lib/QC_AsyncIoController.qpp
     lib/ql_misc.qpp
     lib/ql_compression.qpp
@@ -710,6 +711,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocket.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
+    lib/QoreLoggerBridge.cpp
+    lib/QoreAsyncIoLogger.cpp
     lib/AsyncIoControllerPriv.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
@@ -999,6 +1002,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
@@ -1270,6 +1275,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AsyncIoController.cpp\"
 
 #include \"${CMAKE_SOURCE_DIR}/lib/QorePseudoMethods.cpp\"

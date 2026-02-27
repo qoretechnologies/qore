@@ -38,6 +38,7 @@
 #include "qore/intern/EncryptionTransforms.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QuicSessionTicketCache.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <atomic>
 #include <cerrno>
@@ -322,6 +323,9 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 void qore_cleanup() {
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
+
+    // clean up global async I/O logger before modules and threading are torn down
+    qore_async_io_logger_cleanup();
 
     // purge thread resources before deleting modules
     {

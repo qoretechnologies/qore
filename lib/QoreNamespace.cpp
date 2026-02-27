@@ -49,6 +49,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_EventLoop.h"
 #include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_LoggerInterfaceBase.h"
 #include "qore/intern/QC_AsyncIoController.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
@@ -1292,6 +1293,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
 
+    qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));
     qns.addSystemClass(initSandboxManagerClass(qns));  // must be before Program class
     qns.addSystemClass(initParseOptionsClass(qns));  // must be before Program class

@@ -34,78 +34,18 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <cstdarg>
 
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
 
-// Logger level constants (from Logger module)
-static constexpr int LOGGER_LEVEL_ERROR = 40000;
-static constexpr int LOGGER_LEVEL_WARN = 30000;
-static constexpr int LOGGER_LEVEL_INFO = 20000;
-static constexpr int LOGGER_LEVEL_DEBUG = 10000;
-static constexpr int LOGGER_LEVEL_TRACE = 5000;
-
 //! Returns the current time in microseconds since the epoch
 static int64 get_epoch_us() {
     int us;
     int64 secs = q_epoch_us(us);
     return secs * 1000000LL + us;
-}
-
-// --- LoggerBridge implementation ---
-
-AsyncIoControllerPriv::LoggerBridge::LoggerBridge(QoreObject* logger_obj)
-    : logger_obj(logger_obj), logArgsMethod(nullptr), isEnabledForMethod(nullptr) {
-    assert(logger_obj);
-    logger_obj->ref();
-    const QoreClass* cls = logger_obj->getClass();
-    logArgsMethod = cls->findMethod("logArgs");
-    isEnabledForMethod = cls->findMethod("isEnabledFor");
-}
-
-AsyncIoControllerPriv::LoggerBridge::~LoggerBridge() {
-}
-
-void AsyncIoControllerPriv::LoggerBridge::logArgs(int level, const QoreStringNode* msg,
-        const QoreListNode* args, ExceptionSink* xsink) {
-    if (!logArgsMethod) {
-        return;
-    }
-    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
-    call_args->push(level, xsink);
-    if (msg) {
-        call_args->push(msg->refSelf(), xsink);
-    } else {
-        call_args->push(QoreValue(), xsink);
-    }
-    if (args) {
-        call_args->push(args->refSelf(), xsink);
-    }
-    ValueHolder rv(logger_obj->evalMethod(*logArgsMethod, *call_args, xsink), xsink);
-}
-
-bool AsyncIoControllerPriv::LoggerBridge::isEnabledFor(int level) const {
-    if (!isEnabledForMethod) {
-        return false;
-    }
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), &xsink);
-    call_args->push(level, &xsink);
-    ValueHolder rv(logger_obj->evalMethod(*isEnabledForMethod, *call_args, &xsink), &xsink);
-    if (xsink) {
-        return false;
-    }
-    return rv->getAsBool();
-}
-
-void AsyncIoControllerPriv::LoggerBridge::deref(ExceptionSink* xsink) {
-    if (ROdereference()) {
-        logger_obj->deref(xsink);
-        logger_obj = nullptr;
-        delete this;
-    }
 }
 
 // --- PollInfo implementation ---
@@ -395,7 +335,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         notifier->notify();
     }
 
-    log(LOGGER_LEVEL_DEBUG, "submit: operation '%s' submitted (owner: '%s')", uh.c_str(), owner.c_str());
+    log(QORE_LOG_LEVEL_DEBUG, "submit: operation '%s' submitted (owner: '%s')", uh.c_str(), owner.c_str());
 
     // Return queue to caller — transfer ownership out of RAII struct
     if (res.new_queue_obj) {
@@ -795,13 +735,15 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
         }
     }
 
-    AutoLocker al(m);
-    if (logger) {
-        logger->deref(xsink);
-        logger = nullptr;
+    QoreLoggerBridge* old_logger;
+    {
+        AutoLocker al(m);
+        old_logger = logger;
+        logger = logger_obj ? new QoreLoggerBridge(logger_obj) : nullptr;
     }
-    if (logger_obj) {
-        logger = new LoggerBridge(logger_obj);
+    // Deref old bridge outside lock — destructor may call Qore user code
+    if (old_logger) {
+        old_logger->deref(xsink);
     }
 }
 
@@ -970,7 +912,7 @@ void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
     self->ioThread(xsink);
     if (*xsink) {
         // Log exception
-        self->log(LOGGER_LEVEL_ERROR, "I/O thread exception");
+        self->log(QORE_LOG_LEVEL_ERROR, "I/O thread exception");
         xsink->clear();
     }
     self->deref(xsink);
@@ -984,7 +926,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         io_cond.broadcast();
     }
 
-    log(LOGGER_LEVEL_DEBUG, "I/O thread ready");
+    log(QORE_LOG_LEVEL_DEBUG, "I/O thread ready");
 
     // ready_socket_hashes must persist across iterations:
     // Phase 1 checks this set to decide which operations to continuePoll();
@@ -1259,7 +1201,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 ExceptionSink cb_xsink;
                 ValueHolder rv(dd.callback->execValue(*args, &cb_xsink), &cb_xsink);
                 if (cb_xsink) {
-                    log(LOGGER_LEVEL_ERROR, "callback exception for key '%s'", dd.key.c_str());
+                    log(QORE_LOG_LEVEL_ERROR, "callback exception for key '%s'", dd.key.c_str());
                     cb_xsink.clear();
                 }
                 dd.callback->deref(xsink);
@@ -1289,7 +1231,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         if (do_autostop) {
-            log(LOGGER_LEVEL_DEBUG, "all operations completed; exiting I/O thread (autostop)");
+            log(QORE_LOG_LEVEL_DEBUG, "all operations completed; exiting I/O thread (autostop)");
             break;
         }
 
@@ -1312,7 +1254,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         std::vector<QoreEventInfo> events;
         int count = loop->poll(events, timeout_ms, xsink);
         if (*xsink) {
-            log(LOGGER_LEVEL_ERROR, "EventLoop::poll() error");
+            log(QORE_LOG_LEVEL_ERROR, "EventLoop::poll() error");
             xsink->clear();
             continue;
         }
@@ -1381,7 +1323,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     ExceptionSink cb_xsink;
                     ValueHolder rv(cb_snapshot->execValue(*args, &cb_xsink), &cb_xsink);
                     if (cb_xsink) {
-                        log(LOGGER_LEVEL_ERROR, "timer callback exception for timer %lld",
+                        log(QORE_LOG_LEVEL_ERROR, "timer callback exception for timer %lld",
                             (long long)te.id);
                         cb_xsink.clear();
                     }
@@ -1445,7 +1387,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
     }
 
-    log(LOGGER_LEVEL_DEBUG, "I/O thread exited");
+    log(QORE_LOG_LEVEL_DEBUG, "I/O thread exited");
 }
 
 bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
@@ -1658,7 +1600,7 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         ExceptionSink cb_xsink;
         ValueHolder rv(pinfo.callback->execValue(*args, &cb_xsink), &cb_xsink);
         if (cb_xsink) {
-            log(LOGGER_LEVEL_ERROR, "cancel callback exception");
+            log(QORE_LOG_LEVEL_ERROR, "cancel callback exception");
             cb_xsink.clear();
         }
     } else if (pinfo.queue) {
@@ -1874,14 +1816,25 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     // Snapshot and ref the logger under lock, then release the lock before calling
     // any user-provided methods (isEnabledFor, logArgs) to avoid deadlock if the
     // logger re-enters the controller.
-    LoggerBridge* lgr;
+    QoreLoggerBridge* lgr;
+    bool use_global = false;
     {
         AutoLocker al(m);
         if (!logger) {
-            return;
+            use_global = true;
+        } else {
+            lgr = logger;
+            lgr->ref();
         }
-        lgr = logger;
-        lgr->ref();
+    }
+
+    if (use_global) {
+        // No per-controller logger — delegate to global async I/O logger (outside lock)
+        va_list args;
+        va_start(args, fmt);
+        qore_async_io_log_v(level, fmt, args);
+        va_end(args);
+        return;
     }
 
     if (!lgr->isEnabledFor(level)) {
@@ -1900,25 +1853,6 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
     lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
     lgr->deref(&xsink);
-    if (xsink) {
-        xsink.clear();
-    }
-}
-
-void AsyncIoControllerPriv::logWithRef(LoggerBridge* lgr, int level, const char* fmt, ...) {
-    if (!lgr) {
-        return;
-    }
-
-    va_list args;
-    va_start(args, fmt);
-    QoreStringNode* msg = new QoreStringNode();
-    msg->vsprintf(fmt, args);
-    va_end(args);
-
-    ExceptionSink xsink;
-    lgr->logArgs(level, msg, nullptr, &xsink);
-    msg->deref();
     if (xsink) {
         xsink.clear();
     }

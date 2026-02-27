@@ -65,4 +65,13 @@ public:
     }
 };
 
+// Standard logger levels matching Qore::Logger::LoggerLevel
+constexpr int QORE_LOG_LEVEL_TRACE  =  5000;
+constexpr int QORE_LOG_LEVEL_DEBUG  = 10000;
+constexpr int QORE_LOG_LEVEL_DETAIL = 15000;
+constexpr int QORE_LOG_LEVEL_INFO   = 20000;
+constexpr int QORE_LOG_LEVEL_WARN   = 30000;
+constexpr int QORE_LOG_LEVEL_ERROR  = 40000;
+constexpr int QORE_LOG_LEVEL_FATAL  = 50000;
+
 #endif // _QORE_QOREABSTRACTLOGGERINTERFACE_H

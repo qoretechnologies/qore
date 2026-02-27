@@ -404,4 +404,6 @@
 // Async I/O event loop infrastructure
 #include "QoreEventLoop.cpp"
 #include "QoreEventNotifier.cpp"
+#include "QoreLoggerBridge.cpp"
+#include "QoreAsyncIoLogger.cpp"
 #include "AsyncIoControllerPriv.cpp"

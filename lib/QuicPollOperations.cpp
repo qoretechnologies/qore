@@ -30,8 +30,10 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -1170,8 +1172,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Enforce maximum session count to prevent memory exhaustion from
         // a flood of Initial packets
         if (sessions_.size() >= MAX_QUIC_SERVER_SESSIONS) {
-            // TODO: replace fprintf with AbstractLoggerBase when core logging is implemented
-            fprintf(stderr, "QUIC WARNING: max server sessions (%zu) reached, dropping new connection\n",
+            qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                "QUIC: max server sessions (%zu) reached, dropping new connection",
                 MAX_QUIC_SERVER_SESSIONS);
             return 0;
         }
@@ -1182,7 +1184,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         if (*xsink) {
             const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-            fprintf(stderr, "QUIC WARNING: failed to create shared server SSL_CTX: %s: %s\n",
+            qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                "QUIC: failed to create shared server SSL_CTX: %s: %s",
                 err_str ? err_str->c_str() : "unknown",
                 desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
@@ -1199,10 +1202,10 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         if (*xsink || !new_session) {
             // Log and continue — a single client's failed handshake should not
             // abort the server for all other clients
-            // TODO: replace fprintf with AbstractLoggerBase when core logging is implemented
             const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-            fprintf(stderr, "QUIC WARNING: failed to create server session: %s: %s\n",
+            qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                "QUIC: failed to create server session: %s: %s",
                 err_str ? err_str->c_str() : "unknown",
                 desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
@@ -1240,10 +1243,10 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         if (*xsink) {
             // Log and continue — a single session's HTTP/3 setup failure should not
             // halt the server for all other clients
-            // TODO: replace fprintf with AbstractLoggerBase when core logging is implemented
             const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-            fprintf(stderr, "QUIC WARNING: setupHttp3() failed for session %lld: %s: %s\n",
+            qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                "QUIC: setupHttp3() failed for session %lld: %s: %s",
                 (long long)target_session->getSessionId(),
                 err_str ? err_str->c_str() : "unknown",
                 desc_str ? desc_str->c_str() : "unknown");
