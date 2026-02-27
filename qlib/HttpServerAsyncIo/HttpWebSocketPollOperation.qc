@@ -51,11 +51,11 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
         #! Current state
         string state = STATE_CONNECTED;
 
-        #! Queue of frames to send
-        Queue send_queue();
+        #! Channel of frames to send
+        Channel send_channel(-1);
 
-        #! Queue of received frames for the application
-        Queue recv_queue();
+        #! Channel of received frames for the application
+        Channel recv_channel(-1);
 
         #! Pending outgoing data
         *binary pending_send;
@@ -170,17 +170,11 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
 
         # Check for queued frames to send
         if (!pending_send) {
-            try {
-                *hash<auto> frame = send_queue.get(0ms);
-                if (frame) {
-                    pending_send = encodeFrame(frame);
-                    pending_send_offset = 0;
-                    poll_events |= SOCK_POLLOUT;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "QUEUE-TIMEOUT") {
-                    rethrow;
-                }
+            auto result = send_channel.tryRecv();
+            if (exists result) {
+                pending_send = encodeFrame(result.value);
+                pending_send_offset = 0;
+                poll_events |= SOCK_POLLOUT;
             }
         }
 
@@ -272,7 +266,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
         switch (opcode) {
             case WS_OP_TEXT: {
                 string text = payload.toString("UTF-8");
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "text",
                     "data": text,
                 });
@@ -280,7 +274,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
             }
 
             case WS_OP_BINARY: {
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "binary",
                     "data": payload,
                 });
@@ -290,7 +284,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
             case WS_OP_PING: {
                 # Send pong with same payload
                 queueFrame(WS_OP_PONG, payload);
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "ping",
                     "data": payload,
                 });
@@ -298,7 +292,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
             }
 
             case WS_OP_PONG: {
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "pong",
                     "data": payload,
                 });
@@ -313,7 +307,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
                     }
                 }
 
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "close",
                     "code": close_code,
                     "reason": close_reason,
@@ -329,7 +323,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
 
             case WS_OP_CONTINUATION: {
                 # Continuation frames - simplified handling
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "binary",
                     "data": payload,
                 });
@@ -375,7 +369,7 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
             payload = binary(string(data));
         }
 
-        send_queue.push({
+        send_channel.send({
             "opcode": opcode,
             "data": payload,
         });
@@ -417,19 +411,13 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
     /** @return frame info hash or NOTHING if no frames available
     */
     *hash<WebSocketFrameInfo> getReceivedFrame() {
-        try {
-            return recv_queue.get(0ms);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QUEUE-TIMEOUT") {
-                return NOTHING;
-            }
-            rethrow;
-        }
+        auto result = recv_channel.tryRecv();
+        return exists result ? result.value : NOTHING;
     }
 
     #! Returns True if there are received frames waiting
     bool hasReceivedFrames() {
-        return recv_queue.size() > 0;
+        return !recv_channel.empty();
     }
 
     #! Returns the socket

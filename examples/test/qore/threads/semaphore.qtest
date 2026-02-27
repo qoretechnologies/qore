@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class SemaphoreTest
+
+class SemaphoreTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Semaphore", "1.0", \ARGV) {
+        addTestCase("Basic acquire/release single permit", \testBasicSinglePermit());
+        addTestCase("N-permit concurrent access", \testNPermitConcurrent());
+        addTestCase("tryAcquire when available", \testTryAcquireAvailable());
+        addTestCase("tryAcquire when exhausted", \testTryAcquireExhausted());
+        addTestCase("Timeout behavior", \testTimeout());
+        addTestCase("AutoSemaphore RAII pattern", \testAutoSemaphore());
+        addTestCase("release(n) wakes multiple waiters", \testReleaseMultiple());
+        addTestCase("Negative permits in constructor throws", \testNegativePermits());
+        addTestCase("release(n < 1) throws", \testReleaseInvalid());
+        addTestCase("Copy creates independent semaphore", \testCopy());
+        addTestCase("AutoSemaphore cannot be copied", \testAutoSemaphoreCopy());
+        addTestCase("availablePermits and getWaiting", \testPermitsAndWaiting());
+        addTestCase("AutoSemaphore contended wait", \testAutoSemaphoreContended());
+        addTestCase("AutoSemaphore manual release/reacquire", \testAutoSemaphoreReleaseReacquire());
+        addTestCase("Semaphore zero initial permits", \testZeroPermits());
+        set_return_value(main());
+    }
+
+    testBasicSinglePermit() {
+        Semaphore sem(1);
+        assertEq(1, sem.availablePermits());
+        sem.acquire();
+        assertEq(0, sem.availablePermits());
+        sem.release();
+        assertEq(1, sem.availablePermits());
+    }
+
+    testNPermitConcurrent() {
+        int max_concurrent = 3;
+        Semaphore sem(max_concurrent);
+        Mutex m();
+        int current = 0;
+        int max_seen = 0;
+        Counter done(5);
+
+        for (int i = 0; i < 5; ++i) {
+            background sub() {
+                sem.acquire();
+                {
+                    AutoLock al(m);
+                    ++current;
+                    if (current > max_seen) {
+                        max_seen = current;
+                    }
+                }
+                usleep(50ms);
+                {
+                    AutoLock al(m);
+                    --current;
+                }
+                sem.release();
+                done.dec();
+            }();
+        }
+        done.waitForZero();
+        assertTrue(max_seen <= max_concurrent);
+        assertTrue(max_seen > 0);
+    }
+
+    testTryAcquireAvailable() {
+        Semaphore sem(1);
+        assertTrue(sem.tryAcquire());
+        assertEq(0, sem.availablePermits());
+        sem.release();
+    }
+
+    testTryAcquireExhausted() {
+        Semaphore sem(1);
+        assertTrue(sem.tryAcquire());
+        assertFalse(sem.tryAcquire());
+        sem.release();
+    }
+
+    testTimeout() {
+        Semaphore sem(0);
+        assertThrows("SEMAPHORE-TIMEOUT", sub() { sem.acquire(100ms); });
+    }
+
+    testAutoSemaphore() {
+        Semaphore sem(1);
+        {
+            AutoSemaphore as(sem);
+            assertEq(0, sem.availablePermits());
+        }
+        # After AutoSemaphore goes out of scope, permit should be released
+        assertEq(1, sem.availablePermits());
+    }
+
+    testReleaseMultiple() {
+        Semaphore sem(0);
+        Counter done(3);
+        Mutex m();
+        int acquired_count = 0;
+
+        for (int i = 0; i < 3; ++i) {
+            background sub() {
+                sem.acquire();
+                {
+                    AutoLock al(m);
+                    ++acquired_count;
+                }
+                done.dec();
+            }();
+        }
+
+        usleep(50ms);
+        # Release 3 permits at once - should wake all 3 waiters
+        sem.release(3);
+        done.waitForZero();
+        assertEq(3, acquired_count);
+    }
+
+    testNegativePermits() {
+        assertThrows("SEMAPHORE-ERROR", sub() { Semaphore sem(-1); });
+    }
+
+    testReleaseInvalid() {
+        Semaphore sem(1);
+        assertThrows("SEMAPHORE-ERROR", sub() { sem.release(0); });
+        assertThrows("SEMAPHORE-ERROR", sub() { sem.release(-1); });
+    }
+
+    testCopy() {
+        Semaphore sem(3);
+        sem.acquire();
+        # sem now has 2 permits
+        Semaphore sem2 = sem.copy();
+        # copy should have 2 permits (current state)
+        assertEq(2, sem2.availablePermits());
+        sem.release();
+    }
+
+    testAutoSemaphoreCopy() {
+        Semaphore sem(1);
+        AutoSemaphore as(sem);
+        assertThrows("AUTOSEMAPHORE-COPY-ERROR", sub() { AutoSemaphore as2 = as.copy(); });
+    }
+
+    testPermitsAndWaiting() {
+        Semaphore sem(2);
+        assertEq(2, sem.availablePermits());
+        assertEq(0, sem.getWaiting());
+        sem.acquire();
+        assertEq(1, sem.availablePermits());
+        sem.acquire();
+        assertEq(0, sem.availablePermits());
+        sem.release(2);
+        assertEq(2, sem.availablePermits());
+    }
+
+    testAutoSemaphoreContended() {
+        # Test that AutoSemaphore waits properly when semaphore is contended
+        # (verifies the fix for premature timeout after 500ms)
+        Semaphore sem(1);
+        sem.acquire();  # exhaust the permit
+
+        bool acquired = False;
+        # Release the permit after 1 second from a background thread
+        background sub() {
+            sleep(1s);
+            sem.release();
+        }();
+
+        # AutoSemaphore should wait longer than 500ms for the permit
+        {
+            AutoSemaphore as(sem);
+            acquired = True;
+        }
+        assertTrue(acquired, "AutoSemaphore should have waited for contended permit");
+    }
+
+    testAutoSemaphoreReleaseReacquire() {
+        Semaphore sem(1);
+        {
+            AutoSemaphore as(sem);
+            assertEq(0, sem.availablePermits());
+
+            # Manual release
+            as.release();
+            assertEq(1, sem.availablePermits());
+
+            # Double release throws
+            assertThrows("AUTOSEMAPHORE-ERROR", sub() { as.release(); });
+
+            # Reacquire
+            as.acquire();
+            assertEq(0, sem.availablePermits());
+
+            # Double acquire throws
+            assertThrows("AUTOSEMAPHORE-ERROR", sub() { as.acquire(); });
+        }
+        # Destructor releases
+        assertEq(1, sem.availablePermits());
+    }
+
+    testZeroPermits() {
+        Semaphore sem(0);
+        assertEq(0, sem.availablePermits());
+        assertFalse(sem.tryAcquire());
+
+        # Release adds a permit
+        sem.release();
+        assertEq(1, sem.availablePermits());
+        assertTrue(sem.tryAcquire());
+        assertEq(0, sem.availablePermits());
+    }
+}

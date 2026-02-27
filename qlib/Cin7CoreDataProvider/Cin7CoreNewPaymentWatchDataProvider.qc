@@ -63,7 +63,7 @@ public class Cin7CoreNewPaymentWatchDataProvider inherits Cin7CoreWatchDataProvi
     }
 
     #! Poll for new payments
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Page": 1,

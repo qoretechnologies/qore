@@ -1,0 +1,398 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Channel.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QC_ChannelIterator.h"
+
+//! A typed channel for inter-thread communication with close semantics
+/** Channel objects provide a Go-style channel for passing values between threads with backpressure
+    and close semantics.
+
+    Channels can be unlimited (capacity = -1), buffered (capacity > 0), or unbuffered (capacity = 0):
+    - @b Unlimited channels have an unbounded buffer; @ref send() never blocks (like @ref Queue
+      but with close semantics)
+    - @b Buffered channels have an internal buffer; @ref send() blocks only when the buffer is full
+    - @b Unbuffered channels provide synchronous handoff; @ref send() blocks until a @ref recv() is ready
+
+    Once closed via @ref close(), no more values can be sent, but remaining buffered values can
+    still be received. After all values are drained, @ref recv() returns @ref NOTHING.
+
+    Channels support iteration via @ref Qore::Thread::ChannelIterator "ChannelIterator",
+    enabling use with @ref foreach:
+    @code{.py}
+foreach auto val in (channel.iterator()) {
+    printf("got: %y\n", val);
+}
+    @endcode
+
+    @par Example: Producer-consumer pipeline
+    @code{.py}
+Channel ch(10);  # buffered channel with capacity 10
+background sub() {
+    for (int i = 0; i < 5; ++i) {
+        ch.send(i);
+    }
+    ch.close();
+}();
+foreach auto val in (ch.iterator()) {
+    printf("received: %d\n", val);
+}
+    @endcode
+
+    @par Example: Unbuffered synchronous handoff
+    @code{.py}
+Channel ch(0);  # unbuffered — send() blocks until recv() is called
+background sub() {
+    ch.send("hello");  # blocks until the main thread calls recv()
+}();
+auto val = ch.recv();  # "hello"
+    @endcode
+
+    @par Example: Multiple producers, single consumer
+    @code{.py}
+Channel ch(20);
+int num_producers = 4;
+Counter done(num_producers);
+
+for (int p = 0; p < num_producers; ++p) {
+    background sub(int id) {
+        for (int i = 0; i < 10; ++i) {
+            ch.send({"producer": id, "item": i});
+        }
+        done.dec();
+    }(p);
+}
+
+# Close channel when all producers are done
+background sub() {
+    done.waitForZero();
+    ch.close();
+}();
+
+# Consume all items from all producers
+foreach auto val in (ch.iterator()) {
+    printf("producer %d: item %d\n", val.producer, val.item);
+}
+    @endcode
+
+    @par Example: Backpressure with timeout
+    @code{.py}
+Channel ch(100);  # bounded buffer for backpressure
+background sub() {
+    while (auto item = get_next_item()) {
+        try {
+            ch.send(item, 10s);  # wait up to 10s for space
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "CHANNEL-TIMEOUT") {
+                printf("consumer too slow, dropping item\n");
+                continue;
+            }
+            rethrow;
+        }
+    }
+    ch.close();
+}();
+    @endcode
+
+    @par Example: Non-blocking send/recv
+    @code{.py}
+Channel ch(5);
+if (ch.trySend(42)) {
+    printf("sent successfully\n");
+} else {
+    printf("channel full or closed\n");
+}
+
+auto result = ch.tryRecv();
+if (exists result) {
+    printf("received: %y\n", result.value);
+} else {
+    printf("nothing available\n");
+}
+    @endcode
+
+    @par Example: Fan-out to multiple workers
+    @code{.py}
+Channel work_ch(50);
+Channel result_ch(50);
+
+# Start workers
+int num_workers = 4;
+Counter worker_done(num_workers);
+for (int w = 0; w < num_workers; ++w) {
+    background sub() {
+        foreach auto item in (work_ch.iterator()) {
+            result_ch.send(process(item));
+        }
+        worker_done.dec();
+    }();
+}
+
+# Feed work
+background sub() {
+    foreach auto item in (items) {
+        work_ch.send(item);
+    }
+    work_ch.close();
+}();
+
+# Close result channel when all workers are done
+background sub() {
+    worker_done.waitForZero();
+    result_ch.close();
+}();
+
+# Collect results
+foreach auto result in (result_ch.iterator()) {
+    printf("result: %y\n", result);
+}
+    @endcode
+
+    @see @ref Qore::Thread::ChannelIterator "ChannelIterator"
+    @see @ref channel_select()
+    @see @ref Qore::Thread::Queue "Queue"
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass Channel [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread];
+
+//! Creates the Channel with the given capacity
+/** @param capacity the buffer capacity; -1 = unlimited (unbounded buffer), 0 = unbuffered
+    (synchronous handoff), > 0 = buffered with backpressure
+
+    @par Example:
+    @code{.py}
+Channel ch(10);  # buffered with capacity 10
+Channel sync_ch(0);  # unbuffered
+Channel unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
+    @endcode
+
+    @throw CHANNEL-ERROR capacity less than -1
+
+    @since %Qore 2.3
+ */
+Channel::constructor(int capacity = 0) {
+    if (capacity < -1) {
+        xsink->raiseException("CHANNEL-ERROR",
+            "Channel::constructor() called with invalid capacity " QLLD
+            "; must be >= -1 (-1 = unlimited, 0 = unbuffered, > 0 = buffered)", capacity);
+        return;
+    }
+    self->setPrivate(CID_CHANNEL, new QoreChannel(capacity));
+}
+
+//! Destroys the Channel
+/** Closes the channel and wakes all blocked threads. Remaining values are discarded.
+
+    @throw CHANNEL-ERROR Object deleted while threads blocked on it
+ */
+Channel::destructor() {
+    ch->destructor(xsink);
+    ch->deref(xsink);
+}
+
+//! Throws an exception; Channel objects cannot be copied
+/** @throw CHANNEL-COPY-ERROR Objects of this class cannot be copied
+ */
+Channel::copy() {
+    xsink->raiseException("CHANNEL-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Sends a value into the channel, blocking if the channel is full
+/** @param value the value to send
+    @param timeout_ms a @ref timeout_type "timeout" value; 0 (the default) means wait indefinitely
+
+    @par Example:
+    @code{.py}
+ch.send(42);
+    @endcode
+
+    @throw CHANNEL-CLOSED channel is closed
+    @throw CHANNEL-ERROR channel deleted in another thread
+    @throw CHANNEL-TIMEOUT timed out waiting to send
+    @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
+ */
+nothing Channel::send(auto value, timeout timeout_ms = 0) {
+    ch->send(value.refSelf(), timeout_ms, xsink);
+}
+
+//! Receives a value from the channel, blocking until a value is available
+/** @param timeout_ms a @ref timeout_type "timeout" value; 0 (the default) means wait indefinitely
+
+    @return the received value, or @ref NOTHING if the channel is closed and drained
+
+    @par Example:
+    @code{.py}
+auto val = ch.recv();
+    @endcode
+
+    @throw CHANNEL-ERROR channel deleted in another thread
+    @throw CHANNEL-TIMEOUT timed out waiting to receive
+    @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
+ */
+auto Channel::recv(timeout timeout_ms = 0) {
+    bool timed_out = false;
+    bool has_value = false;
+    QoreValue rv = ch->recv(timeout_ms, xsink, timed_out, has_value);
+    if (timed_out && !*xsink) {
+        xsink->raiseException("CHANNEL-TIMEOUT",
+            "timed out after " QLLD "ms waiting to receive from channel", (int64)timeout_ms);
+    }
+    return rv;
+}
+
+//! Attempts to send a value without blocking
+/** @param value the value to send
+
+    @return @ref True if the value was sent, @ref False if the channel is full or closed
+
+    @par Example:
+    @code{.py}
+if (ch.trySend(42)) {
+    printf("sent!\n");
+}
+    @endcode
+ */
+bool Channel::trySend(auto value) {
+    QoreValue v = value.refSelf();
+    if (ch->trySend(v)) {
+        return true;
+    }
+    v.discard(xsink);
+    return false;
+}
+
+//! Attempts to receive a value without blocking
+/** @return a hash with \c "value" (the received value) and \c "has_value" (\c True) if a value
+    was received, or @ref NOTHING if no value is available
+
+    This allows distinguishing between an empty channel and a channel that contains @ref NOTHING.
+
+    @par Example:
+    @code{.py}
+auto result = ch.tryRecv();
+if (exists result) {
+    printf("received: %y\n", result.value);
+}
+    @endcode
+ */
+auto Channel::tryRecv() {
+    bool has_value = false;
+    QoreValue rv = ch->tryRecv(has_value);
+    if (!has_value) {
+        return QoreValue();
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("value", rv, xsink);
+    h->setKeyValue("has_value", true, xsink);
+    return h;
+}
+
+//! Closes the channel; remaining values can still be received
+/** After closing, @ref send() will throw \c CHANNEL-CLOSED. Remaining buffered values
+    can still be received via @ref recv().
+
+    @par Example:
+    @code{.py}
+ch.close();
+    @endcode
+ */
+nothing Channel::close() {
+    ch->close();
+}
+
+//! Returns @ref True if the channel is closed
+/** @return @ref True if the channel is closed
+
+    @par Example:
+    @code{.py}
+if (ch.isClosed()) { ... }
+    @endcode
+ */
+bool Channel::isClosed() [flags=CONSTANT] {
+    return ch->isClosed();
+}
+
+//! Returns the number of buffered values
+/** @return the number of values currently in the buffer
+
+    @par Example:
+    @code{.py}
+int s = ch.size();
+    @endcode
+ */
+int Channel::size() [flags=CONSTANT] {
+    return ch->size();
+}
+
+//! Returns the channel capacity
+/** @return the maximum buffer capacity (-1 for unlimited, 0 for unbuffered channels)
+
+    @par Example:
+    @code{.py}
+int c = ch.capacity();
+    @endcode
+ */
+int Channel::capacity() [flags=CONSTANT] {
+    return ch->capacity();
+}
+
+//! Returns @ref True if the channel buffer is empty
+/** @return @ref True if the buffer is empty
+
+    @par Example:
+    @code{.py}
+if (ch.empty()) { ... }
+    @endcode
+ */
+bool Channel::empty() [flags=CONSTANT] {
+    return ch->empty();
+}
+
+//! Returns a @ref Qore::Thread::ChannelIterator "ChannelIterator" for this channel
+/** Enables @ref foreach iteration over the channel until it is closed and drained.
+
+    @return a ChannelIterator for this channel
+
+    @par Example:
+    @code{.py}
+foreach auto val in (ch.iterator()) {
+    printf("got: %y\n", val);
+}
+    @endcode
+ */
+ChannelIterator Channel::iterator() {
+    return new QoreObject(QC_CHANNELITERATOR, getProgram(), new QoreChannelIterator(ch));
+}

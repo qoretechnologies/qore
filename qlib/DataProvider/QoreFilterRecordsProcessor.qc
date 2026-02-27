@@ -50,6 +50,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
                     "the expression builder",
                 "type": AbstractDataProviderTypeMap."*hash",
                 "required": True,
+                "server_expression_handling": True,
             },
         };
     }

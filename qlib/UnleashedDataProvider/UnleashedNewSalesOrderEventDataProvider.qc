@@ -63,7 +63,7 @@ public class UnleashedNewSalesOrderEventDataProvider inherits UnleashedWatchData
     }
 
     #! Poll for sales order updates
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "modifiedSince": formatDate(since),
             "pageSize": MaxPageSize,

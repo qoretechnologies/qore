@@ -59,11 +59,11 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
         #! Current state
         string state = STATE_CONNECTED;
 
-        #! Queue of frames to send
-        Queue send_queue();
+        #! Channel of frames to send
+        Channel send_channel(-1);
 
-        #! Queue of received frames
-        Queue recv_queue();
+        #! Channel of received frames
+        Channel recv_channel(-1);
 
         #! Buffer for incoming WebSocket frame data
         binary recv_buffer = binary();
@@ -129,18 +129,12 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
     }
 
     *hash<WebSocketFrameInfo> getReceivedFrame() {
-        try {
-            return recv_queue.get(0ms);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QUEUE-TIMEOUT") {
-                return NOTHING;
-            }
-            rethrow;
-        }
+        auto result = recv_channel.tryRecv();
+        return exists result ? result.value : NOTHING;
     }
 
     bool hasReceivedFrames() {
-        return recv_queue.size() > 0;
+        return !recv_channel.empty();
     }
 
     bool isOpen() {
@@ -183,7 +177,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
         if (state == STATE_CLOSED || state == STATE_ERROR) {
             throw "WEBSOCKET-CLOSED", "WebSocket connection is closed";
         }
-        send_queue.push({
+        send_channel.send({
             "opcode": opcode,
             "data": data,
         });
@@ -193,14 +187,8 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
     /** @return frame hash with opcode and data, or NOTHING if queue is empty
     */
     *hash<auto> getNextSendFrame() {
-        try {
-            return send_queue.get(0ms);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QUEUE-TIMEOUT") {
-                return NOTHING;
-            }
-            rethrow;
-        }
+        auto result = send_channel.tryRecv();
+        return exists result ? result.value : NOTHING;
     }
 
     #! Processes received data from HTTP/2 DATA frames
@@ -291,7 +279,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
         switch (opcode) {
             case WS_OP_TEXT: {
                 string text = payload.toString("UTF-8");
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "text",
                     "data": text,
                 });
@@ -299,7 +287,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
             }
 
             case WS_OP_BINARY: {
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "binary",
                     "data": payload,
                 });
@@ -309,7 +297,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
             case WS_OP_PING: {
                 # Send pong with same payload
                 queueFrame(WS_OP_PONG, payload);
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "ping",
                     "data": payload,
                 });
@@ -317,7 +305,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
             }
 
             case WS_OP_PONG: {
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "pong",
                     "data": payload,
                 });
@@ -332,7 +320,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
                     }
                 }
 
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "close",
                     "code": close_code,
                     "reason": close_reason,
@@ -347,7 +335,7 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
             }
 
             case WS_OP_CONTINUATION: {
-                recv_queue.push(<WebSocketFrameInfo>{
+                recv_channel.send(<WebSocketFrameInfo>{
                     "type": "binary",
                     "data": payload,
                 });

@@ -275,8 +275,14 @@ public class FilePoller {
         #! polling tid
         int tid;
 
-        #! stop counter
-        Qore::Thread::Counter sc();
+        #! stop WaitGroup
+        Qore::Thread::WaitGroup sc();
+
+        #! sleep mutex for condition-based sleep
+        Qore::Thread::Mutex sleep_m();
+
+        #! sleep condition for instant wakeup on stop
+        Qore::Thread::Condition sleep_cond();
 
         #! regex options
         int reopt;
@@ -484,10 +490,10 @@ public class FilePoller {
         if (runflag)
             return tid;
 
-        sc.waitForZero();
+        sc.wait();
 
         runflag = True;
-        sc.inc();
+        sc.add();
 
 %ifdef PO_NO_THREAD_CONTROL
         return tid = call_function(start_thread, \run());
@@ -513,9 +519,13 @@ public class FilePoller {
         m.lock();
         on_exit m.unlock();
 
-        runflag = False;
+        {
+            AutoLock al(sleep_m);
+            runflag = False;
+            sleep_cond.broadcast();
+        }
 
-        sc.waitForZero();
+        sc.wait();
     }
 
     #! stops the polling operation, returns immediately
@@ -527,7 +537,11 @@ public class FilePoller {
         m.lock();
         on_exit m.unlock();
 
-        runflag = False;
+        {
+            AutoLock al(sleep_m);
+            runflag = False;
+            sleep_cond.broadcast();
+        }
     }
 
     #! Waits indefinitely for the polling operation to stop
@@ -543,7 +557,7 @@ public class FilePoller {
     waitStop() {
         if (gettid() == tid)
             throw "THREAD-ERROR", sprintf("cannot call FilePoller::waitStop() from the event thread (%d)", tid);
-        sc.waitForZero();
+        sc.wait();
     }
 
     #! starts the polling operation inline (not in a background thread)
@@ -562,7 +576,7 @@ public class FilePoller {
             runflag = True;
             tid = gettid();
         }
-        sc.inc();
+        sc.add();
         run();
     }
 
@@ -579,24 +593,40 @@ public class FilePoller {
         return False;
     }
 
-    #! sleeps for the specificed number of seconds
+    #! sleeps for the specified number of seconds
     private fileSleep(softint secs) {
+%ifdef PO_NO_PROCESS_CONTROL
+        # Sandbox mode: must use custom sleep function with polling
         date end = now_us() + seconds(secs);
         while (True) {
-%ifdef PO_NO_PROCESS_CONTROL
             call_function(sleep, 1);
-%else
-            sleep ? call_function(sleep, 1) : Qore::usleep(250ms);
-%endif
             if (!runflag || (now_us() >= end)) {
                 break;
             }
         }
+%else
+        if (sleep) {
+            # Custom sleep function: use polling with custom sleep
+            date end = now_us() + seconds(secs);
+            while (True) {
+                call_function(sleep, 1);
+                if (!runflag || (now_us() >= end)) {
+                    break;
+                }
+            }
+        } else {
+            # Default: condition-based sleep for instant wakeup on stop
+            AutoLock al(sleep_m);
+            if (runflag) {
+                sleep_cond.wait(sleep_m, seconds(secs));
+            }
+        }
+%endif
     }
 
     #! starts the polling operation
     private run() {
-        on_exit sc.dec();
+        on_exit sc.done();
 
         while (runflag) {
             try {

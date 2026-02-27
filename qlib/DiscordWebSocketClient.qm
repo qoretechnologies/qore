@@ -316,8 +316,8 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! Resume gateway URL
         string resume_gateway_url;
 
-        #! Heartbeat thread counter
-        Counter heartbeat_cnt();
+        #! Heartbeat thread WaitGroup
+        WaitGroup heartbeat_cnt();
 
         #! Heartbeat thread ID
         int hb_tid;
@@ -573,10 +573,10 @@ hash<auto> h = ws.getInfo();
         if (hb_tid) {
             throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
         }
-        heartbeat_cnt.inc();
+        heartbeat_cnt.add();
         on_error {
             remove hb_tid;
-            heartbeat_cnt.dec();
+            heartbeat_cnt.done();
         }
 %ifdef PO_NO_THREAD_CONTROL
         hb_tid = start_thread(\heartbeatThread());
@@ -599,7 +599,7 @@ hash<auto> h = ws.getInfo();
             heartbeat_cond.signal();
         }
 
-        heartbeat_cnt.waitForZero();
+        heartbeat_cnt.wait();
         AutoLock al(heartbeat_lock);
         remove hb_tid;
         remove hb_stop;
@@ -609,7 +609,7 @@ hash<auto> h = ws.getInfo();
     private heartbeatThread() {
         # in case we went out of scope while running
         on_exit if (self) {
-            heartbeat_cnt.dec();
+            heartbeat_cnt.done();
         }
 
         bool running;

@@ -63,7 +63,7 @@ public class Cin7CoreCustomerUpdatedWatchDataProvider inherits Cin7CoreWatchData
     }
 
     #! Poll for customer updates
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Page": 1,

@@ -63,7 +63,7 @@ public class Cin7CoreNewSaleInvoiceWatchDataProvider inherits Cin7CoreWatchDataP
     }
 
     #! Poll for new authorized invoices
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Status": "Authorized",
