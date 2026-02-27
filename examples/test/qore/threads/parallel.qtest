@@ -30,6 +30,9 @@ class ParallelTest inherits QUnit::Test {
         addTestCase("channel_select all channels closed", \testChannelSelectAllClosed());
         addTestCase("channel_select mixed send+recv", \testChannelSelectMixedSendRecv());
         addTestCase("parallel_foreach with threads=1", \testParallelForEachSequential());
+        addTestCase("channel_select deterministic wakeup", \testChannelSelectDeterministicWakeup());
+        addTestCase("channel_select concurrent selects", \testChannelSelectConcurrent());
+        addTestCase("channel_select unbuffered channel", \testChannelSelectUnbuffered());
         set_return_value(main());
     }
 
@@ -272,5 +275,110 @@ class ParallelTest inherits QUnit::Test {
         }, (10, 20, 30), 1);
         # Sequential mode preserves order
         assertEq((10, 20, 30), collected);
+    }
+
+    testChannelSelectDeterministicWakeup() {
+        # Verify channel_select wakes deterministically (not polling at 100ms intervals)
+        # A background thread sends after 20ms; select should return well under 100ms
+        Channel ch(10);
+
+        # Start a background thread that sends after a brief delay
+        Counter cnt(1);
+        background sub() {
+            usleep(20ms);
+            ch.send(42);
+            cnt.dec();
+        }();
+
+        date start = now_us();
+        auto result = channel_select((
+            {"channel": ch, "op": "recv"},
+        ), 2s);
+        date elapsed = now_us() - start;
+
+        assertEq(True, exists result, "should receive a value");
+        assertEq(0, result.index);
+        assertEq(42, result.value);
+        # With deterministic wakeup, elapsed should be close to 20ms, not 100ms+
+        # Use 80ms threshold to avoid flakiness while ensuring no 100ms polling
+        assertTrue(elapsed < 80ms, sprintf("elapsed %y should be < 80ms (was %y)", elapsed, elapsed));
+
+        cnt.waitForZero();
+    }
+
+    testChannelSelectConcurrent() {
+        # Two channel_select calls on overlapping channel sets both wake correctly
+        Channel ch1(10);
+        Channel ch2(10);
+        Channel result_ch(10);
+
+        # Use a gate counter so we only send values once both selects are waiting
+        Counter ready(2);
+        Counter done(2);
+
+        # Thread 1: select on ch1, ch2
+        background sub() {
+            ready.dec();
+            auto r = channel_select((
+                {"channel": ch1, "op": "recv"},
+                {"channel": ch2, "op": "recv"},
+            ), 5s);
+            result_ch.send({"thread": 1, "result": r});
+            done.dec();
+        }();
+
+        # Thread 2: select on ch1, ch2
+        background sub() {
+            ready.dec();
+            auto r = channel_select((
+                {"channel": ch1, "op": "recv"},
+                {"channel": ch2, "op": "recv"},
+            ), 5s);
+            result_ch.send({"thread": 2, "result": r});
+            done.dec();
+        }();
+
+        # Wait for both threads to start, then give extra time for waiter registration
+        ready.waitForZero(2s);
+        usleep(50ms);
+
+        # Send two values — each select should get one
+        ch1.send(100);
+        ch2.send(200);
+
+        done.waitForZero(5s);
+
+        auto r1 = result_ch.recv(1s);
+        auto r2 = result_ch.recv(1s);
+
+        # Both selects should have received a value
+        assertEq(True, exists r1.result, "thread 1 result exists");
+        assertEq(True, exists r2.result, "thread 2 result exists");
+
+        # Collect received values
+        list<auto> values = sort((r1.result.value, r2.result.value));
+        assertEq((100, 200), values, "both values received across the two selects");
+    }
+
+    testChannelSelectUnbuffered() {
+        # channel_select recv on unbuffered channel with background sender
+        Channel ch(0);
+
+        Counter cnt(1);
+        background sub() {
+            usleep(20ms);
+            ch.send(99);
+            cnt.dec();
+        }();
+
+        auto result = channel_select((
+            {"channel": ch, "op": "recv"},
+        ), 2s);
+
+        assertEq(True, exists result, "should receive from unbuffered channel");
+        assertEq(0, result.index);
+        assertEq(99, result.value);
+
+        cnt.waitForZero();
     }
 }

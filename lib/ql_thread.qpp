@@ -1861,34 +1861,17 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
         return result ? (QoreValue)result : QoreValue();
     }
 
-    // None ready - register external waiter with all channels
-    QoreCondition shared_cond;
-    QoreThreadLock shared_lock;
+    // None ready — create a heap-allocated SelectWaiter and register with all channels.
+    // The waiter has its own lock + condvar + notified flag.  Channel operations
+    // copy the waiter pointer (bumping its refcount) under the channel lock, then
+    // signal the waiter under the waiter's own lock *after* releasing the channel
+    // lock (via the WaiterNotifyHelper RAII pattern).  This eliminates the two-lock
+    // gap that caused lost wakeups in the old polling approach.
+    SelectWaiter* waiter = new SelectWaiter();
 
     for (auto& ci : case_info) {
-        ci.channel->registerExternalWaiter(&shared_cond);
+        ci.channel->registerExternalWaiter(waiter);
     }
-
-    // Re-check immediately after registration — a channel operation may have
-    // completed between the initial try_cases and registerExternalWaiter.
-    result = try_cases(xsink);
-    if (result || *xsink || all_dead) {
-        for (auto& ci : case_info) {
-            ci.channel->deregisterExternalWaiter(&shared_cond);
-            ci.channel->deref(xsink);
-            if (ci.is_send) {
-                ci.send_value.discard(xsink);
-            }
-        }
-        return result ? (QoreValue)result : QoreValue();
-    }
-
-    // Use a bounded internal poll interval to guard against lost wakeups.
-    // Since channel locks and the select's shared_lock are separate, a condvar
-    // broadcast from notifyExternalWaiters() can be lost if it fires between
-    // try_cases() returning and waitWithInterrupt() entering the wait state.
-    // The poll interval bounds the maximum latency for such lost signals.
-    static constexpr int64 SELECT_POLL_MS = 100;
 
     // Helper to get current time in milliseconds since epoch
     auto now_ms = []() -> int64 {
@@ -1902,52 +1885,80 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
     int64 deadline_ms = has_deadline ? (now_ms() + (int64)timeout_ms) : 0;
     QoreValue result_val;
 
+    // Deterministic wait loop.
+    //
+    // NOTE: try_cases() is called WITHOUT holding waiter->lock to avoid
+    // self-deadlock: trySend()/tryRecv() use WaiterNotifyHelper which tries
+    // to lock each external waiter — including ours.  Instead, we use the
+    // notified flag to detect signals in the gap between try_cases() and
+    // the condvar wait:
+    //
+    // 1. Clear notified under waiter lock
+    // 2. Release waiter lock
+    // 3. Call try_cases (may acquire channel locks internally)
+    // 4. If success: done
+    // 5. Acquire waiter lock
+    // 6. If notified was set (channel op happened in step 3-5): loop back
+    // 7. Otherwise: wait on condvar (atomically releases waiter lock)
+    //
+    // Lost-wakeup proof: any channel operation between step 1 and step 5
+    // sets notified=true under waiter->lock, so step 6 catches it.
     while (true) {
-        // Compute wait time: min(poll interval, remaining user timeout)
-        int64 wait_ms = SELECT_POLL_MS;
-        if (has_deadline) {
-            int64 remaining_ms = deadline_ms - now_ms();
-            if (remaining_ms <= 0) {
-                break;  // user timeout expired
-            }
-            if (remaining_ms < wait_ms) {
-                wait_ms = remaining_ms;
-            }
-        }
-        // Infinite user timeout: still use bounded poll for lost-wakeup safety
-
-        // Wait for a signal from any channel (with cancellation support)
-        int rc;
+        // Step 1: clear notified flag
         {
-            AutoLocker al(&shared_lock);
-            rc = shared_cond.waitWithInterrupt(&shared_lock, wait_ms, xsink);
+            AutoLocker al(&waiter->lock);
+            waiter->notified = false;
         }
 
-        if (rc == QORE_COND_RESULT_INTERRUPTED) {
-            break;
-        }
-
-        // Try all cases again
+        // Step 3: try all cases (no waiter lock held)
         result = try_cases(xsink);
         if (result || *xsink || all_dead) {
             result_val = result ? (QoreValue)result : QoreValue();
             break;
         }
 
-        // Check user timeout
+        // Step 5-7: check notified flag, wait if needed
+        {
+            AutoLocker al(&waiter->lock);
+            if (!waiter->notified) {
+                if (has_deadline) {
+                    int64 remaining_ms = deadline_ms - now_ms();
+                    if (remaining_ms <= 0) {
+                        break;  // user timeout expired
+                    }
+                    int rc = waiter->cond.waitWithInterrupt(&waiter->lock, remaining_ms, xsink);
+                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                        break;
+                    }
+                } else {
+                    int rc = waiter->cond.waitWithInterrupt(&waiter->lock, -1, xsink);
+                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                        break;
+                    }
+                }
+            }
+            // If notified or woken by condvar: loop back and try_cases again
+        }
+
+        if (*xsink) {
+            break;
+        }
+
+        // Check deadline after wakeup (condvar wait may have returned on timeout)
         if (has_deadline && now_ms() >= deadline_ms) {
-            break;  // user timeout expired
+            break;
         }
     }
 
-    // Deregister from all channels and clean up
+    // Deregister from all channels and release waiter
     for (auto& ci : case_info) {
-        ci.channel->deregisterExternalWaiter(&shared_cond);
+        ci.channel->deregisterExternalWaiter(waiter);
         ci.channel->deref(xsink);
         if (ci.is_send) {
             ci.send_value.discard(xsink);
         }
     }
+    waiter->deref();
 
     return result_val;
 }

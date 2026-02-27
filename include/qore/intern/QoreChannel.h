@@ -34,10 +34,64 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreCondition.h>
+#include <qore/QoreReferenceCounter.h>
 #include <qore/AbstractPrivateData.h>
 
 #include <deque>
 #include <vector>
+
+//! Heap-allocated, refcounted waiter for channel_select deterministic wakeup
+/** channel_select creates one SelectWaiter, registers it with all channels.
+    Channel operations copy the pointer (bumping refcount), release channel lock,
+    then signal under the waiter's own lock.  Refcounting prevents use-after-free
+    when channel_select returns while in-flight notifications hold pointers.
+*/
+struct SelectWaiter : public QoreReferenceCounter {
+    QoreThreadLock lock;
+    QoreCondition cond;
+    bool notified = false;
+
+    void ref() { ROreference(); }
+    void deref() {
+        if (ROdereference()) {
+            delete this;
+        }
+    }
+};
+
+//! RAII helper that collects SelectWaiter pointers and notifies them on destruction
+/** Declared before AutoLocker in channel methods so it destructs *after* the
+    channel lock is released, ensuring notifications fire outside the channel lock.
+*/
+class WaiterNotifyHelper {
+    std::vector<SelectWaiter*> waiters;
+
+public:
+    ~WaiterNotifyHelper() {
+        flush();
+    }
+
+    //! Fire notifications immediately and clear the list
+    void flush() {
+        for (auto* w : waiters) {
+            {
+                AutoLocker al(&w->lock);
+                w->notified = true;
+                w->cond.broadcast();
+            }
+            w->deref();
+        }
+        waiters.clear();
+    }
+
+    //! Copy all registered external waiters (bumps refcount on each)
+    void addAll(const std::vector<SelectWaiter*>& external_waiters) {
+        for (auto* w : external_waiters) {
+            w->ref();
+            waiters.push_back(w);
+        }
+    }
+};
 
 //! A typed channel for inter-thread communication with close semantics
 class QoreChannel : public AbstractPrivateData {
@@ -60,73 +114,90 @@ public:
         // Convention: timeout_ms <= 0 means infinite; waitWithInterrupt uses -1 for infinite
         int64 cond_timeout = (timeout_ms <= 0) ? -1 : timeout_ms;
 
-        AutoLocker al(&lck);
-        if (closed) {
-            val.discard(xsink);
-            xsink->raiseException("CHANNEL-CLOSED", "cannot send on a closed channel");
-            return -1;
-        }
-
         if (cap == 0) {
-            // Unbuffered: synchronous handoff
-            // Wait until the slot is empty
-            ++send_waiting;
-            while (unbuffered_has_value && !deleted && !closed) {
-                int rc = send_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
-                if (rc == QORE_COND_RESULT_INTERRUPTED) {
-                    --send_waiting;
+            // Unbuffered: synchronous handoff — two-phase with deferred notification
+            // Phase 1: Wait for slot to be empty, place value, notify external waiters
+            {
+                WaiterNotifyHelper wnh;
+                AutoLocker al(&lck);
+
+                if (closed) {
                     val.discard(xsink);
+                    xsink->raiseException("CHANNEL-CLOSED", "cannot send on a closed channel");
                     return -1;
                 }
-                if (deleted || closed || !unbuffered_has_value) {
-                    break;
+
+                ++send_waiting;
+                while (unbuffered_has_value && !deleted && !closed) {
+                    int rc = send_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
+                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                        --send_waiting;
+                        val.discard(xsink);
+                        return -1;
+                    }
+                    if (deleted || closed || !unbuffered_has_value) {
+                        break;
+                    }
+                    if (rc == QORE_COND_RESULT_TIMEOUT) {
+                        --send_waiting;
+                        val.discard(xsink);
+                        xsink->raiseException("CHANNEL-TIMEOUT",
+                            "timed out after " QLLD "ms waiting to send on channel", timeout_ms);
+                        return -1;
+                    }
                 }
-                if (rc == QORE_COND_RESULT_TIMEOUT) {
-                    --send_waiting;
+                --send_waiting;
+
+                if (deleted) {
                     val.discard(xsink);
-                    xsink->raiseException("CHANNEL-TIMEOUT",
-                        "timed out after " QLLD "ms waiting to send on channel", timeout_ms);
+                    xsink->raiseException("CHANNEL-ERROR", "Channel has been deleted in another thread");
                     return -1;
                 }
-            }
-            --send_waiting;
-
-            if (deleted) {
-                val.discard(xsink);
-                xsink->raiseException("CHANNEL-ERROR", "Channel has been deleted in another thread");
-                return -1;
-            }
-            if (closed) {
-                val.discard(xsink);
-                xsink->raiseException("CHANNEL-CLOSED", "cannot send on a closed channel");
-                return -1;
-            }
-
-            unbuffered_value = val;
-            unbuffered_has_value = true;
-            recv_cond.signal();
-            notifyExternalWaiters();
-
-            // Wait for receiver to take it (infinite wait — handoff must complete)
-            while (unbuffered_has_value && !deleted) {
-                int rc = send_cond.waitWithInterrupt(&lck, -1, xsink);
-                if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                if (closed) {
+                    val.discard(xsink);
+                    xsink->raiseException("CHANNEL-CLOSED", "cannot send on a closed channel");
                     return -1;
                 }
-                if (deleted || !unbuffered_has_value) {
-                    break;
-                }
-            }
 
-            if (deleted) {
-                xsink->raiseException("CHANNEL-ERROR", "Channel has been deleted in another thread");
-                return -1;
+                unbuffered_value = val;
+                unbuffered_has_value = true;
+                recv_cond.signal();
+                wnh.addAll(external_waiters);
+            }
+            // AutoLocker releases channel lock first, then WaiterNotifyHelper fires notifications
+
+            // Phase 2: Wait for receiver to take the value (infinite wait — handoff must complete)
+            {
+                AutoLocker al(&lck);
+                while (unbuffered_has_value && !deleted) {
+                    int rc = send_cond.waitWithInterrupt(&lck, -1, xsink);
+                    if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                        return -1;
+                    }
+                    if (deleted || !unbuffered_has_value) {
+                        break;
+                    }
+                }
+
+                if (deleted) {
+                    xsink->raiseException("CHANNEL-ERROR", "Channel has been deleted in another thread");
+                    return -1;
+                }
             }
 
             return 0;
         }
 
         // Buffered: wait for space (cap < 0 means unlimited — never wait)
+        WaiterNotifyHelper wnh;
+        AutoLocker al(&lck);
+
+        if (closed) {
+            val.discard(xsink);
+            xsink->raiseException("CHANNEL-CLOSED", "cannot send on a closed channel");
+            return -1;
+        }
+
         ++send_waiting;
         while (cap > 0 && (int)buffer.size() >= cap && !deleted && !closed) {
             int rc = send_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
@@ -161,7 +232,7 @@ public:
 
         buffer.push_back(val);
         recv_cond.signal();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
         return 0;
     }
 
@@ -178,6 +249,7 @@ public:
         timed_out = false;
         has_value = false;
 
+        WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
 
         if (cap == 0) {
@@ -215,7 +287,7 @@ public:
             unbuffered_has_value = false;
             has_value = true;
             send_cond.signal();
-            notifyExternalWaiters();
+            wnh.addAll(external_waiters);
             return rv;
         }
 
@@ -252,12 +324,13 @@ public:
         buffer.pop_front();
         has_value = true;
         send_cond.signal();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
         return rv;
     }
 
     //! Non-blocking send
     DLLLOCAL bool trySend(QoreValue val) {
+        WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         if (closed || deleted) {
             return false;
@@ -268,7 +341,7 @@ public:
                 unbuffered_value = val;
                 unbuffered_has_value = true;
                 recv_cond.signal();
-                notifyExternalWaiters();
+                wnh.addAll(external_waiters);
                 return true;
             }
             return false;
@@ -278,7 +351,7 @@ public:
         }
         buffer.push_back(val);
         recv_cond.signal();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
         return true;
     }
 
@@ -287,6 +360,7 @@ public:
         @return the value or NOTHING
     */
     DLLLOCAL QoreValue tryRecv(bool& has_value) {
+        WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         has_value = false;
         if (cap == 0) {
@@ -295,7 +369,7 @@ public:
                 unbuffered_value = QoreValue();
                 unbuffered_has_value = false;
                 send_cond.signal();
-                notifyExternalWaiters();
+                wnh.addAll(external_waiters);
                 has_value = true;
                 return rv;
             }
@@ -308,17 +382,18 @@ public:
         QoreValue rv = buffer.front();
         buffer.pop_front();
         send_cond.signal();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
         return rv;
     }
 
     //! Closes the channel
     DLLLOCAL void close() {
+        WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         closed = true;
         send_cond.broadcast();
         recv_cond.broadcast();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
     }
 
     DLLLOCAL bool isClosed() const {
@@ -348,6 +423,7 @@ public:
 
     //! Called from destructor
     DLLLOCAL void destructor(ExceptionSink* xsink) {
+        WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         if (send_waiting > 0 || recv_waiting > 0) {
             xsink->raiseException("CHANNEL-ERROR",
@@ -359,7 +435,7 @@ public:
         closed = true;
         send_cond.broadcast();
         recv_cond.broadcast();
-        notifyExternalWaiters();
+        wnh.addAll(external_waiters);
 
         // Clean up any buffered values
         for (auto& v : buffer) {
@@ -373,20 +449,24 @@ public:
     }
 
     //! Register an external waiter (for channel_select)
-    DLLLOCAL void registerExternalWaiter(QoreCondition* cond) {
+    DLLLOCAL void registerExternalWaiter(SelectWaiter* w) {
+        w->ref();  // bump refcount for the channel's copy
         AutoLocker al(&lck);
-        external_waiters.push_back(cond);
+        external_waiters.push_back(w);
     }
 
     //! Deregister an external waiter
-    DLLLOCAL void deregisterExternalWaiter(QoreCondition* cond) {
-        AutoLocker al(&lck);
-        for (auto it = external_waiters.begin(); it != external_waiters.end(); ++it) {
-            if (*it == cond) {
-                external_waiters.erase(it);
-                break;
+    DLLLOCAL void deregisterExternalWaiter(SelectWaiter* w) {
+        {
+            AutoLocker al(&lck);
+            for (auto it = external_waiters.begin(); it != external_waiters.end(); ++it) {
+                if (*it == w) {
+                    external_waiters.erase(it);
+                    break;
+                }
             }
         }
+        w->deref();
     }
 
 protected:
@@ -408,13 +488,7 @@ private:
     bool unbuffered_has_value = false;
 
     // External waiters for channel_select
-    std::vector<QoreCondition*> external_waiters;
-
-    DLLLOCAL void notifyExternalWaiters() {
-        for (auto* cond : external_waiters) {
-            cond->broadcast();
-        }
-    }
+    std::vector<SelectWaiter*> external_waiters;
 };
 
 #endif // _QORE_INTERN_QORECHANNEL_H
