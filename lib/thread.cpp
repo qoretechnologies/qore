@@ -1178,7 +1178,7 @@ void thread_uninstantiate_self() {
 LocalVarValue* thread_find_lvar(const char* id) {
     ThreadData* td = thread_data.get();
     //printd(5, "thread_find_lvar() pgm: %p tlpd: %p id: %s\n", td->current_pgm, td->tlpd, id);
-    return td->tlpd->lvstack.find(id);
+    return td->tlpd->lvstack.findMaybe(id);
 }
 
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
