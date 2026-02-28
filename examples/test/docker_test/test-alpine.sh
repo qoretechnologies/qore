@@ -62,22 +62,44 @@ if ! command -v tree-sitter > /dev/null 2>&1; then
     cargo install tree-sitter-cli@0.26.5
 fi
 
-# build Qore and install
-echo && echo "-- building Qore Debug --"
+# build Qore Debug and Release in parallel
+echo && echo "-- building Qore Debug and Release in parallel --"
 cd ${QORE_SRC_DIR}
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-make -j${MAKE_JOBS}
-make install
 
-# build Release version for performance-sensitive tests
-echo && echo "-- building Qore Release --"
-cd ${QORE_SRC_DIR}
-mkdir build-release
-cd build-release
-cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-make -j${MAKE_JOBS}
+# Build Debug in background
+(
+    echo "Building Debug mode..."
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    make -j${MAKE_JOBS}
+    make install
+    echo "Debug build complete"
+) &
+DEBUG_BUILD_PID=$!
+
+# Build Release in background
+(
+    echo "Building Release mode..."
+    mkdir build-release
+    cd build-release
+    cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    make -j${MAKE_JOBS}
+    echo "Release build complete"
+) &
+RELEASE_BUILD_PID=$!
+
+# Wait for both builds to complete
+echo "Waiting for builds to complete..."
+if ! wait $DEBUG_BUILD_PID; then
+    echo "Debug build failed"
+    exit 1
+fi
+if ! wait $RELEASE_BUILD_PID; then
+    echo "Release build failed"
+    exit 1
+fi
+echo "Both builds completed successfully"
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then
