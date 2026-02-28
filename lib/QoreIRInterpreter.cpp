@@ -5539,16 +5539,32 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ElementsAny:
-        case QoreIROpcode::ElementsInt:
-            case QoreIROpcode::InvokeSimError: {
+        case QoreIROpcode::ElementsInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+        // InvokeSimError: error propagation call that can modify variables via evalExpr()
+        // Must invalidate all caches after the call, both on success and error paths
+        case QoreIROpcode::InvokeSimError: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                QoreValue res = QoreIRInterpreter::evalExpr(inst->opcode, expr_inst->expr, xsink);
+
+                // Invalidate all variable caches after the AST call - it may have modified
+                // locals, globals, thread-locals, or closure variables. Must include slot cache.
+                cleanupLocalCaches();
+
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
