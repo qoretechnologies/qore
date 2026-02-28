@@ -1071,8 +1071,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         on_error try { udp_sock.close(); } catch () {}
         string bind_addr = opts.node ?? "0.0.0.0";
         string bind_port = port > 0 ? string(port) : (opts.service ?? "0");
-        udp_sock.bindINET(bind_addr, bind_port, True, opts.family != AF_UNSPEC ? opts.family : AF_INET,
-            SOCK_DGRAM);
+        # Resolve the address family: use the explicitly requested family, or detect from
+        # the bind address ("::" is IPv6, anything else defaults to IPv4)
+        int family;
+        if (opts.family != AF_UNSPEC) {
+            family = opts.family;
+        } else if (bind_addr == "::" || bind_addr =~ /^[0-9a-fA-F]*:/) {
+            family = AF_INET6;
+        } else {
+            family = AF_INET;
+        }
+        udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
         hash<auto> sock_info = udp_sock.getSocketInfo();
@@ -2195,14 +2204,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Auto-create QUIC listener for TLS listeners in async mode
             if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
                 try {
-                    int tcp_port = l.getInfo().port;
+                    # Use the actual listener socket info to get the resolved address
+                    # and family, since the original info may have AF_UNSPEC / no node
+                    hash<auto> linfo = l.getInfo();
                     hash<auto> quic_info = addQuicListener(<HttpListenerOptionInfo>{
                         "cert": info.cert,
                         "key": info.key,
-                        "node": info.node,
-                        "family": info.family,
+                        "node": linfo.address ?? info.node,
+                        "family": linfo.family,
                         "alt_svc_max_age": info.alt_svc_max_age,
-                    }, tcp_port);
+                    }, linfo.port);
                     quic_port_map{id} = quic_info.port;
                     quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
                     quic_listener_map{id} = quic_info.id;
