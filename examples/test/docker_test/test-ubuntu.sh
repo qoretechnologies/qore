@@ -110,9 +110,9 @@ cd ${QORE_SRC_DIR}
 
 # Set up binary selector that uses Release for performance-sensitive tests
 chmod +x ./test/docker_test/qore_binary_selector.sh
-export QORE_DEBUG_BINARY="./build/qore"
-export QORE_RELEASE_BINARY="./build-release/qore"
-export QORE_BINARY="./test/docker_test/qore_binary_selector.sh"
+export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
+export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
+export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
 
 # Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
 echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
