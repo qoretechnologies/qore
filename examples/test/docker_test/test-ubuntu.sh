@@ -79,7 +79,7 @@ DEBUG_BUILD_PID=$!
     echo "Building Release mode..."
     mkdir build-release
     cd build-release
-    cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1
+    cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
     make -j${MAKE_JOBS}
     echo "Release build complete"
 ) &
