@@ -251,7 +251,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
             try {
                 bool update;
-                # send any and all messages on the queue
+                # send any and all messages on the channel
                 *string str = conn.pollData();
                 if (str.val()) {
                     sock.send2(str, DefaultSocketSendTimeout);
@@ -287,7 +287,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return False;
     }
 
-    #! Flushes I/O in the connection queue
+    #! Flushes I/O in the connection channel
     /** @return True if any data was flushed, False if not
     */
     bool flushIo(ServerSentEventConnection conn, Socket sock) {
@@ -370,7 +370,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         rwl.readLock();
         on_exit rwl.readUnlock();
 
-        # push the data on all connection queues
+        # push the data on all connection channels
         map $1.sendEncoded(str), ch.iterator();
         logInfo("SSE sent to connections: %y", keys ch);
         #if (ch) logDebug("sending data to connections: %y", keys ch);

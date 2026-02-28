@@ -1,0 +1,171 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AutoSemaphore.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QC_AutoSemaphore.h"
+
+//! A RAII helper for @ref Qore::Thread::Semaphore "Semaphore" for exception-safe acquire/release
+/** AutoSemaphore objects acquire a permit from a @ref Qore::Thread::Semaphore "Semaphore" in the constructor
+    and release it in the destructor, ensuring the permit is released even if exceptions are thrown.
+
+    This class follows the same RAII pattern as @ref Qore::Thread::AutoLock "AutoLock" for
+    @ref Qore::Thread::Mutex "Mutex".
+
+    @par Example: Exception-safe permit management
+    @code{.py}
+Semaphore sem(3);
+
+{
+    AutoSemaphore as(sem);  # acquires permit (blocks if none available)
+    # ... permit is held ...
+    # if an exception is thrown here, the permit is still released
+}  # permit automatically released
+    @endcode
+
+    @par Example: Limiting concurrent access in a function
+    @code{.py}
+our Semaphore db_pool(5);
+
+hash<auto> query_database(string sql) {
+    AutoSemaphore as(db_pool);  # limit to 5 concurrent queries
+    return db.exec(sql);
+    # permit released when function returns or throws
+}
+    @endcode
+
+    @par Example: Manual release and reacquire
+    @code{.py}
+Semaphore sem(1);
+{
+    AutoSemaphore as(sem);
+    # ... do work with permit ...
+    as.release();     # temporarily release permit
+    # ... other threads can acquire now ...
+    as.acquire();     # reacquire permit
+    # ... continue with permit ...
+}  # final release in destructor
+    @endcode
+
+    @see @ref Qore::Thread::Semaphore "Semaphore"
+    @see @ref Qore::Thread::AutoLock "AutoLock"
+
+    @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
+
+    @since %Qore 2.3
+ */
+qclass AutoSemaphore [dom=THREAD_CLASS; arg=QoreAutoSemaphore* as; ns=Qore::Thread];
+
+//! Creates the AutoSemaphore and acquires a permit from the given Semaphore
+/** @param sem the @ref Qore::Thread::Semaphore "Semaphore" to acquire from
+
+    @par Example:
+    @code{.py}
+{
+    AutoSemaphore as(sem);
+    # permit is held
+}
+    @endcode
+
+    @throw SEMAPHORE-ERROR Semaphore has been deleted in another thread
+    @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
+    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked
+ */
+AutoSemaphore::constructor(Semaphore[QoreSemaphore] sem) {
+    // Acquire the semaphore with polling for cancellation support
+    const int poll_ms = 500;
+    while (true) {
+        if (qore_check_cancel(xsink, "semaphore acquire")) {
+            return;
+        }
+        bool timed_out = false;
+        int rc = sem->acquire(poll_ms, xsink, timed_out);
+        if (*xsink) {
+            // Real error (deleted, etc.) — propagate
+            return;
+        }
+        if (rc == 0) {
+            // Acquired — create the AutoSemaphore
+            QoreAutoSemaphore* qas = new QoreAutoSemaphore(sem.release());
+            self->setPrivate(CID_AUTOSEMAPHORE, qas);
+            return;
+        }
+        // timed_out from poll — loop and check cancel again
+    }
+}
+
+//! Releases the permit and destroys the AutoSemaphore
+/** The permit is only released if it is still held.
+
+    @par Example:
+    @code{.py}
+delete as;
+    @endcode
+ */
+AutoSemaphore::destructor() {
+    as->destructor(xsink);
+    as->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw AUTOSEMAPHORE-COPY-ERROR Objects of this class cannot be copied
+ */
+AutoSemaphore::copy() {
+    xsink->raiseException("AUTOSEMAPHORE-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Manually releases the permit
+/** @par Example:
+    @code{.py}
+as.release();
+    @endcode
+
+    @throw AUTOSEMAPHORE-ERROR permit has already been released
+ */
+nothing AutoSemaphore::release() {
+    as->release(xsink);
+}
+
+//! Manually reacquires the permit
+/** @param timeout_ms a @ref timeout_type "timeout" value; 0 (the default) means wait indefinitely
+
+    @par Example:
+    @code{.py}
+as.acquire();
+    @endcode
+
+    @throw AUTOSEMAPHORE-ERROR permit is already acquired
+    @throw SEMAPHORE-ERROR Semaphore has been deleted
+    @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
+ */
+nothing AutoSemaphore::acquire(timeout timeout_ms = 0) {
+    as->acquire(timeout_ms, xsink);
+}

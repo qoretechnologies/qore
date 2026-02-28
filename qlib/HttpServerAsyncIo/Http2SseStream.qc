@@ -42,8 +42,8 @@ public class Http2SseStream inherits AbstractSseConnection {
         #! The stream ID for this SSE stream
         int stream_id;
 
-        #! Queue of events to send
-        Queue event_queue();
+        #! Channel of events to send
+        Channel event_channel(-1);
 
         #! True if the stream is open
         bool stream_open = True;
@@ -69,7 +69,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         if (!stream_open) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
-        event_queue.push({
+        event_channel.send({
             "type": event_type,
             "data": data,
             "id": id,
@@ -81,7 +81,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         if (!stream_open) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
-        event_queue.push(event);
+        event_channel.send(event);
     }
 
     bool isOpen() {
@@ -93,7 +93,7 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     int getQueueSize() {
-        return event_queue.size();
+        return event_channel.size();
     }
 
     close() {
@@ -144,14 +144,8 @@ public class Http2SseStream inherits AbstractSseConnection {
     /** @return event hash or NOTHING if queue is empty
     */
     *hash<auto> getNextEvent() {
-        try {
-            return event_queue.get(0ms);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "QUEUE-TIMEOUT") {
-                return NOTHING;
-            }
-            rethrow;
-        }
+        auto result = event_channel.tryRecv();
+        return exists result ? result.value : NOTHING;
     }
 
     #! Formats an SSE event according to the spec

@@ -178,13 +178,14 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
 
         StreamPipe pipe(False);
 
-        Counter io_counter(1);
+        WaitGroup io_counter();
+        io_counter.add();
         OutputStreamWrapper rv(pipe.getOutputStream(), io_counter);
 
         # run the I/O operation in the background
         background sub () {
             try {
-                on_exit io_counter.dec();
+                on_exit io_counter.done();
 
                 Qore::InputStream is = pipe.getInputStream();
                 f.put(is, file);

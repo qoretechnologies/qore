@@ -50,8 +50,8 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
         #! Current state
         string state = STATE_STREAMING;
 
-        #! Queue of events to send
-        Queue event_queue();
+        #! Channel of events to send
+        Channel event_channel(-1);
 
         #! Error info if state is ERROR
         *hash<ExceptionInfo> error_info;
@@ -146,22 +146,17 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
             }
         }
 
-        # Check event queue for more data to send
-        try {
-            *hash<auto> event = event_queue.get(0ms);
-            if (event) {
-                pending_data = formatSseEvent(event);
+        # Check event channel for more data to send
+        {
+            auto result = event_channel.tryRecv();
+            if (exists result) {
+                pending_data = formatSseEvent(result.value);
                 pending_offset = 0;
                 # Request write poll
                 return <SocketPollInfo>{
                     "events": SOCK_POLLOUT | SOCK_POLLIN,
                     "socket": sock,
                 };
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # Queue timeout is expected
-            if (ex.err != "QUEUE-TIMEOUT") {
-                rethrow;
             }
         }
 
@@ -179,7 +174,7 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
         @param retry retry interval in ms (optional)
     */
     queueEvent(*string event_type, string data, *string id, *int retry) {
-        event_queue.push({
+        event_channel.send({
             "type": event_type,
             "data": data,
             "id": id,
@@ -191,7 +186,7 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
     /** @param event hash with optional keys: type, data, id, retry
     */
     queueRawEvent(hash<auto> event) {
-        event_queue.push(event);
+        event_channel.send(event);
     }
 
     #! Formats an SSE event according to the spec
@@ -241,7 +236,7 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
 
     #! Returns the number of queued events
     int getQueueSize() {
-        return event_queue.size();
+        return event_channel.size();
     }
 
     #! Aborts the operation and closes the connection

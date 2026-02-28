@@ -105,7 +105,7 @@ public class GmailMessageWatchDataProvider inherits GmailMessageWatchDataProvide
     */
     private auto getExampleEventDataImpl(string event_id) {
         hash<auto> info = setup() + {"test_mode": True};
-        if (*hash<auto> msg = pollOnce(\info)) {
+        if (*hash<auto> msg = pollOnceIntern(\info)) {
             return msg;
         }
         return AbstractDataProvider::getExampleEventDataImpl(event_id);

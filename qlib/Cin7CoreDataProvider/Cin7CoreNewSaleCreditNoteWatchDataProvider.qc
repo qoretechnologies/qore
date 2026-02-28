@@ -63,7 +63,7 @@ public class Cin7CoreNewSaleCreditNoteWatchDataProvider inherits Cin7CoreWatchDa
     }
 
     #! Poll for new authorized credit notes
-    list<hash<auto>> pollOnce() {
+    list<hash<auto>> pollOnceImpl() {
         hash<auto> params = {
             "ModifiedSince": since,
             "Status": "Authorized",

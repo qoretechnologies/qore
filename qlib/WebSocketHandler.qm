@@ -193,8 +193,8 @@ public class WebSocketConnection {
     }
 
     private {
-        #! the @ref Qore::Thread::Queue "Queue" object stores messages to be sent to the server
-        Qore::Thread::Queue queue();
+        #! the @ref Qore::Thread::Channel "Channel" object stores messages to be sent to the server
+        Qore::Thread::Channel channel(-1);
 
         #! The TID of the I/O thread
         int tid = gettid();
@@ -285,10 +285,11 @@ public class WebSocketConnection {
     */
     *binary pollData() {
         try {
-            return queue.get(DefaultQueuePollingInterval);
+            return channel.recv(DefaultQueuePollingInterval);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "QUEUE-TIMEOUT")
+            if (ex.err != "CHANNEL-TIMEOUT") {
                 rethrow;
+            }
         }
     }
 
@@ -296,19 +297,19 @@ public class WebSocketConnection {
     /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"
     */
     *binary pollDataImmediate() {
+        auto result = channel.tryRecv();
+        return exists result ? result.value : NOTHING;
+    }
+
+    #! Pushes an already-encoded message on the connection's message channel
+    sendEncoded(binary msg) {
         try {
-            # negative timeout values mean timeout immediately
-            return queue.get(-1);
+            channel.send(msg);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "QUEUE-TIMEOUT") {
+            if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
             }
         }
-    }
-
-    #! Pushes an already-encoded message on the connection's message queue
-    sendEncoded(binary msg) {
-        queue.push(msg);
     }
 
     #! Returns True if this connection requires per-connection encoding
@@ -328,7 +329,7 @@ public class WebSocketConnection {
         return exists active_extensions;
     }
 
-    #! Pushes an unencoded message on the connection's message queue
+    #! Pushes an unencoded message on the connection's message channel
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
 
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
@@ -340,10 +341,16 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
-        queue.push(sendWithExtensions(msg));
+        try {
+            channel.send(sendWithExtensions(msg));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CHANNEL-CLOSED") {
+                rethrow;
+            }
+        }
     }
 
-    #! Pushes an unencoded message on the connection's message queue
+    #! Pushes an unencoded message on the connection's message channel
     /** The message will be encoded with @ref WebSocketUtil::ws_encode_message() before sending
 
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
@@ -355,7 +362,13 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
-        queue.push(sendWithExtensions(msg, op, fin));
+        try {
+            channel.send(sendWithExtensions(msg, op, fin));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CHANNEL-CLOSED") {
+                rethrow;
+            }
+        }
     }
 
     #! Applies extension transforms to outgoing message and encodes it
@@ -441,7 +454,7 @@ public class WebSocketConnection {
     */
     flush() {
         if (gettid() != tid) {
-            while (!stop_flag && !queue.empty()) {
+            while (!stop_flag && !channel.empty()) {
                 usleep(DefaultQueuePollingInterval);
             }
         } else {
@@ -452,9 +465,8 @@ public class WebSocketConnection {
     #! force closing socket related to connection
     stop() {
         stop_flag = True;
-        # to get a dummy data in polling thread immediately (unless stop called from the
-        # WebSocketHandler::startImpl() thread)
-        queue.push(binary());
+        # closing the channel wakes up the polling thread immediately
+        channel.close();
     }
 
 %ifndef NoAsyncApi
@@ -1138,7 +1150,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
             try {
                 bool update = False;
-                # send any and all messages on the queue
+                # send any and all messages on the channel
                 *binary d = wsc.pollData();
                 if (d) {
                     @debug {
@@ -1452,7 +1464,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         return False;
     }
 
-    #! Flushes I/O in the connection queue
+    #! Flushes I/O in the connection channel
     /** @return True if any data was flushed, False if not
     */
     bool flushIo(WebSocketConnection wsc, Socket sock) {
@@ -1513,7 +1525,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # pre-encode once for connections that need no per-connection transforms
         *binary encoded;
 
-        # push the data on all connection queues
+        # push the data on all connection channels
         map (
             $1.needsPerConnectionEncoding()
                 ? $1.send(d)
@@ -1569,7 +1581,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         Without this method, the server shutdown sequence would hang waiting for these threads
         to notice the shutdown flag. By calling stop() on each connection, we:
         1. Set the connection's stop_flag to True
-        2. Push an empty message to wake up pollData() immediately
+        2. Close the channel to wake up pollData() immediately
 
         @param lid the listener ID being stopped
 
@@ -1624,7 +1636,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         For each connection, stop() does:
         1. Sets stop_flag = True (checked in startImpl's while loop)
-        2. Pushes empty binary to queue (wakes up pollData immediately)
+        2. Closes the channel (wakes up pollData immediately)
 
         This ensures the startImpl loop will exit on its next iteration, allowing the
         connection thread to complete and decrement the dThreads counter.

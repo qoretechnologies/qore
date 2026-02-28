@@ -1,0 +1,384 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ParallelTest
+
+class ParallelTest inherits QUnit::Test {
+    constructor() : QUnit::Test("parallel_map/parallel_foreach/channel_select", "1.0", \ARGV) {
+        addTestCase("parallel_map preserves order", \testParallelMapOrder());
+        addTestCase("parallel_map with exception propagation", \testParallelMapException());
+        addTestCase("parallel_map with threads=1 (sequential)", \testParallelMapSequential());
+        addTestCase("parallel_map with empty list", \testParallelMapEmpty());
+        addTestCase("parallel_map with single element", \testParallelMapSingle());
+        addTestCase("parallel_map with large list", \testParallelMapLarge());
+        addTestCase("parallel_foreach basic execution", \testParallelForEach());
+        addTestCase("parallel_foreach with exception", \testParallelForEachException());
+        addTestCase("parallel_foreach with empty list", \testParallelForEachEmpty());
+        addTestCase("channel_select recv from first ready", \testChannelSelectRecv());
+        addTestCase("channel_select send case", \testChannelSelectSend());
+        addTestCase("channel_select timeout", \testChannelSelectTimeout());
+        addTestCase("channel_select fairness", \testChannelSelectFairness());
+        addTestCase("channel_select with closed channel", \testChannelSelectClosed());
+        addTestCase("channel_select empty cases throws", \testChannelSelectEmptyCases());
+        addTestCase("channel_select invalid case throws", \testChannelSelectInvalidCase());
+        addTestCase("parallel_map sequential exception", \testParallelMapSequentialException());
+        addTestCase("channel_select all channels closed", \testChannelSelectAllClosed());
+        addTestCase("channel_select mixed send+recv", \testChannelSelectMixedSendRecv());
+        addTestCase("parallel_foreach with threads=1", \testParallelForEachSequential());
+        addTestCase("channel_select deterministic wakeup", \testChannelSelectDeterministicWakeup());
+        addTestCase("channel_select concurrent selects", \testChannelSelectConcurrent());
+        addTestCase("channel_select unbuffered channel", \testChannelSelectUnbuffered());
+        set_return_value(main());
+    }
+
+    testParallelMapOrder() {
+        list<auto> input = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        list<auto> result = parallel_map(auto sub(auto x) { return x * 2; }, input);
+        assertEq(10, result.size());
+        for (int i = 0; i < 10; ++i) {
+            assertEq(input[i] * 2, result[i]);
+        }
+    }
+
+    testParallelMapException() {
+        assertThrows("TEST-ERROR", sub() {
+            parallel_map(auto sub(auto x) {
+                if (x == 3) {
+                    throw "TEST-ERROR", "error on element 3";
+                }
+                return x * 2;
+            }, (1, 2, 3, 4, 5));
+        });
+    }
+
+    testParallelMapSequential() {
+        list<auto> result = parallel_map(auto sub(auto x) { return x + 10; }, (1, 2, 3), 1);
+        assertEq((11, 12, 13), result);
+    }
+
+    testParallelMapEmpty() {
+        list<auto> result = parallel_map(auto sub(auto x) { return x; }, ());
+        assertEq(0, result.size());
+    }
+
+    testParallelMapSingle() {
+        list<auto> result = parallel_map(auto sub(auto x) { return x * 3; }, (7,));
+        assertEq((21,), result);
+    }
+
+    testParallelMapLarge() {
+        list<auto> input = ();
+        for (int i = 0; i < 100; ++i) {
+            push input, i;
+        }
+        list<auto> result = parallel_map(auto sub(auto x) { return x * x; }, input, 8);
+        assertEq(100, result.size());
+        for (int i = 0; i < 100; ++i) {
+            assertEq(i * i, result[i]);
+        }
+    }
+
+    testParallelForEach() {
+        Mutex m();
+        list<auto> collected = ();
+        parallel_foreach(sub(auto x) {
+            m.lock();
+            on_exit m.unlock();
+            push collected, x;
+        }, (10, 20, 30, 40, 50));
+        # Results may be in any order due to parallelism
+        assertEq(5, collected.size());
+        assertEq((10, 20, 30, 40, 50), sort(collected));
+    }
+
+    testParallelForEachException() {
+        assertThrows("FOREACH-ERROR", sub() {
+            parallel_foreach(sub(auto x) {
+                if (x == 2) {
+                    throw "FOREACH-ERROR", "error in foreach";
+                }
+            }, (1, 2, 3));
+        });
+    }
+
+    testParallelForEachEmpty() {
+        # Should not throw
+        parallel_foreach(sub(auto x) {
+            throw "SHOULD-NOT-REACH", "this should not be called";
+        }, ());
+        assertTrue(True);
+    }
+
+    testChannelSelectRecv() {
+        Channel ch1(10);
+        Channel ch2(10);
+
+        # Put a value in ch2
+        ch2.send(42);
+
+        auto result = channel_select((
+            {"channel": ch1, "op": "recv"},
+            {"channel": ch2, "op": "recv"},
+        ));
+        assertEq(True, exists result);
+        assertEq(1, result.index);
+        assertEq(42, result.value);
+    }
+
+    testChannelSelectSend() {
+        Channel full_ch(1);
+        full_ch.send(1);  # Fill it up
+        Channel empty_ch(10);
+
+        auto result = channel_select((
+            {"channel": full_ch, "op": "send", "value": 99},
+            {"channel": empty_ch, "op": "send", "value": 77},
+        ));
+        assertEq(True, exists result);
+        assertEq(1, result.index);  # empty_ch should accept the send
+        assertNothing(result.value);  # send operations return NOTHING as value
+        # Verify the value was actually sent
+        assertEq(77, empty_ch.recv());
+    }
+
+    testChannelSelectTimeout() {
+        Channel ch1(10);
+        Channel ch2(10);
+
+        # Both channels are empty, recv should timeout
+        auto result = channel_select((
+            {"channel": ch1, "op": "recv"},
+            {"channel": ch2, "op": "recv"},
+        ), 100ms);
+        assertNothing(result);
+    }
+
+    testChannelSelectFairness() {
+        # When multiple channels are ready, selection should be random
+        # Test by running many iterations and checking distribution
+        hash<string, int> counts;
+        int iterations = 100;
+
+        for (int i = 0; i < iterations; ++i) {
+            Channel ch1(10);
+            Channel ch2(10);
+            ch1.send(1);
+            ch2.send(2);
+
+            auto result = channel_select((
+                {"channel": ch1, "op": "recv"},
+                {"channel": ch2, "op": "recv"},
+            ));
+            string key = string(result.index);
+            counts{key} = (counts{key} ?? 0) + 1;
+        }
+
+        # Both channels should be selected at least once (statistical test)
+        # With random selection, probability of one channel never being selected in 100 trials
+        # is astronomically low (0.5^100)
+        assertTrue(counts{"0"} > 0, "channel 0 should be selected at least once");
+        assertTrue(counts{"1"} > 0, "channel 1 should be selected at least once");
+    }
+
+    testChannelSelectClosed() {
+        Channel ch1(10);
+        Channel ch2(10);
+        ch1.close();
+
+        # ch1 is closed - recv should return NOTHING (not selected)
+        # ch2 has no data - should timeout
+        auto result = channel_select((
+            {"channel": ch1, "op": "recv"},
+            {"channel": ch2, "op": "recv"},
+        ), 100ms);
+        # ch1 tryRecv returns NOTHING with has_value=false (closed+empty)
+        # ch2 tryRecv returns NOTHING with has_value=false (empty)
+        # So both fail non-blocking, then timeout
+        assertNothing(result);
+    }
+
+    testChannelSelectEmptyCases() {
+        assertThrows("CHANNEL-SELECT-ERROR", sub() {
+            channel_select(());
+        });
+    }
+
+    testChannelSelectInvalidCase() {
+        assertThrows("CHANNEL-SELECT-ERROR", sub() {
+            channel_select(({"channel": "not_a_channel", "op": "recv"},));
+        });
+    }
+
+    testParallelMapSequentialException() {
+        # Exception in sequential mode (threads=1) should propagate cleanly
+        assertThrows("SEQ-ERROR", sub() {
+            parallel_map(auto sub(auto x) {
+                if (x == 2) {
+                    throw "SEQ-ERROR", "error in sequential mode";
+                }
+                return x;
+            }, (1, 2, 3), 1);
+        });
+    }
+
+    testChannelSelectAllClosed() {
+        # When all channels are closed and empty, channel_select should return NOTHING immediately
+        # (not block forever)
+        Channel ch1(10);
+        Channel ch2(10);
+        ch1.close();
+        ch2.close();
+
+        auto result = channel_select((
+            {"channel": ch1, "op": "recv"},
+            {"channel": ch2, "op": "recv"},
+        ));
+        assertNothing(result);
+    }
+
+    testChannelSelectMixedSendRecv() {
+        # Test mixed send and recv cases
+        Channel recv_ch(10);
+        Channel send_ch(10);
+        recv_ch.send(99);  # recv_ch has data
+
+        auto result = channel_select((
+            {"channel": send_ch, "op": "send", "value": 42},
+            {"channel": recv_ch, "op": "recv"},
+        ));
+        assertEq(True, exists result);
+        # Both could fire (send_ch has space, recv_ch has data)
+        # but we can verify both indices are valid outcomes
+        if (result.index == 0) {
+            # send case fired
+            assertNothing(result.value);
+            assertEq(42, send_ch.recv());
+        } else {
+            assertEq(1, result.index);
+            assertEq(99, result.value);
+        }
+    }
+
+    testParallelForEachSequential() {
+        # Verify sequential mode (threads=1) works correctly
+        Mutex m();
+        list<auto> collected = ();
+        parallel_foreach(sub(auto x) {
+            m.lock();
+            on_exit m.unlock();
+            push collected, x;
+        }, (10, 20, 30), 1);
+        # Sequential mode preserves order
+        assertEq((10, 20, 30), collected);
+    }
+
+    testChannelSelectDeterministicWakeup() {
+        # Verify channel_select wakes deterministically (not polling at 100ms intervals)
+        # A background thread sends after 20ms; select should return well under 100ms
+        Channel ch(10);
+
+        # Start a background thread that sends after a brief delay
+        Counter cnt(1);
+        background sub() {
+            usleep(20ms);
+            ch.send(42);
+            cnt.dec();
+        }();
+
+        date start = now_us();
+        auto result = channel_select((
+            {"channel": ch, "op": "recv"},
+        ), 2s);
+        date elapsed = now_us() - start;
+
+        assertEq(True, exists result, "should receive a value");
+        assertEq(0, result.index);
+        assertEq(42, result.value);
+        # With deterministic wakeup, elapsed should be close to 20ms, not 100ms+
+        # Use 80ms threshold to avoid flakiness while ensuring no 100ms polling
+        assertTrue(elapsed < 80ms, sprintf("elapsed %y should be < 80ms (was %y)", elapsed, elapsed));
+
+        cnt.waitForZero();
+    }
+
+    testChannelSelectConcurrent() {
+        # Two channel_select calls on overlapping channel sets both wake correctly
+        Channel ch1(10);
+        Channel ch2(10);
+        Channel result_ch(10);
+
+        # Use a gate counter so we only send values once both selects are waiting
+        Counter ready(2);
+        Counter done(2);
+
+        # Thread 1: select on ch1, ch2
+        background sub() {
+            ready.dec();
+            auto r = channel_select((
+                {"channel": ch1, "op": "recv"},
+                {"channel": ch2, "op": "recv"},
+            ), 5s);
+            result_ch.send({"thread": 1, "result": r});
+            done.dec();
+        }();
+
+        # Thread 2: select on ch1, ch2
+        background sub() {
+            ready.dec();
+            auto r = channel_select((
+                {"channel": ch1, "op": "recv"},
+                {"channel": ch2, "op": "recv"},
+            ), 5s);
+            result_ch.send({"thread": 2, "result": r});
+            done.dec();
+        }();
+
+        # Wait for both threads to start, then give extra time for waiter registration
+        ready.waitForZero(2s);
+        usleep(50ms);
+
+        # Send two values — each select should get one
+        ch1.send(100);
+        ch2.send(200);
+
+        done.waitForZero(5s);
+
+        auto r1 = result_ch.recv(1s);
+        auto r2 = result_ch.recv(1s);
+
+        # Both selects should have received a value
+        assertEq(True, exists r1.result, "thread 1 result exists");
+        assertEq(True, exists r2.result, "thread 2 result exists");
+
+        # Collect received values
+        list<auto> values = sort((r1.result.value, r2.result.value));
+        assertEq((100, 200), values, "both values received across the two selects");
+    }
+
+    testChannelSelectUnbuffered() {
+        # channel_select recv on unbuffered channel with background sender
+        Channel ch(0);
+
+        Counter cnt(1);
+        background sub() {
+            usleep(20ms);
+            ch.send(99);
+            cnt.dec();
+        }();
+
+        auto result = channel_select((
+            {"channel": ch, "op": "recv"},
+        ), 2s);
+
+        assertEq(True, exists result, "should receive from unbuffered channel");
+        assertEq(0, result.index);
+        assertEq(99, result.value);
+
+        cnt.waitForZero();
+    }
+}
