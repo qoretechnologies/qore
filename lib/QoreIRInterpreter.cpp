@@ -5235,16 +5235,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                cleanupLocalCaches();
                 setValueSlot(values, direct_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(direct_inst->result.id);
@@ -5277,11 +5271,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         nanboxed_args.data(), nargs, xsink));
                 }
 
-                // Invalidate all variable caches after method call
-                cleanupStoredValues(locals, xsink);
-                cleanupStoredValues(globals, xsink);
-                cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
+                // Invalidate all variable caches after method call - must include slot cache
+                cleanupLocalCaches();
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
@@ -5558,13 +5549,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupStoredValues(locals, xsink);
-                    cleanupStoredValues(globals, xsink);
-                    cleanupStoredValues(threadlocals, xsink);
-                    cleanupStoredValues(closures, xsink);
+                    cleanupLocalCaches();
                     return false;
                 }
-                // DotEval opcodes are pure expression opcodes — no cache invalidation needed
+                // DotEval can execute AST code (method calls) that modifies variables, so cache invalidation is needed
+                cleanupLocalCaches();
                 setValueSlot(values, expr_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(expr_inst->result.id);
