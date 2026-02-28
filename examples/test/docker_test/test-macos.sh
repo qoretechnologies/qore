@@ -85,6 +85,10 @@ export PATH="${BUILD_DIR}:${PATH}"
 # when creating 8000+ threads overwhelms the pthread subsystem
 export SKIP_MAX_THREAD_TEST=1
 
+# Increase timeout for macOS - WebSocketH2PerfTest is slow with -penable-debug flag
+# even in Release mode on macOS CI. Default 300s is not enough.
+export TEST_TIMEOUT=600
+
 # Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
 ./run_tests.sh
 
