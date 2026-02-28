@@ -1315,6 +1315,11 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                         }
                     }
                     executeHandlerBody(handlers[i], &obe_xsink);
+                    // Restore td->catchException BEFORE clearing xsink to avoid
+                    // a use-after-free window where td->catchException points to
+                    // the freed exception chain
+                    ex_helper.reset();
+                    argv_helper.reset();
                     if (type == OBE_Error) {
                         if (qore_es_private::get(obe_xsink)->rethrown) {
                             if (xsink) {
@@ -1338,6 +1343,77 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     handlers.clear();
     return nrc;
 }
+
+// Lazy stack location for IR-executed frames.
+// Resolves source location on demand from the current block/ip state.
+// Per-instruction runtime_loc updates are also performed in the main loop
+// for CodeEvaluationHelper compatibility.
+//
+// Lifetime: This object is constructed on execute()'s stack AFTER the block/ip locals it
+// references, so it is destroyed FIRST (C++ reverse construction order), removing itself
+// from the thread's stack location chain before block/ip go out of scope.
+//
+// Thread safety: getLocation() may be called from another thread via
+// get_all_thread_call_stacks().  block_ref and ip_ref are non-atomic, so this is
+// technically a C++ data race.  In practice it is benign on 64-bit platforms where
+// pointer and size_t reads are naturally atomic, and the local-copy pattern in
+// getLocation() prevents TOCTOU issues.  The worst case is a slightly stale source
+// location in a cross-thread stack trace, which is acceptable for debugging purposes.
+class QoreIRStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
+public:
+    DLLLOCAL QoreIRStackLocation(const QoreIRFunction& func, QoreIRBasicBlock*& block_ref,
+            size_t& ip_ref, const StatementBlock* statements, QoreProgram* pgm)
+        : QoreProgramStackLocationHelper(this, saved_stmt, saved_pgm),
+          func(func), block_ref(block_ref), ip_ref(ip_ref),
+          statements(statements), pgm(pgm) {
+        if (!this->pgm) {
+            // Fall back to the thread's current program (saved by base class constructor)
+            this->pgm = saved_pgm;
+        }
+    }
+
+    DLLLOCAL const QoreProgramLocation& getLocation() const override {
+        // Lazily resolve from current IR instruction
+        QoreIRBasicBlock* blk = block_ref;
+        size_t ip = ip_ref;
+        if (blk && ip < blk->instructions.size()) {
+            const QoreProgramLocation* loc = blk->instructions[ip]->loc;
+            if (loc) {
+                return *loc;
+            }
+        }
+        return loc_builtin;
+    }
+
+    DLLLOCAL const std::string& getCallName() const override {
+        return func.name;
+    }
+
+    DLLLOCAL qore_call_t getCallType() const override {
+        return CT_USER;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const override {
+        return pgm;
+    }
+
+    DLLLOCAL const AbstractStatement* getStatement() const override {
+        return statements;
+    }
+
+private:
+    const QoreIRFunction& func;
+    QoreIRBasicBlock*& block_ref;   // reference to execute()'s local variable
+    size_t& ip_ref;                 // reference to execute()'s local variable
+    const StatementBlock* statements;
+    QoreProgram* pgm;
+    // saved_stmt and saved_pgm receive old thread-local values from
+    // QoreProgramStackLocationHelper constructor via output references.
+    // IMPORTANT: no default member initializers — they would overwrite the values
+    // written by the base class constructor (same pattern as QoreInternalCallStackLocationHelperBase).
+    const AbstractStatement* saved_stmt;
+    QoreProgram* saved_pgm;
+};
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
@@ -1439,6 +1515,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 }
                             }
                             executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                            // Restore td->catchException BEFORE clearing xsink to avoid
+                            // a use-after-free window where td->catchException points to
+                            // the freed exception chain
+                            ex_helper.reset();
+                            argv_helper.reset();
                             if (type == OBE_Error) {
                                 if (qore_es_private::get(obe_xsink)->rethrown) {
                                     if (xsink) {
@@ -1449,6 +1530,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             if (obe_xsink) {
                                 if (xsink) {
                                     xsink->assimilate(obe_xsink);
+                                }
+                                if (!error) {
+                                    error = true;
                                 }
                             }
                         }
@@ -1556,9 +1640,27 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* prev_block = nullptr;
     size_t ip = 0;
 
+    // Push lazy stack location for this IR execution frame.
+    // Resolves source location on demand from block/ip rather than
+    // updating runtime_loc on every instruction (zero overhead during normal execution).
+    QoreIRStackLocation ir_stack_loc(func, block, ip, statements, pgm);
+
     // OSR: loop iteration counter for loop-aware JIT promotion
     uint32_t loop_iterations = 0;
     const uint32_t osr_threshold = static_cast<uint32_t>(QoreJIT::getJITThreshold());
+
+    // Track values[] slots holding strong refs from weak reference evaluation.
+    // When LoadSelfMember (or LoadStaticVar) evaluates a needsEval() value
+    // (e.g., WeakReferenceNode), the resulting strong ref is stored in values[].
+    // In AST mode, such refs are temporary within each expression evaluation.
+    // In IR mode, they persist until function return — for long-running functions
+    // (e.g., PipelineQueue::run() blocking in cond.wait()), this prevents object
+    // destruction and causes shutdown hangs.
+    // Fix: discard these "ephemeral" values at statement boundaries (line changes).
+    // Uses a vector (not set) — duplicates are harmless (discard on NOTHING is a no-op)
+    // and 0-2 entries per statement makes linear scan faster than hash table overhead.
+    std::vector<uint32_t> ephemeral_weak_ref_slots;
+    int last_ephemeral_line = -1;
 
     while (block) {
         if (ip >= block->instructions.size()) {
@@ -1637,8 +1739,49 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         QoreIRInstruction* inst = block->instructions[ip].get();
 
+        // Update runtime_loc from the current instruction's source location.
+        // This is needed because AST evaluation code (CodeEvaluationHelper, exception handling)
+        // reads runtime_loc to determine the current source position. Without this, builtin
+        // function calls and exceptions would report <builtin>:-1 during IR execution.
+        // This is a single pointer write per instruction — negligible overhead.
+        if (inst->loc) {
+            update_runtime_statement_location(nullptr, inst->loc);
+        }
+
+        // Clean up ephemeral weak-ref values at statement boundaries.
+        // When the source line changes, discard strong refs from needsEval() member
+        // loads (e.g., WeakReferenceNode evaluations) to match AST temporary lifetime.
+        // Instructions with null loc (synthetic/internal) are transparent — the cleanup
+        // is deferred until the next instruction with a real source location.
+        if (inst->loc && inst->loc->start_line != last_ephemeral_line) {
+            if (!ephemeral_weak_ref_slots.empty()) {
+                for (uint32_t slot : ephemeral_weak_ref_slots) {
+                    if (slot < values.size()) {
+                        values[slot].discard(xsink);
+                        values[slot] = QoreValue();
+                    }
+                }
+                ephemeral_weak_ref_slots.clear();
+            }
+            last_ephemeral_line = inst->loc->start_line;
+        }
+
         // Debug: fire dbgStep on source line changes.
-        // Debugger attachment takes effect at next function call, not mid-instruction.
+        // Re-check debug state: matches AST mode where runtimeCheck() gates every dbgStep.
+        // Handles both mid-execution attachment (addProgram) and detachment (removeProgram).
+        if (can_debug) {
+            bool runtime_check = tlpd->runtimeCheck();
+            if (!debug_active && runtime_check) {
+                // Debugger attached mid-execution: start generating step events
+                // from the current position — no retroactive dbgFunctionEnter since the function
+                // was already entered before the debugger attached (matching AST mode behavior).
+                debug_active = true;
+                last_debug_line = -1;
+            } else if (debug_active && !runtime_check) {
+                // Debugger detached mid-execution: stop generating debug events
+                debug_active = false;
+            }
+        }
         if (debug_active) {
             if (inst->loc && inst->loc->start_line != last_debug_line) {
                 last_debug_line = inst->loc->start_line;
@@ -2283,7 +2426,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             case QoreIROpcode::LandingPad: {
                 // Execute on_error/on_exit handlers for scopes entered within the try body
-                // that were not exited due to an invoke exception jumping directly here
+                // that were not exited due to an invoke exception jumping directly here.
+                // Uses the same handler execution pattern as fireScopeExits() and ScopeExit:
+                // CatchExceptionHelper for rethrow support, rethrown check + xsink->clear(),
+                // executeHandlerBody() for IR-compiled handlers, and error flag update.
                 auto* lp_inst = static_cast<QoreIRLandingPadInstruction*>(inst);
                 while (scope_stack.size() > lp_inst->scope_depth) {
                     size_t scope_start = scope_stack.back();
@@ -2295,7 +2441,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
                             if (type == OBE_Unconditional || (error && type == OBE_Error)) {
-                                if (on_block_exit_handlers[i - 1].code) {
+                                if (on_block_exit_handlers[i - 1].code || on_block_exit_handlers[i - 1].handler_ir) {
                                     std::unique_ptr<SingleArgvContextHelper> argv_helper;
                                     std::unique_ptr<CatchExceptionHelper> ex_helper;
                                     if (type == OBE_Error && xsink) {
@@ -2306,22 +2452,34 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                                 except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    QoreValue rv;
-                                    on_block_exit_handlers[i - 1].code->exec(rv, &obe_xsink);
-                                    // Invalidate caches after AST execution
-                                    cleanupStoredValues(locals, xsink);
-                                    cleanupStoredValues(globals, xsink);
-                                    cleanupStoredValues(threadlocals, xsink);
-                                    cleanupStoredValues(closures, xsink);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                                    // Restore td->catchException BEFORE clearing xsink to avoid
+                                    // a use-after-free window where td->catchException points to
+                                    // the freed exception chain
+                                    ex_helper.reset();
+                                    argv_helper.reset();
+                                    if (type == OBE_Error) {
+                                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                                            if (xsink) {
+                                                xsink->clear();
+                                            }
+                                        }
+                                    }
                                 }
                                 if (obe_xsink) {
                                     if (xsink) {
                                         xsink->assimilate(obe_xsink);
                                     }
+                                    if (!error) {
+                                        error = true;
+                                    }
                                 }
                             }
                         }
                         on_block_exit_handlers.resize(scope_start);
+                        // Invalidate caches after handler execution (both AST and compiled
+                        // handlers can modify locals via the thread-local variable stack)
+                        cleanupStoredValues(locals, xsink);
                     }
                 }
                 ++ip;
@@ -2505,6 +2663,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             // Also store in slot cache for fast access on next load
                             auto slot_it = func.local_var_slots.find(local_inst->local);
                             if (slot_it != func.local_var_slots.end() && slot_it->second < locals_slot_cache.size()) {
+                                // Discard old slot cache value before overwriting to prevent
+                                // refcount leak.  On a cache miss with eval() (e.g. closure
+                                // variable), the slot may already hold a stale +1 ref from a
+                                // prior load.  Without this discard, overwriting the slot
+                                // silently drops that reference, causing a permanent leak.
+                                locals_slot_cache[slot_it->second].discard(xsink);
                                 locals_slot_cache[slot_it->second] = val.hasNode() ? val.refSelf() : val;
                             }
                             out = val.hasNode() ? val.refSelf() : val;
@@ -2997,7 +3161,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
+                bool needs_eval = val->needsEval();
+                QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, xsink);
@@ -3009,6 +3174,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 setValueSlot(values, sm_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(sm_inst->result.id);
+                    if (needs_eval) {
+                        // Strong ref from evaluating a reference-type member
+                        // (e.g., WeakReferenceNode → strong ref). Mark ephemeral
+                        // so it's cleaned at the next statement boundary, matching
+                        // AST temporary lifetime semantics.
+                        ephemeral_weak_ref_slots.push_back(sm_inst->result.id);
+                    }
                 }
                 ++ip;
                 break;
@@ -3026,7 +3198,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                QoreValue out = val->needsEval() ? val->eval(xsink) : val.release();
+                bool needs_eval = val->needsEval();
+                QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupStoredValues(locals, xsink);
@@ -3038,6 +3211,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 setValueSlot(values, sv_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(sv_inst->result.id);
+                    if (needs_eval) {
+                        // Strong ref from evaluating a reference-type static var
+                        // (e.g., WeakReferenceNode). Mark ephemeral for statement-
+                        // boundary cleanup (see LoadSelfMember comment).
+                        ephemeral_weak_ref_slots.push_back(sv_inst->result.id);
+                    }
                 }
                 ++ip;
                 break;
@@ -4195,6 +4374,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         }
                                     }
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                                    // Restore td->catchException BEFORE clearing xsink to avoid
+                                    // a use-after-free window where td->catchException points to
+                                    // the freed exception chain
+                                    ex_helper.reset();
+                                    argv_helper.reset();
                                     if (type == OBE_Error) {
                                         if (qore_es_private::get(obe_xsink)->rethrown) {
                                             if (xsink) {
@@ -5497,19 +5681,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanupStoredValues(closures, xsink);
                     return false;
                 }
-                QoreException* ex = catch_get_exception();
-                if (!ex) {
-                    xsink->raiseException("IR-EXEC-ERROR", "rethrow without exception");
-                } else {
-                    if (!inst->operands.empty()) {
-                        // Rethrow with args: modify the exception's err/desc/arg
-                        // before rethrowing (matches AST RethrowStatement::execImpl)
-                        QoreValue arg = getIRValue(values, inst->operands[0]);
-                        if (arg.getType() == NT_LIST) {
-                            ex = ex->replaceTop(*arg.get<const QoreListNode>(), *xsink);
+                // Only access catch context for real rethrows (from Qore rethrow
+                // statements inside catch/on_error blocks).  Synthetic rethrows
+                // (e.g. foreach reference cleanup) just propagate the exception
+                // already on xsink without touching td->catchException.
+                if (!rethrow_inst->synthetic) {
+                    QoreException* ex = catch_get_exception();
+                    if (!ex) {
+                        xsink->raiseException("IR-EXEC-ERROR", "rethrow without exception");
+                    } else {
+                        if (!inst->operands.empty()) {
+                            // Rethrow with args: modify the exception's err/desc/arg
+                            // before rethrowing (matches AST RethrowStatement::execImpl)
+                            QoreValue arg = getIRValue(values, inst->operands[0]);
+                            if (arg.getType() == NT_LIST) {
+                                ex = ex->replaceTop(*arg.get<const QoreListNode>(), *xsink);
+                            }
                         }
+                        qore_es_private::get(*xsink)->rethrow(ex);
                     }
-                    qore_es_private::get(*xsink)->rethrow(ex);
                 }
                 if (debug_active && *xsink) {
                     tlpd->dbgException(nullptr, xsink);
@@ -5575,7 +5765,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(closures, xsink);
                 return true;
             }
-            case QoreIROpcode::ReturnNothing:
+            case QoreIROpcode::ReturnNothing: {
                 return_value = QoreValue();
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
@@ -5587,6 +5777,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(threadlocals, xsink);
                 cleanupStoredValues(closures, xsink);
                 return true;
+            }
             default:
                 if (xsink) {
                     std::string msg = "unsupported opcode in executor: ";

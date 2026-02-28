@@ -422,6 +422,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 }
             }
             if (inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal
                     || inst->opcode == QoreIROpcode::LoadClosure || inst->opcode == QoreIROpcode::StoreClosure) {
                 auto* local_inst = dynamic_cast<const QoreIRLocalInstruction*>(inst.get());
                 if (local_inst && local_inst->local) {

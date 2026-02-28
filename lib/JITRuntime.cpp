@@ -336,6 +336,9 @@ extern "C" DLLEXPORT int64_t qore_rt_has_exception(ExceptionSink* xsink) {
 // evalTiered() checks this after JIT returns and re-executes via AST if set.
 static thread_local bool tl_jit_deopt_requested = false;
 
+// Empty string used as fallback call name when no cached IR function is available.
+static const std::string jit_empty_call_name;
+
 extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
     tl_jit_deopt_requested = true;
     if (deopt_counter_ptr) {
@@ -2765,21 +2768,70 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* f
     return toBits(result);
 }
 
+// Stack location for JIT/AOT-executed frames.
+// Unlike QoreIRStackLocation which lazily resolves from block/ip, JIT code is compiled
+// to native code so the source location is fixed at the function's parse location.
+class QoreJITStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
+public:
+    DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
+            const StatementBlock* statements, QoreProgram* pgm)
+        : QoreProgramStackLocationHelper(this, saved_stmt, saved_pgm),
+          call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
+        if (!this->pgm) {
+            this->pgm = saved_pgm;
+        }
+    }
+
+    DLLLOCAL const QoreProgramLocation& getLocation() const override {
+        return loc ? *loc : loc_builtin;
+    }
+
+    DLLLOCAL const std::string& getCallName() const override {
+        return call_name;
+    }
+
+    DLLLOCAL qore_call_t getCallType() const override {
+        return CT_USER;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const override {
+        return pgm;
+    }
+
+    DLLLOCAL const AbstractStatement* getStatement() const override {
+        return statements;
+    }
+
+private:
+    std::string call_name;
+    const QoreProgramLocation* loc;
+    const StatementBlock* statements;
+    QoreProgram* pgm;
+    // saved_stmt and saved_pgm receive old thread-local values from
+    // QoreProgramStackLocationHelper constructor via output references.
+    // IMPORTANT: no default member initializers — they would overwrite the values
+    // written by the base class constructor (same pattern as QoreInternalCallStackLocationHelperBase).
+    const AbstractStatement* saved_stmt;
+    QoreProgram* saved_pgm;
+};
+
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 
     Before the JIT call: instantiates body locals unless all are IR-only.
+    Pushes a stack location entry for the JIT frame.
     Calls the provided function to execute JIT code.
     After the call: checks for JIT guard failure, falls back to AST if needed,
     and uninstantiates body locals.
 
     @param uvb the user variant body (for statement block, program, and body locals)
+    @param call_name the function/method name for the stack trace
     @param exec_fn callable that executes the JIT code and returns raw NaN-boxed result bits
     @param val reference to receive the final result value
     @param xsink exception sink
 */
 template <typename ExecFn>
-static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
-        QoreValue& val, ExceptionSink* xsink) {
+static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
+        ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink) {
     // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
     // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
     // are never accessed by AST callbacks).
@@ -2794,24 +2846,22 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
         }
     }
 
-    // Isolate from outer AST stack location chain — the outer chain may contain
-    // pointers to destroyed RAII objects if JIT is called from deep AST context.
-    // Nulling before execution prevents dangling-pointer crashes in
-    // QoreExceptionBase::QoreExceptionBase() when exceptions are thrown in JIT code.
-    const QoreStackLocation* saved_stack_loc = get_runtime_stack_location();
-    if (saved_stack_loc) {
-        update_runtime_stack_location(nullptr);
+    // Push stack location for this JIT execution frame so it appears in
+    // get_all_thread_call_stacks() and exception call stacks.
+    const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
+    QoreJITStackLocation jit_stack_loc(call_name, parse_loc, uvb->getStatementBlock(), uvb->pgm);
+
+    // Set runtime_loc so nested function/method calls (via CodeEvaluationHelper)
+    // report this function's source location as the caller.
+    if (parse_loc) {
+        update_runtime_statement_location(nullptr, parse_loc);
     }
 
-    uint64_t result_bits = exec_fn(xsink);
+    bool fn_invalidated = false;
+    uint64_t result_bits = exec_fn(xsink, fn_invalidated);
 
-    // Check for JIT guard failure requesting deopt to AST
-    if (!*xsink && qore_jit_deopt_requested()) {
-        // Isolate the chain for deopt AST execution as well, since it might throw exceptions
-        if (saved_stack_loc) {
-            update_runtime_stack_location(nullptr);
-        }
-
+    // Check for JIT guard failure or recompilation invalidation requesting deopt to AST
+    if (!*xsink && (qore_jit_deopt_requested() || fn_invalidated)) {
         // Ensure body locals are on thread stack for AST execution
         if (skip_body_locals) {
             const QoreParseOptions& po = uvb->pgm->getParseOptions();
@@ -2828,17 +2878,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, ExecFn&& exec_fn,
                 body_locals[i]->uninstantiate(xsink);
             }
         }
-
-        // Restore the chain after deopt execution
-        if (saved_stack_loc) {
-            update_runtime_stack_location(saved_stack_loc);
-        }
     } else {
-        // Restore the chain for normal (non-deopt) execution
-        if (saved_stack_loc) {
-            update_runtime_stack_location(saved_stack_loc);
-        }
-
         QoreValue result;
         std::memcpy(&result, &result_bits, sizeof(result));
         val = result;
@@ -2949,11 +2989,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
+    // Use cached IR name when available (zero allocation); fall back to building the name
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    std::string call_name_buf;
+    if (!ir) {
+        const char* class_name = func->className();
+        if (class_name) {
+            call_name_buf = class_name;
+            call_name_buf += "::";
+        }
+        call_name_buf += func->getName();
+    }
+    const std::string& call_name = ir ? ir->name : call_name_buf;
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
-            return uvb->execCachedFunction(xs);
+        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            return uvb->execCachedFunction(xs, inv);
         }, val, xsink);
     }
 
@@ -3025,10 +3078,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
+    // Get call name from cached IR function (always available for JIT-compiled functions)
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, [target_fn](ExceptionSink* xs) {
+        execJITWithDeopt(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink);
     }
@@ -3054,9 +3111,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunctionVariant* variant,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
-    // Lightweight helper for self-recursive calls: skips ArgvContextHelper and return type coercion
-    // overhead, but keeps ProgramThreadCountContextHelper for proper context setup.
-    // Only keeps: check_stack, program context, param instantiation, actual call, param uninstantiation.
+    // Self-recursive call helper: sets up params, argv, body locals, and deopt handling.
+    // Falls back to evalTiered slow path if JIT function was invalidated by recompilation.
     assert(variant);
 
     if (check_stack(xsink)) {
@@ -3067,6 +3123,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     if (!uvb) {
         xsink->raiseException("JIT-ERROR", "non-user variant in self-recursive call");
         return toBits(QoreValue());
+    }
+
+    // Fall back to slow path if JIT function was invalidated by recompilation
+    if (!uvb->hasCachedFunction()) {
+        // Build QoreListNode from NaN-boxed args and call through evalTiered
+        ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
+        if (nargs > 0) {
+            qore_list_private* priv = qore_list_private::get(**arg_list);
+            priv->reserve(nargs);
+            for (int i = 0; i < nargs; ++i) {
+                QoreValue val = fromBits(args[i]);
+                if (val.hasNode()) {
+                    val.refSelf();
+                }
+                priv->pushIntern(val);
+            }
+        }
+        const QoreIRFunction* ir = uvb->getCachedIR();
+        const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+        QoreValue result = uvb->callTieredPublic(call_name.c_str(), arg_list, nullptr, xsink);
+        return toBits(result);
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -3083,14 +3160,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         return toBits(QoreValue());
     }
 
-    uint64_t result = uvb->execCachedFunction(xsink);
+    // Build and instantiate argv for excess arguments (varargs)
+    ReferenceHolder<QoreListNode> argv(xsink);
+    if (nargs > (int)num_params) {
+        argv = new QoreListNode(autoTypeInfo);
+        qore_list_private* argv_priv = qore_list_private::get(**argv);
+        argv_priv->reserve(nargs - num_params);
+        for (int i = num_params; i < nargs; ++i) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            argv_priv->pushIntern(val);
+        }
+    }
+    if (sig->argvid) {
+        sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
 
-    // Uninstantiate parameter locals in reverse order
+    // Use cached IR name when available (zero allocation)
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+
+    // Call through execJITWithDeopt which handles body locals, stack location, and deopt
+    QoreValue val{};
+    {
+        ArgvContextHelper argv_helper(argv.release(), xsink);
+        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            return uvb->execCachedFunction(xs, inv);
+        }, val, xsink);
+    }
+
+    // Uninstantiate argv + params in reverse order (LIFO)
+    if (sig->argvid) {
+        sig->argvid->uninstantiate(xsink);
+    }
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
     }
 
-    return result;
+    // Apply return type coercion to match ReturnStatement::execImpl behavior
+    if (!*xsink) {
+        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+    }
+
+    return toBits(val);
 }
 
 // --- Direct method call for devirtualized calls (final classes) ---
@@ -3212,11 +3327,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
+    // Use cached IR name when available (zero allocation); fall back to building the name
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    std::string call_name_buf;
+    if (!ir) {
+        const char* cls = method->getClass() ? method->getClass()->getName() : nullptr;
+        if (cls) {
+            call_name_buf = cls;
+            call_name_buf += "::";
+        }
+        call_name_buf += method->getName();
+    }
+    const std::string& call_name = ir ? ir->name : call_name_buf;
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
-            return uvb->execCachedFunction(xs);
+        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            return uvb->execCachedFunction(xs, inv);
         }, val, xsink);
     }
 
@@ -3940,11 +4068,19 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
+    // Use cached IR name when available (zero allocation); fall back to building the name
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    std::string call_name_buf;
+    if (!ir) {
+        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
+    }
+    const std::string& call_name = ir ? ir->name : call_name_buf;
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
-            return uvb->execCachedFunction(xs);
+        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            return uvb->execCachedFunction(xs, inv);
         }, val, xsink);
     }
 
@@ -4207,11 +4343,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
+    // Use cached IR name when available (zero allocation); fall back to building the name
+    const QoreIRFunction* ir = uvb->getCachedIR();
+    std::string call_name_buf;
+    if (!ir) {
+        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
+    }
+    const std::string& call_name = ir ? ir->name : call_name_buf;
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
-        execJITWithDeopt(uvb, [uvb](ExceptionSink* xs) {
-            return uvb->execCachedFunction(xs);
+        execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
+            return uvb->execCachedFunction(xs, inv);
         }, val, xsink);
     }
 

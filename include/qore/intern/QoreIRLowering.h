@@ -232,13 +232,6 @@ private:
     const QoreTypeInfo* getVarRefTypeInfo(const VarRefNode* var) const;
     const QoreProgramLocation* getVarRefLocation(const VarRefNode* var) const;
 
-    //! Emit ScopeExit instructions for active scopes down to target depth
-    /** Used by return/break/continue to properly unwind on_exit handlers
-     * @param target_depth the scope_stack depth to unwind to (0 for return, loop's depth for break/continue)
-     * @param is_error true if exiting due to an exception
-     */
-    void emitScopeExits(size_t target_depth, bool is_error = false);
-
     //! Flags for emitBlockCleanups controlling cleanup behavior
     enum CleanupFlags : unsigned {
         CF_NONE = 0,

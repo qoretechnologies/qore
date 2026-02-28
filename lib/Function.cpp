@@ -2750,7 +2750,7 @@ void UserVariantBase::attemptJITRecompilation() const {
     }
 
     // Demote to IR tier while recompiling
-    cached_jit_fn = nullptr;
+    cached_jit_fn.store(nullptr, std::memory_order_release);
     current_tier.store(TIER_IR, std::memory_order_release);
 
     // Reset deopt counter before recompilation
@@ -2780,7 +2780,7 @@ void UserVariantBase::attemptJITRecompilation() const {
             orig_name.c_str());
         return;
     }
-    cached_jit_fn = fn;
+    cached_jit_fn.store(fn, std::memory_order_release);
     jit_recompile_state.store(2, std::memory_order_relaxed);
     current_tier.store(TIER_JIT, std::memory_order_release);
     printd(2, "UserVariantBase::attemptJITRecompilation() '%s' recompiled with profiled guards\n",
@@ -2807,7 +2807,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     }
 
     // JIT/AOT tier: execute native function
-    if (tier == TIER_JIT && (cached_jit_fn || cached_aot_fn)) {
+    // Load cached_jit_fn atomically; if it was invalidated by recompilation, fall through to IR tier
+    JitFunctionPtr jit_fn = cached_jit_fn.load(std::memory_order_acquire);
+    if (tier == TIER_JIT && (jit_fn || cached_aot_fn)) {
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
             name, exec_count.load(), (void*)cached_aot_ctx);
 
@@ -2853,13 +2855,14 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the program's parse options for the duration of JIT/AOT execution
-                // so that builtin code called from JIT/AOT-compiled functions (e.g. RangeIterator checking
-                // PO_BROKEN_RANGE) sees the correct program parse options.
+                // Swap in the program's parse options and set runtime_loc to the function's
+                // parse location so that nested function/method calls (via CodeEvaluationHelper)
+                // report this function's source location as the caller.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
+                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
+                    old_stmt, old_loc, old_po);
 
                 // Note: We used to isolate from outer AST stack location chain by nulling it,
                 // but this caused crashes when exceptions are thrown from builtins called during
@@ -2872,7 +2875,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (cached_aot_ctx && cached_aot_fn) {
                     result_bits = cached_aot_fn(cached_aot_ctx, xsink);
                 } else {
-                    result_bits = cached_jit_fn(xsink);
+                    assert(jit_fn);
+                    result_bits = jit_fn(xsink);
                 }
 
                 // Check for JIT guard failure requesting deopt to AST.
@@ -2941,7 +2945,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     }
 
     // IR tier: execute via IR interpreter
-    if (tier == TIER_IR && cached_ir) {
+    // Also handles JIT→IR fallback when cached_jit_fn was invalidated by recompilation
+    if ((tier == TIER_IR || (tier == TIER_JIT && !jit_fn && !cached_aot_fn)) && cached_ir) {
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
         }
@@ -2962,12 +2967,14 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     lv->instantiate(po);
                 }
 
-                // Swap in the program's parse options for the duration of IR execution
-                // so that builtin code called from IR-interpreted functions sees the correct program parse options.
+                // Swap in the program's parse options and set runtime_loc to the function's
+                // parse location for the duration of IR execution. The IR interpreter updates
+                // runtime_loc per-instruction, but this ensures correct location from the start.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
-                swap_runtime_statement_location(xsink, nullptr, nullptr, po, old_stmt, old_loc, old_po);
+                swap_runtime_statement_location(xsink, nullptr, signature.getParseLocation(), po,
+                    old_stmt, old_loc, old_po);
 
                 // Note: We do NOT isolate from outer stack location chain here.
                 // CodeEvaluationHelper RAII properly manages the stack location chain
@@ -2984,6 +2991,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 bool fell_back_to_ast = false;
                 bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
                     nullptr, nullptr, cached_ir->cached_pre_instantiated, excluded_selfid, statements, pgm);
+
                 if (ok && !*xsink) {
                     val = ir_return_value;
                 } else if (*xsink) {

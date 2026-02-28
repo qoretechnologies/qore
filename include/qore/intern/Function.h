@@ -650,7 +650,7 @@ protected:
     mutable std::atomic<uint64_t> exec_count{0};
     mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
     mutable QoreIRFunction* cached_ir = nullptr;
-    mutable JitFunctionPtr cached_jit_fn = nullptr;
+    mutable std::atomic<JitFunctionPtr> cached_jit_fn{nullptr};
     mutable AotFunctionPtr cached_aot_fn = nullptr;
     mutable QoreAOTContext* cached_aot_ctx = nullptr;
     mutable std::once_flag ir_lower_once;
@@ -736,7 +736,7 @@ public:
 
     //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
     DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
-        cached_jit_fn = fn;
+        cached_jit_fn.store(fn, std::memory_order_release);
         jit_compile_state.store(2, std::memory_order_relaxed);
         current_tier.store(TIER_JIT, std::memory_order_release);
     }
@@ -752,15 +752,26 @@ public:
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
     DLLLOCAL bool hasCachedFunction() const {
         return current_tier.load(std::memory_order_acquire) == TIER_JIT
-            && (cached_jit_fn || cached_aot_fn);
+            && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn);
     }
 
     //! Execute the cached JIT/AOT function directly (caller must set up locals)
-    DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink) const {
+    //! @param xsink exception sink
+    //! @param invalidated set to true if cached_jit_fn was nulled by recompilation;
+    //!        caller should fall back to AST via deopt
+    //! @return NaN-boxed result bits, or 0 if invalidated
+    DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink, bool& invalidated) const {
+        invalidated = false;
         if (cached_aot_ctx && cached_aot_fn) {
             return cached_aot_fn(cached_aot_ctx, xsink);
         }
-        return cached_jit_fn(xsink);
+        JitFunctionPtr fn = cached_jit_fn.load(std::memory_order_acquire);
+        if (!fn) {
+            // Function pointer was invalidated by recompilation; signal caller to deopt
+            invalidated = true;
+            return 0;
+        }
+        return fn(xsink);
     }
 
     //! Returns the body locals vector for fast call setup

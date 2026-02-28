@@ -917,6 +917,9 @@ public:
     QoreIRBasicBlock* exception_target = nullptr;
     //! Number of active catch scopes to clean up (for Rethrow only)
     int catch_depth = 0;
+    //! True for synthetic rethrows (e.g. foreach ref cleanup) that just propagate the
+    //! exception already on xsink without accessing td->catchException
+    bool synthetic = false;
 };
 
 class QoreIRLocalInstruction : public QoreIRInstruction {

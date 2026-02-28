@@ -892,10 +892,8 @@ void QoreJIT::bgCompileThreadLoop() {
         // Register the compiled function for the root uvb
         // Cast away const to set cached_jit_fn and tier
         UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
-        // Write function pointer (non-atomic, but followed by release fence)
-        mutable_uvb->cached_jit_fn = fn;
-        // Ensure cached_jit_fn write is visible before tier update
-        std::atomic_thread_fence(std::memory_order_release);
+        // Atomic store with release ordering ensures visibility before tier update
+        mutable_uvb->cached_jit_fn.store(fn, std::memory_order_release);
         mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
         mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
 
@@ -1024,8 +1022,7 @@ void QoreJIT::shutdown() {
             JitFunctionPtr fn = lookupFunction(work.ir_func->name);
             if (fn && work.uvb) {
                 UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
-                mutable_uvb->cached_jit_fn = fn;
-                std::atomic_thread_fence(std::memory_order_release);
+                mutable_uvb->cached_jit_fn.store(fn, std::memory_order_release);
                 mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
                 mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
             }

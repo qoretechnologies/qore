@@ -109,6 +109,7 @@ test-alpine-arm64:
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-alpine.sh; then

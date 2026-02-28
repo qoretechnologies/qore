@@ -911,7 +911,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
-            builder.createRethrow(nullptr, stmt->loc);
+            {
+                auto* rethrow_inst = builder.createRethrow(nullptr, stmt->loc);
+                rethrow_inst->synthetic = true;
+            }
 
             // Move merge block to end (after invoke.cont blocks from body lowering)
             builder.getFunction()->moveBlockToEnd(merge_block);
@@ -1752,15 +1755,6 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     }
 
     return true;
-}
-
-void QoreIRLowering::emitScopeExits(size_t target_depth, bool is_error) {
-    // Emit ScopeExit instructions from innermost to outermost scope
-    // until we reach the target depth
-    for (size_t i = scope_stack.size(); i > target_depth; --i) {
-        uint32_t scope_id = scope_stack[i - 1];
-        builder.createScopeExit(scope_id, is_error);
-    }
 }
 
 void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsigned flags) {

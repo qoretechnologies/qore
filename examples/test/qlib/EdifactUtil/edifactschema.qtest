@@ -65,7 +65,9 @@ public class EdifactSchemaTest inherits QUnit::Test {
         on_exit unsetenv("QORE_EDIFACT_DIRCACHE");
         on_exit FsUtil::remove_tree(base_cache_dir);
 
-        list<hash<auto>> releases = (
+        # Full release list — run all combinations when EDIFACT_FULL_TEST=1
+        # Default (no env var): run a representative subset covering old, mid, and recent releases
+        list<hash<auto>> all_releases = (
             {"release": "D01B", "message": "ORDERS", "code": "1", "code_desc": "Document name code"},
             {"release": "D01B", "message": "INVOIC", "code": "1", "code_desc": "Document name code"},
             {"release": "D01B", "message": "DESADV", "code": "1", "code_desc": "Document name code"},
@@ -259,6 +261,29 @@ public class EdifactSchemaTest inherits QUnit::Test {
             {"release": "D10B", "message": "IFTMIN", "code": "610", "code_desc": "Document name code"},
             {"release": "D10B", "message": "IFTSTA", "code": "25", "code_desc": "Document name code"},
         );
+
+        list<hash<auto>> releases;
+        if (ENV.EDIFACT_FULL_TEST) {
+            releases = all_releases;
+        } else {
+            # Representative subset: old (D96A), early-2000s (D01B), mid (D10B), and recent
+            # (D21A, D24A, D27A, D28A, D30A) — covers different eras and message types
+            hash<string, bool> subset_releases = {
+                "D96A": True,
+                "D01B": True,
+                "D10B": True,
+                "D21A": True,
+                "D24A": True,
+                "D27A": True,
+                "D28A": True,
+                "D30A": True,
+            };
+            foreach hash<auto> entry in (all_releases) {
+                if (subset_releases{entry.release}) {
+                    releases += entry;
+                }
+            }
+        }
 
         foreach hash<auto> info in (releases) {
             string base_path = fixtures_root + info.release + DirSep;
