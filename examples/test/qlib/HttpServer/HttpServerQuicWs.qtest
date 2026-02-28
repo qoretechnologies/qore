@@ -201,14 +201,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         return {
             "server": server,
             "port": h3info.port,
-            "url": "wss://localhost:" + h3info.port,
+            "url": "wss://127.0.0.1:" + h3info.port,
         };
     }
 
     #! Helper to create an HTTP/3 WebSocket client
     private WebSocketClient createH3Client(code cb, int port) {
         hash<auto> opts = {
-            "url": "wss://localhost:" + port,
+            "url": "wss://127.0.0.1:" + port,
             "logger": mLogger,
             "http3_mode": "required",
             "ssl_verify_cert": False,

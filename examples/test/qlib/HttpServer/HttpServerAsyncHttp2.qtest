@@ -799,7 +799,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }();
         }
 
-        cnt.waitForZero();
+        int wait_rc = cnt.waitForZero(60s);
+        assertEq(0, wait_rc, "background file stream requests should complete within 60 seconds");
 
         foreach hash<auto> r in (results) {
             assertTrue(r.success, sprintf("Concurrent file stream request %d should succeed (error: %y: %y)",

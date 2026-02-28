@@ -186,10 +186,16 @@ public class RestClientAsyncTest inherits QUnit::Test {
         delete m_http;
     }
 
-    #! Helper to drive a poll operation to completion
-    private auto drivePoll(AbstractPollOperation poller) {
+    #! Helper to drive a poll operation to completion with a deadline
+    private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
+        date start = now_us();
         while (*hash<SocketPollInfo> info = poller.continuePoll()) {
-            Socket::poll((info,), 5s);
+            timeout elapsed = now_us() - start;
+            if (elapsed >= deadline) {
+                throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
+            }
+            timeout remaining = deadline - elapsed;
+            Socket::poll((info,), min(remaining, 1s));
         }
         assertTrue(poller.goalReached());
         return poller.getOutput();

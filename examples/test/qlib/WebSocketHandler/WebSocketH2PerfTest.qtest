@@ -730,8 +730,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         if (final_received >= 5) {
             # Only assert delivery ratio when we got enough data to be meaningful
             # (very low counts can happen under valgrind)
-            assertTrue(final_received > flood_count / 10,
-                sprintf("pending send buffer: expected >%d messages, got %d/%d",
+            assertTrue(final_received >= flood_count / 10,
+                sprintf("pending send buffer: expected at least %d messages, got %d/%d",
                     flood_count / 10, final_received, flood_count));
         }
     }

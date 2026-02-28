@@ -221,6 +221,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "hdr": {},
             "header_info": {},
             # listener is *HttpListenerInterface; NOTHING is fine for standalone tests
+            "listener": NOTHING,
             "cx": {},
             "keep_alive": False,
             "ssl": False,

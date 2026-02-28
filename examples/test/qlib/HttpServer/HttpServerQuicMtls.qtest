@@ -199,7 +199,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         on_exit mgr.closeAll();
 
-        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "mTLS request should succeed");
 
         hash<auto> body = parse_json(binary_to_string(resp.body));
@@ -224,7 +224,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         on_exit mgr.closeAll();
 
-        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "request without client cert should succeed with SSL_VERIFY_PEER");
 
         hash<auto> body = parse_json(binary_to_string(resp.body));
@@ -252,7 +252,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         bool caught_exception = False;
         try {
-            mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+            mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         } catch (hash<ExceptionInfo> ex) {
             caught_exception = True;
             # The connection should fail due to TLS handshake error
@@ -280,7 +280,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         on_exit mgr.closeAll();
 
-        hash<auto> resp = mgr.request(sprintf("https://localhost:%d", quic_port), "GET", "/mtls");
+        hash<auto> resp = mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         assertEq(200, resp.status_code, "mTLS request should succeed");
 
         hash<auto> body = parse_json(binary_to_string(resp.body));

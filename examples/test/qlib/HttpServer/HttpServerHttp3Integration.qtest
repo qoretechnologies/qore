@@ -709,7 +709,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         bool got_error = False;
         try {
-            mgr.request(sprintf("https://localhost:%d", port), "GET", "/", NOTHING, NOTHING, 2s);
+            mgr.request(sprintf("https://127.0.0.1:%d", port), "GET", "/", NOTHING, NOTHING, 2s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
             # Verify the exception is a known HTTP/3 or QUIC error type
@@ -752,7 +752,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "key": new SSLPrivateKey(KeyPem),
         });
         int port = h3info.port;
-        string url = "https://localhost:" + port;
+        string url = "https://127.0.0.1:" + port;
 
         auto mgr = new HttpClientIo::HttpClientConnectionManager(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -805,7 +805,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "key": new SSLPrivateKey(KeyPem),
         });
         int port = h3info.port;
-        string url = "https://localhost:" + port;
+        string url = "https://127.0.0.1:" + port;
 
         auto mgr = new HttpClientIo::HttpClientConnectionManager(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -860,7 +860,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "key": new SSLPrivateKey(KeyPem),
         });
         int port = h3info.port;
-        string url = "https://localhost:" + port;
+        string url = "https://127.0.0.1:" + port;
 
         auto mgr = new HttpClientIo::HttpClientConnectionManager(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
@@ -994,7 +994,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         int tcp_port = info.port;
 
         # Make an HTTP/1.1 request via the TCP listener
-        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        HTTPClient client({"url": "https://127.0.0.1:" + tcp_port, "ssl_verify_cert": False});
         on_exit {
             delete client;
         }
@@ -1052,7 +1052,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         int tcp_port = info.port;
 
         # Create HTTPClient with http3_mode=auto (default)
-        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        HTTPClient client({"url": "https://127.0.0.1:" + tcp_port, "ssl_verify_cert": False});
         on_exit {
             delete client;
         }
@@ -1127,7 +1127,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Create HTTPClient with http3_mode=disabled
         HTTPClient client({
-            "url": "https://localhost:" + info.port,
+            "url": "https://127.0.0.1:" + info.port,
             "ssl_verify_cert": False,
             "http3_mode": "disabled",
         });
@@ -1175,7 +1175,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         int tcp_port = info.port;
 
         # Create HTTPClient with http3_mode=auto
-        HTTPClient client({"url": "https://localhost:" + tcp_port, "ssl_verify_cert": False});
+        HTTPClient client({"url": "https://127.0.0.1:" + tcp_port, "ssl_verify_cert": False});
         on_exit {
             delete client;
         }
@@ -1264,7 +1264,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             sprintf("server with enable_h3=False should have exactly 1 listener, got %d", listeners.size()));
 
         # Make an HTTP/1.1 request — should NOT have Alt-Svc
-        HTTPClient client({"url": "https://localhost:" + info.port, "ssl_verify_cert": False});
+        HTTPClient client({"url": "https://127.0.0.1:" + info.port, "ssl_verify_cert": False});
         on_exit {
             delete client;
         }

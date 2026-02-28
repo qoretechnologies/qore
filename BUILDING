@@ -23,7 +23,9 @@ OS-level POSIX thread support is required to build qore.
 for Perl-Compatible Regular Expressions. Install libpcre2-dev (Debian/Ubuntu), pcre2-devel (RHEL/Fedora), or pcre2-dev (Alpine).
 	https://github.com/PCRE2Project/pcre2
 
-*) openssl 0.9.7 or higher (3.0 or better recommended)
+*) OpenSSL (different minimum versions depending on features):
+   - Core/Qore: OpenSSL 0.9.7 or higher (3.0 or better recommended)
+   - QUIC/HTTP/3 support: OpenSSL 3.5 or higher (required for QUIC TLS API)
 	http://www.openssl.org
 
 *) bzlib 1.0.4 or higher

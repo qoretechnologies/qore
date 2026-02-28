@@ -47,11 +47,13 @@
 #! Handler that echoes back the request body and reports its size
 class EchoHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        string body_str;
-        if (body.typeCode() == NT_BINARY) {
-            body_str = binary_to_string(body);
-        } else if (body.typeCode() == NT_STRING) {
-            body_str = body;
+        string body_str = "";
+        if (exists body) {
+            if (body.typeCode() == NT_BINARY) {
+                body_str = binary_to_string(body);
+            } else if (body.typeCode() == NT_STRING) {
+                body_str = body;
+            }
         }
         return makeResponse(200, body_str, {"Content-Type": MimeTypeText});
     }

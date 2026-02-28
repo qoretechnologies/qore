@@ -63,7 +63,7 @@ class SseHandler inherits AbstractHttpRequestHandler {
     #! Override the 5-arg version to get the socket for HTTP/3 QUIC API access
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
-        if (hdr.method == "GET" && hdr.path == "sse") {
+        if (hdr.method == "GET" && hdr.path == "/sse") {
             if (cx."header-info".http3) {
                 return handleHttp3Sse(s, cx);
             }
@@ -209,7 +209,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "enable_h3": True,
         });
         server.waitForAsyncIo();
-        string h3_url = "https://localhost:" + h3info.port;
+        string h3_url = "https://127.0.0.1:" + h3info.port;
 
         # Use Http3ClientConnectionManager for HTTP/3 requests
         HttpClientIo::HttpClientConnectionManager mgr(

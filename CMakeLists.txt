@@ -523,6 +523,9 @@ if (NOT QUIC_FOUND_SYSTEM)
     # Save cache variables that we override for subproject builds
     set(_SAVE_BUILD_TESTING ${BUILD_TESTING})
     set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(_SAVE_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_ENABLE_OPENSSL ${ENABLE_OPENSSL})
+    set(_SAVE_ENABLE_GNUTLS ${ENABLE_GNUTLS})
 
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -563,6 +566,34 @@ if (NOT QUIC_FOUND_SYSTEM)
     else()
         unset(BUILD_SHARED_LIBS CACHE)
     endif()
+    if (DEFINED _SAVE_ENABLE_LIB_ONLY)
+        set(ENABLE_LIB_ONLY ${_SAVE_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_LIB_ONLY CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_OPENSSL)
+        set(ENABLE_OPENSSL ${_SAVE_ENABLE_OPENSSL} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_OPENSSL CACHE)
+    endif()
+    if (DEFINED _SAVE_ENABLE_GNUTLS)
+        set(ENABLE_GNUTLS ${_SAVE_ENABLE_GNUTLS} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_GNUTLS CACHE)
+    endif()
+
+    # Add FetchContent include directories explicitly.
+    # Target-based include propagation via INTERFACE_INCLUDE_DIRECTORIES can fail
+    # when cmake targets are mixed into the QORE_LIBS list variable, so we add
+    # the source/build include paths directly.
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS
+        "${nghttp3_SOURCE_DIR}/lib/includes"
+        "${nghttp3_BINARY_DIR}/lib/includes"
+        "${ngtcp2_SOURCE_DIR}/lib/includes"
+        "${ngtcp2_BINARY_DIR}/lib/includes"
+        "${ngtcp2_SOURCE_DIR}/crypto/includes"
+        "${ngtcp2_BINARY_DIR}/crypto/includes"
+    )
 
     # Link against the FetchContent-built targets
     list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2 ngtcp2_crypto_ossl nghttp3)

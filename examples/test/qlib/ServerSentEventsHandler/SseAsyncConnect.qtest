@@ -80,17 +80,18 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         m_error_server.stop();
     }
 
-    #! Helper to drive a poll operation to completion
-    private auto drivePoll(AbstractPollOperation poller) {
-        int max_iterations = 1000;
-        int iteration = 0;
+    #! Helper to drive a poll operation to completion with a deadline
+    private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
+        date start = now_us();
         while (!poller.goalReached()) {
-            if (++iteration > max_iterations) {
-                throw "TIMEOUT", "poll operation exceeded max iterations";
+            timeout elapsed = now_us() - start;
+            if (elapsed >= deadline) {
+                throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
             }
             *hash<SocketPollInfo> info = poller.continuePoll();
             if (info) {
-                Socket::poll((info,), 5s);
+                timeout remaining = deadline - elapsed;
+                Socket::poll((info,), min(remaining, 1s));
             }
         }
         return poller.getOutput();
