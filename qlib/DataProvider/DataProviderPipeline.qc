@@ -272,6 +272,17 @@ public hashdecl PipelineOptionInfo {
         @since DataProvider 3.3
     */
     *AbstractPipelineMetricsCollector metrics_collector;
+
+    #! Optional callback for each output record from terminal pipeline processors
+    /** Called synchronously in the pipeline worker thread for each record
+        output by the last processor in each terminal queue.  The pipeline
+        blocks until the callback returns, throttling throughput.
+
+        If the callback throws, the pipeline aborts via reportError().
+
+        @since DataProvider 3.4
+    */
+    *code<nothing(auto)> output_callback;
 }
 
 #! Pipeline element
@@ -370,6 +381,15 @@ class PipelineQueue {
             via lsize() instead of per-record type checks.
         */
         bool do_bulk = False;
+
+        #! Optional output callback for terminal processor output records
+        /** Set by DataProviderPipeline.checkSubmitIntern() on terminal queues only (queues whose
+            last element is an AbstractDataProcessor, not a fan-out list).
+            Called synchronously after each terminal processor output record.
+
+            @since DataProvider 3.4
+        */
+        *code<nothing(auto)> output_callback;
 
         #! Parent object
         DataProviderPipeline parent;
@@ -640,6 +660,19 @@ class PipelineQueue {
                                 }
                             }
                         }
+
+                        # Invoke output callback for terminal processor output records
+                        if (output_callback && elem_index == elem_count - 1) {
+                            if (do_bulk) {
+                                # Bulk mode: unpack hash-of-lists into individual records
+                                foreach auto out_rec in (new_recs) {
+                                    HashListIterator hli(out_rec);
+                                    map output_callback($1), hli;
+                                }
+                            } else {
+                                map output_callback($1), new_recs;
+                            }
+                        }
                     } else {
                         # Fan-out to child queues
                         # Queue 0 tracks acc_in so flushMetricsBatch can compute submitted
@@ -849,6 +882,18 @@ class PipelineQueue {
                             }
                         }
                         data_recs = new_recs;
+                    }
+
+                    # Invoke output callback for terminal flushed output records
+                    if (output_callback && data_recs) {
+                        if (do_bulk) {
+                            foreach auto out_rec in (data_recs) {
+                                HashListIterator hli(out_rec);
+                                map output_callback($1), hli;
+                            }
+                        } else {
+                            map output_callback($1), data_recs;
+                        }
                     }
                 } else {
                     # must be the last entry in the list - propagate flush to child queues
@@ -1711,6 +1756,10 @@ public class DataProviderPipeline {
         */
         *PipelineMetricsCollector metrics_collector;
 
+        #! Optional output callback for terminal processor output records
+        /** @since DataProvider 3.4
+        */
+        *code<nothing(auto)> output_callback;
     }
 
     #! Creates the object with the given options
@@ -1723,6 +1772,7 @@ public class DataProviderPipeline {
         error_log = opts.error_log;
         debug_log = opts.debug_log;
         thread_callback = opts.thread_callback;
+        output_callback = opts.output_callback;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
         # Initialize metrics collector if provided
@@ -2287,6 +2337,16 @@ public class DataProviderPipeline {
                     q.has_metrics = True;
                     q.mc_cache = metrics_collector;
                     q.do_bulk = do_bulk;
+                }
+            }
+
+            # Propagate output callback to terminal queues only (queues whose last element
+            # is a processor, not a fan-out list)
+            if (output_callback) {
+                foreach PipelineQueue q in (pmap.iterator()) {
+                    if (q.elems && q.elems.last() instanceof AbstractDataProcessor) {
+                        q.output_callback = output_callback;
+                    }
                 }
             }
 
