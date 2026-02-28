@@ -131,6 +131,7 @@ gosu qore:qore env \
     QORE_BINARY="${QORE_BINARY}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
+    QORE_SELECTOR_DEBUG=1 \
     ./run_tests.sh
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
